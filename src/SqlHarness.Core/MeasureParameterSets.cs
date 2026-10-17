@@ -244,6 +244,7 @@ internal sealed record MeasureParameterSetExecution(
     MeasureCaseFailure? FailedCase = null)
 {
     internal ISqlSession? FinalSession { get; init; }
+    internal IReadOnlyList<string> Warnings { get; init; } = [];
 }
 
 internal sealed record MeasureCaseFailure(int Index, string SetName, string? Phase);
@@ -302,6 +303,7 @@ internal sealed class MeasureParameterSetRunner
         var warmupOrder = new List<string>(sets.Count);
         var runs = new List<CollectedBenchmarkRun>(operation.Repeat * sets.Count);
         var completedCases = 0;
+        var setupWarnings = new List<string>();
         SqlHarnessTargetIdentityReport? identity = null;
         ISqlSession? finalSession = null;
         for (var index = 0; index < sets.Count; index++)
@@ -318,7 +320,7 @@ internal sealed class MeasureParameterSetRunner
                 phase = "sql";
                 if (!string.IsNullOrWhiteSpace(operation.SetupSql))
                 {
-                    await SetupSqlExecution.ExecuteSetupAsync(
+                    setupWarnings.AddRange(await SetupSqlExecution.ExecuteSetupAsync(
                         _dialect.Engine,
                         operation.SetupSql,
                         set.Parameters,
@@ -326,7 +328,7 @@ internal sealed class MeasureParameterSetRunner
                         session,
                         raw: null,
                         ct,
-                        setupSafety);
+                        setupSafety));
                     setupExecutionCount++;
                 }
 
@@ -362,7 +364,11 @@ internal sealed class MeasureParameterSetRunner
 
                 var failedCase = new MeasureCaseFailure(index, set.Name, phase);
                 var execution = new MeasureParameterSetExecution(
-                    setupExecutionCount, warmupOrder, runs, completedCases, failedCase);
+                    setupExecutionCount, warmupOrder, runs, completedCases, failedCase)
+                {
+                    Warnings = setupWarnings.Concat(runs.SelectMany(run => run.Warnings))
+                        .Distinct(StringComparer.Ordinal).ToArray(),
+                };
                 var partialReport = completedCases == 0 || identity is null
                     ? null
                     : MeasureParameterSetReportProjector.Project(
@@ -383,6 +389,8 @@ internal sealed class MeasureParameterSetRunner
         return new MeasureParameterSetExecution(setupExecutionCount, warmupOrder, runs, completedCases)
         {
             FinalSession = finalSession,
+            Warnings = setupWarnings.Concat(runs.SelectMany(run => run.Warnings))
+                .Distinct(StringComparer.Ordinal).ToArray(),
         };
 
         Task<CollectedBenchmarkRun> ExecuteSetAsync(ISqlSession session, PreparedMeasureParameterSet set, int repetition) =>
@@ -441,7 +449,10 @@ internal static class MeasureParameterSetReportProjector
             PlanCacheWarning,
             setReports,
             Summarize(setReports),
-            ArtifactDirectory: null);
+            ArtifactDirectory: null)
+        {
+            Warnings = execution.Warnings,
+        };
     }
 
     private static MeasureParameterSetReport ProjectSet(

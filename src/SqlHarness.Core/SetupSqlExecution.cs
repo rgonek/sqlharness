@@ -101,7 +101,7 @@ internal static class SetupSqlExecution
     /// into a parameter-free root-scope prefix followed by a parameterized
     /// remainder; Postgres setup runs unchanged.
     /// </summary>
-    internal static async Task ExecuteSetupAsync(
+    internal static async Task<IReadOnlyList<string>> ExecuteSetupAsync(
         SqlEngine engine,
         string? setupSql,
         IReadOnlyList<SqlHarnessParameter> parameters,
@@ -112,7 +112,7 @@ internal static class SetupSqlExecution
         SqlSafetyDecision? setupSafety = null)
     {
         if (string.IsNullOrWhiteSpace(setupSql))
-            return;
+            return [];
 
         if (engine == SqlEngine.Postgres && setupSafety?.Allowed != true)
             throw new SqlHarnessSafetyException("PostgreSQL setup execution requires successful setup classification.");
@@ -120,14 +120,23 @@ internal static class SetupSqlExecution
         var commands = engine == SqlEngine.SqlServer
             ? PrepareCommands(setupSql, parameters, timeoutSeconds)
             : [new SqlExecutionCommand(setupSql, parameters, timeoutSeconds)];
-        foreach (var command in commands)
+        IReadOnlyList<string> warnings = [];
+        try
         {
-            var execution = engine == SqlEngine.Postgres
-                ? command with { PostgresMode = PostgresExecutionMode.SessionSetup }
-                : command;
-            using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Setup))
-                await BenchmarkRunner.ExecuteRawAsync(session, execution, raw, ct);
+            foreach (var command in commands)
+            {
+                var execution = engine == SqlEngine.Postgres
+                    ? command with { PostgresMode = PostgresExecutionMode.SessionSetup }
+                    : command;
+                using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Setup))
+                    await BenchmarkRunner.ExecuteRawAsync(session, execution, raw, ct, endLogicalBatch: false);
+            }
         }
+        finally
+        {
+            warnings = await SqlSessionLogicalBatch.EndAsync(session, ct);
+        }
+        return warnings;
     }
 
     private static bool ReferencesParameter(TSqlScript script)
@@ -178,6 +187,14 @@ internal static class SetupSqlExecution
 
         var prefix = statements.Take(firstParameterReferenceIndex).ToArray();
         var remainder = statements.Skip(firstParameterReferenceIndex).ToArray();
+        if (SqlServerControlFlowTraversal.Flatten(prefix).Any(statement =>
+                statement is BeginTransactionStatement or CommitTransactionStatement
+                    or RollbackTransactionStatement or SaveTransactionStatement or ReturnStatement))
+        {
+            throw new SqlHarnessSafetyException(
+                "Transaction control and RETURN are not allowed in a parameter-free setup prefix.");
+        }
+
         if (HasCrossSplitLocalReference(prefix, remainder))
         {
             throw new SetupSqlShapeException(

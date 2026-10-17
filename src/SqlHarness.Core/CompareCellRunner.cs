@@ -187,7 +187,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             phase = CompareCellPhase.Sql;
 
             raw = new CanonicalResultAccumulator();
-            await SetupSqlExecution.ExecuteSetupAsync(
+            var setupWarnings = await SetupSqlExecution.ExecuteSetupAsync(
                 request.Target.Engine,
                 request.SetupSql,
                 request.Parameters,
@@ -241,6 +241,10 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 Equivalence = equivalence,
                 Classification = request.Classification,
                 Parameters = BenchmarkReports.ToParameterReports(request.Parameters),
+                Warnings = setupWarnings
+                    .Concat(baselineRuns.SelectMany(run => run.Warnings))
+                    .Concat(candidateRuns.SelectMany(run => run.Warnings))
+                    .Distinct(StringComparer.Ordinal).ToArray(),
                 Regression = RegressionPolicy.Evaluate(new RegressionInput(
                     request.Target.Engine,
                     ToRegressionVariant(baselineRuns),

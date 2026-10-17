@@ -46,6 +46,30 @@ public class SetupSqlExecutionTests
         Assert.Equal("@x", Assert.Single(commands[1].Parameters).Name);
     }
 
+    [Theory]
+    [InlineData("BEGIN TRAN; SELECT @x;")]
+    [InlineData("RETURN; SELECT @x;")]
+    public void Parameterized_setup_rejects_transaction_control_and_return_in_prefix(string sql)
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SetupSqlExecution.PrepareCommands(sql, Parameters(("x", "int", "7")), 30));
+
+        Assert.Contains("parameter-free setup prefix", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parameterized_setup_keeps_transaction_control_in_parameterized_remainder()
+    {
+        const string sql = "SELECT @x; BEGIN TRAN; ROLLBACK;";
+
+        var command = Assert.Single(SetupSqlExecution.PrepareCommands(sql, Parameters(("x", "int", "7")), 30));
+
+        Assert.Contains("SELECT @x", command.Sql, StringComparison.Ordinal);
+        Assert.Contains("BEGIN TRAN", command.Sql, StringComparison.Ordinal);
+        Assert.Contains("ROLLBACK", command.Sql, StringComparison.Ordinal);
+        Assert.Equal("@x", Assert.Single(command.Parameters).Name);
+    }
+
     [Fact]
     public void Parameter_free_select_into_followed_by_parameterized_population_splits()
     {

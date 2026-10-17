@@ -309,6 +309,131 @@ public sealed class SqlExecutionTests
         Assert.False(PostgresEndpointIdentity.Matches(target, "198.51.100.8", "APPDB"));
     }
 
+    [Fact]
+    public async Task Open_transaction_is_rolled_back_with_warning()
+    {
+        var cleanupCommand = string.Empty;
+        await using var session = CreateCleanupSession(cleanup: (sql, _) =>
+        {
+            cleanupCommand = sql;
+            return Task.FromResult(true);
+        });
+
+        var warnings = await session.EndLogicalBatchAsync(CancellationToken.None);
+
+        Assert.Equal(["open transaction rolled back"], warnings);
+        Assert.Contains("sys.sp_cursor_list", cleanupCommand, StringComparison.Ordinal);
+        Assert.Contains("@cursor_scope = 2", cleanupCommand, StringComparison.Ordinal);
+        Assert.Contains("IF @@TRANCOUNT > 0", cleanupCommand, StringComparison.Ordinal);
+        Assert.Contains("ROLLBACK TRANSACTION", cleanupCommand, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Timeout_inside_transaction_discards_connection_with_exact_error()
+    {
+        var clearPoolCalls = 0;
+        await using var session = CreateCleanupSession(
+            execute: (_, _) => Task.FromException<ISqlReader>(new TimeoutException("command timed out")),
+            cleanup: (_, _) => Task.FromResult(true),
+            clearPool: _ => clearPoolCalls++);
+
+        var exception = await Assert.ThrowsAsync<SessionCleanupException>(() =>
+            BenchmarkRunner.ExecuteRawAsync(
+                session,
+                new SqlExecutionCommand("SELECT 1", [], 1),
+                null,
+                CancellationToken.None));
+
+        Assert.Equal("open transaction could not be rolled back; connection discarded", exception.Message);
+        Assert.Equal(
+            [SqlClientSession.BatchTimeoutWarning, SqlClientSession.ConnectionDiscardedWarning],
+            exception.Warnings);
+        Assert.Equal(1, clearPoolCalls);
+    }
+
+    [Fact]
+    public async Task Failed_rollback_fails_operation_and_discards_connection()
+    {
+        var clearPoolCalls = 0;
+        await using var session = CreateCleanupSession(
+            cleanup: (_, _) => Task.FromException<bool>(new InvalidOperationException("rollback failed")),
+            clearPool: _ => clearPoolCalls++);
+
+        var exception = await Assert.ThrowsAsync<SessionCleanupException>(() =>
+            session.EndLogicalBatchAsync(CancellationToken.None));
+
+        Assert.Equal("open transaction could not be rolled back; connection discarded", exception.Message);
+        Assert.Equal([SqlClientSession.ConnectionDiscardedWarning], exception.Warnings);
+        Assert.Equal(1, clearPoolCalls);
+    }
+
+    [Fact]
+    public async Task Setup_split_rolls_back_once_after_whole_setup()
+    {
+        var session = new CleanupTrackingSession();
+        var setup = "CREATE TABLE #t (Id int); INSERT #t VALUES (@x);";
+
+        var warnings = await SetupSqlExecution.ExecuteSetupAsync(
+            SqlEngine.SqlServer,
+            setup,
+            [new SqlHarnessParameter("@x", System.Data.SqlDbType.Int, 7, null, null, null, null)],
+            5,
+            session,
+            null,
+            CancellationToken.None);
+
+        Assert.Equal(2, session.ExecutedCommands);
+        Assert.Equal(1, session.EndLogicalBatchCalls);
+        Assert.Equal(["open transaction rolled back"], warnings);
+    }
+
+    private static SqlClientSession CreateCleanupSession(
+        Func<SqlExecutionCommand, CancellationToken, Task<ISqlReader>>? execute = null,
+        Func<string, CancellationToken, Task<bool>>? cleanup = null,
+        Action<SqlConnection>? clearPool = null) =>
+        new(
+            new SqlConnection(),
+            new SessionMessageBuffer(),
+            (_, _) => { },
+            execute,
+            cleanup,
+            clearPool);
+
+    private sealed class CleanupTrackingSession : ISqlSession
+    {
+        public IReadOnlyList<SessionMessage> Messages => [];
+        public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
+        public int ExecutedCommands { get; private set; }
+        public int EndLogicalBatchCalls { get; private set; }
+
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            ExecutedCommands++;
+            return Task.FromResult<ISqlReader>(new CleanupEmptyReader());
+        }
+
+        public Task<IReadOnlyList<string>> EndLogicalBatchAsync(CancellationToken ct)
+        {
+            EndLogicalBatchCalls++;
+            return Task.FromResult<IReadOnlyList<string>>(["open transaction rolled back"]);
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class CleanupEmptyReader : ISqlReader
+    {
+        public int FieldCount => 0;
+        public int RecordsAffected => 0;
+        public string GetName(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Type GetFieldType(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public bool GetAllowNull(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public object GetValue(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(false);
+        public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private static ResolvedTarget PostgresTarget(string server, bool trust, PostgresTransport? transport) =>
         new(
             server,

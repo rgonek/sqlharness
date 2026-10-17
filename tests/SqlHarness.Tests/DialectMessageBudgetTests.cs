@@ -7,6 +7,32 @@ namespace SqlHarness.Tests;
 public sealed class DialectMessageBudgetTests
 {
     [Fact]
+    public async Task Logical_batch_cleanup_runs_after_measured_messages_are_consumed()
+    {
+        var session = new DrainingSession(command =>
+            command.Sql.StartsWith("SET", StringComparison.Ordinal) ? Empty() : SingleRow());
+        session.OnExecute = command =>
+        {
+            if (!command.Sql.StartsWith("SET", StringComparison.Ordinal))
+                EmitStatisticsMessage(session, reads: 5, cpu: 10, elapsed: 12);
+        };
+        session.OnEndLogicalBatch = _ =>
+        {
+            session.Emit(0, "Table 'X'. Scan count 1, logical reads 999, physical reads 0, lob logical reads 0.");
+            return Task.FromResult<IReadOnlyList<string>>(["open transaction rolled back"]);
+        };
+
+        var run = await BenchmarkRunner.ExecuteAsync(
+            new SqlServerDialect(), session, "SELECT Value", [], 30, 1, "measure", null,
+            raw: null, captureComparison: false, comparisonMaximumRows: 1000, CancellationToken.None);
+
+        Assert.Equal(3, run.Artifact.MessageCount);
+        Assert.Equal(5, run.Artifact.LogicalReads);
+        Assert.Equal(["open transaction rolled back"], run.Warnings);
+        Assert.Empty(session.Messages);
+    }
+
+    [Fact]
     public async Task SqlServer_repeated_runs_keep_statistics_and_release_session_memory()
     {
         var session = new DrainingSession(command =>
@@ -251,6 +277,7 @@ public sealed class DialectMessageBudgetTests
         private readonly SessionMessageBuffer _buffer = new();
 
         public Action<SqlExecutionCommand>? OnExecute { get; set; }
+        public Func<CancellationToken, Task<IReadOnlyList<string>>>? OnEndLogicalBatch { get; set; }
 
         public void Emit(int number, string message) => _buffer.Add(number, message);
 
@@ -267,6 +294,9 @@ public sealed class DialectMessageBudgetTests
             OnExecute?.Invoke(command);
             return Task.FromResult(readers(command));
         }
+
+        public Task<IReadOnlyList<string>> EndLogicalBatchAsync(CancellationToken ct) =>
+            OnEndLogicalBatch?.Invoke(ct) ?? Task.FromResult<IReadOnlyList<string>>([]);
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

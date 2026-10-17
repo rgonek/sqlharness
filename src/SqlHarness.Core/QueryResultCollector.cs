@@ -5,7 +5,8 @@ internal sealed record CollectedQueryResult(
     IReadOnlyList<string> Messages,
     int RecordsAffected,
     CanonicalResult Canonical,
-    int OmittedMessageCount = 0);
+    int OmittedMessageCount = 0,
+    IReadOnlyList<string>? Warnings = null);
 
 internal static class QueryResultCollector
 {
@@ -28,6 +29,34 @@ internal static class QueryResultCollector
     /// are not claimed until that wiring exists.
     /// </remarks>
     internal static async Task<CollectedQueryResult> CollectAsync(
+        ISqlSession session,
+        SqlExecutionCommand command,
+        int maxRows,
+        IReadOnlyCollection<string> knownSecrets,
+        Func<CanonicalResultAccumulator> createRaw,
+        CancellationToken ct)
+    {
+        var ended = false;
+        try
+        {
+            var collected = await CollectCoreAsync(
+                session, command, maxRows, knownSecrets, createRaw, ct);
+            ended = true;
+            var warnings = await SqlSessionLogicalBatch.EndAsync(session, ct);
+            return collected with { Warnings = warnings };
+        }
+        catch
+        {
+            if (!ended)
+            {
+                ended = true;
+                _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
+            }
+            throw;
+        }
+    }
+
+    private static async Task<CollectedQueryResult> CollectCoreAsync(
         ISqlSession session,
         SqlExecutionCommand command,
         int maxRows,

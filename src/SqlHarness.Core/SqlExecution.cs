@@ -53,6 +53,10 @@ internal interface ISqlSession : IAsyncDisposable
     string? ClientConnectionId => null;
     Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct);
 
+    /// <summary>Ends one read-only logical batch and returns any safety warnings it produced.</summary>
+    Task<IReadOnlyList<string>> EndLogicalBatchAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
+
     /// <summary>
     /// Per-command message consumption: returns the messages queued at or after
     /// <paramref name="startIndex"/> so a session never retains notices from all
@@ -70,6 +74,16 @@ internal interface ISqlSession : IAsyncDisposable
 }
 
 internal sealed record SessionMessage(int Number, string Text);
+
+internal static class SqlSessionLogicalBatch
+{
+    internal static async Task<IReadOnlyList<string>> EndAsync(ISqlSession session, CancellationToken ct)
+    {
+        var warnings = await session.EndLogicalBatchAsync(ct);
+        _ = session.ConsumeMessages(0);
+        return warnings;
+    }
+}
 
 /// <summary>
 /// One command's share of session messages. Diagnostics beyond the per-command
@@ -183,6 +197,21 @@ internal interface ISqlSessionFactory
 }
 
 internal sealed class SqlTargetMismatchException(string message) : Exception(message);
+
+internal sealed class SessionCleanupException(
+    string message,
+    Exception? innerException = null,
+    IReadOnlyList<string>? warnings = null)
+    : Exception(message, innerException)
+{
+    internal IReadOnlyList<string> Warnings { get; } = warnings ?? [];
+}
+
+internal static class SqlSessionWarningProjection
+{
+    internal static IReadOnlyList<string> For(Exception exception) =>
+        exception is SessionCleanupException cleanup ? cleanup.Warnings : [];
+}
 
 internal static class SqlExecution
 {
@@ -339,8 +368,81 @@ internal sealed class SqlClientSessionFactory : ISqlSessionFactory
 internal sealed class SqlClientSession(
     SqlConnection connection,
     SessionMessageBuffer messages,
-    SqlInfoMessageEventHandler infoMessageHandler) : ISqlSession
+    SqlInfoMessageEventHandler infoMessageHandler,
+    Func<SqlExecutionCommand, CancellationToken, Task<ISqlReader>>? executeReaderOverride = null,
+    Func<string, CancellationToken, Task<bool>>? cleanupOverride = null,
+    Action<SqlConnection>? clearPool = null) : ISqlSession
 {
+    internal const string BatchTimeoutWarning = "batch reached its timeout";
+    internal const string ConnectionDiscardedWarning = "connection discarded after failed cleanup";
+    private const string CleanupFailureMessage =
+        "open transaction could not be rolled back; connection discarded";
+    private const string CleanupSql = """
+        DECLARE @__sqlharness_global_cursors TABLE (name sysname NOT NULL);
+        DECLARE @__sqlharness_cursor_list CURSOR;
+        EXEC sys.sp_cursor_list
+            @cursor_return = @__sqlharness_cursor_list OUTPUT,
+            @cursor_scope = 2;
+        DECLARE @__sqlharness_reference_name sysname;
+        DECLARE @__sqlharness_cursor_name sysname;
+        DECLARE @__sqlharness_cursor_scope smallint;
+        DECLARE @__sqlharness_status smallint;
+        DECLARE @__sqlharness_model smallint;
+        DECLARE @__sqlharness_concurrency smallint;
+        DECLARE @__sqlharness_scrollable smallint;
+        DECLARE @__sqlharness_open_status smallint;
+        DECLARE @__sqlharness_cursor_rows int;
+        DECLARE @__sqlharness_fetch_status smallint;
+        DECLARE @__sqlharness_column_count smallint;
+        DECLARE @__sqlharness_row_count smallint;
+        DECLARE @__sqlharness_last_operation smallint;
+        DECLARE @__sqlharness_cursor_handle int;
+        FETCH NEXT FROM @__sqlharness_cursor_list INTO
+            @__sqlharness_reference_name, @__sqlharness_cursor_name, @__sqlharness_cursor_scope,
+            @__sqlharness_status, @__sqlharness_model, @__sqlharness_concurrency,
+            @__sqlharness_scrollable, @__sqlharness_open_status, @__sqlharness_cursor_rows,
+            @__sqlharness_fetch_status, @__sqlharness_column_count, @__sqlharness_row_count,
+            @__sqlharness_last_operation, @__sqlharness_cursor_handle;
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            INSERT INTO @__sqlharness_global_cursors (name)
+            VALUES (@__sqlharness_reference_name);
+            FETCH NEXT FROM @__sqlharness_cursor_list INTO
+                @__sqlharness_reference_name, @__sqlharness_cursor_name, @__sqlharness_cursor_scope,
+                @__sqlharness_status, @__sqlharness_model, @__sqlharness_concurrency,
+                @__sqlharness_scrollable, @__sqlharness_open_status, @__sqlharness_cursor_rows,
+                @__sqlharness_fetch_status, @__sqlharness_column_count, @__sqlharness_row_count,
+                @__sqlharness_last_operation, @__sqlharness_cursor_handle;
+        END;
+        CLOSE @__sqlharness_cursor_list;
+        DEALLOCATE @__sqlharness_cursor_list;
+        DECLARE __sqlharness_global_cursor_cleanup CURSOR LOCAL FAST_FORWARD FOR
+            SELECT name FROM @__sqlharness_global_cursors;
+        OPEN __sqlharness_global_cursor_cleanup;
+        FETCH NEXT FROM __sqlharness_global_cursor_cleanup INTO @__sqlharness_cursor_name;
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            DECLARE @__sqlharness_cursor_sql nvarchar(512) =
+                N'BEGIN TRY CLOSE GLOBAL ' + QUOTENAME(@__sqlharness_cursor_name) +
+                N'; END TRY BEGIN CATCH END CATCH; BEGIN TRY DEALLOCATE GLOBAL ' +
+                QUOTENAME(@__sqlharness_cursor_name) + N'; END TRY BEGIN CATCH END CATCH;';
+            EXEC sys.sp_executesql @__sqlharness_cursor_sql;
+            FETCH NEXT FROM __sqlharness_global_cursor_cleanup INTO @__sqlharness_cursor_name;
+        END;
+        CLOSE __sqlharness_global_cursor_cleanup;
+        DEALLOCATE __sqlharness_global_cursor_cleanup;
+        DECLARE @__sqlharness_rolled_back bit = 0;
+        IF @@TRANCOUNT > 0
+        BEGIN
+            ROLLBACK TRANSACTION;
+            SET @__sqlharness_rolled_back = 1;
+        END;
+        SELECT @__sqlharness_rolled_back;
+        """;
+    private bool _discardAfterFailure;
+    private Exception? _lastFailure;
+    private bool _unusable;
+
     public IReadOnlyList<SessionMessage> Messages => messages.Snapshot();
     public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
     public string? ClientConnectionId => connection.ClientConnectionId.ToString();
@@ -349,6 +451,23 @@ internal sealed class SqlClientSession(
 
     public async Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand execution, CancellationToken ct)
     {
+        if (_unusable)
+            throw new SessionCleanupException(CleanupFailureMessage);
+        if (executeReaderOverride is not null)
+        {
+            try
+            {
+                return await executeReaderOverride(execution, ct);
+            }
+            catch (Exception exception)
+            {
+                _lastFailure = exception;
+                if (ShouldDiscard(exception))
+                    _discardAfterFailure = true;
+                throw;
+            }
+        }
+
         var command = connection.CreateCommand();
         var transferred = false;
         try
@@ -356,13 +475,88 @@ internal sealed class SqlClientSession(
             BindCommand(command, execution);
             var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, ct);
             transferred = true;
-            return new SqlClientReader(command, reader);
+            return new SqlClientReader(command, reader, MarkReaderFailure);
+        }
+        catch (Exception exception)
+        {
+            _lastFailure = exception;
+            if (ShouldDiscard(exception))
+                _discardAfterFailure = true;
+            throw;
         }
         finally
         {
             if (!transferred)
                 await command.DisposeAsync();
         }
+    }
+
+    public async Task<IReadOnlyList<string>> EndLogicalBatchAsync(CancellationToken ct)
+    {
+        if (_unusable)
+            throw new SessionCleanupException(CleanupFailureMessage);
+        if (_discardAfterFailure || ct.IsCancellationRequested)
+            throw DiscardConnection(_lastFailure);
+
+        try
+        {
+            bool rolledBack;
+            if (cleanupOverride is not null)
+            {
+                rolledBack = await cleanupOverride(CleanupSql, ct);
+            }
+            else
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = CleanupSql;
+                command.CommandType = CommandType.Text;
+                command.CommandTimeout = 5;
+                await using var reader = await command.ExecuteReaderAsync(ct);
+                rolledBack = await reader.ReadAsync(ct) && reader.GetBoolean(0);
+                while (await reader.NextResultAsync(ct))
+                    while (await reader.ReadAsync(ct)) { }
+            }
+
+            return rolledBack ? ["open transaction rolled back"] : [];
+        }
+        catch (Exception exception)
+        {
+            throw DiscardConnection(exception);
+        }
+    }
+
+    private SessionCleanupException DiscardConnection(Exception? innerException = null)
+    {
+        if (!_unusable)
+        {
+            _unusable = true;
+            if (clearPool is null)
+                SqlConnection.ClearPool(connection);
+            else
+                clearPool(connection);
+        }
+        var warnings = IsTimeout(innerException)
+            ? new[] { BatchTimeoutWarning, ConnectionDiscardedWarning }
+            : [ConnectionDiscardedWarning];
+        return new SessionCleanupException(CleanupFailureMessage, innerException, warnings);
+    }
+
+    private static bool IsTimeout(Exception? exception) =>
+        exception is TimeoutException
+        || exception is SqlException sqlException &&
+            sqlException.Errors.Cast<SqlError>().Any(error => error.Number == -2);
+
+    private bool ShouldDiscard(Exception exception) =>
+        exception is TimeoutException or OperationCanceledException
+        || exception is SqlException sqlException &&
+            sqlException.Errors.Cast<SqlError>().Any(error => error.Number == -2)
+        || connection.State == ConnectionState.Broken;
+
+    private void MarkReaderFailure(Exception exception)
+    {
+        _lastFailure = exception;
+        if (ShouldDiscard(exception))
+            _discardAfterFailure = true;
     }
 
     internal static void BindCommand(SqlCommand command, SqlExecutionCommand execution)
@@ -408,8 +602,14 @@ internal sealed class SqlClientReader : ISqlReader
 {
     private readonly SqlCommand _command;
     private readonly SqlDataReader _reader;
+    private readonly Action<Exception> _onFailure;
     private IReadOnlyList<DbColumn>? _columns;
-    internal SqlClientReader(SqlCommand command, SqlDataReader reader) { _command = command; _reader = reader; }
+    internal SqlClientReader(SqlCommand command, SqlDataReader reader, Action<Exception>? onFailure = null)
+    {
+        _command = command;
+        _reader = reader;
+        _onFailure = onFailure ?? (_ => { });
+    }
     public int FieldCount => _reader.FieldCount;
     public int RecordsAffected => _reader.RecordsAffected;
     public string GetName(int ordinal) => _reader.GetName(ordinal);
@@ -417,17 +617,41 @@ internal sealed class SqlClientReader : ISqlReader
     public bool GetAllowNull(int ordinal) => ProviderNullability.AllowNull(Columns[ordinal]);
     public bool? GetReportedAllowNull(int ordinal) => ProviderNullability.Reported(Columns[ordinal]);
     public object GetValue(int ordinal) => _reader.GetValue(ordinal);
-    public Task<bool> ReadAsync(CancellationToken ct) => _reader.ReadAsync(ct);
+    public async Task<bool> ReadAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await _reader.ReadAsync(ct);
+        }
+        catch (Exception exception)
+        {
+            _onFailure(exception);
+            throw;
+        }
+    }
     public async Task<bool> NextResultAsync(CancellationToken ct)
     {
-        var hasNext = await _reader.NextResultAsync(ct);
-        if (hasNext) _columns = null;
-        return hasNext;
+        try
+        {
+            var hasNext = await _reader.NextResultAsync(ct);
+            if (hasNext) _columns = null;
+            return hasNext;
+        }
+        catch (Exception exception)
+        {
+            _onFailure(exception);
+            throw;
+        }
     }
     private IReadOnlyList<DbColumn> Columns => _columns ??= _reader.GetColumnSchema();
     public async ValueTask DisposeAsync()
     {
         try { await _reader.DisposeAsync(); }
+        catch (Exception exception)
+        {
+            _onFailure(exception);
+            throw;
+        }
         finally { await _command.DisposeAsync(); }
     }
 }

@@ -274,6 +274,8 @@ public sealed record SqlHarnessCompareReport(
     CompareVariantReport Candidate,
     string? ArtifactDirectory)
 {
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+
     public ResultEquivalenceReport Equivalence { get; init; } =
         new(ResultComparisonMode.Ordered, ResultsEquivalent, 0, 0, 0);
 
@@ -291,6 +293,8 @@ public sealed record SqlHarnessMeasureReport(
     SqlHarnessTargetIdentityReport Target, int Repetitions, int MeasuredRunCount,
     bool ResultsStable, CompareVariantReport Query, string? ArtifactDirectory)
 {
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+
     public BenchmarkClassificationReport Classification { get; init; } =
         new("none", "read-only");
 
@@ -346,7 +350,10 @@ public sealed record SqlHarnessMeasureSetReport(
     string PlanCacheWarning,
     IReadOnlyList<MeasureParameterSetReport> Sets,
     MeasureCrossSetSummary CrossSetSummary,
-    string? ArtifactDirectory);
+    string? ArtifactDirectory)
+{
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+}
 
 /// <summary>
 /// The per-run metric fields (CpuTimeMilliseconds, ElapsedTimeMilliseconds,

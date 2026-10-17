@@ -126,6 +126,9 @@ internal sealed class NpgsqlSession(
 
     public ConsumedSessionMessages ConsumeMessages(int startIndex) => messages.Consume(startIndex);
 
+    public Task<IReadOnlyList<string>> EndLogicalBatchAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
+
     public async Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand execution, CancellationToken ct)
     {
         var command = connection.CreateCommand();

@@ -67,6 +67,8 @@ internal static class IndexInventoryCapture
             return null;
 
         var database = string.Empty;
+        var commandStarted = false;
+        var logicalBatchEnded = false;
         try
         {
             ct.ThrowIfCancellationRequested();
@@ -83,15 +85,28 @@ internal static class IndexInventoryCapture
                 IndexInventoryQuery.Sql,
                 IndexInventoryQuery.Parameters(tables),
                 Math.Min(30, timeoutSeconds));
-            await using var reader = await session.ExecuteReaderAsync(command, ct);
-            var inventoryTables = await IndexInventoryQuery.ReadAsync(reader, tables, ct);
+            commandStarted = true;
+            IReadOnlyList<InventoryTable> inventoryTables;
+            await using (var reader = await session.ExecuteReaderAsync(command, ct))
+                inventoryTables = await IndexInventoryQuery.ReadAsync(reader, tables, ct);
+            logicalBatchEnded = true;
+            _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
             IReadOnlyList<string> gaps = skippedTables > 0
                 ? [$"Index inventory covers the first {MaxInventoryTables} hinted tables; {skippedTables} more were skipped."]
                 : [];
             return new IndexInventory(database, DateTimeOffset.UtcNow, inventoryTables, gaps);
         }
+        catch (SessionCleanupException)
+        {
+            throw;
+        }
         catch (Exception exception) when (exception is not OperationCanceledException || !ct.IsCancellationRequested)
         {
+            if (commandStarted && !logicalBatchEnded)
+            {
+                logicalBatchEnded = true;
+                _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
+            }
             return new IndexInventory(
                 database,
                 DateTimeOffset.UtcNow,

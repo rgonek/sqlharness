@@ -31,7 +31,10 @@ public sealed record SqlHarnessQueryReport(
     long DurationMilliseconds,
     string ResultHash,
     OutputFootprint RawFootprint,
-    int OmittedMessages = 0);
+    int OmittedMessages = 0)
+{
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+}
 
 public sealed class SqlHarnessModule : ISqlHarnessModule
 {
@@ -236,7 +239,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 stopwatch.ElapsedMilliseconds,
                 collected.Canonical.Hash,
                 rawFootprint,
-                collected.OmittedMessageCount);
+                collected.OmittedMessageCount)
+            {
+                Warnings = collected.Warnings ?? [],
+            };
             var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
             return Checked(query, WithReceipt(success, rawFootprint));
         }
@@ -252,6 +258,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 MutationOutcomeUnknown = query.UsageOverride == SqlUsage.Mutation &&
                     phase == OperationPhase.Sql && OperationFailureMapper.IsMutationOutcomeUnknown(exception),
+                SessionWarnings = SqlSessionWarningProjection.For(exception),
             };
             return Checked(query, WithReceipt(failure, rawFootprint));
         }
@@ -520,7 +527,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
             var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets),
-                Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets));
+                Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets))
+            {
+                SessionWarnings = SqlSessionWarningProjection.For(exception),
+            };
             return WithReceipt(failure, rawFootprint);
         }
     }
@@ -678,7 +688,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
             var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets),
-                Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets));
+                Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets))
+            {
+                SessionWarnings = SqlSessionWarningProjection.For(exception),
+            };
             return WithReceipt(failure, rawFootprint);
         }
     }
@@ -850,7 +863,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             phase = OperationPhase.Sql;
 
             raw = new CanonicalResultAccumulator();
-            await SetupSqlExecution.ExecuteSetupAsync(
+            var setupWarnings = await SetupSqlExecution.ExecuteSetupAsync(
                 dialect.Engine,
                 measure.SetupSql,
                 parameters,
@@ -880,6 +893,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     BenchmarkReports.ClassificationLabel(setupSafety),
                     BenchmarkReports.ClassificationLabel(querySafety)),
                 Parameters = BenchmarkReports.ToParameterReports(parameters),
+                Warnings = setupWarnings.Concat(runs.SelectMany(run => run.Warnings))
+                    .Distinct(StringComparer.Ordinal).ToArray(),
             };
 
             // Still the measured-SQL phase: a catalog failure stays a gap and cancellation maps like a measured batch.
@@ -937,7 +952,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
             var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets),
-                Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets));
+                Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets))
+            {
+                SessionWarnings = SqlSessionWarningProjection.For(exception),
+            };
             return WithReceipt(failure, rawFootprint);
         }
         finally
@@ -1078,7 +1096,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var failure = new SqlHarnessOutcome(
                 exitCode,
                 null,
-                SecretRedactor.Redact(exception, knownSecrets));
+                SecretRedactor.Redact(exception, knownSecrets))
+            {
+                SessionWarnings = SqlSessionWarningProjection.For(exception),
+            };
             return WithReceipt(failure, rawFootprint);
         }
     }
@@ -1145,7 +1166,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var exitCode = OperationFailureMapper.Map(exception, phase);
             var message = SecretRedactor.Redact(exception, knownSecrets);
             EmitWatchNdjsonFailed(writer, exitCode, SqlHarnessError.From(exitCode, message, "validation"));
-            var failure = new SqlHarnessOutcome(exitCode, null, message);
+            var failure = new SqlHarnessOutcome(exitCode, null, message)
+            {
+                SessionWarnings = SqlSessionWarningProjection.For(exception),
+            };
             return Checked(watch, WithReceipt(failure, rawFootprint) with { OperationRef = watch.OperationRef });
         }
     }
@@ -1240,7 +1264,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var failure = new SqlHarnessOutcome(
                 exitCode,
                 null,
-                SecretRedactor.Redact(exception, knownSecrets));
+                SecretRedactor.Redact(exception, knownSecrets))
+            {
+                SessionWarnings = SqlSessionWarningProjection.For(exception),
+            };
             return WithReceipt(failure, rawFootprint);
         }
     }

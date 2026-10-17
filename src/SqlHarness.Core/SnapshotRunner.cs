@@ -44,7 +44,10 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
                     new SqlHarnessOutcome(
                         SqlHarnessExitCode.LocalStorage,
                         null,
-                        SecretRedactor.Redact(exception, secrets)),
+                        SecretRedactor.Redact(exception, secrets))
+                    {
+                        SessionWarnings = SqlSessionWarningProjection.For(exception),
+                    },
                     new OutputFootprint(0, 0));
             }
         }
@@ -174,7 +177,10 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
                 new SqlHarnessOutcome(
                     MapException(exception, phase),
                     null,
-                    SecretRedactor.Redact(exception, secrets)),
+                    SecretRedactor.Redact(exception, secrets))
+                {
+                    SessionWarnings = SqlSessionWarningProjection.For(exception),
+                },
                 rawFootprint);
         }
         finally

@@ -15,6 +15,7 @@ internal sealed record CollectedBenchmarkRun(
 
     public string Variant => Artifact.Variant;
     public string ResultHash => Artifact.ResultHash;
+    public IReadOnlyList<string> Warnings { get; init; } = [];
 }
 
 internal static class BenchmarkRunner
@@ -34,22 +35,33 @@ internal static class BenchmarkRunner
         CancellationToken ct)
     {
         CollectedCompareRun collected;
-        using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Execute))
-            collected = await dialect.ExecuteBenchmarkRunAsync(
-                session,
-                sql,
-                parameters,
-                timeoutSeconds,
-                repetition,
-                variant,
-                raw,
-                captureComparison,
-                comparisonMaximumRows,
-                ct);
+        IReadOnlyList<string> warnings;
+        try
+        {
+            using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Execute))
+                collected = await dialect.ExecuteBenchmarkRunAsync(
+                    session,
+                    sql,
+                    parameters,
+                    timeoutSeconds,
+                    repetition,
+                    variant,
+                    raw,
+                    captureComparison,
+                    comparisonMaximumRows,
+                    ct);
+        }
+        catch
+        {
+            _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
+            throw;
+        }
+        warnings = await SqlSessionLogicalBatch.EndAsync(session, ct);
         var artifact = collected.Artifact with { ParameterSet = parameterSet };
         return new CollectedBenchmarkRun(artifact, collected.Plans, artifact.PlanXmls.Select(PlanIdentity.Hash).ToArray())
         {
             Comparison = collected.Comparison,
+            Warnings = warnings,
         };
     }
 
@@ -62,7 +74,8 @@ internal static class BenchmarkRunner
         ISqlSession session,
         SqlExecutionCommand command,
         CanonicalResultAccumulator? raw,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool endLogicalBatch = true)
     {
         var messageStart = session.Messages.Count;
         Exception? primaryException = null;
@@ -109,6 +122,9 @@ internal static class BenchmarkRunner
             OperationFailureMapper.CompleteCleanup(
                 primaryException,
                 () => BenchmarkCollector.AppendMessages(session, messageStart, raw));
+            _ = session.ConsumeMessages(messageStart);
+            if (endLogicalBatch)
+                _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
         }
     }
 }
@@ -135,6 +151,8 @@ internal static class BenchmarkReports
         }
         var uniqueOperators = operators.Distinct().ToArray();
         var warnings = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var warning in runs.SelectMany(run => run.Warnings))
+            warnings.Add(warning);
         if (uniqueOperators.Any(op => op.HasWarnings)) warnings.Add("PlanWarning");
         if (uniqueOperators.Any(op => op.HasSpill)) warnings.Add("SpillToTempDb");
         if (uniqueOperators.Any(op => op.HasImplicitConversion)) warnings.Add("ImplicitConversion");

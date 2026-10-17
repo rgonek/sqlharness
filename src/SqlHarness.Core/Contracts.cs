@@ -477,6 +477,10 @@ public sealed record SqlHarnessOutcome(
     [JsonIgnore]
     internal bool MutationOutcomeUnknown { get; init; }
 
+    /// <summary>Structured session safety events retained for the activity journal.</summary>
+    [JsonIgnore]
+    internal IReadOnlyList<string> SessionWarnings { get; init; } = [];
+
     [JsonIgnore]
     public string? OperationRef { get; init; }
 
