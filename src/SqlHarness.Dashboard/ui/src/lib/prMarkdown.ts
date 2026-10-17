@@ -50,6 +50,20 @@ function planMarkdown(value: PlanChanges | "same" | "unavailable" | undefined): 
   return lines
 }
 
+function tableIoMarkdown(pair: ComparePair): string[] {
+  const io = tableIoDelta(pair.baseline.tableIo, pair.candidate.tableIo)
+  const lines = [
+    "",
+    "Table IO headline: median of run totals (data + LOB)",
+    "",
+    "| Table | Logical (baseline) | Logical (candidate) | LOB logical (baseline) | LOB logical (candidate) | Total (baseline) | Total (candidate) | Scans (baseline) | Scans (candidate) | Change |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+  ]
+  for (const row of io.rows) lines.push(`| ${tableCell(row.table)} | ${formatNumber(row.baseline?.logicalReads)} | ${formatNumber(row.candidate?.logicalReads)} | ${formatNumber(row.baseline?.lobLogicalReads)} | ${formatNumber(row.candidate?.lobLogicalReads)} | ${formatNumber(row.baseline?.totalLogicalReads)} | ${formatNumber(row.candidate?.totalLogicalReads)} | ${formatNumber(row.baseline?.scans ?? row.baseline?.scanCount)} | ${formatNumber(row.candidate?.scans ?? row.candidate?.scanCount)} | ${formatChange(row.logicalDelta)} |`)
+  lines.push(`| Total | ${formatNumber(pair.baseline.tableIo.reduce((total, row) => total + row.logicalReads, 0))} | ${formatNumber(pair.candidate.tableIo.reduce((total, row) => total + row.logicalReads, 0))} | ${formatNumber(pair.baseline.tableIo.reduce((total, row) => total + (row.lobLogicalReads ?? 0), 0))} | ${formatNumber(pair.candidate.tableIo.reduce((total, row) => total + (row.lobLogicalReads ?? 0), 0))} | ${formatNumber(io.total.baseline)} | ${formatNumber(io.total.candidate)} | ${formatNumber(pair.baseline.tableIo.reduce((total, row) => total + (row.scans ?? row.scanCount ?? 0), 0))} | ${formatNumber(pair.candidate.tableIo.reduce((total, row) => total + (row.scans ?? row.scanCount ?? 0), 0))} | ${formatChange(io.total.delta)} |`)
+  return lines
+}
+
 export function buildPrMarkdown(input: PrMarkdownInput): string {
   const subject = safeText(text(input.subject, "Unassigned"))
   const scope = safeText(text(input.scope, "Unassigned scope"))
@@ -71,8 +85,7 @@ export function buildPrMarkdown(input: PrMarkdownInput): string {
       const metrics = compareRows(item.pair.baseline, item.pair.candidate, input.engine)
       lines.push(...metrics.map(row => `| ${tableCell(metricLabel(row.metric))} | ${formatNumber(row.baseline)} | ${formatNumber(row.candidate)} | ${formatChange(row.delta)} |`))
       if (input.engine?.toLowerCase() === "sqlserver" || input.engine?.toLowerCase() === "sql-server") {
-        const io = tableIoDelta(item.pair.baseline.tableIo, item.pair.candidate.tableIo)
-        lines.push("", "| Table | Logical reads (baseline) | Logical reads (candidate) | Change |", "| --- | ---: | ---: | ---: |", ...io.rows.map(row => `| ${tableCell(row.table)} | ${formatNumber(row.baseline?.logicalReads)} | ${formatNumber(row.candidate?.logicalReads)} | ${formatChange(row.logicalDelta)} |`))
+        lines.push(...tableIoMarkdown(item.pair))
       }
     }
     else if (item.pair) {
@@ -80,8 +93,7 @@ export function buildPrMarkdown(input: PrMarkdownInput): string {
       const metrics = compareRows(item.pair.baseline, item.pair.candidate, input.engine)
       lines.push(...metrics.map(row => `| ${tableCell(metricLabel(row.metric))} | ${formatNumber(row.baseline)} | ${formatNumber(row.candidate)} | ${formatChange(row.delta)} |`))
       if (input.engine?.toLowerCase() === "sqlserver" || input.engine?.toLowerCase() === "sql-server") {
-        const io = tableIoDelta(item.pair.baseline.tableIo, item.pair.candidate.tableIo)
-        lines.push("", "| Table | Logical reads (baseline) | Logical reads (candidate) | Change |", "| --- | ---: | ---: | ---: |", ...io.rows.map(row => `| ${tableCell(row.table)} | ${formatNumber(row.baseline?.logicalReads)} | ${formatNumber(row.candidate?.logicalReads)} | ${formatChange(row.logicalDelta)} |`))
+        lines.push(...tableIoMarkdown(item.pair))
       }
     } else lines.push("", `#### ${safeText(item.label)}`, "No complete baseline/candidate pair is available.")
 

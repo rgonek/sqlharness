@@ -4,8 +4,13 @@ import { expect, test } from "vitest"
 import { agentCall, operation, operationDetail, session, variant } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
 
+const stubOperationFetch = (routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)>) => stubFetch({
+  "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+  ...routes,
+})
+
 test("compare operation returns to its session with the originating subject and scope", async () => {
-  stubFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnSubject=orders&returnScope=history")
 
   const back = await screen.findByRole("link", { name: "mcp:session" })
@@ -16,7 +21,7 @@ test("compare operation returns to its session with the originating subject and 
 })
 
 test("compare operation returns to the unassigned group without inventing subject or scope", async () => {
-  stubFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnUnassigned=true")
 
   const back = await screen.findByRole("link", { name: "mcp:session" })
@@ -28,7 +33,7 @@ test("compare operation returns to the unassigned group without inventing subjec
 })
 
 test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", async () => {
-  stubFetch({ "/api/operations/10": operationDetail() })
+  stubOperationFetch({ "/api/operations/10": operationDetail() })
   renderApp("/operations/10")
 
   expect(await screen.findByRole("heading", { level: 1, name: "Operation #10" })).toBeInTheDocument()
@@ -48,7 +53,7 @@ test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", a
 })
 
 test("operation details show phase timing shares and expandable connection diagnostics", async () => {
-  stubFetch({ "/api/operations/10": operationDetail({
+  stubOperationFetch({ "/api/operations/10": operationDetail({
     operation: operation({ durationMs: 100 }),
     phases: [{ phase: "execute", count: 2, totalMs: 30, maxMs: 20 }],
     events: [
@@ -76,7 +81,7 @@ test("operation details show phase timing shares and expandable connection diagn
 })
 
 test("legacy operation details show an empty time breakdown without zero-valued phases", async () => {
-  stubFetch({ "/api/operations/10": operationDetail({
+  stubOperationFetch({ "/api/operations/10": operationDetail({
     operation: operation({ durationMs: 100 }),
     phases: [],
   }) })
@@ -90,7 +95,7 @@ test("legacy operation details show an empty time breakdown without zero-valued 
 
 test("compare shows baseline versus candidate and stored plans with operators", async () => {
   const hash = "B".repeat(64)
-  stubFetch({
+  stubOperationFetch({
     "/api/operations/10": operationDetail({
       operation: operation({ operation: "compare" }),
       sqlText: "SELECT 1",
@@ -119,7 +124,7 @@ test("compare shows baseline versus candidate and stored plans with operators", 
 })
 
 test("Operation_without_metrics_or_target_renders", async () => {
-  stubFetch({
+  stubOperationFetch({
     "/api/operations/10": operationDetail({
       operation: operation({ operation: "gain", profile: null, engine: null, server: null, database: null, sqlHash: null, durationMs: null, exitCode: null }),
       session: session(), vars: null, rawTokens: null, emittedTokens: null, artifactDirectory: null, summary: null, variants: [],
@@ -131,7 +136,7 @@ test("Operation_without_metrics_or_target_renders", async () => {
 })
 
 test("failed operation with a variant that has no metrics renders", async () => {
-  stubFetch({
+  stubOperationFetch({
     "/api/operations/10": operationDetail({
       operation: operation({ operation: "measure", status: "failed", exitCode: 5, errorKind: "SqlExecution", finishedAt: null, rowsReturned: null }),
       summary: null,
@@ -156,21 +161,21 @@ test("a non-numeric operation id shows not found without fetching operation data
 })
 
 test("measure-sets summary shows set stability", async () => {
-  stubFetch({ "/api/operations/10": operationDetail({ summary: { kind: "measure-sets", sets: 3, stableSets: 2 } }) })
+  stubOperationFetch({ "/api/operations/10": operationDetail({ summary: { kind: "measure-sets", sets: 3, stableSets: 2 } }) })
   renderApp("/operations/10")
   expect(await screen.findByText("2/3 sets stable")).toBeInTheDocument()
   expect(screen.getByText("unstable results")).toBeInTheDocument()
 })
 
 test("stable measure-sets summary has no unstable badge", async () => {
-  stubFetch({ "/api/operations/10": operationDetail({ summary: { kind: "measure-sets", sets: 2, stableSets: 2 } }) })
+  stubOperationFetch({ "/api/operations/10": operationDetail({ summary: { kind: "measure-sets", sets: 2, stableSets: 2 } }) })
   renderApp("/operations/10")
   expect(await screen.findByText("2/2 sets stable")).toBeInTheDocument()
   expect(screen.queryByText("unstable results")).not.toBeInTheDocument()
 })
 
 test("compare-matrix summary shows the matrix parameter and equivalent cells", async () => {
-  stubFetch({
+  stubOperationFetch({
     "/api/operations/10": operationDetail({
       summary: { kind: "compare-matrix", parameterName: "BatchSize", parameterType: "int", cells: 3, equivalentCells: 2 },
     }),
@@ -181,7 +186,7 @@ test("compare-matrix summary shows the matrix parameter and equivalent cells", a
 })
 
 test("agent call card shows the client-supplied labels and is absent without them", async () => {
-  stubFetch({
+  stubOperationFetch({
     "/api/operations/10": operationDetail({
       agent: agentCall({ callId: "exec-1", model: "gpt-6-sol", reasoningEffort: "low", sessionId: "s", turnId: "turn-1", turnTrigger: "exec", threadSource: "user" }),
     }),
@@ -196,7 +201,7 @@ test("agent call card shows the client-supplied labels and is absent without the
 })
 
 test("shows transcript model and effort when the call has no client labels", async () => {
-  stubFetch({ "/api/operations/10": operationDetail({
+  stubOperationFetch({ "/api/operations/10": operationDetail({
     agent: agentCall({ transcriptModel: "claude-opus-5-5", transcriptReasoningEffort: "high", conversationTitle: "Optimize orders" }),
   }) })
   renderApp("/operations/10")
@@ -207,7 +212,7 @@ test("shows transcript model and effort when the call has no client labels", asy
 })
 
 test("operations without call labels render no agent call card", async () => {
-  stubFetch({ "/api/operations/10": operationDetail({ agent: null }) })
+  stubOperationFetch({ "/api/operations/10": operationDetail({ agent: null }) })
   renderApp("/operations/10")
 
   expect(await screen.findByRole("heading", { level: 1, name: "Operation #10" })).toBeInTheDocument()
@@ -216,7 +221,7 @@ test("operations without call labels render no agent call card", async () => {
 
 test("measure operation shows recorded setup SQL before the measured query", async () => {
   const setup = "CREATE TABLE #data (id int);\nINSERT INTO #data VALUES (1);"
-  stubFetch({ "/api/operations/10": operationDetail({
+  stubOperationFetch({ "/api/operations/10": operationDetail({
     operation: operation({ operation: "measure" }),
     sqlText: "SELECT id FROM #data",
     setupSqlText: setup,

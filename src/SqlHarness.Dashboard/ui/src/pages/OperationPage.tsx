@@ -9,6 +9,9 @@ import { SqlBlock } from "@/components/SqlBlock"
 import { StatusBadge } from "@/components/StatusBadge"
 import { VariantPanel } from "@/components/VariantPanel"
 import { CompareDetail } from "@/components/CompareDetail"
+import { ConditionsList } from "@/components/ConditionsList"
+import { ReproScriptButtons } from "@/components/ReproScriptButtons"
+import { displayCaseLabel } from "@/lib/caseLabel"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -184,6 +187,20 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
       </Card>
 
       <OperationTimings detail={detail} />
+
+      {op.operation === "measure" && <Card>
+        <CardHeader><CardTitle>Measurement conditions</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <ConditionsList conditions={detail.conditions} />
+          {detail.variants.length > 0 && <section className="space-y-2">
+            <h2 className="font-medium">Reproduction scripts</h2>
+            {[...new Map(detail.variants.map(variant => [variant.caseId, variant])).values()].map(variant => <div key={variant.caseId} className="space-y-1">
+              {variant.caseLabel !== "Case 1 of 1" && <h3 className="text-sm font-medium" title={variant.caseLabel}>{displayCaseLabel(variant.caseLabel)}</h3>}
+              <ReproScriptButtons operationId={op.id} side="query" caseId={variant.caseId} />
+            </div>)}
+          </section>}
+        </CardContent>
+      </Card>}
 
       {detail.agent && (
         <Card>

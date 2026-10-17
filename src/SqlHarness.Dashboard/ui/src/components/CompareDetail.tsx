@@ -15,13 +15,15 @@ import { TableIoComparison } from "@/components/TableIoComparison"
 import { PlanChanges } from "@/components/PlanChanges"
 import { loadUnifiedDiffText } from "@/components/SqlEditors"
 import { buildPrMarkdown } from "@/lib/prMarkdown"
-import { firstPlanHash, planChanges } from "@/lib/planChanges"
+import { planChangeStatus, planChanges, storedPlanStatements } from "@/lib/planChanges"
 import { diffTooLarge, normalizeForDiff } from "@/lib/sqlDiff"
 import { SqlBlock } from "@/components/SqlBlock"
+import { ConditionsList } from "@/components/ConditionsList"
+import { ReproScriptButtons } from "@/components/ReproScriptButtons"
+import { displayCaseLabel } from "@/lib/caseLabel"
 
 type JsonObject = Record<string, unknown>
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
-const textValue = (value: unknown) => value === null || value === undefined ? "—" : typeof value === "string" ? value : JSON.stringify(value)
 
 function Equivalence({ value }: { value: JsonObject | null }) {
   return <Badge variant="outline">{equivalenceLabel(value)}</Badge>
@@ -49,14 +51,19 @@ type CompareCard = { key: string; label: string; pair: ReturnType<typeof compare
 function compareCards(detail: OperationDetail): CompareCard[] {
   const pairs = comparePairs(detail.variants)
   const cells = detail.compareCases ?? []
+  const casesByIndex = new Map((detail.conditions?.cases ?? []).map(item => [item.index, item]))
   const casePairs = new Map(pairs.filter(pair => pair.baseline.matrixCell !== null).map(pair => [pair.baseline.matrixCell!, pair]))
-  return cells.length > 0 ? cells.map(matrixCase => ({
-    key: `cell ${String(matrixCase.index)}`,
-    label: `Cell ${String(matrixCase.index)}`,
-    pair: casePairs.get(typeof matrixCase.index === "number" ? matrixCase.index : -1) ?? null,
-    equivalence: object(matrixCase.equivalence),
-    regression: object(matrixCase.regression),
-  })) : pairs.map(pair => ({
+  return cells.length > 0 ? cells.map(matrixCase => {
+    const index = typeof matrixCase.index === "number" ? matrixCase.index : -1
+    const caseLabel = casesByIndex.get(index)?.label
+    return {
+      key: `cell ${String(matrixCase.index)}`,
+      label: caseLabel && caseLabel !== "Case 1 of 1" ? caseLabel : `Cell ${String(matrixCase.index)}`,
+      pair: casePairs.get(index) ?? null,
+      equivalence: object(matrixCase.equivalence),
+      regression: object(matrixCase.regression),
+    }
+  }) : pairs.map(pair => ({
     key: pair.label,
     label: pair.baseline.matrixCell === null ? "Compare" : `Cell ${pair.baseline.matrixCell}`,
     pair,
@@ -72,19 +79,14 @@ function Cases({ detail }: { detail: OperationDetail }) {
   if (pairs.length === 0 && cells.length === 0) return <p className="text-sm text-muted-foreground">No complete baseline/candidate pairs are available.</p>
   return <div className="space-y-4">{cards.map(card => {
     return <Card key={card.key}>
-      <CardHeader><CardTitle className="text-base">{card.label}</CardTitle><CardDescription className="flex flex-wrap gap-2"><span>Execution {detail.operation.status}</span><span>·</span><span>{regressionLabel(card.regression)}</span><span>·</span><Equivalence value={card.equivalence} /></CardDescription></CardHeader>
-      {card.pair && <CardContent><PairMetrics baseline={card.pair.baseline} candidate={card.pair.candidate} engine={detail.operation.engine} /></CardContent>}
+      <CardHeader><CardTitle className="min-w-0 text-base"><span className="block" title={card.label}>{displayCaseLabel(card.label)}</span></CardTitle><CardDescription className="flex flex-wrap gap-2"><span>Execution {detail.operation.status}</span><span>·</span><span>{regressionLabel(card.regression)}</span><span>·</span><Equivalence value={card.equivalence} /></CardDescription></CardHeader>
+      {card.pair && <CardContent className="space-y-3"><PairMetrics baseline={card.pair.baseline} candidate={card.pair.candidate} engine={detail.operation.engine} /><div className="grid gap-3 sm:grid-cols-2"><section><h3 className="mb-1 text-sm font-medium">Baseline reproduction</h3><ReproScriptButtons operationId={detail.operation.id} side="baseline" caseId={card.pair.baseline.caseId} /></section><section><h3 className="mb-1 text-sm font-medium">Candidate reproduction</h3><ReproScriptButtons operationId={detail.operation.id} side="candidate" caseId={card.pair.candidate.caseId} /></section></div></CardContent>}
     </Card>
   })}</div>
 }
 
 function SetupSql({ detail }: { detail: OperationDetail }) {
-  const conditions = object(detail.compareConditions)
-  const recordedSetup = conditions?.setupSql
-  // Pre-v12 journals kept setup only inside bounded compare conditions.
-  const setup = detail.setupSqlText ?? (typeof recordedSetup === "string" ? recordedSetup : null)
-  const omittedFields = conditions?.omittedSensitiveFields
-  const omitted = Array.isArray(omittedFields) && omittedFields.includes("setupSql")
+  const setup = detail.setupSqlText ?? detail.conditions?.setup?.text ?? null
   return <section aria-label="Setup SQL" className="space-y-2">
     <h3 className="font-medium">Setup SQL</h3>
     {typeof setup === "string" && setup.trim() !== "" ? (
@@ -92,10 +94,6 @@ function SetupSql({ detail }: { detail: OperationDetail }) {
         <p className="text-sm text-muted-foreground">Run setup and the chosen SQL in the same database session, with the original parameter values.</p>
         <SqlBlock sql={setup} engine={detail.operation.engine} initiallyFormatted={false} />
       </>
-    ) : omitted ? (
-      <p className="text-sm text-muted-foreground">Setup SQL was omitted because journal storage limits were reached.</p>
-    ) : conditions && "setupSql" in conditions ? (
-      <p className="text-sm text-muted-foreground">No setup SQL was supplied.</p>
     ) : (
       <p className="text-sm text-muted-foreground">Setup SQL is not stored (journal.storeSensitive is off or historical data is unavailable).</p>
     )}
@@ -103,24 +101,7 @@ function SetupSql({ detail }: { detail: OperationDetail }) {
 }
 
 function Conditions({ detail }: { detail: OperationDetail }) {
-  const conditions = object(detail.compareConditions)
-  if (!conditions) return <p className="text-sm text-muted-foreground">Historical measurement conditions are unavailable.</p>
-  const allowed = ["timeoutSeconds", "repeat", "comparisonMode", "compareNullability", "setupSql", "parameters", "typedParameters", "parameterSets", "matrix", "matrixText"]
-  const omitted = Array.isArray(conditions.omittedSensitiveFields) ? conditions.omittedSensitiveFields.filter((item): item is string => typeof item === "string") : []
-  const fields = allowed.filter(key => key in conditions)
-  return <div className="space-y-4">
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <div><div className="text-sm text-muted-foreground">Profile</div><div>{detail.operation.profile ?? "—"}</div></div>
-      <div><div className="text-sm text-muted-foreground">Resolved database</div><div>{detail.operation.database ?? "—"}</div></div>
-      <div><div className="text-sm text-muted-foreground">Engine</div><div>{detail.operation.engine ?? "—"}</div></div>
-      <div><div className="text-sm text-muted-foreground">Server</div><div>{detail.operation.server ?? "—"}</div></div>
-    </div>
-    {detail.vars && <div><div className="text-sm text-muted-foreground">Variables</div><pre className="whitespace-pre-wrap font-mono text-xs">{JSON.stringify(detail.vars, null, 2)}</pre></div>}
-    <div className="grid gap-3 md:grid-cols-2">
-      {fields.map(key => <div key={key}><div className="text-sm text-muted-foreground">{key}</div><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border p-2 font-mono text-xs">{textValue(conditions[key])}</pre></div>)}
-      {omitted.map(key => <div key={key}><div className="text-sm text-muted-foreground">{key}</div><span className="text-sm">Unavailable; omitted by journal storage limits.</span></div>)}
-    </div>
-  </div>
+  return <ConditionsList conditions={detail.conditions} />
 }
 
 export function CompareDetail({ detail }: { detail: OperationDetail }) {
@@ -137,16 +118,19 @@ export function CompareDetail({ detail }: { detail: OperationDetail }) {
     await Promise.all(cards.flatMap(card => {
       const pair = card.pair
       if (!pair) return []
-      const baselineHash = firstPlanHash(pair.baseline)
-      const candidateHash = firstPlanHash(pair.candidate)
-      if (baselineHash === null || candidateHash === null) {
-        plans.set(pair.label, "unavailable")
-        return []
-      }
-      if (baselineHash === candidateHash) {
+      const status = planChangeStatus(pair.baseline, pair.candidate)
+      if (status.same) {
         plans.set(pair.label, "same")
         return []
       }
+      const change = status.changed[0]
+      if (!change) {
+        plans.set(pair.label, "unavailable")
+        return []
+      }
+      const baselineHash = storedPlanStatements(pair.baseline).find(plan => plan.ordinal === change.ordinal)?.hash
+      const candidateHash = storedPlanStatements(pair.candidate).find(plan => plan.ordinal === change.ordinal)?.hash
+      if (!baselineHash || !candidateHash) { plans.set(pair.label, "unavailable"); return [] }
       return [queryClient.fetchQuery({ queryKey: queryKeys.plan(baselineHash), queryFn: () => fetchDistilledPlan(baselineHash), staleTime: Infinity })
         .then(baseline => queryClient.fetchQuery({ queryKey: queryKeys.plan(candidateHash), queryFn: () => fetchDistilledPlan(candidateHash), staleTime: Infinity })
           .then(candidate => plans.set(pair.label, planChanges(baseline, candidate))))

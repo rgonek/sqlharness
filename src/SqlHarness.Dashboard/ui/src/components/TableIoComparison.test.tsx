@@ -6,8 +6,8 @@ import { variant } from "@/test/fixtures"
 
 test("labels each matrix cell and keeps a regression visible beside an improvement", () => {
   const pairs: ComparePair[] = [
-    { label: "cell 0", baseline: variant({ variant: "baseline", matrixCell: 0, tableIo: [{ ...variant().tableIo[0], logicalReads: 100 }] }), candidate: variant({ variant: "candidate", matrixCell: 0, tableIo: [{ ...variant().tableIo[0], logicalReads: 400 }] }) },
-    { label: "cell 1", baseline: variant({ variant: "baseline", matrixCell: 1, tableIo: [{ ...variant().tableIo[0], logicalReads: 100 }] }), candidate: variant({ variant: "candidate", matrixCell: 1, tableIo: [{ ...variant().tableIo[0], logicalReads: 50 }] }) },
+    { label: "cell 0", baseline: variant({ variant: "baseline", matrixCell: 0, tableIo: [{ ...variant().tableIo[0], logicalReads: 100, totalLogicalReads: 100 }] }), candidate: variant({ variant: "candidate", matrixCell: 0, tableIo: [{ ...variant().tableIo[0], logicalReads: 400, totalLogicalReads: 400 }] }) },
+    { label: "cell 1", baseline: variant({ variant: "baseline", matrixCell: 1, tableIo: [{ ...variant().tableIo[0], logicalReads: 100, totalLogicalReads: 100 }] }), candidate: variant({ variant: "candidate", matrixCell: 1, tableIo: [{ ...variant().tableIo[0], logicalReads: 50, totalLogicalReads: 50 }] }) },
   ]
   render(<TableIoComparison pairs={pairs} engine="sqlserver" />)
   const first = screen.getByRole("region", { name: "cell 0 table IO" })
@@ -16,6 +16,10 @@ test("labels each matrix cell and keeps a regression visible beside an improveme
   const secondTable = within(second).getByRole("table", { name: /per-table IO/ })
   expect(within(within(firstTable).getByRole("row", { name: /Orders/ })).getByText("+300%")).toBeInTheDocument()
   expect(within(within(secondTable).getByRole("row", { name: /Orders/ })).getByText("-50%")).toBeInTheDocument()
+  expect(within(firstTable).getByText(/Logical B/)).toBeInTheDocument()
+  expect(within(firstTable).getByText(/LOB logical B/)).toBeInTheDocument()
+  expect(within(firstTable).getByText(/Total B/)).toBeInTheDocument()
+  expect(screen.getAllByText(/median of run totals \(data \+ LOB\)/)).toHaveLength(2)
 })
 
 test("shows recorded PostgreSQL buffers without a per-table IO section", () => {

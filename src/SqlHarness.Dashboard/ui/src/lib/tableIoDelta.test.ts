@@ -20,3 +20,15 @@ test("joins tables, labels one-sided rows, sorts by absolute change and totals",
 test("zero baseline gives no percentage", () => {
   expect(tableIoDelta([io("T", 0)], [io("T", 5)]).rows[0].logicalDelta).toBeNull()
 })
+
+test("uses data plus LOB reads for totals and combines table-variable rows", () => {
+  const before = [
+    { ...io("#12345678", 10), lobLogicalReads: 4, totalLogicalReads: 14 },
+    { ...io("#ABCDEF12", 20), lobLogicalReads: 8, totalLogicalReads: 28 },
+  ]
+  const after = [{ ...io("#87654321", 10), lobLogicalReads: 4, totalLogicalReads: 14 }]
+  const result = tableIoDelta(before, after)
+  expect(result.rows.map(row => row.table)).toEqual(["table variables"])
+  expect(result.rows[0].baseline).toMatchObject({ logicalReads: 30, lobLogicalReads: 12, totalLogicalReads: 42, scans: 2 })
+  expect(result.total).toEqual({ baseline: 42, candidate: 14, delta: -2 / 3 })
+})

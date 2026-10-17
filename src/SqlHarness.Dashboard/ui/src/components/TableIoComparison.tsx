@@ -43,16 +43,19 @@ function SqlServerTable({ pair }: { pair: ComparePair }) {
   const comparison = tableIoDelta(pair.baseline.tableIo, pair.candidate.tableIo)
   if (comparison.rows.length === 0) return <p className="text-sm text-muted-foreground">No table IO recorded for this pair.</p>
   return <div className="space-y-2">
+    <p className="text-sm text-muted-foreground">Headline: median of run totals (data + LOB)</p>
     <Table aria-label={`${pair.label} per-table IO`}>
-      <TableHeader><TableRow><TableHead>Table</TableHead><TableHead className="text-right">Logical reads B</TableHead><TableHead className="text-right">C</TableHead><TableHead className="text-right">Change</TableHead><TableHead className="text-right">Scans B</TableHead><TableHead className="text-right">C</TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow><TableHead>Table</TableHead><TableHead className="text-right">Logical B</TableHead><TableHead className="text-right">C</TableHead><TableHead className="text-right">LOB logical B</TableHead><TableHead className="text-right">C</TableHead><TableHead className="text-right">Total B</TableHead><TableHead className="text-right">C</TableHead><TableHead className="text-right">Scans B</TableHead><TableHead className="text-right">C</TableHead><TableHead className="text-right">Change</TableHead></TableRow></TableHeader>
       <TableBody>
         {comparison.rows.map(row => <TableRow key={row.table}>
           <TableCell className="font-mono">{row.table} {row.presence !== "both" && <Badge variant="outline">only in {row.presence === "baseline-only" ? "baseline" : "candidate"}</Badge>}</TableCell>
           <TableCell className="text-right">{formatNumber(row.baseline?.logicalReads)}</TableCell><TableCell className="text-right">{formatNumber(row.candidate?.logicalReads)}</TableCell>
+          <TableCell className="text-right">{formatNumber(row.baseline?.lobLogicalReads)}</TableCell><TableCell className="text-right">{formatNumber(row.candidate?.lobLogicalReads)}</TableCell>
+          <TableCell className="text-right">{formatNumber(row.baseline?.totalLogicalReads)}</TableCell><TableCell className="text-right">{formatNumber(row.candidate?.totalLogicalReads)}</TableCell>
+          <TableCell className="text-right">{formatNumber(row.baseline?.scans ?? row.baseline?.scanCount)}</TableCell><TableCell className="text-right">{formatNumber(row.candidate?.scans ?? row.candidate?.scanCount)}</TableCell>
           <TableCell className="text-right">{formatChange(row.logicalDelta)}</TableCell>
-          <TableCell className="text-right">{formatNumber(row.baseline?.scanCount)}</TableCell><TableCell className="text-right">{formatNumber(row.candidate?.scanCount)}</TableCell>
         </TableRow>)}
-        <TableRow className="font-bold"><TableCell>Total</TableCell><TableCell className="text-right">{formatNumber(comparison.total.baseline)}</TableCell><TableCell className="text-right">{formatNumber(comparison.total.candidate)}</TableCell><TableCell className="text-right">{formatChange(comparison.total.delta)}</TableCell><TableCell colSpan={2} /></TableRow>
+        <TableRow className="font-bold"><TableCell>Total</TableCell><TableCell className="text-right">{formatNumber(comparison.rows.reduce((total, row) => total + (row.baseline?.logicalReads ?? 0), 0))}</TableCell><TableCell className="text-right">{formatNumber(comparison.rows.reduce((total, row) => total + (row.candidate?.logicalReads ?? 0), 0))}</TableCell><TableCell className="text-right">{formatNumber(nullableTotal(comparison.rows.flatMap(row => row.baseline ? [row.baseline] : []), "lobLogicalReads"))}</TableCell><TableCell className="text-right">{formatNumber(nullableTotal(comparison.rows.flatMap(row => row.candidate ? [row.candidate] : []), "lobLogicalReads"))}</TableCell><TableCell className="text-right">{formatNumber(comparison.total.baseline)}</TableCell><TableCell className="text-right">{formatNumber(comparison.total.candidate)}</TableCell><TableCell className="text-right">{formatNumber(comparison.rows.reduce((total, row) => total + (row.baseline?.scans ?? row.baseline?.scanCount ?? 0), 0))}</TableCell><TableCell className="text-right">{formatNumber(comparison.rows.reduce((total, row) => total + (row.candidate?.scans ?? row.candidate?.scanCount ?? 0), 0))}</TableCell><TableCell className="text-right">{formatChange(comparison.total.delta)}</TableCell></TableRow>
       </TableBody>
     </Table>
     <MoreRows rows={comparison.rows} />
@@ -85,7 +88,7 @@ export function TableIoComparison({ pairs, engine }: { pairs: ComparePair[]; eng
   if (pairs.length === 0) return null
   const postgres = engine === "postgres"
   return <Card>
-    <CardHeader><CardTitle>Table IO: baseline vs candidate</CardTitle></CardHeader>
+    <CardHeader><CardTitle>Table IO: baseline vs candidate</CardTitle><p className="text-sm text-muted-foreground">Median of run totals (data + LOB)</p></CardHeader>
     <CardContent className="space-y-4">
       {pairs.map(pair => <section key={pair.label} aria-label={`${pair.label} table IO`} className="space-y-2">
         {pairs.length > 1 && <h3 className="font-medium">{pair.label}</h3>}

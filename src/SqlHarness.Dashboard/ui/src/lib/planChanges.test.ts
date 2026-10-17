@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 import type { DistilledPlan, PlanNode } from "@/api/types"
 import { variant as variantFixture } from "@/test/fixtures"
-import { planChanges, firstPlanHash } from "./planChanges"
+import { planChanges, planChangeStatus } from "./planChanges"
 
 const plan = (root: PlanNode, missing = 0): DistilledPlan => ({
   statements: [{ root, missingIndexes: Array.from({ length: missing }, () => ({ table: "Orders", equalityColumns: ["CustomerId"], inequalityColumns: [], includeColumns: [], impact: 90 })) }],
@@ -65,15 +65,29 @@ test("identical plans have no access or warning changes", () => {
   expect(planChanges(p, p)).toMatchObject({ access: [], accessDetails: [], warnings: [] })
 })
 
-test("firstPlanHash chooses the earliest stored repetition and ordinal", () => {
-  const withPlans = variantFixture({
-    plans: [
-      { repetition: 2, ordinal: 0, hash: "later-repetition", stored: true },
-      { repetition: 1, ordinal: 3, hash: "later-ordinal", stored: true },
-      { repetition: 1, ordinal: 1, hash: "first", stored: true },
-      { repetition: 0, ordinal: 0, hash: "not-stored", stored: false },
-    ],
-  })
-  expect(firstPlanHash(withPlans)).toBe("first")
-  expect(firstPlanHash(variantFixture({ plans: [] }))).toBeNull()
+test("reports changed statement hashes in the first stored repetition", () => {
+  const baseline = variantFixture({ plans: [
+    { repetition: 1, ordinal: 0, hash: "same", stored: true },
+    { repetition: 1, ordinal: 1, hash: "before12345678", stored: true },
+  ] })
+  const candidate = variantFixture({ plans: [
+    { repetition: 1, ordinal: 0, hash: "same", stored: true },
+    { repetition: 1, ordinal: 1, hash: "after12345678", stored: true },
+  ] })
+  expect(planChangeStatus(baseline, candidate)).toEqual({ same: false, changed: [{ ordinal: 1, statement: "statement 1 (after1234567)" }] })
+})
+
+test("reports different statement counts as changed", () => {
+  expect(planChangeStatus(
+    variantFixture({ plans: [{ repetition: 1, ordinal: 0, hash: "one", stored: true }] }),
+    variantFixture({ plans: [{ repetition: 1, ordinal: 0, hash: "one", stored: true }, { repetition: 1, ordinal: 1, hash: "two", stored: true }] }),
+  ).same).toBe(false)
+})
+
+test("reports all stored statement hashes equal", () => {
+  const variants = variantFixture({ plans: [
+    { repetition: 1, ordinal: 0, hash: "one", stored: true },
+    { repetition: 1, ordinal: 1, hash: "two", stored: true },
+  ] })
+  expect(planChangeStatus(variants, variants)).toEqual({ same: true, changed: [] })
 })

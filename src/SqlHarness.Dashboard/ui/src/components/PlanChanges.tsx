@@ -1,11 +1,12 @@
 import { Fragment } from "react"
-import { useDistilledPlan } from "@/api/queries"
+import { useQuery } from "@tanstack/react-query"
+import { fetchDistilledPlan, useDistilledPlan } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { ComparePair } from "@/lib/compare"
-import { firstPlanHash, planChanges, type TopOperator } from "@/lib/planChanges"
+import { planChangeStatus, planChanges, storedPlanStatements, type TopOperator } from "@/lib/planChanges"
 import { formatNumber } from "@/lib/format"
 
 const operators = (values: string[]) => values.length ? values.join(", ") : "—"
@@ -23,8 +24,22 @@ function TopOperators({ title, nodes }: { title: string; nodes: TopOperator[] })
 }
 
 export function PlanChanges({ pair }: { pair: ComparePair }) {
-  const hashB = firstPlanHash(pair.baseline)
-  const hashC = firstPlanHash(pair.candidate)
+  const beforeLinks = storedPlanStatements(pair.baseline)
+  const afterLinks = storedPlanStatements(pair.candidate)
+  const hashB = beforeLinks[0]?.hash ?? null
+  const hashC = afterLinks[0]?.hash ?? null
+  const status = planChangeStatus(pair.baseline, pair.candidate)
+  const changedLinks = status.changed.flatMap(change => {
+    const before = beforeLinks.find(link => link.ordinal === change.ordinal)
+    const after = afterLinks.find(link => link.ordinal === change.ordinal)
+    return [before, after].filter((link): link is NonNullable<typeof link> => Boolean(link))
+  })
+  const statementPlans = useQuery({
+    queryKey: ["changed-statement-plans", [...new Set(changedLinks.map(link => link.hash))].sort()],
+    queryFn: async () => Object.fromEntries(await Promise.all([...new Set(changedLinks.map(link => link.hash))].map(async hash => [hash, await fetchDistilledPlan(hash)] as const))),
+    enabled: changedLinks.length > 0,
+    staleTime: Infinity,
+  })
   const baseline = useDistilledPlan(hashB ?? "", hashB !== null)
   const candidate = useDistilledPlan(hashC ?? "", hashC !== null && hashC !== hashB)
 
@@ -34,11 +49,24 @@ export function PlanChanges({ pair }: { pair: ComparePair }) {
   else if (baseline.error) content = <ErrorState error={baseline.error} />
   else if (hashB !== hashC && candidate.error) content = <ErrorState error={candidate.error} />
   else if (baseline.isPending || (hashB !== hashC && candidate.isPending)) content = <Skeleton className="h-32 w-full" />
-  else if (hashB === hashC) content = <p className="text-sm text-muted-foreground">Same plan</p>
+  else if (status.same) content = <p className="text-sm text-muted-foreground">Same plan</p>
   else if (baseline.data && candidate.data) {
     const changes = planChanges(baseline.data, candidate.data)
     const detailByObject = new Map(changes.accessDetails.map(detail => [detail.object, detail]))
     content = <div className="space-y-4">
+      <section aria-label={`${pair.label} changed statements`}>
+        <h3 className="mb-2 font-medium">Changed statements</h3>
+        {status.changed.length === 0 ? <p className="text-sm text-muted-foreground">Statement plan comparison unavailable.</p> : <ul className="space-y-2">
+          {status.changed.map(change => {
+            const link = afterLinks.find(item => item.ordinal === change.ordinal) ?? beforeLinks.find(item => item.ordinal === change.ordinal)
+            const sql = link ? statementPlans.data?.[link.hash]?.statements.find(statement => statement.sql)?.sql : null
+            return <li key={change.ordinal} className="rounded border p-2">
+              <h4 className="font-medium">{sql ?? change.statement}</h4>
+              {sql && <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-xs">{sql}</pre>}
+            </li>
+          })}
+        </ul>}
+      </section>
       <section aria-label={`${pair.label} access changes`}>
         <h3 className="mb-2 font-medium">Access changes</h3>
         {changes.access.length === 0 ? <p className="text-sm text-muted-foreground">No access changes.</p> : <Table aria-label={`${pair.label} Access changes`}>

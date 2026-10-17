@@ -1,6 +1,6 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
-import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, MutationRequestSummary, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
+import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, MutationRequestSummary, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string }
 
@@ -123,6 +123,10 @@ export function useSessionSqlText(sessionId: number, hash: string | null) {
 
 export function useOperation(id: number) {
   return useQuery({ queryKey: queryKeys.operation(id), queryFn: () => getJson<OperationDetail>(`/api/operations/${id}`) })
+}
+
+export function fetchReproScript(operationId: number, side: string, caseId: string, form: ReproScriptForm): Promise<ReproScript> {
+  return getJson<ReproScript>(`/api/operations/${operationId}/repro`, { side, case: caseId, form })
 }
 
 export function useOperations(filters: OperationFilters) {

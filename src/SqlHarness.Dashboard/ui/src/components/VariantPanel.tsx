@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatKb, formatNumber, shortHash } from "@/lib/format"
+import { tableIoDelta } from "@/lib/tableIoDelta"
 
 const spread = (value: { min: number; median: number; max: number } | null, unit = "") =>
   value ? `${formatNumber(value.median)}${unit}` : "—"
@@ -39,6 +40,7 @@ function StoredPlan({ link, engine }: { link: PlanLinkRow; engine: string | null
 export function VariantPanel({ variant, engine, compareMetrics = false }: { variant: VariantDetail; engine: string | null; compareMetrics?: boolean }) {
   const plans = [...new Map(variant.plans.map(link => [link.hash, link])).values()]
   const sqlServer = !compareMetrics || engine?.toLowerCase() === "sqlserver" || engine?.toLowerCase() === "sql-server"
+  const tableIoRows = tableIoDelta(variant.tableIo, []).rows.flatMap(row => row.baseline ? [row.baseline] : [])
   return (
     <div className="space-y-4">
       <section aria-label="Key metrics" className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -59,7 +61,8 @@ export function VariantPanel({ variant, engine, compareMetrics = false }: { vari
       {variant.tableIo.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Table IO (median per run)</CardTitle>
+            <CardTitle>Table IO</CardTitle>
+            <p className="text-sm text-muted-foreground">{variant.totalLogicalReadsLabel}</p>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table>
@@ -68,21 +71,19 @@ export function VariantPanel({ variant, engine, compareMetrics = false }: { vari
                   <TableHead>Table</TableHead>
                   <TableHead className="text-right">Logical</TableHead>
                   <TableHead className="text-right">Scans</TableHead>
-                  <TableHead className="text-right">Physical</TableHead>
-                  <TableHead className="text-right">Read-ahead</TableHead>
                   <TableHead className="text-right">LOB logical</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Cold runs</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {variant.tableIo.map(row => (
+                {tableIoRows.map(row => (
                   <TableRow key={row.table}>
                     <TableCell className="font-mono">{row.table}</TableCell>
                     <TableCell className="text-right">{formatNumber(row.logicalReads)}</TableCell>
                     <TableCell className="text-right">{formatNumber(row.scanCount)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.physicalReads)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.readAheadReads)}</TableCell>
                     <TableCell className="text-right">{formatNumber(row.lobLogicalReads)}</TableCell>
+                    <TableCell className="text-right">{formatNumber(row.totalLogicalReads)}</TableCell>
                     <TableCell className="text-right">{row.coldRuns > 0 ? <Badge variant="outline">{row.coldRuns}</Badge> : "0"}</TableCell>
                   </TableRow>
                 ))}

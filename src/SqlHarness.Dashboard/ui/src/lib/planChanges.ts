@@ -1,5 +1,6 @@
 import type { DistilledPlan, PlanNode, VariantDetail } from "@/api/types"
 import { flattenPlan } from "@/lib/plan"
+import { shortHash } from "@/lib/format"
 
 export type AccessChange = { object: string; baseline: string[]; candidate: string[] }
 export type WarningChange = { warning: string; baseline: number; candidate: number }
@@ -14,10 +15,28 @@ export type PlanChangesResult = {
   topCandidate: TopOperator[]
 }
 
-export function firstPlanHash(variant: VariantDetail): string | null {
-  return [...variant.plans]
-    .filter(plan => plan.stored)
-    .sort((a, b) => a.repetition - b.repetition || a.ordinal - b.ordinal)[0]?.hash ?? null
+export type PlanStatementChange = { ordinal: number; statement: string }
+
+export function storedPlanStatements(variant: VariantDetail) {
+  const stored = variant.plans.filter(plan => plan.stored)
+  const firstRepetition = Math.min(...stored.map(plan => plan.repetition))
+  return Number.isFinite(firstRepetition) ? stored.filter(plan => plan.repetition === firstRepetition).sort((a, b) => a.ordinal - b.ordinal) : []
+}
+
+export function planChangeStatus(baseline: VariantDetail, candidate: VariantDetail): { same: boolean; changed: PlanStatementChange[] } {
+  const before = storedPlanStatements(baseline)
+  const after = storedPlanStatements(candidate)
+  const beforeByOrdinal = new Map(before.map(plan => [plan.ordinal, plan]))
+  const afterByOrdinal = new Map(after.map(plan => [plan.ordinal, plan]))
+  const ordinals = [...new Set([...beforeByOrdinal.keys(), ...afterByOrdinal.keys()])].sort((a, b) => a - b)
+  const changed = ordinals.flatMap(ordinal => {
+    const previous = beforeByOrdinal.get(ordinal)
+    const next = afterByOrdinal.get(ordinal)
+    if (previous && next && previous.hash === next.hash) return []
+    const hash = next?.hash ?? previous?.hash ?? ""
+    return [{ ordinal, statement: `statement ${ordinal} (${shortHash(hash)})` }]
+  })
+  return { same: before.length > 0 && before.length === after.length && changed.length === 0, changed }
 }
 
 const objectFor = (node: PlanNode): string | null => node.objectName

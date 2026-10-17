@@ -3,11 +3,13 @@ import userEvent from "@testing-library/user-event"
 import { expect, test, vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { CompareDetail } from "./CompareDetail"
-import { operation, operationDetail, variant } from "@/test/fixtures"
+import { conditions, operation, operationDetail, variant } from "@/test/fixtures"
+import { stubFetch } from "@/test/render"
 
-const renderCompare = (detail: ReturnType<typeof operationDetail>) => render(
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>,
-)
+const renderCompare = (detail: ReturnType<typeof operationDetail>) => {
+  stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" } })
+  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>)
+}
 
 test("keeps execution, Core regression, result equivalence, and matrix case outcomes separate", () => {
   renderCompare(operationDetail({
@@ -36,6 +38,35 @@ test("keeps execution, Core regression, result equivalence, and matrix case outc
   expect(screen.getByRole("region", { name: "Compare detail" })).toHaveTextContent("v0 → v1")
 })
 
+test("shows canonical case labels, truncates long labels, and hides the single-case label", () => {
+  const fullLabel = "@ClassType = N'ClientConfigurationModel2'"
+  renderCompare(operationDetail({
+    operation: operation({ operation: "compare", status: "succeeded" }),
+    summary: { kind: "compare-matrix", comparison: "Ordered", cases: 2 },
+    conditions: conditions({ cases: [
+      { id: "0", index: 0, label: fullLabel, setName: null, varying: [], fingerprint: "a" },
+      { id: "1", index: 1, label: "@tenant = N'a very long tenant label that should be clipped in the heading'", setName: null, varying: [], fingerprint: "b" },
+    ] }),
+    compareCases: [{ index: 0 }, { index: 1 }],
+    variants: [
+      variant({ ordinal: 0, variant: "baseline", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", matrixCell: 0 }),
+      variant({ ordinal: 2, variant: "baseline", matrixCell: 1 }), variant({ ordinal: 3, variant: "candidate", matrixCell: 1 }),
+    ],
+  }))
+  const heading = screen.getByTitle(fullLabel)
+  expect(heading).toHaveTextContent("@ClassType = N'ClientConfigurationModel2'")
+  const longLabel = "@tenant = N'a very long tenant label that should be clipped in the heading'"
+  const long = screen.getByTitle(longLabel)
+  expect(long).toHaveTextContent(/^@tenant = N'a very long/)
+  expect(long).toHaveTextContent(/heading'$/)
+  expect(long).not.toHaveTextContent(longLabel)
+
+  const single = renderCompare(operationDetail({
+    operation: operation({ operation: "compare" }), conditions: conditions({ cases: [{ id: "0", index: 0, label: "Case 1 of 1", setName: null, varying: [], fingerprint: "single" }] }),
+  }))
+  expect(single.queryByText("Case 1 of 1")).not.toBeInTheDocument()
+})
+
 test("shows missing historic conditions and unrecorded equivalence without borrowing an assessment", async () => {
   renderCompare(operationDetail({
     operation: operation({ operation: "compare" }),
@@ -50,6 +81,7 @@ test("shows missing historic conditions and unrecorded equivalence without borro
 })
 
 test("shows plans and table IO from both compare sides", async () => {
+  stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" } })
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={queryClient}><CompareDetail detail={operationDetail({
     operation: operation({ operation: "compare" }),
@@ -71,7 +103,7 @@ test("copies compare Markdown without operation metadata or SQL when SQL text is
     operation: operation({ operation: "compare", engine: "sqlserver", server: "server-secret", database: "database-secret", profile: "profile-secret" }),
     vars: { tenant: "var-secret" }, artifactDirectory: "artifact-secret", sqlText: null, candidateSqlText: null,
     compareSubject: "orders", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v1",
-    compareConditions: { setupSql: "setup-secret", parameters: [{ value: "parameter-secret" }] },
+    conditions: conditions({ setup: { hash: "setup", text: "setup-secret" }, fixed: [{ name: "@p", effectiveType: "int", value: "parameter-secret" }] }),
   }))
 
   await userEvent.click(screen.getByRole("button", { name: "Copy" }))
@@ -91,7 +123,7 @@ test("shows original setup SQL with an independent copy control beside compare S
     operation: operation({ operation: "compare" }),
     sqlText: "SELECT id FROM #session_data",
     candidateSqlText: "SELECT id FROM #session_data WHERE id > 0",
-    compareConditions: { setupSql: setup, timeoutSeconds: 30 },
+    conditions: conditions({ setup: { hash: "setup", text: setup } }),
   }))
   await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
   const panel = screen.getByRole("region", { name: "Setup SQL" })
@@ -106,15 +138,15 @@ test("explains when setup SQL is unavailable or omitted by journal limits", asyn
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const { rerender } = render(<QueryClientProvider client={queryClient}><CompareDetail detail={operationDetail({
     operation: operation({ operation: "compare" }),
-    compareConditions: { timeoutSeconds: 30 },
+    conditions: conditions(),
   })} /></QueryClientProvider>)
   await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
   expect(screen.getByText(/Setup SQL is not stored/)).toBeInTheDocument()
   rerender(<QueryClientProvider client={queryClient}><CompareDetail detail={operationDetail({
     operation: operation({ operation: "compare" }),
-    compareConditions: { omittedSensitiveFields: ["setupSql"], timeoutSeconds: 30 },
+    conditions: conditions(),
   })} /></QueryClientProvider>)
-  expect(screen.getByText(/Setup SQL was omitted/)).toBeInTheDocument()
+  expect(screen.getByText(/Setup SQL is not stored/)).toBeInTheDocument()
   expect(within(screen.getByRole("region", { name: "Setup SQL" })).queryByRole("button", { name: "Copy" })).not.toBeInTheDocument()
 })
 
@@ -123,7 +155,7 @@ test("uses the dedicated setup column even if the bounded conditions omitted set
   renderCompare(operationDetail({
     operation: operation({ operation: "compare" }),
     setupSqlText: setup,
-    compareConditions: { omittedSensitiveFields: ["setupSql"] },
+    conditions: conditions(),
   }))
   await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
   const section = screen.getByRole("region", { name: "Setup SQL" })

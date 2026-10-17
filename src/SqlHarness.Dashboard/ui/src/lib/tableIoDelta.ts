@@ -8,18 +8,43 @@ export type TableIoDeltaRow = {
   logicalDelta: number | null
 }
 
+const tableVariable = /^(?:\[dbo\]\.)?\[?#(?:[0-9a-f]{8})\]?$/i
+
+function grouped(rows: TableIoRow[]): Map<string, TableIoRow> {
+  const result = new Map<string, TableIoRow>()
+  for (const row of rows) {
+    const table = tableVariable.test(row.table) ? "table variables" : row.table
+    const previous = result.get(table)
+    if (!previous) {
+      result.set(table, { ...row, table })
+      continue
+    }
+    const sum = (left: number | null, right: number | null): number | null => left === null && right === null ? null : (left ?? 0) + (right ?? 0)
+    result.set(table, {
+      ...previous,
+      logicalReads: previous.logicalReads + row.logicalReads,
+      scanCount: sum(previous.scanCount, row.scanCount), scans: sum(previous.scans, row.scans),
+      physicalReads: sum(previous.physicalReads, row.physicalReads), pageServerReads: sum(previous.pageServerReads, row.pageServerReads),
+      readAheadReads: sum(previous.readAheadReads, row.readAheadReads), lobLogicalReads: sum(previous.lobLogicalReads, row.lobLogicalReads),
+      lobPhysicalReads: sum(previous.lobPhysicalReads, row.lobPhysicalReads), lobReadAheadReads: sum(previous.lobReadAheadReads, row.lobReadAheadReads),
+      coldRuns: previous.coldRuns + row.coldRuns, totalLogicalReads: previous.totalLogicalReads + row.totalLogicalReads,
+    })
+  }
+  return result
+}
+
 export function tableIoDelta(baseline: TableIoRow[], candidate: TableIoRow[]): {
   rows: TableIoDeltaRow[]
   total: { baseline: number; candidate: number; delta: number | null }
 } {
-  const baselineByTable = new Map(baseline.map(row => [row.table, row]))
-  const candidateByTable = new Map(candidate.map(row => [row.table, row]))
+  const baselineByTable = grouped(baseline)
+  const candidateByTable = grouped(candidate)
   const tableNames = new Set([...baselineByTable.keys(), ...candidateByTable.keys()])
   const rows = [...tableNames].map(table => {
     const baselineRow = baselineByTable.get(table) ?? null
     const candidateRow = candidateByTable.get(table) ?? null
-    const baselineReads = baselineRow?.logicalReads ?? null
-    const candidateReads = candidateRow?.logicalReads ?? null
+    const baselineReads = baselineRow?.totalLogicalReads ?? null
+    const candidateReads = candidateRow?.totalLogicalReads ?? null
     return {
       table,
       presence: baselineRow && candidateRow ? "both" as const : baselineRow ? "baseline-only" as const : "candidate-only" as const,
@@ -35,8 +60,8 @@ export function tableIoDelta(baseline: TableIoRow[], candidate: TableIoRow[]): {
     if (leftChange !== rightChange) return rightChange - leftChange
     return left.table < right.table ? -1 : left.table > right.table ? 1 : 0
   })
-  const baselineTotal = baseline.reduce((total, row) => total + row.logicalReads, 0)
-  const candidateTotal = candidate.reduce((total, row) => total + row.logicalReads, 0)
+  const baselineTotal = baseline.reduce((total, row) => total + row.totalLogicalReads, 0)
+  const candidateTotal = candidate.reduce((total, row) => total + row.totalLogicalReads, 0)
   return {
     rows,
     total: {

@@ -1,4 +1,10 @@
-import type { AgentCall, DashboardStats, OperationDetail, OperationSummary, SessionDetail, SessionSummary, VariantDetail } from "@/api/types"
+import type { AgentCall, ConditionsModel, DashboardStats, OperationDetail, OperationSummary, SessionDetail, SessionSummary, VariantDetail } from "@/api/types"
+
+export const conditions = (over: Partial<ConditionsModel> = {}): ConditionsModel => ({
+  version: 1, engine: "sqlserver", server: "srv", database: "db",
+  execution: { operation: "compare", sessionPolicy: "sequential-cases", setupBinding: "per-case", warmup: 1, repeat: 3, timeoutSeconds: 30, comparisonMode: "Ordered", compareNullability: false },
+  setup: null, fixed: [], cases: [], fingerprint: "fingerprint", omitted: [], ...over,
+})
 
 export const session = (over: Partial<SessionSummary> = {}): SessionSummary => ({
   id: 1, sessionKey: "cli:abc", agentKind: "claude", transport: "cli", source: "process-tree",

@@ -94,7 +94,7 @@ export type CompareAttemptSummary = {
   startedAt: string
   regression: Record<string, unknown> | null
   cases: Record<string, unknown>[] | null
-  conditions: Record<string, unknown> | null
+  conditions: ConditionsModel | null
   summary: Record<string, unknown> | null
 }
 
@@ -124,6 +124,16 @@ export type SessionDetail = {
 }
 
 export type SqlVersionText = { hash: string; text: string | null; tooLarge: boolean }
+export type ConditionsParameter = { name: string; effectiveType: string; value: unknown | null }
+export type ConditionsCase = { id: string; index: number; label: string; setName: string | null; varying: ConditionsParameter[]; fingerprint: string }
+export type ConditionsModel = {
+  version: number; engine: string; server: string | null; database: string | null
+  execution: { operation: string; sessionPolicy: string; setupBinding: string; warmup: number; repeat: number; timeoutSeconds: number; comparisonMode: string | null; compareNullability: boolean | null }
+  setup: { hash: string; text: string | null } | null
+  fixed: ConditionsParameter[]; cases: ConditionsCase[]; fingerprint: string; omitted: string[]
+}
+export type ReproScriptForm = "as-executed" | "local-variables"
+export type ReproScript = { text: string | null; completeness: "Complete" | "ValuesMissing" | "Unavailable"; label: string }
 
 export type SessionAnnotation = { title: string | null; note: string | null; starred: boolean; archived: boolean }
 
@@ -215,7 +225,7 @@ export type OperationDetail = {
   compareConditions: Record<string, unknown> | null
   phases: OperationPhaseSummary[]
   events?: OperationEventSummary[]
-  conditions: Record<string, unknown> | null
+  conditions: ConditionsModel | null
 }
 
 export type OperationPhaseSummary = { phase: string; count: number; totalMs: number; maxMs: number }

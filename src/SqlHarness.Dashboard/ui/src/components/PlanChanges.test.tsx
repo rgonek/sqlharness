@@ -16,7 +16,7 @@ const plan: DistilledPlan = { statements: [{ root: { physicalOp: "Index Seek", o
 
 test("same stored hash is stated explicitly and fetched once", async () => {
   const calls = stubFetch({ "/api/plans/shared?view=distilled": plan })
-  renderPlanChanges({ label: "compare", baseline: variant({ plans: [{ repetition: 0, ordinal: 0, hash: "shared", stored: true }] }), candidate: variant({ variant: "candidate", plans: [{ repetition: 0, ordinal: 1, hash: "shared", stored: true }] }) })
+  renderPlanChanges({ label: "compare", baseline: variant({ plans: [{ repetition: 0, ordinal: 0, hash: "shared", stored: true }] }), candidate: variant({ variant: "candidate", plans: [{ repetition: 0, ordinal: 0, hash: "shared", stored: true }] }) })
   expect(await screen.findByText("Same plan")).toBeInTheDocument()
   await waitFor(() => expect(calls).toHaveLength(1))
 })
@@ -49,4 +49,13 @@ test("shows plan request failures through ErrorState", async () => {
   renderPlanChanges({ label: "compare", baseline: variant({ plans: [{ repetition: 0, ordinal: 0, hash: "baseline", stored: true }] }), candidate: variant({ variant: "candidate", plans: [{ repetition: 0, ordinal: 1, hash: "candidate", stored: true }] }) })
   expect(await screen.findByText("Request failed")).toBeInTheDocument()
   expect(screen.getByText(/500/)).toBeInTheDocument()
+})
+
+test("uses the statement text stored in plan XML and falls back to ordinal and hash when absent", async () => {
+  stubFetch({
+    "/api/plans/baseline?view=distilled": { statements: [{ root: { physicalOp: "Index Scan" } }] },
+    "/api/plans/candidate?view=distilled": { statements: [{ root: { physicalOp: "Index Seek" } }] },
+  })
+  renderPlanChanges({ label: "compare", baseline: variant({ plans: [{ repetition: 0, ordinal: 0, hash: "baseline", stored: true }] }), candidate: variant({ variant: "candidate", plans: [{ repetition: 0, ordinal: 0, hash: "candidate", stored: true }] }) })
+  expect(await screen.findByText("statement 0 (candidate)")).toBeInTheDocument()
 })
