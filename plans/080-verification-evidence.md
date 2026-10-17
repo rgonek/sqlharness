@@ -558,3 +558,35 @@ pwsh -NoProfile -Command "Import-Module Pester -MaximumVersion 3.99; Invoke-Pest
 
 (The plan header records the `test` stage at `1m22s` sequential; the 84 here is 76 before this task
 plus 8 new Pester cases.)
+## Final tree verification (2026-10-17)
+
+`just verify` on `opt-windows-gate` at the last product commit, with the plan's documentation
+bookkeeping committed on top (checkboxes and the index status, no executable change):
+
+```
+==> ui-install skipped (lockfile unchanged)
+==> build ok 1m37s
+==> ui-check ok 1m37s
+==> test ok 2m14s
+==> format skipped (0 changed C# files)
+verify: OK  stages=5  3m51s
+```
+
+**What this run proves, contention-independently.**
+
+- `stages=5` with no `restore` stage. The stage is gone, not renamed or hidden.
+- `build` and `ui-check` report the **same** 1m37s. Two sequential stages cannot finish at the same
+  wall time, so the overlap is real: the build ran while the UI check was still going.
+- The `test` stage wrote one log per project (`test-SqlHarness.Tests.log`,
+  `test-SqlHarness.Mcp.Tests.log`) and printed one line.
+- `format` still reports `skipped` when no C# file changed, and `ui-install` still reports `skipped`
+  when the lockfile is unchanged. The agent-readable contract survived the reshape.
+
+**What this run does not prove: the speedup figure.** The box was still carrying load — `ui-check`
+at 1m37s against the 36,9 s quiet baseline recorded in the plan header is roughly 2,6× inflated, so
+this is not the quiet-machine measurement. The only claimable speedup evidence remains Task 3's own
+A/B, which is a **test-stage ratio**, not a whole-gate before/after: 153,8 s → 101,0 s (34,3 %) with
+a build in front, both arms measured back to back on a freed box.
+
+**The whole-gate before/after number remains open** and needs a run of the pre-change tree on a
+quiet machine. Until then no committed file states one, and none should.
