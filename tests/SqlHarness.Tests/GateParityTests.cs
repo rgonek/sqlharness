@@ -264,10 +264,16 @@ public sealed class GateParityTests
         Assert.True(stage > 0, "the Linux gate must run a test stage");
 
         // Cut at the next stage so the counts cannot be satisfied by another stage's bash.
+        // The cut is asserted, not assumed: the stage after this one is format, so a block
+        // that had quietly become the whole file would carry `dotnet format` - and both
+        // `dotnet test` lines live in this stage, so every count below would still read 2.
+        // The script-level assertion keeps the pair from passing for the wrong reason.
         var block = content.Substring(stage);
         var next = block.IndexOf("Invoke-LinuxStage -Name", 1);
         if (next > 0) { block = block.Substring(0, next); }
 
+        Assert.Contains("dotnet format", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet format", block, StringComparison.Ordinal);
         Assert.Equal(2, Regex.Matches(block, @"'dotnet test [^']+ &',").Count);
         Assert.Equal(2, Regex.Matches(block, @"\w+_pid=\$!").Count);
         Assert.Equal(2, Regex.Matches(block, @"'wait ""\$\w+_pid""").Count);

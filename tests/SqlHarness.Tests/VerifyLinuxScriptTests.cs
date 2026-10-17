@@ -51,13 +51,41 @@ public sealed class VerifyLinuxScriptTests
         // marker are the only thing that tell a reader which project broke. The marker names
         // the project whose exit code the script returns, which is what
         // Get-ReportedFailureStage turns into the summary line.
+        //
+        // Every assertion reads the test stage's OWN block, never the whole script. `set +e`
+        // appears in the build stage too, so a whole-script search is satisfied by the build
+        // stage's copy and says nothing about this one - and without `set +e` here the block
+        // still runs under `set -euo pipefail`, so the first non-zero `wait` aborts the script
+        // before the second project is joined and before either marker is printed.
         var script = Script();
         var testStage = script.IndexOf("Invoke-LinuxStage -Name 'test'", StringComparison.Ordinal);
         Assert.True(testStage > 0, "the Linux gate must run a test stage");
 
-        Assert.Contains("'set +e',", script, StringComparison.Ordinal);
-        Assert.Contains("'if [ \"$tests_status\" -ne 0 ]; then echo \"stage-failure: tests/SqlHarness.Tests\" >&2; exit \"$tests_status\"; fi',", script, StringComparison.Ordinal);
-        Assert.Contains("'if [ \"$mcp_status\" -ne 0 ]; then echo \"stage-failure: tests/SqlHarness.Mcp.Tests\" >&2; exit \"$mcp_status\"; fi',", script, StringComparison.Ordinal);
+        // Cut at the next stage, so no assertion below can be answered by another stage's
+        // bash. The cut is asserted rather than assumed: the stage after this one is format,
+        // so a block that still held it would carry `dotnet format`, and an extraction that
+        // quietly returned the whole file would fail this rather than passing every search
+        // vacuously. The script-level assertion is what stops the pair from passing for the
+        // wrong reason - a stage that stopped existing entirely must not look like a clean cut.
+        var block = script.Substring(testStage);
+        var next = block.IndexOf("Invoke-LinuxStage -Name", 1);
+        if (next > 0) { block = block.Substring(0, next); }
+
+        Assert.Contains("dotnet format", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet format", block, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(block, @"'set \+e',"));
+
+        // Both projects are joined before either exit code is read: one wait per pid, and
+        // `set -e` restored after them so the markers below are reached only once.
+        Assert.Equal(2, Regex.Matches(block, @"'wait ""\$\w+_pid""").Count);
+        Assert.Contains("'set -e',", block, StringComparison.Ordinal);
+
+        // The ==&gt; lines and the stage-failure: marker each name one project, and the marker
+        // is written only by the project whose exit code the script returns.
+        Assert.Contains("'if [ \"$tests_status\" -ne 0 ]; then echo \"==> tests/SqlHarness.Tests FAILED (exit $tests_status)\" >&2; fi',", block, StringComparison.Ordinal);
+        Assert.Contains("'if [ \"$mcp_status\" -ne 0 ]; then echo \"==> tests/SqlHarness.Mcp.Tests FAILED (exit $mcp_status)\" >&2; fi',", block, StringComparison.Ordinal);
+        Assert.Contains("'if [ \"$tests_status\" -ne 0 ]; then echo \"stage-failure: tests/SqlHarness.Tests\" >&2; exit \"$tests_status\"; fi',", block, StringComparison.Ordinal);
+        Assert.Contains("'if [ \"$mcp_status\" -ne 0 ]; then echo \"stage-failure: tests/SqlHarness.Mcp.Tests\" >&2; exit \"$mcp_status\"; fi',", block, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -292,3 +292,106 @@ pwsh -NoProfile -Command "Import-Module Pester -MaximumVersion 3.99; Invoke-Pest
 ```
 
 Measured tree: the commit that landed this task, on top of `c8e7bb9`. A commit cannot contain its own SHA, so read it from `git log -1`.
+
+---
+
+# Fix round 1
+
+One Important finding, one guard. Nothing in §1–§10 changed.
+
+## The finding
+
+`Linux_gate_names_the_failing_project_of_its_parallel_test_stage` computed `testStage` and then never
+used it. All four of its assertions searched the **whole** `verify-linux.ps1`, and `'set +e',` occurs
+**twice** — in the build stage and in the test stage — so the assertion was answered by the build
+stage's copy and said nothing about the test stage. Deleting `'set +e',` from the test stage left C#
+65/65 and Pester 84/84 green. Without it the block runs under `set -euo pipefail`, so
+`wait "$tests_pid"` aborts before `wait "$mcp_pid"`: the second project is orphaned and neither the
+`==>` marker nor the `stage-failure:` marker is printed — Review Focus 1's exact failure mode, unguarded.
+
+## The fix
+
+Every assertion meant to describe the test stage now reads the test stage's own block, extracted the
+way the C# twin does (from `Invoke-LinuxStage -Name 'test'` to the next `Invoke-LinuxStage -Name`), and
+the whole test was audited rather than just line 58:
+
+| assertion | before | after |
+|---|---|---|
+| `set +e` | `Assert.Contains(…, script)` — satisfied by the build stage | `Assert.Single(Regex.Matches(block, @"'set \+e',"))` |
+| `wait` per pid | not asserted here | `Assert.Equal(2, …)` — both projects are joined before either code is read |
+| `set -e` restored | not asserted here | `Assert.Contains("'set -e',", block)` |
+| the two `==>` markers | not asserted here | `Assert.Contains(…, block)` — added; on Linux these are the only thing naming the project in the log |
+| the two `stage-failure:` markers | `Assert.Contains(…, script)` — unique to the test stage today, unbounded nonetheless | `Assert.Contains(…, block)` |
+
+Nothing was deleted; three assertions were added.
+
+**The cut is asserted, not assumed.** The stage after the test stage is format, so the block must not
+contain `dotnet format`, and the script must still contain it — the pair stops the guard passing for the
+wrong reason (a format stage that stopped existing must not look like a clean cut):
+
+```csharp
+Assert.Contains("dotnet format", script, StringComparison.Ordinal);
+Assert.DoesNotContain("dotnet format", block, StringComparison.Ordinal);
+```
+
+`GateParityTests.The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both` had the
+same vacuity exposure — both `dotnet test … &` lines live in that stage, so every count there still
+reads 2 over the whole file — and got the same two assertions.
+
+## Mutation proofs
+
+| # | mutation | result |
+|---|---|---|
+| **M-A** | `'set +e',` deleted from the **test** stage, left in the build stage — the reviewer's mutation | **RED** `SqlHarness.Tests.VerifyLinuxScriptTests.Linux_gate_names_the_failing_project_of_its_parallel_test_stage` (xunit 64/65, Pester 8/8 green) |
+| **M-B** | control: `'set +e',` deleted from the **build** stage, left in the test stage | **GREEN** 65/65 and Pester 8/8 — so the bound counts only the test stage's copy, and is not satisfied by occurrence count |
+| **M-C** | the test stage's extraction stops cutting (`if (next > 0 && block.Length < 0)`), so the block holds the test stage *and everything after it* | **RED** `…Linux_gate_names_the_failing_project_of_its_parallel_test_stage` |
+| **M-D** | the same, in the C# twin | **RED** `…The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both` |
+
+M-A is the reviewer's mutation and the teeth proof. M-B is the control that shows the new bound is not
+just an occurrence count. M-C and M-D are the non-vacuity proofs: an extraction that stopped cutting at
+the next stage would let every search read the file tail and pass silently, and both are now caught by
+the `dotnet format` pair.
+
+**Two of these mutations proved nothing on the first attempt and were fixed before being accepted:**
+
+- M-C/M-D were first written as `if ($false) { … }`, which is not valid C#. The build failed, the
+  previous test binary stayed in place, and the suite reported green — a mutation that measures the
+  unmutated code. The harness now fails loudly on a build error, and the mutations were rewritten as
+  compiling C#.
+- `Copy-Item` preserves the source timestamp, so a restored file could look **older** than the binary
+  built from the previous mutation; MSBuild skipped it and a "restored" run reported the last
+  mutation's red. `Restore` now touches every restored file. All four results above are from runs after
+  that fix, and the restored tree was re-confirmed from `dotnet clean` + a full rebuild: 65/65.
+
+**The first version of the non-vacuity guard named the wrong stages.** It asserted the block contained
+no `npm run check` and no `dotnet build` — but both live in the *build* stage, which precedes the test
+stage and therefore cannot appear in a substring starting at it. Those two assertions could never fail.
+They were replaced with the format-stage pair above, which can.
+
+## Verification after the fix
+
+```powershell
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName~VerifyLinuxScriptTests|FullyQualifiedName~GateParityTests'
+# Passed!  - Failed: 0, Passed: 65, Skipped: 0, Total: 65     (after dotnet clean + full rebuild)
+
+pwsh -NoProfile -Command "Import-Module Pester -MaximumVersion 3.99; Invoke-Pester -Path tests/scripts -EnableExit"
+# Passed: 84 Failed: 0
+
+just verify -LogDirectory D:/temp/opencode/gate-t3-fix1
+# ==> ui-install skipped (lockfile unchanged)
+# ==> build ok 25,2s
+# ==> ui-check ok 2m20s
+# ==> test ok 2m14s
+# format: 2 changed C# file(s) (working-tree)
+# ==> format ok 1m17s
+# verify: OK  stages=5  5m53s
+# ===== just verify exit code: 0 =====
+```
+
+**The `powershell.exe` Pester command in the fix-round instructions reports `Passed: 10 Failed: 34`,
+and that is not this round's doing.** Every `scripts/*.ps1` carries `#Requires -Version 7.0`, so
+Windows PowerShell 5.1 raises `ScriptRequiresException` before any test body runs. This is recorded
+under Task 4 ("The Pester suite must be run under `pwsh`, not `powershell.exe`") and is why
+`.github/workflows/ci.yml` runs that lane with `shell: pwsh`. Under `pwsh` the same path is 84/84, and
+it was 84/84 before this round too — the count is unchanged, because this round changed two C#
+assertions and added no Pester case.
