@@ -20,6 +20,8 @@ import { variantLabel } from "@/lib/compare"
 import { formatDuration, formatNumber, formatTimestamp, shortHash } from "@/lib/format"
 import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
+import { sessionSearchFromOperation } from "@/lib/sessionSearch"
+import type { OperationDetailSearch } from "@/router"
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -115,7 +117,7 @@ export function OperationPage() {
   return <OperationView id={id} returnSearch={search} />
 }
 
-function OperationView({ id, returnSearch }: { id: number; returnSearch: { returnSession?: number; returnSubject?: string; returnScope?: string; returnUnassigned?: boolean } }) {
+function OperationView({ id, returnSearch }: { id: number; returnSearch: OperationDetailSearch }) {
   const query = useOperation(id)
 
   if (query.error) return <ErrorState error={query.error} />
@@ -137,7 +139,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
           </div>
           <CardDescription>
             {op.operation} by {agentLabel(op.agentKind)} in{" "}
-            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? { subject: returnSearch.returnSubject, scope: returnSearch.returnScope, unassigned: returnSearch.returnUnassigned } : undefined}>
+            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined}>
               {detail.session.sessionKey}
             </Link>
           </CardDescription>

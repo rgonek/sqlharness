@@ -5,8 +5,10 @@ import { CopyButton } from "@/components/CopyButton"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { SessionVersionDiff } from "@/components/SessionVersionDiff"
 import { Button } from "@/components/ui/button"
-import { optimizationMarkdown } from "@/lib/optimizationMarkdown"
+import { conditionsDifferMessage, optimizationMarkdown } from "@/lib/optimizationMarkdown"
+import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SqlVersionOption } from "@/lib/compare"
+import type { SessionSearch } from "@/router"
 
 function basisLabel(comparison: OptimizationComparison): string {
   switch (comparison.basis) {
@@ -22,27 +24,28 @@ function actionCase(action: OptimizationActionReference | null | undefined, sele
   return action.caseIds.includes(selectedCase) ? selectedCase : action.caseIds[0]
 }
 
-function VersionAction({ label, action, selectedCase, sessionId }: {
-  label: string; action: OptimizationActionReference | null | undefined; selectedCase: string; sessionId: number
+function VersionAction({ label, action, selectedCase, sessionId, sessionSearch }: {
+  label: string; action: OptimizationActionReference | null | undefined; selectedCase: string; sessionId: number; sessionSearch: SessionSearch
 }) {
   const caseId = actionCase(action, selectedCase)
   if (!action || !caseId) return null
   return <section className="space-y-1" aria-label={`${label} actions`}>
     <h3 className="text-sm font-medium">{label} · {action.side}</h3>
     <div className="flex flex-wrap items-center gap-2">
-      <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={{ returnSession: sessionId }} className="text-sm underline">Plans for {label}</Link>
+      <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">Plans for {label}</Link>
       <ReproScriptButtons operationId={action.operationId} side={action.side} caseId={caseId} />
     </div>
   </section>
 }
 
-export function ComparisonPanel({ comparison, sessionId, subject, scope, versions = [], engine = null, searchState, onSelectionChange }: {
+export function ComparisonPanel({ comparison, sessionId, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange }: {
   comparison: OptimizationComparison
   sessionId: number
   subject: string
   scope: string
   versions?: ScopeVersions["versions"]
   engine?: string | null
+  sessionSearch?: SessionSearch
   searchState?: { case?: string; agg?: string }
   onSelectionChange?: (patch: { case?: string; agg?: string }) => void
 }) {
@@ -77,7 +80,7 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
     </div>
     {comparison.coverageLabel && <p className="text-sm text-muted-foreground">{comparison.coverageLabel}</p>}
     {comparison.mixed && <p className="text-sm text-amber-700 dark:text-amber-300">Mixed: {comparison.mixed.better} better, {comparison.mixed.worse} worse — {comparison.mixed.worstCaseLabel}: logical reads {comparison.mixed.worstChangePercent > 0 ? "+" : ""}{Math.round(comparison.mixed.worstChangePercent)}%</p>}
-    {comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">conditions differ; SQL diff is the available comparison.</p> : <>
+    {comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <>
       {comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <div className="overflow-x-auto">
         <table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2 pr-3">Table</th><th className="px-3 py-2">Scans before</th><th className="px-3 py-2">Scans after</th><th className="px-3 py-2">Logical reads before</th><th className="px-3 py-2">Logical reads after</th><th className="px-3 py-2">Change</th></tr></thead>
           <tbody>{comparison.tables.map(row => <tr key={row.table} className="border-b"><th scope="row" className="py-2 pr-3 text-left font-normal">{row.table}</th><td className="px-3 py-2">{row.scansBefore ?? "—"}</td><td className="px-3 py-2">{row.scansAfter ?? "—"}</td><td className="px-3 py-2">{row.readsBefore ?? "—"}</td><td className="px-3 py-2">{row.readsAfter ?? "—"}</td><td className="px-3 py-2">{row.change}</td></tr>)}
@@ -85,13 +88,13 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
       </div>}
       <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict} (policy v2)</dd>}</dl>
     </>}
-    {comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={{ returnSession: sessionId, returnSubject: subject, returnScope: scope }} className="text-sm underline">Operation #{comparison.operationId}</Link>
-      : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} /></div>}
-    <div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} sessionId={sessionId} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} sessionId={sessionId} /></div>
-    {showDiff && sqlOptions.length > 1 && <SessionVersionDiff sessionId={sessionId} engine={engine} options={sqlOptions} />}
+    {comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">Operation #{comparison.operationId}</Link>
+      : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} /></div>}
+    <div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} /></div>
+    {showDiff && sqlOptions.length > 1 && <SessionVersionDiff key={`${comparison.a}:${comparison.b}`} sessionId={sessionId} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} />}
   </section>
 }
 
-function VersionOperationLink({ action, sessionId }: { action: OptimizationActionReference | null | undefined; sessionId: number }) {
-  return action ? <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={{ returnSession: sessionId }} className="text-sm underline">Operation #{action.operationId}</Link> : null
+function VersionOperationLink({ action, sessionId, sessionSearch }: { action: OptimizationActionReference | null | undefined; sessionId: number; sessionSearch: SessionSearch }) {
+  return action ? <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">Operation #{action.operationId}</Link> : null
 }

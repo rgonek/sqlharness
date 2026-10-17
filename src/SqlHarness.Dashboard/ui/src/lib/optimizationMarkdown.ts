@@ -1,5 +1,7 @@
 import type { OptimizationComparison } from "@/api/types"
 
+export const conditionsDifferMessage = "conditions differ; SQL diff is the available comparison."
+
 function basisLabel(comparison: OptimizationComparison): string {
   switch (comparison.basis) {
     case "MeasuredTogether": return `measured together in #${comparison.operationId}`
@@ -31,7 +33,7 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
   }
 
   if (comparison.basis === "ConditionsDiffer") {
-    lines.push("conditions differ; SQL diff is the available comparison")
+    lines.push(conditionsDifferMessage)
     return lines.join("\n")
   }
 
@@ -46,7 +48,7 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
     ...comparison.tables.map(row => `| ${row.table} | ${number(row.scansBefore)} | ${number(row.scansAfter)} | ${number(row.readsBefore)} | ${number(row.readsAfter)} | ${row.change} |`),
   )
   if (comparison.collapsed) {
-    lines.push(`| ${comparison.collapsed.label} | — | — | — | — | collapsed |`)
+    lines.push(`| ${comparison.collapsed.label} |`)
   }
   return lines.join("\n")
 }

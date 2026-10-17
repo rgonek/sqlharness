@@ -4,6 +4,7 @@ import { useSessionOptimization, useSessionOptimizationComparison } from "@/api/
 import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
 import { VersionTable } from "@/components/optimization/VersionTable"
 import { Button } from "@/components/ui/button"
+import { operationReturnSearch } from "@/lib/sessionSearch"
 
 function subjectKey(subject: OptimizationSubject): string {
   return `${subject.subject}\u0000${subject.database}`
@@ -70,12 +71,12 @@ export function OptimizationSection({ sessionId }: { sessionId: number }) {
       {compareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
       {compareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {compareQuery.error.message}</p>}
       {compareQuery.data && scope && <div className="mt-4"><ComparisonPanel comparison={compareQuery.data} sessionId={sessionId} subject={selectedSubject.subject} scope={scope.scope} versions={versions} engine={selectedSubject.engine}
-        searchState={{ case: search.case, agg: search.agg }} onSelectionChange={patch => update(patch)} /></div>}
+        sessionSearch={search} searchState={{ case: search.case, agg: search.agg }} onSelectionChange={patch => update(patch)} /></div>}
     </div> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
     {!!section?.unassigned.length && <details className="rounded-lg border p-3" open={search.unassigned}>
       <summary className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</summary>
       <p className="mt-2 text-sm text-muted-foreground">These compares do not have a complete subject and scope, so they are not included in version comparisons.</p>
-      <ol className="divide-y">{section.unassigned.map(item => <li key={item.operationId} className="flex flex-wrap gap-3 py-2"><Link to="/operations/$id" params={{ id: String(item.operationId) }} search={{ returnSession: sessionId, returnUnassigned: true }}>Compare #{item.operationId}</Link><span>{item.status}</span><time className="text-muted-foreground">{item.startedAt}</time></li>)}</ol>
+      <ol className="divide-y">{section.unassigned.map(item => <li key={item.operationId} className="flex flex-wrap gap-3 py-2"><Link to="/operations/$id" params={{ id: String(item.operationId) }} search={operationReturnSearch(sessionId, { ...search, unassigned: true })}>Compare #{item.operationId}</Link><span>{item.status}</span><time className="text-muted-foreground">{item.startedAt}</time></li>)}</ol>
     </details>}
   </section>
 }

@@ -20,6 +20,14 @@ test("compare operation returns to its session with the originating subject and 
   expect(target.searchParams.get("scope")).toBe("history")
 })
 
+test("compare operation restores every optimization search selection on return", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
+  renderApp("/operations/10?returnSession=7&returnSubject=orders&returnDb=shop&returnGroup=fp-2&returnScope=fragment%3Acustomer&returnA=v1&returnB=v2&returnCase=customer-9001&returnAgg=mean")
+  const back = await screen.findByRole("link", { name: "mcp:session" })
+  const target = new URL(back.getAttribute("href")!, "http://dashboard")
+  expect(Object.fromEntries(target.searchParams)).toMatchObject({ subject: "orders", db: "shop", group: "fp-2", scope: "fragment:customer", a: "v1", b: "v2", case: "customer-9001", agg: "mean" })
+})
+
 test("compare operation returns to the unassigned group without inventing subject or scope", async () => {
   stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnUnassigned=true")

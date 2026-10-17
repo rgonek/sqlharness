@@ -22,7 +22,7 @@ test("Markdown matches the selected comparison rows and labels", () => {
     "| Table | Scans before | Scans after | Logical reads before | Logical reads after | Change |",
     "| --- | ---: | ---: | ---: | ---: | --- |",
     "| dbo.Orders | 4 | 2 | 100 | 135 | +35% |",
-    "| 2 smaller tables | — | — | — | — | collapsed |",
+    "| 2 smaller tables |",
   ].join("\n"))
 })
 
@@ -32,6 +32,6 @@ test("Markdown labels different-run comparisons and unavailable table IO", () =>
   expect(optimizationMarkdown({ ...comparison, tableIoUnavailable: true, tables: [], collapsed: null }, "Orders", "whole query"))
     .toContain("per-table IO not available for this engine")
   const conditionsDiffer = optimizationMarkdown({ ...comparison, basis: "ConditionsDiffer", operationId: null, tables: [], collapsed: null }, "Orders", "whole query")
-  expect(conditionsDiffer).toContain("conditions differ; SQL diff is the available comparison")
+  expect(conditionsDiffer).toContain("conditions differ; SQL diff is the available comparison.")
   expect(conditionsDiffer).not.toContain("| Table |")
 })
