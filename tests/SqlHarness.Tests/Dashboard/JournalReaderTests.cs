@@ -188,6 +188,37 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Session_list_optimization_badge_warns_when_default_comparison_is_mixed()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var compare = seed.Compare(JournalSeed.Session("cli:mixed-badge"), "orders", "whole", "h0", "h1");
+        var conditions = JournalSeed.ReproConditions() with
+        {
+            Cases =
+            [
+                new ConditionsCase("0", 0, "@id = 1", null, [], "fingerprint-0"),
+                new ConditionsCase("1", 1, "@id = 2", null, [], "fingerprint-1"),
+            ],
+        };
+        var metrics = new BenchmarkJournalRecord(
+        [
+            OptimizationVariant("baseline", 100, matrixCell: 0),
+            OptimizationVariant("candidate", 80, matrixCell: 0),
+            OptimizationVariant("baseline", 100, matrixCell: 1),
+            OptimizationVariant("candidate", 140, matrixCell: 1),
+        ], []);
+        seed.CompareEvidence(compare, conditions,
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}},{"caseId":"1","caseLabel":"@id = 2","equivalence":{"equivalent":true}}]}""",
+            metrics);
+
+        var badge = Assert.Single(Assert.Single(Reader(home).Sessions(new SessionQuery()).Items).Optimization);
+
+        Assert.True(badge.Warning);
+        Assert.Equal("+10%", badge.Change);
+    }
+
+    [Fact]
     public void Compare_operation_summaries_include_subject_pair_and_reads()
     {
         using var home = new TempHome();
@@ -220,8 +251,8 @@ public sealed class JournalReaderTests
     private static BenchmarkJournalRecord OptimizationMetrics(long before, long after) => new(
     [OptimizationVariant("baseline", before), OptimizationVariant("candidate", after)], []);
 
-    private static JournalVariantMetrics OptimizationVariant(string variant, long reads) => new(
-        variant, null, null, 1, new CompareDistribution(10, 10, 10), new CompareDistribution(8, 8, 8),
+    private static JournalVariantMetrics OptimizationVariant(string variant, long reads, int? matrixCell = null) => new(
+        variant, null, matrixCell, 1, new CompareDistribution(10, 10, 10), new CompareDistribution(8, 8, 8),
         new CompareDistribution(reads, reads, reads), null, null, null, null, null, null, 0, false, false, 0,
         [], null, [new JournalTableIo("Orders", reads, 1, 0, null, null, 0, null, null, 0)], [])
     {
