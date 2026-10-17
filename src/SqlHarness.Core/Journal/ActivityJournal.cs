@@ -619,9 +619,10 @@ public sealed class ActivityJournal : IActivityJournal
                 json = null;
 
             using var update = connection.CreateCommand();
-            update.CommandText = "UPDATE operations SET conditions_json = $json, conditions_fingerprint = $fingerprint WHERE id = $id;";
+            update.CommandText = "UPDATE operations SET conditions_json = $json, conditions_fingerprint = $fingerprint, measurement_fingerprint = $measurementFingerprint WHERE id = $id;";
             update.Parameters.AddWithValue("$json", (object?)json ?? DBNull.Value);
             update.Parameters.AddWithValue("$fingerprint", persisted.Fingerprint);
+            update.Parameters.AddWithValue("$measurementFingerprint", (object?)persisted.MeasurementFingerprint ?? DBNull.Value);
             update.Parameters.AddWithValue("$id", handle.OperationId);
             update.ExecuteNonQuery();
         }
@@ -644,12 +645,14 @@ public sealed class ActivityJournal : IActivityJournal
         var cases = model.Cases.Select(item => item with
         {
             Fingerprint = Hmac(salt, ConditionsModelBuilder.CaseFingerprintPayload(model, setupHash, item)),
+            MeasurementFingerprint = Hmac(salt, ConditionsModelBuilder.CaseMeasurementFingerprintPayload(model, setupHash, item)),
         }).ToArray();
         return model with
         {
             Setup = model.Setup is null ? null : model.Setup with { Hash = setupHash },
             Cases = cases,
             Fingerprint = Hmac(salt, ConditionsModelBuilder.OperationFingerprintPayload(model, setupHash)),
+            MeasurementFingerprint = Hmac(salt, ConditionsModelBuilder.OperationMeasurementFingerprintPayload(model, setupHash)),
         };
     }
 
