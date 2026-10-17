@@ -22,7 +22,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `760f7d6`. Depends on 079, 080, 081.
+- TODO. Planning base `760f7d6`. Depends on 079, 080, 081 and 087 (measure observations in the comparer).
 - Priority P2; effort L; risk MEDIUM (verdict basis changes what reviewers see).
 
 ## Global Constraints

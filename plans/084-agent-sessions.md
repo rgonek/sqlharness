@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `6c37cd7`. Depends on 079 (journal floor) and 080 (Optimization). Plan 085 depends on this plan.
+- TODO. Planning base `6c37cd7`. Depends on 079 (journal floor), 080 (Optimization) and 087 (measure observations; treat them like compare observations in agent-session history and frozen labels). Plan 085 depends on this plan.
 - Priority P2; effort L; risk MEDIUM.
 
 ## Global Constraints
