@@ -6,9 +6,11 @@
 .DESCRIPTION
     Syncs the current branch into the disposable gate clone created by
     scripts/setup-linux-gate.ps1, checks that the provisioned Node matches
-    .nvmrc, installs and checks the dashboard UI, then runs the same four .NET
-    stages CI runs: restore, build -warnaserror, test, and format
-    --verify-no-changes.
+    .nvmrc, installs the dashboard UI, then runs the same three .NET stages CI
+    runs: build -warnaserror (which restores implicitly), test, and format
+    --verify-no-changes. The UI check runs beside the build inside the build
+    stage, and the two test projects run beside each other inside the test stage,
+    so the stage lines here stay sequential.
 
     The gate clone is reset to the branch tip, so the format stage checks the
     C# files the branch changed relative to origin/main, not the working tree:
@@ -188,7 +190,10 @@ export PATH="$HOME/.node/current/bin:$HOME/.dotnet:$PATH"
 
     $failure = Get-StageFailureText -Result $result -TailLines 40
     if ($failure) { Write-Host $failure }
-    Write-Host (Get-GateSummaryLine -Gate 'verify-linux' -StageCount $script:stageCount -Seconds $total.Elapsed.TotalSeconds -FailureStage $Name -FailureExitCode $result.ExitCode)
+    # A stage that runs more than one command names the one whose exit code it returned,
+    # so a UI-only failure in the coupled build stage is not reported as the build.
+    $reported = Get-ReportedFailureStage -Name $Name -Result $result
+    Write-Host (Get-GateSummaryLine -Gate 'verify-linux' -StageCount $script:stageCount -Seconds $total.Elapsed.TotalSeconds -FailureStage $reported -FailureExitCode $result.ExitCode)
     exit $result.ExitCode
 }
 
@@ -230,24 +235,57 @@ Invoke-LinuxStage -Name 'ui-install' -Arguments @($gateClone) -Lines @(
     'printf %s "$lock_hash" > "$stamp"'
 )
 
-Invoke-LinuxStage -Name 'ui-check' -Arguments @($gateClone) -Lines @(
-    'cd "$1"',
-    'npm run check --prefix src/SqlHarness.Dashboard/ui'
-)
-
-Invoke-LinuxStage -Name 'restore' -Arguments @($gateClone) -Lines @(
-    'cd "$1"',
-    'dotnet restore SqlHarness.sln'
-)
-
+# The UI check needs no .NET artifacts, so it overlaps the build here rather than
+# running in front of it. Each stage is one wsl.exe run of one bash script against the
+# same gate clone, so a background `npm run check &` inside the build script is the
+# only way to overlap the two: two concurrent WSL launches would race each other over
+# the clone. Coupling them inside one invocation is why the stage lines here stay
+# sequential. set +e around both commands is what lets the UI check be joined even when
+# the build has already failed. Both failures are named in the log, but `stage-failure:`
+# names only the command whose exit code the script returns, so the summary line pairs a
+# stage name with that stage's own code instead of reporting a UI-only failure as the
+# build.
 Invoke-LinuxStage -Name 'build' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
-    'dotnet build SqlHarness.sln --no-restore -warnaserror'
+    'npm run check --prefix src/SqlHarness.Dashboard/ui &',
+    'ui_check_pid=$!',
+    'set +e',
+    'dotnet build SqlHarness.sln -warnaserror',
+    'build_status=$?',
+    'wait "$ui_check_pid"',
+    'ui_check_status=$?',
+    'set -e',
+    'if [ "$ui_check_status" -ne 0 ]; then echo "==> ui-check FAILED (exit $ui_check_status)" >&2; fi',
+    'if [ "$build_status" -ne 0 ]; then echo "==> build FAILED (exit $build_status)" >&2; fi',
+    'if [ "$build_status" -ne 0 ]; then echo "stage-failure: build" >&2; exit "$build_status"; fi',
+    'if [ "$ui_check_status" -ne 0 ]; then echo "stage-failure: ui-check" >&2; exit "$ui_check_status"; fi',
+    'exit 0'
 )
 
+# The two test projects run at once, the same way the Windows gate runs them: dotnet test
+# on the solution runs them one after the other. Both live in one bash block because two
+# concurrent WSL launches would race each other over the gate clone, which is the same
+# reason the UI check is coupled into the build stage. set +e around the waits is what lets
+# a green project still be joined when the other one has already failed; stage-failure:
+# names the project whose exit code the script returns, so the summary line pairs a project
+# with its own code instead of reporting one project's failure as the other's.
+# Unlike the Windows gate, this block writes no per-project log: both projects write to the
+# one stage log and interleave there. The ==> lines below are what name the project.
 Invoke-LinuxStage -Name 'test' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
-    'dotnet test SqlHarness.sln --no-build --filter "FullyQualifiedName!~Integration" --logger "console;verbosity=normal"'
+    'dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter "FullyQualifiedName!~Integration" --logger "console;verbosity=normal" &',
+    'tests_pid=$!',
+    'dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter "FullyQualifiedName!~Integration" --logger "console;verbosity=normal" &',
+    'mcp_pid=$!',
+    'set +e',
+    'wait "$tests_pid"; tests_status=$?',
+    'wait "$mcp_pid"; mcp_status=$?',
+    'set -e',
+    'if [ "$tests_status" -ne 0 ]; then echo "==> tests/SqlHarness.Tests FAILED (exit $tests_status)" >&2; fi',
+    'if [ "$mcp_status" -ne 0 ]; then echo "==> tests/SqlHarness.Mcp.Tests FAILED (exit $mcp_status)" >&2; fi',
+    'if [ "$tests_status" -ne 0 ]; then echo "stage-failure: tests/SqlHarness.Tests" >&2; exit "$tests_status"; fi',
+    'if [ "$mcp_status" -ne 0 ]; then echo "stage-failure: tests/SqlHarness.Mcp.Tests" >&2; exit "$mcp_status"; fi',
+    'exit 0'
 )
 
 $changedFiles = @(& (Join-Path $PSScriptRoot 'format-changed.ps1') -Mode branch -ListOnly | Where-Object { $_ -match '\.cs$' })

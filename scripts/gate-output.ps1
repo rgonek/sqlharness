@@ -129,6 +129,301 @@ function Invoke-GateStage {
     }
 }
 
+# Keyed by process id, and only ever written by Start-BackgroundGateStage. The reads
+# have to be in flight before the caller starts the stage it is overlapping, so they
+# cannot be reconstructed from the process alone at join time.
+$script:BackgroundGateStages = @{}
+
+function Resolve-GateStageExecutable {
+    param([Parameter(Mandatory)][string]$FilePath)
+
+    # Process.Start applies no PATHEXT: 'npm' does not resolve the way `npm run` does in
+    # PowerShell, and the bare name is not something CreateProcess can launch. Only a
+    # real executable path is accepted, so a stage that cannot start fails loudly.
+    if (Test-Path -LiteralPath $FilePath -PathType Leaf) {
+        return (Resolve-Path -LiteralPath $FilePath).ProviderPath
+    }
+
+    $launchable = @('.exe', '.com', '.cmd', '.bat')
+    $command = Get-Command -Name $FilePath -CommandType Application -ErrorAction SilentlyContinue |
+        Where-Object { $launchable -contains [System.IO.Path]::GetExtension($_.Source) } |
+        Select-Object -First 1
+    if ($command) { return $command.Source }
+
+    throw "'$FilePath' could not be resolved to an executable on PATH. A stage that cannot start must never look green."
+}
+
+function Start-BackgroundGateStage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$LogDirectory,
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [string]$WorkingDirectory
+    )
+
+    # The command is a native executable rather than a scriptblock because the only
+    # overlapped stage is `npm run check`: a scriptblock would make the caller capture
+    # and redirect its own output, which is the part that has to be shared.
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = Resolve-GateStageExecutable -FilePath $FilePath
+    foreach ($argument in $Arguments) { $null = $startInfo.ArgumentList.Add($argument) }
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
+
+    $process = [System.Diagnostics.Process]::Start($startInfo)
+    if ($null -eq $process) {
+        throw "'$FilePath' could not be started. A stage that cannot start must never look green."
+    }
+
+    # Both reads start here, before the caller runs anything else. Reading one to the
+    # end before the other deadlocks as soon as the second pipe buffer fills, which hung
+    # the UI check stage for 38 minutes; Complete- only collects what these two have
+    # already gathered.
+    try {
+        $script:BackgroundGateStages[$process.Id] = [pscustomobject]@{
+            Stopwatch      = [System.Diagnostics.Stopwatch]::StartNew()
+            StandardOutput = $process.StandardOutput.ReadToEndAsync()
+            StandardError  = $process.StandardError.ReadToEndAsync()
+        }
+    }
+    catch {
+        # A running process nothing tracks would fill a pipe nobody drains and survive the
+        # gate, so a stage that cannot be registered is killed rather than orphaned.
+        if (-not $script:BackgroundGateStages.ContainsKey($process.Id)) {
+            try { $process.Kill($true) } catch { }
+        }
+        throw
+    }
+
+    return $process
+}
+
+function Complete-BackgroundGateStage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$LogDirectory,
+        [Parameter(Mandatory)][System.Diagnostics.Process]$Process,
+
+        # Replay the stage's output the way -Stream does for a foreground stage.
+        [switch]$Stream
+    )
+
+    $state = $null
+    if ($null -ne $script:BackgroundGateStages -and $script:BackgroundGateStages.ContainsKey($Process.Id)) {
+        $state = $script:BackgroundGateStages[$Process.Id]
+    }
+    if ($null -eq $state) {
+        # Joining a process Start- never returned would write an empty log and report
+        # green for a stage that never ran.
+        throw "'$Name' was completed with a process Start-BackgroundGateStage did not return. A stage that never started must never look green."
+    }
+
+    try {
+        $Process.WaitForExit()
+        $stdout = $state.StandardOutput.GetAwaiter().GetResult()
+        $stderr = $state.StandardError.GetAwaiter().GetResult()
+        $state.Stopwatch.Stop()
+
+        if (-not (Test-Path -LiteralPath $LogDirectory)) {
+            New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+        }
+        $logPath = Join-Path $LogDirectory ("$Name.log")
+
+        $capturedOutput = [System.Collections.Generic.List[string]]::new()
+        if (-not [string]::IsNullOrEmpty($stdout)) { $stdout.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $capturedOutput.Add($_) } }
+        if (-not [string]::IsNullOrEmpty($stderr)) { $stderr.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $capturedOutput.Add($_) } }
+        Set-Content -LiteralPath $logPath -Value $capturedOutput
+
+        $result = [pscustomobject]@{
+            Name       = $Name
+            ExitCode   = [int]$Process.ExitCode
+            Seconds    = [Math]::Round($state.Stopwatch.Elapsed.TotalSeconds, 1)
+            LogPath    = $logPath
+            Skipped    = $false
+            SkipReason = $null
+        }
+
+        # The same one line and the same failure tail a foreground stage prints, so an
+        # overlapped stage is indistinguishable in the transcript from one that ran
+        # alone. This is the stage's only report: whoever decides what a failure means
+        # must not print the tail a second time.
+        Write-Host (Get-StageLine -Result $result)
+        if ($Stream) { Get-Content -LiteralPath $logPath | ForEach-Object { Write-Host $_ } }
+        if ($result.ExitCode -ne 0) {
+            $failure = Get-StageFailureText -Result $result -TailLines 40
+            if ($failure) { Write-Host $failure }
+        }
+
+        return $result
+    }
+    finally {
+        # The entry holds two pending read tasks. Removing it here rather than before the
+        # work means a throw anywhere in the join cannot leave a stale entry behind to
+        # leak both tasks and collide with the next process id.
+        $script:BackgroundGateStages.Remove($Process.Id)
+    }
+}
+
+# One process per project, all started before any of them is waited for, so a stage over
+# several projects costs the slowest project instead of the sum of all of them. Each project
+# writes its own log, and the result names the FIRST project that failed: a stage whose exit
+# code came from whichever process was joined last would hide the project that broke.
+#
+# Placed after the launch helpers because it reuses Resolve-GateStageExecutable, which is why
+# a bare 'dotnet' is resolved here even though it would resolve on its own.
+function Invoke-ParallelGateStage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$LogDirectory,
+
+        # One `dotnet test <project>` process per entry, listed explicitly and never
+        # discovered: a project the gate does not name is a project the gate does not run.
+        [Parameter(Mandatory)][string[]]$Project,
+        [string[]]$Arguments = @(),
+
+        # Report the stage as skipped without running it.
+        [switch]$Skipped,
+
+        [string]$SkipReason
+    )
+
+    if ($Skipped) {
+        return [pscustomobject]@{
+            Name       = $Name
+            ExitCode   = 0
+            Seconds    = 0.0
+            LogPath    = $null
+            Skipped    = $true
+            SkipReason = $SkipReason
+            Projects   = @()
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $LogDirectory)) {
+        New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+    }
+
+    # Resolved once, and before anything starts: a missing dotnet throws here rather than
+    # after some projects have already run and reported green.
+    $filePath = Resolve-GateStageExecutable -FilePath 'dotnet'
+
+    $runs = [System.Collections.Generic.List[object]]::new()
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        foreach ($projectPath in $Project) {
+            $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = $filePath
+            $null = $startInfo.ArgumentList.Add('test')
+            $null = $startInfo.ArgumentList.Add($projectPath)
+            foreach ($argument in $Arguments) { $null = $startInfo.ArgumentList.Add($argument) }
+            $startInfo.UseShellExecute = $false
+            $startInfo.RedirectStandardOutput = $true
+            $startInfo.RedirectStandardError = $true
+
+            $process = [System.Diagnostics.Process]::Start($startInfo)
+            if ($null -eq $process) {
+                throw "'dotnet test $projectPath' could not be started. A stage that cannot start must never look green."
+            }
+
+            # Both pipes are drained from the moment the process starts, and before the next
+            # project is launched. Reading one to the end before the other deadlocks as soon
+            # as the second pipe buffer fills, which hung the UI check stage for 38 minutes.
+            $runs.Add([pscustomobject]@{
+                Project        = $projectPath
+                Process        = $process
+                StandardOutput = $process.StandardOutput.ReadToEndAsync()
+                StandardError  = $process.StandardError.ReadToEndAsync()
+            })
+        }
+    }
+    catch {
+        # A project that started and is not waited for would outlive the gate and fill a
+        # pipe nobody drains, so the ones already running are killed rather than orphaned.
+        foreach ($run in $runs) { try { $run.Process.Kill($true) } catch { } }
+        throw
+    }
+
+    foreach ($run in $runs) { $run.Process.WaitForExit() }
+    $stopwatch.Stop()
+
+    $projects = foreach ($run in $runs) {
+        $stdout = $run.StandardOutput.GetAwaiter().GetResult()
+        $stderr = $run.StandardError.GetAwaiter().GetResult()
+
+        $lines = [System.Collections.Generic.List[string]]::new()
+        # The command that ran is the first line and the project with its exit code is the
+        # last, so a reader who opens the log or reads only its tail can tell which project
+        # this is and how it ended without another lookup.
+        $lines.Add(('dotnet test {0} {1}' -f $run.Project, ($Arguments -join ' ')).Trim())
+        if (-not [string]::IsNullOrEmpty($stdout)) { $stdout.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $lines.Add($_) } }
+        if (-not [string]::IsNullOrEmpty($stderr)) { $stderr.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $lines.Add($_) } }
+        $lines.Add("==> $Name project: $($run.Project) exit $($run.Process.ExitCode)")
+
+        $logPath = Join-Path $LogDirectory ("$Name-{0}.log" -f [System.IO.Path]::GetFileNameWithoutExtension($run.Project))
+        Set-Content -LiteralPath $logPath -Value $lines
+
+        [pscustomobject]@{
+            Project  = $run.Project
+            ExitCode = [int]$run.Process.ExitCode
+            LogPath  = $logPath
+        }
+    }
+
+    # The first failure in project order, not the last process joined: the order the projects
+    # were started in is the order the gate promises to report them in.
+    $failed = @($projects | Where-Object { $_.ExitCode -ne 0 })
+
+    return [pscustomobject]@{
+        Name       = $Name
+        ExitCode   = if ($failed.Count -gt 0) { [int]$failed[0].ExitCode } else { 0 }
+        Seconds    = [Math]::Round($stopwatch.Elapsed.TotalSeconds, 1)
+        LogPath    = if ($failed.Count -gt 0) { $failed[0].LogPath } else { $null }
+        Skipped    = $false
+        SkipReason = $null
+        Projects   = @($projects)
+    }
+}
+
+# The log files a result stands for: one for a foreground or background stage, one per
+# project for a parallel stage. A parallel stage's LogPath names the first FAILING project
+# only, so reading or streaming from LogPath alone would show nothing at all when the stage
+# is green - the case where a watcher most wants to see the output.
+function Get-StageLogPaths {
+    param([Parameter(Mandatory)]$Result)
+
+    if ($Result.Skipped) { return @() }
+    if ($null -ne $Result.PSObject.Properties['Projects']) {
+        return @($Result.Projects | Where-Object { $_.LogPath } | ForEach-Object { $_.LogPath })
+    }
+    if ([string]::IsNullOrWhiteSpace($Result.LogPath)) { return @() }
+    return @($Result.LogPath)
+}
+
+function Get-ReportedFailureStage {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)]$Result
+    )
+
+    # A stage that runs more than one command in a single script names the command whose
+    # exit code it returned. Reporting the wrapper's name instead would let a UI-only
+    # failure read "stage=build" with the UI check's exit code beside it.
+    if ($Result.ExitCode -eq 0 -or $Result.Skipped -or [string]::IsNullOrWhiteSpace($Result.LogPath)) { return $Name }
+    if (-not (Test-Path -LiteralPath $Result.LogPath)) { return $Name }
+
+    $marker = Select-String -LiteralPath $Result.LogPath -Pattern '(?m)^stage-failure: (?<stage>\S+)$' |
+        Select-Object -First 1
+    if ($marker) { return $marker.Matches[0].Groups['stage'].Value }
+
+    return $Name
+}
+
 function Format-Duration {
     param([Parameter(Mandatory)][double]$Seconds)
 

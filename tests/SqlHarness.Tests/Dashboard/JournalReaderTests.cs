@@ -127,15 +127,12 @@ public sealed class JournalReaderTests
     public void Compare_pages_have_no_gaps_and_versions_use_all_retained_history_before_paging()
     {
         using var home = new TempHome();
-        var seed = new JournalSeed(home.DatabasePath);
-        var session = JournalSeed.Session("cli:compare-history");
         // More rows than JournalReader.CompareHistoryPageLimit (100) so the history
         // has to be read across an internal page boundary, and more than one user page
         // at the limit below, so the cursor has to advance. That is the property; the
         // session operation cap is a different test.
         const int attempts = 137;
-        for (var index = 0; index < attempts; index++)
-            seed.Compare(session, "orders", "whole", "base", $"candidate-{index}");
+        JournalSeed.Compares(home.DatabasePath, "cli:compare-history", attempts);
 
         var reader = Reader(home);
         var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
@@ -1365,15 +1362,13 @@ public sealed class JournalReaderTests
     public void Starred_list_pages_with_the_id_cursor_without_gaps()
     {
         using var home = new TempHome();
-        var seed = new JournalSeed(home.DatabasePath);
         // Two full pages of starred sessions plus a partial one is what proves the id cursor;
         // seeding ten times more only cost twelve seconds of the gate.
-        for (var i = 0; i < 240; i++)
+        JournalSeed.Operations(home.DatabasePath, 240, (index, id) =>
         {
-            seed.Operation(JournalSeed.Session($"cli:{i:D3}"));
-            if (i % 2 == 0)
-                JournalSeed.Annotate(home.DatabasePath, $"cli:{i:D3}", starred: true);
-        }
+            if (index % 2 == 0)
+                JournalSeed.Annotate(home.DatabasePath, $"cli:{index:D3}", starred: true);
+        });
         var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
 
         var seen = new List<string>();

@@ -4,12 +4,15 @@ namespace SqlHarness.Tests;
 
 public sealed class GateParityTests
 {
-    private static readonly string[] ExpectedVerbs = ["restore", "build", "test", "format"];
+    // `dotnet build` restores implicitly, so there is no separate restore verb to keep
+    // in step between the gates. `VerbGroup` below still lists it so the extractor can
+    // find a restore command if one is ever added back and the expectations catch it.
+    private static readonly string[] ExpectedVerbs = ["build", "test", "format"];
 
     [Theory]
     [InlineData("scripts/verify.ps1")]
     [InlineData("scripts/verify-linux.ps1")]
-    public void Every_local_gate_runs_the_same_four_stages_in_the_same_order(string path)
+    public void Every_local_gate_runs_the_same_three_dotnet_stages_in_the_same_order(string path)
     {
         var verbs = StageVerbs(File.ReadAllText(RepositoryFile.Locate(path.Split('/'))));
 
@@ -24,7 +27,6 @@ public sealed class GateParityTests
         var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
 
         Assert.Contains("-warnaserror", StageCommand(content, "build"), StringComparison.Ordinal);
-        Assert.Contains("--no-restore", StageCommand(content, "build"), StringComparison.Ordinal);
         Assert.Contains("--verify-no-changes", StageCommand(content, "format"), StringComparison.Ordinal);
         Assert.Contains("SqlHarness.sln", StageCommand(content, "format"), StringComparison.Ordinal);
     }
@@ -32,43 +34,102 @@ public sealed class GateParityTests
     [Theory]
     [InlineData("scripts/verify.ps1")]
     [InlineData("scripts/verify-linux.ps1")]
-    public void Every_local_gate_runs_the_same_non_integration_test_selection(string path)
+    [InlineData(".github/workflows/ci.yml")]
+    public void Every_gate_runs_build_and_format_exactly_once(string path)
     {
-        var command = StageCommand(File.ReadAllText(RepositoryFile.Locate(path.Split('/'))), "test");
+        // StageVerbs is distinct, because a project list legitimately yields `test` twice.
+        // That dedupe would otherwise let a second `dotnet build` or `dotnet format` slip in
+        // unnoticed, and the two-stage comparison above reads only the first one.
+        //
+        // CI is in this theory, not only the two local gates. StageCommand reads the FIRST
+        // command of a verb, and every other build/format comparison here reads it too, so
+        // while this theory was local-only a second `dotnet build` or a second format step
+        // appended to ci.yml passed the whole suite and doubled the work CI does. That is
+        // the same hole class as the I-3 narrowing this branch already paid for once.
+        var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
 
-        Assert.Contains("--no-build", command, StringComparison.Ordinal);
-        Assert.Contains("--filter", command, StringComparison.Ordinal);
-        Assert.Contains("FullyQualifiedName!~Integration", command, StringComparison.Ordinal);
+        Assert.Single(StageCommands(content, "build"));
+        Assert.Single(StageCommands(content, "format"));
     }
 
-    [Fact]
-    public void The_two_gates_name_the_same_test_filter_value()
+    // CI is in this theory, not only the two local gates. The UI-before-build anchor moved
+    // from `dotnet restore` to `dotnet build`, but that changed the anchor, not the scope:
+    // when this check only covered the local scripts, adding `--no-restore` to CI's build
+    // step or putting a standalone `dotnet restore` back into ci.yml left the suite green.
+    // CI's `dotnet build` runs from the repository root and names no solution, which is why
+    // this is separate from the format assertions above.
+    [Theory]
+    [InlineData("scripts/verify.ps1")]
+    [InlineData("scripts/verify-linux.ps1")]
+    [InlineData(".github/workflows/ci.yml")]
+    public void Every_gate_builds_with_warnaserror_and_lets_the_build_restore(string path)
     {
-        var windows = FilterValue(File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1")));
-        var linux = FilterValue(File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1")));
+        // `dotnet build` restores implicitly. A gate that passes --no-restore would fail on
+        // an unbuilt tree instead of restoring, so none of the three may pass it.
+        var command = StageCommand(File.ReadAllText(RepositoryFile.Locate(path.Split('/'))), "build");
 
-        Assert.Equal("FullyQualifiedName!~Integration", windows);
-        Assert.Equal(windows, linux);
+        Assert.Contains("-warnaserror", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("--no-restore", command, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Neither_gate_runs_integration_tests_unfiltered()
+    [Theory]
+    [InlineData("scripts/verify.ps1")]
+    [InlineData("scripts/verify-linux.ps1")]
+    [InlineData(".github/workflows/ci.yml")]
+    public void Every_gate_runs_the_same_non_integration_test_selection(string path)
     {
-        foreach (var path in new[] { "scripts/verify.ps1", "scripts/verify-linux.ps1" })
+        // Every `dotnet test` command, not the first one: a gate that runs one command per
+        // project can carry the right filter on one project and the wrong one on the other.
+        // CI is in this theory so its test steps cannot drift from the local gates' on the
+        // selection they run.
+        var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
+
+        Assert.All(CommandsFor(path, content, "test"), command =>
         {
-            var command = StageCommand(File.ReadAllText(RepositoryFile.Locate(path.Split('/'))), "test");
-
-            Assert.Matches(@"--filter\s+['""]FullyQualifiedName!~Integration['""]", command);
-        }
+            Assert.Contains("--no-build", command, StringComparison.Ordinal);
+            Assert.Contains("--filter", command, StringComparison.Ordinal);
+            Assert.Contains("FullyQualifiedName!~Integration", command, StringComparison.Ordinal);
+        });
     }
 
     [Fact]
-    public void The_two_gates_have_identical_restore_commands()
+    public void Every_gate_names_the_same_test_filter_value()
     {
-        var windows = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1")), "restore");
-        var linux = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1")), "restore");
+        // One value across all three surfaces and every command in them. A second --filter,
+        // or a different selection in one surface, is exactly the drift the per-project
+        // comparison cannot see because it compares flags rather than the filter.
+        var values = new[] { "scripts/verify.ps1", "scripts/verify-linux.ps1", ".github/workflows/ci.yml" }
+            .SelectMany(path => CommandsFor(path, ReadRepositoryFile(path.Split('/')), "test")
+                .Select(FilterValueOf))
+            .Distinct()
+            .ToArray();
 
-        Assert.Equal(windows, linux);
+        Assert.Equal(["FullyQualifiedName!~Integration"], values);
+    }
+
+    [Theory]
+    [InlineData("scripts/verify.ps1")]
+    [InlineData("scripts/verify-linux.ps1")]
+    [InlineData(".github/workflows/ci.yml")]
+    public void Every_gate_runs_integration_tests_filtered(string path)
+    {
+        // Exactly one --filter, and its whole value is the exclusion. An unquoted value, a
+        // value with extra conditions glued on, or a second --filter that overrides the first
+        // are all shapes that stop excluding the integration tests, and none of them can be
+        // told apart by looking for a quoted substring.
+        var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
+
+        Assert.All(CommandsFor(path, content, "test"), command =>
+        {
+            var arguments = ArgumentsOf(command);
+            var filters = Enumerable.Range(0, arguments.Length).Where(index => arguments[index] == "--filter").ToArray();
+
+            Assert.Single(filters);
+            Assert.True(
+                filters[0] + 1 < arguments.Length,
+                $"'{command}' passes --filter with no value after it");
+            Assert.Equal("FullyQualifiedName!~Integration", arguments[filters[0] + 1]);
+        });
     }
 
     [Fact]
@@ -81,6 +142,22 @@ public sealed class GateParityTests
     }
 
     [Fact]
+    public void No_gate_runs_a_standalone_restore_stage()
+    {
+        // dotnet build restores implicitly and performs the same restore, so a separate
+        // restore stage is duplicated work. This replaces the deleted identical-restore
+        // comparison with a stronger claim than it made, and it covers ci.yml too: the
+        // local gates were guarded here while CI's `dotnet restore` step could come back
+        // unnoticed.
+        foreach (var path in new[] { "scripts/verify.ps1", "scripts/verify-linux.ps1", ".github/workflows/ci.yml" })
+        {
+            var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
+
+            Assert.DoesNotContain("dotnet restore", content, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void The_two_gates_have_identical_format_commands()
     {
         var windows = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1")), "format");
@@ -89,42 +166,224 @@ public sealed class GateParityTests
         Assert.Equal(FormatShape(linux), FormatShape(windows));
     }
 
-    [Fact]
-    public void The_two_gates_have_equal_test_commands_modulo_the_linux_logger()
+    // CI is in this theory, not only the two local gates. When the two gates are compared to
+    // each other and a third surface is left out, that surface drifts silently - which is
+    // how CI's build step lost its restore guard once already. Every surface runs the
+    // Windows arguments plus its own logger, and nothing else.
+    [Theory]
+    [InlineData("scripts/verify-linux.ps1", "--logger console;verbosity=normal")]
+    [InlineData(".github/workflows/ci.yml", "--logger trx --results-directory TestResults")]
+    public void Every_gate_runs_the_windows_test_commands_plus_its_own_logger(string path, string logger)
     {
-        var windows = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1")), "test");
-        var linux = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1")), "test");
+        // Arguments, not command text: the three surfaces quote the same argument three ways
+        // because their shells differ, and comparing the text would compare the shells
+        // instead of what they run. Compared as sets, because which project a surface runs
+        // first is not a parity property - WHICH projects, and with which arguments, is.
+        var expected = TestCommands("scripts/verify.ps1", ReadRepositoryFile("scripts", "verify.ps1"))
+            .SelectMany(command => ArgumentsOf(command).Concat(logger.Split(' ')))
+            .OrderBy(argument => argument, StringComparer.Ordinal)
+            .ToArray();
+        var actual = TestCommands(path, ReadRepositoryFile(path.Split('/')))
+            .SelectMany(ArgumentsOf)
+            .OrderBy(argument => argument, StringComparer.Ordinal)
+            .ToArray();
 
-        Assert.Equal(linux, windows + " --logger \"console;verbosity=normal\"");
+        Assert.Equal(expected, actual);
     }
 
     [Fact]
-    public void The_windows_test_command_does_not_include_a_logger()
+    public void The_windows_gate_runs_no_test_logger()
     {
-        var windows = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1")), "test");
-
-        Assert.DoesNotContain("--logger", windows, StringComparison.Ordinal);
+        // The Windows gate already writes each project's output to its own log file, so a
+        // console logger on top of it would duplicate the stage's only report. CI's trx
+        // logger is asserted by the theory above rather than here: CI has no per-project
+        // log to write into, and its logger is what produces the uploaded artifact.
+        Assert.All(
+            TestCommands("scripts/verify.ps1", ReadRepositoryFile("scripts", "verify.ps1")),
+            command => Assert.DoesNotContain("--logger", command, StringComparison.Ordinal));
     }
 
     [Fact]
-    public void The_only_logger_occurrence_is_in_the_linux_test_command()
+    public void The_only_logger_occurrences_are_the_ones_that_surface_asks_for()
     {
-        foreach (var path in new[] { "scripts/verify.ps1", "scripts/verify-linux.ps1" })
+        // One logger per test command where a surface asks for one, and none anywhere else:
+        // a --logger that appears on build or format, or twice on a test command, is drift
+        // the single-value comparisons above cannot see. Every command of every verb is
+        // checked, so an extra command cannot carry one either.
+        foreach (var verb in ExpectedVerbs)
         {
-            var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
-            foreach (var verb in ExpectedVerbs)
+            foreach (var path in new[] { "scripts/verify.ps1", "scripts/verify-linux.ps1", ".github/workflows/ci.yml" })
             {
-                var command = StageCommand(content, verb);
-                if (path == "scripts/verify-linux.ps1" && verb == "test")
+                var commands = CommandsFor(path, ReadRepositoryFile(path.Split('/')), verb);
+                var wants = verb == "test" && path != "scripts/verify.ps1";
+
+                Assert.All(commands, command =>
                 {
-                    Assert.Single(Regex.Matches(command, @"--logger"));
-                }
-                else
-                {
-                    Assert.DoesNotContain("--logger", command, StringComparison.Ordinal);
-                }
+                    if (wants) { Assert.Single(Regex.Matches(command, @"--logger")); }
+                    else { Assert.DoesNotContain("--logger", command, StringComparison.Ordinal); }
+                });
             }
         }
+    }
+
+    // Every surface names one `dotnet test` command per test project, and only the projects
+    // the solution holds. Naming them explicitly is what makes the stage able to start them
+    // all at once, and it is also the failure mode: a third test project added to the
+    // solution would simply not run in any gate.
+    [Theory]
+    [InlineData("scripts/verify.ps1")]
+    [InlineData("scripts/verify-linux.ps1")]
+    [InlineData(".github/workflows/ci.yml")]
+    public void Every_gate_names_every_test_project_in_the_solution(string path)
+    {
+        var commands = TestCommands(path, ReadRepositoryFile(path.Split('/')));
+
+        Assert.NotEmpty(commands);
+        Assert.Equal(
+            SolutionTestProjects(),
+            commands.Select(TestProjectOf).OrderBy(project => project, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public void The_windows_gate_runs_its_test_projects_through_the_shared_parallel_stage()
+    {
+        // One Add-Stage over a project list, not one Add-Stage per project: two sequential
+        // stages are two sequential runs and report only the first failure. The helper comes
+        // from gate-output.ps1, so the parallel stage keeps the same log-per-stage contract as
+        // every other stage rather than growing a second implementation in the gate.
+        var content = ReadRepositoryFile("scripts", "verify.ps1");
+
+        Assert.Single(Regex.Matches(content, @"Add-Stage -Name 'test'"));
+        Assert.Contains("Invoke-ParallelGateStage", content, StringComparison.Ordinal);
+        Assert.Contains("Invoke-ParallelGateStage", ReadRepositoryFile("scripts", "gate-output.ps1"), StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"dotnet\s+test\s+SqlHarness\.sln", content);
+    }
+
+    [Fact]
+    public void The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both()
+    {
+        // A `&` on both commands and a wait on both pids: joining the first before starting
+        // the second is the sequential solution wearing this stage's name. Both live in one
+        // bash block because two concurrent WSL launches would race each other over the
+        // clone, the same reason the UI check is coupled into the build stage.
+        var content = ReadRepositoryFile("scripts", "verify-linux.ps1");
+        var stage = content.IndexOf("Invoke-LinuxStage -Name 'test'", StringComparison.Ordinal);
+        Assert.True(stage > 0, "the Linux gate must run a test stage");
+
+        // Cut at the next stage so the counts cannot be satisfied by another stage's bash.
+        // The cut is asserted, not assumed: the stage after this one is format, so a block
+        // that had quietly become the whole file would carry `dotnet format` - and both
+        // `dotnet test` lines live in this stage, so every count below would still read 2.
+        // The script-level assertion keeps the pair from passing for the wrong reason.
+        var block = content.Substring(stage);
+        var next = block.IndexOf("Invoke-LinuxStage -Name", 1);
+        if (next > 0) { block = block.Substring(0, next); }
+
+        Assert.Contains("dotnet format", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet format", block, StringComparison.Ordinal);
+        Assert.Equal(2, Regex.Matches(block, @"'dotnet test [^']+ &',").Count);
+        Assert.Equal(2, Regex.Matches(block, @"\w+_pid=\$!").Count);
+        Assert.Equal(2, Regex.Matches(block, @"'wait ""\$\w+_pid""").Count);
+    }
+
+    [Fact]
+    public void Ci_runs_one_dotnet_test_step_per_test_project()
+    {
+        // Two steps, not one shell block and not one step over the solution: the job summary
+        // names the project that failed, which is the reason CI is not made parallel here.
+        // Every_gate_names_every_test_project_in_the_solution cannot see this shape - a single
+        // block running both projects would satisfy it.
+        var content = ReadRepositoryFile(".github", "workflows", "ci.yml");
+        var steps = Regex.Matches(content, @"(?m)^\s*-\s+run:\s*(?<command>dotnet test\b.*)$")
+            .Select(match => NormalizeCommand(match.Groups["command"].Value))
+            .ToArray();
+
+        Assert.Equal(SolutionTestProjects().Length, steps.Length);
+        Assert.Equal(
+            SolutionTestProjects(),
+            steps.Select(TestProjectOf).OrderBy(project => project, StringComparer.Ordinal).ToArray());
+    }
+
+    // The marker is pinned here because no project in the repository declares it today, so
+    // without these cases the filter is code no test ever runs and a pattern that stopped
+    // matching would be found only by a tree this branch has never seen. The last two cases are
+    // what keeps it from becoming a name filter in disguise: an unrelated false and a project
+    // that says nothing are both test projects.
+    [Theory]
+    [InlineData("<IsTestProject>false</IsTestProject>", true)]
+    [InlineData("<IsTestProject>False</IsTestProject>", true)]
+    [InlineData("<IsTestProject>0</IsTestProject>", true)]
+    [InlineData("<IsTestProject>true</IsTestProject>", false)]
+    [InlineData("<IsPackable>false</IsPackable>", false)]
+    [InlineData("", false)]
+    public void Only_the_marker_dotnet_test_skips_on_marks_a_project_as_not_a_test_project(string projectFile, bool marked)
+    {
+        Assert.Equal(marked, IsMarkedNotATestProject(projectFile));
+    }
+
+    // The four projects the synthetic solution below names. Paths are spelled the way the filter
+    // normalises them to, which is also the way the InlineData rows spell them.
+    private const string TestsProject = "tests/SqlHarness.Tests/SqlHarness.Tests.csproj";
+    private const string McpTestsProject = "tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj";
+    private const string WorkflowHostProject = "tests/SqlHarness.Mcp.WorkflowHost/SqlHarness.Mcp.WorkflowHost.csproj";
+    private const string ThirdTestProject = "tests/SqlHarness.Mcp.Tests.Extra/SqlHarness.Mcp.Tests.Extra.csproj";
+
+    // The wiring, not just the predicate. Only_the_marker_..._marks_a_project pins what the
+    // filter DECIDES; nothing else on this branch can tell whether the filter is APPLIED, because
+    // no project in the repository declares the marker, so dropping the step would keep the whole
+    // suite green and the merged-main red this fix prevents would return unnoticed. So the three
+    // cases that were proven by editing SqlHarness.sln are run here over a solution and a reader
+    // that exist only in this method: the marked host is excluded, a genuine third test project is
+    // still demanded, and a project whose text cannot be read is a failure rather than a guess.
+    // The expected lists are in the Ordinal order the filter returns, which the comparisons below
+    // pin as well.
+    [Theory]
+    // The host is in the solution but its project cannot be read: unknown, so the guards fail.
+    [InlineData(WorkflowHostProject, false, null)]
+    // The host declares IsTestProject false: excluded, and the two test projects remain.
+    [InlineData(null, false, new string[] { McpTestsProject, TestsProject })]
+    // The host excluded AND a genuine third test project added: that project is still demanded.
+    [InlineData(null, true, new string[] { ThirdTestProject, McpTestsProject, TestsProject })]
+    public void The_filter_demands_only_the_projects_dotnet_test_would_run_and_reports_one_it_cannot_read(string? unreadable, bool thirdTestProject, string[]? expected)
+    {
+        // One Project line in the shape SqlHarness.sln spells it, which is all the filter reads -
+        // including the backslashes it has to normalise to the '/' the expected lists use.
+        static string Entry(string name, string project) =>
+            $@"Project(""{{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}}"") = ""{name}"", ""{project.Replace('/', '\\')}"", ""{{A1B2C3D4-0000-4000-8000-000000000001}}""";
+
+        var entries = new List<string>
+        {
+            Entry("SqlHarness.Tests", TestsProject),
+            Entry("SqlHarness.Mcp.Tests", McpTestsProject),
+            Entry("SqlHarness.Mcp.WorkflowHost", WorkflowHostProject),
+        };
+        if (thirdTestProject) { entries.Add(Entry("SqlHarness.Mcp.Tests.Extra", ThirdTestProject)); }
+        var solution = string.Join("\n", [.. entries, "Global", string.Empty]);
+
+        // The reader answers from strings and refuses exactly the project the row names, which is
+        // what RepositoryFile.Locate does for a project that is not there - same exception type,
+        // same message - so the unreadable row exercises the path production takes, not a
+        // stand-in for it.
+        var texts = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [TestsProject] = "<Project Sdk=\"Microsoft.NET.Sdk\" />",
+            [McpTestsProject] = "<Project Sdk=\"Microsoft.NET.Sdk\" />",
+            [WorkflowHostProject] = "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><IsTestProject>false</IsTestProject></PropertyGroup></Project>",
+            [ThirdTestProject] = "<Project Sdk=\"Microsoft.NET.Sdk\" />",
+        };
+        if (unreadable is not null) { texts.Remove(unreadable); }
+        Func<string, string?> readProject = project =>
+            texts.TryGetValue(project, out var text) ? text : throw new FileNotFoundException($"Could not locate repository file: {project}");
+
+        if (expected is null)
+        {
+            var failure = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => SolutionTestProjects(solution, readProject));
+
+            Assert.Contains(unreadable!, failure.Message, StringComparison.Ordinal);
+            return;
+        }
+
+        Assert.Equal(expected, SolutionTestProjects(solution, readProject));
     }
 
     [Fact]
@@ -229,15 +488,35 @@ public sealed class GateParityTests
     [Fact]
     public void The_extractor_returns_the_expected_commands_for_the_real_gate_files()
     {
-        var windows = File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1"));
-        var linux = File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1"));
+        var windows = ReadRepositoryFile("scripts", "verify.ps1");
+        var linux = ReadRepositoryFile("scripts", "verify-linux.ps1");
+        var ci = ReadRepositoryFile(".github", "workflows", "ci.yml");
 
-        Assert.Equal("dotnet restore SqlHarness.sln", StageCommand(windows, "restore"));
-        Assert.Equal("dotnet restore SqlHarness.sln", StageCommand(linux, "restore"));
-        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", StageCommand(windows, "build"));
-        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", StageCommand(linux, "build"));
-        Assert.Equal("dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\"", StageCommand(windows, "test"));
-        Assert.Equal("dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\" --logger \"console;verbosity=normal\"", StageCommand(linux, "test"));
+        Assert.Equal("dotnet build SqlHarness.sln -warnaserror", StageCommand(windows, "build"));
+        Assert.Equal("dotnet build SqlHarness.sln -warnaserror", StageCommand(linux, "build"));
+        Assert.Equal("dotnet build -warnaserror", StageCommand(ci, "build"));
+        // The Windows command is composed from the parallel stage's argument list, so its
+        // filter value carries no quotes: PowerShell hands the argument to dotnet without
+        // them, exactly as bash strips them from the Linux command. ArgumentsOf is what
+        // makes the two spellings compare equal, and it is asserted on all three above.
+        Assert.Equal(
+            [
+                "dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter FullyQualifiedName!~Integration",
+                "dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter FullyQualifiedName!~Integration",
+            ],
+            TestCommands("scripts/verify.ps1", windows));
+        Assert.Equal(
+            [
+                "dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter \"FullyQualifiedName!~Integration\" --logger \"console;verbosity=normal\"",
+                "dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter \"FullyQualifiedName!~Integration\" --logger \"console;verbosity=normal\"",
+            ],
+            TestCommands("scripts/verify-linux.ps1", linux));
+        Assert.Equal(
+            [
+                "dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter \"FullyQualifiedName!~Integration\" --logger trx --results-directory TestResults",
+                "dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter \"FullyQualifiedName!~Integration\" --logger trx --results-directory TestResults",
+            ],
+            TestCommands(".github/workflows/ci.yml", ci));
         Assert.Equal("dotnet format SqlHarness.sln --no-restore --include $changedFiles --verify-no-changes", FormatShape(StageCommand(windows, "format")));
         Assert.Equal("dotnet format SqlHarness.sln --no-restore --include $changedFiles --verify-no-changes", FormatShape(StageCommand(linux, "format")));
     }
@@ -331,10 +610,26 @@ public sealed class GateParityTests
         Assert.Contains("GitHub Actions", verification, StringComparison.Ordinal);
     }
 
-    private static readonly string[] UiCommands =
-    [
-        "npm run check --prefix src/SqlHarness.Dashboard/ui",
-    ];
+    private const string UiCheckCommand = "npm run check --prefix src/SqlHarness.Dashboard/ui";
+
+    // The Windows gate starts the UI check as a background process, so the command
+    // arrives as a FilePath plus an argument vector instead of one literal line. Both
+    // spellings name the same check against the same directory, so the assertion is
+    // equally strong either way; only the surface form differs. Returns the position
+    // of the anchor so the caller can still pin the order, or -1 when the gate never
+    // names the check at all.
+    private static int UiCheckIndex(string path, string content)
+    {
+        if (path != "scripts/verify.ps1")
+        {
+            return content.IndexOf(UiCheckCommand, StringComparison.Ordinal);
+        }
+
+        var filePath = content.IndexOf("-FilePath 'npm'", StringComparison.Ordinal);
+        if (filePath < 0) { return -1; }
+        var argumentList = content.IndexOf("@('run', 'check', '--prefix', 'src/SqlHarness.Dashboard/ui')", StringComparison.Ordinal);
+        return argumentList < 0 ? -1 : Math.Min(filePath, argumentList);
+    }
 
     // The Windows gate installs through scripts/ui-install.ps1, the Linux gate with
     // its own stamp logic in bash, CI with a plain npm ci.
@@ -349,23 +644,23 @@ public sealed class GateParityTests
     [InlineData("scripts/verify.ps1")]
     [InlineData("scripts/verify-linux.ps1")]
     [InlineData(".github/workflows/ci.yml")]
-    public void Every_gate_installs_and_checks_the_ui_before_restore(string path)
+    public void Every_gate_installs_and_checks_the_ui_before_the_dotnet_build(string path)
     {
+        // dotnet build is the first .NET stage in every gate, so "before the build" is
+        // the earliest .NET work a gate can do; the UI must be installed and checked by
+        // then or the gate pays for the UI twice.
         var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
-        var restore = content.IndexOf("dotnet restore", StringComparison.Ordinal);
+        var build = content.IndexOf("dotnet build", StringComparison.Ordinal);
+        var uiCheck = UiCheckIndex(path, content);
 
-        Assert.True(restore > 0, "the gate must restore");
+        Assert.True(build > 0, "the gate must build");
         var install = UiInstallMarker(path);
         var installIndex = content.IndexOf(install, StringComparison.Ordinal);
 
         Assert.True(installIndex >= 0, $"{path} must install the UI with '{install}'");
-        Assert.True(installIndex < restore, $"{path} must install the UI before dotnet restore");
-        foreach (var command in UiCommands)
-        {
-            var index = content.IndexOf(command, StringComparison.Ordinal);
-            Assert.True(index >= 0, $"{path} must run '{command}'");
-            Assert.True(index < restore, $"{path} must run '{command}' before dotnet restore");
-        }
+        Assert.True(installIndex < build, $"{path} must install the UI before dotnet build");
+        Assert.True(uiCheck >= 0, $"{path} must run '{UiCheckCommand}'");
+        Assert.True(uiCheck < build, $"{path} must check the UI before dotnet build");
     }
 
     [Fact]
@@ -426,6 +721,26 @@ public sealed class GateParityTests
     private const string LinuxBody = @"(?:[^""'\r\n]|""[^""]*"")*";
     private const string YamlBody = @"(?:[^""'\r\n]|""[^""]*""|'[^']*')*";
 
+    // One `dotnet <verb>` command in any of the three surfaces: a PowerShell scriptblock
+    // stage, a single-quoted bash line, or a yaml `run:` step. The test commands of a gate
+    // that runs one project per line are found with the same pattern, which is why the
+    // plural form below exists.
+    private static string StagePattern(string verbGroup) =>
+        $@"(?:\{{\s*(?<command>dotnet {verbGroup}\b{Body})\s*\}})|(?:'(?<command>dotnet {verbGroup}\b{LinuxBody})')|(?:(?m)^\s*(?:-\s+)?run:\s*(?<command>dotnet {verbGroup}\b{YamlBody}))";
+
+    // Add-Stage -Name 'test' -Project @('a', 'b') -Arguments @('--no-build', ...)
+    private static readonly Regex ParallelTestStage = new(
+        @"Add-Stage\s+-Name\s+'test'\s+-Project\s*@\((?<projects>.*?)\)\s*-Arguments\s*@\((?<arguments>.*?)\)",
+        RegexOptions.Singleline);
+
+    private static readonly Regex TestProjectArgument = new(@"^dotnet test\s+(?<project>\S+\.csproj)");
+
+    // The declaration that marks a project as one `dotnet test` does not run. Case-insensitive
+    // and accepting 0 as well as false, because that is how MSBuild spells a boolean.
+    private static readonly Regex DeclaredNotATestProject = new(
+        @"<IsTestProject\s*>\s*(?:false|0)\s*</IsTestProject\s*>",
+        RegexOptions.IgnoreCase);
+
     internal static string FormatShape(string command) =>
         Regex.Replace(
             command,
@@ -455,32 +770,183 @@ public sealed class GateParityTests
 
     internal static string[] StageVerbs(string content)
     {
-        var pattern = $@"(?:\{{\s*dotnet {VerbGroup}\b{Body}\s*\}})|(?:'dotnet {VerbGroup}\b{LinuxBody}')|(?:(?m)^\s*(?:-\s+)?run:\s*dotnet {VerbGroup}\b{YamlBody})";
-        return Regex.Matches(content, pattern)
-            .Select(match => match.Groups["verb"].Value)
+        var verbs = new List<(int Index, string Verb)>();
+        foreach (Match match in Regex.Matches(content, StagePattern(VerbGroup)))
+        {
+            verbs.Add((match.Index, match.Groups["verb"].Value));
+        }
+
+        // A project list is one `dotnet test` command per project, and the Windows gate hands
+        // that list to the shared parallel stage helper rather than spelling the commands
+        // out, so each project contributes a `test` at the position of the stage running it.
+        var parallel = ParallelTestStage.Match(content);
+        if (parallel.Success)
+        {
+            foreach (var _ in ParseStringArray(parallel.Groups["projects"].Value))
+            {
+                verbs.Add((parallel.Index, "test"));
+            }
+        }
+
+        // Distinct, in first-occurrence order. The ORDER of the stages is the property under
+        // test; the count is not, because two `test` verbs now means two test projects running
+        // at once. The stages that must appear exactly once are asserted separately.
+        return verbs
+            .OrderBy(entry => entry.Index)
+            .Select(entry => entry.Verb)
+            .Distinct()
+            .ToArray();
+    }
+
+    internal static string[] StageCommands(string content, string verb)
+    {
+        // A trailing `&` is how the Linux gate schedules a project in the background, not an
+        // argument of dotnet, and a trailing `# ...` is a shell comment. Both are stripped
+        // with the command so what is compared is the command and not how the shell runs
+        // it; the backgrounding itself is pinned by
+        // The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both.
+        return Regex.Matches(content, StagePattern(verb))
+            .Select(match => NormalizeCommand(
+                Regex.Replace(match.Groups["command"].Value, @"(?:\s+#.*$|\s+&\s*$)", "")))
             .ToArray();
     }
 
     internal static string StageCommand(string content, string verb)
     {
-        var pattern = $@"(?:\{{\s*(?<command>dotnet {verb}\b{Body})\s*\}})|(?:'(?<command>dotnet {verb}\b{LinuxBody})')|(?:(?m)^\s*(?:-\s+)?run:\s*(?<command>dotnet {verb}\b{YamlBody}))";
+        var commands = StageCommands(content, verb);
 
-        var match = Regex.Match(content, pattern);
-        if (match.Success)
+        if (commands.Length == 0)
         {
-            var command = Regex.Replace(match.Groups["command"].Value, @"\s+#.*$", "");
-            return NormalizeCommand(command);
+            Assert.Fail($"No 'dotnet {verb}' command was found.");
         }
 
-        Assert.Fail($"No 'dotnet {verb}' command was found.");
-        return null!;
+        return commands[0];
     }
+
+    // The `dotnet test` commands one surface really runs, one per test project. The Windows
+    // gate names its projects in the parallel stage helper rather than spelling a command
+    // line per project, so its list is composed from that project list and the shared
+    // argument list - which is the command the stage actually runs, and so a stronger thing
+    // to compare between the gates than a literal line would be. The other two surfaces
+    // spell their commands out and are read as they are written.
+    internal static string[] TestCommands(string path, string content)
+    {
+        if (path != "scripts/verify.ps1")
+        {
+            var commands = StageCommands(content, "test");
+            if (commands.Length == 0)
+            {
+                Assert.Fail($"No 'dotnet test' command was found in {path}.");
+            }
+
+            return commands;
+        }
+
+        var stage = ParallelTestStage.Match(content);
+        if (!stage.Success)
+        {
+            Assert.Fail("scripts/verify.ps1 must run its test stage through the shared parallel stage helper.");
+            return [];
+        }
+
+        var arguments = ParseStringArray(stage.Groups["arguments"].Value);
+        return ParseStringArray(stage.Groups["projects"].Value)
+            .Select(project => NormalizeCommand($"dotnet test {project} {string.Join(" ", arguments)}".Trim()))
+            .ToArray();
+    }
+
+    // The commands one surface runs for a verb. `test` always goes through TestCommands,
+    // because "the test command" of a gate with two test projects is a list, not a line.
+    internal static string[] CommandsFor(string path, string content, string verb) =>
+        verb == "test" ? TestCommands(path, content) : StageCommands(content, verb);
+
+    // The project a test command names, spelled the way the solution spells it.
+    internal static string TestProjectOf(string command)
+    {
+        var match = TestProjectArgument.Match(command);
+
+        Assert.True(match.Success, $"'{command}' names no test project.");
+        return match.Groups["project"].Value.Replace('\\', '/');
+    }
+
+    // The test projects the solution itself holds, read out of SqlHarness.sln rather than
+    // hard-coded. That is what makes Every_gate_names_every_test_project_in_the_solution
+    // fail on the day a third test project is added instead of on the day someone notices.
+    // What the solution holds under tests\ is not the whole of it: a project that declares
+    // IsTestProject false is one `dotnet test` skips, so no gate may be made to name it, and
+    // requiring that would fail the build over a project that must not be tested.
+    internal static string[] SolutionTestProjects() =>
+        SolutionTestProjects(ReadRepositoryFile("SqlHarness.sln"), project => ReadRepositoryFile(project.Split('/')));
+
+    // The same read over a solution and a project reader the caller supplies, which is what lets
+    // the filter be pinned by a test that touches no file in the repository: no project in this
+    // repository declares the marker, so nothing on this branch can tell a caller-supplied
+    // solution from SqlHarness.sln except the tests that pass one in. readProject returns the
+    // project's text, or null when it cannot be read.
+    internal static string[] SolutionTestProjects(string solution, Func<string, string?> readProject) =>
+        Regex.Matches(solution, @"""(?<project>tests\\[^""]+\.csproj)""", RegexOptions.IgnoreCase)
+            .Select(match => match.Groups["project"].Value.Replace('\\', '/'))
+            .Where(project => DotnetTestWouldRun(project, readProject))
+            .OrderBy(project => project, StringComparer.Ordinal)
+            .ToArray();
+
+    // Whether `dotnet test` would run the project the solution names. The marker the SDK
+    // honours decides it, not the project's name and not a list kept here, so the next project
+    // that declares the marker is handled without anybody editing this file.
+    //
+    // A project whose text cannot be obtained fails loudly instead of defaulting either way.
+    // Assuming it is not a test project would drop a real one from the two guards above, which
+    // is the single drift those guards exist to catch; assuming it is would demand a test step
+    // for a project no gate can run. Both guesses are quiet, and a solution entry this test
+    // cannot read is drift too - so it is a red guard naming the file, never a pass.
+    private static bool DotnetTestWouldRun(string project, Func<string, string?> readProject)
+    {
+        string? projectFile = null;
+        string? failure = null;
+
+        try
+        {
+            projectFile = readProject(project);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            failure = ex.Message;
+        }
+
+        if (projectFile is null)
+        {
+            Assert.Fail($"SqlHarness.sln lists {project}, but reading it failed, so whether `dotnet test` runs it is unknown. {failure ?? "the reader returned no text for it."}");
+        }
+
+        return !IsMarkedNotATestProject(projectFile);
+    }
+
+    // The marker `dotnet test` skips a project on, read from the project's own text. A project
+    // that says nothing here is a test project, because that is the SDK's default.
+    internal static bool IsMarkedNotATestProject(string projectFile) =>
+        DeclaredNotATestProject.IsMatch(projectFile);
+
+    private static string[] ParseStringArray(string literal) =>
+        Regex.Matches(literal, @"'(?<value>[^']*)'|""(?<value>[^""]*)""")
+            .Select(match => match.Groups["value"].Value)
+            .ToArray();
+
+    // The arguments of a command as the process receives them: shell quoting is stripped, so
+    // a bare FullyQualifiedName!~Integration and a "FullyQualifiedName!~Integration" are the
+    // same argument. This is what the parity comparison compares, because the three surfaces
+    // spell the same argument differently and their text is not the thing that must match.
+    internal static string[] ArgumentsOf(string command) =>
+        Regex.Matches(command, @"""(?<value>[^""]*)""|'(?<value>[^']*)'|(?<value>\S+)")
+            .Select(match => match.Groups["value"].Value)
+            .ToArray();
+
+    // The filter value of ONE command. It ends at the first space or quote after --filter,
+    // and it may be quoted or bare, because the three surfaces spell it three ways.
+    internal static string FilterValueOf(string command) =>
+        Regex.Match(command, @"--filter\s+['""]?(?<value>[^'""\s]+)")
+            .Groups["value"]
+            .Value;
 
     private static string NormalizeCommand(string command) =>
         command.Trim().Replace('\'', '"');
-
-    private static string FilterValue(string content) =>
-        Regex.Match(content, @"--filter\s+['""]?(?<value>[^'""\s]+)")
-            .Groups["value"]
-            .Value;
 }

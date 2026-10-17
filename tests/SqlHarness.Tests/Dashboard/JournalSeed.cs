@@ -1,3 +1,7 @@
+using System.Globalization;
+
+using Microsoft.Data.Sqlite;
+
 using SqlHarness.Core;
 using SqlHarness.Tests.Journal;
 
@@ -79,7 +83,7 @@ internal sealed class JournalSeed
     {
         // Pooled: seeding a few hundred annotations through one non-pooled connection each
         // cost about 7.5 ms per call. TempHome clears the pools before deleting the file.
-        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}");
+        using var connection = new SqliteConnection($"Data Source={databasePath}");
         connection.Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -94,10 +98,146 @@ internal sealed class JournalSeed
         Assert.Equal(1, command.ExecuteNonQuery());
     }
 
+    /// <summary>
+    /// Bulk seeds <paramref name="count"/> sessions with keys <c>cli:000</c> … <c>cli:{count-1:D3}</c>,
+    /// each carrying one completed query operation, for reader tests that need volume but assert
+    /// nothing about what the writer wrote.
+    /// One pooled connection and one commit, like <see cref="Annotate"/>: <see cref="Operation"/> costs
+    /// a fresh non-pooled connection and a commit per journal call, which measured about 35 ms per
+    /// seeded operation here and 8.3 s for the 240 sessions of the starred cursor test.
+    /// <paramref name="onSession"/> runs after the commit, because a callback that opens its own
+    /// connection (<see cref="Annotate"/>, <see cref="Link"/>) cannot write while this transaction
+    /// holds the journal's WAL write lock.
+    /// </summary>
+    public static void Operations(string databasePath, int count, Action<int, long>? onSession = null)
+    {
+        EnsureSchema(databasePath);
+        var identity = Session($"cli:{0:D3}");
+        var sessionIds = new long[count];
+        using var connection = new SqliteConnection($"Data Source={databasePath}");
+        connection.Open();
+        using (var transaction = connection.BeginTransaction())
+        {
+            using var session = SessionInsert(connection, transaction, identity);
+            using var operation = connection.CreateCommand();
+            operation.Transaction = transaction;
+            // The columns JournalReader selects. Writer columns left out stay null instead of
+            // matching the writer: vars_json and the emission footprints stay empty here.
+            operation.CommandText = """
+                INSERT INTO operations (session_id, operation, host_pid, host_started_at, started_at, updated_at,
+                    finished_at, status, exit_code, duration_ms, profile, engine, server, database,
+                    result_sets, rows_returned, sql_hash)
+                VALUES ($session, 'query', $hostPid, $hostStarted, $seen, $seen,
+                    $seen, 'succeeded', 0, 10, 'local', 'sqlserver', 'srv', 'db', 1, 3, $sqlHash);
+                """;
+            operation.Parameters.AddWithValue("$session", 0L);
+            operation.Parameters.AddWithValue("$hostPid", identity.HostPid);
+            operation.Parameters.AddWithValue("$hostStarted", Timestamp(identity.HostStartedAt));
+            operation.Parameters.AddWithValue("$seen", Timestamp(HostStarted));
+            operation.Parameters.AddWithValue("$sqlHash", OperationJournalDescriber.SqlHash("SELECT 1"));
+            for (var index = 0; index < count; index++)
+            {
+                var seen = Timestamp(HostStarted.AddSeconds(index));
+                var sessionId = (long)Insert(session, $"cli:{index:D3}", seen)!;
+                sessionIds[index] = sessionId;
+                operation.Parameters["$session"].Value = sessionId;
+                operation.Parameters["$seen"].Value = seen;
+                operation.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
+
+        if (onSession is not null)
+            for (var index = 0; index < count; index++)
+                onSession(index, sessionIds[index]);
+    }
+
+    /// <summary>
+    /// Bulk seeds <paramref name="count"/> completed compare attempts into one session, for reader
+    /// tests that page retained history. Same pooled single-transaction shape as
+    /// <see cref="Operations"/>. Subject and scope are fixed and the baseline hash repeats while every
+    /// candidate is unique, so <see cref="CompareHistoryBuilder"/> labels them v0 for the baseline and
+    /// one version per attempt for the candidates.
+    /// </summary>
+    public static void Compares(string databasePath, string sessionKey, int count)
+    {
+        EnsureSchema(databasePath);
+        var identity = Session(sessionKey);
+        using var connection = new SqliteConnection($"Data Source={databasePath}");
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        using var session = SessionInsert(connection, transaction, identity);
+        var sessionId = (long)Insert(session, sessionKey, Timestamp(identity.HostStartedAt))!;
+        using var operation = connection.CreateCommand();
+        operation.Transaction = transaction;
+        operation.CommandText = """
+            INSERT INTO operations (session_id, operation, host_pid, host_started_at, started_at, updated_at,
+                finished_at, status, exit_code, duration_ms, profile, engine, server, database,
+                result_sets, rows_returned, compare_subject, compare_scope, sql_hash, candidate_sql_hash)
+            VALUES ($session, 'compare', $hostPid, $hostStarted, $seen, $seen,
+                $seen, 'succeeded', 0, 10, 'local', 'sqlserver', 'srv', 'db', 1, 3, 'orders', 'whole', 'base', $candidate);
+            """;
+        operation.Parameters.AddWithValue("$session", sessionId);
+        operation.Parameters.AddWithValue("$hostPid", identity.HostPid);
+        operation.Parameters.AddWithValue("$hostStarted", Timestamp(identity.HostStartedAt));
+        operation.Parameters.AddWithValue("$seen", Timestamp(HostStarted));
+        operation.Parameters.AddWithValue("$candidate", "candidate-0");
+        for (var index = 0; index < count; index++)
+        {
+            operation.Parameters["$seen"].Value = Timestamp(HostStarted.AddSeconds(index));
+            operation.Parameters["$candidate"].Value = $"candidate-{index}";
+            operation.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+    }
+
+    /// <summary>Creates and migrates the journal so a bulk helper can seed a reader fixture on its own.</summary>
+    private static void EnsureSchema(string databasePath) =>
+        _ = ActivityJournal.Open(databasePath, new JournalConfig(), TextWriter.Null, new FixedTimeProvider(HostStarted));
+
+    /// <summary>
+    /// One prepared session insert reused for every row, carrying the writer's columns for a
+    /// <see cref="Session"/> except <c>agent_pid</c> and <c>agent_started_at</c>, which the writer does
+    /// populate and which no reader test selects today — a test that starts selecting them must add them here.
+    /// </summary>
+    private static SqliteCommand SessionInsert(SqliteConnection connection, SqliteTransaction transaction, SessionIdentity identity)
+    {
+        var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, host_started_at, cwd,
+                first_seen, last_seen)
+            VALUES ($key, $kind, $transport, $source, $hostPid, $hostStarted, $cwd, $seen, $seen)
+            RETURNING id;
+            """;
+        command.Parameters.AddWithValue("$key", identity.SessionKey);
+        command.Parameters.AddWithValue("$kind", identity.AgentKind);
+        command.Parameters.AddWithValue("$transport", identity.Transport == JournalTransport.Mcp ? "mcp" : "cli");
+        command.Parameters.AddWithValue("$source", identity.Source);
+        command.Parameters.AddWithValue("$hostPid", identity.HostPid);
+        command.Parameters.AddWithValue("$hostStarted", Timestamp(identity.HostStartedAt));
+        command.Parameters.AddWithValue("$cwd", (object?)identity.Cwd ?? DBNull.Value);
+        command.Parameters.AddWithValue("$seen", Timestamp(HostStarted));
+        return command;
+    }
+
+    private static object? Insert(SqliteCommand session, string sessionKey, object seen)
+    {
+        session.Parameters["$key"].Value = sessionKey;
+        session.Parameters["$seen"].Value = seen;
+        return session.ExecuteScalar();
+    }
+
+    /// <summary>The journal's timestamp format; the reader orders these strings, so it has to match.</summary>
+    private static object Timestamp(DateTimeOffset? value) =>
+        value is null ? DBNull.Value : value.Value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+
     public static void Link(string databasePath, long operationId, string kind, string conversationId, string? title,
         string? model = null, string? effort = null)
     {
-        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath};Pooling=False");
+        using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
         connection.Open();
         using var transaction = connection.BeginTransaction();
         using (var conversation = connection.CreateCommand())
