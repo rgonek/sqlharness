@@ -192,7 +192,7 @@ The primary measure is correct conclusion with the required evidence and no unsa
 - [x] Update the served interface with pass-not-improvement, dry-run, query timing/rows, watch no-continuation and offline-plan omission semantics. Task 6 already updated the installed skill and authoritative MCP docs; Task 7 reused those changes and added a README pointer without duplicating contract prose.
 - [x] Attempt D7's nine post-change agent trials through the real fixture MCP server using the predeclared model/settings/prompts/bounds. All nine failed before a model turn or MCP call with HTTP 402; record usage as unavailable and leave behavioral acceptance/efficiency unverified. No retries.
 - [x] In the evaluation record distinguish unit semantics, deterministic MCP protocol workflows, model-driven task trials and separately authorized live-database integration; record skipped/unavailable classes explicitly. Fixture/server results are not described as live-database or actual-agent proof.
-- [ ] Run `just verify` on the final product tree before implementation completion. Record actual revision, stages, skips and boundaries in the report, then update plan/index. Keep commits cohesive; no push/install/publish.
+- [x] Run `just verify` on final product commit `617153c`. UI-check, restore, build and tests passed; format skipped because no changed C# files remained after the successful `just fix`. Record the stage log path and boundaries in the evaluation/report. Keep actual-agent acceptance unverified; no push/install/publish.
 
 ## Acceptance
 
