@@ -34,11 +34,18 @@ public sealed class GateParityTests
     [Theory]
     [InlineData("scripts/verify.ps1")]
     [InlineData("scripts/verify-linux.ps1")]
-    public void Every_local_gate_runs_build_and_format_exactly_once(string path)
+    [InlineData(".github/workflows/ci.yml")]
+    public void Every_gate_runs_build_and_format_exactly_once(string path)
     {
         // StageVerbs is distinct, because a project list legitimately yields `test` twice.
         // That dedupe would otherwise let a second `dotnet build` or `dotnet format` slip in
         // unnoticed, and the two-stage comparison above reads only the first one.
+        //
+        // CI is in this theory, not only the two local gates. StageCommand reads the FIRST
+        // command of a verb, and every other build/format comparison here reads it too, so
+        // while this theory was local-only a second `dotnet build` or a second format step
+        // appended to ci.yml passed the whole suite and doubled the work CI does. That is
+        // the same hole class as the I-3 narrowing this branch already paid for once.
         var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
 
         Assert.Single(StageCommands(content, "build"));

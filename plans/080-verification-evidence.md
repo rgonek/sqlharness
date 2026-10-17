@@ -457,7 +457,7 @@ Every one of these was proved by a live mutation; the table names the red test e
 | `The_windows_gate_runs_no_test_logger` | every Windows test command | as above |
 | `The_only_logger_occurrences_are_the_ones_that_surface_asks_for` | every command of every verb on all three surfaces | it previously read only the first command per verb and never looked at CI |
 | `The_extractor_returns_the_expected_commands_for_the_real_gate_files` | per-project strings for all three surfaces | the Windows commands no longer exist as literal lines |
-| `Every_local_gate_runs_build_and_format_exactly_once` | new | `StageVerbs` is now distinct, which would otherwise let a second `dotnet build` slip in |
+| `Every_gate_runs_build_and_format_exactly_once` | new; theory over all three surfaces, added to CI in the final-review fix wave | `StageVerbs` is now distinct, which would otherwise let a second `dotnet build` slip in; with CI outside the theory, a second build or format step in `ci.yml` passed every comparison, because `StageCommand` reads the first command of a verb |
 | `Every_gate_names_every_test_project_in_the_solution` | new, theory over all three surfaces | Review Focus 4: a third test project would silently not run |
 | `The_windows_gate_runs_its_test_projects_through_the_shared_parallel_stage` | new | one `Add-Stage` over a project list, not one per project, and the helper comes from `gate-output.ps1` |
 | `The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both` | new | two `&`, two `$!`, two `wait`, counted inside the test stage's own bash block |
@@ -478,7 +478,7 @@ below were rewritten and both re-run; that is recorded rather than quietly fixed
 | M1 | Windows parallel stage grows `--logger` | `The_extractor_returns_the_expected_commands_for_the_real_gate_files`, `Every_gate_runs_the_windows_test_commands_plus_its_own_logger` (×2 surfaces), `The_only_logger_occurrences_are_the_ones_that_surface_asks_for`, `The_windows_gate_runs_no_test_logger` |
 | M2 | Windows drops the Mcp project from `-Project` | `Every_gate_names_every_test_project_in_the_solution(verify.ps1)`, the logger theory (×2), `The_extractor_returns_…` |
 | M3 | Windows reverted to one solution-wide `dotnet test` | 10 red, including `Every_local_gate_runs_the_same_three_dotnet_stages_in_the_same_order`'s sibling assertions, `The_windows_gate_runs_its_test_projects_through_the_shared_parallel_stage`, plus the Pester `starts every test project at once in both gates` |
-| M4 | a second `dotnet build` in the Windows gate | `Every_local_gate_runs_build_and_format_exactly_once(verify.ps1)` |
+| M4 | a second `dotnet build` in the Windows gate | `Every_gate_runs_build_and_format_exactly_once(verify.ps1)` |
 | M5 | one Linux project stops being backgrounded | `The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both`, `Linux_gate_uses_the_shared_stage_commands`, plus the Pester shape test |
 | M6 | the Linux gate filters one project differently | 6 red, including `Every_gate_runs_integration_tests_filtered(verify-linux.ps1)` |
 | M7 | the Linux gate stops waiting for the second project | `The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both`, plus the Pester shape test |
@@ -494,6 +494,8 @@ below were rewritten and both re-run; that is recorded rather than quietly fixed
 | M17 | the stage joins each project before starting the next | `runs the projects at once rather than one after the other` |
 | M18 | the stage writes no per-project log | 4 Pester red |
 | M19 | every project writes to the same log | 5 Pester red |
+| M20 | a second `dotnet build` step appended to `ci.yml` | `Every_gate_runs_build_and_format_exactly_once(ci.yml)` — the widening the final review asked for |
+| M21 | a second `dotnet format` step appended to `ci.yml` | `Every_gate_runs_build_and_format_exactly_once(ci.yml)` |
 
 The fake now maps a **different exit code per project** (M13) and the log assertions read the **last
 line** (M15), which is what those two mutations needed. M17's proof is a rendezvous: each fake project

@@ -593,10 +593,11 @@ Before marking implementation complete, run `just verify`. It runs the same thre
 
 Neither gate replaces CI, which runs on ubuntu-latest and windows-latest.
 
-The gate prints one line per stage (`==> build ok 45.5s`) and a final `verify: OK stages=5 2m03s`;
-stage output goes to a log file, and a failed stage prints its exit code, the tail of the log and the
-log path. Add `-Stream` (`just verify -Stream`) to watch a run instead. Logs default to a directory
-under the temp path, overridable with `-LogDirectory`.
+Each gate prints one line per stage (`==> build ok <stage seconds>`) and a final summary line
+(`verify: OK  stages=5  <total>`, each gate counting its own stages); stage output goes to a log
+file, and a failed stage prints its exit code, the tail of the log and the log path. Add `-Stream`
+(`just verify -Stream`) to watch a run instead. Logs default to a directory under the temp path,
+overridable with `-LogDirectory`.
 
 The UI check needs no .NET artifacts, so `just verify` runs it in the background beside the build and
 joins it before the tests, which are the memory-hungry stage on a box with 8 logical cores. The
@@ -606,11 +607,15 @@ code. `just verify-linux` cannot do this: every Linux stage is one WSL run of on
 its UI check is backgrounded inside the build stage and that stage's line covers both.
 
 The two test projects are named explicitly and started at the same time, so the test stage costs
-the slower project rather than the sum of both. Each project writes its own log and the failure
-tail names the project that failed. `just verify-linux` gets the same result by backgrounding both
-`dotnet test` commands inside one bash block; `ci.yml` keeps two separate steps instead, so the
-GitHub job summary names the project that failed. A third test project added to the solution fails
-the gate parity tests until every gate names it.
+the slower project rather than the sum of both. `just verify` writes one log per project and the
+failure tail names the project that failed. `just verify-linux` gets the same result by
+backgrounding both `dotnet test` commands inside one bash block, but that block writes no
+per-project log: both projects write to the one stage log and interleave there. What names them
+there is the `==>` line each red project is given, and the `stage-failure:` marker for the project
+whose code the gate returns. Both are written only after the two processes have been joined, so
+they land at the end of the log and inside the tail a failure prints. `ci.yml` keeps two separate
+steps instead, so the GitHub job summary names the project that failed. A third test project added
+to the solution fails the gate parity tests until every gate names it.
 
 The format stage is scoped to the C# files a change touched, because `dotnet format` spends nearly all of its time loading the MSBuild workspace: a full-solution check took 129s here against 34s scoped to what changed. `just verify` checks the working tree; `just verify-linux` checks what the branch changed relative to `origin/main`, because the gate clone is reset to the branch tip and a working-tree diff there is always empty.
 
