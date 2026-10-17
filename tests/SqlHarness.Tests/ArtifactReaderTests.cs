@@ -153,6 +153,7 @@ public class ArtifactReaderTests
         var noNodeSpace = Assert.IsType<ArtifactPlanSection>(AgentOutputProjection.Project(selected, 128, int.MaxValue, out _, 1));
         Assert.Empty(noNodeSpace.Nodes);
         Assert.Null(noNodeSpace.Continuation);
+        Assert.Equal(selected.Cursor, noNodeSpace.Cursor);
         Assert.Contains("cannot fit", noNodeSpace.PageError, StringComparison.Ordinal);
         Assert.Empty(selected.Nodes[0].Operator.Children);
         Assert.Null(selected.Nodes[0].Operator.Predicate);
@@ -695,6 +696,210 @@ public class ArtifactReaderTests
         Assert.Null(legacy.Cases[0].Baseline.CpuMilliseconds);
         Assert.Equal("cell-000", legacy.Cases[0].ArtifactId);
         Assert.Null(legacy.Cases[0].SetName);
+        Assert.Null(legacy.Coverage);
+        Assert.Null(legacy.Cases[0].Regression);
+        Assert.Null(legacy.Cases[0].Baseline.ElapsedMinimum);
+        Assert.Null(legacy.Cases[0].MismatchReasons);
+    }
+
+    [Fact]
+    public void Matrix_index_preserves_coverage_and_decision_fields_across_pages()
+    {
+        using var temp = new TempDirectory();
+        const string id = "matrix-index-d4";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
+        var coverage = MatrixExecutionCoverage.AllCompleted(40);
+        var cases = Enumerable.Range(0, 40).Select(index => new AgentMatrixCase(
+            index, $"cell-{index:D3}", true, "compared",
+            new AgentMedianMetrics(1, 2, 3) { ElapsedMinimum = 1, ElapsedMaximum = 4 },
+            new AgentMedianMetrics(4, 5, 6) { ElapsedMinimum = 4, ElapsedMaximum = 8 },
+            new AgentMedianMetrics(3, 3, 3), ["warning"])
+        {
+            SetName = $"set-{index:D2}",
+            Regression = new AgentMatrixRegression(index == 7 ? "fail" : index == 15 ? "inconclusive" : "pass",
+                index == 7 ? ["elapsed-regressed"] : index == 15 ? ["unstable-elapsed"] : []),
+            BaselineStable = true,
+            CandidateStable = true,
+            SchemaEquivalent = true,
+        }).ToArray();
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new
+        {
+            cases,
+            coverage,
+        }, jsonOptions));
+
+        var recovered = new List<AgentMatrixCase>();
+        int? cursor = 0;
+        while (cursor is { } pageCursor)
+        {
+            var page = Assert.IsType<ArtifactMatrixCellsSection>(
+                ArtifactReader.ReadSection(temp.Path, id, "matrix-cells", cursor: pageCursor));
+            Assert.Equal(40, page.Coverage!.RequestedCases);
+            Assert.Equal(40, page.Coverage.CompletedCases);
+            Assert.Equal(0, page.Coverage.NotExecutedCases);
+            Assert.Null(page.Coverage.FailedCase);
+            recovered.AddRange(page.Cases);
+            cursor = page.Continuation;
+            if (page.Continuation is { } next)
+                Assert.True(next > pageCursor);
+        }
+
+        Assert.Equal(40, recovered.Count);
+        Assert.Equal(Enumerable.Range(0, 40), recovered.Select(item => item.Index));
+        Assert.Equal(40, recovered.Select(item => item.Index).Distinct().Count());
+        Assert.Equal("fail", recovered[7].Regression!.Verdict);
+        Assert.Equal("inconclusive", recovered[15].Regression!.Verdict);
+        Assert.Equal(1m, recovered[0].Baseline.ElapsedMinimum);
+        Assert.Equal($"cell-000", recovered[0].ArtifactId);
+    }
+
+    [Fact]
+    public void Operators_plan_refs_round_trip_through_the_offline_reader_to_the_identified_node()
+    {
+        using var temp = new TempDirectory();
+        var xml = StatementMetricsTests.CollidingNodeIdPlan();
+        var baseline = BenchmarkReports.CreateVariantReport(
+            "baseline",
+            [
+                StatementMetricsTests.MeasuredRun("baseline", 1, xml),
+                StatementMetricsTests.MeasuredRun("baseline", 5, xml),
+            ]);
+        var candidate = BenchmarkReports.CreateVariantReport(
+            "candidate",
+            [
+                StatementMetricsTests.MeasuredRun("candidate", 1, xml),
+                StatementMetricsTests.MeasuredRun("candidate", 5, xml),
+            ]);
+        var report = new SqlHarnessCompareReport(
+            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
+            5, 4, true, baseline, candidate, null);
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 1, 2, 3, new Dictionary<string, long>(), "h", [xml], 0),
+            new CompareRunArtifact("baseline", 5, 1, 2, 3, new Dictionary<string, long>(), "h", [xml], 0),
+            new CompareRunArtifact("candidate", 1, 4, 5, 6, new Dictionary<string, long>(), "h", [xml], 0),
+            new CompareRunArtifact("candidate", 5, 4, 5, 6, new Dictionary<string, long>(), "h", [xml], 0),
+        };
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, runs, "wind");
+        var id = Path.GetFileName(directory);
+        var operators = Assert.IsType<ArtifactOperatorsSection>(
+            ArtifactReader.ReadSection(temp.Path, id, "operators"));
+        var scan = Assert.Single(operators.Operators, op => op.PhysicalOp == "Clustered Index Scan");
+        Assert.NotEmpty(scan.PlanRefs!);
+        Assert.True(operators.SourceIsCapped);
+        Assert.Equal("both", scan.Side);
+        Assert.Null(scan.HasWarnings);
+        Assert.Null(scan.HasSpill);
+        Assert.Null(scan.HasImplicitConversion);
+        using (var scanJson = JsonDocument.Parse(JsonSerializer.Serialize(scan, ArtifactDirectoryPublisher.JsonOptions)))
+        {
+            Assert.False(scanJson.RootElement.TryGetProperty("hasWarnings", out _));
+            Assert.False(scanJson.RootElement.TryGetProperty("hasSpill", out _));
+            Assert.False(scanJson.RootElement.TryGetProperty("hasImplicitConversion", out _));
+            Assert.True(scanJson.RootElement.GetProperty("baseline").GetProperty("hasSpill").GetBoolean());
+            Assert.True(scanJson.RootElement.GetProperty("candidate").GetProperty("hasSpill").GetBoolean());
+        }
+
+        foreach (var href in scan.PlanRefs!)
+        {
+            Assert.Equal(id, href.ArtifactId);
+            var page = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(
+                temp.Path,
+                href.ArtifactId,
+                "plan",
+                cursor: href.Cursor,
+                planSelector: new ArtifactPlanSelector(href.Variant, href.Statement, href.ParameterSet, href.Repetition)));
+            var node = Assert.Single(page.Nodes, item => item.NodePath == href.NodePath);
+            Assert.Equal("Clustered Index Scan", node.Operator.PhysicalOp);
+            Assert.Equal(1, node.Operator.NodeId);
+            Assert.Contains(node.Operator.Warnings, warning => warning.Contains("SpillToTempDb", StringComparison.Ordinal));
+            Assert.Equal(href.Repetition, page.Repetition);
+            Assert.Equal(href.Statement, page.Statement);
+            Assert.Equal("explicit", page.Selection);
+        }
+    }
+
+    [Fact]
+    public void Operators_plan_ref_does_not_fall_back_to_another_repetition_when_evidence_is_missing()
+    {
+        using var temp = new TempDirectory();
+        var xml = StatementMetricsTests.CollidingNodeIdPlan();
+        var candidate = BenchmarkReports.CreateVariantReport(
+            "candidate", [StatementMetricsTests.MeasuredRun("candidate", 5, xml)]);
+        var report = CompareReport() with { Candidate = candidate };
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 1, 2, 3, new Dictionary<string, long>(), "h", [FixturePlan()], 0),
+            new CompareRunArtifact("candidate", 5, 4, 5, 6, new Dictionary<string, long>(), "h", [xml], 0),
+        };
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, runs, "wind");
+        var id = Path.GetFileName(directory);
+        var operators = Assert.IsType<ArtifactOperatorsSection>(
+            ArtifactReader.ReadSection(temp.Path, id, "operators"));
+        var href = Assert.Single(Assert.Single(operators.Operators, op => op.HasSpill == true).PlanRefs!);
+        Assert.Equal(5, href.Repetition);
+
+        var runsPath = Path.Combine(directory, "runs.jsonl");
+        File.WriteAllText(runsPath, """
+            {"variant":"baseline","repetition":1,"planJsonFiles":["baseline-001-000-000.plan.json"]}
+            {"variant":"candidate","repetition":1,"planJsonFiles":["candidate-005-001-000.plan.json"]}
+            {"variant":"candidate","repetition":5,"planJsonFiles":[]}
+            """);
+        var missing = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(
+            temp.Path,
+            href.ArtifactId,
+            "plan",
+            cursor: href.Cursor,
+            planSelector: new ArtifactPlanSelector(href.Variant, href.Statement, href.ParameterSet, href.Repetition)));
+        Assert.Contains("no saved plan evidence", missing.Message, StringComparison.Ordinal);
+        Assert.Contains("5", missing.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Operators_section_omits_plan_refs_for_legacy_reports_and_names_the_limitation()
+    {
+        using var temp = new TempDirectory();
+        const string id = "legacy-operators";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        var report = CompareReport();
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"operators\"]}");
+        File.WriteAllText(Path.Combine(directory, "report.json"),
+            JsonSerializer.Serialize(report with { ArtifactDirectory = directory }, ArtifactDirectoryPublisher.JsonOptions));
+
+        var operators = Assert.IsType<ArtifactOperatorsSection>(
+            ArtifactReader.ReadSection(temp.Path, id, "operators"));
+        Assert.All(operators.Operators, op => Assert.Null(op.PlanRefs));
+        Assert.Contains(operators.EvidenceGaps!, gap => gap.Contains("plan source", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Plan_section_reads_legacy_nodes_without_node_id()
+    {
+        using var temp = new TempDirectory();
+        const string id = "legacy-plan-nodes";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+        File.WriteAllText(Path.Combine(directory, "plans", "baseline-001-000-000.plan.json"),
+            """{"statements":[{"root":{"physicalOp":"Scan","objectName":"dbo.T"}}]}""");
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"),
+            """{"variant":"baseline","repetition":1,"planJsonFiles":["baseline-001-000-000.plan.json"]}""");
+
+        var page = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(
+            temp.Path, id, "plan", planSelector: new ArtifactPlanSelector("baseline")));
+        var node = Assert.Single(page.Nodes);
+        Assert.Equal("0", node.NodePath);
+        Assert.Null(node.Operator.NodeId);
+        Assert.Equal("Scan", node.Operator.PhysicalOp);
     }
 
     [Fact]
@@ -768,6 +973,38 @@ public class ArtifactReaderTests
 
         Assert.IsType<MeasureBenchmarkSummary>(ArtifactReader.ReadSection(temp.Path, measureId, "summary"));
         Assert.IsType<MeasureSetBenchmarkSummary>(ArtifactReader.ReadSection(temp.Path, setId, "summary"));
+    }
+
+    [Fact]
+    public void Dotted_id_under_deep_parent_round_trips_with_owner_checks()
+    {
+        using var temp = new TempDirectory();
+        var root = Path.Combine(temp.Path, "deep", new string('p', 120), "artifacts");
+        Directory.CreateDirectory(root);
+        var id = "2026.10.16T000000000Z-host.example-ab12cd34ef";
+        var owner = new ArtifactOwner("profile", new Dictionary<string, string>(), "sqlserver", "sql-a", "AdventureWorks");
+        var report = CompareReport() with
+        {
+            Target = new SqlHarnessTargetIdentityReport("sql-a", "AdventureWorks", "sql-a", "AdventureWorks", "profile", Engine: "sqlserver"),
+            ArtifactDirectory = Path.Combine(root, id),
+        };
+        var directory = Path.Combine(root, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(
+            ArtifactManifest.ForReport(report, owner), ArtifactDirectoryPublisher.JsonOptions));
+        File.WriteAllText(Path.Combine(directory, "report.json"), JsonSerializer.Serialize(report, ArtifactDirectoryPublisher.JsonOptions));
+
+        Assert.True(ArtifactIds.IsValid(id));
+        var summary = Assert.IsType<CompareBenchmarkSummary>(ArtifactReader.ReadSection(root, id, "summary", owner));
+        Assert.Equal(report.Baseline.ElapsedTimeMilliseconds, summary.Baseline.ElapsedTimeMilliseconds);
+        var foreign = Assert.Throws<ArtifactReadException>(() =>
+            ArtifactReader.ReadSection(root, id, "summary", owner with { Server = "sql-b" }));
+        Assert.Equal("The artifact is not available in the current scope.", foreign.Message);
+
+        var prefix = id[..8];
+        Assert.True(ArtifactIds.IsValid(prefix));
+        var clipped = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(root, prefix, "summary", owner));
+        Assert.Equal("Unknown artifact id.", clipped.Message);
     }
 
     [Theory]

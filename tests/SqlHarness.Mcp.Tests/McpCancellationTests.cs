@@ -90,21 +90,24 @@ public sealed class McpCancellationTests
         Assert.True(result.IsError == true, Text(result));
         var envelope = Envelope(result);
         Assert.Equal("error", envelope.GetProperty("status").GetString());
-        Assert.Equal((int)SqlHarnessExitCode.SqlExecution, envelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal(command, envelope.GetProperty("command").GetString());
+        Assert.False(envelope.TryGetProperty("command", out _));
+        Assert.False(envelope.TryGetProperty("exitCode", out _));
         var error = envelope.GetProperty("error");
         Assert.Equal(McpCallOutcome.CancelledCode, error.GetProperty("code").GetString());
         Assert.Equal(McpCallOutcome.CancelledMessage, error.GetProperty("message").GetString());
         Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+        _ = command;
     }
 
     private static void AssertInvalidBudget(CallToolResult result, string command)
     {
         Assert.True(result.IsError == true, Text(result));
         var envelope = Envelope(result);
-        Assert.Equal((int)SqlHarnessExitCode.Safety, envelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
         Assert.Equal("The requested budget is invalid.", envelope.GetProperty("error").GetProperty("message").GetString());
-        Assert.Equal(command, envelope.GetProperty("command").GetString());
+        Assert.False(envelope.TryGetProperty("command", out _));
+        Assert.False(envelope.TryGetProperty("exitCode", out _));
+        _ = command;
     }
 
     [Fact]
@@ -402,7 +405,7 @@ public sealed class McpCancellationTests
 
         Assert.False(result.IsError == true, Text(result));
         var envelope = Envelope(result);
-        Assert.Equal((int)SqlHarnessExitCode.WatchMaxDuration, envelope.GetProperty("exitCode").GetInt32());
+        Assert.False(envelope.TryGetProperty("exitCode", out _));
         Assert.Equal("watch_max_duration", envelope.GetProperty("status").GetString());
     }
 

@@ -160,7 +160,90 @@ public sealed record CompareMatrixCellReport(
 public sealed record SqlHarnessCompareMatrixReport(
     string? ParameterName,
     string? ParameterType,
-    IReadOnlyList<CompareMatrixCellReport> Cells);
+    IReadOnlyList<CompareMatrixCellReport> Cells)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MatrixExecutionCoverage? Coverage { get; init; }
+}
+
+/// <summary>Identified attempted matrix cell that stopped the run. Phase is omitted when not established.</summary>
+[JsonConverter(typeof(MatrixFailedCaseJsonConverter))]
+public sealed record MatrixFailedCase(
+    int Index,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SetName = null,
+    string? ParameterValue = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Phase = null)
+{
+    [JsonIgnore]
+    public bool IncludeParameterValue { get; init; }
+}
+
+internal sealed class MatrixFailedCaseJsonConverter : JsonConverter<MatrixFailedCase>
+{
+    public override MatrixFailedCase Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+            throw new JsonException("Matrix failed case must be an object.");
+        var index = root.TryGetProperty("index", out var indexElement) && indexElement.TryGetInt32(out var parsedIndex)
+            ? parsedIndex
+            : throw new JsonException("Matrix failed case requires index.");
+        string? setName = root.TryGetProperty("setName", out var setNameElement) && setNameElement.ValueKind == JsonValueKind.String
+            ? setNameElement.GetString()
+            : null;
+        var hasParameterValue = root.TryGetProperty("parameterValue", out var parameterValueElement);
+        string? parameterValue = hasParameterValue && parameterValueElement.ValueKind == JsonValueKind.String
+            ? parameterValueElement.GetString()
+            : null;
+        if (hasParameterValue && parameterValueElement.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+            throw new JsonException("Matrix failed case parameterValue must be a string or null.");
+        string? phase = root.TryGetProperty("phase", out var phaseElement) && phaseElement.ValueKind == JsonValueKind.String
+            ? phaseElement.GetString()
+            : null;
+        return new MatrixFailedCase(index, setName, parameterValue, phase) { IncludeParameterValue = hasParameterValue };
+    }
+
+    public override void Write(Utf8JsonWriter writer, MatrixFailedCase value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("index", value.Index);
+        if (value.SetName is not null)
+            writer.WriteString("setName", value.SetName);
+        if (value.IncludeParameterValue)
+        {
+            if (value.ParameterValue is null)
+                writer.WriteNull("parameterValue");
+            else
+                writer.WriteString("parameterValue", value.ParameterValue);
+        }
+        if (value.Phase is not null)
+            writer.WriteString("phase", value.Phase);
+        writer.WriteEndObject();
+    }
+}
+
+/// <summary>
+/// Execution coverage for a matrix run, distinct from inventory paging.
+/// Null counts are unknown; an identified stop satisfies
+/// requestedCases = completedCases + 1 + notExecutedCases.
+/// </summary>
+public sealed record MatrixExecutionCoverage(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? RequestedCases = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? CompletedCases = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? NotExecutedCases = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MatrixFailedCase? FailedCase = null)
+{
+    public static MatrixExecutionCoverage AllCompleted(int requested) =>
+        new(requested, requested, 0);
+
+    public static MatrixExecutionCoverage IdentifiedFailure(int requested, int completed, MatrixFailedCase failedCase)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(completed);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(completed, Math.Max(requested - 1, 0));
+        return new(requested, completed, requested - completed - 1, failedCase);
+    }
+}
 
 public sealed record SqlHarnessParameterSetInput(
     string Name, IReadOnlyList<string> Parameters)
@@ -200,7 +283,17 @@ public sealed record SqlHarnessDryRunReport(
     string Classification,
     string Tier,
     IReadOnlyList<BenchmarkParameterReport> Parameters,
-    int ParameterSets);
+    int ParameterSets)
+{
+    public string Validation { get; init; } = "passed";
+    public string Execution { get; init; } = "not-run";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BenchmarkClassificationReport? BenchmarkClassification { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompareClassificationReport? CompareClassification { get; init; }
+}
 
 public sealed record SqlHarnessPlanOperation(string ShowplanXml, OutputFootprint RawFootprint) : SqlHarnessOperation;
 
@@ -396,6 +489,12 @@ public sealed record SqlHarnessOutcome(
     /// </summary>
     [JsonIgnore]
     internal IReadOnlyList<CompareRunArtifact>? BenchmarkRuns { get; init; }
+
+    /// <summary>
+    /// Matrix execution coverage from the runner, including first-cell stops with a null report.
+    /// </summary>
+    [JsonIgnore]
+    public MatrixExecutionCoverage? Coverage { get; init; }
 
     private static SqlHarnessError? MapMachineError(
         SqlHarnessExitCode exitCode,

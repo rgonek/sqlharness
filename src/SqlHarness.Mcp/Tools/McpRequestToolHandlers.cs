@@ -242,7 +242,7 @@ public sealed class McpRequestToolHandlers(
         catch (OperationCanceledException) { return McpCallOutcome.CancelledResult(command, budget); }
         catch (Exception exception) when (exception is McpMappingException or McpInputException or ParameterSetFileException)
         { return Failure(exception.Message, command, process.MaxResultBytes); }
-        catch (Exception) { return Failure(null, command, process.MaxResultBytes); }
+        catch (Exception) { return InternalFailure(command, process.MaxResultBytes); }
     }
 
     private static McpRequestScope ParseTarget(RequestContext<CallToolRequestParams> ctx, McpRequestScopeArgument target)
@@ -291,5 +291,13 @@ public sealed class McpRequestToolHandlers(
 
     private static CallToolResult Failure(string? message, string command, int maxBytes) => McpResultAdapter.Adapt(
         new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, string.IsNullOrWhiteSpace(message) ? "The tool failed without a safe error." : message),
+        command, new McpResultBudget(maxBytes));
+
+    private static CallToolResult InternalFailure(string command, int maxBytes) => McpResultAdapter.Adapt(
+        new SqlHarnessOutcome(
+            SqlHarnessExitCode.Safety,
+            null,
+            McpAgentError.InternalMessage,
+            Error: McpAgentError.InternalOutcomeError()),
         command, new McpResultBudget(maxBytes));
 }

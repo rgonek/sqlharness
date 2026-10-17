@@ -77,8 +77,8 @@ public sealed class McpTokenBudgetTests
         var report = new SqlHarnessQueryReport(Target, "read-only", [resultSet], [], 0, 1,
             "raw-hash", new OutputFootprint(0, 0));
         var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
-        while (JsonSerializer.SerializeToUtf8Bytes(new SqlHarnessAgentEnvelope(
-                   McpResultAdapter.SchemaVersion, "query", "success", 0, report, null, null)).Length < targetBytes)
+        while (JsonSerializer.SerializeToUtf8Bytes(new McpAgentEnvelope(
+                   McpResultAdapter.SchemaVersion, "success", report)).Length < targetBytes)
         {
             rows.Add([new string('x', 32)]);
             resultSet = resultSet with { Rows = rows, RowCount = rows.Count };
@@ -114,7 +114,7 @@ public sealed class McpTokenBudgetTests
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
 
-        Assert.Equal(AgentEnvelopeSchema.Version, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(McpAgentEnvelope.Version, document.RootElement.GetProperty("schemaVersion").GetInt32());
         var query = document.RootElement.GetProperty("result");
         Assert.Equal("db", query.GetProperty("database").GetString());
         Assert.False(query.TryGetProperty("target", out _));
@@ -132,7 +132,7 @@ public sealed class McpTokenBudgetTests
 
         Assert.Equal(Encoding.UTF8.GetByteCount(text), McpResultAdapter.MeasureBytes(result));
         using var document = JsonDocument.Parse(text);
-        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("truncation").ValueKind);
+        Assert.False(document.RootElement.TryGetProperty("truncation", out _));
     }
 
     [Theory]
@@ -408,6 +408,7 @@ public sealed class McpTokenBudgetTests
         var children = Enumerable.Range(1, nodeCount - 1).Select(index => new
         {
             physicalOp = $"Synthetic-{index:D3}",
+            nodeId = index,
             logicalOp = "Scan",
             objectName = $"public.fixture_{index:D3}",
             indexName = "fixture_idx",
@@ -428,6 +429,7 @@ public sealed class McpTokenBudgetTests
                     root = new
                     {
                         physicalOp = "Synthetic-Root",
+                        nodeId = 0,
                         logicalOp = "Root",
                         objectName = "public.synthetic_fixture",
                         indexName = "fixture_root_idx",
@@ -448,6 +450,55 @@ public sealed class McpTokenBudgetTests
         File.WriteAllText(Path.Combine(directory, "runs.jsonl"),
             "{\"variant\":\"baseline\",\"repetition\":1,\"planJsonFiles\":[\"baseline-001-000-000.plan.json\"]}");
         return (root, id);
+    }
+
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(65536)]
+    public void Operators_with_plan_refs_fit_the_budget_and_keep_callable_selectors(int budget)
+    {
+        var href = new OperatorPlanRef("artifact-001", "candidate", null, 1, 5, "0/4", 5);
+        var operators = Enumerable.Range(0, 7).Select(index => new NoteworthyOperatorSummary(
+            "candidate", index, "Clustered Index Scan", "dbo.Accounts", true, true, false)
+        {
+            PlanRefs = [href with { Cursor = index, NodePath = index == 0 ? "0" : "0/" + (index - 1) }],
+            SourceIsCapped = true,
+        }).Append(new NoteworthyOperatorSummary(
+            "both", null, "Clustered Index Scan", "dbo.Accounts", null, null, null)
+        {
+            Baseline = new NoteworthyOperatorSideEvidence(false, true, false),
+            Candidate = new NoteworthyOperatorSideEvidence(false, false, false),
+            PlanRefs = [href with { Variant = "baseline" }, href],
+            SourceIsCapped = true,
+        }).ToArray();
+        var section = new ArtifactOperatorsSection("artifact-001", "compare", operators)
+        {
+            SourceIsCapped = true,
+        };
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null),
+            "sqlharness_artifact", new McpResultBudget(budget, 64));
+        var bytes = ResultTextBytes(result, budget);
+        _output.WriteLine($"operators-plan-refs: budget={budget} emittedUtf8Bytes={bytes} estimatedTokensCeilBytesDiv4={(bytes + 3) / 4}");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var returned = document.RootElement.GetProperty("result").GetProperty("operators");
+        Assert.NotEmpty(returned.EnumerateArray());
+        var first = returned[0].GetProperty("planRefs")[0];
+        Assert.True(returned[0].GetProperty("hasWarnings").GetBoolean());
+        var shared = Assert.Single(returned.EnumerateArray(), item => item.GetProperty("side").GetString() == "both");
+        Assert.False(shared.TryGetProperty("hasWarnings", out _));
+        Assert.False(shared.TryGetProperty("hasSpill", out _));
+        Assert.False(shared.TryGetProperty("hasImplicitConversion", out _));
+        Assert.True(shared.GetProperty("baseline").GetProperty("hasSpill").GetBoolean());
+        Assert.False(shared.GetProperty("candidate").GetProperty("hasSpill").GetBoolean());
+        Assert.Equal("artifact-001", first.GetProperty("artifactId").GetString());
+        Assert.Equal("candidate", first.GetProperty("variant").GetString());
+        Assert.Equal(1, first.GetProperty("statement").GetInt32());
+        Assert.Equal(5, first.GetProperty("repetition").GetInt32());
+        Assert.True(first.TryGetProperty("nodePath", out _));
+        Assert.True(first.TryGetProperty("cursor", out _));
+        Assert.False(first.TryGetProperty("nodeId", out _));
     }
 
     [Fact]
@@ -515,8 +566,60 @@ public sealed class McpTokenBudgetTests
         var bytes = ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
         _output.WriteLine($"compare matrix result with regression: {bytes} bytes of {McpLimits.DefaultCallToolResultBudgetBytes}");
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
-        var first = document.RootElement.GetProperty("result").GetProperty("details")[0];
-        Assert.Equal("fail", first.GetProperty("compare").GetProperty("regression").GetProperty("verdict").GetString());
+        var cases = document.RootElement.GetProperty("result").GetProperty("cases");
+        Assert.True(cases.GetArrayLength() > 0);
+        Assert.Equal("fail", cases[0].GetProperty("regression").GetProperty("verdict").GetString());
+        Assert.Equal(
+            [RegressionPolicy.ReasonElapsedRegressed],
+            cases[0].GetProperty("regression").GetProperty("reasons").EnumerateArray().Select(value => value.GetString()!).ToArray());
+        Assert.False(document.RootElement.GetProperty("result").TryGetProperty("details", out var details) && details.GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public void Thirty_two_mixed_matrix_pages_fit_4096_and_keep_verdicts()
+    {
+        var comparePass = BuildCompareReport();
+        var cells = Enumerable.Range(0, 32).Select(i =>
+        {
+            var verdict = i == 7 ? FailVerdict() : i == 15
+                ? new RegressionReport(RegressionPolicy.Inconclusive, [RegressionPolicy.ReasonUnstableElapsed],
+                    RegressionPolicy.PolicyVersion,
+                    new RegressionDiagnostic(RegressionPolicy.StatusInconclusive, 40m, 12m, -28m, -70m),
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m),
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m))
+                : new RegressionReport(RegressionPolicy.Pass, [], RegressionPolicy.PolicyVersion,
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 40m, 12m, -28m, -70m),
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m),
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m));
+            return new CompareMatrixCellReport(i, i.ToString(), BuildCompareReport(verdict) with
+            {
+                ArtifactDirectory = $"/artifacts/case-{i:D2}",
+            });
+        }).ToArray();
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells)
+        {
+            Coverage = MatrixExecutionCoverage.AllCompleted(32),
+        };
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null) { Coverage = matrix.Coverage },
+            "sqlharness_compare", new McpResultBudget(4096, 128));
+
+        var bytes = ResultTextBytes(result, 4096);
+        _output.WriteLine($"32-case matrix page: {bytes} bytes of 4096");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var projected = document.RootElement.GetProperty("result");
+        Assert.True(projected.GetProperty("cases").GetArrayLength() < 32);
+        Assert.True(projected.GetProperty("omittedCaseCount").GetInt32() > 0);
+        foreach (var matrixCase in projected.GetProperty("cases").EnumerateArray())
+        {
+            Assert.True(matrixCase.TryGetProperty("regression", out var regression));
+            Assert.False(string.IsNullOrEmpty(regression.GetProperty("verdict").GetString()));
+            Assert.True(matrixCase.TryGetProperty("artifactId", out var id));
+            Assert.False(string.IsNullOrEmpty(id.GetString()));
+        }
+        Assert.Equal(32, projected.GetProperty("coverage").GetProperty("requestedCases").GetInt32());
+        Assert.Equal(32, projected.GetProperty("coverage").GetProperty("completedCases").GetInt32());
     }
 
     [Fact]
@@ -530,7 +633,7 @@ public sealed class McpTokenBudgetTests
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         var cases = document.RootElement.GetProperty("result").GetProperty("cases");
         Assert.Equal(2, cases.GetArrayLength());
-        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("truncation").ValueKind);
+        Assert.False(document.RootElement.TryGetProperty("truncation", out _));
     }
 
     [Theory]
@@ -548,11 +651,21 @@ public sealed class McpTokenBudgetTests
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         var projected = document.RootElement.GetProperty("result");
         var cases = projected.GetProperty("cases");
-        Assert.Equal(6, cases.GetArrayLength());
         Assert.Equal(6, projected.GetProperty("caseCount").GetInt32());
-        Assert.Equal(Enumerable.Range(0, 6), cases.EnumerateArray().Select(item => item.GetProperty("index").GetInt32()));
+        Assert.InRange(cases.GetArrayLength(), 1, 6);
+        Assert.Equal(6 - cases.GetArrayLength(), projected.GetProperty("omittedCaseCount").GetInt32());
+        if (budget >= 65536)
+            Assert.Equal(6, cases.GetArrayLength());
+        Assert.Equal(Enumerable.Range(0, cases.GetArrayLength()), cases.EnumerateArray().Select(item => item.GetProperty("index").GetInt32()));
+        foreach (var matrixCase in cases.EnumerateArray())
+        {
+            Assert.True(matrixCase.TryGetProperty("delta", out _));
+            Assert.Equal("not-requested", matrixCase.GetProperty("equivalenceAvailability").GetString());
+            Assert.True(matrixCase.TryGetProperty("baseline", out var baseline));
+            Assert.True(baseline.TryGetProperty("elapsedMinimum", out _));
+            Assert.True(baseline.TryGetProperty("elapsedMaximum", out _));
+        }
         Assert.Equal(10m, cases[0].GetProperty("delta").GetProperty("elapsedMilliseconds").GetDecimal());
-        Assert.Equal("not-requested", cases[0].GetProperty("equivalenceAvailability").GetString());
         Assert.Equal(JsonValueKind.Null, cases[0].GetProperty("equivalent").ValueKind);
     }
 
@@ -789,7 +902,8 @@ public sealed class McpTokenBudgetTests
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
         // Level 0 drops the row (and the message) but keeps the result-set
         // inventory and its column schema, with the omitted row counted.
-        Assert.Equal(0, document.RootElement.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
+        Assert.False(document.RootElement.GetProperty("truncation").TryGetProperty("detailLimit", out _));
+        Assert.Equal(4096, document.RootElement.GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
         var resultSets = document.RootElement.GetProperty("result").GetProperty("resultSets");
         var projectedSet = Assert.Single(resultSets.EnumerateArray());
         Assert.Equal(0, projectedSet.GetProperty("rows").GetArrayLength());

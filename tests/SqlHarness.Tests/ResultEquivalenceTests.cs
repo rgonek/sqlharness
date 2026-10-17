@@ -418,8 +418,8 @@ public class ResultEquivalenceTests
             var candidate = RandomRuns(random, alphabet, random.Next(0, 4));
 
             var expected = ReferenceCompare(mode, baseline, candidate);
-            Assert.Equal(expected, ResultComparer.Compare(mode, baseline, candidate));
-            Assert.Equal(
+            AssertReportsEqual(expected, ResultComparer.Compare(mode, baseline, candidate));
+            AssertReportsEqual(
                 expected,
                 ResultComparer.Compare(mode, baseline, candidate, maxUniqueFingerprints: 1_000_000, CancellationToken.None));
         }
@@ -520,7 +520,7 @@ public class ResultEquivalenceTests
         var report = ResultComparer.Compare(ResultComparisonMode.Multiset, baseline, candidate);
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
-        Assert.Equal(ReferenceCompare(ResultComparisonMode.Multiset, baseline, candidate), report);
+        AssertReportsEqual(ReferenceCompare(ResultComparisonMode.Multiset, baseline, candidate), report);
         Assert.True(
             allocated < AllocationCapBytes,
             $"Compare allocated {allocated:N0} bytes, above the {AllocationCapBytes:N0}-byte cap.");
@@ -582,7 +582,7 @@ public class ResultEquivalenceTests
         int maxUniqueFingerprints)
     {
         var actual = ResultComparer.Compare(mode, baseline, candidate, maxUniqueFingerprints, CancellationToken.None);
-        Assert.Equal(ReferenceCompare(mode, baseline, candidate), actual);
+        AssertReportsEqual(ReferenceCompare(mode, baseline, candidate), actual);
         return actual;
     }
 
@@ -592,8 +592,24 @@ public class ResultEquivalenceTests
         IReadOnlyList<CanonicalComparisonResult> candidate)
     {
         var actual = ResultComparer.Compare(mode, baseline, candidate);
-        Assert.Equal(ReferenceCompare(mode, baseline, candidate), actual);
+        AssertReportsEqual(ReferenceCompare(mode, baseline, candidate), actual);
         return actual;
+    }
+
+    private static void AssertReportsEqual(ResultEquivalenceReport expected, ResultEquivalenceReport actual)
+    {
+        Assert.Equal(expected.Mode, actual.Mode);
+        Assert.Equal(expected.Equivalent, actual.Equivalent);
+        Assert.Equal(expected.DifferingPositions, actual.DifferingPositions);
+        Assert.Equal(expected.BaselineOnlyCount, actual.BaselineOnlyCount);
+        Assert.Equal(expected.CandidateOnlyCount, actual.CandidateOnlyCount);
+        Assert.Equal(expected.CompareNullability, actual.CompareNullability);
+        Assert.Equal(expected.NullabilityEquivalent, actual.NullabilityEquivalent);
+        Assert.Equal(expected.MismatchReason, actual.MismatchReason);
+        Assert.Equal(expected.BaselineStable, actual.BaselineStable);
+        Assert.Equal(expected.CandidateStable, actual.CandidateStable);
+        Assert.Equal(expected.SchemaEquivalent, actual.SchemaEquivalent);
+        Assert.Equal(expected.MismatchReasons, actual.MismatchReasons);
     }
 
     private static ResultEquivalenceReport ReferenceCompare(
@@ -637,7 +653,97 @@ public class ResultEquivalenceTests
             }
         }
 
-        return new ResultEquivalenceReport(mode, equivalent, maxDifferingPositions, maxBaselineOnly, maxCandidateOnly);
+        var baselineStable = ReferenceSideStable(mode, baseline);
+        var candidateStable = ReferenceSideStable(mode, candidate);
+        var schemaEquivalent = ReferenceSchemaEquivalent(baseline, candidate);
+        var rowsMismatch = ReferenceRowsDiffer(mode, baseline, candidate);
+        var reasons = new List<string>(5);
+        if (baselineStable == false)
+            reasons.Add(ResultMismatchReasons.BaselineUnstable);
+        if (candidateStable == false)
+            reasons.Add(ResultMismatchReasons.CandidateUnstable);
+        if (schemaEquivalent == false)
+            reasons.Add(ResultMismatchReasons.Schema);
+        if (rowsMismatch)
+            reasons.Add(ResultMismatchReasons.Rows);
+
+        return new ResultEquivalenceReport(
+            mode,
+            equivalent,
+            maxDifferingPositions,
+            maxBaselineOnly,
+            maxCandidateOnly,
+            BaselineStable: baselineStable,
+            CandidateStable: candidateStable,
+            SchemaEquivalent: schemaEquivalent,
+            MismatchReasons: reasons.Count == 0 ? [] : reasons.ToArray());
+    }
+
+    private static bool? ReferenceSideStable(ResultComparisonMode mode, IReadOnlyList<CanonicalComparisonResult> runs)
+    {
+        if (runs.Count < 2)
+            return null;
+        var first = runs[0];
+        for (var index = 1; index < runs.Count; index++)
+        {
+            if (!ReferenceEquivalent(mode, first, runs[index]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool? ReferenceSchemaEquivalent(
+        IReadOnlyList<CanonicalComparisonResult> baseline,
+        IReadOnlyList<CanonicalComparisonResult> candidate)
+    {
+        if (baseline.Count == 0 || candidate.Count == 0)
+            return null;
+        var schema = baseline[0].SchemaHash;
+        foreach (var run in baseline.Concat(candidate))
+        {
+            if (!string.Equals(schema, run.SchemaHash, StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool ReferenceRowsDiffer(
+        ResultComparisonMode mode,
+        IReadOnlyList<CanonicalComparisonResult> baseline,
+        IReadOnlyList<CanonicalComparisonResult> candidate)
+    {
+        foreach (var left in baseline)
+        {
+            foreach (var right in candidate)
+            {
+                if (!ReferenceRowsEqual(mode, left, right))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ReferenceRowsEqual(
+        ResultComparisonMode mode, CanonicalComparisonResult left, CanonicalComparisonResult right)
+    {
+        if (mode == ResultComparisonMode.Ordered)
+            return ReferenceOrderedEqual(left.OrderedRows, right.OrderedRows);
+        if (mode == ResultComparisonMode.Multiset)
+        {
+            var (baselineOnly, candidateOnly) = ReferenceMultisetCounts(left.OrderedRows, right.OrderedRows);
+            return baselineOnly == 0 && candidateOnly == 0;
+        }
+
+        if (mode == ResultComparisonMode.Set)
+        {
+            var (baselineOnly, candidateOnly) = ReferenceSetCounts(left.OrderedRows, right.OrderedRows);
+            return baselineOnly == 0 && candidateOnly == 0;
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported result comparison mode.");
     }
 
     private static bool ReferenceEquivalent(
@@ -1017,5 +1123,220 @@ public class ResultEquivalenceTests
         Assert.False(legacy.CompareNullability);
         Assert.Null(legacy.NullabilityEquivalent);
         Assert.Null(legacy.MismatchReason);
+        Assert.Null(legacy.BaselineStable);
+        Assert.Null(legacy.CandidateStable);
+        Assert.Null(legacy.SchemaEquivalent);
+        Assert.Null(legacy.MismatchReasons);
+    }
+
+    [Fact]
+    public void Stable_equal_results_report_side_stability_and_no_mismatch_reasons()
+    {
+        var run = Capture("A", "B");
+        var report = ResultComparer.Compare(ResultComparisonMode.Ordered, [run, run], [run, run]);
+
+        Assert.True(report.Equivalent);
+        Assert.True(report.BaselineStable);
+        Assert.True(report.CandidateStable);
+        Assert.True(report.SchemaEquivalent);
+        Assert.Equal(Array.Empty<string>(), report.MismatchReasons);
+        Assert.Null(report.MismatchReason);
+        Assert.DoesNotContain("order-only", report.MismatchReasons!);
+    }
+
+    [Fact]
+    public void Unstable_baseline_emits_baseline_unstable_and_rows_together()
+    {
+        var match = Capture("A");
+        var changed = Capture("B");
+        var report = ResultComparer.Compare(ResultComparisonMode.Ordered, [match, changed], [match, match]);
+
+        Assert.False(report.Equivalent);
+        Assert.False(report.BaselineStable);
+        Assert.True(report.CandidateStable);
+        Assert.True(report.SchemaEquivalent);
+        Assert.Equal(
+            [ResultMismatchReasons.BaselineUnstable, ResultMismatchReasons.Rows],
+            report.MismatchReasons);
+        Assert.Null(report.MismatchReason);
+    }
+
+    [Fact]
+    public void Unstable_candidate_emits_candidate_unstable_and_rows_together()
+    {
+        var match = Capture("A");
+        var changed = Capture("B");
+        var report = ResultComparer.Compare(ResultComparisonMode.Ordered, [match, match], [match, changed]);
+
+        Assert.False(report.Equivalent);
+        Assert.True(report.BaselineStable);
+        Assert.False(report.CandidateStable);
+        Assert.True(report.SchemaEquivalent);
+        Assert.Equal(
+            [ResultMismatchReasons.CandidateUnstable, ResultMismatchReasons.Rows],
+            report.MismatchReasons);
+        Assert.Null(report.MismatchReason);
+    }
+
+    [Fact]
+    public void Both_sides_unstable_emit_both_stability_reasons_before_rows()
+    {
+        var a = Capture("A");
+        var b = Capture("B");
+        var c = Capture("C");
+        var report = ResultComparer.Compare(ResultComparisonMode.Ordered, [a, b], [a, c]);
+
+        Assert.False(report.Equivalent);
+        Assert.False(report.BaselineStable);
+        Assert.False(report.CandidateStable);
+        Assert.True(report.SchemaEquivalent);
+        Assert.Equal(
+            [
+                ResultMismatchReasons.BaselineUnstable,
+                ResultMismatchReasons.CandidateUnstable,
+                ResultMismatchReasons.Rows,
+            ],
+            report.MismatchReasons);
+        Assert.Null(report.MismatchReason);
+    }
+
+    [Fact]
+    public void Schema_mismatch_is_schema_reason_without_inventing_rows()
+    {
+        var baseline = new CanonicalComparisonResult("schema-a", ["A"]);
+        var candidate = new CanonicalComparisonResult("schema-b", ["A"]);
+        var report = ResultComparer.Compare(ResultComparisonMode.Multiset, [baseline], [candidate]);
+
+        Assert.False(report.Equivalent);
+        Assert.Null(report.BaselineStable);
+        Assert.Null(report.CandidateStable);
+        Assert.False(report.SchemaEquivalent);
+        Assert.Equal([ResultMismatchReasons.Schema], report.MismatchReasons);
+        Assert.Null(report.MismatchReason);
+    }
+
+    [Fact]
+    public void Stable_row_mismatch_emits_rows_and_keeps_the_selected_mode()
+    {
+        var baseline = Capture("A", "B");
+        var candidate = Capture("A", "C");
+        var report = ResultComparer.Compare(ResultComparisonMode.Ordered, [baseline, baseline], [candidate, candidate]);
+
+        Assert.False(report.Equivalent);
+        Assert.True(report.BaselineStable);
+        Assert.True(report.CandidateStable);
+        Assert.True(report.SchemaEquivalent);
+        Assert.Equal([ResultMismatchReasons.Rows], report.MismatchReasons);
+        Assert.Equal(ResultComparisonMode.Ordered, report.Mode);
+        Assert.Null(report.MismatchReason);
+        Assert.DoesNotContain("order-only", report.MismatchReasons!);
+    }
+
+    [Fact]
+    public void Strict_nullability_only_mismatch_emits_nullability_and_keeps_legacy_reason()
+    {
+        var baseline = Nullable(false, 1, 2);
+        var candidate = Nullable(true, 1, 2);
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Ordered, [baseline, baseline], [candidate, candidate], compareNullability: true);
+
+        Assert.False(report.Equivalent);
+        Assert.True(report.BaselineStable);
+        Assert.True(report.CandidateStable);
+        Assert.True(report.SchemaEquivalent);
+        Assert.False(report.NullabilityEquivalent);
+        Assert.Equal([ResultMismatchReasons.Nullability], report.MismatchReasons);
+        Assert.Equal(ResultMismatchReasons.Nullability, report.MismatchReason);
+    }
+
+    [Fact]
+    public void Off_leaves_diagnostics_unknown()
+    {
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Off, [Capture("A"), Capture("B")], [Capture("C"), Capture("D")]);
+
+        Assert.Equal(ResultComparisonMode.Off, report.Mode);
+        Assert.Null(report.Equivalent);
+        Assert.Null(report.BaselineStable);
+        Assert.Null(report.CandidateStable);
+        Assert.Null(report.SchemaEquivalent);
+        Assert.Null(report.MismatchReasons);
+        Assert.Null(report.MismatchReason);
+    }
+
+    [Fact]
+    public void One_run_per_side_leaves_stability_unknown()
+    {
+        var report = ResultComparer.Compare(ResultComparisonMode.Set, [Capture("A")], [Capture("A")]);
+
+        Assert.True(report.Equivalent);
+        Assert.Null(report.BaselineStable);
+        Assert.Null(report.CandidateStable);
+        Assert.True(report.SchemaEquivalent);
+        Assert.Equal(Array.Empty<string>(), report.MismatchReasons);
+    }
+
+    [Fact]
+    public void Simultaneous_schema_and_row_reasons_preserve_order_and_legacy_mismatch_reason()
+    {
+        var baseline = new CanonicalComparisonResult("schema-a", ["A", "B"]);
+        var candidate = new CanonicalComparisonResult("schema-b", ["A", "C"]);
+        var report = ResultComparer.Compare(ResultComparisonMode.Ordered, [baseline, baseline], [candidate, candidate]);
+
+        Assert.False(report.Equivalent);
+        Assert.True(report.BaselineStable);
+        Assert.True(report.CandidateStable);
+        Assert.False(report.SchemaEquivalent);
+        Assert.Equal([ResultMismatchReasons.Schema, ResultMismatchReasons.Rows], report.MismatchReasons);
+        Assert.Null(report.MismatchReason);
+    }
+
+    [Fact]
+    public void Simultaneous_row_and_strict_nullability_do_not_fill_legacy_reason_from_counters()
+    {
+        var baseline = Nullable(false, 1, 2);
+        var candidate = Nullable(true, 1, 3);
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Ordered, [baseline, baseline], [candidate, candidate], compareNullability: true);
+
+        Assert.False(report.Equivalent);
+        Assert.True(report.BaselineStable);
+        Assert.True(report.CandidateStable);
+        Assert.True(report.SchemaEquivalent);
+        Assert.False(report.NullabilityEquivalent);
+        Assert.Equal([ResultMismatchReasons.Rows, ResultMismatchReasons.Nullability], report.MismatchReasons);
+        Assert.Null(report.MismatchReason);
+        Assert.Equal(1, report.BaselineOnlyCount);
+        Assert.Equal(1, report.CandidateOnlyCount);
+    }
+
+    [Fact]
+    public void Ordered_reorder_is_rows_not_order_only_and_does_not_change_mode()
+    {
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Ordered,
+            [new CanonicalComparisonResult("schema", ["A", "B"]), new CanonicalComparisonResult("schema", ["A", "B"])],
+            [new CanonicalComparisonResult("schema", ["B", "A"]), new CanonicalComparisonResult("schema", ["B", "A"])]);
+
+        Assert.False(report.Equivalent);
+        Assert.True(report.DifferingPositions > 0);
+        Assert.Equal(0, report.BaselineOnlyCount);
+        Assert.Equal(0, report.CandidateOnlyCount);
+        Assert.Equal(ResultComparisonMode.Ordered, report.Mode);
+        Assert.Equal([ResultMismatchReasons.Rows], report.MismatchReasons);
+        Assert.DoesNotContain("order-only", report.MismatchReasons!);
+        Assert.Null(report.MismatchReason);
+    }
+
+    [Fact]
+    public void Aggregate_counters_on_a_constructed_report_do_not_invent_mismatch_reasons()
+    {
+        var report = new ResultEquivalenceReport(ResultComparisonMode.Ordered, false, 2, 0, 0);
+
+        Assert.Null(report.BaselineStable);
+        Assert.Null(report.CandidateStable);
+        Assert.Null(report.SchemaEquivalent);
+        Assert.Null(report.MismatchReasons);
+        Assert.Null(report.MismatchReason);
     }
 }

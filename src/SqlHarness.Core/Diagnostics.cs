@@ -186,7 +186,7 @@ internal sealed record Distribution(long Min, long Median, long Max)
     }
 }
 
-internal sealed record ExecutionPlan(IReadOnlyList<PlanOperator> Operators);
+internal sealed record ExecutionPlan(IReadOnlyList<PlanOperator> Operators, int StatementCount = 1);
 
 internal sealed record PlanOperator(
     int NodeId,
@@ -194,7 +194,14 @@ internal sealed record PlanOperator(
     string? Object,
     bool HasWarnings,
     bool HasSpill,
-    bool HasImplicitConversion);
+    bool HasImplicitConversion)
+{
+    public int StatementOrdinal { get; init; }
+
+    public string? NodePath { get; init; }
+
+    public int? Cursor { get; init; }
+}
 
 internal static class ExecutionPlanParser
 {
@@ -205,28 +212,65 @@ internal static class ExecutionPlanParser
             return ParseJson(xml);
 
         var document = XDocument.Parse(xml);
-        var operators = document
+        var operators = new List<PlanOperator>();
+        var statements = document
             .Descendants()
-            .Where(element => element.Name.LocalName == "RelOp")
-            .Select(ParseOperator)
+            .Where(element => element.Name.LocalName == "StmtSimple")
             .ToArray();
+        if (statements.Length == 0)
+        {
+            // Preserve legacy/minimal ShowPlan diagnostics where no statement
+            // container can establish a trustworthy statement/path identity.
+            // These operators intentionally carry no provenance and cannot form
+            // an exact artifact plan reference.
+            var legacyOperators = document
+                .Descendants()
+                .Where(element => element.Name.LocalName == "RelOp")
+                .Select(ParseOperator)
+                .ToArray();
+            return new ExecutionPlan(legacyOperators, 0);
+        }
 
-        return new ExecutionPlan(operators);
+        for (var ordinal = 0; ordinal < statements.Length; ordinal++)
+        {
+            var queryPlan = statements[ordinal].Elements().FirstOrDefault(element => element.Name.LocalName == "QueryPlan");
+            var root = queryPlan?.Elements().FirstOrDefault(element => element.Name.LocalName == "RelOp");
+            if (root is null)
+                continue;
+            var cursor = 0;
+            WalkRelOp(root, ordinal, "0", operators, ref cursor);
+        }
+
+        return new ExecutionPlan(operators, statements.Length);
     }
 
     private static ExecutionPlan ParseJson(string json)
     {
         using var document = JsonDocument.Parse(json, Postgres.PostgresBenchmark.PlanJsonOptions);
-        var root = document.RootElement.ValueKind == JsonValueKind.Array && document.RootElement.GetArrayLength() > 0
-            ? document.RootElement[0]
-            : document.RootElement;
         var operators = new List<PlanOperator>();
-        if (root.TryGetProperty("Plan", out var plan))
-            WalkJson(plan, operators);
-        return new ExecutionPlan(operators);
+        var statementCount = 0;
+        if (document.RootElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var element in document.RootElement.EnumerateArray())
+            {
+                if (!element.TryGetProperty("Plan", out var plan))
+                    continue;
+                var cursor = 0;
+                WalkJson(plan, statementCount, "0", operators, ref cursor);
+                statementCount++;
+            }
+        }
+        else if (document.RootElement.TryGetProperty("Plan", out var plan))
+        {
+            var cursor = 0;
+            WalkJson(plan, 0, "0", operators, ref cursor);
+            statementCount = 1;
+        }
+
+        return new ExecutionPlan(operators, statementCount == 0 ? 1 : statementCount);
     }
 
-    private static void WalkJson(JsonElement node, List<PlanOperator> operators)
+    private static void WalkJson(JsonElement node, int statementOrdinal, string path, List<PlanOperator> operators, ref int cursor)
     {
         var physicalOp = node.TryGetProperty("Node Type", out var nodeType) && nodeType.ValueKind == JsonValueKind.String
             ? nodeType.GetString() ?? string.Empty
@@ -236,11 +280,53 @@ internal static class ExecutionPlanParser
             JsonString(node, "Relation Name"));
         var hasWarnings = node.TryGetProperty("Warnings", out _)
             || (node.TryGetProperty("Never Executed", out var neverExecuted) && neverExecuted.ValueKind == JsonValueKind.True);
-        operators.Add(new PlanOperator(operators.Count + 1, physicalOp, relation, hasWarnings, false, false));
+        operators.Add(new PlanOperator(operators.Count + 1, physicalOp, relation, hasWarnings, false, false)
+        {
+            StatementOrdinal = statementOrdinal,
+            NodePath = path,
+            Cursor = cursor,
+        });
+        cursor++;
         if (node.TryGetProperty("Plans", out var plans) && plans.ValueKind == JsonValueKind.Array)
         {
+            var index = 0;
             foreach (var child in plans.EnumerateArray())
-                WalkJson(child, operators);
+            {
+                WalkJson(child, statementOrdinal, path + "/" + index, operators, ref cursor);
+                index++;
+            }
+        }
+    }
+
+    private static void WalkRelOp(XElement relOp, int statementOrdinal, string path, List<PlanOperator> operators, ref int cursor)
+    {
+        operators.Add(ParseOperator(relOp) with
+        {
+            StatementOrdinal = statementOrdinal,
+            NodePath = path,
+            Cursor = cursor,
+        });
+        cursor++;
+        var index = 0;
+        foreach (var child in DirectChildOperators(relOp))
+        {
+            WalkRelOp(child, statementOrdinal, path + "/" + index, operators, ref cursor);
+            index++;
+        }
+    }
+
+    private static IEnumerable<XElement> DirectChildOperators(XElement relOp)
+    {
+        foreach (var child in relOp.Elements())
+        {
+            if (child.Name.LocalName == "RelOp")
+            {
+                yield return child;
+                continue;
+            }
+
+            foreach (var descendant in DirectChildOperators(child))
+                yield return descendant;
         }
     }
 

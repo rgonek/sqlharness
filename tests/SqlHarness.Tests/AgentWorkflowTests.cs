@@ -69,6 +69,78 @@ public sealed class AgentWorkflowTests
         Assert.Equal(CountNormalizedUtf8Bytes("one\ntwo\n"), CountNormalizedUtf8Bytes("one\r\ntwo\r\n"));
     }
 
+    [Fact]
+    public void Portable_journal_baseline_preserves_session_and_compare_artifact_costs_without_inventing_payloads()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(RepositoryFile.Locate("plans", "evidence", "077-workflow-baseline.json")));
+        var root = document.RootElement;
+        Assert.Equal(1, root.GetProperty("formatVersion").GetInt32());
+        Assert.Equal("historical-workflow-output-observations", root.GetProperty("kind").GetString());
+        Assert.False(root.GetProperty("replayable").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("sourceRevision").ValueKind);
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("responseBudgetBytes").ValueKind);
+        Assert.Equal("emitted UTF-8 text bytes", root.GetProperty("unit").GetString());
+        Assert.Contains("tools/list discovery", root.GetProperty("excluded").EnumerateArray().Select(value => value.GetString()));
+        Assert.Contains("model input", root.GetProperty("excluded").EnumerateArray().Select(value => value.GetString()));
+        Assert.Contains("final chat", root.GetProperty("excluded").EnumerateArray().Select(value => value.GetString()));
+
+        var sessions = root.GetProperty("sessions");
+        Assert.Equal(4, sessions.GetArrayLength());
+        var workflowCount = 0;
+        var callCount = 0;
+        foreach (var session in sessions.EnumerateArray())
+        {
+            var sessionBytes = 0;
+            var compareArtifactBytes = 0;
+            var sessionCalls = 0;
+            foreach (var workflow in session.GetProperty("workflows").EnumerateArray())
+            {
+                workflowCount++;
+                var workflowBytes = 0;
+                var artifactReads = 0;
+                string? producerId = null;
+                foreach (var call in workflow.GetProperty("calls").EnumerateArray())
+                {
+                    callCount++;
+                    sessionCalls++;
+                    var emitted = call.GetProperty("emittedBytes").GetInt32();
+                    workflowBytes += emitted;
+                    sessionBytes += emitted;
+                    var operation = call.GetProperty("operation").GetString();
+                    var parent = call.GetProperty("parentCall");
+                    if (operation is "compare")
+                    {
+                        Assert.Equal(JsonValueKind.Null, parent.ValueKind);
+                        producerId = call.GetProperty("id").GetString();
+                        compareArtifactBytes += emitted;
+                    }
+                    else if (operation is "artifact")
+                    {
+                        artifactReads++;
+                        compareArtifactBytes += emitted;
+                        Assert.Equal(JsonValueKind.String, parent.ValueKind);
+                        Assert.Equal(producerId, parent.GetString());
+                    }
+                }
+
+                Assert.Equal(workflowBytes, workflow.GetProperty("emittedBytes").GetInt32());
+                Assert.Equal(artifactReads, workflow.GetProperty("artifactReads").GetInt32());
+            }
+
+            var recordedSession = session.GetProperty("totalRecordedEmittedBytes").GetInt32();
+            var recordedCalls = session.GetProperty("totalRecordedCalls").GetInt32();
+            var recordedCompareArtifact = session.GetProperty("compareArtifactEmittedBytes").GetInt32();
+            Assert.Equal(sessionBytes, recordedCompareArtifact);
+            Assert.True(recordedSession >= recordedCompareArtifact);
+            Assert.True(recordedCalls >= sessionCalls);
+            Assert.Equal(compareArtifactBytes, recordedCompareArtifact);
+            _output.WriteLine($"{session.GetProperty("id").GetString()}: session={recordedSession}, compareArtifact={compareArtifactBytes}, workflowCalls={sessionCalls}/{recordedCalls}");
+        }
+
+        Assert.Equal(11, workflowCount);
+        Assert.Equal(40, callCount);
+    }
+
     private static string Fixture(string name) => Path.Combine(FixtureDirectory, name);
 
     private static StringWriter NewOutput() => new() { NewLine = "\n" };

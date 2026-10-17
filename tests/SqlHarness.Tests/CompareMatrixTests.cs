@@ -933,6 +933,129 @@ public class CompareMatrixTests
         Assert.True(outcome.BenchmarkRuns is null || outcome.BenchmarkRuns.Count == 0);
     }
 
+    [Theory]
+    [InlineData(0, 32, 0, 31, "sql")]
+    [InlineData(15, 32, 15, 16, "sql")]
+    [InlineData(31, 32, 31, 0, "sql")]
+    public async Task Matrix_stop_reports_identified_coverage_without_inventing_a_failed_case(
+        int failAt, int requested, int completed, int notExecuted, string phase)
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory(failSqlAt: failAt);
+        var values = string.Join(",", Enumerable.Range(1, requested));
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix($"BatchSize:int={values}"));
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        var coverage = Assert.IsType<MatrixExecutionCoverage>(outcome.Coverage);
+        Assert.Equal(requested, coverage.RequestedCases);
+        Assert.Equal(completed, coverage.CompletedCases);
+        Assert.Equal(notExecuted, coverage.NotExecutedCases);
+        var failed = Assert.IsType<MatrixFailedCase>(coverage.FailedCase);
+        Assert.Equal(failAt, failed.Index);
+        Assert.Equal(phase, failed.Phase);
+        Assert.True(failed.IncludeParameterValue);
+        Assert.Equal((failAt + 1).ToString(CultureInfo.InvariantCulture), failed.ParameterValue);
+        Assert.Null(failed.SetName);
+        Assert.Equal(requested, completed + 1 + notExecuted);
+        if (completed == 0)
+        {
+            Assert.Null(outcome.Report);
+            Assert.True(outcome.BenchmarkRuns is null || outcome.BenchmarkRuns.Count == 0);
+        }
+        else
+        {
+            var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+            Assert.Equal(Enumerable.Range(0, completed), report.Cells.Select(cell => cell.Index));
+            Assert.Equal(coverage, report.Coverage);
+            Assert.Equal(Enumerable.Range(0, completed), outcome.BenchmarkRuns!.Select(run => run.MatrixCell!.Value).Distinct().Order());
+        }
+    }
+
+    [Fact]
+    public async Task Typed_null_and_empty_string_failures_keep_distinct_parameter_values()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var emptyFailure = await Module(new MatrixSessionFactory(failSqlAt: 1), artifacts)
+            .ExecuteAsync(TypedMatrix("kept", "", "later"));
+        var nullFailure = await Module(new MatrixSessionFactory(failSqlAt: 1), artifacts)
+            .ExecuteAsync(TypedMatrix("kept", null, "later"));
+
+        var empty = Assert.IsType<MatrixFailedCase>(emptyFailure.Coverage!.FailedCase);
+        var typedNull = Assert.IsType<MatrixFailedCase>(nullFailure.Coverage!.FailedCase);
+        Assert.Equal(1, empty.Index);
+        Assert.Equal("", empty.ParameterValue);
+        Assert.True(empty.IncludeParameterValue);
+        Assert.Equal(1, typedNull.Index);
+        Assert.Null(typedNull.ParameterValue);
+        Assert.True(typedNull.IncludeParameterValue);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(
+            new { empty = emptyFailure.Coverage.FailedCase, typedNull = nullFailure.Coverage.FailedCase },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        Assert.Equal(JsonValueKind.String, json.RootElement.GetProperty("empty").GetProperty("parameterValue").ValueKind);
+        Assert.Equal("", json.RootElement.GetProperty("empty").GetProperty("parameterValue").GetString());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("typedNull").GetProperty("parameterValue").ValueKind);
+    }
+
+    [Fact]
+    public async Task Named_set_failure_carries_set_name_and_sql_phase()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var operation = Matrix("BatchSize:int=1,20") with
+        {
+            Matrix = "",
+            TypedMatrix = null,
+            ParameterSets =
+            [
+                new("small", []) { TypedParameters = [new("BatchSize", "int", "1")] },
+                new("large", []) { TypedParameters = [new("BatchSize", "int", "100")] },
+                new("xlarge", []) { TypedParameters = [new("BatchSize", "int", "1000")] },
+            ],
+        };
+
+        var outcome = await Module(new MatrixSessionFactory(failSqlAt: 1), artifacts).ExecuteAsync(operation);
+
+        var failed = Assert.IsType<MatrixFailedCase>(outcome.Coverage!.FailedCase);
+        Assert.Equal(1, failed.Index);
+        Assert.Equal("large", failed.SetName);
+        Assert.False(failed.IncludeParameterValue);
+        Assert.Equal("sql", failed.Phase);
+        Assert.Equal(3, outcome.Coverage.RequestedCases);
+        Assert.Equal(1, outcome.Coverage.CompletedCases);
+        Assert.Equal(1, outcome.Coverage.NotExecutedCases);
+    }
+
+    [Fact]
+    public async Task Artifact_phase_failure_is_named_on_coverage_and_keeps_completed_runs()
+    {
+        using var artifacts = new DirectoryArtifactWriter(failWriteAt: 2);
+        var outcome = await Module(new MatrixSessionFactory(), artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100"));
+
+        Assert.Equal(SqlHarnessExitCode.LocalStorage, outcome.ExitCode);
+        var coverage = Assert.IsType<MatrixExecutionCoverage>(outcome.Coverage);
+        Assert.Equal(3, coverage.RequestedCases);
+        Assert.Equal(2, coverage.CompletedCases);
+        Assert.Equal(0, coverage.NotExecutedCases);
+        Assert.Equal(2, coverage.FailedCase!.Index);
+        Assert.Equal("artifact", coverage.FailedCase.Phase);
+        Assert.Equal([0, 1], outcome.BenchmarkRuns!.Select(run => run.MatrixCell!.Value).Distinct().Order());
+    }
+
+    [Fact]
+    public async Task First_cell_artifact_failure_keeps_null_report_and_coverage()
+    {
+        using var artifacts = new DirectoryArtifactWriter(failWriteAt: 0);
+        var outcome = await Module(new MatrixSessionFactory(), artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20"));
+
+        Assert.Equal(SqlHarnessExitCode.LocalStorage, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Equal(0, outcome.Coverage!.CompletedCases);
+        Assert.Equal(1, outcome.Coverage.NotExecutedCases);
+        Assert.Equal(0, outcome.Coverage.FailedCase!.Index);
+        Assert.Equal("artifact", outcome.Coverage.FailedCase.Phase);
+        Assert.True(outcome.BenchmarkRuns is null || outcome.BenchmarkRuns.Count == 0);
+    }
+
     [Fact]
     public async Task Matrix_case_inventory_retains_parameter_values_when_detail_is_limited()
     {

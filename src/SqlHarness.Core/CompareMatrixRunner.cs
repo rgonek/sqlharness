@@ -18,7 +18,19 @@ internal sealed class CompareMatrixCellFailedException : Exception
     internal SqlHarnessCompareMatrixReport? PartialReport { get; }
     internal IReadOnlyList<CompareRunArtifact> CompletedRuns { get; }
 
-    internal CompareMatrixCellFailedException(int index, string? parameterName, string? parameterType, string setName, CompareCellFailedException inner, IReadOnlyList<CompareMatrixCellReport> completedCells, IReadOnlyList<CompareRunArtifact> completedRuns, OutputFootprint rawFootprint)
+    internal MatrixExecutionCoverage Coverage { get; }
+
+    internal CompareMatrixCellFailedException(
+        int index,
+        string? parameterName,
+        string? parameterType,
+        string setName,
+        string? parameterValue,
+        int requestedCount,
+        CompareCellFailedException inner,
+        IReadOnlyList<CompareMatrixCellReport> completedCells,
+        IReadOnlyList<CompareRunArtifact> completedRuns,
+        OutputFootprint rawFootprint)
         : base(null, Unwrap(inner))
     {
         Index = index;
@@ -26,14 +38,43 @@ internal sealed class CompareMatrixCellFailedException : Exception
         SetName = setName;
         Phase = inner.Phase;
         RawFootprint = rawFootprint;
+        Coverage = MatrixExecutionCoverage.IdentifiedFailure(
+            requestedCount,
+            completedCells.Count,
+            FailedCase(index, parameterName, setName, parameterValue, inner.Phase));
         PartialReport = completedCells.Count == 0
             ? null
             : new SqlHarnessCompareMatrixReport(
                 parameterName,
                 parameterType,
-                completedCells.ToArray());
+                completedCells.ToArray())
+            {
+                Coverage = Coverage,
+            };
         CompletedRuns = completedRuns.ToArray();
     }
+
+    internal static MatrixFailedCase FailedCase(
+        int index, string? parameterName, string setName, string? parameterValue, CompareCellPhase phase)
+    {
+        var namedSet = parameterName is null && !string.IsNullOrEmpty(setName);
+        return new MatrixFailedCase(
+            index,
+            namedSet ? setName : null,
+            namedSet ? null : parameterValue,
+            PhaseName(phase))
+        {
+            IncludeParameterValue = !namedSet,
+        };
+    }
+
+    internal static string? PhaseName(CompareCellPhase phase) => phase switch
+    {
+        CompareCellPhase.Authentication => "authentication",
+        CompareCellPhase.Sql => "sql",
+        CompareCellPhase.Artifact => "artifact",
+        _ => null,
+    };
 
     private static Exception Unwrap(CompareCellFailedException inner)
     {
@@ -48,6 +89,8 @@ internal sealed record CompareMatrixResult(
 {
     /// <summary>Every cell's measured runs, tagged with the zero-based cell index (never the value).</summary>
     internal IReadOnlyList<CompareRunArtifact> Runs { get; init; } = [];
+
+    internal MatrixExecutionCoverage Coverage { get; init; } = MatrixExecutionCoverage.AllCompleted(0);
 }
 
 internal sealed class CompareMatrixRunner(CompareCellRunner cells)
@@ -103,6 +146,8 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
                     run.ParameterName,
                     run.ParameterType,
                     set.Name,
+                    set.ParameterValue,
+                    run.Sets.Count,
                     failed,
                     reports,
                     runs,
@@ -110,11 +155,16 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
             }
         }
 
+        var coverage = MatrixExecutionCoverage.AllCompleted(run.Sets.Count);
         return new CompareMatrixResult(
-            new SqlHarnessCompareMatrixReport(run.ParameterName, run.ParameterType, reports),
+            new SqlHarnessCompareMatrixReport(run.ParameterName, run.ParameterType, reports)
+            {
+                Coverage = coverage,
+            },
             rawAvailable ? new OutputFootprint(bytes, lines) : null)
         {
             Runs = runs,
+            Coverage = coverage,
         };
     }
 }

@@ -198,7 +198,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (query.DryRun)
             {
                 MissingParameterCheck.RequireSupplied(target.Engine, parameters, query.Sql);
-                return Checked(query, DryRunOutcome("query", BenchmarkReports.ClassificationLabel(safety), SqlRiskTiers.Label(safety.Tier), parameters, 1));
+                return Checked(query, DryRunOutcome("query", BenchmarkReports.ClassificationLabel(safety), SqlRiskTiers.Label(safety.Tier), parameters, 1,
+                    benchmarkClassification: new BenchmarkClassificationReport("none", BenchmarkReports.ClassificationLabel(safety))));
             }
 
             phase = OperationPhase.Authentication;
@@ -401,7 +402,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         string classification,
         string tier,
         IReadOnlyList<SqlHarnessParameter> parameters,
-        int parameterSets) =>
+        int parameterSets,
+        BenchmarkClassificationReport? benchmarkClassification = null,
+        CompareClassificationReport? compareClassification = null) =>
         WithReceipt(
             new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
@@ -410,7 +413,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     classification,
                     tier,
                     BenchmarkReports.ToParameterReports(parameters),
-                    parameterSets),
+                    parameterSets)
+                {
+                    BenchmarkClassification = benchmarkClassification,
+                    CompareClassification = compareClassification,
+                },
                 null),
             new OutputFootprint(0, 0));
 
@@ -451,7 +458,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     prepared.Classification.Baseline,
                     SqlRiskTiers.Label(prepared.Tier),
                     prepared.FixedParameters,
-                    parameterSets: 1);
+                    parameterSets: 1,
+                    compareClassification: prepared.Classification);
             }
 
             _artifactWriter.CheckStorage();
@@ -569,7 +577,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     prepared.Classification.Baseline,
                     SqlRiskTiers.Label(prepared.Tier),
                     cellParameters[0],
-                    cellParameters.Length);
+                    cellParameters.Length,
+                    compareClassification: prepared.Classification);
             }
 
             _artifactWriter.CheckStorage();
@@ -618,15 +627,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     try
                     {
                         phase = OperationPhase.Artifact;
-                        _artifactWriter.WriteMatrixIndex(partialReport.Cells);
+                        _artifactWriter.WriteMatrixIndex(partialReport.Cells, failed.Coverage);
                     }
                     catch (Exception exception)
                     {
                         return WithReceipt(
-                            new SqlHarnessOutcome(SqlHarnessExitCode.LocalStorage, partialReport, SecretRedactor.Redact(exception, knownSecrets))
-                            {
-                                BenchmarkRuns = failed.CompletedRuns,
-                            },
+                            MatrixOutcome(
+                                SqlHarnessExitCode.LocalStorage,
+                                partialReport,
+                                SecretRedactor.Redact(exception, knownSecrets),
+                                failed.Coverage,
+                                failed.CompletedRuns),
                             rawFootprint);
                     }
                     phase = failed.Phase switch
@@ -639,21 +650,16 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 var exitCode = phase == OperationPhase.Artifact
                     ? SqlHarnessExitCode.LocalStorage
                     : OperationFailureMapper.Map(failed.InnerException ?? failed, phase);
+                var message = FormatMatrixCellError(failed, knownSecrets);
                 return WithReceipt(
-                    new SqlHarnessOutcome(exitCode, failed.PartialReport, FormatMatrixCellError(failed, knownSecrets))
-                    {
-                        BenchmarkRuns = failed.CompletedRuns,
-                    },
+                    MatrixOutcome(exitCode, failed.PartialReport, message, failed.Coverage, failed.CompletedRuns),
                     rawFootprint);
             }
 
             rawFootprint = result.RawFootprint;
             phase = OperationPhase.Artifact;
-            _artifactWriter.WriteMatrixIndex(result.Report.Cells);
-            var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, result.Report, null)
-            {
-                BenchmarkRuns = result.Runs,
-            };
+            _artifactWriter.WriteMatrixIndex(result.Report.Cells, result.Coverage);
+            var success = MatrixOutcome(SqlHarnessExitCode.Success, result.Report, null, result.Coverage, result.Runs);
             return WithReceipt(success, rawFootprint);
         }
         catch (Exception exception)
@@ -665,6 +671,23 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets));
             return WithReceipt(failure, rawFootprint);
         }
+    }
+
+    private static SqlHarnessOutcome MatrixOutcome(
+        SqlHarnessExitCode exitCode,
+        object? report,
+        string? safeError,
+        MatrixExecutionCoverage coverage,
+        IReadOnlyList<CompareRunArtifact>? runs)
+    {
+        var error = report is null && safeError is not null
+            ? SqlHarnessError.From(exitCode, safeError) with { MatrixStop = coverage }
+            : null;
+        return new SqlHarnessOutcome(exitCode, report, safeError, Error: error)
+        {
+            BenchmarkRuns = runs,
+            Coverage = coverage,
+        };
     }
 
     private static string FormatMatrixCellError(CompareMatrixCellFailedException failed, IReadOnlyList<string> knownSecrets)
@@ -724,7 +747,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                         BenchmarkReports.ClassificationLabel(querySafety),
                         SqlRiskTiers.Label(SqlRiskTiers.Max(querySafety.Tier, setupSafety?.Tier ?? SqlRiskTier.ReadOnly)),
                         boundSets[0].Parameters,
-                        boundSets.Count);
+                        boundSets.Count,
+                        benchmarkClassification: new BenchmarkClassificationReport(
+                            BenchmarkReports.ClassificationLabel(setupSafety), BenchmarkReports.ClassificationLabel(querySafety)));
                 }
 
                 _artifactWriter.CheckStorage();
@@ -779,7 +804,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     BenchmarkReports.ClassificationLabel(querySafety),
                     SqlRiskTiers.Label(SqlRiskTiers.Max(querySafety.Tier, setupSafety?.Tier ?? SqlRiskTier.ReadOnly)),
                     parameters,
-                    parameterSets: 1);
+                    parameterSets: 1,
+                    benchmarkClassification: new BenchmarkClassificationReport(
+                        BenchmarkReports.ClassificationLabel(setupSafety), BenchmarkReports.ClassificationLabel(querySafety)));
             }
 
             _artifactWriter.CheckStorage();

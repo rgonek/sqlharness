@@ -1,0 +1,138 @@
+{
+  "formatVersion": 1,
+  "kind": "synthetic-optimization-workflows",
+  "replayable": true,
+  "profile": "workflow-fixture",
+  "host": {
+    "project": "tests/SqlHarness.Mcp.WorkflowHost/SqlHarness.Mcp.WorkflowHost.csproj",
+    "arguments": ["--scenario", "<id>", "--home", "<isolated-directory>"]
+  },
+  "budgets": [4096, 65536],
+  "agentTrials": {
+    "model": "grok-4.6",
+    "effort": "medium",
+    "maxToolCalls": 20,
+    "maxDurationSeconds": 300,
+    "runsPerFamily": 3,
+    "families": ["no-improvement-invalid-comparison", "partial-32-case-matrix", "colliding-operator-ids"]
+  },
+  "scenarios": [
+    {
+      "id": "no-improvement",
+      "family": "no-improvement-invalid-comparison",
+      "seed": 7701,
+      "engine": "sqlserver",
+      "inputs": {
+        "baseline": "inputs/no-improvement-baseline.sql",
+        "candidate": "inputs/no-improvement-candidate.sql"
+      },
+      "prompt": "prompts/no-improvement.md",
+      "oracle": "oracle/no-improvement.json",
+      "scriptedRequests": [
+        { "tool": "sqlharness_capabilities", "arguments": {} },
+        {
+          "tool": "sqlharness_compare",
+          "arguments": {
+            "baseline": { "sqlFile": "inputs/no-improvement-baseline.sql" },
+            "candidate": { "sqlFile": "inputs/no-improvement-candidate.sql" },
+            "subject": "orders-by-region",
+            "scope": "whole",
+            "repeat": 5
+          }
+        },
+        { "tool": "sqlharness_artifact", "arguments": { "id": "<from-compare>", "section": "summary" } }
+      ]
+    },
+    {
+      "id": "partial-matrix-32",
+      "family": "partial-32-case-matrix",
+      "seed": 7702,
+      "engine": "sqlserver",
+      "inputs": {
+        "baseline": "inputs/partial-matrix-baseline.sql",
+        "candidate": "inputs/partial-matrix-candidate.sql"
+      },
+      "prompt": "prompts/partial-matrix-32.md",
+      "oracle": "oracle/partial-matrix-32.json",
+      "scriptedRequests": [
+        {
+          "tool": "sqlharness_compare",
+          "arguments": {
+            "baseline": { "sqlFile": "inputs/partial-matrix-baseline.sql" },
+            "candidate": { "sqlFile": "inputs/partial-matrix-candidate.sql" },
+            "subject": "orders-by-batch",
+            "scope": "whole",
+            "repeat": 5,
+            "matrix": {
+              "name": "BatchSize",
+              "type": "int",
+              "values": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32"]
+            }
+          }
+        },
+        { "tool": "sqlharness_artifact", "arguments": { "id": "<from-compare>", "section": "matrix-cells", "cursor": 0 } }
+      ]
+    },
+    {
+      "id": "colliding-operators",
+      "family": "colliding-operator-ids",
+      "seed": 7703,
+      "engine": "sqlserver",
+      "inputs": {
+        "baseline": "inputs/colliding-baseline.sql",
+        "candidate": "inputs/colliding-candidate.sql"
+      },
+      "prompt": "prompts/colliding-operators.md",
+      "oracle": "oracle/colliding-operators.json",
+      "scriptedRequests": [
+        {
+          "tool": "sqlharness_compare",
+          "arguments": {
+            "baseline": { "sqlFile": "inputs/colliding-baseline.sql" },
+            "candidate": { "sqlFile": "inputs/colliding-candidate.sql" },
+            "subject": "accounts-ledger",
+            "scope": "whole",
+            "repeat": 5
+          }
+        },
+        { "tool": "sqlharness_artifact", "arguments": { "id": "<from-compare>", "section": "operators" } },
+        { "tool": "sqlharness_artifact", "arguments": { "id": "<from-compare>", "section": "plan", "variant": "candidate", "statement": 1 } }
+      ]
+    },
+    {
+      "id": "unavailable-metrics",
+      "family": "unavailable-metrics",
+      "seed": 7704,
+      "engine": "postgres",
+      "inputs": {
+        "baseline": "inputs/unavailable-baseline.sql",
+        "candidate": "inputs/unavailable-candidate.sql"
+      },
+      "scriptedRequests": [
+        {
+          "tool": "sqlharness_compare",
+          "arguments": {
+            "baseline": { "sqlFile": "inputs/unavailable-baseline.sql" },
+            "candidate": { "sqlFile": "inputs/unavailable-candidate.sql" },
+            "subject": "orders-region",
+            "scope": "whole",
+            "repeat": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "request-scope-mapping",
+      "family": "request-scope-mapping",
+      "seed": 7705,
+      "engine": "sqlserver",
+      "inputs": {
+        "baseline": "inputs/no-improvement-baseline.sql",
+        "candidate": "inputs/no-improvement-candidate.sql"
+      },
+      "scriptedRequests": [
+        { "tool": "sqlharness_capabilities", "arguments": {} }
+      ]
+    }
+  ]
+}

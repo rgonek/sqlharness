@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SqlHarness.Core;
 
@@ -19,11 +20,20 @@ public sealed record ResultEquivalenceReport(
     long? CandidateOnlyCount,
     bool CompareNullability = false,
     bool? NullabilityEquivalent = null,
-    string? MismatchReason = null);
+    string? MismatchReason = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? BaselineStable = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CandidateStable = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? SchemaEquivalent = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? MismatchReasons = null);
 
-/// <summary>Stable values for <see cref="ResultEquivalenceReport.MismatchReason"/>.</summary>
+/// <summary>Stable values for <see cref="ResultEquivalenceReport.MismatchReason"/> and <see cref="ResultEquivalenceReport.MismatchReasons"/>.</summary>
 public static class ResultMismatchReasons
 {
+    public const string BaselineUnstable = "baseline-unstable";
+    public const string CandidateUnstable = "candidate-unstable";
+    public const string Schema = "schema";
+    public const string Rows = "rows";
+
     /// <summary>Strict nullability mode alone made the result not equivalent: the rows matched.</summary>
     public const string Nullability = "nullability";
 }
@@ -125,6 +135,23 @@ internal static class ResultComparer
             }
         }
 
+        var baselineStable = SideStable(baselineReps, mode, cancellationToken);
+        var candidateStable = SideStable(candidateReps, mode, cancellationToken);
+        var schemaEquivalent = SchemaEquivalentAcross(baseline, candidate);
+        var rowsMismatch = RowsDiffer(baselineReps, candidateReps, mode, cancellationToken);
+
+        var reasons = new List<string>(5);
+        if (baselineStable == false)
+            reasons.Add(ResultMismatchReasons.BaselineUnstable);
+        if (candidateStable == false)
+            reasons.Add(ResultMismatchReasons.CandidateUnstable);
+        if (schemaEquivalent == false)
+            reasons.Add(ResultMismatchReasons.Schema);
+        if (rowsMismatch)
+            reasons.Add(ResultMismatchReasons.Rows);
+        if (compareNullability && nullabilityEquivalent == false)
+            reasons.Add(ResultMismatchReasons.Nullability);
+
         var strictNullabilityFailure = compareNullability && equivalent && nullabilityEquivalent == false;
         return new ResultEquivalenceReport(
             mode,
@@ -134,7 +161,70 @@ internal static class ResultComparer
             maxCandidateOnly,
             compareNullability,
             nullabilityEquivalent,
-            strictNullabilityFailure ? ResultMismatchReasons.Nullability : null);
+            strictNullabilityFailure ? ResultMismatchReasons.Nullability : null,
+            baselineStable,
+            candidateStable,
+            schemaEquivalent,
+            reasons.Count == 0 ? [] : reasons.ToArray());
+    }
+
+    private static bool? SideStable(
+        SharedRepresentation[] runs, ResultComparisonMode mode, CancellationToken cancellationToken)
+    {
+        if (runs.Length < 2)
+            return null;
+
+        var reference = runs[0];
+        for (var index = 1; index < runs.Length; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!reference.IsEquivalentTo(runs[index], mode))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool? SchemaEquivalentAcross(
+        IReadOnlyList<CanonicalComparisonResult> baseline,
+        IReadOnlyList<CanonicalComparisonResult> candidate)
+    {
+        if (baseline.Count == 0 || candidate.Count == 0)
+            return null;
+
+        var schema = baseline[0].SchemaHash;
+        foreach (var run in baseline)
+        {
+            if (!string.Equals(schema, run.SchemaHash, StringComparison.Ordinal))
+                return false;
+        }
+
+        foreach (var run in candidate)
+        {
+            if (!string.Equals(schema, run.SchemaHash, StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool RowsDiffer(
+        SharedRepresentation[] baseline,
+        SharedRepresentation[] candidate,
+        ResultComparisonMode mode,
+        CancellationToken cancellationToken)
+    {
+        foreach (var left in baseline)
+        {
+            foreach (var right in candidate)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!left.RowsEquivalentTo(right, mode))
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool? EvaluateNullability(
@@ -225,14 +315,17 @@ internal static class ResultComparer
             if (!string.Equals(SchemaHash, other.SchemaHash, StringComparison.Ordinal))
                 return false;
 
-            return mode switch
+            return RowsEquivalentTo(other, mode);
+        }
+
+        internal bool RowsEquivalentTo(SharedRepresentation other, ResultComparisonMode mode) =>
+            mode switch
             {
                 ResultComparisonMode.Ordered => Rows.SequenceEqual(other.Rows, StringComparer.Ordinal),
                 ResultComparisonMode.Multiset => HistogramsEqual(GetHistogram(), other.GetHistogram()),
                 ResultComparisonMode.Set => GetSet().SetEquals(other.GetSet()),
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported result comparison mode."),
             };
-        }
 
         internal (long BaselineOnly, long CandidateOnly) MultisetDirectionalCounts(SharedRepresentation other)
         {

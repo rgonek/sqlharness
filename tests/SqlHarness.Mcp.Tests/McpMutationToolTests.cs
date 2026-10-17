@@ -51,7 +51,8 @@ public sealed class McpMutationToolTests
 
         Assert.False(result.IsError == true);
         Assert.Equal("success", envelope.RootElement.GetProperty("status").GetString());
-        Assert.Equal("sqlharness_mutation", envelope.RootElement.GetProperty("command").GetString());
+        Assert.False(envelope.RootElement.TryGetProperty("command", out _));
+        Assert.False(envelope.RootElement.TryGetProperty("exitCode", out _));
         var sets = envelope.RootElement.GetProperty("result").GetProperty("result").GetProperty("resultSets");
         Assert.Equal(JsonValueKind.Array, sets.ValueKind);
         Assert.Equal("saved", sets[0].GetProperty("rows")[0][0].GetString());

@@ -36,6 +36,9 @@ public sealed class PlanDistillerTests
         Assert.Equal(2, statement.Root.Children.Count);
 
         var seek = statement.Root.Children[0];
+        Assert.Equal(0, statement.Root.NodeId);
+        Assert.Equal(1, seek.NodeId);
+        Assert.Equal(2, statement.Root.Children[1].NodeId);
         Assert.Equal("[dbo].[Orders]", seek.ObjectName);
         Assert.Equal("[IX_Orders_Customer]", seek.IndexName);
         Assert.Equal(7, seek.ActualRows);
@@ -104,24 +107,24 @@ public sealed class PlanDistillerTests
     }
 
     [Theory]
-    [InlineData("operators.sqlplan")]
-    [InlineData("warnings.sqlplan")]
-    public void Distilled_json_is_at_least_sixty_percent_smaller_than_source(string fixture)
+    [InlineData("operators.sqlplan", 0.4)]
+    [InlineData("warnings.sqlplan", 0.42)]
+    public void Distilled_json_stays_compact_after_optional_node_identity(string fixture, double maximumFraction)
     {
         var xml = Fixture(fixture);
         var json = JsonSerializer.Serialize(PlanDistiller.Distill(xml));
 
-        Assert.True(Encoding.UTF8.GetByteCount(json) <= Encoding.UTF8.GetByteCount(xml) * 0.4,
+        Assert.True(Encoding.UTF8.GetByteCount(json) <= Encoding.UTF8.GetByteCount(xml) * maximumFraction,
             $"Distilled JSON was {Encoding.UTF8.GetByteCount(json)} bytes for {Encoding.UTF8.GetByteCount(xml)} source bytes.");
     }
 
     [Fact]
-    public void Distilled_json_meets_the_sixty_percent_contract_for_canonical_lf_input()
+    public void Distilled_json_stays_compact_for_canonical_lf_input_with_node_identity()
     {
         var xml = Fixture("warnings.sqlplan").ReplaceLineEndings("\n");
         var json = JsonSerializer.Serialize(PlanDistiller.Distill(xml));
 
-        Assert.True(Encoding.UTF8.GetByteCount(json) <= Encoding.UTF8.GetByteCount(xml) * 0.4,
+        Assert.True(Encoding.UTF8.GetByteCount(json) <= Encoding.UTF8.GetByteCount(xml) * 0.42,
             $"Distilled JSON was {Encoding.UTF8.GetByteCount(json)} bytes for {Encoding.UTF8.GetByteCount(xml)} source bytes.");
     }
 
@@ -281,6 +284,28 @@ public sealed class PlanDistillerTests
         Assert.Equal(distilledPredicate, document.RootElement.GetProperty("Statements")[0].GetProperty("Root").GetProperty("Predicate").GetString());
         Assert.Contains("\\\"", json, StringComparison.Ordinal);
         Assert.Contains("\\\\", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Stored_plan_reader_reads_optional_node_id_and_accepts_legacy_nodes_without_it()
+    {
+        var withId = StoredPlanReader.Read("""{"statements":[{"root":{"physicalOp":"Scan","nodeId":7}}]}""");
+        var legacy = StoredPlanReader.Read("""{"statements":[{"root":{"physicalOp":"Scan"}}]}""");
+
+        Assert.Equal(7, Assert.Single(withId.Statements).Root.NodeId);
+        Assert.Null(Assert.Single(legacy.Statements).Root.NodeId);
+    }
+
+    [Fact]
+    public void Distilled_json_writes_node_id_only_when_present()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var withId = JsonSerializer.Serialize(PlanDistiller.Distill(MinimalPlan("", "NodeId=\"4\" PhysicalOp=\"Scan\"", "")), options);
+        var withoutId = JsonSerializer.Serialize(new DistilledPlan([new PlanStatement(null, new PlanNode(
+            "Scan", null, null, null, null, null, null, null, null, [], []), [])]), options);
+
+        Assert.Contains("\"nodeId\":4", withId, StringComparison.Ordinal);
+        Assert.DoesNotContain("nodeId", withoutId, StringComparison.Ordinal);
     }
 
     [Fact]

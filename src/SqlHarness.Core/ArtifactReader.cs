@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
 
@@ -69,6 +68,9 @@ public sealed record ArtifactOperatorsSection(
     public int? Continuation { get; init; }
     public int Cursor { get; init; }
     public bool SourceIsCapped { get; init; } = true;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? EvidenceGaps { get; init; }
 }
 
 public sealed record ArtifactPlanSelector(string Variant, int Statement = 0, string? ParameterSet = null, int? Repetition = null);
@@ -128,7 +130,11 @@ public sealed record ArtifactMatrixCellsSection(
     string ArtifactId,
     IReadOnlyList<AgentMatrixCase> Cases,
     int? Continuation,
-    int Cursor = 0);
+    int Cursor = 0)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MatrixExecutionCoverage? Coverage { get; init; }
+}
 
 /// <summary>Safe refusal of a selective artifact read. The message never carries artifact content.</summary>
 public sealed class ArtifactReadException(string message, SqlHarnessExitCode exitCode) : Exception(message)
@@ -142,7 +148,7 @@ public sealed class ArtifactReadException(string message, SqlHarnessExitCode exi
 /// Opens no connection and reads only bounded report, index, and distilled
 /// plan JSON files; it never reads raw plan XML, queries.jsonl, or source SQL.
 /// </summary>
-public static partial class ArtifactReader
+public static class ArtifactReader
 {
     public const int CurrentManifestVersion = 2;
 
@@ -264,7 +270,7 @@ public static partial class ArtifactReader
                     || !item.TryGetProperty("artifactId", out var id)
                     || id.ValueKind != JsonValueKind.String
                     || id.GetString() is not { } artifactCellId
-                    || !ArtifactIdPattern().IsMatch(artifactCellId))
+                    || !ArtifactIds.IsValid(artifactCellId))
                     throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
                 var matrixCase = hasLegacyCells
                     ? new AgentMatrixCase(cellIndex, artifactCellId, null, "unavailable",
@@ -277,7 +283,17 @@ public static partial class ArtifactReader
                 return matrixCase;
             }).ToArray();
             var next = cursor + page.Length;
-            return new ArtifactMatrixCellsSection(artifactId, page, next < cases.GetArrayLength() ? next : null, cursor);
+            MatrixExecutionCoverage? coverage = null;
+            if (document.RootElement.TryGetProperty("coverage", out var coverageElement)
+                && coverageElement.ValueKind == JsonValueKind.Object)
+            {
+                coverage = JsonSerializer.Deserialize<MatrixExecutionCoverage>(
+                    coverageElement.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            }
+            return new ArtifactMatrixCellsSection(artifactId, page, next < cases.GetArrayLength() ? next : null, cursor)
+            {
+                Coverage = coverage,
+            };
         }
         catch (ArtifactReadException)
         {
@@ -295,8 +311,7 @@ public static partial class ArtifactReader
 
     private static string ResolveDirectory(string root, string artifactId)
     {
-        if (string.IsNullOrWhiteSpace(artifactId) || artifactId.Length > 128
-            || !ArtifactIdPattern().IsMatch(artifactId))
+        if (!ArtifactIds.IsValid(artifactId))
             throw new ArtifactReadException("Unknown artifact id.", SqlHarnessExitCode.Safety);
 
         string rootFull;
@@ -415,8 +430,15 @@ public static partial class ArtifactReader
         if (cursor > operators.Count) throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
         const int pageSize = 32;
         var page = operators.Skip(cursor).Take(pageSize).ToArray();
+        IReadOnlyList<string>? gaps = operators.Count > 0 && operators.Any(op => op.PlanRefs is not { Count: > 0 })
+            ? ["Exact plan source was not retained for one or more noteworthy operators."]
+            : null;
         return new ArtifactOperatorsSection(artifactId, manifest.ArtifactKind, page)
-        { Cursor = cursor, Continuation = cursor + page.Length < operators.Count ? cursor + page.Length : null };
+        {
+            Cursor = cursor,
+            Continuation = cursor + page.Length < operators.Count ? cursor + page.Length : null,
+            EvidenceGaps = gaps,
+        };
     }
 
     private static string DefaultVariant(string artifactKind) => artifactKind switch
@@ -486,7 +508,9 @@ public static partial class ArtifactReader
             if (selector.Statement >= statements.Length)
                 throw new ArtifactReadException($"Statement {selector.Statement} is unavailable; available statement range: 0..{Math.Max(-1, statements.Length - 1)}.", SqlHarnessExitCode.Safety);
             var selected = statements[selector.Statement];
-            var allNodes = Flatten(selected.Root, null, "0").ToArray();
+            var allNodes = PlanDistiller.Preorder(selected.Root)
+                .Select(node => new ArtifactPlanNode(node.Path, node.Parent, node.Node with { Children = [] }))
+                .ToArray();
             if (cursor > allNodes.Length) throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
             var nodes = allNodes.Skip(cursor).Take(MaxPlanPageSourceNodes).Select(node => includeText ? node : node with
             { Operator = node.Operator with { Predicate = null } }).ToArray();
@@ -536,15 +560,9 @@ public static partial class ArtifactReader
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         { throw new ArtifactReadException("Artifact storage is unavailable.", SqlHarnessExitCode.LocalStorage); }
 
-        static IEnumerable<ArtifactPlanNode> Flatten(PlanNode node, string? parent, string path)
+        static string Shape(PlanNode root) => JsonSerializer.Serialize(PlanDistiller.Preorder(root).Select(node => new[]
         {
-            yield return new ArtifactPlanNode(path, parent, node with { Children = [] });
-            for (var index = 0; index < node.Children.Count; index++)
-                foreach (var child in Flatten(node.Children[index], path, path + "/" + index)) yield return child;
-        }
-        static string Shape(PlanNode root) => JsonSerializer.Serialize(Flatten(root, null, "0").Select(node => new[]
-        {
-            node.Operator.PhysicalOp, node.Operator.LogicalOp, node.Operator.ObjectName, node.Operator.IndexName, node.Operator.Predicate,
+            node.Node.PhysicalOp, node.Node.LogicalOp, node.Node.ObjectName, node.Node.IndexName, node.Node.Predicate,
         }));
     }
 
@@ -857,7 +875,4 @@ public static partial class ArtifactReader
 
     internal static bool IsEscapeLink(string? linkTarget, FileAttributes attributes) =>
         linkTarget is not null || (attributes & FileAttributes.ReparsePoint) != 0;
-
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant)]
-    private static partial Regex ArtifactIdPattern();
 }

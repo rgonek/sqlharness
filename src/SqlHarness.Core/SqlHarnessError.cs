@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace SqlHarness.Core;
 
 /// <summary>A stable, safe description of a failed SQLHarness operation.</summary>
@@ -8,6 +10,9 @@ public sealed record SqlHarnessError(
     string? Hint = null,
     SqlHarnessErrorLocation? Location = null)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MatrixExecutionCoverage? MatrixStop { get; init; }
+
     public static SqlHarnessError From(SqlHarnessExitCode exitCode, string? message, string? phase = null) =>
         new(
             exitCode switch

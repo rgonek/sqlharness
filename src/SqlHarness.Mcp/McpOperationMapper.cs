@@ -107,8 +107,7 @@ public static partial class McpPlanTextPolicy
 /// </summary>
 public static partial class McpOperationMapper
 {
-    private static readonly HashSet<string> CompareResultModes = new(StringComparer.OrdinalIgnoreCase)
-        { "ordered", "multiset", "set", "off" };
+    private static readonly HashSet<string> CompareResultModes = new(AgentProjectionNames.ComparisonModes, StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> SnapshotActions = new(StringComparer.OrdinalIgnoreCase)
         { "capture", "diff" };
     private static readonly HashSet<string> ArtifactSections = new(StringComparer.OrdinalIgnoreCase)
