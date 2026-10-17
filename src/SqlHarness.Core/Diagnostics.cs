@@ -217,6 +217,20 @@ internal static class ExecutionPlanParser
             .Descendants()
             .Where(element => element.Name.LocalName == "StmtSimple")
             .ToArray();
+        if (statements.Length == 0)
+        {
+            // Preserve legacy/minimal ShowPlan diagnostics where no statement
+            // container can establish a trustworthy statement/path identity.
+            // These operators intentionally carry no provenance and cannot form
+            // an exact artifact plan reference.
+            var legacyOperators = document
+                .Descendants()
+                .Where(element => element.Name.LocalName == "RelOp")
+                .Select(ParseOperator)
+                .ToArray();
+            return new ExecutionPlan(legacyOperators, 0);
+        }
+
         for (var ordinal = 0; ordinal < statements.Length; ordinal++)
         {
             var queryPlan = statements[ordinal].Elements().FirstOrDefault(element => element.Name.LocalName == "QueryPlan");

@@ -870,6 +870,51 @@ public sealed class McpToolSchemaTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Tools_list_explains_optimization_evidence_semantics_in_both_modes()
+    {
+        var scope = ScopeWithInputRoot();
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => scope.Profiles);
+        await using var fixedServed = await ServedCatalog.CreateAsync(scope);
+        await using var requestServed = await ServedCatalog.CreateAsync(process);
+
+        foreach (var served in new[] { fixedServed, requestServed })
+        {
+            var tools = await ServedToolsAsync(served);
+            var query = ToolDescription(tools, "sqlharness_query");
+            var measure = ToolDescription(tools, "sqlharness_measure");
+            var compare = ToolDescription(tools, "sqlharness_compare");
+            var watch = ToolDescription(tools, "sqlharness_watch");
+            var plan = ToolDescription(tools, "sqlharness_plan");
+            var artifact = ToolDescription(tools, "sqlharness_artifact");
+
+            Assert.Contains("not benchmark evidence", query, StringComparison.Ordinal);
+            Assert.Contains("estimated", query, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("actualRows", query, StringComparison.Ordinal);
+            Assert.Contains("executions", query, StringComparison.Ordinal);
+            Assert.Contains("validation: passed", query, StringComparison.Ordinal);
+            Assert.Contains("execution: not-run", query, StringComparison.Ordinal);
+            Assert.Contains("validation: passed", measure, StringComparison.Ordinal);
+            Assert.Contains("execution: not-run", measure, StringComparison.Ordinal);
+            Assert.Contains("setup classification", measure, StringComparison.Ordinal);
+            Assert.Contains("pass means no elapsed regression", compare, StringComparison.Ordinal);
+            Assert.Contains("not improvement", compare, StringComparison.Ordinal);
+            Assert.Contains("not domain equivalence", compare, StringComparison.Ordinal);
+            Assert.Contains("execution: not-run", compare, StringComparison.Ordinal);
+            Assert.Contains("baseline/candidate classifications", compare, StringComparison.Ordinal);
+            Assert.Contains("no continuation", watch, StringComparison.Ordinal);
+            Assert.Contains("projection omissions", watch, StringComparison.Ordinal);
+            Assert.Contains("omittedChildCount", plan, StringComparison.Ordinal);
+            Assert.Contains("omittedSubtreeCount", plan, StringComparison.Ordinal);
+            Assert.Contains("returned continuation", artifact, StringComparison.Ordinal);
+            Assert.Contains("omittedChildCount", artifact, StringComparison.Ordinal);
+        }
+    }
+
     [Theory]
     [InlineData("sqlharness_measure", "{\"setup\":{\"sql\":\"SELECT 1\"}}")]
     [InlineData("sqlharness_compare", "{\"candidate\":{\"sql\":\"SELECT 1\"}}")]

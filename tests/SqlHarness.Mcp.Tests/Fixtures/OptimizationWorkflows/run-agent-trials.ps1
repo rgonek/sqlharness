@@ -24,7 +24,7 @@ if (-not $HostDll) {
     if (-not (Test-Path -LiteralPath $builtHost)) {
         throw "Workflow host is missing at $builtHost. Build tests/SqlHarness.Mcp.WorkflowHost first."
     }
-    if (Test-Path -LiteralPath $hostCopy) { Remove-Item -LiteralPath $hostCopy -Recurse -Force }
+    Remove-TemporaryDirectory $hostCopy "sqlharness-077-host"
     Copy-Item -LiteralPath (Split-Path $builtHost) -Destination $hostCopy -Recurse
     $HostDll = Join-Path $hostCopy "SqlHarness.Mcp.WorkflowHost.dll"
 }
@@ -55,6 +55,17 @@ function Get-DenyGlobs {
         "Edit(D:\\Dev\\**)",
         "Bash(*)"
     )
+}
+
+function Remove-TemporaryDirectory([string] $path, [string] $requiredLeafPrefix) {
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $target = [IO.Path]::GetFullPath($path)
+    $rootPrefix = $tempRoot + [IO.Path]::DirectorySeparatorChar
+    if (-not $target.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+        -not [IO.Path]::GetFileName($target).StartsWith($requiredLeafPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing recursive removal outside the expected temporary directory: $target"
+    }
+    if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
 }
 
 function Get-McpSelectors([string] $export) {
@@ -308,6 +319,7 @@ foreach ($family in $families) {
         $agentFinished = $false
         $exitCode = -1
         $errorText = $null
+        $stderr = ""
         $started = Get-Date
         try {
             Push-Location $work
@@ -439,7 +451,11 @@ foreach ($family in $families) {
             $toolCalls = [regex]::Matches($md, "(?m)^- UseTool: sqlharness__").Count
         }
         if ($agentFinished) { $timedOut = $false }
-        $failed = [bool]$errorText -and -not $agentFinished
+        $debugText = if (Test-Path -LiteralPath $debugPath) { Get-Content -LiteralPath $debugPath -Raw } else { "" }
+        $providerFailure = ($stderr -match 'API error \(status 402 Payment Required\): Grok Build usage balance exhausted') -or
+            ($debugText -match 'API error \(status 402 Payment Required\): Grok Build usage balance exhausted')
+        if ($providerFailure) { $errorText = "Grok Build usage balance exhausted (HTTP 402); model call and usage unavailable." }
+        $failed = $providerFailure -or ([bool]$errorText -and -not $agentFinished)
         $exportForScore = if (Test-Path -LiteralPath $exportPath) { Get-Content -LiteralPath $exportPath -Raw } else { $conclusion }
         $selectors = Get-McpSelectors $exportForScore
         $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns $timedOut $failed $duration $selectors $exportForScore
@@ -475,7 +491,7 @@ foreach ($family in $families) {
         $row | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $metaPath -Encoding utf8
         $summary.Add($row)
         Write-Host "$name -> $($score.outcome) exit=$exitCode timeout=$timedOut seconds=$duration"
-        try { Remove-Item -LiteralPath $trialRoot -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+        try { Remove-TemporaryDirectory $trialRoot "sqlharness-077-trial-" } catch { }
     }
 }
 

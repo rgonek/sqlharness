@@ -221,6 +221,12 @@ public sealed class AgentOptimizationWorkflowTests
                 };
                 var json = Normalize(JsonSerializer.Serialize(record, JsonOptions), session.Home);
                 AssertScenarioRecord(scenario, budget, json);
+                var captureDirectory = Environment.GetEnvironmentVariable("SQLHARNESS_077_CAPTURE_DIR");
+                if (!string.IsNullOrWhiteSpace(captureDirectory))
+                {
+                    Directory.CreateDirectory(captureDirectory);
+                    File.WriteAllText(Path.Combine(captureDirectory, $"{scenario}-{budget}.json"), json);
+                }
                 var path = Path.Combine(recordsDir, $"{scenario}-{budget}.json");
                 Assert.True(File.Exists(path), $"Frozen pre-change record missing: {path}");
                 _ = Normalize(File.ReadAllText(path));

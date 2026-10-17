@@ -30,21 +30,15 @@ export default defineConfig({
     },
   },
   test: {
-    // Measured on the Windows gate, same worktree, 35 files and 163 tests:
-    //   jsdom                     116.6s
-    //   happy-dom                  49.7s
-    //   happy-dom + vmThreads      22.2s
-    // The environment was created once per file and cost 52% (jsdom) or 32%
-    // (happy-dom) of the suite; vmThreads reuses one environment per worker while
-    // keeping per-file isolation.
+    // The Windows gate stalled without a summary under vmThreads after tests were
+    // still making progress. The full suite completed with forks/1 (50 files,
+    // 260 tests, 170.26s); favor the stable worker lifecycle over parallel speed.
     environment: "happy-dom",
     setupFiles: ["./src/test/setup.ts"],
     css: false,
     restoreMocks: true,
-    pool: "vmThreads",
-    // More workers than this oversubscribes the machine and measured slower
-    // (29.6s against 22.2s on eight logical cores).
-    maxWorkers: 4,
+    pool: "forks",
+    maxWorkers: 1,
     // StatsPage interactions exceed Vitest's 5s default on the Linux gate.
     testTimeout: 20_000,
   },

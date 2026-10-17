@@ -113,12 +113,15 @@ public sealed class JournalContractTests : IDisposable
         var (exit, output) = await Run(module, args);
         Assert.True(exit == 0, output);
 
-        // One publish per run: the only per-run difference is the directory (a GUID suffix
-        // under a per-run root), so both its raw and JSON-escaped forms become one token.
+        // One publish per run: the artifact directory and the id referenced from planRefs
+        // both contain a fresh suffix, so normalize those identifiers while retaining the
+        // structure and cross-references in the payloads.
         var directory = Assert.Single(Directory.GetDirectories(artifactRoot));
+        var artifactId = ArtifactIds.FromDirectory(directory)!;
         string Normalize(string text) => text
             .Replace(System.Text.Json.JsonSerializer.Serialize(directory)[1..^1], "<artifact>", StringComparison.Ordinal)
-            .Replace(directory, "<artifact>", StringComparison.Ordinal);
+            .Replace(directory, "<artifact>", StringComparison.Ordinal)
+            .Replace(artifactId, "<artifact-id>", StringComparison.Ordinal);
         var files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories).ToDictionary(
             path => Path.GetRelativePath(directory, path).Replace('\\', '/'),
             path => NormalizeArtifactFile(path, Normalize),

@@ -129,6 +129,10 @@ public class SqlHarnessCompareTests
         Assert.Empty(report.Baseline.Warnings);
         Assert.Contains(report.Candidate.Operators, op => op is { NodeId: 2, PhysicalOp: "Hash Match", HasSpill: true });
         Assert.Contains("SpillToTempDb", report.Candidate.Warnings);
+        var legacyCandidateOperator = Assert.Single(report.Candidate.Operators);
+        Assert.Null(legacyCandidateOperator.Statement);
+        Assert.Null(legacyCandidateOperator.NodePath);
+        Assert.Null(legacyCandidateOperator.Cursor);
     }
 
     [Fact]

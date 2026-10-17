@@ -616,9 +616,13 @@ public static class McpToolCatalog
     public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
     public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
     public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
-    public const string MeasureDescription = "Measure one query across repeats. Sets rotate on one session/shared cache; setup binds the first set once. Results report per-set stability, not cross-set equivalence.";
-    public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode.";
+    public const string MeasureDescription = "Measure one query across repeats. Sets rotate on one session/shared cache; setup binds the first set once. Results report per-set stability, not cross-set equivalence. Dry-run reports validation: passed, execution: not-run, and setup classification.";
+    public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode: pass means no elapsed regression under policy, not improvement. Observed equivalence follows the selected ordering, duplicate and nullability rules; it is not domain equivalence. Dry-run reports validation: passed, execution: not-run, and setup/baseline/candidate classifications.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
+    public const string ArtifactDescription = "Read an existing saved artifact offline. Use its returned continuation for matrix-cells, statements, operators, or plan pages; plan nodes report omittedChildCount and omittedSubtreeCount when clipped.";
+    public const string WatchDescription = "Poll a bounded query until its stop condition or duration limit. Poll output has no continuation; inspect emitted polls, source omissions, and projection omissions in this response.";
+    public const string QueryDescription = "A query duration is one execution's elapsed time, not benchmark evidence. Estimated plan rows are optimizer estimates; actualRows are observed rows and executions is the operator count. Dry-run reports validation: passed and execution: not-run.";
+    public const string PlanDescription = "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only. Clipped nodes report omittedChildCount and omittedSubtreeCount.";
     public const string RepetitionDescription = "Measured repetition for section=plan; default is the identified last measured run. A run without a saved plan reports missing evidence, never an earlier plan.";
 
     public static readonly IReadOnlyList<string> ToolNames =
@@ -652,14 +656,14 @@ public static class McpToolCatalog
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
             factory.Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
-            factory.Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query against the supplied request scope."), true, false, null, true),
+            factory.Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query against the supplied request scope. " + QueryDescription), true, false, null, true),
             factory.Tool(ToolNames[2], nameof(McpRequestToolHandlers.MutationAsync), MutationDescription, null, false, null, true),
             factory.Tool(ToolNames[3], nameof(McpRequestToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
             factory.Tool(ToolNames[4], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
-            factory.Tool(ToolNames[5], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
+            factory.Tool(ToolNames[5], nameof(McpRequestToolHandlers.WatchAsync), WatchDescription, true, false, null, true),
             factory.Tool(ToolNames[6], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
-            factory.Tool(ToolNames[7], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
-            factory.Tool(ToolNames[8], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
+            factory.Tool(ToolNames[7], nameof(McpRequestToolHandlers.PlanAsync), PlanDescription, true, false, true, false),
+            factory.Tool(ToolNames[8], nameof(McpRequestToolHandlers.ArtifactAsync), ArtifactDescription + " Against the supplied request scope.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
@@ -698,14 +702,14 @@ public static class McpToolCatalog
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
             factory.Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
-            factory.Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root."), true, false, null, true),
+            factory.Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root. " + QueryDescription), true, false, null, true),
             factory.Tool(ToolNames[2], nameof(McpToolHandlers.MutationAsync), MutationDescription, null, false, null, true),
             factory.Tool(ToolNames[3], nameof(McpToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
             factory.Tool(ToolNames[4], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
-            factory.Tool(ToolNames[5], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
+            factory.Tool(ToolNames[5], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until or untilUnchanged, within interval/maxDuration bounds. " + WatchDescription, true, false, null, true),
             factory.Tool(ToolNames[6], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true),
-            factory.Tool(ToolNames[7], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
-            factory.Tool(ToolNames[8], nameof(McpToolHandlers.ArtifactAsync), "Read a safe section (summary, metrics, operators, statements, matrix-cells, or plan) of a saved benchmark artifact.", true, false, true, false),
+            factory.Tool(ToolNames[7], nameof(McpToolHandlers.PlanAsync), PlanDescription, true, false, true, false),
+            factory.Tool(ToolNames[8], nameof(McpToolHandlers.ArtifactAsync), ArtifactDescription + " Sections: summary, metrics, operators, statements, matrix-cells, and plan.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");

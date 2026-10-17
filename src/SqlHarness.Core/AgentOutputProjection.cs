@@ -102,6 +102,17 @@ public sealed record AgentWatchOutput(
     int OmittedPolls = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedEmittedPolls = 0);
 
+/// <summary>CLI watch output keeps the established numeric enum representation.</summary>
+public sealed record AgentCliWatchOutput(
+    SqlHarnessTargetIdentityReport Target,
+    int PollCount,
+    long ElapsedMilliseconds,
+    WatchExitReason ExitReason,
+    IReadOnlyList<AgentWatchPollOutput> EmittedPolls,
+    int TotalChangedPolls = 0,
+    int OmittedPolls = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedEmittedPolls = 0);
+
 public sealed record AgentWatchPollOutput(
     int Poll,
     long ElapsedMilliseconds,
@@ -333,15 +344,25 @@ public static class AgentOutputProjection
                         return new AgentWatchPollOutput(poll.Poll, poll.ElapsedMilliseconds, poll.ResultHash, compact.ResultSets);
                     }).ToArray();
                     omissions += clippedItems;
-                    return new AgentWatchOutput(
-                        watch.Target,
-                        watch.PollCount,
-                        watch.ElapsedMilliseconds,
-                        AgentProjectionNames.WatchExitReason(watch.ExitReason),
-                        polls,
-                        watch.TotalChangedPolls,
-                        watch.OmittedPolls,
-                        watch.EmittedPolls.Count - polls.Length);
+                    return profile == AgentProjectionProfile.Mcp
+                        ? new AgentWatchOutput(
+                            watch.Target,
+                            watch.PollCount,
+                            watch.ElapsedMilliseconds,
+                            AgentProjectionNames.WatchExitReason(watch.ExitReason),
+                            polls,
+                            watch.TotalChangedPolls,
+                            watch.OmittedPolls,
+                            watch.EmittedPolls.Count - polls.Length)
+                        : new AgentCliWatchOutput(
+                            watch.Target,
+                            watch.PollCount,
+                            watch.ElapsedMilliseconds,
+                            watch.ExitReason,
+                            polls,
+                            watch.TotalChangedPolls,
+                            watch.OmittedPolls,
+                            watch.EmittedPolls.Count - polls.Length);
                 case SqlHarnessSnapshotReport snapshot:
                     var snapshotName = Clip(snapshot.Name)!;
                     var differences = Take(snapshot.Differences);

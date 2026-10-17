@@ -186,6 +186,8 @@ Request mode is SQL Server only: `query`, `measure`, `compare`, `watch`, `snapsh
 
 File reads require absolute paths lexically under a configured root, reject UNC paths, and honor byte caps; the reader does not resolve links or guard against changes by the same OS user. See [the MCP contract](docs/mcp.md) for both client-entry shapes, scope behavior, and limits.
 
+For output interpretation, the [tool contract](docs/mcp/tools.md) defines comparison verdicts, query and plan row fields, dry-run reports, and artifact/watch continuation behavior. The [runtime contract](docs/mcp/runtime.md) defines response and catalog budgets.
+
 <a id="agent-startup"></a>
 
 ## Check your configuration
