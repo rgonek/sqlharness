@@ -70,18 +70,29 @@ public static class OptimizationSummaryBuilder
         var defaultA = primary.Select(item => item.BaselineVersion).FirstOrDefault(version => version is not null)
             ?? primary.Select(item => item.CandidateVersion).FirstOrDefault(version => version is not null)
             ?? "v0";
-        var defaultB = defaultA;
-        foreach (var attempt in primary)
-        {
-            if (attempt.BaselineVersion != defaultB || attempt.CandidateVersion is null)
-                continue;
-            if (!Equivalent(attempt.Compare))
-                break;
-            defaultB = attempt.CandidateVersion;
-        }
+        var defaultB = NewestEquivalentReachable(primary, defaultA);
 
         return new ConditionsGroup(fingerprint, GroupLabel(compares), scopes, defaultA,
             defaultB == defaultA ? null : defaultB);
+    }
+
+    private static string NewestEquivalentReachable(IReadOnlyList<VersionedCompare> compares, string start)
+    {
+        var reachable = new HashSet<string>(StringComparer.Ordinal) { start };
+        var pending = new Queue<string>();
+        pending.Enqueue(start);
+        while (pending.TryDequeue(out var version))
+        {
+            foreach (var attempt in compares)
+            {
+                if (attempt.BaselineVersion != version || attempt.CandidateVersion is null || !Equivalent(attempt.Compare))
+                    continue;
+                if (reachable.Add(attempt.CandidateVersion))
+                    pending.Enqueue(attempt.CandidateVersion);
+            }
+        }
+
+        return reachable.OrderBy(NumericVersion).ThenBy(version => version, StringComparer.Ordinal).Last();
     }
 
     private static IReadOnlyList<VersionRow> BuildVersions(IReadOnlyList<VersionedCompare> compares)
@@ -140,22 +151,21 @@ public static class OptimizationSummaryBuilder
         if (cases.Count == 0 || cases.Any(item => item.ResultsEquivalent is null))
             return "incomplete";
 
-        var measured = MetricsFor(compare, variant).ToDictionary(metric => metric.CaseId, StringComparer.Ordinal);
-        if (cases.Any(item => !measured.TryGetValue(item.CaseId, out var metric) || metric.LogicalReadsMedian is null))
+        var baseline = MetricsFor(compare, "baseline").ToDictionary(metric => metric.CaseId, StringComparer.Ordinal);
+        var candidate = MetricsFor(compare, "candidate").ToDictionary(metric => metric.CaseId, StringComparer.Ordinal);
+        if (cases.Any(item => !baseline.TryGetValue(item.CaseId, out var before) || before.LogicalReadsMedian is null
+            || !candidate.TryGetValue(item.CaseId, out var after) || after.LogicalReadsMedian is null))
             return "incomplete";
 
         if (variant.Equals("baseline", StringComparison.OrdinalIgnoreCase))
             return $"{cases.Count.ToString(CultureInfo.InvariantCulture)}/{cases.Count.ToString(CultureInfo.InvariantCulture)} ok";
 
-        var baseline = MetricsFor(compare, "baseline").ToDictionary(metric => metric.CaseId, StringComparer.Ordinal);
-        var candidate = MetricsFor(compare, "candidate").ToDictionary(metric => metric.CaseId, StringComparer.Ordinal);
         var better = 0;
         var worse = 0;
         foreach (var item in cases)
         {
-            if (!baseline.TryGetValue(item.CaseId, out var before) || !candidate.TryGetValue(item.CaseId, out var after)
-                || before.LogicalReadsMedian is not { } beforeReads || after.LogicalReadsMedian is not { } afterReads)
-                continue;
+            var beforeReads = baseline[item.CaseId].LogicalReadsMedian!.Value;
+            var afterReads = candidate[item.CaseId].LogicalReadsMedian!.Value;
             if (Change(beforeReads, afterReads) == "better") better++;
             else if (Change(beforeReads, afterReads) == "worse") worse++;
         }

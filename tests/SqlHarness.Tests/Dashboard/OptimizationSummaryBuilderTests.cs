@@ -46,6 +46,19 @@ public sealed class OptimizationSummaryBuilderTests
     }
 
     [Fact]
+    public void Default_pair_continues_past_a_failed_edge_to_later_equivalent_branch()
+    {
+        var section = OptimizationSummaryBuilder.Build([
+            Compare(1, "orders", "whole", "db", "f", "h0", "h1", equivalent: false),
+            Compare(2, "orders", "whole", "db", "f", "h0", "h2"),
+        ]);
+
+        var group = Assert.Single(Assert.Single(section.Subjects).Groups);
+        Assert.Equal("v0", group.DefaultA);
+        Assert.Equal("v2", group.DefaultB);
+    }
+
+    [Fact]
     public void Equivalence_off_is_never_default_b()
     {
         var section = OptimizationSummaryBuilder.Build([
@@ -82,6 +95,29 @@ public sealed class OptimizationSummaryBuilderTests
         Assert.Equal("1 better · 1 worse", candidate.CaseOutcome);
         Assert.Equal(2995, candidate.LogicalReadsSum);
         Assert.Equal(998, candidate.LogicalReadsMean);
+    }
+
+    [Fact]
+    public void Candidate_outcome_is_incomplete_when_any_baseline_case_metric_is_missing()
+    {
+        var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
+        {
+            Cases =
+            [
+                new CompareCaseEvidence("0", "@CustomerId = 1", null, true, null),
+                new CompareCaseEvidence("1", "@CustomerId = 2", null, true, null),
+            ],
+            Metrics =
+            [
+                Metric("baseline", "0", 100), Metric("candidate", "0", 100),
+                Metric("candidate", "1", 100),
+            ],
+        };
+
+        var candidate = Assert.Single(Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build([compare]).Subjects).Groups).Scopes)
+            .Versions.Single(version => version.Version == "v1");
+
+        Assert.Equal("incomplete", candidate.CaseOutcome);
     }
 
     [Fact]
