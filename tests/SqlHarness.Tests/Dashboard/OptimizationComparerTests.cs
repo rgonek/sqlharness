@@ -92,6 +92,8 @@ public sealed class OptimizationComparerTests
         Assert.Equal("Tenant A", Assert.Single(result.Cases).Label);
         AssertAction(result.BeforeAction, 214, "baseline", "matrix-0");
         AssertAction(result.AfterAction, 215, "measure", "set-tenant-a");
+        Assert.Equal("matrix-0", result.BeforeAction?.CaseIdsByFingerprint["case-fp-a"]);
+        Assert.Equal("set-tenant-a", result.AfterAction?.CaseIdsByFingerprint["case-fp-a"]);
     }
 
     [Fact]

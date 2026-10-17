@@ -16,7 +16,7 @@ const comparison: OptimizationComparison = {
 }
 
 function renderPanel(payload = comparison, versions = [{ version: "v0", hash: "h0", logicalReadsSum: 100, logicalReadsMean: 100, scansSum: 4, elapsedMedianMs: 10, caseOutcome: "1/1 ok", measuredIn: [214], latestOperationId: 214 }, { version: "v3", hash: "h3", logicalReadsSum: 135, logicalReadsMean: 135, scansSum: 2, elapsedMedianMs: 11, caseOutcome: "worse", measuredIn: [214], latestOperationId: 214 }], searchUrl = "/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v0&b=v3&case=all&agg=sum") {
-  stubFetch({
+  const calls = stubFetch({
     "/api/sessions/7": sessionDetail({ session: session({ id: 7, hasCompare: true }), operations: [operation({ id: 70, operation: "compare" })] }),
     "/api/sessions/7/optimization": { subjects: [{ subject: "Orders", database: "shop", engine: "SqlServer", groups: [
       { fingerprint: "fp-1", label: "1 case", subject: "Orders", database: "shop", defaultA: "v0", defaultB: "v3", scopes: [{ scope: "whole query", defaultA: "v0", defaultB: "v3", versions }] },
@@ -31,7 +31,7 @@ function renderPanel(payload = comparison, versions = [{ version: "v0", hash: "h
     "/api/operations/214/optimization?case=all&aggregate=sum": comparison,
     "/api/operations/214/optimization?case=customer-9001&aggregate=mean": comparison,
   })
-  return renderApp(searchUrl)
+  return { ...renderApp(searchUrl), calls }
 }
 
 test("shows basis, case chips, mixed warning, collapsed rows and URL-backed selectors", async () => {
@@ -92,6 +92,29 @@ test("SQL diff starts at the selected non-default A/B pair", async () => {
   await userEvent.click(await screen.findByRole("button", { name: "SQL diff" }))
   expect(await screen.findByRole("combobox", { name: "From version" })).toHaveValue(JSON.stringify(["v1", "h1"]))
   expect(screen.getByRole("combobox", { name: "To version" })).toHaveValue(JSON.stringify(["v2", "h2"]))
+})
+
+test("reproduction actions resolve a selected fingerprint to each side's raw case ID", async () => {
+  const cases = [
+    { id: "fingerprint-a", label: "@CustomerId = 1", outcome: "same" },
+    { id: "fingerprint-b", label: "@CustomerId = 2", outcome: "better" },
+  ]
+  const payload: OptimizationComparison = {
+    ...comparison,
+    cases,
+    beforeAction: { operationId: 214, side: "baseline", caseIds: ["baseline-raw-a", "baseline-raw-b"],
+      caseIdsByFingerprint: { "fingerprint-a": "baseline-raw-a", "fingerprint-b": "baseline-raw-b" } },
+    afterAction: { operationId: 214, side: "candidate", caseIds: ["candidate-raw-a", "candidate-raw-b"],
+      caseIdsByFingerprint: { "fingerprint-a": "candidate-raw-a", "fingerprint-b": "candidate-raw-b" } },
+  }
+  const { calls } = renderPanel(payload)
+
+  await userEvent.click(await screen.findByRole("button", { name: "@CustomerId = 2" }))
+
+  await expect.poll(() => calls.some(call => call.includes("/repro?") && call.includes("case=baseline-raw-b"))).toBe(true)
+  await expect.poll(() => calls.some(call => call.includes("/repro?") && call.includes("case=candidate-raw-b"))).toBe(true)
+  expect(calls.some(call => call.includes("/repro?") && call.includes("case=baseline-raw-a"))).toBe(true)
+  expect(calls.some(call => call.includes("/repro?") && call.includes("case=candidate-raw-a"))).toBe(true)
 })
 
 test("operation navigation round-trips the selected multi-group session search", async () => {

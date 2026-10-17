@@ -22,6 +22,8 @@ function basisLabel(comparison: OptimizationComparison): string {
 
 function actionCase(action: OptimizationActionReference | null | undefined, selectedCase: string): string | null {
   if (!action?.caseIds.length) return null
+  const mappedCaseId = action.caseIdsByFingerprint?.[selectedCase]
+  if (mappedCaseId) return mappedCaseId
   return action.caseIds.includes(selectedCase) ? selectedCase : action.caseIds[0]
 }
 

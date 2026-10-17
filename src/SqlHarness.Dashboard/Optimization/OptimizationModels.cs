@@ -104,7 +104,11 @@ public sealed record OptimizationComparison(
     public PostgresBuffers? BuffersAfter { get; init; }
 }
 
-public sealed record OptimizationActionReference(long OperationId, string Side, IReadOnlyList<string> CaseIds);
+public sealed record OptimizationActionReference(long OperationId, string Side, IReadOnlyList<string> CaseIds)
+{
+    public IReadOnlyDictionary<string, string> CaseIdsByFingerprint { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+}
 
 public sealed record CaseOption(string Id, string Label, string Outcome);
 public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);

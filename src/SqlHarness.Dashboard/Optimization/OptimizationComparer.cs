@@ -119,8 +119,16 @@ public static class OptimizationComparer
             BuffersAfter = buffersAfter,
         };
 
-        static OptimizationActionReference Action(VersionSnapshot snapshot) =>
-            new(snapshot.OperationId, snapshot.Variant, snapshot.Metrics.Values.Select(metric => metric.CaseId).Order(StringComparer.Ordinal).ToArray());
+        static OptimizationActionReference Action(VersionSnapshot snapshot)
+        {
+            var caseIdsByFingerprint = snapshot.Metrics.ToDictionary(pair => pair.Key,
+                pair => pair.Value.CaseId, StringComparer.Ordinal);
+            return new OptimizationActionReference(snapshot.OperationId, snapshot.Variant,
+                caseIdsByFingerprint.Values.Order(StringComparer.Ordinal).ToArray())
+            {
+                CaseIdsByFingerprint = caseIdsByFingerprint,
+            };
+        }
 
     }
 
