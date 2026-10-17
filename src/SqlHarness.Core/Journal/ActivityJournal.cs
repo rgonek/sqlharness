@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
@@ -572,49 +573,158 @@ public sealed class ActivityJournal : IActivityJournal
 
     private void Migrate()
     {
-        using var connection = Connect();
-        var version = UserVersion(connection);
-        if (version > JournalSchema.CurrentVersion)
-            throw new JournalSchemaTooNewException();
-        if (version == JournalSchema.CurrentVersion)
-            return;
+        using var migrationLock = AcquireMigrationLock();
+        long version;
+        using (var connection = Connect())
+        {
+            version = UserVersion(connection);
+            if (version > JournalSchema.CurrentVersion)
+                throw new JournalSchemaTooNewException();
+            if (version == JournalSchema.CurrentVersion)
+                return;
 
-        // auto_vacuum only takes effect before the first table exists; WAL persists in the file.
+            if (version > 0 && version < JournalSchema.FirstRetainedVersion)
+            {
+                if (HasPendingMutationRequests(connection))
+                    throw new InvalidOperationException("The older journal contains pending mutation requests.");
+
+                var checkpoint = Checkpoint(connection);
+                if (checkpoint is { Busy: not 0 })
+                    throw new InvalidOperationException("The older journal is in use by another process.");
+            }
+            else if (version != 0)
+            {
+                MigrateRetainedJournal(connection, version);
+                return;
+            }
+        }
+
+        if (version > 0)
+        {
+            var currentVersion = ReadVersionExclusively();
+            if (currentVersion > JournalSchema.CurrentVersion)
+                throw new JournalSchemaTooNewException();
+            if (currentVersion == JournalSchema.CurrentVersion)
+                return;
+            if (currentVersion > 0 && currentVersion < JournalSchema.FirstRetainedVersion)
+                RenameJournal($".v{currentVersion}-{_time.GetUtcNow().UtcDateTime.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture)}.bak");
+            else
+                throw new InvalidOperationException("The journal version changed while the migration lock was held.");
+        }
+
+        using var fresh = Connect();
+        CreateCurrentJournal(fresh);
+    }
+
+    private void Quarantine()
+    {
+        var suffix = ".corrupt-" + _time.GetUtcNow().UtcDateTime.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
+        using var migrationLock = AcquireMigrationLock();
+        RenameJournal(suffix);
+    }
+
+    private FileStream AcquireMigrationLock()
+    {
+        var lockPath = _path + ".upgrade.lock";
+        var waitTimer = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            try
+            {
+                var migrationLock = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                OwnerOnlyFiles.File(lockPath);
+                return migrationLock;
+            }
+            catch (IOException) when (waitTimer.Elapsed < TimeSpan.FromSeconds(30))
+            {
+                Thread.Sleep(25);
+            }
+        }
+    }
+
+    private uint ReadVersionExclusively()
+    {
+        using var database = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.None);
+        Span<byte> version = stackalloc byte[sizeof(uint)];
+        database.Position = 60;
+        database.ReadExactly(version);
+        return BinaryPrimitives.ReadUInt32BigEndian(version);
+    }
+
+    private void RenameJournal(string suffix)
+    {
+        var moved = new List<(string Source, string Destination)>();
+        try
+        {
+            foreach (var side in new[] { string.Empty, "-wal", "-shm" })
+            {
+                var source = _path + side;
+                if (!File.Exists(source))
+                    continue;
+                var destination = _path + suffix + side;
+                File.Move(source, destination);
+                moved.Add((source, destination));
+            }
+        }
+        catch
+        {
+            foreach (var (source, destination) in moved.AsEnumerable().Reverse())
+            {
+                if (File.Exists(destination) && !File.Exists(source))
+                    File.Move(destination, source);
+            }
+            throw;
+        }
+    }
+
+    private static bool HasPendingMutationRequests(SqliteConnection connection)
+    {
+        if (!TableExists(connection, "mutation_requests"))
+            return false;
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS (SELECT 1 FROM mutation_requests WHERE state IN ('pending', 'approved', 'executing'));";
+        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture) != 0;
+    }
+
+    private static bool TableExists(SqliteConnection connection, string name)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = $name);";
+        command.Parameters.AddWithValue("$name", name);
+        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture) != 0;
+    }
+
+    private static (long Busy, long Log, long Checkpointed)? Checkpoint(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+        try
+        {
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+                return null;
+            return (reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2));
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode == 1)
+        {
+            return null;
+        }
+    }
+
+    private void CreateCurrentJournal(SqliteConnection connection)
+    {
         Execute(connection, "PRAGMA auto_vacuum = INCREMENTAL;");
         Execute(connection, "PRAGMA journal_mode = WAL;");
         Execute(connection, "BEGIN IMMEDIATE;");
         try
         {
-            // Re-check under the write lock: a concurrent process may have migrated first.
-            var locked = UserVersion(connection);
-            if (locked > JournalSchema.CurrentVersion)
-                throw new JournalSchemaTooNewException();
-            if (locked < 1)
-                Execute(connection, JournalSchema.Version1);
-            if (locked < 2)
-                Execute(connection, JournalSchema.Version2);
-            if (locked < 3)
-                Execute(connection, JournalSchema.Version3);
-            if (locked < 4)
-                Execute(connection, JournalSchema.Version4);
-            if (locked < 5)
-                Execute(connection, JournalSchema.Version5);
-            if (locked < 6)
-                Execute(connection, JournalSchema.Version6);
-            if (locked < 7)
-                Execute(connection, JournalSchema.Version7);
-            if (locked < 8)
-                Execute(connection, JournalSchema.Version8);
-            if (locked < 9)
-                Execute(connection, JournalSchema.Version9);
-            if (locked < 10)
-                Execute(connection, JournalSchema.Version10);
-            if (locked < 11)
-                Execute(connection, JournalSchema.Version11);
-            if (locked < 12)
-                Execute(connection, JournalSchema.Version12);
-            if (locked < 13)
-                Execute(connection, JournalSchema.Version13);
+            Execute(connection, JournalSchema.Current);
+            using (var insert = connection.CreateCommand())
+            {
+                insert.CommandText = "INSERT INTO journal_meta (key, value) VALUES ('fingerprint_salt', $salt);";
+                insert.Parameters.AddWithValue("$salt", System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+                insert.ExecuteNonQuery();
+            }
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }
@@ -627,14 +737,35 @@ public sealed class ActivityJournal : IActivityJournal
         ProtectFiles();
     }
 
-    private void Quarantine()
+    private static void MigrateRetainedJournal(SqliteConnection connection, long version)
     {
-        var suffix = ".corrupt-" + _time.GetUtcNow().UtcDateTime.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
-        foreach (var side in new[] { string.Empty, "-wal", "-shm" })
+        Execute(connection, "PRAGMA journal_mode = WAL;");
+        Execute(connection, "BEGIN IMMEDIATE;");
+        try
         {
-            var file = _path + side;
-            if (File.Exists(file))
-                File.Move(file, _path + suffix + side);
+            var locked = UserVersion(connection);
+            if (locked > JournalSchema.CurrentVersion)
+                throw new JournalSchemaTooNewException();
+            if (locked == JournalSchema.CurrentVersion)
+            {
+                Execute(connection, "ROLLBACK;");
+                return;
+            }
+            if (locked != version || locked < JournalSchema.FirstRetainedVersion)
+                throw new InvalidOperationException("The journal version changed while the migration lock was held.");
+            for (var next = checked((int)locked + 1); next <= JournalSchema.CurrentVersion; next++)
+            {
+                if (!JournalSchema.Migrations.TryGetValue(next, out var migration))
+                    throw new InvalidOperationException($"No journal migration is registered for version {next}.");
+                Execute(connection, migration);
+                Execute(connection, $"PRAGMA user_version = {next};");
+            }
+            Execute(connection, "COMMIT;");
+        }
+        catch
+        {
+            Execute(connection, "ROLLBACK;");
+            throw;
         }
     }
 

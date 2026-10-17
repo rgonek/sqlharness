@@ -18,11 +18,137 @@ public sealed class ActivityJournalTests
     public void Open_creates_current_schema_in_wal_mode()
     {
         using var temp = new JournalTempDirectory();
-
-        Assert.IsType<ActivityJournal>(Open(temp, TextWriter.Null));
+        using var log = new StringWriter();
+        var journal = Open(temp, log);
+        Assert.True(journal is ActivityJournal, log.ToString());
 
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         Assert.Equal("wal", JournalDb.Rows(temp.DatabasePath, "PRAGMA journal_mode")[0]["journal_mode"]);
+    }
+
+    [Fact]
+    public void Opening_older_journal_keeps_backup_and_creates_current()
+    {
+        using var temp = new JournalTempDirectory();
+        SeedLegacyJournal(temp.DatabasePath, 13, "legacy-row");
+
+        var journal = Open(temp, TextWriter.Null);
+
+        var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "activity.db.v13-*.bak"));
+        Assert.Contains("activity.db.v13-", Path.GetFileName(backup), StringComparison.Ordinal);
+        Assert.Equal("legacy-row", JournalDb.Rows(backup, "SELECT value FROM legacy_data").Single()["value"]);
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operations"));
+        var salt = JournalDb.Rows(temp.DatabasePath, "SELECT value FROM journal_meta WHERE key = 'fingerprint_salt'").Single()["value"];
+        Assert.IsType<byte[]>(salt);
+        Assert.Equal(32, ((byte[])salt!).Length);
+        Assert.IsType<ActivityJournal>(journal);
+    }
+
+    [Fact]
+    public void Current_journal_opens_without_rename()
+    {
+        using var temp = new JournalTempDirectory();
+        var first = Open(temp, TextWriter.Null);
+        first.Begin(JournalTestData.Session(), JournalTestData.Start());
+
+        var second = Open(temp, TextWriter.Null);
+
+        Assert.IsType<ActivityJournal>(second);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "activity.db.*.bak"));
+        Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operations"));
+    }
+
+    [Fact]
+    public void Newer_journal_still_reports_too_new()
+    {
+        using var temp = new JournalTempDirectory();
+        SeedLegacyJournal(temp.DatabasePath, JournalSchema.CurrentVersion + 1, "newer-row");
+        using var log = new StringWriter();
+
+        var journal = Open(temp, log);
+
+        Assert.IsType<NullActivityJournal>(journal);
+        Assert.Contains("activity journal schema is newer", log.ToString(), StringComparison.Ordinal);
+        Assert.Equal("newer-row", JournalDb.Rows(temp.DatabasePath, "SELECT value FROM legacy_data").Single()["value"]);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "*.bak"));
+    }
+
+    [Fact]
+    public void Locked_old_journal_reports_and_keeps_file()
+    {
+        using var temp = new JournalTempDirectory();
+        SeedLegacyJournal(temp.DatabasePath, 13, "legacy-row");
+        using var heldConnection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = temp.DatabasePath,
+            Pooling = false,
+        }.ToString());
+        heldConnection.Open();
+        using var log = new StringWriter();
+
+        var journal = Open(temp, log);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+
+        Assert.IsType<NullActivityJournal>(journal);
+        Assert.Null(handle);
+        Assert.Contains("activity journal unavailable", log.ToString(), StringComparison.Ordinal);
+        Assert.Equal(13L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal("legacy-row", JournalDb.Rows(temp.DatabasePath, "SELECT value FROM legacy_data").Single()["value"]);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "*.bak"));
+    }
+
+    [Fact]
+    public async Task Concurrent_old_journal_openers_create_one_backup_and_keep_new_journal()
+    {
+        using var temp = new JournalTempDirectory();
+        SeedLegacyJournal(temp.DatabasePath, 13, "legacy-row");
+        using var start = new ManualResetEventSlim();
+
+        var openers = Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
+        {
+            start.Wait();
+            return Open(temp, TextWriter.Null);
+        })).ToArray();
+        start.Set();
+        var journals = await Task.WhenAll(openers);
+
+        Assert.All(journals, journal => Assert.IsType<ActivityJournal>(journal));
+        Assert.Single(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "activity.db.v13-*.bak"));
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'operations'"));
+    }
+
+    [Fact]
+    public void Pending_mutation_requests_refuse_fresh_start()
+    {
+        using var temp = new JournalTempDirectory();
+        SeedLegacyJournal(temp.DatabasePath, 13, "legacy-row", pendingMutation: true);
+        using var log = new StringWriter();
+
+        var journal = Open(temp, log);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+
+        Assert.IsType<NullActivityJournal>(journal);
+        Assert.Null(handle);
+        Assert.Contains("activity journal unavailable", log.ToString(), StringComparison.Ordinal);
+        Assert.Equal(13L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal("legacy-row", JournalDb.Rows(temp.DatabasePath, "SELECT value FROM legacy_data").Single()["value"]);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "*.bak"));
+    }
+
+    private static void SeedLegacyJournal(string path, int version, string value, bool pendingMutation = false)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "CREATE TABLE legacy_data (value TEXT NOT NULL); INSERT INTO legacy_data VALUES ($value);";
+        if (pendingMutation)
+            command.CommandText += "CREATE TABLE mutation_requests (state TEXT NOT NULL); INSERT INTO mutation_requests VALUES ('pending');";
+        command.CommandText += $"PRAGMA user_version = {version};";
+        command.Parameters.AddWithValue("$value", value);
+        command.ExecuteNonQuery();
     }
 
     [Fact]
@@ -429,166 +555,26 @@ public sealed class ActivityJournalTests
         Assert.EndsWith("\u2026", message);
     }
 
-    [Fact]
-    public void Version_3_journal_migrates_to_current_and_keeps_rows()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(8)]
+    [InlineData(10)]
+    [InlineData(13)]
+    public void Older_journal_is_backed_up_and_replaced_with_current_schema(int version)
     {
         using var temp = new JournalTempDirectory();
-        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
-        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3 + """
-                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
-                VALUES ('cli:old', 'claude', 'cli', 'process-tree', 1, 't', 't');
-                INSERT INTO operations (session_id, operation, host_pid, started_at, updated_at, status, error_kind)
-                VALUES (1, 'query', 1, 't', 't', 'failed', 'sql_execution_failed');
-                PRAGMA user_version = 3;
-                """;
-            command.ExecuteNonQuery();
-        }
+        SeedLegacyJournal(temp.DatabasePath, version, "legacy-row");
 
-        Open(temp, TextWriter.Null);
+        _ = Open(temp, TextWriter.Null);
 
-        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
-        var row = JournalDb.Rows(temp.DatabasePath, "SELECT error_kind, error_message FROM operations")[0];
-        Assert.Equal("sql_execution_failed", row["error_kind"]);
-        Assert.Null(row["error_message"]);
+        var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, $"activity.db.v{version}-*.bak"));
+        Assert.Equal("legacy-row", JournalDb.Rows(backup, "SELECT value FROM legacy_data").Single()["value"]);
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operations"));
     }
-
-    [Fact]
-    public void Version_5_journal_migrates_to_current_with_null_metadata()
-    {
-        using var temp = new JournalTempDirectory();
-        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
-        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3
-                + JournalSchema.Version4 + JournalSchema.Version5 + """
-                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
-                VALUES ('mcp:old', 'claude', 'mcp', 'mcp-clientinfo', 1, 't', 't');
-                INSERT INTO operations (session_id, operation, host_pid, started_at, updated_at, status, error_kind)
-                VALUES (1, 'query', 1, 't', 't', 'failed', 'cancelled');
-                PRAGMA user_version = 5;
-                """;
-            command.ExecuteNonQuery();
-        }
-
-        Open(temp, TextWriter.Null);
-
-        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
-        var session = JournalDb.Rows(temp.DatabasePath, "SELECT client_title, roots_json FROM sessions")[0];
-        Assert.Null(session["client_title"]);
-        Assert.Null(session["roots_json"]);
-        var operation = JournalDb.Rows(temp.DatabasePath,
-            "SELECT cancel_reason, compare_subject, compare_scope, compare_conditions_json FROM operations")[0];
-        Assert.Null(operation["cancel_reason"]);
-        Assert.Null(operation["compare_subject"]);
-        Assert.Null(operation["compare_scope"]);
-        Assert.Null(operation["compare_conditions_json"]);
-    }
-
-    [Fact]
-    public void Version_6_journal_migrates_to_v11_without_inventing_legacy_provenance_or_changing_bytes()
-    {
-        using var temp = new JournalTempDirectory();
-        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
-        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3
-                + JournalSchema.Version4 + JournalSchema.Version5 + JournalSchema.Version6 + """
-                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
-                VALUES ('cli:v6', 'agent', 'cli', 'process-tree', 1, 't', 't');
-                INSERT INTO operations (session_id, operation, host_pid, started_at, updated_at, status, raw_bytes, emitted_bytes)
-                VALUES (1, 'compare', 1, 't', 't', 'succeeded', 1234, 567);
-                PRAGMA user_version = 6;
-                """;
-            command.ExecuteNonQuery();
-        }
-
-        Open(temp, TextWriter.Null);
-
-        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
-        var row = JournalDb.Rows(temp.DatabasePath,
-            "SELECT operation_ref, parent_operation_ref, dry_run, raw_bytes, emitted_bytes, compare_subject, compare_scope, compare_conditions_json FROM operations").Single();
-        Assert.Null(row["operation_ref"]);
-        Assert.Null(row["parent_operation_ref"]);
-        Assert.Equal(0L, row["dry_run"]);
-        Assert.Equal(1234L, row["raw_bytes"]);
-        Assert.Equal(567L, row["emitted_bytes"]);
-        Assert.Null(row["compare_subject"]);
-        Assert.Null(row["compare_scope"]);
-        Assert.Null(row["compare_conditions_json"]);
-    }
-
-    [Fact]
-    public void Version_8_journal_migrates_to_v11_preserving_the_annotation_schema()
-    {
-        using var temp = new JournalTempDirectory();
-        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
-        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3
-                + JournalSchema.Version4 + JournalSchema.Version5 + JournalSchema.Version6 + JournalSchema.Version7
-                + JournalSchema.Version8 + """
-                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
-                VALUES ('cli:v8', 'agent', 'cli', 'process-tree', 1, 't', 't');
-                PRAGMA user_version = 8;
-                """;
-            command.ExecuteNonQuery();
-        }
-
-        Open(temp, TextWriter.Null);
-
-        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
-        Assert.Equal("cli:v8", JournalDb.Rows(temp.DatabasePath, "SELECT session_key FROM sessions").Single()["session_key"]);
-        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM session_annotations"));
-        Assert.Single(JournalDb.Rows(temp.DatabasePath,
-            "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'ix_session_annotations_starred'"));
-    }
-
-    [Fact]
-    public void Version_10_journal_migrates_to_v11_with_empty_agent_tables_and_keeps_rows()
-    {
-        using var temp = new JournalTempDirectory();
-        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
-        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3
-                + JournalSchema.Version4 + JournalSchema.Version5 + JournalSchema.Version6 + JournalSchema.Version7
-                + JournalSchema.Version8 + JournalSchema.Version9 + JournalSchema.Version10 + """
-                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
-                VALUES ('cli:v10', 'agent', 'cli', 'process-tree', 1, 't', 't');
-                INSERT INTO operations (session_id, operation, host_pid, started_at, updated_at, status)
-                VALUES (1, 'query', 1, 't', 't', 'succeeded');
-                PRAGMA user_version = 10;
-                """;
-            command.ExecuteNonQuery();
-        }
-
-        Open(temp, TextWriter.Null);
-
-        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
-        Assert.Equal("cli:v10", JournalDb.Rows(temp.DatabasePath, "SELECT session_key FROM sessions").Single()["session_key"]);
-        Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operations"));
-        Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT setup_sql_text FROM operations").Single()["setup_sql_text"]);
-        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_phases"));
-        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_events"));
-        foreach (var table in new[] { "agent_conversations", "agent_tool_calls", "operation_agent_links", "transcript_cursors" })
-        {
-            Assert.Single(JournalDb.Rows(temp.DatabasePath, $"SELECT name FROM sqlite_master WHERE type = 'table' AND name = '{table}'"));
-            Assert.Empty(JournalDb.Rows(temp.DatabasePath, $"SELECT * FROM {table}"));
-        }
-    }
-
     [Fact]
     public void Session_title_keeps_first_value_and_roots_keep_latest_non_null()
     {

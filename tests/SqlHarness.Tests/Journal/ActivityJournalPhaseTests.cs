@@ -12,7 +12,7 @@ public sealed class ActivityJournalPhaseTests
     [Theory]
     [InlineData(7)]
     [InlineData(9)]
-    public void Legacy_journals_migrate_to_current_schema_with_phase_tables_without_losing_rows(int version)
+    public void Legacy_journals_are_backed_up_before_current_schema_is_created(int version)
     {
         using var temp = new JournalTempDirectory();
         CreateLegacyJournal(temp.DatabasePath, version);
@@ -21,15 +21,12 @@ public sealed class ActivityJournalPhaseTests
             new FixedTimeProvider(JournalTestData.T0));
 
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
-        var row = JournalDb.Rows(temp.DatabasePath,
-            "SELECT operation, status, compare_subject FROM operations").Single();
-        Assert.Equal("query", row["operation"]);
-        Assert.Equal("succeeded", row["status"]);
-        Assert.Equal(version >= 8 ? "legacy-subject" : null, row["compare_subject"]);
+        var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, $"activity.db.v{version}-*.bak"));
+        Assert.Equal("legacy-row", JournalDb.Rows(backup, "SELECT value FROM legacy_data").Single()["value"]);
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operations"));
         Assert.Equal(2, JournalDb.Rows(temp.DatabasePath,
             "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('operation_phases', 'operation_events')").Count);
-        if (version == 9)
-            Assert.Equal("legacy-title", JournalDb.Rows(temp.DatabasePath, "SELECT title FROM session_annotations").Single()["title"]);
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM session_annotations"));
     }
 
     [Fact]
@@ -183,28 +180,8 @@ public sealed class ActivityJournalPhaseTests
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var connection = new SqliteConnection($"Data Source={path};Pooling=False");
         connection.Open();
-        var migrations = new[]
-        {
-            JournalSchema.Version1, JournalSchema.Version2, JournalSchema.Version3,
-            JournalSchema.Version4, JournalSchema.Version5, JournalSchema.Version6,
-            JournalSchema.Version7, JournalSchema.Version8, JournalSchema.Version9,
-        };
-        for (var index = 0; index < version; index++)
-        {
-            using var migration = connection.CreateCommand();
-            migration.CommandText = migrations[index];
-            migration.ExecuteNonQuery();
-        }
-
         using var seed = connection.CreateCommand();
-        seed.CommandText = """
-            INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
-            VALUES ('legacy', 'unknown', 'cli', 'process-tree', 1, 'now', 'now');
-            INSERT INTO operations (session_id, operation, host_pid, started_at, updated_at, status)
-            VALUES (1, 'query', 1, 'now', 'now', 'succeeded');
-            """ + (version >= 8 ? "UPDATE operations SET compare_subject = 'legacy-subject' WHERE id = 1;" : string.Empty) +
-            (version >= 9 ? "INSERT INTO session_annotations (session_id, title, updated_at) VALUES (1, 'legacy-title', 'now');" : string.Empty) +
-            $"PRAGMA user_version = {version};";
+        seed.CommandText = $"CREATE TABLE legacy_data (value TEXT NOT NULL); INSERT INTO legacy_data VALUES ('legacy-row'); PRAGMA user_version = {version};";
         seed.ExecuteNonQuery();
     }
 

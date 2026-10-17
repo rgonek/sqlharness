@@ -23,7 +23,7 @@ public sealed class ActivityJournalBenchmarkTests
         ]);
 
     [Fact]
-    public void Version_1_database_migrates_to_the_current_version_and_keeps_rows()
+    public void Older_database_is_backed_up_before_current_schema_is_created()
     {
         using var temp = new JournalTempDirectory();
         Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
@@ -31,18 +31,16 @@ public sealed class ActivityJournalBenchmarkTests
         {
             connection.Open();
             using var command = connection.CreateCommand();
-            command.CommandText = JournalSchema.Version1 + """
-                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
-                VALUES ('cli:old', 'claude', 'cli', 'process-tree', 1, 't', 't');
-                PRAGMA user_version = 1;
-                """;
+            command.CommandText = "CREATE TABLE old_rows (id INTEGER PRIMARY KEY); INSERT INTO old_rows VALUES (1); PRAGMA user_version = 1;";
             command.ExecuteNonQuery();
         }
 
         Open(temp, storeSensitive: false);
 
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
-        Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM sessions WHERE session_key = 'cli:old'"));
+        var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "activity.db.v1-*.bak"));
+        Assert.Single(JournalDb.Rows(backup, "SELECT id FROM old_rows"));
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM sessions"));
         Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operation_metrics"));
         Assert.Contains("raw_bytes", JournalDb.Rows(temp.DatabasePath, "SELECT name FROM pragma_table_info('operations')").Select(r => (string)r["name"]!));
     }

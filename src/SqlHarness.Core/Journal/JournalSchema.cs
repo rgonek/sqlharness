@@ -4,9 +4,13 @@ namespace SqlHarness.Core;
 
 internal static class JournalSchema
 {
-    internal const int CurrentVersion = 13;
+    internal const int FirstRetainedVersion = 14;
+    internal const int CurrentVersion = 14;
 
-    internal const string Version1 = """
+    internal static readonly IReadOnlyDictionary<int, string> Migrations = new Dictionary<int, string>();
+
+    internal const string Current = """
+        CREATE TABLE journal_meta (key TEXT PRIMARY KEY, value BLOB NOT NULL);
         CREATE TABLE sessions (
             id INTEGER PRIMARY KEY,
             session_key TEXT NOT NULL UNIQUE,
@@ -22,7 +26,10 @@ internal static class JournalSchema
             host_started_at TEXT,
             cwd TEXT,
             first_seen TEXT NOT NULL,
-            last_seen TEXT NOT NULL
+            last_seen TEXT NOT NULL,
+            client_title TEXT,
+            roots_json TEXT,
+            protocol_version TEXT
         );
         CREATE TABLE operations (
             id INTEGER PRIMARY KEY,
@@ -53,15 +60,34 @@ internal static class JournalSchema
             sql_hash TEXT,
             candidate_sql_hash TEXT,
             sql_text TEXT,
-            candidate_sql_text TEXT
+            candidate_sql_text TEXT,
+            raw_bytes INTEGER,
+            raw_lines INTEGER,
+            emitted_bytes INTEGER,
+            emitted_lines INTEGER,
+            error_message TEXT,
+            cancel_reason TEXT,
+            client_call_id TEXT,
+            agent_model TEXT,
+            agent_reasoning_effort TEXT,
+            agent_session_id TEXT,
+            agent_turn_id TEXT,
+            agent_turn_trigger TEXT,
+            agent_thread_source TEXT,
+            operation_ref TEXT,
+            parent_operation_ref TEXT,
+            dry_run INTEGER NOT NULL DEFAULT 0,
+            compare_subject TEXT,
+            compare_scope TEXT,
+            compare_conditions_json TEXT,
+            setup_sql_text TEXT,
+            conditions_json TEXT,
+            conditions_fingerprint TEXT
         );
         CREATE INDEX ix_operations_session ON operations(session_id, id);
         CREATE INDEX ix_operations_updated ON operations(updated_at);
         CREATE INDEX ix_operations_status ON operations(status);
         CREATE INDEX ix_operations_sql_hash ON operations(sql_hash);
-        """;
-
-    internal const string Version2 = """
         CREATE TABLE operation_metrics (
             id INTEGER PRIMARY KEY,
             operation_id INTEGER NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
@@ -69,6 +95,8 @@ internal static class JournalSchema
             variant TEXT NOT NULL,
             parameter_set TEXT,
             matrix_cell INTEGER,
+            case_id TEXT NOT NULL DEFAULT '0',
+            case_label TEXT NOT NULL DEFAULT 'Case 1 of 1',
             runs INTEGER NOT NULL,
             elapsed_ms_min INTEGER, elapsed_ms_median INTEGER, elapsed_ms_max INTEGER,
             cpu_ms_min INTEGER, cpu_ms_median INTEGER, cpu_ms_max INTEGER,
@@ -108,20 +136,6 @@ internal static class JournalSchema
             gz BLOB NOT NULL,
             first_seen TEXT NOT NULL
         );
-        """;
-
-    internal const string Version3 = """
-        ALTER TABLE operations ADD COLUMN raw_bytes INTEGER;
-        ALTER TABLE operations ADD COLUMN raw_lines INTEGER;
-        ALTER TABLE operations ADD COLUMN emitted_bytes INTEGER;
-        ALTER TABLE operations ADD COLUMN emitted_lines INTEGER;
-        """;
-
-    internal const string Version4 = """
-        ALTER TABLE operations ADD COLUMN error_message TEXT;
-        """;
-
-    internal const string Version5 = """
         CREATE TABLE operation_statements (
             id INTEGER PRIMARY KEY,
             operation_id INTEGER NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
@@ -129,6 +143,8 @@ internal static class JournalSchema
             variant TEXT NOT NULL,
             parameter_set TEXT,
             matrix_cell INTEGER,
+            case_id TEXT NOT NULL DEFAULT '0',
+            case_label TEXT NOT NULL DEFAULT 'Case 1 of 1',
             statement_ordinal INTEGER NOT NULL,
             statement_hash TEXT NOT NULL,
             cpu_ms INTEGER,
@@ -138,36 +154,7 @@ internal static class JournalSchema
         );
         CREATE INDEX ix_operation_statements_operation ON operation_statements(operation_id, ordinal);
         CREATE INDEX ix_operation_statements_hash ON operation_statements(statement_hash);
-        """;
-
-    internal const string Version6 = """
-        ALTER TABLE sessions ADD COLUMN client_title TEXT;
-        ALTER TABLE sessions ADD COLUMN roots_json TEXT;
-        ALTER TABLE sessions ADD COLUMN protocol_version TEXT;
-        ALTER TABLE operations ADD COLUMN cancel_reason TEXT;
-        ALTER TABLE operations ADD COLUMN client_call_id TEXT;
-        ALTER TABLE operations ADD COLUMN agent_model TEXT;
-        ALTER TABLE operations ADD COLUMN agent_reasoning_effort TEXT;
-        ALTER TABLE operations ADD COLUMN agent_session_id TEXT;
-        ALTER TABLE operations ADD COLUMN agent_turn_id TEXT;
-        ALTER TABLE operations ADD COLUMN agent_turn_trigger TEXT;
-        ALTER TABLE operations ADD COLUMN agent_thread_source TEXT;
-        """;
-
-    internal const string Version7 = """
-        ALTER TABLE operations ADD COLUMN operation_ref TEXT;
         CREATE UNIQUE INDEX ix_operations_operation_ref ON operations(operation_ref) WHERE operation_ref IS NOT NULL;
-        ALTER TABLE operations ADD COLUMN parent_operation_ref TEXT;
-        ALTER TABLE operations ADD COLUMN dry_run INTEGER NOT NULL DEFAULT 0;
-        """;
-
-    internal const string Version8 = """
-        ALTER TABLE operations ADD COLUMN compare_subject TEXT;
-        ALTER TABLE operations ADD COLUMN compare_scope TEXT;
-        ALTER TABLE operations ADD COLUMN compare_conditions_json TEXT;
-        """;
-
-    internal const string Version9 = """
         CREATE TABLE session_annotations (
             session_id INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
             title TEXT,
@@ -177,9 +164,6 @@ internal static class JournalSchema
             updated_at TEXT NOT NULL
         );
         CREATE INDEX ix_session_annotations_starred ON session_annotations(starred) WHERE starred = 1;
-        """;
-
-    internal const string Version10 = """
         CREATE TABLE operation_phases (
             operation_id INTEGER NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
             phase TEXT NOT NULL,
@@ -199,9 +183,6 @@ internal static class JournalSchema
             detail_json TEXT,
             PRIMARY KEY (operation_id, seq)
         );
-        """;
-
-    internal const string Version11 = """
         CREATE TABLE agent_conversations (
             id INTEGER PRIMARY KEY,
             agent_kind TEXT NOT NULL,
@@ -232,23 +213,29 @@ internal static class JournalSchema
             mtime TEXT NOT NULL,
             offset INTEGER NOT NULL
         );
-        """;
-
-    internal const string Version12 = """
-        ALTER TABLE operations ADD COLUMN setup_sql_text TEXT;
-        """;
-
-    internal const string Version13 = """
         CREATE TABLE mutation_requests (
-          id INTEGER PRIMARY KEY,
-          request_id TEXT NOT NULL UNIQUE,
-          session_key TEXT NOT NULL,
-          host_pid INTEGER NOT NULL, host_started_at TEXT NULL,
-          profile TEXT NOT NULL, engine TEXT NOT NULL, server TEXT NOT NULL, database_name TEXT NOT NULL,
-          tier TEXT NOT NULL, mode TEXT NOT NULL, digest TEXT NOT NULL, environment TEXT NULL,
-          sql_text TEXT NULL, parameters_json TEXT NULL,
-          state TEXT NOT NULL, status TEXT NULL, verification TEXT NULL,
-          created_at TEXT NOT NULL, decided_at TEXT NULL, finished_at TEXT NULL);
+            id INTEGER PRIMARY KEY,
+            request_id TEXT NOT NULL UNIQUE,
+            session_key TEXT NOT NULL,
+            host_pid INTEGER NOT NULL,
+            host_started_at TEXT NULL,
+            profile TEXT NOT NULL,
+            engine TEXT NOT NULL,
+            server TEXT NOT NULL,
+            database_name TEXT NOT NULL,
+            tier TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            digest TEXT NOT NULL,
+            environment TEXT NULL,
+            sql_text TEXT NULL,
+            parameters_json TEXT NULL,
+            state TEXT NOT NULL,
+            status TEXT NULL,
+            verification TEXT NULL,
+            created_at TEXT NOT NULL,
+            decided_at TEXT NULL,
+            finished_at TEXT NULL
+        );
         CREATE INDEX ix_mutation_requests_created ON mutation_requests (created_at);
         """;
 }

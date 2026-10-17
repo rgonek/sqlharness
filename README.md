@@ -484,6 +484,8 @@ When `diagnostics.enabled` is true, schema v10 also stores bounded `operation_ev
 
 Schema v11 adds the dashboard-written derived tables `agent_conversations`, `agent_tool_calls`, `operation_agent_links`, and `transcript_cursors` for opt-in agent transcript matching. These derived records do not replace operation or operator-annotation fields. Retention removes links with their operations and removes conversations that are no longer referenced. **Clear matched data** empties all four transcript tables; it keeps session titles, notes, stars, and archive state. Operator titles and notes are stored as plain text regardless of `journal.storeSensitive`; a star does not protect a session from retention.
 
+Schema v14 starts a fresh journal. When SQLHarness opens a journal older than v14, it keeps the old database and any WAL/SHM files in a sibling `.v<version>-<utc>.bak` backup and creates a new journal. The old sessions, annotations (titles, notes, stars), and transcript cursors remain in that backup and are not copied into the new journal. An upgrade is refused while the older journal has pending mutation requests or is open in another process; SQLHarness continues without journaling. Older SQLHarness versions refuse to open a v14 journal.
+
 `sqlharness doctor --json` reports whether the config file is present and valid, the effective journal settings, and whether the journal file exists.
 
 ```json

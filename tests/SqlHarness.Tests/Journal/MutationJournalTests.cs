@@ -15,7 +15,7 @@ public sealed class MutationJournalTests
         "UPDATE accounts SET secret = 'marker'", "{\"secret\":\"marker\"}", createdAt ?? JournalTestData.T0);
 
     [Fact]
-    public void Version_12_journal_migrates_to_current_and_creates_mutation_requests()
+    public void Fresh_schema_includes_mutation_requests_after_older_journal_backup()
     {
         using var temp = new JournalTempDirectory();
         Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
@@ -23,16 +23,15 @@ public sealed class MutationJournalTests
         {
             connection.Open();
             using var command = connection.CreateCommand();
-            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3
-                + JournalSchema.Version4 + JournalSchema.Version5 + JournalSchema.Version6 + JournalSchema.Version7
-                + JournalSchema.Version8 + JournalSchema.Version9 + JournalSchema.Version10 + JournalSchema.Version11
-                + JournalSchema.Version12 + "PRAGMA user_version = 12;";
+            command.CommandText = "CREATE TABLE old_rows (id INTEGER PRIMARY KEY); INSERT INTO old_rows VALUES (1); PRAGMA user_version = 12;";
             command.ExecuteNonQuery();
         }
 
         Open(temp);
 
-        Assert.Equal(13, JournalSchema.CurrentVersion);
+        Assert.Equal(14, JournalSchema.CurrentVersion);
+        var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "activity.db.v12-*.bak"));
+        Assert.Single(JournalDb.Rows(backup, "SELECT id FROM old_rows"));
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
         Assert.Equal(new[] { "id", "request_id", "session_key", "host_pid", "host_started_at", "profile", "engine", "server", "database_name", "tier", "mode", "digest",
             "environment", "sql_text", "parameters_json", "state", "status", "verification", "created_at", "decided_at", "finished_at" },
