@@ -143,6 +143,62 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Optimization_reader_loads_measure_observations_with_legacy_case_fingerprint_fallback()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:measure-optimization");
+        var conditions = JournalSeed.ReproConditions() with
+        {
+            Cases = [new ConditionsCase("set-a", 0, "set-a", "set-a", [], "case-fallback")],
+        };
+        var measure = seed.Measure(session, "orders", "whole", "h0", conditions,
+            new BenchmarkJournalRecord([new JournalVariantMetrics("measure", "set-a", null, 1, null, null,
+                new CompareDistribution(100, 100, 100), null, null, null, null, null, null, 0, false, false, 0,
+                [], null, [], [])], []));
+        var compare = seed.Compare(session, "orders", "whole", "h0", "h1");
+        seed.CompareEvidence(compare, conditions,
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"set-a","caseLabel":"set-a","equivalence":{"equivalent":true}}]}""",
+            new BenchmarkJournalRecord([
+                OptimizationVariant("baseline", 100, matrixCell: 0) with { CaseId = "set-a" },
+                OptimizationVariant("candidate", 80, matrixCell: 0) with { CaseId = "set-a" },
+            ], []));
+        string? expectedCaseFingerprint;
+        using (var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE operations SET conditions_json = json_remove(conditions_json, '$.measurementFingerprint', '$.cases[0].measurementFingerprint') WHERE id IN ($measure, $compare);";
+            command.Parameters.AddWithValue("$measure", measure.OperationId);
+            command.Parameters.AddWithValue("$compare", compare.OperationId);
+            Assert.Equal(2, command.ExecuteNonQuery());
+            command.CommandText = "SELECT conditions_json FROM operations WHERE id = $measure;";
+            command.Parameters.Remove(command.Parameters["$compare"]);
+            var legacyJson = (string)command.ExecuteScalar()!;
+            using var legacy = JsonDocument.Parse(legacyJson);
+            expectedCaseFingerprint = legacy.RootElement.GetProperty("cases")[0].GetProperty("fingerprint").GetString();
+            Assert.NotNull(expectedCaseFingerprint);
+        }
+
+        var reader = Reader(home);
+        var sessionSummary = Assert.Single(reader.Sessions(new SessionQuery(HasCompare: true)).Items);
+        var evidence = reader.OptimizationEvidence(sessionSummary.Id);
+        var measureEvidence = Assert.Single(evidence, item => item.OperationId == measure.OperationId);
+        var compareEvidence = Assert.Single(evidence, item => item.OperationId == compare.OperationId);
+
+        Assert.True(sessionSummary.HasCompare);
+        Assert.Equal(compareEvidence.Fingerprint, measureEvidence.Fingerprint);
+        Assert.True(measureEvidence.IsMeasure);
+        Assert.Equal("h0", measureEvidence.BaselineHash);
+        Assert.Null(measureEvidence.CandidateHash);
+        Assert.Equal(expectedCaseFingerprint, Assert.Single(measureEvidence.Cases).MeasurementFingerprint);
+        Assert.Equal(expectedCaseFingerprint, Assert.Single(measureEvidence.Metrics).MeasurementFingerprint);
+        var group = Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build(evidence).Subjects).Groups);
+        Assert.Equal(("v0", "v1"), (group.DefaultA, group.DefaultB));
+        Assert.Equal([measure.OperationId, compare.OperationId], group.Scopes.Single().Versions.Single(version => version.Version == "v0").MeasuredIn);
+    }
+
+    [Fact]
     public void Sessions_filter_has_compare_and_builds_default_optimization_badges()
     {
         using var home = new TempHome();
@@ -156,12 +212,18 @@ public sealed class JournalReaderTests
         seed.Operation(withoutCompare);
         var unassigned = JournalSeed.Session("cli:unassigned-compare");
         seed.Compare(unassigned, null, null, "legacy-a", "legacy-b");
+        var measureOnly = JournalSeed.Session("cli:measure-only");
+        seed.Measure(measureOnly, "reports", "whole", "measure-hash", JournalSeed.ReproConditions(), JournalSeed.Benchmark());
+        var measureWithoutSubject = JournalSeed.Session("cli:measure-without-subject");
+        seed.Measure(measureWithoutSubject, null, null, "unassigned-hash", JournalSeed.ReproConditions(), JournalSeed.Benchmark());
 
         var reader = Reader(home);
         var filtered = reader.Sessions(new SessionQuery(HasCompare: true)).Items;
-        Assert.Equal(2, filtered.Count);
+        Assert.Equal(3, filtered.Count);
         Assert.True(filtered.Single(item => item.SessionKey == "cli:unassigned-compare").HasCompare);
         Assert.Empty(filtered.Single(item => item.SessionKey == "cli:unassigned-compare").Optimization);
+        var measureItem = filtered.Single(item => item.SessionKey == "cli:measure-only");
+        Assert.Equal("reports", Assert.Single(measureItem.Optimization).Subject);
         var item = filtered.Single(item => item.SessionKey == "cli:has-compare");
         Assert.Equal("cli:has-compare", item.SessionKey);
         Assert.True(item.HasCompare);
@@ -170,7 +232,8 @@ public sealed class JournalReaderTests
         Assert.Equal("−94%", badge.Change);
         Assert.False(badge.Warning);
 
-        Assert.False(Assert.Single(reader.Sessions(new SessionQuery(HasCompare: false)).Items).HasCompare);
+        Assert.Equal(["cli:measure-without-subject", "cli:no-compare"],
+            reader.Sessions(new SessionQuery(HasCompare: false)).Items.Select(session => session.SessionKey).Order(StringComparer.Ordinal));
     }
 
     [Fact]

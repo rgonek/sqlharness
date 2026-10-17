@@ -52,8 +52,8 @@
 
 ### Task 3: Optimization consumes measure evidence
 **Files:** `src/SqlHarness.Dashboard/JournalReader.cs` (load measure evidence with context), `CompareHistoryBuilder.cs` (measure hashes in version numbering), 080's `Optimization/OptimizationSummaryBuilder.cs`, `OptimizationComparer.cs`, `OptimizationModels.cs`, session-list badge/filter; UI `ComparisonPanel.tsx`, `VersionTable.tsx`, `SessionTable.tsx`/`SessionsPage.tsx` labels; tests `OptimizationSummaryBuilderTests.cs`, `OptimizationComparerTests.cs`, `CompareHistoryBuilderTests.cs`, UI tests.
-- [ ] Failing tests: `Measure_then_compare_shares_group`; `Common_compare_beats_newer_measure`; `Cases_pair_by_fingerprint_not_id`; `Measure_without_subject_is_not_versioned`; measure-only group default pair earliest→newest with label; outcome `measured only`; Mixed/better/worse computed for measure pairs; filter `Contains optimization` includes measure-only sessions; Markdown copy states basis and `results not compared`.
-- [ ] FAIL → implement → PASS (`dotnet test`, `npm --prefix src/SqlHarness.Dashboard/ui test`). Commit `feat(087): measure observations in optimization`.
+- [x] Failing tests: `Measure_then_compare_shares_group`; `Common_compare_beats_newer_measure`; `Cases_pair_by_fingerprint_not_id`; `Measure_without_subject_is_not_versioned`; measure-only group default pair earliest→newest with label; outcome `measured only`; Mixed/better/worse computed for measure pairs; filter `Contains optimization` includes measure-only sessions; Markdown copy states basis and `results not compared`.
+- [x] Scoped FAIL → implement → PASS. Backend focused dashboard tests: 49 passed; UI focused Vitest tests: 28 passed. Full `just verify` is reserved for Task 4/controller. Commit `feat(087): measure observations in optimization`.
 
 ### Task 4: Documentation and verification
 - [ ] README/`docs/mcp.md` (measure context, measurement fingerprint, panel semantics); `plans/README.md`; note in plans 082/084 headers that they follow 087; `just verify`; queue → history; commit `docs(087): record plan 087 evidence`.

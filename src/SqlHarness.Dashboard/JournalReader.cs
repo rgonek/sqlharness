@@ -17,7 +17,7 @@ namespace SqlHarness.Dashboard;
 public sealed class JournalReader(string databasePath, IProcessInfo processes)
 {
     private sealed record OptimizationEvidenceRow(
-        long OperationId, string? Subject, string? Scope, string? Database, string? Engine, string? Fingerprint,
+        long OperationId, string Operation, string? Subject, string? Scope, string? Database, string? Engine, string? Fingerprint,
         string? BaselineHash, string? CandidateHash, string StartedAt, string Status, string? ConditionsJson, string? SummaryJson,
         long? MetricId, string? Variant, string? CaseId, string? CaseLabel, long? LogicalReadsMedian, long? ElapsedMedianMs,
         long? CpuMedianMs, long? PgSharedHit, long? PgSharedRead, long? PgSharedDirtied, long? PgSharedWritten,
@@ -80,7 +80,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
          JOIN operations o2 ON o2.id = l.operation_id
          WHERE o2.session_id = s.id AND c.title IS NOT NULL
          ORDER BY o2.id DESC LIMIT 1) AS agent_title,
-        EXISTS (SELECT 1 FROM operations compare_op WHERE compare_op.session_id = s.id AND compare_op.operation = 'compare') AS has_compare
+        EXISTS (SELECT 1 FROM operations compare_op WHERE compare_op.session_id = s.id
+                AND (compare_op.operation = 'compare' OR (compare_op.operation = 'measure'
+                    AND compare_op.compare_subject IS NOT NULL AND compare_op.compare_scope IS NOT NULL))) AS has_compare
         """;
 
     public long? SchemaVersion()
@@ -169,7 +171,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
               AND ($cursor IS NULL OR s.id < $cursor)
               AND ($archived IS NULL OR EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id AND a.archived_at IS NOT NULL) = $archived)
               AND ($starred IS NULL OR COALESCE((SELECT a.starred FROM session_annotations a WHERE a.session_id = s.id), 0) = $starred)
-              AND ($hasCompare IS NULL OR EXISTS (SELECT 1 FROM operations compare_op WHERE compare_op.session_id = s.id AND compare_op.operation = 'compare') = $hasCompare)
+              AND ($hasCompare IS NULL OR EXISTS (SELECT 1 FROM operations compare_op WHERE compare_op.session_id = s.id
+                  AND (compare_op.operation = 'compare' OR (compare_op.operation = 'measure'
+                      AND compare_op.compare_subject IS NOT NULL AND compare_op.compare_scope IS NOT NULL))) = $hasCompare)
               AND ($q IS NULL
                    OR sqlh_fold(s.session_key) LIKE $q ESCAPE '\' OR sqlh_fold(s.cwd) LIKE $q ESCAPE '\'
                    OR sqlh_fold(s.client_title) LIKE $q ESCAPE '\'
@@ -234,7 +238,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
         var liveness = new ProcessLiveness(processes, _dead);
         var rows = Query(connection, """
-            SELECT o.id, o.compare_subject, o.compare_scope, o.database, o.engine,
+            SELECT o.id, o.operation, o.compare_subject, o.compare_scope, o.database, o.engine,
                    o.conditions_fingerprint,
                    o.sql_hash, o.candidate_sql_hash, o.started_at, o.status, o.host_pid, o.host_started_at,
                    o.conditions_json, o.summary_json,
@@ -245,20 +249,22 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             FROM operations o
             LEFT JOIN operation_metrics m ON m.operation_id = o.id
             LEFT JOIN operation_table_io t ON t.metric_id = m.id
-            WHERE o.session_id = $session AND o.operation = 'compare'
+            WHERE o.session_id = $session AND (o.operation = 'compare' OR (o.operation = 'measure'
+                AND o.compare_subject IS NOT NULL AND o.compare_scope IS NOT NULL))
             ORDER BY o.started_at, o.id, m.ordinal, t.table_name;
             """, [("$session", sessionId)], r => new OptimizationEvidenceRow(
-            r.GetInt64(0), NullableString(r, 1), NullableString(r, 2), NullableString(r, 3), NullableString(r, 4), NullableString(r, 5),
-            NullableString(r, 6), NullableString(r, 7), r.GetString(8),
-            liveness.Status(r.GetString(9), r.GetInt64(10), NullableString(r, 11)), NullableString(r, 12), NullableString(r, 13),
-            r.IsDBNull(14) ? null : r.GetInt64(14), NullableString(r, 15), NullableString(r, 16), NullableString(r, 17),
-            NullableLong(r, 18), NullableLong(r, 19), NullableLong(r, 20), NullableLong(r, 21), NullableLong(r, 22),
-            NullableLong(r, 23), NullableLong(r, 24), NullableLong(r, 25), NullableLong(r, 26), NullableString(r, 27),
-            NullableLong(r, 28), NullableLong(r, 29), NullableLong(r, 30)));
+            r.GetInt64(0), r.GetString(1), NullableString(r, 2), NullableString(r, 3), NullableString(r, 4), NullableString(r, 5), NullableString(r, 6),
+            NullableString(r, 7), NullableString(r, 8), r.GetString(9),
+            liveness.Status(r.GetString(10), r.GetInt64(11), NullableString(r, 12)), NullableString(r, 13), NullableString(r, 14),
+            r.IsDBNull(15) ? null : r.GetInt64(15), NullableString(r, 16), NullableString(r, 17), NullableString(r, 18),
+            NullableLong(r, 19), NullableLong(r, 20), NullableLong(r, 21), NullableLong(r, 22), NullableLong(r, 23),
+            NullableLong(r, 24), NullableLong(r, 25), NullableLong(r, 26), NullableLong(r, 27), NullableString(r, 28),
+            NullableLong(r, 29), NullableLong(r, 30), NullableLong(r, 31)));
 
         var compares = rows.GroupBy(row => row.OperationId).Select(group =>
         {
             var first = group.First();
+            var conditions = DeserializeConditions(first.ConditionsJson);
             var metricRows = group.Where(row => row.MetricId is not null)
                 .GroupBy(row => (row.MetricId, row.Variant, row.CaseId, row.CaseLabel))
                 .Select(metric =>
@@ -276,22 +282,25 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                         ? new PostgresBuffers(samples[0].PgSharedHit, samples[0].PgSharedRead, samples[0].PgSharedDirtied,
                             samples[0].PgSharedWritten, samples[0].PgTempRead, samples[0].PgTempWritten)
                         : null;
+                    var caseFingerprint = conditions?.Cases.FirstOrDefault(item => item.Id == metric.Key.CaseId)?.EffectiveMeasurementFingerprint;
                     return new CompareMetricEvidence(metric.Key.Variant!, metric.Key.CaseId!, metric.Key.CaseLabel!,
                         samples[0].LogicalReadsMedian, samples[0].ElapsedMedianMs, scans, tableRows)
                     {
                         CpuMedianMs = samples[0].CpuMedianMs,
                         Postgres = postgres,
+                        MeasurementFingerprint = caseFingerprint,
                     };
                 }).ToArray();
-            var conditions = DeserializeConditions(first.ConditionsJson);
             var summary = Json(first.SummaryJson);
             var caseEvidence = ReadOptimizationCases(summary, conditions, metricRows);
             var comparisonMode = StringProperty(summary, "comparison") ?? conditions?.Execution?.ComparisonMode;
             var resultsEquivalent = BooleanProperty(summary, "resultsEquivalent") ?? AggregateEquivalence(caseEvidence);
             return new CompareEvidence(first.OperationId, first.Subject, first.Scope, first.Database, first.Engine,
-                first.Fingerprint ?? conditions?.Fingerprint, first.BaselineHash, first.CandidateHash, first.StartedAt,
+                conditions?.EffectiveMeasurementFingerprint ?? first.Fingerprint ?? conditions?.Fingerprint,
+                first.BaselineHash, first.Operation == "measure" ? null : first.CandidateHash, first.StartedAt,
                 first.Status, comparisonMode, resultsEquivalent,
-                StringProperty(Property(summary, "regression"), "verdict"), caseEvidence, metricRows);
+                StringProperty(Property(summary, "regression"), "verdict"), caseEvidence, metricRows)
+            { IsMeasure = first.Operation == "measure" };
         }).ToArray();
 
         return compares;
@@ -382,15 +391,17 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     {
         var liveness = new ProcessLiveness(processes, _dead);
         return Query(connection, """
-        SELECT id, session_id, compare_subject, compare_scope, sql_hash, candidate_sql_hash, status, started_at,
+        SELECT id, session_id, operation, compare_subject, compare_scope, sql_hash, candidate_sql_hash, status, started_at,
                host_pid, host_started_at
         FROM operations
-        WHERE session_id = $session AND operation = 'compare'
+        WHERE session_id = $session AND (operation = 'compare' OR (operation = 'measure'
+            AND compare_subject IS NOT NULL AND compare_scope IS NOT NULL))
         ORDER BY started_at, id;
         """, [("$session", sessionId)], reader => new CompareHistoryRow(
-            reader.GetInt64(0), reader.GetInt64(1), NullableString(reader, 2), NullableString(reader, 3),
-            NullableString(reader, 4), NullableString(reader, 5),
-            liveness.Status(reader.GetString(6), reader.GetInt64(8), NullableString(reader, 9)), reader.GetString(7)));
+            reader.GetInt64(0), reader.GetInt64(1), NullableString(reader, 3), NullableString(reader, 4),
+            NullableString(reader, 5), NullableString(reader, 6),
+            liveness.Status(reader.GetString(7), reader.GetInt64(9), NullableString(reader, 10)), reader.GetString(8))
+        { IsMeasure = reader.GetString(2) == "measure" });
     }
 
     private IReadOnlyList<CompareAttemptSummary> HydrateCompareEvidence(
@@ -1222,7 +1233,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var cases = new Dictionary<string, CompareCaseEvidence>(StringComparer.Ordinal);
         if (conditions?.Cases is { } conditionCases)
             foreach (var item in conditionCases)
-                cases[item.Id] = new CompareCaseEvidence(item.Id, item.Label, item.SetName, null, null);
+                cases[item.Id] = new CompareCaseEvidence(item.Id, item.Label, item.SetName, null, null)
+                { MeasurementFingerprint = item.EffectiveMeasurementFingerprint };
 
         var summaryCases = Property(summary, "cases");
         if (summaryCases is { ValueKind: JsonValueKind.Array } caseArray)
@@ -1254,7 +1266,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
         foreach (var metric in metrics)
             if (!cases.ContainsKey(metric.CaseId))
-                cases.Add(metric.CaseId, new CompareCaseEvidence(metric.CaseId, metric.CaseLabel, null, null, null));
+                cases.Add(metric.CaseId, new CompareCaseEvidence(metric.CaseId, metric.CaseLabel, null, null, null)
+                { MeasurementFingerprint = metric.MeasurementFingerprint });
         return cases.Values.OrderBy(item => conditions?.Cases?.FirstOrDefault(value => value.Id == item.CaseId)?.Index ?? int.MaxValue)
             .ThenBy(item => item.CaseId, StringComparer.Ordinal).ToArray();
     }

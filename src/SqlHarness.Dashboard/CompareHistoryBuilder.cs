@@ -5,7 +5,10 @@ namespace SqlHarness.Dashboard;
 /// <summary>Lightweight compare metadata read from retained history before versioning and paging.</summary>
 public sealed record CompareHistoryRow(
     long OperationId, long SessionId, string? Subject, string? Scope, string? BaselineHash,
-    string? CandidateHash, string Status, string StartedAt);
+    string? CandidateHash, string Status, string StartedAt)
+{
+    public bool IsMeasure { get; init; }
+}
 
 /// <summary>Compact compare history entry. Versions describe retained hash occurrences only.</summary>
 public sealed record CompareAttemptSummary(
@@ -61,8 +64,9 @@ public static class CompareHistoryBuilder
                 }
             }
 
-            attempts.Add(new CompareAttemptSummary(row.OperationId, row.Subject, row.Scope, row.BaselineHash,
-                row.CandidateHash, baselineVersion, candidateVersion, row.Status, row.StartedAt, null, null, null, null));
+            if (!row.IsMeasure)
+                attempts.Add(new CompareAttemptSummary(row.OperationId, row.Subject, row.Scope, row.BaselineHash,
+                    row.CandidateHash, baselineVersion, candidateVersion, row.Status, row.StartedAt, null, null, null, null));
         }
         return attempts;
     }

@@ -71,6 +71,22 @@ internal sealed class JournalSeed
         return handle;
     }
 
+    public JournalHandle Measure(SessionIdentity session, string? subject, string? scope, string sqlHash,
+        ConditionsModel conditions, BenchmarkJournalRecord metrics)
+    {
+        var start = new OperationStart("measure", "local", new Dictionary<string, string> { ["tenant"] = "acme" },
+            false, sqlHash, null, "SELECT 1", null)
+        {
+            Context = subject is null || scope is null ? null : new CompareContext(subject, scope),
+        };
+        var handle = _journal.Begin(session, start)!;
+        _journal.Complete(handle, new OperationEnd("succeeded", 0, null, 10,
+            "sqlserver", "srv", "db", 1, 3, null, null, null));
+        _journal.RecordConditions(handle, conditions);
+        _journal.RecordBenchmark(handle, metrics);
+        return handle;
+    }
+
     public void RecordConditions(JournalHandle handle, ConditionsModel? conditions = null) =>
         _journal.RecordConditions(handle, conditions ?? ReproConditions());
 

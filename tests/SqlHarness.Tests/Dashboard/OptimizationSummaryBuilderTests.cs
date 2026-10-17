@@ -63,13 +63,13 @@ public sealed class OptimizationSummaryBuilderTests
     }
 
     [Fact]
-    public void Equivalence_off_is_never_default_b()
+    public void Equivalence_off_falls_back_to_newest_version()
     {
         var section = OptimizationSummaryBuilder.Build([
             Compare(1, "orders", "whole", "db", "f", "h0", "h1", comparisonMode: "Off"),
         ]);
 
-        Assert.Null(Assert.Single(Assert.Single(section.Subjects).Groups).DefaultB);
+        Assert.Equal("v1", Assert.Single(Assert.Single(section.Subjects).Groups).DefaultB);
     }
 
     [Fact]
@@ -162,6 +162,29 @@ public sealed class OptimizationSummaryBuilderTests
         Assert.Equal(new UnassignedCompare(9, "2026-10-07T09:00:09Z", "failed"), Assert.Single(section.Unassigned));
     }
 
+    [Fact]
+    public void Measure_only_group_defaults_to_earliest_and_newest_and_marks_observations_measured_only()
+    {
+        var section = OptimizationSummaryBuilder.Build([
+            Measure(1, "orders", "whole", "db", "f", "h0", 100),
+            Measure(2, "orders", "whole", "db", "f", "h1", 70),
+        ]);
+
+        var group = Assert.Single(Assert.Single(section.Subjects).Groups);
+        Assert.Equal(("v0", "v1"), (group.DefaultA, group.DefaultB));
+        Assert.Equal(["measured only", "measured only"], group.Scopes.Single().Versions.Select(row => row.CaseOutcome));
+        Assert.Equal([100L, 70L], group.Scopes.Single().Versions.Select(row => row.LogicalReadsSum));
+    }
+
+    [Fact]
+    public void Measure_without_subject_is_not_versioned()
+    {
+        var section = OptimizationSummaryBuilder.Build([Measure(1, null, "whole", "db", "f", "h0", 100)]);
+
+        Assert.Empty(section.Subjects);
+        Assert.Empty(section.Unassigned);
+    }
+
     private static CompareEvidence Compare(long id, string? subject, string? scope, string database, string fingerprint,
         string baselineHash, string candidateHash, (long Baseline, long Candidate) reads = default,
         bool equivalent = true, string comparisonMode = "Ordered", string status = "succeeded") =>
@@ -169,6 +192,13 @@ public sealed class OptimizationSummaryBuilderTests
             $"2026-10-07T09:00:{id % 60:D2}Z", status, comparisonMode, equivalent, null,
             [new CompareCaseEvidence("0", "@CustomerId = 1", null, equivalent, null)],
             [Metric("baseline", reads.Baseline), Metric("candidate", reads.Candidate)]);
+
+    private static CompareEvidence Measure(long id, string? subject, string? scope, string database, string fingerprint,
+        string hash, long reads) =>
+        new(id, subject, scope, database, "sqlserver", fingerprint, hash, null,
+            $"2026-10-07T09:00:{id % 60:D2}Z", "succeeded", null, null, null,
+            [new CompareCaseEvidence("set-a", "set-a", "set-a", null, null)],
+            [new CompareMetricEvidence("measure", "set-a", "set-a", reads, reads, 1, [])]) { IsMeasure = true };
 
     private static CompareMetricEvidence Metric(string variant, long reads) => Metric(variant, "0", reads);
 

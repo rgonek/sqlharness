@@ -49,7 +49,7 @@ function SessionRow({ session, now }: { session: SessionSummary; now: number }) 
       <TableCell className="whitespace-nowrap">{formatAge(session.lastSeen, now)}</TableCell>
       <TableCell className="text-right">{session.operations}</TableCell>
       <TableCell>
-        {session.hasCompare && <Link to="/sessions/$id" params={{ id: String(session.id) }} className="flex flex-wrap gap-1" aria-label="Optimization compares">
+        {session.hasCompare && <Link to="/sessions/$id" params={{ id: String(session.id) }} className="flex flex-wrap gap-1" aria-label="Optimization subjects">
           {session.optimization.map(item => <Badge key={item.subject} variant="outline" className="gap-1">
             {item.warning && <TriangleAlert aria-label="Warning" className="size-3 text-amber-600" />}
             {item.subject} {item.change}

@@ -35,3 +35,11 @@ test("Markdown labels different-run comparisons and unavailable table IO", () =>
   expect(conditionsDiffer).toContain("conditions differ; SQL diff is the available comparison.")
   expect(conditionsDiffer).not.toContain("| Table |")
 })
+
+test("measure-only Markdown states the different-run basis and unverified results", () => {
+  const markdown = optimizationMarkdown({ ...comparison, basis: "DifferentRunsSameConditions", operationId: null,
+    equivalenceLabel: "results not compared", mixed: null, beforeAction: null, afterAction: null }, "Orders", "whole query")
+
+  expect(markdown).toContain("Basis: different runs, same conditions")
+  expect(markdown).toContain("Equivalence: results not compared")
+})

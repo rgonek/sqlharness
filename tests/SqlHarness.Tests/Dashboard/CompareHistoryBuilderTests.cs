@@ -67,6 +67,21 @@ public sealed class CompareHistoryBuilderTests
     }
 
     [Fact]
+    public void Measure_hash_uses_the_same_version_sequence_as_compare_hashes()
+    {
+        var history = CompareHistoryBuilder.Build([
+            Row(1, 1, "orders", "whole", "h0", null, startedAt: "2026-01-01T00:00:00Z") with { IsMeasure = true },
+            Row(2, 1, "orders", "whole", "h0", "h1", startedAt: "2026-01-02T00:00:00Z"),
+        ]);
+
+        Assert.Single(history);
+        Assert.Equal(("v0", "v1"), Pair(history, 2));
+        Assert.Equal([("v0", "h0"), ("v1", "h1")],
+            CompareHistoryBuilder.Subjects(history).Single().ScopeVersions.Single().Versions
+                .Select(version => (version.Version, version.Hash)));
+    }
+
+    [Fact]
     public void Whole_summary_uses_latest_terminal_attempt_and_only_direct_start_comparison()
     {
         var attempts = CompareHistoryBuilder.Build([

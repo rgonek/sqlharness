@@ -16,7 +16,7 @@ public static class OptimizationSummaryBuilder
             Version(compare.Subject, compare.Scope, compare.BaselineHash),
             Version(compare.Subject, compare.Scope, compare.CandidateHash))).ToArray();
 
-        var subjects = versioned.Where(item => IsAssigned(item.Compare))
+        var subjects = versioned.Where(item => IsAssigned(item.Compare) && (!item.Compare.IsMeasure || item.Compare.BaselineHash is not null))
             .GroupBy(item => (item.Compare.Subject!, Database: item.Compare.Database ?? string.Empty))
             .OrderBy(group => group.Key.Item1, StringComparer.Ordinal)
             .ThenBy(group => group.Key.Database, StringComparer.Ordinal)
@@ -30,7 +30,7 @@ public static class OptimizationSummaryBuilder
                     .ToArray()))
             .ToArray();
 
-        var unassigned = ordered.Where(compare => !IsAssigned(compare))
+        var unassigned = ordered.Where(compare => !compare.IsMeasure && !IsAssigned(compare))
             .Select(compare => new UnassignedCompare(compare.OperationId, compare.StartedAt, compare.Status))
             .ToArray();
         return new OptimizationSection(subjects, unassigned);
@@ -65,7 +65,7 @@ public static class OptimizationSummaryBuilder
                 var defaultA = scopeCompares.Select(item => item.BaselineVersion).FirstOrDefault(version => version is not null)
                     ?? scopeCompares.Select(item => item.CandidateVersion).FirstOrDefault(version => version is not null)
                     ?? "v0";
-                var defaultB = NewestEquivalentReachable(scopeCompares, defaultA);
+                var defaultB = DefaultB(scopeCompares, defaultA);
                 return new ScopeVersions(scope.Key == "whole" ? "whole query" : scope.Key, BuildVersions(scopeCompares))
                 {
                     DefaultA = defaultA,
@@ -82,7 +82,7 @@ public static class OptimizationSummaryBuilder
         var defaultA = primary.Select(item => item.BaselineVersion).FirstOrDefault(version => version is not null)
             ?? primary.Select(item => item.CandidateVersion).FirstOrDefault(version => version is not null)
             ?? "v0";
-        var defaultB = NewestEquivalentReachable(primary, defaultA);
+        var defaultB = DefaultB(primary, defaultA);
 
         return new ConditionsGroup(fingerprint, GroupLabel(compares), scopes, defaultA,
             defaultB == defaultA ? null : defaultB)
@@ -90,6 +90,16 @@ public static class OptimizationSummaryBuilder
             Subject = compares.Select(item => item.Compare.Subject).FirstOrDefault(subject => subject is not null),
             Database = compares.Select(item => item.Compare.Database ?? string.Empty).FirstOrDefault(),
         };
+    }
+
+    private static string DefaultB(IReadOnlyList<VersionedCompare> observations, string start)
+    {
+        var equivalent = NewestEquivalentReachable(observations.Where(item => !item.Compare.IsMeasure).ToArray(), start);
+        if (equivalent != start)
+            return equivalent;
+        return observations.SelectMany(item => new[] { item.BaselineVersion, item.CandidateVersion })
+            .Where(version => version is not null).Select(version => version!)
+            .OrderBy(NumericVersion).ThenBy(version => version, StringComparer.Ordinal).LastOrDefault() ?? start;
     }
 
     private static string NewestEquivalentReachable(IReadOnlyList<VersionedCompare> compares, string start)
@@ -113,7 +123,9 @@ public static class OptimizationSummaryBuilder
 
     private static IReadOnlyList<VersionRow> BuildVersions(IReadOnlyList<VersionedCompare> compares)
     {
-        var versions = compares.SelectMany(item => new[]
+        var versions = compares.SelectMany(item => item.Compare.IsMeasure
+                ? new[] { (item.BaselineVersion, item.Compare.BaselineHash, item.Compare, Variant: "measure") }
+                : new[]
             {
                 (item.BaselineVersion, item.Compare.BaselineHash, item.Compare, Variant: "baseline"),
                 (item.CandidateVersion, item.Compare.CandidateHash, item.Compare, Variant: "candidate"),
@@ -132,6 +144,10 @@ public static class OptimizationSummaryBuilder
                 var reads = metrics.Select(metric => metric.LogicalReadsMedian).Where(value => value.HasValue).Select(value => value!.Value).ToArray();
                 var scans = metrics.Select(metric => metric.ScansSum).ToArray();
                 var elapsed = metrics.Select(metric => metric.ElapsedMedianMs).Where(value => value.HasValue).Select(value => value!.Value).Order().ToArray();
+                var latestCompare = measurements.LastOrDefault(item => !item.Compare.IsMeasure);
+                var outcome = latest.Compare.IsMeasure
+                    ? latestCompare.Compare is null ? "measured only" : CaseOutcome(latestCompare.Compare, latestCompare.Variant)
+                    : CaseOutcome(latest.Compare, latest.Variant);
                 return new VersionRow(
                     group.Key.Version,
                     group.Key.Hash,
@@ -139,7 +155,7 @@ public static class OptimizationSummaryBuilder
                     reads.Length == 0 ? null : Sum(reads) / reads.Length,
                     scans.Length == 0 || scans.Any(value => !value.HasValue) ? null : Sum(scans.Select(value => value!.Value)),
                     Median(elapsed),
-                    CaseOutcome(latest.Compare, latest.Variant),
+                    outcome,
                     measurements.Select(item => item.Compare.OperationId).Distinct().Order().ToArray(),
                     latest.Compare.OperationId);
             })

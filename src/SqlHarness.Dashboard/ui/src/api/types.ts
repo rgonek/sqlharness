@@ -137,7 +137,7 @@ export type OptimizationVersion = {
   elapsedMedianMs: number | null; caseOutcome: string; measuredIn: number[]; latestOperationId: number
 }
 export type UnassignedCompare = { operationId: number; startedAt: string; status: string }
-export type OptimizationActionReference = { operationId: number; side: "baseline" | "candidate"; caseIds: string[] }
+export type OptimizationActionReference = { operationId: number; side: "baseline" | "candidate" | "measure"; caseIds: string[] }
 export type OptimizationComparison = {
   a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql"
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]

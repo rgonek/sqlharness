@@ -78,6 +78,24 @@ test("renders forty versions and updates the URL when a version picker changes",
   expect(router.state.location.search).toMatchObject({ a: "v1", b: "v39", subject: "Orders", db: "shop", group: "fp-1" })
 })
 
+test("version table shows measure-only outcomes and unverified comparison label", async () => {
+  const measured = { ...section, unassigned: [], subjects: [{ ...section.subjects[0]!, groups: [{
+    ...section.subjects[0]!.groups[0]!, defaultA: "v0", defaultB: "v1", scopes: [{ scope: "whole query", defaultA: "v0", defaultB: "v1", versions: [
+      { ...versions[0]!, version: "v0", caseOutcome: "measured only", measuredIn: [215], latestOperationId: 215 },
+      { ...versions[1]!, version: "v1", caseOutcome: "measured only", measuredIn: [216], latestOperationId: 216 },
+    ] }],
+  }] }] }
+  stubFetch({
+    "/api/sessions/7": sessionWithCompare(true),
+    "/api/sessions/7/optimization": measured,
+    "/api/sessions/7/optimization/compare": { ...comparison, basis: "DifferentRunsSameConditions", operationId: null, equivalenceLabel: "results not compared" },
+  })
+  renderApp("/sessions/7")
+
+  expect(await screen.findAllByText("measured only")).toHaveLength(2)
+  expect(await screen.findByText("results not compared")).toBeInTheDocument()
+})
+
 test("shows group and scope selectors only when the selected group has choices", async () => {
   stubFetch({
     "/api/sessions/7": sessionWithCompare(true),
