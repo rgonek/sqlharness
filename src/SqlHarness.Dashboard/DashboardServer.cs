@@ -208,17 +208,22 @@ public static partial class DashboardServer
         var api = app.MapGroup("/api");
         MapRead(api, "/agents", () => Results.Json(reader.AgentKinds(), Json));
         MapRead(api, "/sessions", (string? agent, string? transport, string? from, string? to, long? cursor, int? limit,
-            string? archived, bool? starred, string? q) =>
+            string? archived, bool? starred, string? q, bool? hasCompare) =>
             q is { Length: > JournalReader.MaximumSearchLength }
                 ? BadRequest("q must be at most 200 characters.")
                 : !TryArchived(archived, out var archivedFilter)
                     ? BadRequest("archived must be true, false or any.")
                 : TryWindow(from, to, out var window)
                     ? Results.Json(reader.Sessions(new SessionQuery(agent, transport, window.From, window.To, cursor,
-                        limit ?? JournalReader.DefaultLimit, archivedFilter, starred, string.IsNullOrWhiteSpace(q) ? null : q.Trim())), Json)
+                        limit ?? JournalReader.DefaultLimit, archivedFilter, starred, string.IsNullOrWhiteSpace(q) ? null : q.Trim(), hasCompare)), Json)
                     : BadRequest("from/to must be ISO-8601 timestamps."));
         MapRead(api, "/sessions/{id:long}", (long id) =>
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
+        MapRead(api, "/sessions/{id:long}/optimization", (long id) =>
+            reader.Session(id) is null ? Results.NotFound() : Results.Json(reader.Optimization(id), Json));
+        MapRead(api, "/sessions/{id:long}/optimization/compare", (long id, string? subject, string? database,
+            string? group, string? scope, string? a, string? b, string? @case, string? aggregate) =>
+            SessionOptimizationCompare(reader, id, subject, database, group, scope, a, b, @case, aggregate, Json));
         MapRead(api, "/sessions/{id:long}/compares", (long id, long? cursor, int? limit) =>
             Results.Json(reader.CompareAttempts(id, cursor, limit ?? JournalReader.CompareHistoryPageLimit), Json));
         MapRead(api, "/sessions/{id:long}/sql", (long id, string? hash) =>
@@ -237,6 +242,8 @@ public static partial class DashboardServer
             reader.Operation(id, DashboardProfiles.DimensionNames(options.TargetsPath)) is { } detail
                 ? Results.Json(detail, Json)
                 : Results.NotFound());
+        MapRead(api, "/operations/{id:long}/optimization", (long id, string? @case, string? aggregate) =>
+            OperationOptimizationCompare(reader, id, @case, aggregate, Json));
         MapRead(api, "/operations/{id:long}/repro", (long id, string? side, string? @case, string? form) =>
         {
             if (side is not ("baseline" or "candidate" or "query"))
@@ -318,6 +325,121 @@ public static partial class DashboardServer
         MapRead(app, "/{**path}", (string? path) => assets.Resolve(path));
         return app;
     }
+
+    private static IResult SessionOptimizationCompare(JournalReader reader, long sessionId, string? subject,
+        string? database, string? fingerprint, string? scope, string? a, string? b, string? selectedCase,
+        string? aggregate, JsonSerializerOptions json)
+    {
+        var normalizedAggregate = NormalizeAggregate(aggregate);
+        if (normalizedAggregate is null)
+            return BadRequest("aggregate must be sum or mean.");
+        if (reader.Session(sessionId) is null)
+            return Results.NotFound();
+
+        var evidence = reader.OptimizationEvidence(sessionId);
+        var section = OptimizationSummaryBuilder.Build(evidence);
+        var subjectChoices = section.Subjects.Where(item => (subject is null || item.Subject == subject)
+            && (database is null || item.Database == database)).ToArray();
+        if (subjectChoices.Length != 1)
+            return Results.NotFound();
+        var selectedSubject = subjectChoices[0];
+        var groupChoices = selectedSubject.Groups.Where(item => fingerprint is null || item.Fingerprint == fingerprint).ToArray();
+        if (groupChoices.Length != 1)
+            return Results.NotFound();
+        var selectedGroup = groupChoices[0];
+        var scopeName = NormalizeOptimizationScope(scope);
+        var scopeChoices = selectedGroup.Scopes.Where(item => scopeName is null || NormalizeOptimizationScope(item.Scope) == scopeName)
+            .OrderBy(item => item.Scope == "whole query" ? 0 : 1).ThenBy(item => item.Scope, StringComparer.Ordinal).ToArray();
+        if (scopeChoices.Length == 0)
+            return Results.NotFound();
+        var selectedScope = scopeChoices[0];
+        var selectedA = a ?? selectedScope.DefaultA;
+        var selectedB = b ?? selectedScope.DefaultB;
+        if (selectedA is null || selectedB is null
+            || !selectedScope.Versions.Any(version => version.Version == selectedA)
+            || !selectedScope.Versions.Any(version => version.Version == selectedB))
+            return Results.NotFound();
+
+        var scopedGroup = selectedGroup with
+        {
+            Scopes = [selectedScope],
+            DefaultA = selectedScope.DefaultA ?? selectedA,
+            DefaultB = selectedScope.DefaultB,
+        };
+        var scopedEvidence = evidence.Where(item => item.Subject == selectedSubject.Subject
+                && (item.Database ?? string.Empty) == selectedSubject.Database
+                && item.Fingerprint == selectedGroup.Fingerprint
+                && NormalizeOptimizationScope(item.Scope) == NormalizeOptimizationScope(selectedScope.Scope))
+            .ToArray();
+        var comparison = OptimizationComparer.Compare(scopedGroup, scopedEvidence, selectedA, selectedB,
+            selectedCase ?? "all", normalizedAggregate);
+        if (selectedCase is not null && selectedCase != "all"
+            && !comparison.Cases.Any(item => item.Id == selectedCase))
+            return Results.NotFound();
+        return Results.Json(comparison, json);
+    }
+
+    private static IResult OperationOptimizationCompare(JournalReader reader, long operationId, string? selectedCase,
+        string? aggregate, JsonSerializerOptions json)
+    {
+        var normalizedAggregate = NormalizeAggregate(aggregate);
+        if (normalizedAggregate is null)
+            return BadRequest("aggregate must be sum or mean.");
+        var operation = reader.Operation(operationId);
+        if (operation is null || operation.Operation.Operation != "compare")
+            return Results.NotFound();
+        var allEvidence = reader.OptimizationEvidence(operation.Operation.SessionId);
+        var evidence = allEvidence.SingleOrDefault(item => item.OperationId == operationId);
+        if (evidence is null || evidence.BaselineHash is null || evidence.CandidateHash is null)
+            return Results.NotFound();
+
+        var section = OptimizationSummaryBuilder.Build(allEvidence);
+        var subject = evidence.Subject ?? "(unassigned)";
+        var database = evidence.Database ?? string.Empty;
+        var scopeLabel = evidence.Scope == "whole" ? "whole query" : evidence.Scope ?? "whole query";
+        var group = section.Subjects.FirstOrDefault(item => item.Subject == evidence.Subject && item.Database == database)?
+            .Groups.FirstOrDefault(item => item.Fingerprint == evidence.Fingerprint);
+        var scopeVersions = group?.Scopes.FirstOrDefault(item => item.Scope == scopeLabel);
+        var a = scopeVersions?.Versions.FirstOrDefault(item => item.Hash == evidence.BaselineHash)?.Version ?? "v0";
+        var b = evidence.CandidateHash == evidence.BaselineHash
+            ? a
+            : scopeVersions?.Versions.FirstOrDefault(item => item.Hash == evidence.CandidateHash)?.Version ?? (a == "v0" ? "v1" : "v0");
+        IReadOnlyList<VersionRow> versions = scopeVersions?.Versions ?? (a == b
+            ? [new VersionRow(a, evidence.BaselineHash, null, null, null, null, "incomplete", [operationId], operationId)]
+            : [
+                new VersionRow(a, evidence.BaselineHash, null, null, null, null, "incomplete", [operationId], operationId),
+                new VersionRow(b, evidence.CandidateHash, null, null, null, null, "incomplete", [operationId], operationId),
+            ]);
+        var ownEvidence = evidence with
+        {
+            Subject = subject,
+            Database = database,
+            Scope = evidence.Scope ?? (scopeLabel == "whole query" ? "whole" : scopeLabel),
+        };
+        var selectedScope = new ScopeVersions(scopeLabel, versions) { DefaultA = a, DefaultB = b };
+        var compareGroup = new ConditionsGroup(evidence.Fingerprint ?? string.Empty, "", [selectedScope], a, b)
+        {
+            Subject = subject,
+            Database = database,
+        };
+        var comparison = OptimizationComparer.Compare(compareGroup, [ownEvidence], a, b,
+            selectedCase ?? "all", normalizedAggregate);
+        if (selectedCase is not null && selectedCase != "all"
+            && !comparison.Cases.Any(item => item.Id == selectedCase))
+            return Results.NotFound();
+        return Results.Json(comparison, json);
+    }
+
+    private static string? NormalizeAggregate(string? aggregate) => aggregate is null
+        || aggregate.Equals("sum", StringComparison.OrdinalIgnoreCase) ? "sum"
+        : aggregate.Equals("mean", StringComparison.OrdinalIgnoreCase) ? "mean" : null;
+
+    private static string? NormalizeOptimizationScope(string? scope) => scope switch
+    {
+        "whole" or "whole query" => "whole",
+        null => null,
+        _ => scope,
+    };
 
     private static void MapRead(IEndpointRouteBuilder routes, string pattern, Delegate handler) =>
         routes.MapMethods(pattern, ReadMethods, handler);

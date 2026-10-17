@@ -34,6 +34,14 @@ export type SessionSummary = {
   archived: boolean
   notePreview: string | null
   agentTitle: string | null
+  hasCompare: boolean
+  optimization: SessionOptimizationBadge[]
+}
+
+export type SessionOptimizationBadge = {
+  subject: string
+  change: string
+  warning: boolean
 }
 
 export type OperationSummary = {
@@ -71,6 +79,10 @@ export type OperationSummary = {
   parentOperationRef: string | null
   dryRun: boolean
   agentModelSource: string | null
+  subject: string | null
+  versionPair: string | null
+  readsBefore: number | null
+  readsAfter: number | null
 }
 
 /** Allowlisted, client-supplied labels from tools/call _meta; never verified, never content. */

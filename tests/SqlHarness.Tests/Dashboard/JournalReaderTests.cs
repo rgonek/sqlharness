@@ -142,6 +142,97 @@ public sealed class JournalReaderTests
         Assert.Single(section.Subjects);
     }
 
+    [Fact]
+    public void Sessions_filter_has_compare_and_builds_default_optimization_badges()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var withCompare = JournalSeed.Session("cli:has-compare");
+        var compare = seed.Compare(withCompare, "orders", "whole", "h0", "h1");
+        seed.CompareEvidence(compare, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
+            OptimizationMetrics(100, 6));
+        var withoutCompare = JournalSeed.Session("cli:no-compare");
+        seed.Operation(withoutCompare);
+        var unassigned = JournalSeed.Session("cli:unassigned-compare");
+        seed.Compare(unassigned, null, null, "legacy-a", "legacy-b");
+
+        var reader = Reader(home);
+        var filtered = reader.Sessions(new SessionQuery(HasCompare: true)).Items;
+        Assert.Equal(2, filtered.Count);
+        Assert.True(filtered.Single(item => item.SessionKey == "cli:unassigned-compare").HasCompare);
+        Assert.Empty(filtered.Single(item => item.SessionKey == "cli:unassigned-compare").Optimization);
+        var item = filtered.Single(item => item.SessionKey == "cli:has-compare");
+        Assert.Equal("cli:has-compare", item.SessionKey);
+        Assert.True(item.HasCompare);
+        var badge = Assert.Single(item.Optimization);
+        Assert.Equal("orders", badge.Subject);
+        Assert.Equal("−94%", badge.Change);
+        Assert.False(badge.Warning);
+
+        Assert.False(Assert.Single(reader.Sessions(new SessionQuery(HasCompare: false)).Items).HasCompare);
+    }
+
+    [Fact]
+    public void Session_list_optimization_badge_warns_for_results_that_differ()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var compare = seed.Compare(JournalSeed.Session("cli:differing"), "orders", "whole", "h0", "h1");
+        seed.CompareEvidence(compare, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":false,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":false}}]}""",
+            OptimizationMetrics(100, 6));
+
+        var badge = Assert.Single(Assert.Single(Reader(home).Sessions(new SessionQuery()).Items).Optimization);
+        Assert.True(badge.Warning);
+    }
+
+    [Fact]
+    public void Compare_operation_summaries_include_subject_pair_and_reads()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var compare = seed.Compare(JournalSeed.Session("cli:operation-summary"), "orders", "whole", "h0", "h1");
+        seed.CompareEvidence(compare, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
+            OptimizationMetrics(100, 20));
+
+        var summary = Assert.Single(Reader(home).Operations(new OperationQuery()).Items);
+        Assert.Equal("orders", summary.Subject);
+        Assert.Equal("v0 → v1", summary.VersionPair);
+        Assert.Equal(100, summary.ReadsBefore);
+        Assert.Equal(20, summary.ReadsAfter);
+    }
+
+    [Fact]
+    public void Over_granted_requires_one_megabyte_and_less_than_one_quarter_used()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:small-grant"), benchmark: GrantBenchmark(512, 10));
+        seed.Operation(JournalSeed.Session("cli:large-grant"), benchmark: GrantBenchmark(4096, 100));
+
+        var items = Reader(home).Operations(new OperationQuery()).Items.ToDictionary(item => item.SessionId);
+        Assert.False(items[1].OverGranted);
+        Assert.True(items[2].OverGranted);
+    }
+
+    private static BenchmarkJournalRecord OptimizationMetrics(long before, long after) => new(
+    [OptimizationVariant("baseline", before), OptimizationVariant("candidate", after)], []);
+
+    private static JournalVariantMetrics OptimizationVariant(string variant, long reads) => new(
+        variant, null, null, 1, new CompareDistribution(10, 10, 10), new CompareDistribution(8, 8, 8),
+        new CompareDistribution(reads, reads, reads), null, null, null, null, null, null, 0, false, false, 0,
+        [], null, [new JournalTableIo("Orders", reads, 1, 0, null, null, 0, null, null, 0)], [])
+    {
+        CaseId = "0",
+        CaseLabel = "@id = 1",
+    };
+
+    private static BenchmarkJournalRecord GrantBenchmark(long granted, long used) => new(
+    [new JournalVariantMetrics("measure", null, null, 1, null, null, null, null, granted, used, null, null, null,
+        0, false, false, 0, [], null, [], [])], []);
+
     private static JournalVariantMetrics OptimizationMetric(string variant, long logicalReads, long elapsed, long scans) =>
         new(variant, null, null, 3, new CompareDistribution(elapsed, elapsed, elapsed), new CompareDistribution(elapsed, elapsed, elapsed),
             new CompareDistribution(logicalReads, logicalReads, logicalReads), null, null, null, null, null, null, 0, false, false, 0,

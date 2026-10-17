@@ -136,9 +136,9 @@
   - Operation summaries gain `string? Subject`, `string? VersionPair` (`v0 → v3`), `long? ReadsBefore`, `long? ReadsAfter`.
   - over-granted SQL: `m.grant_granted_kb >= 1024 AND m.grant_max_used_kb * 4 < m.grant_granted_kb`.
 
-- [ ] **Step 1:** Failing tests: endpoint shapes and status codes; `Sessions_filter_has_compare`; `Session_list_optimization_badge_uses_default_pair` (equals Task 2 result for default A/B, `Warning` when Mixed or not equivalent); `Over_granted_requires_one_megabyte` (granted 512 KB, used 10 KB → false; granted 4096, used 100 → true); operation summary fields for a compare.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement (compute badges only for the returned page). **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(080): serve optimization section and list data`.
+- [x] **Step 1:** Failing tests: endpoint shapes and status codes; `Sessions_filter_has_compare`; `Session_list_optimization_badge_uses_default_pair` (equals Task 2 result for default A/B, `Warning` when Mixed or not equivalent); `Over_granted_requires_one_megabyte` (granted 512 KB, used 10 KB → false; granted 4096, used 100 → true); operation summary fields for a compare.
+- [x] **Step 2:** → FAIL (missing API/list contract members). **Step 3:** Implement (compute badges only for the returned page). **Step 4:** → PASS (focused and full test suite; see [Task 3 report](../.superpowers/sdd/080-optimization-dashboard/task-3-report.md)).
+- [x] **Step 5:** Commit `feat(080): serve optimization section and list data`.
 
 ### Task 4: Session Optimization section (UI)
 

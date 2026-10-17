@@ -506,6 +506,113 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Optimization_endpoints_validate_selectors_and_return_scoped_comparison()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:optimization-api");
+        var compare = seed.Compare(session, "orders", "whole", "base", "candidate");
+        seed.CompareEvidence(compare, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
+            OptimizationMetrics(100, 20));
+        var fragment = seed.Compare(session, "orders", "fragment:1", "fragment-base", "fragment-candidate");
+        seed.CompareEvidence(fragment, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
+            OptimizationMetrics(300, 30));
+        var otherSubject = seed.Compare(session, "customers", "whole", "base", "candidate");
+        seed.CompareEvidence(otherSubject, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
+            OptimizationMetrics(400, 200));
+        var id = new JournalReader(home.DatabasePath, new FakeProcesses()).Sessions(new SessionQuery()).Items.Single().Id;
+        var fingerprint = new JournalReader(home.DatabasePath, new FakeProcesses()).OptimizationEvidence(id)
+            .First(item => item.OperationId == compare.OperationId).Fingerprint;
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var sectionResponse = await client.GetAsync($"/api/sessions/{id}/optimization");
+        Assert.Equal(HttpStatusCode.OK, sectionResponse.StatusCode);
+        using var section = JsonDocument.Parse(await sectionResponse.Content.ReadAsStringAsync());
+        Assert.Contains(section.RootElement.GetProperty("subjects").EnumerateArray(),
+            item => item.GetProperty("subject").GetString() == "orders");
+
+        using var comparisonResponse = await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}");
+        Assert.True(comparisonResponse.StatusCode == HttpStatusCode.OK,
+            $"Expected OK, got {(int)comparisonResponse.StatusCode}: {await comparisonResponse.Content.ReadAsStringAsync()}");
+        using var comparison = JsonDocument.Parse(await comparisonResponse.Content.ReadAsStringAsync());
+        Assert.Equal("v0", comparison.RootElement.GetProperty("a").GetString());
+        Assert.Equal("v1", comparison.RootElement.GetProperty("b").GetString());
+        Assert.Equal(compare.OperationId, comparison.RootElement.GetProperty("operationId").GetInt64());
+        Assert.Equal(100, comparison.RootElement.GetProperty("tables")[0].GetProperty("readsBefore").GetInt64());
+
+        using var fragmentResponse = await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&scope=fragment%3A1");
+        Assert.Equal(HttpStatusCode.OK, fragmentResponse.StatusCode);
+        using var fragmentComparison = JsonDocument.Parse(await fragmentResponse.Content.ReadAsStringAsync());
+        Assert.Equal(300, fragmentComparison.RootElement.GetProperty("tables")[0].GetProperty("readsBefore").GetInt64());
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&aggregate=median")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=missing&database=db&group={fingerprint}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group=missing")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=wrong&group={fingerprint}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&scope=missing")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&a=v99")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync("/api/sessions/987654/optimization")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/sessions/987654/optimization/compare?subject=orders&database=db&group={fingerprint}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Operation_optimization_uses_its_own_compare_evidence_even_when_unassigned()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:operation-optimization");
+        var earlier = seed.Compare(session, null, null, "base", "candidate");
+        seed.CompareEvidence(earlier, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
+            OptimizationMetrics(100, 20));
+        var unassigned = seed.Compare(session, null, null, "base", "candidate");
+        seed.CompareEvidence(unassigned, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
+            OptimizationMetrics(400, 300));
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync($"/api/operations/{unassigned.OperationId}/optimization");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(unassigned.OperationId, result.RootElement.GetProperty("operationId").GetInt64());
+        Assert.Equal(400, result.RootElement.GetProperty("tables")[0].GetProperty("readsBefore").GetInt64());
+        Assert.Equal(300, result.RootElement.GetProperty("tables")[0].GetProperty("readsAfter").GetInt64());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync($"/api/operations/{unassigned.OperationId}/optimization?aggregate=median")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/operations/987654/optimization")).StatusCode);
+        var measure = seed.Operation(session);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/operations/{measure.OperationId}/optimization")).StatusCode);
+    }
+
+    private static BenchmarkJournalRecord OptimizationMetrics(long before, long after) => new(
+    [
+        OptimizationVariant("baseline", before),
+        OptimizationVariant("candidate", after),
+    ], []);
+
+    private static JournalVariantMetrics OptimizationVariant(string variant, long reads) => new(
+        variant, null, null, 1, new CompareDistribution(10, 10, 10), new CompareDistribution(8, 8, 8),
+        new CompareDistribution(reads, reads, reads), null, null, null, null, null, null, 0, false, false, 0,
+        [], null, [new JournalTableIo("Orders", reads, 1, 0, null, null, 0, null, null, 0)], [])
+    {
+        CaseId = "0",
+        CaseLabel = "@id = 1",
+    };
+
+    [Fact]
     public async Task Session_sql_route_rejects_malformed_hashes_and_returns_not_found_for_unknown_hashes()
     {
         using var home = new TempHome();

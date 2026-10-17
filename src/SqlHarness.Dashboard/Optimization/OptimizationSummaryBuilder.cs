@@ -58,8 +58,20 @@ public static class OptimizationSummaryBuilder
         var scopes = compares.GroupBy(item => item.Compare.Scope!, StringComparer.Ordinal)
             .OrderBy(scope => scope.Key == "whole" ? 0 : 1)
             .ThenBy(scope => scope.Key, StringComparer.Ordinal)
-            .Select(scope => new ScopeVersions(scope.Key == "whole" ? "whole query" : scope.Key,
-                BuildVersions(scope.ToArray())))
+            .Select(scope =>
+            {
+                var scopeCompares = scope.OrderBy(item => item.Compare.StartedAt, StringComparer.Ordinal)
+                    .ThenBy(item => item.Compare.OperationId).ToArray();
+                var defaultA = scopeCompares.Select(item => item.BaselineVersion).FirstOrDefault(version => version is not null)
+                    ?? scopeCompares.Select(item => item.CandidateVersion).FirstOrDefault(version => version is not null)
+                    ?? "v0";
+                var defaultB = NewestEquivalentReachable(scopeCompares, defaultA);
+                return new ScopeVersions(scope.Key == "whole" ? "whole query" : scope.Key, BuildVersions(scopeCompares))
+                {
+                    DefaultA = defaultA,
+                    DefaultB = defaultB == defaultA ? null : defaultB,
+                };
+            })
             .ToArray();
 
         var primary = compares.Where(item => item.Compare.Scope == "whole")

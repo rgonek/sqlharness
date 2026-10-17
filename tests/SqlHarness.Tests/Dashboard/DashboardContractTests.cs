@@ -26,8 +26,9 @@ public sealed class DashboardContractTests
             ["id", "sessionId", "agentKind", "operation", "status", "exitCode", "errorKind", "startedAt", "updatedAt",
              "finishedAt", "durationMs", "profile", "engine", "server", "database", "mutationRequested", "sqlHash",
              "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage", "cancelReason", "agentModel", "agentReasoningEffort",
-             "operationRef", "parentOperationRef", "dryRun", "agentModelSource"],
+             "operationRef", "parentOperationRef", "dryRun", "agentModelSource", "subject", "versionPair", "readsBefore", "readsAfter"],
             Names(summary));
+        AssertTypescriptFieldsMatch("OperationSummary", summary);
     }
 
     [Fact]
@@ -38,8 +39,10 @@ public sealed class DashboardContractTests
         Assert.Equal(
             ["id", "sessionKey", "agentKind", "transport", "source", "clientName", "clientVersion", "mcpMode", "cwd",
              "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned", "clientTitle", "roots", "protocolVersion",
-             "title", "starred", "archived", "notePreview", "agentTitle"],
+             "title", "starred", "archived", "notePreview", "agentTitle", "hasCompare", "optimization"],
             Names(session));
+        AssertTypescriptFieldsMatch("SessionSummary", session);
+        AssertTypescriptFieldsMatch("SessionOptimizationBadge", new SessionOptimizationBadge("orders", "−94%", false));
 
         Assert.Equal(["session", "operations", "compareSubjects", "unassignedCompareCount", "note", "conversations"],
             Names(new SessionDetail(session, [], [], 0, null, [])));

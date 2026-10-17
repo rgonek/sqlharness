@@ -19,7 +19,7 @@ public sealed record MutationRequestSummary(
 public sealed record SessionQuery(
     string? Agent = null, string? Transport = null, DateTimeOffset? From = null, DateTimeOffset? To = null,
     long? Cursor = null, int Limit = JournalReader.DefaultLimit,
-    bool? Archived = false, bool? Starred = null, string? Search = null);
+    bool? Archived = false, bool? Starred = null, string? Search = null, bool? HasCompare = null);
 
 public sealed record OperationQuery(
     long? SessionId = null, string? Status = null, string? Operation = null, DateTimeOffset? From = null,
@@ -37,7 +37,13 @@ public sealed record SessionSummary(
     string? ClientVersion, string? McpMode, string? Cwd, string FirstSeen, string LastSeen,
     int Operations, int Failed, int Rejected, int Running, int Abandoned,
     string? ClientTitle, IReadOnlyList<SessionRoot>? Roots, string? ProtocolVersion,
-    string? Title, bool Starred, bool Archived, string? NotePreview, string? AgentTitle = null);
+    string? Title, bool Starred, bool Archived, string? NotePreview, string? AgentTitle = null)
+{
+    public bool HasCompare { get; init; }
+    public IReadOnlyList<SessionOptimizationBadge> Optimization { get; init; } = [];
+}
+
+public sealed record SessionOptimizationBadge(string Subject, string Change, bool Warning);
 
 public sealed record OperationSummary(
     long Id, long SessionId, string AgentKind, string Operation, string Status, int? ExitCode, string? ErrorKind,
@@ -45,7 +51,8 @@ public sealed record OperationSummary(
     string? Server, string? Database, bool MutationRequested, string? SqlHash, long? RowsReturned,
     long? LogicalReadsMedian, bool HasSpill, bool ColdCache, bool OverGranted, JsonElement? Progress,
     string? ErrorMessage, string? CancelReason, string? AgentModel, string? AgentReasoningEffort,
-    string? OperationRef = null, string? ParentOperationRef = null, bool DryRun = false, string? AgentModelSource = null);
+    string? OperationRef = null, string? ParentOperationRef = null, bool DryRun = false, string? AgentModelSource = null,
+    string? Subject = null, string? VersionPair = null, long? ReadsBefore = null, long? ReadsAfter = null);
 
 public sealed record AgentCall(
     string? CallId, string? Model, string? ReasoningEffort, string? SessionId, string? TurnId,
