@@ -1,6 +1,11 @@
 import { useState } from "react"
+import type { OperationSummary } from "@/api/types"
 
 const storageKey = "sqlharness.showInternalOperations"
+
+export function isInternalOperation(operation: OperationSummary): boolean {
+  return operation.operation.toLowerCase().includes("artifact")
+}
 
 function readPreference(): boolean {
   try { return window.localStorage.getItem(storageKey) === "true" } catch { return false }

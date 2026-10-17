@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { isActiveSession, mergeOperations, mergeSessions, reconcileRunning, runningOnly } from "@/live/liveStore"
 import { useLiveFeed } from "@/live/useLiveFeed"
 import { useNow } from "@/lib/useNow"
-import { useShowInternalOperations } from "@/lib/internalOperations"
+import { isInternalOperation, useShowInternalOperations } from "@/lib/internalOperations"
 
 export function LivePage() {
   const [showInternal, setShowInternal] = useShowInternalOperations()
@@ -61,9 +61,10 @@ export function LivePage() {
   if (error) return <ErrorState error={error} />
 
   const running = runningOnly(runningOperations.data ?? [])
+  const visibleRunning = showInternal ? running : running.filter(operation => !isInternalOperation(operation))
   const recent = (operations.data ?? []).slice(0, 50)
   const active = (sessions.data ?? []).filter(session => isActiveSession(session, now))
-  const noRunning = !runningOperations.isPending && running.length === 0
+  const noRunning = !runningOperations.isPending && visibleRunning.length === 0
   const noActive = !sessions.isPending && active.length === 0
 
   return (
@@ -79,7 +80,9 @@ export function LivePage() {
         <CardContent>
           {runningOperations.isPending ? <Skeleton className="h-16 w-full" /> : running.length === 0
             ? noActive ? <p className="sr-only">Nothing running</p> : <p className="text-sm text-muted-foreground">Nothing is running.</p>
-            : <><InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} /><OperationTable operations={running} now={now} showInternal={showInternal} /></>}
+            : <><InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />{visibleRunning.length > 0
+              ? <OperationTable operations={running} now={now} showInternal={showInternal} />
+              : !noActive && <p className="text-sm text-muted-foreground">No visible operations.</p>}</>}
         </CardContent>
       </Card>
       <Card role="region" aria-label="Active sessions">

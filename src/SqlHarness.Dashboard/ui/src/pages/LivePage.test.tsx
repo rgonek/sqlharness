@@ -136,6 +136,24 @@ test("empty running and active sections share one compact status line", async ()
   expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
 })
 
+test("artifact-only running rows share the empty state and remain revealable", async () => {
+  useFakeEventSource()
+  localStorage.removeItem("sqlharness.showInternalOperations")
+  stubFetch({
+    [RECENT]: page([]),
+    [RUNNING]: page([operation({ id: 41, status: "running", operation: "sqlharness_artifact" })]),
+    [STARRED]: page([]),
+    [SESSIONS]: page([]),
+  })
+  renderApp("/")
+  const running = await screen.findByRole("region", { name: "Running" })
+  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
+  expect(within(running).queryByText("sqlharness_artifact")).not.toBeInTheDocument()
+  await userEvent.click(within(running).getByRole("checkbox", { name: "Show internal operations" }))
+  expect(await within(running).findByText("sqlharness_artifact")).toBeInTheDocument()
+  expect(screen.queryByText("Nothing running · no active sessions")).not.toBeInTheDocument()
+})
+
 test("live lists are refetched on every (re)connect so changes made during a gap show", async () => {
   useFakeEventSource()
   let finished = false

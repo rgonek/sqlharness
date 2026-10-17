@@ -5,10 +5,11 @@ import { StatusBadge } from "@/components/StatusBadge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { agentLabel } from "@/lib/agents"
 import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
+import { isInternalOperation } from "@/lib/internalOperations"
 
 /** Live elapsed time for running rows when `now` is given; recorded duration otherwise. */
 export function OperationTable({ operations, now, showInternal }: { operations: OperationSummary[]; now?: number; showInternal: boolean }) {
-  const visibleOperations = showInternal ? operations : operations.filter(operation => !operation.operation.toLowerCase().includes("artifact"))
+  const visibleOperations = showInternal ? operations : operations.filter(operation => !isInternalOperation(operation))
   return (
     <div className="overflow-x-auto">
       <Table>
