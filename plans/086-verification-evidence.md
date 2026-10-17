@@ -1,6 +1,6 @@
-# Plan 080 verification evidence
+# plan 086 verification evidence
 
-Evidence note for plan 080 ([080-windows-gate-speedup.md](080-windows-gate-speedup.md)), appended per task. Each section
+Evidence note for plan 086 ([086-windows-gate-speedup.md](086-windows-gate-speedup.md)), appended per task. Each section
 records the exact command, the machine it ran on, and the numbers it produced, so a later task can extend it without
 re-running an earlier measurement. Dates are local dates on the machine named in the section.
 

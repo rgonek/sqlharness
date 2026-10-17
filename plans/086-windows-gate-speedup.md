@@ -1,4 +1,4 @@
-# 080 — Windows gate speedup and test cleanup
+# 086 - Windows gate speedup and test cleanup
 
 **Goal:** Shorten the local Windows gate and remove test scaffolding that has no production value, without weakening any assertion the gate depends on.
 
@@ -144,7 +144,7 @@ Expected: 64 passed, 0 failed. If a reader assertion fails, the bulk rows do not
 
 - [x] **Step 5: Measure the change**
 
-Run the same filter with `--logger "trx;LogFileName=jr.trx" --results-directory D:/temp/opencode/trx-seed`, then sum `UnitTestResult/@duration` for the class. Expected: class total well below the recorded 52,9 s. Record both numbers in `plans/080-verification-evidence.md` (Step 8).
+Run the same filter with `--logger "trx;LogFileName=jr.trx" --results-directory D:/temp/opencode/trx-seed`, then sum `UnitTestResult/@duration` for the class. Expected: class total well below the recorded 52,9 s. Record both numbers in `plans/086-verification-evidence.md` (Step 8).
 
 - [x] **Step 6: Prove no writer test uses the bulk helper**
 
@@ -158,12 +158,12 @@ Expected: 0 warnings, 0 errors.
 
 - [x] **Step 8: Write the evidence note**
 
-Create `plans/080-verification-evidence.md` with the before/after `JournalReaderTests` class totals, the `dotnet test` command used, and the resulting date.
+Create `plans/086-verification-evidence.md` with the before/after `JournalReaderTests` class totals, the `dotnet test` command used, and the resulting date.
 
 - [x] **Step 9: Commit**
 
 ```bash
-git add tests/SqlHarness.Tests/Dashboard/JournalSeed.cs tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs plans/080-verification-evidence.md
+git add tests/SqlHarness.Tests/Dashboard/JournalSeed.cs tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs plans/086-verification-evidence.md
 git commit -m "test: seed reader fixtures in one transaction"
 ```
 
@@ -232,12 +232,12 @@ Expected: all pass. Then run the Pester command from Step 2 over `tests/scripts`
 
 - [x] **Step 10: Measure both orders before committing**
 
-Run the two projects sequentially, then concurrently, on the quiet machine, three runs each, and record the medians in `plans/080-verification-evidence.md`. If the concurrent median is not at least 15 % better, stop and report the measurement instead of landing a change that only adds contention — this is the configuration in which the housekeeping flake in Task 1 appeared.
+Run the two projects sequentially, then concurrently, on the quiet machine, three runs each, and record the medians in `plans/086-verification-evidence.md`. If the concurrent median is not at least 15 % better, stop and report the measurement instead of landing a change that only adds contention — this is the configuration in which the housekeeping flake in Task 1 appeared.
 
 - [x] **Step 11: Commit**
 
 ```bash
-git add scripts/gate-output.ps1 scripts/verify.ps1 scripts/verify-linux.ps1 .github/workflows/ci.yml tests/SqlHarness.Tests/GateParityTests.cs tests/scripts/gate-output.Tests.ps1 plans/080-verification-evidence.md
+git add scripts/gate-output.ps1 scripts/verify.ps1 scripts/verify-linux.ps1 .github/workflows/ci.yml tests/SqlHarness.Tests/GateParityTests.cs tests/scripts/gate-output.Tests.ps1 plans/086-verification-evidence.md
 git commit -m "build: run the two test projects concurrently"
 ```
 
@@ -308,12 +308,12 @@ Fix every hit so the documentation matches the gate, and keep `GateParityTests.T
 
 - [x] **Step 10: Measure**
 
-Run `just verify` three times on the quiet machine and record the stage lines in `plans/080-verification-evidence.md`. Compare against the 2m25s baseline: expect the restore stage gone and `ui-check` overlapping `build`.
+Run `just verify` three times on the quiet machine and record the stage lines in `plans/086-verification-evidence.md`. Compare against the 2m25s baseline: expect the restore stage gone and `ui-check` overlapping `build`.
 
 - [x] **Step 11: Commit**
 
 ```bash
-git add scripts/verify.ps1 scripts/verify-linux.ps1 scripts/gate-output.ps1 .github/workflows/ci.yml tests/SqlHarness.Tests/GateParityTests.cs tests/SqlHarness.Tests/VerifyLinuxScriptTests.cs tests/scripts/gate-scripts.Tests.ps1 docs/agents/verification.md plans/080-verification-evidence.md
+git add scripts/verify.ps1 scripts/verify-linux.ps1 scripts/gate-output.ps1 .github/workflows/ci.yml tests/SqlHarness.Tests/GateParityTests.cs tests/SqlHarness.Tests/VerifyLinuxScriptTests.cs tests/scripts/gate-scripts.Tests.ps1 docs/agents/verification.md plans/086-verification-evidence.md
 git commit -m "build: fold restore into build and overlap the UI check"
 ```
 
@@ -344,7 +344,7 @@ Expected: more than zero matches. If zero, the attributes in `PlatformFactAttrib
 - [x] **Step 4: Run the suite to confirm the count drops by two**
 
 Run: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName!~Integration'`
-Expected: passed count is 2 lower than the count recorded in `plans/080-verification-evidence.md` before this task, 0 failed.
+Expected: passed count is 2 lower than the count recorded in `plans/086-verification-evidence.md` before this task, 0 failed.
 
 - [x] **Step 5: Commit**
 
