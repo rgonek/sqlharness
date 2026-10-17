@@ -168,11 +168,11 @@
 - Test: `OperationPage.test.tsx`, `CompareDetail.test.tsx`
 
 **Interfaces:**
-- Consumes: `ComparisonPanel`; `GET /api/sessions/{sid}/optimization/compare` with the operation's pair (or an equivalent operation-scoped call the builder adds to Task 3 if simpler).
+- Consumes: `ComparisonPanel`; `GET /api/operations/{id}/optimization?case=all&aggregate=sum` with the operation's own compare pair.
 
-- [ ] **Step 1: Failing tests:** compare operation renders a one-line header (subject, `whole query`, `v0 → v3`, database, time, status, back link with the session title) followed by `ComparisonPanel`; sections `SQL diff & conditions`, `Plans`, `Per-case & per-run details`, `Run diagnostics` are collapsed by default; token/bytes, phase timings, agent call and connection events appear only inside `Run diagnostics`; per-run details show one case and side at a time (selector), not a four-column grid; variable chips render once; measure operations show result first with diagnostics collapsed.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(080): compare-first operation page`.
+- [x] **Step 1: Failing tests:** focused operation-page test first failed on the old `Operation #10` heading instead of the compare subject; see [Task 5 report](../.superpowers/sdd/080-optimization-dashboard/task-5-report.md).
+- [x] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS (22 focused UI tests; typecheck, lint, and build passed; see Task 5 report).
+- [x] **Step 5:** Commit `feat(080): compare-first operation page` (recorded in Task 5 report).
 
 ### Task 6: Lists, badges, Live and naming
 

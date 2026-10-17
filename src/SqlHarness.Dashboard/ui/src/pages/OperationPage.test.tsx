@@ -4,8 +4,16 @@ import { expect, test } from "vitest"
 import { agentCall, operation, operationDetail, session, variant } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
 
+const defaultOptimization = {
+  a: "v0", b: "v1", basis: "MeasuredTogether", operationId: 10, equivalenceLabel: "results equivalent (direct)",
+  cases: [{ id: "0", label: "Case 1 of 1", outcome: "same" }], selectedCase: "all", aggregate: "sum", coverageLabel: "1 of 1 cases",
+  mixed: null, tables: [], collapsed: null, elapsed: { beforeMs: 12, afterMs: 9, policyVerdict: null, differentRun: false },
+  beforeAction: { operationId: 10, side: "baseline", caseIds: ["0"] }, afterAction: { operationId: 10, side: "candidate", caseIds: ["0"] },
+}
 const stubOperationFetch = (routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)>) => stubFetch({
   "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+  "/api/operations/10/optimization?case=all&aggregate=sum": defaultOptimization,
+  "/api/operations/10/optimization": defaultOptimization,
   ...routes,
 })
 
@@ -13,7 +21,7 @@ test("compare operation returns to its session with the originating subject and 
   stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnSubject=orders&returnScope=history")
 
-  const back = await screen.findByRole("link", { name: "mcp:session" })
+  const back = await screen.findByRole("link", { name: "Back to mcp:session" })
   const target = new URL(back.getAttribute("href")!, "http://dashboard")
   expect(target.pathname).toBe("/sessions/7")
   expect(target.searchParams.get("subject")).toBe("orders")
@@ -23,7 +31,7 @@ test("compare operation returns to its session with the originating subject and 
 test("compare operation restores every optimization search selection on return", async () => {
   stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnSubject=orders&returnDb=shop&returnGroup=fp-2&returnScope=fragment%3Acustomer&returnA=v1&returnB=v2&returnCase=customer-9001&returnAgg=mean")
-  const back = await screen.findByRole("link", { name: "mcp:session" })
+  const back = await screen.findByRole("link", { name: "Back to mcp:session" })
   const target = new URL(back.getAttribute("href")!, "http://dashboard")
   expect(Object.fromEntries(target.searchParams)).toMatchObject({ subject: "orders", db: "shop", group: "fp-2", scope: "fragment:customer", a: "v1", b: "v2", case: "customer-9001", agg: "mean" })
 })
@@ -32,12 +40,48 @@ test("compare operation returns to the unassigned group without inventing subjec
   stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnUnassigned=true")
 
-  const back = await screen.findByRole("link", { name: "mcp:session" })
+  const back = await screen.findByRole("link", { name: "Back to mcp:session" })
   const target = new URL(back.getAttribute("href")!, "http://dashboard")
   expect(target.pathname).toBe("/sessions/7")
   expect(target.searchParams.get("unassigned")).toBe("true")
   expect(target.searchParams.has("subject")).toBe(false)
   expect(target.searchParams.has("scope")).toBe(false)
+})
+
+test("compare opens on the Optimization panel and carries selected case and aggregate in its URL", async () => {
+  const comparison = { ...defaultOptimization, b: "v3", selectedCase: "0" }
+  const calls = stubOperationFetch({
+    "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare", database: "shop" }), session: session({ id: 7, title: "Tuning orders" }), compareSubject: "orders", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v3", vars: { tenant: "acme" }, phases: [{ phase: "execute", count: 1, totalMs: 12, maxMs: 12 }], variants: [
+      variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0 }),
+      variant({ ordinal: 2, variant: "baseline", caseId: "1", caseLabel: "@tenant = N'other'", matrixCell: 1 }), variant({ ordinal: 3, variant: "candidate", caseId: "1", caseLabel: "@tenant = N'other'", matrixCell: 1 }),
+    ], compareCases: [{ index: 0 }, { index: 1 }] }),
+    "/api/operations/10/optimization?case=0&aggregate=sum": comparison,
+    "/api/operations/10/optimization?case=1&aggregate=sum": { ...comparison, selectedCase: "1" },
+  })
+  const { router, container } = renderApp("/operations/10?returnSession=7&returnSubject=orders&returnDb=shop&returnGroup=fp&returnScope=whole&returnA=v0&returnB=v3&returnCase=0&returnAgg=sum&case=0&agg=sum")
+  expect(router.state.location.search).toMatchObject({ case: "0", agg: "sum" })
+
+  expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("orders")
+  expect(screen.getByText("whole query")).toBeInTheDocument()
+  expect(screen.getByText("v0 → v3")).toBeInTheDocument()
+  expect(screen.getByText("shop")).toBeInTheDocument()
+  expect(await screen.findByRole("region", { name: "Version comparison" })).toBeInTheDocument()
+  expect(screen.getByText("SQL diff & conditions").closest("details")).not.toHaveAttribute("open")
+  expect(screen.getAllByText("Plans").find(element => element.tagName.toLowerCase() === "summary")).not.toHaveAttribute("open")
+  expect(screen.getByText("Per-case & per-run details").closest("details")).not.toHaveAttribute("open")
+  const diagnostics = screen.getByText("Run diagnostics").closest("details")!
+  expect(diagnostics).not.toHaveAttribute("open")
+  expect(screen.getByRole("region", { name: "Time breakdown" }).closest("details")).toBe(diagnostics)
+  expect(container.querySelectorAll('[aria-label="Variables"] > *')).toHaveLength(1)
+  const requestedCase = (value: string) => calls.some(call => {
+    const url = new URL(call, "http://dashboard")
+    return url.pathname === "/api/operations/10/optimization" && url.searchParams.get("case") === value && url.searchParams.get("aggregate") === "sum"
+  })
+  expect(calls.filter(call => call.includes("optimization"))).toEqual(["/api/operations/10/optimization?case=0&aggregate=sum"])
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Case" }), "1")
+  await screen.findByText("@tenant = N'other'")
+  expect(requestedCase("1")).toBe(true)
+  expect(router.state.location.search).toMatchObject({ returnSubject: "orders", returnAgg: "sum", case: "1", agg: "sum" })
 })
 
 test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", async () => {
@@ -49,7 +93,9 @@ test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", a
   expect(screen.getByText("Output bytes (raw / emitted)")).toBeInTheDocument()
   expect(screen.getByText("Estimated output tokens (raw / emitted)")).toBeInTheDocument()
   expect(screen.getByText("Token estimation method")).toBeInTheDocument()
+  expect(screen.getByText("Run diagnostics").closest("details")).not.toHaveAttribute("open")
   const kpis = screen.getByRole("region", { name: "Key metrics" })
+  expect(kpis.compareDocumentPosition(screen.getByText("Run diagnostics")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   // Elapsed median (with its 10–14 range) and compile time are both 12 ms in the fixture.
   expect(within(kpis).getAllByText("12 ms")).toHaveLength(2)
   expect(within(kpis).getByText("10–14")).toBeInTheDocument()
@@ -72,6 +118,9 @@ test("operation details show phase timing shares and expandable connection diagn
   renderApp("/operations/10")
 
   const timing = await screen.findByRole("region", { name: "Time breakdown" })
+  const diagnostics = timing.closest("details")!
+  expect(diagnostics).not.toHaveAttribute("open")
+  await userEvent.click(within(diagnostics).getByText("Run diagnostics"))
   expect(within(timing).getByRole("columnheader", { name: "Phase" })).toBeInTheDocument()
   expect(within(timing).getByRole("cell", { name: "execute" })).toBeInTheDocument()
   expect(within(timing).getByRole("cell", { name: "30 ms" })).toBeInTheDocument()
@@ -96,6 +145,7 @@ test("legacy operation details show an empty time breakdown without zero-valued 
   renderApp("/operations/10")
 
   const timing = await screen.findByRole("region", { name: "Time breakdown" })
+  await userEvent.click(within(timing.closest("details")!).getByText("Run diagnostics"))
   expect(within(timing).getByRole("columnheader", { name: "Phase" })).toBeInTheDocument()
   expect(within(timing).getByText("No phase timing data was recorded for this operation.")).toBeInTheDocument()
   expect(within(timing).queryByRole("cell", { name: "0 ms" })).not.toBeInTheDocument()
@@ -106,6 +156,7 @@ test("compare shows baseline versus candidate and stored plans with operators", 
   stubOperationFetch({
     "/api/operations/10": operationDetail({
       operation: operation({ operation: "compare" }),
+      baselineVersion: "v0", candidateVersion: "v1",
       sqlText: "SELECT 1",
       candidateSqlText: "SELECT 2",
       summary: { kind: "compare", comparison: "Ordered", resultsEquivalent: true, baselineOperators: [], candidateOperators: [] },
@@ -119,16 +170,12 @@ test("compare shows baseline versus candidate and stored plans with operators", 
   })
   renderApp("/operations/10")
 
-  const comparison = await screen.findByRole("region", { name: "Compare detail" })
-  expect(within(comparison).getByText("-50%")).toBeInTheDocument()
-  expect(screen.getAllByText("Results equivalent").length).toBeGreaterThan(0)
-  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
+  await screen.findByRole("region", { name: "Compare detail" })
+  expect(screen.getByText("v0 → v1")).toBeInTheDocument()
+  await userEvent.click(screen.getByText("SQL diff & conditions"))
   expect(screen.getByRole("button", { name: "Copy diff" })).toBeInTheDocument()
-  await userEvent.click(screen.getByRole("tab", { name: "Plans and IO" }))
-  expect(screen.getByRole("link", { name: "Download plan" })).toHaveAttribute("href", `/api/plans/${hash}`)
-
-  await userEvent.click(screen.getByRole("button", { name: "Show operators" }))
-  expect(await screen.findByText("Clustered Index Scan")).toBeInTheDocument()
+  await userEvent.click(screen.getAllByText("Plans").find(element => element.tagName.toLowerCase() === "summary")!)
+  expect(within(screen.getByRole("region", { name: "Selected variant plan" })).getAllByRole("region", { name: "Key metrics" })).toHaveLength(2)
 })
 
 test("Operation_without_metrics_or_target_renders", async () => {
@@ -201,6 +248,7 @@ test("agent call card shows the client-supplied labels and is absent without the
   })
   renderApp("/operations/10")
 
+  await userEvent.click(await screen.findByText("Run diagnostics"))
   expect(await screen.findByRole("heading", { name: "Agent call" })).toBeInTheDocument()
   expect(screen.getByText("gpt-6-sol")).toBeInTheDocument()
   expect(screen.getByText("low")).toBeInTheDocument()
@@ -213,6 +261,7 @@ test("shows transcript model and effort when the call has no client labels", asy
     agent: agentCall({ transcriptModel: "claude-opus-5-5", transcriptReasoningEffort: "high", conversationTitle: "Optimize orders" }),
   }) })
   renderApp("/operations/10")
+  await userEvent.click(await screen.findByText("Run diagnostics"))
   expect(await screen.findByText("claude-opus-5-5")).toBeInTheDocument()
   expect(screen.getAllByText("from transcript")).toHaveLength(2)
   expect(screen.getByText("high")).toBeInTheDocument()

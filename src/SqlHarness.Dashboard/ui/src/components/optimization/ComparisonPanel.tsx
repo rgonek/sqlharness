@@ -38,7 +38,7 @@ function VersionAction({ label, action, selectedCase, sessionId, sessionSearch }
   </section>
 }
 
-export function ComparisonPanel({ comparison, sessionId, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange }: {
+export function ComparisonPanel({ comparison, sessionId, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange, hideCaseSelector = false }: {
   comparison: OptimizationComparison
   sessionId: number
   subject: string
@@ -48,6 +48,7 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
   sessionSearch?: SessionSearch
   searchState?: { case?: string; agg?: string }
   onSelectionChange?: (patch: { case?: string; agg?: string }) => void
+  hideCaseSelector?: boolean
 }) {
   const activeCase = searchState?.case ?? comparison.selectedCase
   const activeAggregate = searchState?.agg ?? comparison.aggregate
@@ -71,9 +72,9 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
     </div>
 
     <div className="flex flex-wrap items-center gap-2" aria-label="Cases">
-      <span className="text-sm font-medium">Case</span>
-      <Button type="button" size="sm" variant={activeCase === "all" ? "secondary" : "outline"} aria-pressed={activeCase === "all"} onClick={() => updateSearch({ case: "all" })}>All cases</Button>
-      {comparison.cases.filter(option => option.id !== "all").map(option => <Button key={option.id} type="button" size="sm" variant={activeCase === option.id ? "secondary" : "outline"} aria-pressed={activeCase === option.id} onClick={() => updateSearch({ case: option.id })}>{option.label}</Button>)}
+      {!hideCaseSelector && <><span className="text-sm font-medium">Case</span>
+        <Button type="button" size="sm" variant={activeCase === "all" ? "secondary" : "outline"} aria-pressed={activeCase === "all"} onClick={() => updateSearch({ case: "all" })}>All cases</Button>
+        {comparison.cases.filter(option => option.id !== "all").map(option => <Button key={option.id} type="button" size="sm" variant={activeCase === option.id ? "secondary" : "outline"} aria-pressed={activeCase === option.id} onClick={() => updateSearch({ case: option.id })}>{option.label}</Button>)}</>}
       <span className="ml-2 text-sm font-medium">Aggregate</span>
       <Button type="button" size="sm" variant={activeAggregate === "sum" ? "secondary" : "outline"} aria-pressed={activeAggregate === "sum"} onClick={() => updateSearch({ agg: "sum" })}>Sum</Button>
       <Button type="button" size="sm" variant={activeAggregate === "mean" ? "secondary" : "outline"} aria-pressed={activeAggregate === "mean"} onClick={() => updateSearch({ agg: "mean" })}>Mean</Button>
