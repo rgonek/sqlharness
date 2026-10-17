@@ -21,7 +21,7 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 | [084](084-agent-sessions.md) | Agent sessions across MCP/CLI sessions (matching on): per-operation membership exact/inferred/unassigned, immediate Codex linking + cursor fix, event-driven Claude matching, agent-session list/page/annotations, Optimization per agent session with frozen version labels, subagents folded into parent | 079, 080 merged | TODO |
 | [085](085-operation-annotations.md) | Opt-in agent operation labels/keep at call time + post-hoc annotation tool by operationRef scoped to the agent session; owner operation star/note and Named operations view | 077, 079, 084 merged | TODO |
 
-Plans 063, 070, 071, 072, 073, 074, 076, 079, and 080 are DONE; see their evidence in [history](history.md). Plan 071 uses Monaco behind a provider-neutral SQL editor contract, with direct Monaco API lifecycle management for the diff widget. Plan 080's final review fix wave is implemented and Windows-verified on its feature branch; scoped re-review and local integration remain pending. Coordinate work that changes shared MCP, journal, and dashboard contracts through the selected plan.
+Plans 063, 070, 071, 072, 073, 074, 076, 079, and 080 are DONE; see their evidence in [history](history.md). Plan 071 uses Monaco behind a provider-neutral SQL editor contract, with direct Monaco API lifecycle management for the diff widget. Plan 080's final review fix wave is implemented and Windows-verified on its feature branch; the scoped re-review approved all findings, and local integration remains pending. Coordinate work that changes shared MCP, journal, and dashboard contracts through the selected plan.
 
 ## Historia
 
