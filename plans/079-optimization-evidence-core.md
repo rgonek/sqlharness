@@ -182,18 +182,18 @@
   - `static string SqlServerLiteral.Format(ConditionsParameter p)`.
 - Labels (exact copy): AsExecuted `"As executed (sp_executesql)"`; LocalVariables `"Local variables — estimates may differ"`, or `"Local variables — equivalent (every statement uses OPTION (RECOMPILE))"`; missing values `"Incomplete — values not stored"`; no SQL `"Script not available — enable storeSensitive"`.
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - `As_executed_matches_bound_definitions` — for op-203-like conditions (`@NClients int 0`, `@NGroups int 0`, `@NCountries int 1`, case `@ClassType nvarchar(4000) N'ClientConfigurationModel2'`) the text contains `SET STATISTICS IO, TIME ON;`, `EXEC sys.sp_executesql N'`, the definition string `N'@NClients int, @NGroups int, @NCountries int, @ClassType nvarchar(4000)'` and `@ClassType = N'ClientConfigurationModel2'`; header comments name side, case label and "new connection; setup runs per case".
   - `Local_variables_form_declares_each_parameter` — `DECLARE @NClients int = 0;` … and SQL inline; label "estimates may differ".
   - `Recompile_everywhere_is_labelled_equivalent`.
   - `Setup_split_matches_execution` — setup `CREATE TABLE #t(i int); INSERT #t SELECT @N;` renders the parameter-free prefix as its own batch, then `GO`, then the parameterized remainder through `sp_executesql`, matching `PrepareCommands` boundaries.
-  - `Literals_round_trip_for_every_supported_type` — `O'Brien` → `N'O''Brien'`; Unicode `Zażółć`; SQL NULL → `CAST(NULL AS int)` in AsExecuted argument position and `= NULL` in DECLARE; `datetime` `2026-10-16T12:34:56.997`; `datetime2(7)` with 7 fractional digits; `varbinary` `0x0A0B`; `decimal(38,10)` invariant; `bit` `1`.
+  - `Literals_round_trip_for_every_supported_type` — `O'Brien` → `N'O''Brien'`; Unicode `Zażółć`; SQL NULL → bare `NULL` in the AsExecuted argument (the declared type comes from `@params`) and `= NULL` in DECLARE; `datetime` `2026-10-16T12:34:56.997`; `datetime2(7)` with 7 fractional digits; `varbinary` `0x0A0B`; `decimal(38,10)` invariant; `bit` `1`.
   - `Missing_values_render_typed_placeholders` — `@N int = /* value not stored */` and completeness `ValuesMissing`.
   - `Without_stored_sql_script_is_unavailable` — `sideSql == null` → `Unavailable`, `Text == null`.
   - `Postgres_is_unavailable`.
-- [ ] **Step 2:** Run `--filter "FullyQualifiedName~Repro"` → FAIL.
-- [ ] **Step 3:** Implement. Header also states that SQLHarness discards one warm-up and reports medians while the script runs once, and sets `SET ARITHABORT ON;` (verify SqlClient vs SSMS defaults; include only options that differ).
-- [ ] **Step 4:** Run → PASS. **Step 5:** Commit `feat(079): generate SQL Server reproduction scripts`.
+- [x] **Step 2:** Run `--filter "FullyQualifiedName~Repro"` → FAIL.
+- [x] **Step 3:** Implement. Header states that SQLHarness discards one warm-up and reports medians while the script runs once. Microsoft documents application client connections with `ARITHABORT OFF` and SSMS with `ON`, so generated scripts set `ARITHABORT OFF` and note that effective session settings are not journaled.
+- [x] **Step 4:** Run → PASS. **Step 5:** Commit `feat(079): generate SQL Server reproduction scripts`.
 
 ### Task 7: Journal normalization and dashboard API
 
