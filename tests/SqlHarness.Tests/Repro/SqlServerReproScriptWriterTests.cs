@@ -94,6 +94,30 @@ public sealed class SqlServerReproScriptWriterTests
         Assert.Empty(ParseErrors(result.Text!));
     }
 
+    [Theory]
+    [InlineData(ReproScriptForm.AsExecuted, "EXEC sys.sp_executesql")]
+    [InlineData(ReproScriptForm.LocalVariables, "SELECT * FROM dbo.MeasuredTable")]
+    public void Statistics_start_after_reading_setup_and_immediately_before_measured_sql(
+        ReproScriptForm form,
+        string measuredSql)
+    {
+        const string setup = "SELECT * FROM dbo.SetupTable;";
+        var model = Model() with { Setup = new ConditionsSetup("hash", setup) };
+
+        var result = ReproScripts.Create(model, "SELECT * FROM dbo.MeasuredTable", "query", "0", form);
+        var text = result.Text!;
+
+        var arithAbort = text.IndexOf("SET ARITHABORT OFF;", StringComparison.Ordinal);
+        var setupRead = text.IndexOf(setup, StringComparison.Ordinal);
+        var statistics = text.IndexOf("SET STATISTICS IO, TIME ON;", StringComparison.Ordinal);
+        var measured = text.IndexOf(measuredSql, StringComparison.Ordinal);
+        Assert.True(arithAbort >= 0 && arithAbort < setupRead);
+        Assert.True(setupRead < statistics);
+        Assert.True(statistics < measured);
+        var linesAfterStatistics = text[(statistics)..].Split('\n');
+        Assert.StartsWith(measuredSql, linesAfterStatistics[1].Trim(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Literals_round_trip_for_supported_values()
     {

@@ -108,9 +108,9 @@ internal static class JournalBenchmarkBuilder
     {
         var cpuAvailable = runs.All(run => run.Metrics?.CpuTimeAvailability != BenchmarkMetricReport.Unavailable);
         var elapsedAvailable = runs.All(run => run.Metrics?.ElapsedTimeAvailability != BenchmarkMetricReport.Unavailable);
-        var readsAvailable = runs.All(run => run.Metrics?.LogicalReadsAvailability != BenchmarkMetricReport.Unavailable);
         var tableIoAvailable = runs.All(run =>
             run.TableIoComplete ?? run.Metrics?.LogicalReadsAvailability != BenchmarkMetricReport.Unavailable);
+        var readsAvailable = tableIoAvailable;
 
         var planMetrics = runs.Select(run => PlanMetricsExtractor.Extract(run.PlanXmls)).ToArray();
         var links = new List<JournalPlanLink>();

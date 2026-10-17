@@ -34,7 +34,6 @@ internal static partial class SqlServerReproScriptWriter
         builder.AppendLine("-- new connection; setup runs per case");
         builder.AppendLine("-- SQLHarness discards one warm-up and reports medians; this script runs once");
         builder.AppendLine("-- ARITHABORT OFF reflects SqlClient's documented client default; this session setting was not journaled");
-        builder.AppendLine("SET STATISTICS IO, TIME ON;");
         builder.AppendLine("SET ARITHABORT OFF;");
         builder.AppendLine();
 
@@ -62,13 +61,16 @@ internal static partial class SqlServerReproScriptWriter
             }
         }
 
+        if (form == ReproScriptForm.LocalVariables)
+            AppendLocalDeclarations(builder, parameters);
+
+        builder.AppendLine("SET STATISTICS IO, TIME ON;");
         if (form == ReproScriptForm.AsExecuted)
         {
             AppendSpExecuteSql(builder, sideSql, parameters);
         }
         else
         {
-            AppendLocalDeclarations(builder, parameters);
             builder.AppendLine(sideSql.TrimEnd());
         }
         builder.AppendLine("GO");

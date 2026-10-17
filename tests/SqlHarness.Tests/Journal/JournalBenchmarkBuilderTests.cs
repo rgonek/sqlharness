@@ -146,6 +146,52 @@ public sealed class JournalBenchmarkBuilderTests
         Assert.Equal(1200, table.ScanCount);
     }
 
+    [Fact]
+    public async Task Incomplete_numbered_io_is_not_journaled_as_measured_when_time_is_valid()
+    {
+        var session = new IncompleteIoSession();
+        var run = await new SqlServerDialect().ExecuteBenchmarkRunAsync(
+            session, "SELECT Value", [], 30, 1, "measure", null,
+            captureComparison: false, comparisonMaximumRows: 0, CancellationToken.None);
+
+        Assert.Equal(5, run.Artifact.LogicalReads);
+        Assert.False(run.Artifact.TableIoComplete);
+        var metrics = Assert.IsType<BenchmarkRunMetrics>(run.Artifact.Metrics);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, metrics.LogicalReadsAvailability);
+        Assert.Equal(BenchmarkMetricReport.Measured, metrics.CpuTimeAvailability);
+        Assert.Equal(BenchmarkMetricReport.Measured, metrics.ElapsedTimeAvailability);
+
+        var variant = Assert.Single(JournalBenchmarkBuilder.Build([run.Artifact]).Variants);
+        Assert.Null(variant.LogicalReads);
+        Assert.Empty(variant.TableIo);
+        Assert.Equal(new CompareDistribution(12, 12, 12), variant.CpuMilliseconds);
+        Assert.Equal(new CompareDistribution(20, 20, 20), variant.ElapsedMilliseconds);
+    }
+
+    private sealed class IncompleteIoSession : ISqlSession
+    {
+        private readonly SessionMessageBuffer _messages = new();
+
+        public IReadOnlyList<SessionMessage> Messages => _messages.Snapshot();
+        public SqlHarnessTargetIdentityReport Identity { get; set; } =
+            new("server", "database", "server", "database", "profile");
+
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            if (!command.Sql.StartsWith("SET", StringComparison.Ordinal))
+            {
+                _messages.Add(3615, "Table 'Partial'. Scan count 1, logical reads 5, physical reads 0, lob logical reads 0.");
+                _messages.Add(3615, "localized or malformed statistics output");
+                _messages.Add(3612, "SQL Server Execution Times: CPU time = 12 ms, elapsed time = 20 ms.");
+            }
+            return Task.FromResult<ISqlReader>(new TestReader(["Value"], [[1]]));
+        }
+
+        public ConsumedSessionMessages ConsumeMessages(int startIndex) => _messages.Consume(startIndex);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private sealed class TableIoSession : ISqlSession
     {
         private readonly SessionMessageBuffer _messages = new();

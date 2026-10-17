@@ -94,7 +94,7 @@ internal sealed class SqlServerDialect : ISqlDialect
                 result.Canonical.Hash,
                 result.PlanXmls,
                 messages.Length,
-                Metrics: UnavailableMetricsOrNull(consumed.OmittedMessageCount, time.RecognizedBlocks, consumed.TableIoComplete))
+                Metrics: UnavailableMetricsOrNull(consumed.OmittedMessageCount, time, consumed.TableIoComplete))
             {
                 TableIo = consumed.TableIo,
                 TableIoComplete = consumed.TableIoComplete,
@@ -152,29 +152,36 @@ internal sealed class SqlServerDialect : ISqlDialect
     /// </summary>
     private static BenchmarkRunMetrics? UnavailableMetricsOrNull(
         int omittedMessageCount,
-        int recognizedTimeBlocks,
+        StatisticsTime time,
         bool tableIoComplete)
     {
-        if (omittedMessageCount <= 0 && recognizedTimeBlocks > 0)
+        var timeAvailable = omittedMessageCount <= 0 && time.RecognizedBlocks > 0;
+        var readsAvailable = tableIoComplete;
+        if (timeAvailable && readsAvailable)
             return null;
 
-        var warning = omittedMessageCount > 0
-            ? string.Format(CultureInfo.InvariantCulture, StatisticsTruncatedWarning, omittedMessageCount)
-            : StatisticsUnrecognizedWarning;
+        var warnings = new List<string>();
+        if (omittedMessageCount > 0)
+            warnings.Add(string.Format(CultureInfo.InvariantCulture, StatisticsTruncatedWarning, omittedMessageCount));
+        else if (!timeAvailable)
+            warnings.Add(StatisticsUnrecognizedWarning);
+        if (!readsAvailable && timeAvailable)
+            warnings.Add("SQL Server STATISTICS IO output was not completely parsed; logicalReads is unavailable.");
+
         return new BenchmarkRunMetrics(
-            BenchmarkMetricReport.Unavailable,
-            BenchmarkMetricReport.Unavailable,
+            timeAvailable ? BenchmarkMetricReport.Measured : BenchmarkMetricReport.Unavailable,
+            timeAvailable ? BenchmarkMetricReport.Measured : BenchmarkMetricReport.Unavailable,
+            timeAvailable ? time.ElapsedTimeMs : null,
+            timeAvailable,
             null,
-            false,
             null,
-            null,
-            tableIoComplete ? BenchmarkMetricReport.Measured : BenchmarkMetricReport.Unavailable,
+            readsAvailable ? BenchmarkMetricReport.Measured : BenchmarkMetricReport.Unavailable,
             null,
             null,
             null,
             BenchmarkMetricReport.ResultStatement,
             BenchmarkMetricText.StatementRows,
-            [warning]);
+            warnings);
     }
 
 }
