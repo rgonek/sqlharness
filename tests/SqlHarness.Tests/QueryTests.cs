@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Text.Json;
 
 using Npgsql;
@@ -876,7 +876,7 @@ public class SqlHarnessQueryTests
         public List<SqlExecutionCommand> Commands { get; } = [];
         public ResolvedTarget? FactoryTarget { get; set; }
         public string? FactoryAccessToken { get; set; }
-        public IReadOnlyList<string> Messages => _messages.ToArray();
+        public IReadOnlyList<SessionMessage> Messages => _messages.Select(message => new SessionMessage(0, message)).ToArray();
         public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
 
         public static FakeSqlSession WithIdentity(

@@ -761,7 +761,7 @@ public sealed class MeasureParameterSetExecutionTests
         private readonly int _resultRowCount;
         private readonly int? _failDisposeOnConnectionNumber;
         private readonly Exception? _disposeFailure;
-        private readonly List<string> _messages = [];
+        private readonly List<SessionMessage> _messages = [];
         private int _setCount;
         private int _queryCount;
 
@@ -796,7 +796,7 @@ public sealed class MeasureParameterSetExecutionTests
         public int DisposeCount { get; private set; }
         public string SetupSql => _setupSql;
         public string QuerySql => _querySql;
-        public IReadOnlyList<string> Messages => _messages;
+        public IReadOnlyList<SessionMessage> Messages => _messages;
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
 
@@ -879,7 +879,10 @@ public sealed class MeasureParameterSetExecutionTests
                     MeasuredSetNames.Add(setName);
             }
 
-            _messages.Add(StatisticsMessage(5, 10, 12));
+            _messages.Add(new SessionMessage(3615,
+                "Table 'Clients'. Scan count 1, logical reads 5, physical reads 0, lob logical reads 0."));
+            _messages.Add(new SessionMessage(3613,
+                "SQL Server Execution Times: CPU time = 10 ms, elapsed time = 12 ms."));
             object?[][] rows = Enumerable.Range(0, _resultRowCount)
                 .Select(index => new object?[] { 42 + index })
                 .ToArray();

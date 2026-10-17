@@ -118,7 +118,7 @@ public class SqlExecutionProviderNullabilityTests
 
     private sealed class FakeSession(ISqlReader reader) : ISqlSession
     {
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = new("server", "db", "server", "db", "profile");
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct) => Task.FromResult(reader);
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

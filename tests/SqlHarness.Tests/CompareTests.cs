@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Text.Json;
 
 using SqlHarness.Cli;
@@ -470,11 +470,11 @@ public class SqlHarnessCompareTests
 
         using var expected = new CanonicalResultAccumulator();
         AddResultSet(expected, "Value", "System.Int32", 42, 43);
-        foreach (var message in session.Messages.Skip(4).Take(2))
-            expected.AddMessage("sql", message);
+        foreach (var message in session.Messages.Skip(6).Take(3))
+            expected.AddMessage("sql", message.Text);
         AddResultSet(expected, "Value", "System.Int32", 42, 43);
-        foreach (var message in session.Messages.Skip(6).Take(2))
-            expected.AddMessage("sql", message);
+        foreach (var message in session.Messages.Skip(9).Take(3))
+            expected.AddMessage("sql", message.Text);
 
         Assert.Equal(expected.Complete().Footprint, outcome.EmissionReceipt!.RawFootprint);
         Assert.True(Assert.IsType<SqlHarnessCompareReport>(outcome.Report).ResultsEquivalent);
@@ -571,8 +571,8 @@ public class SqlHarnessCompareTests
             // Same localized fixture as the dialect run: no English TIME block.
             session.StatisticsMessages =
             [
-                "Tabelle 'X'. Scananzahl 1, logische Lesevorgänge 5",
-                "SQL Server-Ausführungszeiten:\n   CPU-Zeit = 12 ms, verstrichene Zeit = 20 ms.",
+                new SessionMessage(3615, "Tabelle 'X'. Scananzahl 1, logische Lesevorgänge 5"),
+                new SessionMessage(3612, "SQL Server-Ausführungszeiten:\n   CPU-Zeit = 12 ms, verstrichene Zeit = 20 ms."),
             ];
             var output = new StringWriter();
             var exit = await SqlHarnessCli.Create(Module(session), output).RunAsync([
@@ -880,7 +880,7 @@ public class SqlHarnessCompareTests
         public sealed class CountingIdentitySession(FakeCompareSession inner) : ISqlSession
         {
             public int Sets { get; private set; }
-            public IReadOnlyList<string> Messages => inner.Messages;
+            public IReadOnlyList<SessionMessage> Messages => inner.Messages;
             public SqlHarnessTargetIdentityReport Identity
             {
                 get => inner.Identity;
@@ -976,19 +976,19 @@ public class SqlHarnessCompareTests
         private readonly string? _plan;
         private int _baseline;
         private int _candidate;
-        private readonly List<string> _messages = [];
+        private readonly List<SessionMessage> _messages = [];
 
         public List<string> Labels { get; } = [];
         public List<SqlExecutionCommand> Commands { get; } = [];
         public int FactoryOpenCount { get; private set; }
         public List<CancellationToken> StatisticsCleanupTokens { get; } = [];
-        public IReadOnlyList<string> Messages => _messages;
+        public IReadOnlyList<SessionMessage> Messages => _messages;
 
         // When set, benchmark commands emit these messages instead of English STATISTICS text.
-        public IReadOnlyList<string>? StatisticsMessages { get; set; }
+        public IReadOnlyList<SessionMessage>? StatisticsMessages { get; set; }
 
         // When set, candidate benchmark commands emit these messages instead of StatisticsMessages.
-        public IReadOnlyList<string>? CandidateStatisticsMessages { get; set; }
+        public IReadOnlyList<SessionMessage>? CandidateStatisticsMessages { get; set; }
 
         // Simulates SqlClient reporting no AllowDBNull for result columns.
         public bool UnknownNullability { get; set; }
@@ -1092,8 +1092,7 @@ public class SqlHarnessCompareTests
             var overrideMessages = baseline ? StatisticsMessages : CandidateStatisticsMessages ?? StatisticsMessages;
             if (overrideMessages is not null)
             {
-                foreach (var statisticsMessage in overrideMessages)
-                    _messages.Add(statisticsMessage);
+                _messages.AddRange(overrideMessages);
             }
             else
             {
@@ -1107,10 +1106,14 @@ public class SqlHarnessCompareTests
                     if (secondaryReads > 0)
                         message = TableIoLine(_secondaryIoTable, secondaryReads) + "\n" + message;
                 }
-                _messages.Add(message);
+                foreach (var line in message.Split('\n'))
+                {
+                    var number = line.StartsWith("Table '", StringComparison.Ordinal) ? 3615 : 3612;
+                    _messages.Add(new SessionMessage(number, line));
+                }
             }
             if (_includeExtraMessage)
-                _messages.Add($"ordinary diagnostic message {count}");
+                _messages.Add(new SessionMessage(0, $"ordinary diagnostic message {count}"));
             var plans = _plan is not null ? new[] { _plan } : _includeSecondPlan ? new[] { PlanA, PlanB } : new[] { baseline ? PlanA : PlanB };
             if (_reorderCandidate)
             {

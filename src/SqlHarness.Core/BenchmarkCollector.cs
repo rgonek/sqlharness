@@ -67,7 +67,7 @@ internal static class BenchmarkCollector
         if (raw is null)
             return;
         foreach (var message in session.Messages.Skip(messageStart))
-            raw.AddMessage("sql", message);
+            raw.AddMessage("sql", message.Text);
     }
 
     internal static async Task ExecuteAndDrainAsync(

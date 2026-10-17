@@ -123,7 +123,7 @@ internal static class PostgresBenchmark
         var consumed = session.ConsumeMessages(messageStart);
         var messages = consumed.Messages.ToArray();
         foreach (var message in messages)
-            raw?.AddMessage("sql", message);
+            raw?.AddMessage("sql", message.Text);
         var omittedMessageCount = consumed.OmittedMessageCount;
 
         var stats = ParseStats(planJson);
@@ -154,7 +154,7 @@ internal static class PostgresBenchmark
                 sidecar, raw, captureComparison, comparisonMaximumRows, ct);
             var sidecarConsumed = session.ConsumeMessages(sidecarStart);
             foreach (var message in sidecarConsumed.Messages)
-                raw?.AddMessage("sql", message);
+                raw?.AddMessage("sql", message.Text);
             omittedMessageCount += sidecarConsumed.OmittedMessageCount;
             canonical = collected.Canonical;
             comparison = collected.Comparison;

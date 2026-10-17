@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Text;
 
 using SqlHarness.Core;
@@ -394,16 +394,16 @@ public class QueryResultCollectorTests
 
     private sealed class TruncatingSession(ISqlReader reader, List<string> messages, int retain) : ISqlSession
     {
-        private readonly List<string> _live = new();
+        private readonly List<SessionMessage> _live = new();
 
-        public IReadOnlyList<string> Messages => _live.ToArray();
+        public IReadOnlyList<SessionMessage> Messages => _live.ToArray();
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("server", "db", "server", "db", "profile");
 
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {
             // The avalanche arrives during the command, after messageStart.
-            _live.AddRange(messages);
+            _live.AddRange(messages.Select(message => new SessionMessage(0, message)));
             return Task.FromResult(reader);
         }
 
@@ -412,7 +412,7 @@ public class QueryResultCollectorTests
         {
             var window = _live.Skip(Math.Max(0, startIndex)).ToArray();
             var retained = window.TakeLast(retain).ToArray();
-            return new ConsumedSessionMessages(retained, window.Length - retained.Length);
+            return new ConsumedSessionMessages(retained, window.Length - retained.Length, [], true);
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -427,7 +427,7 @@ public class QueryResultCollectorTests
             _queued.Enqueue((reader, messages));
 
         public int BufferedMessageCount => _buffer.Count;
-        public IReadOnlyList<string> Messages => _buffer.Snapshot();
+        public IReadOnlyList<SessionMessage> Messages => _buffer.Snapshot();
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("server", "db", "server", "db", "profile");
 
@@ -438,7 +438,7 @@ public class QueryResultCollectorTests
         {
             var (reader, messages) = _queued.Dequeue();
             foreach (var message in messages)
-                _buffer.Add(message);
+                _buffer.Add(0, message);
             return Task.FromResult(reader);
         }
 
@@ -471,8 +471,8 @@ public class QueryResultCollectorTests
         public static FakeCollectorSession FailOpen(Exception failure) => new(failure);
 
         public List<SqlExecutionCommand> Commands { get; } = [];
-        public IReadOnlyList<string> Messages =>
-            _messages is List<string> list ? list.ToArray() : _messages.ToArray();
+        public IReadOnlyList<SessionMessage> Messages =>
+            _messages.Select(message => new SessionMessage(0, message)).ToArray();
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("server", "db", "server", "db", "profile");
 

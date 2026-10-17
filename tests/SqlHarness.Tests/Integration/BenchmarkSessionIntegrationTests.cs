@@ -430,7 +430,7 @@ public sealed class BenchmarkSessionIntegrationTests
             private readonly List<TrackingReader> _readers = [];
             private int _disposed;
 
-            public IReadOnlyList<string> Messages => inner.Messages;
+            public IReadOnlyList<SessionMessage> Messages => inner.Messages;
 
             public SqlHarnessTargetIdentityReport Identity
             {

@@ -56,4 +56,38 @@ public sealed class StatisticsIoDetailParserTests
 
         Assert.Equal(new TableIoCounters("Sales", 1, 0, 0, 0, 0, 30, 0, 0), Assert.Single(StatisticsIoDetailParser.Parse(text)));
     }
+
+    [Fact]
+    public void Accumulate_matches_parse_for_same_text()
+    {
+        const string text = "Table 'Orders'. Scan count 3, logical reads 120, physical reads 2, page server reads 0, read-ahead reads 40, page server read-ahead reads 0, lob logical reads 7, lob physical reads 1, lob page server reads 0, lob read-ahead reads 5, lob page server read-ahead reads 0.";
+        var accumulator = new TableIoAccumulator();
+
+        accumulator.Add(3615, text);
+
+        Assert.True(accumulator.Complete);
+        Assert.Equal(StatisticsIoDetailParser.Parse(text), accumulator.Snapshot());
+    }
+
+    [Fact]
+    public void Non_statistics_messages_do_not_accumulate_table_io()
+    {
+        var accumulator = new TableIoAccumulator();
+
+        accumulator.Add(0, "Table 'X'. Scan count 1, logical reads 999, lob logical reads 0.");
+
+        Assert.True(accumulator.Complete);
+        Assert.Empty(accumulator.Snapshot());
+    }
+
+    [Fact]
+    public void Unparseable_engine_io_message_marks_accumulation_incomplete()
+    {
+        var accumulator = new TableIoAccumulator();
+
+        accumulator.Add(3615, "localized or malformed statistics output");
+
+        Assert.False(accumulator.Complete);
+        Assert.Empty(accumulator.Snapshot());
+    }
 }

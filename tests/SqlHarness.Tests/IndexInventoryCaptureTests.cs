@@ -662,7 +662,7 @@ public sealed class IndexInventoryCaptureTests
 
         public List<SqlExecutionCommand> Commands { get; } = [];
 
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
 
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("localhost", "appdb", "localhost", "appdb", "profile", Engine: "postgres");

@@ -127,7 +127,7 @@ public sealed class PostgresReadOnlyRuntimeTests
     private sealed class CapturingSession : ISqlSession
     {
         public List<SqlExecutionCommand> Commands { get; } = [];
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
 
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
@@ -154,7 +154,7 @@ public sealed class PostgresReadOnlyRuntimeTests
 
     private sealed class UnusedSession : ISqlSession
     {
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct) =>
             throw new InvalidOperationException("The setup preflight should reject before executing.");

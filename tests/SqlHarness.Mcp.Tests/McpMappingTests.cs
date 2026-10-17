@@ -668,7 +668,7 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
-    public async Task Measure_matrix_uses_one_session_and_reports_zero_based_set_names()
+    public async Task Measure_matrix_uses_distinct_sessions_and_reports_zero_based_set_names()
     {
         var scope = Scope();
         var sessions = new CoreSessionFactory(blockFirstSession: false);
@@ -688,7 +688,7 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
         var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
         Assert.Equal(["0", "1"], report.Sets.Select(set => set.Name).ToArray());
-        Assert.Equal(1, sessions.ConnectedSessions);
+        Assert.Equal(2, sessions.ConnectedSessions);
     }
 
     [Fact]

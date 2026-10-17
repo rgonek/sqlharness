@@ -895,9 +895,9 @@ public class CompareMatrixTests
         Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
         var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
         Assert.Equal(["small", "large"], report.Sets.Select(set => set.Name));
-        var session = Assert.Single(factory.Sessions);
+        Assert.Equal(2, factory.Sessions.Count);
         Assert.All(
-            session.Commands.Where(command => !IsStatistics(command.Sql)),
+            factory.Sessions.SelectMany(session => session.Commands).Where(command => !IsStatistics(command.Sql)),
             command => Assert.Equal(7, (int)command.Parameters.Single(parameter => parameter.Name == "@Tenant").Value));
     }
 
@@ -1244,7 +1244,7 @@ public class CompareMatrixTests
         private readonly int _resultRowCount;
         private readonly string _echoParameterName;
         private readonly string _plan;
-        private readonly List<string> _messages = [];
+        private readonly List<SessionMessage> _messages = [];
 
         public MatrixSession(bool failSql, int resultRowCount, string echoParameterName = "@BatchSize", string? plan = null)
         {
@@ -1256,7 +1256,7 @@ public class CompareMatrixTests
 
         public List<SqlExecutionCommand> Commands { get; } = [];
         public int SetupCount { get; private set; }
-        public IReadOnlyList<string> Messages => _messages;
+        public IReadOnlyList<SessionMessage> Messages => _messages;
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
 
@@ -1292,8 +1292,10 @@ public class CompareMatrixTests
                 return Task.FromResult<ISqlReader>(MatrixReader.Empty());
             }
 
-            _messages.Add(
-                "Table 'Clients'. Scan count 1, logical reads 5, physical reads 0, lob logical reads 0.\nSQL Server Execution Times: CPU time = 10 ms, elapsed time = 12 ms.");
+            _messages.Add(new SessionMessage(3615,
+                "Table 'Clients'. Scan count 1, logical reads 5, physical reads 0, lob logical reads 0."));
+            _messages.Add(new SessionMessage(3613,
+                "SQL Server Execution Times: CPU time = 10 ms, elapsed time = 12 ms."));
             var rows = Enumerable.Range(0, _resultRowCount)
                 .Select(index => new object?[] { 42 + index })
                 .ToArray();

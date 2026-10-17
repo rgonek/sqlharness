@@ -128,7 +128,7 @@ public sealed class TimedSessionFactoryTests
 
     private sealed class FakeSession : ISqlSession
     {
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct) =>
             throw new NotImplementedException();

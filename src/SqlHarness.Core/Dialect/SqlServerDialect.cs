@@ -5,10 +5,10 @@ namespace SqlHarness.Core.Dialect;
 internal sealed class SqlServerDialect : ISqlDialect
 {
     private const string StatisticsTruncatedWarning =
-        "SQL Server informational messages exceeded the per-command limit and {0} messages were omitted. CPU time, elapsed time and logicalReads parsed from STATISTICS output are unavailable; logicalReads 0 is not a measured zero.";
+        "SQL Server informational messages exceeded the per-command limit and {0} messages were omitted. CPU time and elapsed time parsed from STATISTICS output are unavailable; logicalReads is measured only when STATISTICS IO was completely parsed.";
 
     private const string StatisticsUnrecognizedWarning =
-        "SQL Server STATISTICS TIME output was not recognized (the session language may not be English). CPU time, elapsed time and logicalReads parsed from STATISTICS output are unavailable; 0 is not a measured zero.";
+        "SQL Server STATISTICS TIME output was not recognized (the session language may not be English). CPU time and elapsed time are unavailable; logicalReads is measured only when STATISTICS IO was completely parsed.";
 
     private readonly SqlSafetyClassifier _classifier = new();
 
@@ -69,11 +69,20 @@ internal sealed class SqlServerDialect : ISqlDialect
             var consumed = session.ConsumeMessages(messageStart);
             var messages = consumed.Messages.ToArray();
             foreach (var message in messages)
-                raw?.AddMessage("sql", message);
+                raw?.AddMessage("sql", message.Text);
             messagesCaptured = true;
-            var statistics = string.Join(Environment.NewLine, messages);
-            var io = StatisticsIoParser.Parse(statistics);
-            var time = StatisticsTimeParser.Parse(statistics);
+            var ioMessages = messages.Where(message => message.Number == 3615).Select(message => message.Text).ToArray();
+            var timeMessages = messages.Where(message => message.Number is 3612 or 3613).Select(message => message.Text).ToArray();
+            var io = StatisticsIoParser.Parse(string.Join(Environment.NewLine, ioMessages));
+            var time = StatisticsTimeParser.Parse(string.Join(Environment.NewLine, timeMessages));
+            if (consumed.OmittedMessageCount > 0 && consumed.TableIoComplete)
+            {
+                var tables = consumed.TableIo.ToDictionary(
+                    table => table.Table,
+                    table => table.LogicalReads + table.LobLogicalReads,
+                    StringComparer.Ordinal);
+                io = new StatisticsIo(tables.Values.Sum(), tables);
+            }
             var plans = result.PlanXmls.Select(ExecutionPlanParser.Parse).ToArray();
             var artifact = new CompareRunArtifact(
                 variant,
@@ -85,10 +94,10 @@ internal sealed class SqlServerDialect : ISqlDialect
                 result.Canonical.Hash,
                 result.PlanXmls,
                 messages.Length,
-                Metrics: UnavailableMetricsOrNull(consumed.OmittedMessageCount, time.RecognizedBlocks))
+                Metrics: UnavailableMetricsOrNull(consumed.OmittedMessageCount, time.RecognizedBlocks, consumed.TableIoComplete))
             {
-                // Truncated message windows make the counters partial; the journal then records none.
-                TableIo = consumed.OmittedMessageCount > 0 ? [] : StatisticsIoDetailParser.Parse(statistics),
+                TableIo = consumed.TableIo,
+                TableIoComplete = consumed.TableIoComplete,
             };
             return new CollectedCompareRun(artifact, plans, result.Comparison);
         }
@@ -141,7 +150,10 @@ internal sealed class SqlServerDialect : ISqlDialect
     /// understood. Parsed zeros are unavailable, not measured zeros. Omitted
     /// messages take precedence over unrecognized text.
     /// </summary>
-    private static BenchmarkRunMetrics? UnavailableMetricsOrNull(int omittedMessageCount, int recognizedTimeBlocks)
+    private static BenchmarkRunMetrics? UnavailableMetricsOrNull(
+        int omittedMessageCount,
+        int recognizedTimeBlocks,
+        bool tableIoComplete)
     {
         if (omittedMessageCount <= 0 && recognizedTimeBlocks > 0)
             return null;
@@ -156,7 +168,7 @@ internal sealed class SqlServerDialect : ISqlDialect
             false,
             null,
             null,
-            BenchmarkMetricReport.Unavailable,
+            tableIoComplete ? BenchmarkMetricReport.Measured : BenchmarkMetricReport.Unavailable,
             null,
             null,
             null,

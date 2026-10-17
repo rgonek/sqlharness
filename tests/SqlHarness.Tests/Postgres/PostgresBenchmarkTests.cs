@@ -577,7 +577,7 @@ public sealed class PostgresBenchmarkTests
         private int _driftingRows;
 
         public List<SqlExecutionCommand> Commands { get; } = [];
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("localhost", "appdb", "localhost", "appdb", "profile", Engine: "postgres");
 
@@ -614,7 +614,7 @@ public sealed class PostgresBenchmarkTests
 
         public List<SqlExecutionCommand> Commands { get; } = [];
         public int FactoryOpenCount { get; private set; }
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("localhost", "appdb", "localhost", "appdb", "profile", Engine: "postgres");
 

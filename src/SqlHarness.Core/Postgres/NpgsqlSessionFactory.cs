@@ -77,7 +77,7 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
         try
         {
             var messages = new SessionMessageBuffer();
-            NoticeEventHandler handler = (_, args) => messages.Add(args.Notice.MessageText);
+            NoticeEventHandler handler = (_, args) => messages.Add(0, args.Notice.MessageText);
             connection.Notice += handler;
             await connection.OpenAsync(ct);
             opened = true;
@@ -121,7 +121,7 @@ internal sealed class NpgsqlSession(
     SessionMessageBuffer messages,
     NoticeEventHandler noticeHandler) : ISqlSession
 {
-    public IReadOnlyList<string> Messages => messages.Snapshot();
+    public IReadOnlyList<SessionMessage> Messages => messages.Snapshot();
     public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
 
     public ConsumedSessionMessages ConsumeMessages(int startIndex) => messages.Consume(startIndex);

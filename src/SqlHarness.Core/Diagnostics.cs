@@ -93,53 +93,111 @@ internal static class StatisticsIoDetailParser
         var order = new List<string>();
         foreach (Match line in TableLine.Matches(text))
         {
-            var table = TempTableKey.Normalize(line.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal));
-            var values = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-            foreach (var segment in line.Groups["counters"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-            {
-                var match = Counter.Match(segment);
-                if (match.Success && long.TryParse(match.Groups["value"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var value))
-                    values[match.Groups["name"].Value.Trim()] = value;
-            }
-
-            // Like StatisticsIoParser, a line without logical reads (localized output,
-            // columnstore segment lines) is not a counter line; recording it would turn unknown into zero.
-            if (!values.ContainsKey("logical reads"))
-                continue;
-
-            long Get(string name) => values.GetValueOrDefault(name);
-            var counters = new TableIoCounters(
-                table,
-                Get("scan count"),
-                Get("logical reads"),
-                Get("physical reads"),
-                Get("page server reads"),
-                Get("read-ahead reads"),
-                Get("lob logical reads"),
-                Get("lob physical reads"),
-                Get("lob read-ahead reads"));
-            if (tables.TryGetValue(table, out var existing))
-            {
-                tables[table] = existing with
-                {
-                    ScanCount = existing.ScanCount + counters.ScanCount,
-                    LogicalReads = existing.LogicalReads + counters.LogicalReads,
-                    PhysicalReads = existing.PhysicalReads + counters.PhysicalReads,
-                    PageServerReads = existing.PageServerReads + counters.PageServerReads,
-                    ReadAheadReads = existing.ReadAheadReads + counters.ReadAheadReads,
-                    LobLogicalReads = existing.LobLogicalReads + counters.LobLogicalReads,
-                    LobPhysicalReads = existing.LobPhysicalReads + counters.LobPhysicalReads,
-                    LobReadAheadReads = existing.LobReadAheadReads + counters.LobReadAheadReads,
-                };
-            }
-            else
-            {
-                tables[table] = counters;
-                order.Add(table);
-            }
+            if (TryParse(line, out var counters))
+                Add(tables, order, counters);
         }
 
         return order.Select(table => tables[table]).ToArray();
+    }
+
+    internal static bool TryParseMessage(string text, out IReadOnlyList<TableIoCounters> counters)
+    {
+        counters = Parse(text);
+        return counters.Count > 0;
+    }
+
+    internal static void Add(
+        Dictionary<string, TableIoCounters> tables,
+        List<string> order,
+        TableIoCounters counters)
+    {
+        if (tables.TryGetValue(counters.Table, out var existing))
+        {
+            tables[counters.Table] = existing with
+            {
+                ScanCount = existing.ScanCount + counters.ScanCount,
+                LogicalReads = existing.LogicalReads + counters.LogicalReads,
+                PhysicalReads = existing.PhysicalReads + counters.PhysicalReads,
+                PageServerReads = existing.PageServerReads + counters.PageServerReads,
+                ReadAheadReads = existing.ReadAheadReads + counters.ReadAheadReads,
+                LobLogicalReads = existing.LobLogicalReads + counters.LobLogicalReads,
+                LobPhysicalReads = existing.LobPhysicalReads + counters.LobPhysicalReads,
+                LobReadAheadReads = existing.LobReadAheadReads + counters.LobReadAheadReads,
+            };
+        }
+        else
+        {
+            tables[counters.Table] = counters;
+            order.Add(counters.Table);
+        }
+    }
+
+    private static bool TryParse(Match line, out TableIoCounters counters)
+    {
+        var table = TempTableKey.Normalize(line.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal));
+        var values = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var segment in line.Groups["counters"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var match = Counter.Match(segment);
+            if (match.Success && long.TryParse(match.Groups["value"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var value))
+                values[match.Groups["name"].Value.Trim()] = value;
+        }
+
+        // Like StatisticsIoParser, a line without logical reads (localized output,
+        // columnstore segment lines) is not a counter line; recording it would turn unknown into zero.
+        if (!values.ContainsKey("logical reads"))
+        {
+            counters = null!;
+            return false;
+        }
+
+        long Get(string name) => values.GetValueOrDefault(name);
+        counters = new TableIoCounters(
+            table,
+            Get("scan count"),
+            Get("logical reads"),
+            Get("physical reads"),
+            Get("page server reads"),
+            Get("read-ahead reads"),
+            Get("lob logical reads"),
+            Get("lob physical reads"),
+            Get("lob read-ahead reads"));
+        return true;
+    }
+}
+
+/// <summary>Incrementally aggregates SQL Server STATISTICS IO messages while the session retains its bounded text window.</summary>
+internal sealed class TableIoAccumulator
+{
+    private readonly Dictionary<string, TableIoCounters> _tables = new(StringComparer.Ordinal);
+    private readonly List<string> _order = [];
+
+    internal bool Complete { get; private set; } = true;
+
+    internal void Add(int messageNumber, string message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (messageNumber != 3615)
+            return;
+
+        if (message.Length > SessionMessageBuffer.MaxCharactersPerCommand ||
+            !StatisticsIoDetailParser.TryParseMessage(message, out var counters))
+        {
+            Complete = false;
+            return;
+        }
+
+        foreach (var counter in counters)
+            StatisticsIoDetailParser.Add(_tables, _order, counter);
+    }
+
+    internal IReadOnlyList<TableIoCounters> Snapshot() => _order.Select(table => _tables[table]).ToArray();
+
+    internal void Reset()
+    {
+        _tables.Clear();
+        _order.Clear();
+        Complete = true;
     }
 }
 

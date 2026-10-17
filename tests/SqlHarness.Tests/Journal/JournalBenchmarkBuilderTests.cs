@@ -1,4 +1,5 @@
 using SqlHarness.Core;
+using SqlHarness.Core.Dialect;
 
 namespace SqlHarness.Tests.Journal;
 
@@ -77,6 +78,61 @@ public sealed class JournalBenchmarkBuilderTests
         Assert.Null(variant.ElapsedMilliseconds);
         Assert.Null(variant.LogicalReads);
         Assert.Empty(variant.TableIo);
+    }
+
+    [Fact]
+    public async Task Table_io_from_more_than_one_thousand_messages_is_journaled()
+    {
+        var session = new TableIoSession();
+        var run = await new SqlServerDialect().ExecuteBenchmarkRunAsync(
+            session, "SELECT Value", [], 30, 1, "measure", null,
+            captureComparison: false, comparisonMaximumRows: 0, CancellationToken.None);
+
+        var journal = JournalBenchmarkBuilder.Build([run.Artifact]);
+
+        var table = Assert.Single(Assert.Single(journal.Variants).TableIo);
+        Assert.Equal("T", table.Table);
+        Assert.Equal(2400, table.LogicalReads);
+        Assert.Equal(1200, table.ScanCount);
+    }
+
+    private sealed class TableIoSession : ISqlSession
+    {
+        private readonly SessionMessageBuffer _messages = new();
+
+        public IReadOnlyList<SessionMessage> Messages => _messages.Snapshot();
+        public SqlHarnessTargetIdentityReport Identity { get; set; } =
+            new("server", "database", "server", "database", "profile");
+
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            if (command.Sql.StartsWith("SET", StringComparison.Ordinal))
+                return Task.FromResult<ISqlReader>(new TestReader([], []));
+
+            for (var index = 0; index < 1200; index++)
+                _messages.Add(3615,
+                    "Table 'T'. Scan count 1, logical reads 2, physical reads 0, lob logical reads 0.");
+            return Task.FromResult<ISqlReader>(new TestReader(["Value"], [[1]]));
+        }
+
+        public ConsumedSessionMessages ConsumeMessages(int startIndex) => _messages.Consume(startIndex);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class TestReader(string[] names, object?[][] rows) : ISqlReader
+    {
+        private int _position = -1;
+
+        public int FieldCount => names.Length;
+        public int RecordsAffected => -1;
+        public string GetName(int ordinal) => names[ordinal];
+        public Type GetFieldType(int ordinal) => rows[0][ordinal]?.GetType() ?? typeof(object);
+        public bool GetAllowNull(int ordinal) => true;
+        public object GetValue(int ordinal) => rows[_position][ordinal] ?? DBNull.Value;
+        public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(++_position < rows.Length);
+        public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     [Fact]

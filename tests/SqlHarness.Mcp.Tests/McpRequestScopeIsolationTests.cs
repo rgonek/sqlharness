@@ -172,7 +172,7 @@ public sealed class McpRequestScopeIsolationTests : IDisposable
 
     private sealed class EmptySession(ResolvedTarget target) : ISqlSession
     {
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = new(target.Server, target.Database, target.Server, target.Database, "profile");
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {

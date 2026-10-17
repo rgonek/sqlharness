@@ -366,6 +366,10 @@ internal sealed record CompareRunArtifact(
     [JsonIgnore]
     public IReadOnlyList<TableIoCounters> TableIo { get; init; } = [];
 
+    /// <summary>Whether the SQL Server table IO detail was fully parsed; journal-only and never serialized.</summary>
+    [JsonIgnore]
+    public bool? TableIoComplete { get; init; }
+
     /// <summary>Zero-based compare --matrix cell index; never the matrix value. Journal only; never serialized.</summary>
     [JsonIgnore]
     public int? MatrixCell { get; init; }

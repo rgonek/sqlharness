@@ -476,7 +476,7 @@ public class SnapshotTests
         public string? FactoryAccessToken { get; set; }
         public Exception? ExecuteFailure { get; set; }
         public List<SqlExecutionCommand> Commands { get; } = [];
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
 

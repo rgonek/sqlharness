@@ -409,7 +409,7 @@ public sealed class PostgresParameterTests
         private FakeSession(IEnumerable<Func<ISqlReader>> results) => _results = new(results);
 
         public List<SqlExecutionCommand> Commands { get; } = [];
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
 
         public static FakeSession WithIdentity(string server, string database, FakeReader reader) =>

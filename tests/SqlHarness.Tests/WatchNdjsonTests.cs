@@ -971,7 +971,7 @@ public class WatchNdjsonTests
         public List<CancellationToken> CapturedTokens { get; } = [];
         public Action? BeforeResult { get; set; }
         public Func<SqlExecutionCommand, CancellationToken, Task<ISqlReader>>? ExecuteHandler { get; set; }
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
 

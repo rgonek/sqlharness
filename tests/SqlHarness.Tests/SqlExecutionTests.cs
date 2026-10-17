@@ -358,7 +358,7 @@ public sealed class SqlExecutionTests
     {
         public List<SqlExecutionCommand> Commands { get; } = [];
         public bool Disposed { get; private set; }
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
 
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
@@ -402,8 +402,8 @@ public sealed class SqlExecutionTests
             Assert.Equal(SessionMessageBuffer.MaxMessagesPerCommand, buffer.Count);
             var consumed = buffer.Consume(0);
             Assert.Equal(SessionMessageBuffer.MaxMessagesPerCommand, consumed.Messages.Count);
-            Assert.Equal("message 500", consumed.Messages[0]);
-            Assert.Equal($"message {SessionMessageBuffer.MaxMessagesPerCommand + 499}", consumed.Messages[^1]);
+            Assert.Equal("message 500", consumed.Messages[0].Text);
+            Assert.Equal($"message {SessionMessageBuffer.MaxMessagesPerCommand + 499}", consumed.Messages[^1].Text);
             Assert.Equal(500, consumed.OmittedMessageCount);
             Assert.Equal(0, buffer.Count);
         }
@@ -419,8 +419,8 @@ public sealed class SqlExecutionTests
             // The oldest (largest) arrival is evicted; the two newest fit.
             Assert.Equal(2, buffer.Count);
             var consumed = buffer.Consume(0);
-            Assert.Equal(new string('b', 100), consumed.Messages[0]);
-            Assert.Equal("over the character budget", consumed.Messages[1]);
+            Assert.Equal(new string('b', 100), consumed.Messages[0].Text);
+            Assert.Equal("over the character budget", consumed.Messages[1].Text);
             Assert.Equal(1, consumed.OmittedMessageCount);
         }
 
@@ -459,12 +459,12 @@ public sealed class SqlExecutionTests
             buffer.Add("two");
 
             var tail = buffer.Consume(1);
-            Assert.Equal(["two"], tail.Messages);
+            Assert.Equal(["two"], tail.Messages.Select(message => message.Text));
             Assert.Equal(0, tail.OmittedMessageCount);
             Assert.Equal(0, buffer.Count);
 
             buffer.Add("three");
-            Assert.Equal(["three"], buffer.Consume(-5).Messages);
+            Assert.Equal(["three"], buffer.Consume(-5).Messages.Select(message => message.Text));
             Assert.Empty(buffer.Consume(99).Messages);
         }
     }

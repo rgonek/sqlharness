@@ -90,8 +90,8 @@ public class CompareRegressionOutputTests
         var session = SqlHarnessCompareTests.FakeCompareSession.Create();
         session.StatisticsMessages =
         [
-            "Table 'Clients'. Scan count 1, logical reads 5, physical reads 0, lob logical reads 0." + "\n" +
-            "SQL Server Execution Times: CPU time = 10 ms, elapsed time = 20 ms.",
+            new SessionMessage(3615, "Table 'Clients'. Scan count 1, logical reads 5, physical reads 0, lob logical reads 0."),
+            new SessionMessage(3612, "SQL Server Execution Times: CPU time = 10 ms, elapsed time = 20 ms."),
         ];
         var runner = new CompareCellRunner(session, new MemoryWriter());
 
@@ -109,7 +109,11 @@ public class CompareRegressionOutputTests
     public async Task CompareCellRunner_unrecognized_statistics_make_elapsed_unavailable_and_inconclusive()
     {
         var session = SqlHarnessCompareTests.FakeCompareSession.Create();
-        session.CandidateStatisticsMessages = ["unrecognized statistics text"];
+        session.CandidateStatisticsMessages =
+        [
+            new SessionMessage(3615, "localized statistics IO text"),
+            new SessionMessage(3612, "localized statistics TIME text"),
+        ];
         var runner = new CompareCellRunner(session, new MemoryWriter());
 
         var cell = await runner.RunAsync(Request(ResultComparisonMode.Ordered) with { Repeat = 5 }, CancellationToken.None);

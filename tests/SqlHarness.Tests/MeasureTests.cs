@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 
 using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
@@ -426,8 +426,8 @@ public class SqlHarnessMeasureTests
 
         using var expected = new CanonicalResultAccumulator();
         AddResultSet(expected, "Value", "System.Int32", 42, 43);
-        foreach (var message in session.Messages.Skip(2).Take(2))
-            expected.AddMessage("sql", message);
+        foreach (var message in session.Messages.Skip(3).Take(3))
+            expected.AddMessage("sql", message.Text);
 
         Assert.Equal(expected.Complete().Footprint, outcome.EmissionReceipt!.RawFootprint);
         Assert.Contains(plan, outcome.BenchmarkRuns!.First().PlanXmls);
@@ -798,14 +798,14 @@ public class SqlHarnessMeasureTests
         private readonly Func<int, long>? _tableReadsForMeasured;
         private readonly int _resultRowCount;
         private readonly string _plan;
-        private readonly List<string> _messages = [];
+        private readonly List<SessionMessage> _messages = [];
         private int _queryCount;
 
         public List<string> Labels { get; } = [];
         public List<SqlExecutionCommand> Commands { get; } = [];
         public int FactoryOpenCount { get; private set; }
         public List<CancellationToken> StatisticsCleanupTokens { get; } = [];
-        public IReadOnlyList<string> Messages => _messages;
+        public IReadOnlyList<SessionMessage> Messages => _messages;
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
         public Func<string, string>? PlanForSql { get; set; }
@@ -877,7 +877,7 @@ public class SqlHarnessMeasureTests
                     Labels.Add("setup");
                 if (_failSetup)
                 {
-                    _messages.Add("diagnostic before setup failure");
+                    _messages.Add(new SessionMessage(0, "diagnostic before setup failure"));
                     return Task.FromException<ISqlReader>(new TimeoutException("setup failed"));
                 }
                 return Task.FromResult<ISqlReader>(_includeSetupResult ? FakeReader.Single(["SetupValue"], ["setup-result-value"]) : FakeReader.Empty());
@@ -908,15 +908,17 @@ public class SqlHarnessMeasureTests
             if (_failOnQueryNumber == queryNumber)
             {
                 if (_emitMessageBeforeQueryFailure)
-                    _messages.Add("diagnostic before query failure");
+                    _messages.Add(new SessionMessage(0, "diagnostic before query failure"));
                 return Task.FromException<ISqlReader>(new TimeoutException("measured run failed"));
             }
             Labels.Add(queryNumber == 1 ? "warmup" : $"query-{queryNumber - 1}");
             var measured = Math.Max(queryNumber - 1, 1);
             var reads = _tableReadsForMeasured?.Invoke(measured) ?? measured * 5L;
-            _messages.Add(StatisticsMessage(reads, measured * 10, measured * 10 + 2, _ioTable));
+            var lines = StatisticsMessage(reads, measured * 10, measured * 10 + 2, _ioTable).Split('\n');
+            _messages.Add(new SessionMessage(3615, lines[0]));
+            _messages.Add(new SessionMessage(3613, lines[1]));
             if (_includeExtraMessage)
-                _messages.Add($"ordinary diagnostic message {queryNumber}");
+                _messages.Add(new SessionMessage(0, $"ordinary diagnostic message {queryNumber}"));
             var value = _changeLastResult && queryNumber == 4 ? 43 : 42;
             object?[][] rows = Enumerable.Range(0, _resultRowCount)
                 .Select(index => new object?[] { value + index })

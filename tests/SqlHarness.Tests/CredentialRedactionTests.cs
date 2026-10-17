@@ -269,7 +269,7 @@ public sealed class CredentialRedactionTests
 
     private sealed class ThrowingSession(Exception failure) : ISqlSessionFactory, ISqlSession
     {
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = new("server", "db", "server", "db", "profile");
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct) =>

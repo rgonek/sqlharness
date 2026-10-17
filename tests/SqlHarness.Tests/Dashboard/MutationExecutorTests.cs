@@ -298,7 +298,7 @@ public sealed class MutationExecutorTests
 
         private sealed class RecordingMutationSession(ResolvedTarget target, List<SqlExecutionCommand> commands) : ISqlSession
         {
-            public IReadOnlyList<string> Messages => [];
+            public IReadOnlyList<SessionMessage> Messages => [];
             public SqlHarnessTargetIdentityReport Identity { get; set; } = new(target.Server, target.Database,
                 target.Server, target.Database, "local", SqlEngineNames.Format(target.Engine));
 

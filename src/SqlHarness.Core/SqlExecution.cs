@@ -48,7 +48,7 @@ internal interface ISqlReader : IAsyncDisposable
 
 internal interface ISqlSession : IAsyncDisposable
 {
-    IReadOnlyList<string> Messages { get; }
+    IReadOnlyList<SessionMessage> Messages { get; }
     SqlHarnessTargetIdentityReport Identity { get; set; }
     string? ClientConnectionId => null;
     Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct);
@@ -59,9 +59,17 @@ internal interface ISqlSession : IAsyncDisposable
     /// previous repetitions. Production sessions additionally release the consumed
     /// buffer memory; the default keeps the legacy slice without releasing.
     /// </summary>
-    ConsumedSessionMessages ConsumeMessages(int startIndex) =>
-        new ConsumedSessionMessages(Messages.Skip(Math.Max(0, startIndex)).ToArray(), 0);
+    ConsumedSessionMessages ConsumeMessages(int startIndex)
+    {
+        var messages = Messages.Skip(Math.Max(0, startIndex)).ToArray();
+        var tableIo = new TableIoAccumulator();
+        foreach (var message in messages)
+            tableIo.Add(message.Number, message.Text);
+        return new ConsumedSessionMessages(messages, 0, tableIo.Snapshot(), tableIo.Complete);
+    }
 }
+
+internal sealed record SessionMessage(int Number, string Text);
 
 /// <summary>
 /// One command's share of session messages. Diagnostics beyond the per-command
@@ -69,8 +77,14 @@ internal interface ISqlSession : IAsyncDisposable
 /// arrivals were dropped since the previous consumption.
 /// </summary>
 internal sealed record ConsumedSessionMessages(
-    IReadOnlyList<string> Messages,
-    int OmittedMessageCount);
+    IReadOnlyList<SessionMessage> Messages,
+    int OmittedMessageCount,
+    IReadOnlyList<TableIoCounters> TableIo,
+    bool TableIoComplete)
+{
+    internal ConsumedSessionMessages(IReadOnlyList<SessionMessage> messages, int omittedMessageCount)
+        : this(messages, omittedMessageCount, [], true) { }
+}
 
 /// <summary>
 /// Bounded server-message store for one session (InfoMessage / NOTICE).
@@ -90,7 +104,8 @@ internal sealed class SessionMessageBuffer
     internal const int MaxCharactersPerCommand = 256 * 1024;
 
     private readonly object _sync = new();
-    private readonly List<string> _messages = new();
+    private readonly List<SessionMessage> _messages = new();
+    private readonly TableIoAccumulator _tableIo = new();
     private long _retainedChars;
     private int _droppedSinceConsume;
 
@@ -103,12 +118,13 @@ internal sealed class SessionMessageBuffer
         }
     }
 
-    public void Add(string message)
+    public void Add(int number, string message)
     {
         ArgumentNullException.ThrowIfNull(message);
         lock (_sync)
         {
-            _messages.Add(message);
+            _tableIo.Add(number, message);
+            _messages.Add(new SessionMessage(number, message));
             _retainedChars += message.Length;
             while ((_messages.Count > MaxMessagesPerCommand ||
                 _retainedChars > MaxCharactersPerCommand) &&
@@ -116,15 +132,17 @@ internal sealed class SessionMessageBuffer
             {
                 // Evict oldest first. A single arrival larger than the whole
                 // budget is dropped outright, so the bound always holds.
-                string oldest = _messages[0];
+                SessionMessage oldest = _messages[0];
                 _messages.RemoveAt(0);
-                _retainedChars -= oldest.Length;
+                _retainedChars -= oldest.Text.Length;
                 _droppedSinceConsume++;
             }
         }
     }
 
-    public IReadOnlyList<string> Snapshot()
+    public void Add(string message) => Add(0, message);
+
+    public IReadOnlyList<SessionMessage> Snapshot()
     {
         lock (_sync)
             return _messages.ToArray();
@@ -141,12 +159,15 @@ internal sealed class SessionMessageBuffer
         lock (_sync)
         {
             int start = Math.Clamp(startIndex, 0, _messages.Count);
-            IReadOnlyList<string> slice = _messages.Skip(start).ToArray();
+            IReadOnlyList<SessionMessage> slice = _messages.Skip(start).ToArray();
             int omitted = _droppedSinceConsume;
+            IReadOnlyList<TableIoCounters> tableIo = _tableIo.Snapshot();
+            bool tableIoComplete = _tableIo.Complete;
             _messages.Clear();
             _retainedChars = 0;
             _droppedSinceConsume = 0;
-            return new ConsumedSessionMessages(slice, omitted);
+            _tableIo.Reset();
+            return new ConsumedSessionMessages(slice, omitted, tableIo, tableIoComplete);
         }
     }
 }
@@ -295,7 +316,11 @@ internal sealed class SqlClientSessionFactory : ISqlSessionFactory
         try
         {
             var messages = new SessionMessageBuffer();
-            SqlInfoMessageEventHandler handler = (_, args) => messages.Add(args.Message);
+            SqlInfoMessageEventHandler handler = (_, args) =>
+            {
+                foreach (SqlError error in args.Errors)
+                    messages.Add(error.Number, error.Message);
+            };
             connection.InfoMessage += handler;
             if (accessToken is not null)
                 connection.AccessToken = accessToken;
@@ -316,7 +341,7 @@ internal sealed class SqlClientSession(
     SessionMessageBuffer messages,
     SqlInfoMessageEventHandler infoMessageHandler) : ISqlSession
 {
-    public IReadOnlyList<string> Messages => messages.Snapshot();
+    public IReadOnlyList<SessionMessage> Messages => messages.Snapshot();
     public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
     public string? ClientConnectionId => connection.ClientConnectionId.ToString();
 

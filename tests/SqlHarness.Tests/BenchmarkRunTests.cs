@@ -250,7 +250,7 @@ public sealed class BenchmarkRunTests
 
     private sealed class DrainOnlySession(DrainOnlyReader reader) : ISqlSession
     {
-        public IReadOnlyList<string> Messages => [];
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = new("s", "d", "s", "d", "profile");
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct) => Task.FromResult<ISqlReader>(reader);
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -284,9 +284,9 @@ public sealed class BenchmarkRunTests
     private sealed class FlakyMessagesSession(Exception primary) : ISqlSession
     {
         private bool _failed;
-        public IReadOnlyList<string> Messages => _failed
+        public IReadOnlyList<SessionMessage> Messages => _failed
             ? throw new InvalidOperationException("cleanup messages failed")
-            : Array.Empty<string>();
+            : Array.Empty<SessionMessage>();
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("s", "d", "s", "d", "profile");
 
@@ -302,8 +302,8 @@ public sealed class BenchmarkRunTests
     private sealed class MessagesFailingSession(Exception cleanup) : ISqlSession
     {
         private int _reads;
-        public IReadOnlyList<string> Messages => ++_reads == 1
-            ? Array.Empty<string>()
+        public IReadOnlyList<SessionMessage> Messages => ++_reads == 1
+            ? Array.Empty<SessionMessage>()
             : throw cleanup;
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("s", "d", "s", "d", "profile");
@@ -481,7 +481,7 @@ public sealed class BenchmarkRunTests
     private sealed class IdleSession : ISqlSession
     {
         public int ReaderCalls { get; private set; }
-        public IReadOnlyList<string> Messages => throw new NotSupportedException("BenchmarkRunner must not read session messages.");
+        public IReadOnlyList<SessionMessage> Messages => throw new NotSupportedException("BenchmarkRunner must not read session messages.");
         public SqlHarnessTargetIdentityReport Identity
         {
             get => throw new NotSupportedException("BenchmarkRunner must not read session identity.");

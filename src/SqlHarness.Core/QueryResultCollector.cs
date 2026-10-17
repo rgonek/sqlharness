@@ -111,7 +111,7 @@ internal static class QueryResultCollector
         // Per-command consumption: only this execution's messages are published and
         // the session releases them, so repetitions never accumulate whole history.
         var consumed = session.ConsumeMessages(messageStart);
-        var safeMessages = RedactMessages(consumed.Messages, secrets);
+        var safeMessages = RedactMessages(consumed.Messages.Select(message => message.Text).ToArray(), secrets);
         foreach (var message in safeMessages)
         {
             canonical.AddMessage("sql", message);
@@ -131,7 +131,7 @@ internal static class QueryResultCollector
         ConsumedSessionMessages consumed,
         IReadOnlyList<string> secrets)
     {
-        foreach (var message in RedactMessages(consumed.Messages, secrets))
+        foreach (var message in RedactMessages(consumed.Messages.Select(message => message.Text).ToArray(), secrets))
             raw.AddMessage("sql", message);
     }
 
