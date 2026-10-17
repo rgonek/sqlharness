@@ -12,6 +12,19 @@
 
 **Spec:** [docs/superpowers/specs/2026-10-16-optimization-evidence-core-design.md](../docs/superpowers/specs/2026-10-16-optimization-evidence-core-design.md)
 
+## Review amendments (2026-10-16, cross-plan review) — these override task text below
+
+1. **No `operation_runs` table exists.** Put `case_id`/`case_label` on `operation_metrics` and `operation_statements` (grouping is variant, parameter_set, matrix_cell). Add `caseId` to each case in `summary_json`. Single-case runs use case id `"0"`, label `Case 1 of 1` (not shown in UI).
+2. **Where the conditions model is built.** Not in `OperationJournalDescriber` (it runs before resolve/bind). Build `ConditionsModel` in `SqlHarnessModule` after target resolution and binding, for measure and compare; pass it to the journal through new `IActivityJournal.RecordConditions(JournalHandle handle, ConditionsModel model)` (`NullActivityJournal` no-op). `ActivityJournal` owns the salt and computes all HMACs (fingerprints and any content hash); the builder produces canonical JSON inputs only. 083 will call `RecordConditions` again after per-case materialization (last write wins).
+3. **Journal versioning floor.** Add `JournalSchema.FirstRetainedVersion` = the version this plan creates (14 at planning time). `0 < version < FirstRetainedVersion` → back up and start fresh; `FirstRetainedVersion ≤ version < CurrentVersion` → run step scripts (`VersionN`) as before. Later plans add steps and pins in `JournalContractTests`.
+4. **Upgrade safety (Task 1).** Take an exclusive lock file next to the journal, re-check `user_version` right before the rename, then rename; test two concurrent openers (exactly one backup, no lost v-new file). Processes on an older build fail closed on a newer journal (`JournalSchemaTooNewException`), pinned by a test. Refuse the upgrade (journal unavailable warning, operations not journaled) while the old journal has pending `mutation_requests`; document in README that the fresh start drops old sessions, annotations (titles, notes, stars) and transcript cursors (they stay in the backup file). The owner accepted this loss (2026-10-16): do not migrate annotations.
+5. **Message numbers (Task 5) — interface 081 consumes.** Define `sealed record SessionMessage(int Number, string Text)`; `ISqlSession.Messages` and `ConsumedSessionMessages.Messages` become `IReadOnlyList<SessionMessage>` (including the default implementation at `SqlExecution.cs:62`); the SqlClient handler iterates `args.Errors` (one `SessionMessage` per `SqlError`); PostgreSQL notices map to `Number = 0`. IO/time parsers consume only engine statistics numbers. Provide `FakeSqlSession` support for numbered messages in tests.
+6. **Table IO availability (Tasks 5/7).** `UnavailableMetricsOrNull` must not mark reads unavailable merely because message text was dropped; journal-side availability follows `TableIoComplete`, which is journaled. Add an end-to-end `JournalBenchmarkBuilder` test: >1,000 messages → table IO journaled.
+7. **Measure partial failure (Task 4).** Mirror compare: a `MeasureCaseFailedException` carrying completed runs and the partial report, handled in `SqlHarnessModule` like `CompareMatrixCellFailedException` (`BenchmarkRuns` on the error outcome) so completed sets are journaled. Reuse 077's `MatrixFailedCase`/`coverage` shape (`error.matrixStop` on MCP) — no new shape. `warmupOrder` is filled with the sequential set order. Update also `docs/mcp/tools.md:19`, `Capabilities.cs:~226`, `README.md:288-294` and the measure-set report's rotation/cache text. Anchors: `MeasureDescription` ~`McpToolCatalog.cs:609`; measure path ~`SqlHarnessModule.cs:681-800`.
+8. **Task order.** Move the `JournalReader`/`CompareHistoryBuilder` switch from `compare_conditions_json` to the new conditions storage into Task 2 so the build stays green.
+9. **Statement text for plan changes (Task 8).** Statement text exists only in plan XML (stored with `storeSensitive`); without it show `statement {ordinal} ({shortHash})`.
+10. **Anchors/schema facts.** `Migrate` ~`ActivityJournal.cs:573`, `Quarantine` ~`:630`; `operation_table_io.lob_logical_reads` already exists (no schema change for it). Test `SqlTypes.Effective` with unsized decimal (SqlClient-inferred precision/scale).
+
 ## Status and dependencies
 
 - TODO. Planning base `f3655f8` (2026-10-16; 073 DONE, journal at version 13). Blocked until plan 077 is merged (executing on another machine).
@@ -142,11 +155,13 @@
 - Test: `tests/SqlHarness.Tests/StatisticsIoDetailParserTests.cs`, `DialectMessageBudgetTests.cs`
 
 **Interfaces:**
-- Produces: `ConsumedSessionMessages(IReadOnlyList<string> Messages, int OmittedMessageCount, IReadOnlyList<TableIoCounters> TableIo, bool TableIoComplete)`; `sealed class TableIoAccumulator { void Add(string message); IReadOnlyList<TableIoCounters> Snapshot(); bool Complete { get; } }`.
+- Produces: `ConsumedSessionMessages(IReadOnlyList<string> Messages, int OmittedMessageCount, IReadOnlyList<TableIoCounters> TableIo, bool TableIoComplete)`; `sealed class TableIoAccumulator { void Add(int messageNumber, string message); IReadOnlyList<TableIoCounters> Snapshot(); bool Complete { get; } }`.
+- Message numbers: the session keeps each info message's number (`SqlError.Number` from `InfoMessage`); IO and time parsers consume only engine statistics messages (IO 3615; time 3612/3613 — verify exact numbers against a live run and pin them in a test), so `PRINT`/`RAISERROR` text that imitates statistics is ignored (needed by plan 081, which admits `PRINT`/`RAISERROR`).
 
 - [ ] **Step 1: Write failing tests:**
   - `Table_io_survives_message_and_character_caps` — feed 1,500 messages totalling > 256 KiB, each with `Table 'T'. Scan count 1, logical reads 2, … lob logical reads 1 …`; consumed `TableIo` has `T` with scans 1,500, logical 3,000, LOB 1,500; `OmittedMessageCount > 0`; `TableIoComplete == true`.
   - `Accumulate_matches_parse_for_same_text` — same counters as today's `Parse` for the fixtures in `StatisticsIoDetailParserTests`.
+  - `User_messages_imitating_statistics_are_ignored` — a message number 0 (PRINT) with text `Table 'X'. Scan count 1, logical reads 999…` and one imitating `SQL Server Execution Times` leave IO and time counters unchanged.
 - [ ] **Step 2:** Run → FAIL. **Step 3:** Implement: `SessionMessageBuffer.Add` feeds the accumulator before eviction; `Consume` returns and resets it; `SqlServerDialect` uses `consumed.TableIo` instead of dropping IO when messages were omitted. `TableIoComplete` is false only if a single message could not be parsed (oversized/garbled).
 - [ ] **Step 4:** Run → PASS. **Step 5:** Commit `fix(079): aggregate table IO while messages stream`.
 

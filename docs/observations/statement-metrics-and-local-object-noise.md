@@ -44,3 +44,35 @@ cost is unmeasured.
 Cheapest next checks: a synthetic two-statement batch through the SQL Server diagnostics parser, to
 see whether per-statement IO is already split before aggregation; and a projection test on a fixture
 with many `#` table entries to measure the emitted-byte share. No live database is needed.
+
+## Follow-up 2026-10-16 (HEAD `566628e`)
+
+Status: collecting observations. Journal and dashboard coverage is now planned in
+[plan 082](../../plans/082-statement-io-attribution.md) (with table-variable grouping in
+[plan 079](../../plans/079-optimization-evidence-core.md)); the agent path (MCP output and `artifact`)
+is not covered by any plan.
+
+Observed in a read-only spike against a SQL Server test database (System1 profile; generic batches only:
+two table variables, one `#temp`, reads from three permanent tables; a scalar UDF and a multi-statement
+TVF; one forced parallel scan):
+
+- Actual plans name local objects stably (`[@P]`, `[#F]`), unlike `STATISTICS IO` (`#XXXXXXXX`, new per
+  execution). With `repeat = 2`, the per-name median of a table variable came out halfway between zero and
+  its real reads; with three or more repetitions it would be zero.
+- Summing `RunTimeCountersPerThread/@ActualLogicalReads` per object over operators and threads, then over
+  statements, matched `STATISTICS IO` per object exactly in every observed case, including the parallel
+  scan; summed `@ActualScans` matched the journaled scan count.
+- Plans exist only for DML/SELECT statements (none for `DECLARE`, `CREATE TABLE`, `DROP`).
+- Scalar UDF reads appear in neither `STATISTICS IO` nor plan counters; the plan carries
+  `<UserDefinedFunction>` and `QueryTimeStats/@UdfElapsedTime`/`@UdfCpuTime`. Multi-statement TVF
+  internals are invisible apart from the function operator and the scan of its return table.
+- The `artifact` `plan` section returns distilled nodes without these runtime counters; confirming the
+  match required reading the raw saved `.sqlplan` locally (a manual step outside the tool contract).
+
+Verified source: `src/SqlHarness.Core/ArtifactReader.cs` (plan section projection),
+`src/SqlHarness.Core/StatementMetrics.cs` (extraction caps, no reads).
+
+Questions for later synthesis: should the agent path expose per-operator or per-statement actual reads
+(artifact `plan`/`statements` sections) once 082 extracts them, and within which output budget?
+Confidence: high for the observed match on these shapes; loops, cursors, spools and procedures were not
+measurable (rejected by the classifier at this HEAD).
