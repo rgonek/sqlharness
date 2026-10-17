@@ -4,7 +4,7 @@ import { comparePairs, compareRows, equivalenceLabel, formatChange, regressionLa
 
 test("labels include parameter set and matrix cell", () => {
   expect(variantLabel(variant())).toBe("measure")
-  expect(variantLabel(variant({ variant: "baseline", matrixCell: 2 }))).toBe("baseline · cell 2")
+  expect(variantLabel(variant({ variant: "baseline", matrixCell: 2 }))).toBe("baseline · Case 2")
   expect(variantLabel(variant({ parameterSet: "large" }))).toBe("measure · large")
 })
 
@@ -13,7 +13,7 @@ test("pairs baseline and candidate per matrix cell", () => {
     variant({ ordinal: 0, variant: "baseline", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", matrixCell: 0 }),
     variant({ ordinal: 2, variant: "baseline", matrixCell: 1 }), variant({ ordinal: 3, variant: "candidate", matrixCell: 1 }),
   ])
-  expect(pairs.map(pair => pair.label)).toEqual(["cell 0", "cell 1"])
+  expect(pairs.map(pair => pair.label)).toEqual(["Case 0", "Case 1"])
   expect(comparePairs([variant()])).toEqual([])
 })
 
@@ -57,8 +57,8 @@ test("metric rows use only metrics for the recorded engine and never divide by z
 })
 
 test("regression label names the policy version only for a positive integer", () => {
-  expect(regressionLabel({ verdict: "fail", policyVersion: 2 })).toBe("Regression detected (policy v2)")
-  expect(regressionLabel({ verdict: "inconclusive", policyVersion: 1 })).toBe("Inconclusive (policy v1)")
+  expect(regressionLabel({ verdict: "fail", policyVersion: 2 })).toBe("Regression detected")
+  expect(regressionLabel({ verdict: "inconclusive", policyVersion: 1 })).toBe("Inconclusive")
   expect(regressionLabel({ verdict: "pass" })).toBe("No regression detected")
   expect(regressionLabel({ verdict: "pass", policyVersion: "2" })).toBe("No regression detected")
   expect(regressionLabel({ policyVersion: 2 })).toBe("No assessment")

@@ -26,7 +26,7 @@ export function versionOptions(versions: SqlVersionOption[]): SqlVersionOption[]
 export function variantLabel(variant: VariantDetail): string {
   const parts = [variant.variant]
   if (variant.parameterSet) parts.push(variant.parameterSet)
-  if (variant.matrixCell !== null) parts.push(`cell ${variant.matrixCell}`)
+  if (variant.matrixCell !== null) parts.push(`Case ${variant.matrixCell}`)
   return parts.join(" · ")
 }
 
@@ -39,7 +39,7 @@ export function comparePairs(variants: VariantDetail[]): ComparePair[] {
   for (const cell of cells) {
     const baseline = variants.find(v => v.matrixCell === cell && v.variant === "baseline")
     const candidate = variants.find(v => v.matrixCell === cell && v.variant === "candidate")
-    if (baseline && candidate) pairs.push({ label: cell === null ? "compare" : `cell ${cell}`, baseline, candidate })
+    if (baseline && candidate) pairs.push({ label: cell === null ? "compare" : `Case ${cell}`, baseline, candidate })
   }
   return pairs
 }
@@ -80,8 +80,7 @@ export function compareRows(baseline: VariantDetail, candidate: VariantDetail, e
 export function regressionLabel(regression: Record<string, unknown> | null | undefined): string {
   const text = verdictText(regression?.verdict)
   if (text === null) return "No assessment"
-  const version = regression?.policyVersion
-  return typeof version === "number" && Number.isInteger(version) && version > 0 ? `${text} (policy v${version})` : text
+  return text
 }
 
 function verdictText(verdict: unknown): string | null {

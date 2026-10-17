@@ -34,6 +34,14 @@ export type SessionSummary = {
   archived: boolean
   notePreview: string | null
   agentTitle: string | null
+  hasCompare: boolean
+  optimization: SessionOptimizationBadge[]
+}
+
+export type SessionOptimizationBadge = {
+  subject: string
+  change: string
+  warning: boolean
 }
 
 export type OperationSummary = {
@@ -71,6 +79,10 @@ export type OperationSummary = {
   parentOperationRef: string | null
   dryRun: boolean
   agentModelSource: string | null
+  subject: string | null
+  versionPair: string | null
+  readsBefore: number | null
+  readsAfter: number | null
 }
 
 /** Allowlisted, client-supplied labels from tools/call _meta; never verified, never content. */
@@ -111,6 +123,32 @@ export type CompareSubjectSummary = {
 export type CompareScopeVersions = {
   scope: string
   versions: CompareSqlVersion[]
+}
+
+export type OptimizationSection = { subjects: OptimizationSubject[]; unassigned: UnassignedCompare[] }
+export type OptimizationSubject = { subject: string; database: string; engine: string; groups: ConditionsGroup[] }
+export type ConditionsGroup = {
+  fingerprint: string; label: string; scopes: ScopeVersions[]; defaultA: string; defaultB: string | null
+  subject: string | null; database: string | null
+}
+export type ScopeVersions = { scope: string; versions: OptimizationVersion[]; defaultA: string | null; defaultB: string | null }
+export type OptimizationVersion = {
+  version: string; hash: string; logicalReadsSum: number | null; logicalReadsMean: number | null; scansSum: number | null
+  elapsedMedianMs: number | null; caseOutcome: string; measuredIn: number[]; latestOperationId: number
+}
+export type UnassignedCompare = { operationId: number; startedAt: string; status: string }
+export type OptimizationActionReference = { operationId: number; side: "baseline" | "candidate"; caseIds: string[] }
+export type OptimizationComparison = {
+  a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql"
+  operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]
+  selectedCase: string; aggregate: string; coverageLabel: string
+  mixed: { better: number; worse: number; worstCaseLabel: string; worstChangePercent: number } | null
+  tables: { table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
+  collapsed: { count: number; label: string } | null
+  elapsed: { beforeMs: number | null; afterMs: number | null; policyVerdict: string | null; differentRun: boolean }
+  tableIoUnavailable?: boolean; cpuBeforeMs?: number | null; cpuAfterMs?: number | null
+  buffersBefore?: PostgresBuffers | null; buffersAfter?: PostgresBuffers | null
+  beforeAction?: OptimizationActionReference | null; afterAction?: OptimizationActionReference | null
 }
 
 export type CompareSqlVersion = {

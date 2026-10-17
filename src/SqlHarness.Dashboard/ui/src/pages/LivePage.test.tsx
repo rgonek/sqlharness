@@ -129,6 +129,31 @@ test("the feed shows connecting until it first opens", async () => {
   expect(screen.getByText("disconnected")).toBeInTheDocument()
 })
 
+test("empty running and active sections share one compact status line", async () => {
+  useFakeEventSource()
+  stubFetch({ [RECENT]: page([]), [RUNNING]: page([]), [STARRED]: page([]), [SESSIONS]: page([]) })
+  renderApp("/")
+  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
+})
+
+test("artifact-only running rows share the empty state and remain revealable", async () => {
+  useFakeEventSource()
+  localStorage.removeItem("sqlharness.showInternalOperations")
+  stubFetch({
+    [RECENT]: page([]),
+    [RUNNING]: page([operation({ id: 41, status: "running", operation: "sqlharness_artifact" })]),
+    [STARRED]: page([]),
+    [SESSIONS]: page([]),
+  })
+  renderApp("/")
+  const running = await screen.findByRole("region", { name: "Running" })
+  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
+  expect(within(running).queryByText("sqlharness_artifact")).not.toBeInTheDocument()
+  await userEvent.click(within(running).getByRole("checkbox", { name: "Show internal operations" }))
+  expect(await within(running).findByText("sqlharness_artifact")).toBeInTheDocument()
+  expect(screen.queryByText("Nothing running · no active sessions")).not.toBeInTheDocument()
+})
+
 test("live lists are refetched on every (re)connect so changes made during a gap show", async () => {
   useFakeEventSource()
   let finished = false
@@ -193,7 +218,7 @@ test("clearing transcript data removes stale titles and models from the live cac
   renderApp("/")
   const running = await screen.findByRole("region", { name: "Running" })
   expect(await screen.findByRole("link", { name: "Optimize orders" })).toBeInTheDocument()
-  expect(await within(running).findByText("claude-opus-5-5 (transcript)")).toBeInTheDocument()
+  expect(within(running).getByText("Claude Code")).toHaveAttribute("title", "claude-opus-5-5 (transcript)")
   expect(count(calls, RECENT)).toBe(1)
   expect(count(calls, RUNNING)).toBe(1)
   expect(count(calls, SESSIONS)).toBe(1)
@@ -214,7 +239,7 @@ test("clearing transcript data removes stale titles and models from the live cac
   })
   expect(await screen.findByRole("link", { name: "cli:live" })).toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "Optimize orders" })).not.toBeInTheDocument()
-  expect(screen.queryByText("claude-opus-5-5 (transcript)")).not.toBeInTheDocument()
+  expect(screen.queryByText("Claude Code", { selector: "span[title='claude-opus-5-5 (transcript)']" })).not.toBeInTheDocument()
 })
 
 test("a long-running operation outside the recent page still shows in Running", async () => {
@@ -255,7 +280,7 @@ test("a running operation missing from the refetched running list leaves Running
   gone = true
   act(() => liveFeed().open())
 
-  expect(await within(running).findByText("Nothing is running.")).toBeInTheDocument()
+  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
 })
 
 test("pushed events add running rows and remove finished ones without the recent cap", async () => {
@@ -265,7 +290,7 @@ test("pushed events add running rows and remove finished ones without the recent
 
   renderApp("/")
   const running = await screen.findByRole("region", { name: "Running" })
-  expect(await within(running).findByText("Nothing is running.")).toBeInTheDocument()
+  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
   act(() => liveFeed().open())
 
   const old = operation({ id: 5, status: "running", operation: "watch", updatedAt: "2026-10-07T09:00:01.000Z" })
@@ -273,7 +298,7 @@ test("pushed events add running rows and remove finished ones without the recent
   expect(await within(running).findByText("watch")).toBeInTheDocument()
 
   act(() => liveFeed().emit("operation", { ...old, status: "succeeded", updatedAt: "2026-10-07T09:00:02.000Z" }))
-  expect(await within(running).findByText("Nothing is running.")).toBeInTheDocument()
+  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
 })
 
 test("a feed the server refuses (401) shows the reopen message without retrying", async () => {

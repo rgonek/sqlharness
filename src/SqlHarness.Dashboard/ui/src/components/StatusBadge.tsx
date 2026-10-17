@@ -4,13 +4,14 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { describeError } from "@/lib/errors"
-import { statusVariant } from "@/lib/flags"
+import { badgeTier, statusVariant } from "@/lib/flags"
 
 type StatusFields = Pick<OperationSummary, "status" | "exitCode" | "errorKind" | "errorMessage" | "cancelReason">
 
 export function StatusBadge({ operation }: { operation: StatusFields }) {
   const [open, setOpen] = useState(false)
-  const badge = <Badge variant={statusVariant(operation.status)}>{operation.status}</Badge>
+  if (badgeTier(operation.status) === "info") return <span className="text-sm text-muted-foreground">{operation.status}</span>
+  const badge = <Badge data-tier={badgeTier(operation.status)} variant={statusVariant(operation.status)}>{operation.status}</Badge>
   if (operation.status !== "failed" && operation.status !== "rejected") return badge
 
   const heading = [operation.errorKind ?? "error", operation.exitCode !== null ? `exit ${operation.exitCode}` : null]

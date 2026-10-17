@@ -27,13 +27,15 @@ function sideState(version: string, query: ReturnType<typeof useSessionSqlText>)
   return null
 }
 
-export function SessionVersionDiff({ sessionId, engine, options }: {
+export function SessionVersionDiff({ sessionId, engine, options, initialFrom, initialTo }: {
   sessionId: number
   engine: string | null
   options: SqlVersionOption[]
+  initialFrom?: string
+  initialTo?: string
 }) {
-  const [fromSelection, setFromSelection] = useState<string | null>(() => keyOf(options[0]))
-  const [toSelection, setToSelection] = useState<string | null>(() => keyOf(options.at(-1)))
+  const [fromSelection, setFromSelection] = useState<string | null>(() => keyOf(options.find(option => option.version === initialFrom) ?? options[0]))
+  const [toSelection, setToSelection] = useState<string | null>(() => keyOf(options.find(option => option.version === initialTo) ?? options.at(-1)))
   const fromOption = selectedOption(options, fromSelection) ?? options[0]
   const toOption = selectedOption(options, toSelection) ?? options.at(-1)
   const fromQuery = useSessionSqlText(sessionId, fromOption?.hash ?? null)

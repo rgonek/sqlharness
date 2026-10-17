@@ -11,7 +11,7 @@ export const session = (over: Partial<SessionSummary> = {}): SessionSummary => (
   clientName: null, clientVersion: null, mcpMode: null, cwd: "/work",
   firstSeen: "2026-10-07T09:00:00.000Z", lastSeen: "2026-10-07T09:05:00.000Z",
   operations: 3, failed: 1, rejected: 0, running: 0, abandoned: 0, clientTitle: null, roots: null, protocolVersion: null,
-  title: null, starred: false, archived: false, notePreview: null, agentTitle: null, ...over,
+  title: null, starred: false, archived: false, notePreview: null, agentTitle: null, hasCompare: false, optimization: [], ...over,
 })
 
 export const operation = (over: Partial<OperationSummary> = {}): OperationSummary => ({
@@ -20,7 +20,7 @@ export const operation = (over: Partial<OperationSummary> = {}): OperationSummar
   durationMs: 1200, profile: "local", engine: "sqlserver", server: "srv", database: "db", mutationRequested: false,
   sqlHash: "sha256:0123456789abcdef", rowsReturned: 3, logicalReadsMedian: null, hasSpill: false, coldCache: false,
   overGranted: false, progress: null, errorMessage: null, cancelReason: null, agentModel: null, agentReasoningEffort: null,
-  operationRef: null, parentOperationRef: null, dryRun: false, agentModelSource: null, ...over,
+  operationRef: null, parentOperationRef: null, dryRun: false, agentModelSource: null, subject: null, versionPair: null, readsBefore: null, readsAfter: null, ...over,
 })
 
 export const agentCall = (over: Partial<AgentCall> = {}): AgentCall => ({

@@ -30,6 +30,26 @@ test("lists dimension-scoped operations with exact window and cursor paging", as
   expect(calls.filter(call => call.startsWith("/api/operations?")).length).toBeGreaterThanOrEqual(2)
 })
 
+test("internal-operation visibility starts hidden and persists when enabled", async () => {
+  localStorage.removeItem("sqlharness.showInternalOperations")
+  stubFetch({ "/api/operations": { items: [operation({ id: 22, operation: "sqlharness_artifact" }), operation({ id: 23, sessionId: 7, operation: "compare", subject: "orders", versionPair: "v0 → v3", readsBefore: 48_210, readsAfter: 3_115, agentModel: "gpt-6-sol" })], nextCursor: null } })
+  const first = renderApp("/operations")
+  expect(await screen.findByRole("link", { name: "23" })).toHaveAttribute("href", "/operations/23?returnSession=7")
+  expect(screen.queryByRole("link", { name: "22" })).not.toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Session #7" })).toBeInTheDocument()
+  expect(screen.getByText("orders")).toBeInTheDocument()
+  expect(screen.getByText("v0 → v3 · 48,210 → 3,115")).toBeInTheDocument()
+  expect(screen.getByText("Claude Code")).toHaveAttribute("title", "gpt-6-sol")
+  await userEvent.click(screen.getByRole("checkbox", { name: "Show internal operations" }))
+  expect(await screen.findByRole("link", { name: "22" })).toBeInTheDocument()
+  expect(localStorage.getItem("sqlharness.showInternalOperations")).toBe("true")
+  first.unmount()
+
+  renderApp("/operations")
+  expect(await screen.findByRole("checkbox", { name: "Show internal operations" })).toBeChecked()
+  expect(await screen.findByRole("link", { name: "22" })).toBeInTheDocument()
+})
+
 function jsonResponse(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } })
 }

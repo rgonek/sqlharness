@@ -12,6 +12,7 @@ test("shows KPIs, charts and top lists, and switches range", async () => {
   const calls = stubFetch({ "/api/stats": stats(), "/api/profiles": profilesResponse() })
   renderApp("/stats")
 
+  expect(await screen.findByRole("heading", { name: "Usage" })).toBeInTheDocument()
   expect(await screen.findByText("Workflow output cost")).toBeInTheDocument()
   expect(screen.getByText("single-measured-execution-output")).toBeInTheDocument()
   expect(screen.getByText(/Input, discovery and chat are unmeasured/)).toBeInTheDocument()

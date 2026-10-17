@@ -1,8 +1,8 @@
 import type { ReactNode } from "react"
 import type { OperationDetail } from "@/api/types"
-import { Link, useParams, useSearch } from "@tanstack/react-router"
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
-import { useOperation } from "@/api/queries"
+import { useOperation, useOperationOptimization } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { FlagBadges } from "@/components/FlagBadges"
 import { SqlBlock } from "@/components/SqlBlock"
@@ -20,6 +20,9 @@ import { variantLabel } from "@/lib/compare"
 import { formatDuration, formatNumber, formatTimestamp, shortHash } from "@/lib/format"
 import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
+import { sessionSearchFromOperation } from "@/lib/sessionSearch"
+import type { OperationDetailSearch } from "@/router"
+import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -115,7 +118,7 @@ export function OperationPage() {
   return <OperationView id={id} returnSearch={search} />
 }
 
-function OperationView({ id, returnSearch }: { id: number; returnSearch: { returnSession?: number; returnSubject?: string; returnScope?: string; returnUnassigned?: boolean } }) {
+function OperationView({ id, returnSearch }: { id: number; returnSearch: OperationDetailSearch }) {
   const query = useOperation(id)
 
   if (query.error) return <ErrorState error={query.error} />
@@ -123,6 +126,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
 
   const detail = query.data
   const op = detail.operation
+  if (op.operation === "compare") return <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
   const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
   return (
     <div className="space-y-4">
@@ -137,7 +141,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
           </div>
           <CardDescription>
             {op.operation} by {agentLabel(op.agentKind)} in{" "}
-            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? { subject: returnSearch.returnSubject, scope: returnSearch.returnScope, unassigned: returnSearch.returnUnassigned } : undefined}>
+            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined}>
               {detail.session.sessionKey}
             </Link>
           </CardDescription>
@@ -153,9 +157,6 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
             <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>
             <Fact label="SQL hash"><span className="font-mono">{shortHash(op.sqlHash)}</span></Fact>
-            <Fact label="Output bytes (raw / emitted)">{formatNumber(detail.rawBytes)} / {formatNumber(detail.emittedBytes)}</Fact>
-            <Fact label="Estimated output tokens (raw / emitted)">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
-            <Fact label="Token estimation method">{detail.tokenEstimationMethod}; UTF-8 bytes divided by four, rounded up</Fact>
             {op.dryRun && <Fact label="Execution mode">Dry run; output counted, no database execution</Fact>}
             {op.operationRef && <Fact label="Operation reference"><span className="font-mono">{op.operationRef}</span></Fact>}
             {op.parentOperationRef && <Fact label="Producer reference"><span className="font-mono">{op.parentOperationRef}</span></Fact>}
@@ -186,7 +187,28 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
         </CardContent>
       </Card>
 
-      <OperationTimings detail={detail} />
+      {detail.variants.length === 1 && <VariantPanel variant={detail.variants[0]} engine={op.engine} />}
+      {detail.variants.length > 1 && (
+        <Tabs defaultValue={String(detail.variants[0].ordinal)}>
+          <TabsList>
+            {detail.variants.map(v => <TabsTrigger key={v.ordinal} value={String(v.ordinal)}>{variantLabel(v)}</TabsTrigger>)}
+          </TabsList>
+          {detail.variants.map(v => <TabsContent key={v.ordinal} value={String(v.ordinal)}><VariantPanel variant={v} engine={op.engine} /></TabsContent>)}
+        </Tabs>
+      )}
+      <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Run diagnostics</summary><div className="mt-4 space-y-4">
+        <Card><CardHeader><CardTitle>Output size</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <Fact label="Output bytes (raw / emitted)">{formatNumber(detail.rawBytes)} / {formatNumber(detail.emittedBytes)}</Fact>
+          <Fact label="Estimated output tokens (raw / emitted)">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
+          <Fact label="Token estimation method">{detail.tokenEstimationMethod}; UTF-8 bytes divided by four, rounded up</Fact>
+        </CardContent></Card>
+        <OperationTimings detail={detail} />
+        {detail.agent && <Card><CardHeader><CardTitle><h2>Agent call</h2></CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <Fact label="Model">{detail.agent.model ?? detail.agent.transcriptModel ?? "—"}{!detail.agent.model && detail.agent.transcriptModel && <span className="ml-1 text-sm text-muted-foreground">from transcript</span>}</Fact>
+          <Fact label="Effort">{detail.agent.reasoningEffort ?? detail.agent.transcriptReasoningEffort ?? "—"}{!detail.agent.reasoningEffort && detail.agent.transcriptReasoningEffort && <span className="ml-1 text-sm text-muted-foreground">from transcript</span>}</Fact>
+          {detail.agent.conversationTitle && <Fact label="Conversation">{detail.agent.conversationTitle}</Fact>}<Fact label="Agent session">{detail.agent.sessionId ?? "—"}</Fact><Fact label="Turn">{detail.agent.turnId ?? "—"}</Fact><Fact label="Trigger">{detail.agent.turnTrigger ?? "—"}</Fact><Fact label="Thread source">{detail.agent.threadSource ?? "—"}</Fact><Fact label="Call id">{detail.agent.callId ?? "—"}</Fact>
+        </CardContent></Card>}
+      </div></details>
 
       {op.operation === "measure" && <Card>
         <CardHeader><CardTitle>Measurement conditions</CardTitle></CardHeader>
@@ -202,52 +224,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
         </CardContent>
       </Card>}
 
-      {detail.agent && (
-        <Card>
-          <CardHeader>
-            <CardTitle><h2>Agent call</h2></CardTitle>
-            <CardDescription>Labels the client sent with this call; not verified.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <Fact label="Model">
-                {detail.agent.model ?? detail.agent.transcriptModel ?? "—"}
-                {!detail.agent.model && detail.agent.transcriptModel && <span className="ml-1 text-sm text-muted-foreground">from transcript</span>}
-              </Fact>
-              <Fact label="Effort">
-                {detail.agent.reasoningEffort ?? detail.agent.transcriptReasoningEffort ?? "—"}
-                {!detail.agent.reasoningEffort && detail.agent.transcriptReasoningEffort && <span className="ml-1 text-sm text-muted-foreground">from transcript</span>}
-              </Fact>
-              {detail.agent.conversationTitle && <Fact label="Conversation">{detail.agent.conversationTitle}</Fact>}
-              <Fact label="Agent session"><span className="font-mono">{detail.agent.sessionId ?? "—"}</span></Fact>
-              <Fact label="Turn"><span className="font-mono">{detail.agent.turnId ?? "—"}</span></Fact>
-              <Fact label="Trigger">{detail.agent.turnTrigger ?? "—"}</Fact>
-              <Fact label="Thread source">{detail.agent.threadSource ?? "—"}</Fact>
-              <Fact label="Call id"><span className="font-mono">{detail.agent.callId ?? "—"}</span></Fact>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {op.operation === "compare" && <CompareDetail detail={detail} />}
-
-      {op.operation !== "compare" && detail.variants.length === 1 && <VariantPanel variant={detail.variants[0]} engine={op.engine} />}
-      {op.operation !== "compare" && detail.variants.length > 1 && (
-        <Tabs defaultValue={String(detail.variants[0].ordinal)}>
-          <TabsList>
-            {detail.variants.map(v => (
-              <TabsTrigger key={v.ordinal} value={String(v.ordinal)}>
-                {variantLabel(v)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {detail.variants.map(v => (
-            <TabsContent key={v.ordinal} value={String(v.ordinal)}>
-              <VariantPanel variant={v} engine={op.engine} />
-            </TabsContent>
-          ))}
-        </Tabs>
-      )}
 
       {op.operation !== "compare" && <Card>
         <CardHeader>
@@ -273,4 +250,45 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
       </Card>}
     </div>
   )
+}
+
+function CompareOperationView({ id, detail, returnSearch }: { id: number; detail: OperationDetail; returnSearch: OperationDetailSearch }) {
+  const op = detail.operation
+  const navigate = useNavigate({ from: "/operations/$id" })
+  const selectedCase = returnSearch.case ?? "all"
+  const aggregate = returnSearch.agg ?? "sum"
+  const comparison = useOperationOptimization(id, selectedCase, aggregate)
+  const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
+  const title = detail.session.title ?? detail.session.clientTitle ?? detail.session.sessionKey
+  if (comparison.error) return <ErrorState error={comparison.error} />
+  return <main className="space-y-4">
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b pb-3">
+      <h1 className="font-heading text-lg font-medium">{detail.compareSubject ?? "Unassigned compare"}</h1>
+      <span className="text-sm">{detail.compareScope === "whole" ? "whole query" : detail.compareScope ?? "Unassigned scope"}</span>
+      <span className="text-sm">{detail.baselineVersion ?? "Unknown"} → {detail.candidateVersion ?? "Unknown"}</span>
+      <span className="text-sm">{op.database ?? "Unknown database"}</span>
+      <time className="text-sm" dateTime={op.startedAt}>{formatTimestamp(op.startedAt)}</time>
+      <StatusBadge operation={op} />
+      <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined} className="ml-auto text-sm underline">Back to {title}</Link>
+    </header>
+    {detail.vars && <div className="flex flex-wrap gap-2" aria-label="Variables">{Object.entries(detail.vars).map(([key, value]) => <Badge key={key} variant="outline">{key}=<span>{value}</span></Badge>)}</div>}
+    {comparison.isPending ? <Skeleton className="h-64 w-full" /> : comparison.data ? <>
+      <ComparisonPanel comparison={comparison.data} sessionId={op.sessionId} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector
+        searchState={{ case: selectedCase, agg: aggregate }} sessionSearch={sessionSearchFromOperation(returnSearch)}
+        onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }) }) }} />
+      <CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data.selectedCase : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }) }) }} />
+    </> : null}
+    <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Run diagnostics</summary><div className="mt-4 space-y-4">
+      <Card><CardHeader><CardTitle>Output size</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Fact label="Output bytes (raw / emitted)">{formatNumber(detail.rawBytes)} / {formatNumber(detail.emittedBytes)}</Fact>
+        <Fact label="Estimated output tokens (raw / emitted)">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
+        <Fact label="Token estimation method">{detail.tokenEstimationMethod}; UTF-8 bytes divided by four, rounded up</Fact>
+      </CardContent></Card>
+      <OperationTimings detail={detail} />
+      {detail.agent && <Card><CardHeader><CardTitle><h2>Agent call</h2></CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Fact label="Model">{detail.agent.model ?? detail.agent.transcriptModel ?? "—"}</Fact><Fact label="Effort">{detail.agent.reasoningEffort ?? detail.agent.transcriptReasoningEffort ?? "—"}</Fact>
+        {detail.agent.conversationTitle && <Fact label="Conversation">{detail.agent.conversationTitle}</Fact>}<Fact label="Agent session">{detail.agent.sessionId ?? "—"}</Fact><Fact label="Turn">{detail.agent.turnId ?? "—"}</Fact><Fact label="Trigger">{detail.agent.turnTrigger ?? "—"}</Fact><Fact label="Thread source">{detail.agent.threadSource ?? "—"}</Fact><Fact label="Call id">{detail.agent.callId ?? "—"}</Fact>
+      </CardContent></Card>}
+    </div></details>
+  </main>
 }

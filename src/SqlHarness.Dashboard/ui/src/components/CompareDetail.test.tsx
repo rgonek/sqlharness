@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test, vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -6,210 +6,106 @@ import { CompareDetail } from "./CompareDetail"
 import { conditions, operation, operationDetail, variant } from "@/test/fixtures"
 import { stubFetch } from "@/test/render"
 
-const renderCompare = (detail: ReturnType<typeof operationDetail>, routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)> = {}) => {
-  stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" }, ...routes })
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>)
+const renderCompare = (detail: ReturnType<typeof operationDetail>) => {
+  const calls = stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" } })
+  return { ...render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>), calls }
 }
 
-test("keeps execution, Core regression, result equivalence, and matrix case outcomes separate", () => {
+test("compare detail disclosures start collapsed", () => {
+  renderCompare(operationDetail({ operation: operation({ operation: "compare" }) }))
+  for (const label of ["SQL diff & conditions", "Plans", "Per-case & per-run details"]) {
+    expect(screen.getByText(label).closest("details")).not.toHaveAttribute("open")
+  }
+})
+
+test("no assessment explains its meaning and keeps policy version in a tooltip", () => {
   renderCompare(operationDetail({
-    operation: operation({ operation: "compare", status: "succeeded", engine: "sqlserver" }),
-    compareSubject: "orders", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v1",
-    compareRegression: { verdict: "fail", reasons: ["elapsed-regressed"] },
-    summary: { kind: "compare-matrix", comparison: "Ordered", cases: 2 },
+    operation: operation({ operation: "compare" }),
+    compareCases: [{ index: 0, equivalence: { mode: "Ordered", equivalent: false }, regression: { policyVersion: 2 } }],
+    variants: [variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0 })],
+  }))
+  expect(screen.getByText("No assessment")).toHaveAttribute("title", "No regression assessment is available for this comparison.")
+  expect(screen.getByText("Results differ").closest("[data-tier='warning']")).not.toBeNull()
+})
+
+test("policy version appears only in the assessment tooltip", () => {
+  renderCompare(operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareCases: [{ index: 0, equivalence: { mode: "Ordered", equivalent: true }, regression: { verdict: "fail", policyVersion: 2 } }],
+    variants: [variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0 })],
+  }))
+  expect(screen.getByText("Regression detected")).toHaveAttribute("title", "Policy v2")
+  expect(screen.queryByText("policy v2", { exact: false })).toBeNull()
+})
+
+test("per-run details select one case and one side at a time", async () => {
+  const onCaseChange = vi.fn()
+  const detail = operationDetail({
+    operation: operation({ operation: "compare" }),
+    conditions: conditions({ cases: [
+      { id: "0", index: 0, label: "@tenant = N'gold'", setName: null, varying: [], fingerprint: "a" },
+      { id: "1", index: 1, label: "@tenant = N'silver'", setName: null, varying: [], fingerprint: "b" },
+    ] }),
     compareCases: [
       { index: 0, equivalence: { mode: "Ordered", equivalent: true }, regression: { verdict: "pass" } },
       { index: 1, equivalence: { mode: "Ordered", equivalent: false }, regression: { verdict: "fail" } },
     ],
     variants: [
-      variant({ ordinal: 0, variant: "baseline", matrixCell: 0, elapsedMs: { min: 10, median: 12, max: 14 } }),
-      variant({ ordinal: 1, variant: "candidate", matrixCell: 0, elapsedMs: { min: 8, median: 9, max: 11 } }),
-      variant({ ordinal: 2, variant: "baseline", matrixCell: 1, elapsedMs: { min: 10, median: 12, max: 14 } }),
-      variant({ ordinal: 3, variant: "candidate", matrixCell: 1, elapsedMs: { min: 16, median: 18, max: 20 } }),
+      variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0, elapsedMs: { min: 1, median: 11, max: 12 } }),
+      variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0, elapsedMs: { min: 1, median: 12, max: 13 } }),
+      variant({ ordinal: 2, variant: "baseline", caseId: "1", matrixCell: 1, elapsedMs: { min: 1, median: 21, max: 22 } }),
+      variant({ ordinal: 3, variant: "candidate", caseId: "1", matrixCell: 1, elapsedMs: { min: 1, median: 22, max: 23 } }),
     ],
-  }))
-  expect(screen.getAllByText(/Execution succeeded/)).toHaveLength(3)
-  expect(screen.getAllByText("Regression detected")).toHaveLength(2)
-  expect(screen.getByText("Results differ")).toBeInTheDocument()
-  const cases = screen.getByRole("tabpanel", { name: "Cases" })
-  expect(within(cases).getByText("Cell 0")).toBeInTheDocument()
-  expect(within(cases).getByText("Cell 1")).toBeInTheDocument()
-  expect(within(cases).getByText("Regression detected")).toBeInTheDocument()
-  expect(screen.getByRole("region", { name: "Compare detail" })).toHaveTextContent("v0 → v1")
-})
-
-test("shows canonical case labels, truncates long labels, and hides the single-case label", () => {
-  const fullLabel = "@ClassType = N'ClientConfigurationModel2'"
-  renderCompare(operationDetail({
-    operation: operation({ operation: "compare", status: "succeeded" }),
-    summary: { kind: "compare-matrix", comparison: "Ordered", cases: 2 },
-    conditions: conditions({ cases: [
-      { id: "0", index: 0, label: fullLabel, setName: null, varying: [], fingerprint: "a" },
-      { id: "1", index: 1, label: "@tenant = N'a very long tenant label that should be clipped in the heading'", setName: null, varying: [], fingerprint: "b" },
-    ] }),
-    compareCases: [{ index: 0 }, { index: 1 }],
-    variants: [
-      variant({ ordinal: 0, variant: "baseline", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", matrixCell: 0 }),
-      variant({ ordinal: 2, variant: "baseline", matrixCell: 1 }), variant({ ordinal: 3, variant: "candidate", matrixCell: 1 }),
-    ],
-  }))
-  const heading = screen.getByTitle(fullLabel)
-  expect(heading).toHaveTextContent("@ClassType = N'ClientConfigurationModel2'")
-  const longLabel = "@tenant = N'a very long tenant label that should be clipped in the heading'"
-  const long = screen.getByTitle(longLabel)
-  expect(long).toHaveTextContent(/^@tenant = N'a very long/)
-  expect(long).toHaveTextContent(/heading'$/)
-  expect(long).not.toHaveTextContent(longLabel)
-
-  const single = renderCompare(operationDetail({
-    operation: operation({ operation: "compare" }), conditions: conditions({ cases: [{ id: "0", index: 0, label: "Case 1 of 1", setName: null, varying: [], fingerprint: "single" }] }),
-  }))
-  expect(single.queryByText("Case 1 of 1")).not.toBeInTheDocument()
-})
-
-test("uses variant case labels when compare case summaries are absent", () => {
-  renderCompare(operationDetail({
-    operation: operation({ operation: "compare" }),
-    summary: { kind: "compare-matrix", comparison: "Ordered", cases: 1 }, compareCases: null,
-    conditions: null,
-    variants: [
-      variant({ ordinal: 0, variant: "baseline", matrixCell: 0, caseLabel: "@tenant = N'gold'" }),
-      variant({ ordinal: 1, variant: "candidate", matrixCell: 0, caseLabel: "@tenant = N'gold'" }),
-    ],
-  }))
-
-  expect(screen.getByTitle("@tenant = N'gold'")).toHaveTextContent("@tenant = N'gold'")
-  expect(screen.queryByText("Cell 0")).not.toBeInTheDocument()
-})
-
-test("shows missing historic conditions and unrecorded equivalence without borrowing an assessment", async () => {
-  renderCompare(operationDetail({
-    operation: operation({ operation: "compare" }),
-    compareConditions: null, summary: null, compareRegression: null, compareCases: null,
-  }))
-  expect(screen.getByText("Equivalence unavailable (legacy record)")).toBeInTheDocument()
-  expect(screen.getByText("No assessment")).toBeInTheDocument()
-  await userEvent.click(screen.getByRole("tab", { name: "Measurement conditions" }))
-  expect(screen.getByText("Historical measurement conditions are unavailable.")).toBeInTheDocument()
-  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
-  expect(screen.getByText(/SQL text is not stored for both sides/)).toBeInTheDocument()
-})
-
-test("shows plans and table IO from both compare sides", async () => {
-  stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" } })
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={queryClient}><CompareDetail detail={operationDetail({
-    operation: operation({ operation: "compare" }),
-    variants: [
-      variant({ ordinal: 0, variant: "baseline", tableIo: [{ ...variant().tableIo[0], table: "BeforeRows" }], plans: [{ repetition: 1, ordinal: 0, hash: "A".repeat(64), stored: false }] }),
-      variant({ ordinal: 1, variant: "candidate", tableIo: [{ ...variant().tableIo[0], table: "AfterRows" }], plans: [{ repetition: 1, ordinal: 1, hash: "B".repeat(64), stored: false }] }),
-    ],
-  })} /></QueryClientProvider>)
-  await userEvent.click(screen.getByRole("tab", { name: "Plans and IO" }))
-  expect(screen.getAllByText("BeforeRows")).toHaveLength(3)
-  expect(screen.getAllByText("AfterRows")).toHaveLength(3)
-  expect(screen.getAllByText(/plan not stored/)).toHaveLength(2)
-})
-
-test("copies compare Markdown without operation metadata or SQL when SQL text is unavailable", async () => {
-  const writeText = vi.fn().mockResolvedValue(undefined)
-  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
-  renderCompare(operationDetail({
-    operation: operation({ operation: "compare", engine: "sqlserver", server: "server-secret", database: "database-secret", profile: "profile-secret" }),
-    vars: { tenant: "var-secret" }, artifactDirectory: "artifact-secret", sqlText: null, candidateSqlText: null,
-    compareSubject: "orders", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v1",
-    conditions: conditions({ setup: { hash: "setup", text: "setup-secret" }, fixed: [{ name: "@p", effectiveType: "int", value: "parameter-secret" }] }),
-  }))
-
-  await userEvent.click(screen.getByRole("button", { name: "Copy" }))
-
-  await waitFor(() => expect(writeText).toHaveBeenCalledOnce())
-  const markdown = writeText.mock.calls[0][0] as string
-  expect(markdown.startsWith("### SQL compare: orders / whole (v0 → v1)")).toBe(true)
-  expect(markdown).toContain("SQL diff not included (SQL text not stored or over the size limit).")
-  for (const secret of ["server-secret", "database-secret", "profile-secret", "var-secret", "setup-secret", "parameter-secret", "artifact-secret"]) {
-    expect(markdown).not.toContain(secret)
-  }
-})
-
-test("copied Markdown includes detailed changes for every changed statement ordinal", async () => {
-  const writeText = vi.fn().mockResolvedValue(undefined)
-  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
-  const statementPlan = (physicalOp: string, objectName: string) => ({ statements: [{ root: { physicalOp, objectName }, missingIndexes: [] }] })
-  renderCompare(operationDetail({
-    operation: operation({ operation: "compare" }),
-    compareSubject: "batch", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v1",
-    sqlText: null, candidateSqlText: null,
-    variants: [
-      variant({ ordinal: 0, variant: "baseline", plans: [
-        { repetition: 0, ordinal: 0, hash: "same", stored: true },
-        { repetition: 0, ordinal: 1, hash: "before1", stored: true },
-        { repetition: 0, ordinal: 2, hash: "before2", stored: true },
-      ] }),
-      variant({ ordinal: 1, variant: "candidate", plans: [
-        { repetition: 0, ordinal: 0, hash: "same", stored: true },
-        { repetition: 0, ordinal: 1, hash: "after1", stored: true },
-        { repetition: 0, ordinal: 2, hash: "after2", stored: true },
-      ] }),
-    ],
-  }), {
-    "/api/plans/before1?view=distilled": statementPlan("Index Scan", "dbo.First"),
-    "/api/plans/after1?view=distilled": statementPlan("Index Seek", "dbo.First"),
-    "/api/plans/before2?view=distilled": statementPlan("Table Scan", "dbo.Second"),
-    "/api/plans/after2?view=distilled": statementPlan("Index Seek", "dbo.Second"),
   })
-
-  await userEvent.click(screen.getByRole("button", { name: "Copy" }))
-  await waitFor(() => expect(writeText).toHaveBeenCalledOnce())
-  const markdown = writeText.mock.calls[0][0] as string
-  expect(markdown).toContain("Statement 1")
-  expect(markdown).toContain("dbo.First: Index Scan → Index Seek")
-  expect(markdown).toContain("Statement 2")
-  expect(markdown).toContain("dbo.Second: Table Scan → Index Seek")
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} selectedCase="1" onCaseChange={onCaseChange} /></QueryClientProvider>)
+  await userEvent.click(screen.getByText("Per-case & per-run details"))
+  const section = screen.getByText("Per-case & per-run details").closest("details")!
+  const caseSelect = within(section).getByRole("combobox", { name: "Case" })
+  expect(caseSelect).toHaveValue("1")
+  fireEvent.change(caseSelect, { target: { value: "0" } })
+  expect(onCaseChange).toHaveBeenCalledWith("0")
+  await userEvent.selectOptions(within(section).getByRole("combobox", { name: "Side" }), "candidate")
+  expect(within(section).getAllByRole("region", { name: "Key metrics" })).toHaveLength(1)
+  expect(within(section).getByText("22 ms")).toBeInTheDocument()
+  expect(within(section).queryByText("21 ms")).not.toBeInTheDocument()
+  expect(within(section).getByText(/Results differ/)).toBeInTheDocument()
+  expect(within(section).getByText(/Regression detected/)).toBeInTheDocument()
 })
 
-test("shows original setup SQL with an independent copy control beside compare SQL", async () => {
-  const setup = "CREATE TABLE #session_data (id int);\nINSERT INTO #session_data VALUES (1);"
-  renderCompare(operationDetail({
+test("SQL, conditions, and plans stay within their disclosures", async () => {
+  const detail = operationDetail({
     operation: operation({ operation: "compare" }),
-    sqlText: "SELECT id FROM #session_data",
-    candidateSqlText: "SELECT id FROM #session_data WHERE id > 0",
-    conditions: conditions({ setup: { hash: "setup", text: setup } }),
+    sqlText: "SELECT id FROM Orders", candidateSqlText: "SELECT id FROM Orders WHERE id > 0",
+    conditions: conditions({ setup: { hash: "setup", text: "CREATE TABLE #work (id int);" } }),
+    variants: [variant({ ordinal: 0, variant: "baseline" }), variant({ ordinal: 1, variant: "candidate" })],
+  })
+  renderCompare(detail)
+  await userEvent.click(screen.getByText("SQL diff & conditions"))
+  const sql = screen.getByText("SQL diff & conditions").closest("details")!
+  expect(within(sql).getByText("CREATE TABLE #work (id int);")).toBeInTheDocument()
+  expect(within(sql).getByText("Timeout")).toBeInTheDocument()
+  await userEvent.click(screen.getAllByText("Plans")[0])
+  expect(within(screen.getAllByText("Plans")[0].closest("details")!).getAllByRole("region", { name: "Key metrics" })).toHaveLength(2)
+})
+
+test("plans and reproduction scripts use the selected operation's actual baseline and candidate variants", async () => {
+  const before = "C".repeat(64)
+  const after = "D".repeat(64)
+  const { calls } = renderCompare(operationDetail({
+    operation: operation({ operation: "compare" }),
+    variants: [
+      variant({ ordinal: 0, variant: "baseline", caseId: "0", plans: [{ repetition: 1, ordinal: 0, hash: before, stored: true }] }),
+      variant({ ordinal: 1, variant: "candidate", caseId: "0", plans: [{ repetition: 1, ordinal: 0, hash: after, stored: true }] }),
+    ],
   }))
-  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
-  const panel = screen.getByRole("region", { name: "Setup SQL" })
-  expect(within(panel).getByTestId("sql-code").textContent).toBe(setup)
-  expect(within(panel).getByRole("button", { name: "Show formatted" })).toBeInTheDocument()
-  expect(within(panel).getByRole("button", { name: "Copy" })).toBeInTheDocument()
-  expect(within(panel).getByText(/same database session/)).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: "Diff" })).toBeInTheDocument()
-})
-
-test("explains when setup SQL is unavailable or omitted by journal limits", async () => {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const { rerender } = render(<QueryClientProvider client={queryClient}><CompareDetail detail={operationDetail({
-    operation: operation({ operation: "compare" }),
-    conditions: conditions(),
-  })} /></QueryClientProvider>)
-  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
-  expect(screen.getByText(/Setup SQL is not stored/)).toBeInTheDocument()
-  rerender(<QueryClientProvider client={queryClient}><CompareDetail detail={operationDetail({
-    operation: operation({ operation: "compare" }),
-    conditions: conditions(),
-  })} /></QueryClientProvider>)
-  expect(screen.getByText(/Setup SQL is not stored/)).toBeInTheDocument()
-  expect(within(screen.getByRole("region", { name: "Setup SQL" })).queryByRole("button", { name: "Copy" })).not.toBeInTheDocument()
-})
-
-test("uses the dedicated setup column even if the bounded conditions omitted setup", async () => {
-  const setup = "CREATE TABLE #big_data (id int);"
-  renderCompare(operationDetail({
-    operation: operation({ operation: "compare" }),
-    setupSqlText: setup,
-    conditions: conditions(),
-  }))
-  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
-  const section = screen.getByRole("region", { name: "Setup SQL" })
-  expect(within(section).getByTestId("sql-code")).toHaveTextContent(setup)
-  expect(screen.queryByText(/Setup SQL was omitted/)).not.toBeInTheDocument()
+  await userEvent.click(screen.getAllByText("Plans").find(element => element.tagName.toLowerCase() === "summary")!)
+  const planHrefs = screen.getAllByRole("link", { name: "Download plan" }).map(link => link.getAttribute("href"))
+  expect(planHrefs).toContain(`/api/plans/${before}`)
+  expect(planHrefs).toContain(`/api/plans/${after}`)
+  await userEvent.click(screen.getByText("Per-case & per-run details"))
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Side" }), "candidate")
+  await waitFor(() => expect(calls.some(call => {
+    const url = new URL(call, "http://dashboard")
+    return url.pathname === "/api/operations/10/repro" && url.searchParams.get("side") === "candidate" && url.searchParams.get("case") === "0"
+  })).toBe(true))
 })

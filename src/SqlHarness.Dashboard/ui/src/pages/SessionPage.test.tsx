@@ -20,6 +20,15 @@ test("shows session facts and its operations", async () => {
   expect(screen.getByText("compare")).toBeInTheDocument()
 })
 
+test("shows the optimization section for sessions marked with a compare", async () => {
+  stubFetch({
+    "/api/sessions/7": sessionDetail({ session: session({ id: 7, hasCompare: true }) }),
+    "/api/sessions/7/optimization": { subjects: [], unassigned: [] },
+  })
+  renderApp("/sessions/7")
+  expect(await screen.findByRole("heading", { name: "Optimization" })).toBeInTheDocument()
+})
+
 test("unknown session shows not found", async () => {
   stubFetch({})
   renderApp("/sessions/999")

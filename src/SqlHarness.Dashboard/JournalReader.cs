@@ -16,6 +16,14 @@ namespace SqlHarness.Dashboard;
 /// </summary>
 public sealed class JournalReader(string databasePath, IProcessInfo processes)
 {
+    private sealed record OptimizationEvidenceRow(
+        long OperationId, string? Subject, string? Scope, string? Database, string? Engine, string? Fingerprint,
+        string? BaselineHash, string? CandidateHash, string StartedAt, string Status, string? ConditionsJson, string? SummaryJson,
+        long? MetricId, string? Variant, string? CaseId, string? CaseLabel, long? LogicalReadsMedian, long? ElapsedMedianMs,
+        long? CpuMedianMs, long? PgSharedHit, long? PgSharedRead, long? PgSharedDirtied, long? PgSharedWritten,
+        long? PgTempRead, long? PgTempWritten,
+        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount);
+
     private static readonly JsonSerializerOptions ConditionsJsonOptions = new(JsonSerializerDefaults.Web);
     public const int DefaultLimit = 50;
     internal const int MaximumSearchLength = 200;
@@ -49,7 +57,10 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         o.operation_ref, o.parent_operation_ref, o.dry_run,
         CASE WHEN o.agent_model IS NOT NULL THEN 'call'
              WHEN EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.operation_id = o.id AND l.model IS NOT NULL) THEN 'transcript'
-        END AS agent_model_source
+        END AS agent_model_source,
+        o.compare_subject,
+        (SELECT SUM(m.logical_reads_median) FROM operation_metrics m WHERE m.operation_id = o.id AND lower(m.variant) = 'baseline') AS reads_before,
+        (SELECT SUM(m.logical_reads_median) FROM operation_metrics m WHERE m.operation_id = o.id AND lower(m.variant) = 'candidate') AS reads_after
         """;
 
     private const string SessionColumns = """
@@ -68,7 +79,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
          JOIN agent_conversations c ON c.id = l.conversation
          JOIN operations o2 ON o2.id = l.operation_id
          WHERE o2.session_id = s.id AND c.title IS NOT NULL
-         ORDER BY o2.id DESC LIMIT 1) AS agent_title
+         ORDER BY o2.id DESC LIMIT 1) AS agent_title,
+        EXISTS (SELECT 1 FROM operations compare_op WHERE compare_op.session_id = s.id AND compare_op.operation = 'compare') AS has_compare
         """;
 
     public long? SchemaVersion()
@@ -144,6 +156,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             ("$limit", limit + 1),
             ("$archived", query.Archived is null ? null : query.Archived.Value ? 1 : 0),
             ("$starred", query.Starred is null ? null : query.Starred.Value ? 1 : 0),
+            ("$hasCompare", query.HasCompare is null ? null : query.HasCompare.Value ? 1 : 0),
             ("$q", query.Search is null ? null : "%" + EscapeLike(FoldForSearch(query.Search)!) + "%"),
         ];
         var order = query.Starred is null ? "starred DESC, s.id DESC" : "s.id DESC";
@@ -156,6 +169,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
               AND ($cursor IS NULL OR s.id < $cursor)
               AND ($archived IS NULL OR EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id AND a.archived_at IS NOT NULL) = $archived)
               AND ($starred IS NULL OR COALESCE((SELECT a.starred FROM session_annotations a WHERE a.session_id = s.id), 0) = $starred)
+              AND ($hasCompare IS NULL OR EXISTS (SELECT 1 FROM operations compare_op WHERE compare_op.session_id = s.id AND compare_op.operation = 'compare') = $hasCompare)
               AND ($q IS NULL
                    OR sqlh_fold(s.session_key) LIKE $q ESCAPE '\' OR sqlh_fold(s.cwd) LIKE $q ESCAPE '\'
                    OR sqlh_fold(s.client_title) LIKE $q ESCAPE '\'
@@ -169,7 +183,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             parameters,
             ReadSessionRow);
         var page = rows.Take(limit).ToArray();
-        return new Page<SessionSummary>(WithRunning(connection, page),
+        return new Page<SessionSummary>(WithOptimizationBadges(WithRunning(connection, page)),
             query.Starred is not null && rows.Count > limit ? page[^1].Id : null);
     }
 
@@ -206,6 +220,81 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         return new SessionDetail(WithRunning(connection, [session])[0], operations,
             subjects,
             compares.Count(attempt => attempt.Subject is null || attempt.Scope is null), note, conversations);
+    }
+
+    /// <summary>Builds the optimization section from every retained compare and its journaled case evidence.</summary>
+    public OptimizationSection Optimization(long sessionId) => OptimizationSummaryBuilder.Build(OptimizationEvidence(sessionId));
+
+    /// <summary>Reads every retained compare with its actual per-case and per-table journal evidence.</summary>
+    public IReadOnlyList<CompareEvidence> OptimizationEvidence(long sessionId)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return [];
+
+        var liveness = new ProcessLiveness(processes, _dead);
+        var rows = Query(connection, """
+            SELECT o.id, o.compare_subject, o.compare_scope, o.database, o.engine,
+                   o.conditions_fingerprint,
+                   o.sql_hash, o.candidate_sql_hash, o.started_at, o.status, o.host_pid, o.host_started_at,
+                   o.conditions_json, o.summary_json,
+                   m.id, m.variant, m.case_id, m.case_label, m.logical_reads_median, m.elapsed_ms_median,
+                   m.cpu_ms_median, m.pg_shared_hit, m.pg_shared_read, m.pg_shared_dirtied,
+                   m.pg_shared_written, m.pg_temp_read, m.pg_temp_written,
+                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count
+            FROM operations o
+            LEFT JOIN operation_metrics m ON m.operation_id = o.id
+            LEFT JOIN operation_table_io t ON t.metric_id = m.id
+            WHERE o.session_id = $session AND o.operation = 'compare'
+            ORDER BY o.started_at, o.id, m.ordinal, t.table_name;
+            """, [("$session", sessionId)], r => new OptimizationEvidenceRow(
+            r.GetInt64(0), NullableString(r, 1), NullableString(r, 2), NullableString(r, 3), NullableString(r, 4), NullableString(r, 5),
+            NullableString(r, 6), NullableString(r, 7), r.GetString(8),
+            liveness.Status(r.GetString(9), r.GetInt64(10), NullableString(r, 11)), NullableString(r, 12), NullableString(r, 13),
+            r.IsDBNull(14) ? null : r.GetInt64(14), NullableString(r, 15), NullableString(r, 16), NullableString(r, 17),
+            NullableLong(r, 18), NullableLong(r, 19), NullableLong(r, 20), NullableLong(r, 21), NullableLong(r, 22),
+            NullableLong(r, 23), NullableLong(r, 24), NullableLong(r, 25), NullableLong(r, 26), NullableString(r, 27),
+            NullableLong(r, 28), NullableLong(r, 29), NullableLong(r, 30)));
+
+        var compares = rows.GroupBy(row => row.OperationId).Select(group =>
+        {
+            var first = group.First();
+            var metricRows = group.Where(row => row.MetricId is not null)
+                .GroupBy(row => (row.MetricId, row.Variant, row.CaseId, row.CaseLabel))
+                .Select(metric =>
+                {
+                    var samples = metric.ToArray();
+                    var tableRows = samples.Where(row => row.Table is not null)
+                        .Select(row => new CompareTableIoEvidence(row.Table!, row.TableLogicalReads!.Value, row.TableLobLogicalReads, row.ScanCount))
+                        .ToArray();
+                    long? scans = tableRows.Length == 0 || tableRows.Any(row => row.Scans is null)
+                        ? null
+                        : tableRows.Sum(row => row.Scans!.Value);
+                    var postgres = samples.Any(row => row.PgSharedHit.HasValue || row.PgSharedRead.HasValue
+                        || row.PgSharedDirtied.HasValue || row.PgSharedWritten.HasValue || row.PgTempRead.HasValue
+                        || row.PgTempWritten.HasValue)
+                        ? new PostgresBuffers(samples[0].PgSharedHit, samples[0].PgSharedRead, samples[0].PgSharedDirtied,
+                            samples[0].PgSharedWritten, samples[0].PgTempRead, samples[0].PgTempWritten)
+                        : null;
+                    return new CompareMetricEvidence(metric.Key.Variant!, metric.Key.CaseId!, metric.Key.CaseLabel!,
+                        samples[0].LogicalReadsMedian, samples[0].ElapsedMedianMs, scans, tableRows)
+                    {
+                        CpuMedianMs = samples[0].CpuMedianMs,
+                        Postgres = postgres,
+                    };
+                }).ToArray();
+            var conditions = DeserializeConditions(first.ConditionsJson);
+            var summary = Json(first.SummaryJson);
+            var caseEvidence = ReadOptimizationCases(summary, conditions, metricRows);
+            var comparisonMode = StringProperty(summary, "comparison") ?? conditions?.Execution?.ComparisonMode;
+            var resultsEquivalent = BooleanProperty(summary, "resultsEquivalent") ?? AggregateEquivalence(caseEvidence);
+            return new CompareEvidence(first.OperationId, first.Subject, first.Scope, first.Database, first.Engine,
+                first.Fingerprint ?? conditions?.Fingerprint, first.BaselineHash, first.CandidateHash, first.StartedAt,
+                first.Status, comparisonMode, resultsEquivalent,
+                StringProperty(Property(summary, "regression"), "verdict"), caseEvidence, metricRows);
+        }).ToArray();
+
+        return compares;
     }
 
     public SqlVersionText? SessionSqlText(long sessionId, string hash)
@@ -375,7 +464,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 """,
                 parameters,
                 reader => (Operation: ReadOperation(reader, liveness),
-                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 33))));
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 36))));
             var filteredRows = rows.Where(row => !variableFiltered
                 || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
             matches.AddRange(liveFiltered
@@ -387,6 +476,16 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         }
 
         var page = matches.Take(limit).ToArray();
+        var attemptsBySession = page.Where(item => item.Operation == "compare").Select(item => item.SessionId).Distinct()
+            .ToDictionary(sessionId => sessionId, sessionId => CompareHistoryBuilder.Build(CompareHistoryRows(connection, sessionId)));
+        page = page.Select(item => item.Operation == "compare" && attemptsBySession.TryGetValue(item.SessionId, out var attempts)
+            ? item with
+            {
+                VersionPair = attempts.FirstOrDefault(attempt => attempt.OperationId == item.Id) is { BaselineVersion: { } a, CandidateVersion: { } b }
+                    ? $"{a} → {b}"
+                    : null,
+            }
+            : item).ToArray();
         var next = matches.Count > limit ? page[^1].Id : (long?)null;
         return new Page<OperationSummary>(page, next);
     }
@@ -947,7 +1046,65 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         NullableString(r, 6), NullableString(r, 7), NullableString(r, 8), r.GetString(9), r.GetString(10),
         r.GetInt32(11), r.GetInt32(12), r.GetInt32(13), 0, 0,
         NullableString(r, 14), Roots(NullableString(r, 15)), NullableString(r, 16),
-        NullableString(r, 17), r.GetInt64(18) != 0, r.GetInt64(19) != 0, NullableString(r, 20), NullableString(r, 21));
+        NullableString(r, 17), r.GetInt64(18) != 0, r.GetInt64(19) != 0, NullableString(r, 20), NullableString(r, 21))
+    {
+        HasCompare = r.GetInt64(22) != 0,
+    };
+
+    private IReadOnlyList<SessionSummary> WithOptimizationBadges(IReadOnlyList<SessionSummary> sessions) => sessions.Select(session =>
+    {
+        if (!session.HasCompare)
+            return session;
+        var evidence = OptimizationEvidence(session.Id);
+        var section = OptimizationSummaryBuilder.Build(evidence);
+        var badges = new List<SessionOptimizationBadge>();
+        foreach (var subject in section.Subjects)
+        {
+            var added = false;
+            var candidates = subject.Groups.SelectMany(group => group.Scopes.Select(scope => (Group: group, Scope: scope)))
+                .OrderBy(item => item.Scope.Scope == "whole query" ? 0 : 1)
+                .ThenBy(item => item.Scope.Scope, StringComparer.Ordinal);
+            foreach (var (group, scope) in candidates)
+            {
+                if (scope.DefaultA is null)
+                    continue;
+                if (scope.DefaultB is null)
+                {
+                    badges.Add(new SessionOptimizationBadge(subject.Subject, "—", true));
+                    added = true;
+                    break;
+                }
+                var scopedGroup = group with { Scopes = [scope], DefaultA = scope.DefaultA, DefaultB = scope.DefaultB };
+                var scopedEvidence = evidence.Where(item => item.Subject == subject.Subject
+                    && (item.Database ?? string.Empty) == subject.Database
+                    && item.Fingerprint == group.Fingerprint
+                    && (item.Scope == scope.Scope || (scope.Scope == "whole query" && item.Scope == "whole"))).ToArray();
+                var comparison = OptimizationComparer.Compare(scopedGroup, scopedEvidence,
+                    scope.DefaultA, scope.DefaultB, "all", "sum");
+                var before = scope.Versions.FirstOrDefault(version => version.Version == scope.DefaultA)?.LogicalReadsSum;
+                var after = scope.Versions.FirstOrDefault(version => version.Version == scope.DefaultB)?.LogicalReadsSum;
+                var change = before is null || after is null ? "—" : ChangeLabel(before.Value, after.Value);
+                var warning = comparison.Mixed is not null
+                    || !comparison.EquivalenceLabel.StartsWith("results equivalent", StringComparison.Ordinal);
+                badges.Add(new SessionOptimizationBadge(subject.Subject, change, warning));
+                added = true;
+                break;
+            }
+            if (!added)
+                badges.Add(new SessionOptimizationBadge(subject.Subject, "—", true));
+        }
+        return session with { Optimization = badges };
+    }).ToArray();
+
+    private static string ChangeLabel(long before, long after)
+    {
+        if (before == 0)
+            return after == 0 ? "0%" : $"+{after.ToString(CultureInfo.InvariantCulture)} pages";
+        var percent = Math.Round((after - before) * 100d / before, MidpointRounding.AwayFromZero);
+        return percent < 0
+            ? $"−{Math.Abs(percent).ToString("0", CultureInfo.InvariantCulture)}%"
+            : $"+{percent.ToString("0", CultureInfo.InvariantCulture)}%";
+    }
 
     /// <summary>
     /// Search folding shared by the query and every searched column: NFC, then invariant
@@ -968,7 +1125,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         r.GetInt64(15) != 0, NullableString(r, 16), NullableLong(r, 17), NullableLong(r, 21),
         r.GetInt64(22) != 0, r.GetInt64(23) != 0, r.GetInt64(24) != 0, Json(NullableString(r, 18)),
         NullableString(r, 25), NullableString(r, 26), NullableString(r, 27), NullableString(r, 28),
-        NullableString(r, 29), NullableString(r, 30), r.GetInt64(31) != 0, NullableString(r, 32));
+        NullableString(r, 29), NullableString(r, 30), r.GetInt64(31) != 0, NullableString(r, 32),
+        NullableString(r, 33), null, NullableLong(r, 34), NullableLong(r, 35));
 
     private static IReadOnlyList<SessionRoot>? Roots(string? json)
     {
@@ -1043,6 +1201,94 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     }
 
     private static string? NullableString(SqliteDataReader r, int index) => r.IsDBNull(index) ? null : r.GetString(index);
+
+    private static ConditionsModel? DeserializeConditions(string? text)
+    {
+        if (text is null)
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<ConditionsModel>(text, ConditionsJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static IReadOnlyList<CompareCaseEvidence> ReadOptimizationCases(
+        JsonElement? summary, ConditionsModel? conditions, IReadOnlyList<CompareMetricEvidence> metrics)
+    {
+        var cases = new Dictionary<string, CompareCaseEvidence>(StringComparer.Ordinal);
+        if (conditions?.Cases is { } conditionCases)
+            foreach (var item in conditionCases)
+                cases[item.Id] = new CompareCaseEvidence(item.Id, item.Label, item.SetName, null, null);
+
+        var summaryCases = Property(summary, "cases");
+        if (summaryCases is { ValueKind: JsonValueKind.Array } caseArray)
+        {
+            foreach (var item in caseArray.EnumerateArray())
+            {
+                var id = StringProperty(item, "caseId") ?? IntProperty(item, "index")?.ToString(CultureInfo.InvariantCulture) ?? "0";
+                var current = cases.TryGetValue(id, out var found)
+                    ? found
+                    : new CompareCaseEvidence(id, StringProperty(item, "caseLabel") ?? $"Case {id}", null, null, null);
+                var equivalence = Property(item, "equivalence");
+                cases[id] = current with
+                {
+                    Label = StringProperty(item, "caseLabel") ?? current.Label,
+                    ResultsEquivalent = BooleanProperty(equivalence, "equivalent"),
+                    RegressionVerdict = StringProperty(Property(item, "regression"), "verdict"),
+                };
+            }
+        }
+        else if (cases.Count == 1)
+        {
+            var single = cases.Values.Single();
+            cases[single.CaseId] = single with
+            {
+                ResultsEquivalent = BooleanProperty(summary, "resultsEquivalent"),
+                RegressionVerdict = StringProperty(Property(summary, "regression"), "verdict"),
+            };
+        }
+
+        foreach (var metric in metrics)
+            if (!cases.ContainsKey(metric.CaseId))
+                cases.Add(metric.CaseId, new CompareCaseEvidence(metric.CaseId, metric.CaseLabel, null, null, null));
+        return cases.Values.OrderBy(item => conditions?.Cases?.FirstOrDefault(value => value.Id == item.CaseId)?.Index ?? int.MaxValue)
+            .ThenBy(item => item.CaseId, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool? AggregateEquivalence(IReadOnlyList<CompareCaseEvidence> cases)
+    {
+        if (cases.Count == 0 || cases.Any(item => item.ResultsEquivalent is null))
+            return null;
+        return cases.All(item => item.ResultsEquivalent == true);
+    }
+
+    private static JsonElement? Property(JsonElement? element, string name) =>
+        element is { ValueKind: JsonValueKind.Object } value && value.TryGetProperty(name, out var property) ? property : null;
+
+    private static JsonElement? Property(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var property) ? property : null;
+
+    private static string? StringProperty(JsonElement? element, string name)
+    {
+        var value = Property(element, name);
+        return value is { ValueKind: JsonValueKind.String } text ? text.GetString() : null;
+    }
+
+    private static bool? BooleanProperty(JsonElement? element, string name)
+    {
+        var value = Property(element, name);
+        return value is { ValueKind: JsonValueKind.True } ? true : value is { ValueKind: JsonValueKind.False } ? false : null;
+    }
+
+    private static int? IntProperty(JsonElement element, string name)
+    {
+        var value = Property(element, name);
+        return value is { ValueKind: JsonValueKind.Number } number && number.TryGetInt32(out var result) ? result : null;
+    }
 
     private static long? NullableLong(SqliteDataReader r, int index) => r.IsDBNull(index) ? null : r.GetInt64(index);
 

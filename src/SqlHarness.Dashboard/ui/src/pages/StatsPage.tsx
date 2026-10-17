@@ -156,7 +156,7 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
-        <h1>Statistics</h1>
+        <h1>Usage</h1>
         <div className="grid min-w-52 gap-1.5">
           <Label htmlFor="stats-profile">Profile</Label>
           <select

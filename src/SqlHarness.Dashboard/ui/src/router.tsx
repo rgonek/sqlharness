@@ -11,8 +11,8 @@ import { SessionsPage } from "@/pages/SessionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { StatsPage } from "@/pages/StatsPage"
 
-export type SessionSearch = { subject?: string; scope?: string; unassigned?: boolean }
-export type OperationDetailSearch = { returnSession?: number; returnSubject?: string; returnScope?: string; returnUnassigned?: boolean }
+export type SessionSearch = { subject?: string; db?: string; group?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; unassigned?: boolean }
+export type OperationDetailSearch = { case?: string; agg?: string; returnSession?: number; returnSubject?: string; returnDb?: string; returnGroup?: string; returnScope?: string; returnA?: string; returnB?: string; returnCase?: string; returnAgg?: string; returnUnassigned?: boolean }
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
@@ -21,15 +21,31 @@ const sessionsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/ses
 const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$id", component: SessionPage,
   validateSearch: (search: Record<string, unknown>): SessionSearch => ({
     subject: typeof search.subject === "string" && search.subject.length <= 64 ? search.subject : undefined,
+    db: typeof search.db === "string" && search.db.length <= 128 ? search.db : undefined,
+    group: typeof search.group === "string" && search.group.length <= 256 ? search.group : undefined,
     scope: typeof search.scope === "string" && search.scope.length <= 64 ? search.scope : undefined,
+    a: typeof search.a === "string" && search.a.length <= 64 ? search.a : undefined,
+    b: typeof search.b === "string" && search.b.length <= 64 ? search.b : undefined,
+    case: typeof search.case === "string" && search.case.length <= 256 ? search.case
+      : typeof search.case === "number" && Number.isSafeInteger(search.case) ? String(search.case) : undefined,
+    agg: search.agg === "mean" ? "mean" : search.agg === "sum" ? "sum" : undefined,
     unassigned: search.unassigned === true || search.unassigned === "true",
   }) })
 const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: OperationPage,
   validateSearch: (search: Record<string, unknown>): OperationDetailSearch => ({
+    case: typeof search.case === "string" && search.case.length <= 256 ? search.case
+      : typeof search.case === "number" && Number.isSafeInteger(search.case) ? String(search.case) : undefined,
+    agg: search.agg === "mean" ? "mean" : search.agg === "sum" ? "sum" : undefined,
     returnSession: typeof search.returnSession === "number" && Number.isSafeInteger(search.returnSession) && search.returnSession > 0 ? search.returnSession
       : typeof search.returnSession === "string" && /^\d+$/.test(search.returnSession) && Number.isSafeInteger(Number(search.returnSession)) ? Number(search.returnSession) : undefined,
     returnSubject: typeof search.returnSubject === "string" && search.returnSubject.length <= 64 ? search.returnSubject : undefined,
+    returnDb: typeof search.returnDb === "string" && search.returnDb.length <= 128 ? search.returnDb : undefined,
+    returnGroup: typeof search.returnGroup === "string" && search.returnGroup.length <= 256 ? search.returnGroup : undefined,
     returnScope: typeof search.returnScope === "string" && search.returnScope.length <= 64 ? search.returnScope : undefined,
+    returnA: typeof search.returnA === "string" && search.returnA.length <= 64 ? search.returnA : undefined,
+    returnB: typeof search.returnB === "string" && search.returnB.length <= 64 ? search.returnB : undefined,
+    returnCase: typeof search.returnCase === "string" && search.returnCase.length <= 256 ? search.returnCase : undefined,
+    returnAgg: search.returnAgg === "mean" ? "mean" : search.returnAgg === "sum" ? "sum" : undefined,
     returnUnassigned: search.returnUnassigned === true || search.returnUnassigned === "true",
   }) })
 const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations", component: OperationsPage,

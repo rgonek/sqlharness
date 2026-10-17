@@ -23,7 +23,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `4154fe7` (2026-10-16). Blocked until 077 and 079 are merged.
+- DONE on feature branch `plan-080`; Tasks 1–6 are implemented and reviewed, and Task 7 documentation and Windows verification are complete. The final review fix wave and scoped re-review are approved; local integration remains pending. The owner's visual check remains unverified by the implementation session. Planning base `4154fe7` (2026-10-16); dependencies 077 and 079 are present.
 - Priority P1; effort L; risk MEDIUM (UI-wide changes; comparison semantics shown to reviewers).
 
 ## Global Constraints
@@ -54,8 +54,8 @@
 
 ### Task 0: Drift check and baseline
 
-- [ ] **Step 1:** Confirm 077 and 079 are merged; run the drift check; record the base commit here.
-- [ ] **Step 2:** `just verify` on the base; record the result.
+- [x] **Step 1:** Confirm 077 and 079 are merged; run the drift check; record the base commit here.
+- [x] **Step 2:** `just verify` on the base; record the result.
 
 ### Task 1: Optimization summary builder
 
@@ -75,7 +75,7 @@
   - `sealed record UnassignedCompare(long OperationId, string StartedAt, string Status)`
   - `static OptimizationSection OptimizationSummaryBuilder.Build(IReadOnlyList<CompareEvidence> compares)`; `CompareEvidence` is the reader's row record defined in `OptimizationModels.cs`.
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - `Groups_by_subject_database_and_fingerprint` — two compares same subject, two databases → two subjects; same database, two fingerprints → two groups.
   - `Version_in_two_groups_is_listed_in_each` — v1 measured under fingerprints F1 and F2 appears in both groups with that group's numbers only.
   - `Default_pair_follows_equivalence_chain` — compares v0→v1 (equivalent), v1→v2 (equivalent), v2→v3 (results differ) → DefaultA `v0`, DefaultB `v2`.
@@ -83,9 +83,9 @@
   - `Newest_measurement_wins_per_version` — v0 measured in #201 and #214 → row uses #214, `MeasuredIn = [201, 214]`.
   - `Whole_query_first_fragments_after`.
   - `Unassigned_compares_are_listed`.
-- [ ] **Step 2:** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~OptimizationSummaryBuilder"` → FAIL.
-- [ ] **Step 3:** Implement. Case outcome per version uses the version's newest measurement against its baseline in that compare, with the Global Constraints rule.
-- [ ] **Step 4:** Run → PASS. **Step 5:** Commit `feat(080): build session optimization summary`.
+- [x] **Step 2:** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~OptimizationSummaryBuilder"` → FAIL.
+- [x] **Step 3:** Implement. Case outcome per version uses the version's newest measurement against its baseline in that compare, with the Global Constraints rule.
+- [x] **Step 4:** Run → PASS. **Step 5:** Commit `feat(080): build session optimization summary`.
 
 ### Task 2: Two-version comparison
 
@@ -106,7 +106,7 @@
   - `sealed record ElapsedInfo(double? BeforeMs, double? AfterMs, string? PolicyVerdict, bool DifferentRun)`
   - `static OptimizationComparison OptimizationComparer.Compare(ConditionsGroup group, IReadOnlyList<CompareEvidence> compares, string a, string b, string selectedCase, string aggregate)`
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - `Measured_together_uses_that_operation` — pair present in #214 → Basis `MeasuredTogether`, OperationId 214.
   - `Different_runs_same_conditions` — v1 from #201 and v3 from #214, same fingerprint → `DifferentRunsSameConditions`, `Elapsed.DifferentRun == true`.
   - `Conditions_differ_returns_no_numbers` — Tables empty, Basis `ConditionsDiffer`.
@@ -119,8 +119,8 @@
   - `Temp_objects_collapse` — `table variables`, `Worktable`, `Workfile` and zero-read rows go into `Collapsed`; real tables sorted by absolute reads change descending.
   - `Equivalence_labels` — direct, `via v2`, not compared.
   - `Engine_without_table_io_returns_message` — PostgreSQL evidence → Tables empty and a `TableIoUnavailable` flag (add `bool TableIoUnavailable` to the record).
-- [ ] **Step 2:** `--filter "FullyQualifiedName~OptimizationComparer"` → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(080): compare two optimization versions`.
+- [x] **Step 2:** `--filter "FullyQualifiedName~OptimizationComparer"` → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
+- [x] **Step 5:** Commit `feat(080): compare two optimization versions`.
 
 ### Task 3: API and session list data
 
@@ -136,9 +136,9 @@
   - Operation summaries gain `string? Subject`, `string? VersionPair` (`v0 → v3`), `long? ReadsBefore`, `long? ReadsAfter`.
   - over-granted SQL: `m.grant_granted_kb >= 1024 AND m.grant_max_used_kb * 4 < m.grant_granted_kb`.
 
-- [ ] **Step 1:** Failing tests: endpoint shapes and status codes; `Sessions_filter_has_compare`; `Session_list_optimization_badge_uses_default_pair` (equals Task 2 result for default A/B, `Warning` when Mixed or not equivalent); `Over_granted_requires_one_megabyte` (granted 512 KB, used 10 KB → false; granted 4096, used 100 → true); operation summary fields for a compare.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement (compute badges only for the returned page). **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(080): serve optimization section and list data`.
+- [x] **Step 1:** Failing tests: endpoint shapes and status codes; `Sessions_filter_has_compare`; `Session_list_optimization_badge_uses_default_pair` (equals Task 2 result for default A/B, `Warning` when Mixed or not equivalent); `Over_granted_requires_one_megabyte` (granted 512 KB, used 10 KB → false; granted 4096, used 100 → true); operation summary fields for a compare.
+- [x] **Step 2:** → FAIL (missing API/list contract members). **Step 3:** Implement (compute badges only for the returned page). **Step 4:** → PASS (focused and full test suite; see [Task 3 report](../.superpowers/sdd/080-optimization-dashboard/task-3-report.md)).
+- [x] **Step 5:** Commit `feat(080): serve optimization section and list data`.
 
 ### Task 4: Session Optimization section (UI)
 
@@ -152,14 +152,14 @@
 - Consumes: Task 3 endpoints; 079 `ReproScriptButtons`.
 - Produces: `<ComparisonPanel comparison={OptimizationComparison} sessionId={number} />` (reused by Task 5); `optimizationMarkdown(c: OptimizationComparison, subject: string, scope: string): string`.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:** Focused UI RED for missing Markdown/panel/section modules and C# RED for missing retained action-reference contract; see [Task 4 report](../.superpowers/sdd/080-optimization-dashboard/task-4-report.md).
   - section absent for a session without compares; present and first otherwise; unassigned compares listed with links.
   - version table: rows, `whole query` first, outcome text, A/B radios default to `DefaultA`/`DefaultB`; group selector shown only with >1 group; `renders forty versions` (40 rows, defaults selected, picker change updates URL `a`/`b`).
   - panel: basis badge text (`measured together in #214` / `different runs, same conditions` / `conditions differ`), case chips with labels, Sum/Mean toggle updates URL `agg`, Mixed warning text `Mixed: 2 better, 1 worse — @CustomerId = 9001: logical reads +35%`, collapsed row text, `per-table IO not available for this engine`.
   - actions: copy summary uses `optimizationMarkdown`; script buttons for both versions; links to SQL diff, plans, operation.
   - `optimizationMarkdown` produces a header line (subject, scope, `v0 → v3`, case or aggregate label, basis, equivalence label) and a table `| Table | Scans before | Scans after | Logical reads before | Logical reads after | Change |` matching the panel rows, plus the collapsed row and Mixed line.
-- [ ] **Step 2:** `npm --prefix src/SqlHarness.Dashboard/ui test` → FAIL. **Step 3:** Implement with existing shadcn components. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(080): session optimization section`.
+- [x] **Step 2:** Focused tests failed on the missing implementation/contracts. **Step 3:** Implemented the section, reusable comparison panel/Markdown, URL-backed selection, and actual retained action references. **Step 4:** → PASS (focused UI 26/26, full UI tests 274/274, typecheck, lint, build, focused comparer 21/21; see report).
+- [x] **Step 5:** Commit `feat(080): session optimization section` (recorded in Task 4 report).
 
 ### Task 5: Compare-first operation page
 
@@ -168,11 +168,11 @@
 - Test: `OperationPage.test.tsx`, `CompareDetail.test.tsx`
 
 **Interfaces:**
-- Consumes: `ComparisonPanel`; `GET /api/sessions/{sid}/optimization/compare` with the operation's pair (or an equivalent operation-scoped call the builder adds to Task 3 if simpler).
+- Consumes: `ComparisonPanel`; `GET /api/operations/{id}/optimization?case=all&aggregate=sum` with the operation's own compare pair.
 
-- [ ] **Step 1: Failing tests:** compare operation renders a one-line header (subject, `whole query`, `v0 → v3`, database, time, status, back link with the session title) followed by `ComparisonPanel`; sections `SQL diff & conditions`, `Plans`, `Per-case & per-run details`, `Run diagnostics` are collapsed by default; token/bytes, phase timings, agent call and connection events appear only inside `Run diagnostics`; per-run details show one case and side at a time (selector), not a four-column grid; variable chips render once; measure operations show result first with diagnostics collapsed.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(080): compare-first operation page`.
+- [x] **Step 1: Failing tests:** focused operation-page test first failed on the old `Operation #10` heading instead of the compare subject; see [Task 5 report](../.superpowers/sdd/080-optimization-dashboard/task-5-report.md).
+- [x] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS (22 focused UI tests; typecheck, lint, and build passed; see Task 5 report).
+- [x] **Step 5:** Commit `feat(080): compare-first operation page` (recorded in Task 5 report).
 
 ### Task 6: Lists, badges, Live and naming
 
@@ -183,18 +183,36 @@
 **Interfaces:**
 - Produces: `badgeTier(kind): "outcome" | "warning" | "info"`; `OperationTable` prop `showInternal: boolean` persisted under localStorage key `sqlharness.showInternalOperations` (wrapped in try/catch).
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - sessions: Optimization column `orders-by-customer −94%` with warning icon when `Warning`; "contains compare" filter sets `hasCompare=true`; working directory shows last segment with full path in `title`; state badges not clipped (column has no fixed width truncation).
   - operations: `artifact` rows hidden by default, toggle shows them and persists; session/subject column; agent single line with model in `title`; compare row shows `v0 → v3` and `48 210 → 3 115`.
   - badges: `succeeded`/`failed`/`rejected` outcome tier; regression/results differ/Mixed warning tier; info items render as muted text, not `Badge`.
   - Live: empty Running and Active sessions render as one line `Nothing running · no active sessions`.
   - naming: no visible `Cell `; `whole` rendered `whole query`; "No assessment" has an explanation tooltip; "policy v2" only in a tooltip; nav label `Usage`.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS; `npm --prefix src/SqlHarness.Dashboard/ui run build`.
-- [ ] **Step 5:** Commit `feat(080): de-noise lists, badges and naming`.
+- [x] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS; `npm --prefix src/SqlHarness.Dashboard/ui run build`.
+- [x] **Step 5:** Commit `feat(080): de-noise lists, badges and naming`.
 
 ### Task 7: Documentation and verification
 
-- [ ] **Step 1:** Update README dashboard section (Optimization section, Usage rename, artifact toggle); `plans/README.md` status.
-- [ ] **Step 2:** `just verify` → exit 0; record revision and result here.
-- [ ] **Step 3:** Live check against the running dashboard with the owner's journal (headless screenshots of a session with compares and a compare operation); record observations without business data.
-- [ ] **Step 4:** Move the queue entry to history with evidence; commit `docs(080): record plan 080 evidence`.
+- [x] **Step 1:** Update README dashboard section (Optimization section, Usage rename, artifact toggle); record verification progress in `plans/README.md`.
+- [x] **Step 2:** `just verify` exited 0 on product revision `23dd105189ff0e979ed27b1bf8a0f79b6ab80f86` after one initial attempt had two unrelated failures; both focused reruns passed, then the full rerun passed. See [Task 7 verification evidence](#task-7-verification-evidence).
+- [x] **Step 3:** The owner waived screenshots/live visual review (`"olejmy to, ja sprawdze"`) and will verify personally. Visual review is owner-owned and remains unverified; no browser or live dashboard check was performed here.
+- [x] **Step 4:** Move the completed feature-branch entry to [history](history.md) with evidence; commit `docs(080): record plan 080 evidence`.
+
+#### Task 7 verification evidence
+
+On feature branch `plan-080`, product revision `23dd105189ff0e979ed27b1bf8a0f79b6ab80f86` was tested with `just verify -LogDirectory .superpowers/sdd/080-optimization-dashboard/task-7-verify-20261017`. The first run exited 1 after 7m27s at the test stage. UI install was skipped because the lockfile was unchanged; build passed in 1m23s with 0 warnings and 0 errors; UI check passed in 4m46s (55 files, 284 tests); MCP passed (426 passed, 4 skipped); Core reported 4,175 passed, 11 skipped, and 2 failed. Formatting was not reached because the test stage failed. The Core failures were outside the Plan 080 diff: `DashboardLifecycleTests.Unauthorized_shutdown_returns_Failed_without_leaking_token` raised `ArgumentOutOfRangeException` from `Task.Delay(Remaining())` at `DashboardLifecycle.cs:54`; `ProcessRunnerTests.PidPublicationError_ReportsDiagnosticsAndCleansUp` timed out after 480 attempts with one process id published. Both tests passed in focused reruns (1/1 each), recorded in `task-7-focused-dashboard-lifecycle.log` and `task-7-focused-process-runner.log` under local scratch.
+
+The full gate was rerun once with `just verify -LogDirectory .superpowers/sdd/080-optimization-dashboard/task-7-verify-rerun-20261017`; it exited 0: `verify: OK stages=5 6m38s`. Install was skipped (unchanged lockfile); build passed in 28.95s with 0 warnings/errors; UI check passed in 4m00s (55 files, 284 tests); Core passed 4,177 with 11 skipped; MCP passed 426 with 4 skipped; formatting was skipped with 0 changed C# files. Rerun logs are in `.superpowers/sdd/080-optimization-dashboard/task-7-verify-rerun-20261017/`. UI logs contain non-failing localhost:3000 connection refusals and Node `DEP0190`.
+
+The README updates contain no new Markdown links. The changed-doc plan and history links were checked against the files in the repository. This is feature-branch evidence only; it is not verification of an integrated `main` tree. Linux was not run because it is not a completion criterion under [repository verification policy](../docs/agents/verification.md). The owner waived the visual review and will perform it personally; it remains unverified here. No live database, merge, push, installation, or publication occurred.
+
+#### Final review fix wave (2026-10-18)
+
+The final whole-branch review at `58af265` identified four Important findings. Product commit `ed8b20e04eaef948f455b8fd75972573000e3345` fixes them: a null scope-local default B stays unset with a selection prompt; PostgreSQL cases are selected from common elapsed/CPU/buffer metrics even when logical reads are absent, with reads marked unavailable and CPU/buffers shown in both panel and Markdown; every retained measurement operation is linked with session return context; and every subject/database has its own card with group/scope-specific URL selection. Numeric `case=0`, group/scope defaults, and unassigned-compare return context remain covered.
+
+TDD RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:IsTestProject=true --filter FullyQualifiedName~Postgres_cases_without_logical_reads --no-restore` failed as expected because no cases were selected (0 passed, 1 failed). `npm --prefix src/SqlHarness.Dashboard/ui test -- OptimizationSection.test.tsx` failed the three added regressions for the missing B prompt, multiple cards, and measurement links (4 passed, 3 failed). GREEN: the focused comparer suite passed 22/22; `npm --prefix src/SqlHarness.Dashboard/ui test -- OptimizationSection.test.tsx ComparisonPanel.test.tsx` passed 14/14.
+
+On revision `ed8b20e`, UI typecheck and lint exited 0, and UI build exited 0 with the existing chunk-size advisory. The required `just verify --LogDirectory .superpowers/sdd/080-optimization-dashboard/final-fix-verify-20261018` exited 0: `verify: OK stages=5 7m44s`; install skipped; build passed in 1m02s with 0 warnings/errors; UI check passed in 5m12s (55 files, 288 tests); Core passed 4,178 with 11 skipped; MCP passed 426 with 4 skipped. Format reported skipped (0 changed C# files). Logs are in the plan-local directory above. UI output contains non-failing `localhost:3000` connection refusals and Node `DEP0190`.
+
+The initial Task 7 gate failures and their focused reruns remain documented above and were not overwritten. This final fix gate had no failures. Sol low's scoped re-review approved all four Important findings as addressed and found no new breakage. Local integration remains pending; owner visual review remains waived/unverified; Linux remains outside the current completion policy. No merge, push, hosted CI, or live database check was performed.

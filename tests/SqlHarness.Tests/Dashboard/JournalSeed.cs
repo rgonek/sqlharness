@@ -11,9 +11,13 @@ internal sealed class JournalSeed
 {
     private readonly FixedTimeProvider _time = new(new DateTimeOffset(2026, 10, 7, 9, 0, 0, TimeSpan.Zero));
     private readonly IActivityJournal _journal;
+    private readonly string _databasePath;
 
-    public JournalSeed(string databasePath, bool storeSensitive = false) =>
+    public JournalSeed(string databasePath, bool storeSensitive = false)
+    {
+        _databasePath = databasePath;
         _journal = ActivityJournal.Open(databasePath, new JournalConfig { StoreSensitive = storeSensitive }, TextWriter.Null, _time);
+    }
 
     public static readonly DateTimeOffset HostStarted = new(2026, 10, 7, 8, 0, 0, TimeSpan.Zero);
 
@@ -69,6 +73,20 @@ internal sealed class JournalSeed
 
     public void RecordConditions(JournalHandle handle, ConditionsModel? conditions = null) =>
         _journal.RecordConditions(handle, conditions ?? ReproConditions());
+
+    public void CompareEvidence(JournalHandle handle, ConditionsModel conditions, string summaryJson,
+        BenchmarkJournalRecord metrics)
+    {
+        _journal.RecordConditions(handle, conditions);
+        _journal.RecordBenchmark(handle, metrics);
+        using var connection = new SqliteConnection($"Data Source={_databasePath};Pooling=False");
+        connection.Open();
+        using var update = connection.CreateCommand();
+        update.CommandText = "UPDATE operations SET summary_json = $summary WHERE id = $id;";
+        update.Parameters.AddWithValue("$summary", summaryJson);
+        update.Parameters.AddWithValue("$id", handle.OperationId);
+        Assert.Equal(1, update.ExecuteNonQuery());
+    }
 
     public static ConditionsModel ReproConditions() => new(
         1, "sqlserver", "srv", "db",
