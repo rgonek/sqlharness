@@ -304,6 +304,23 @@ public sealed class GateParityTests
             steps.Select(TestProjectOf).OrderBy(project => project, StringComparer.Ordinal).ToArray());
     }
 
+    // The marker is pinned here because no project in the repository declares it today, so
+    // without these cases the filter is code no test ever runs and a pattern that stopped
+    // matching would be found only by a tree this branch has never seen. The last two cases are
+    // what keeps it from becoming a name filter in disguise: an unrelated false and a project
+    // that says nothing are both test projects.
+    [Theory]
+    [InlineData("<IsTestProject>false</IsTestProject>", true)]
+    [InlineData("<IsTestProject>False</IsTestProject>", true)]
+    [InlineData("<IsTestProject>0</IsTestProject>", true)]
+    [InlineData("<IsTestProject>true</IsTestProject>", false)]
+    [InlineData("<IsPackable>false</IsPackable>", false)]
+    [InlineData("", false)]
+    public void Only_the_marker_dotnet_test_skips_on_marks_a_project_as_not_a_test_project(string projectFile, bool marked)
+    {
+        Assert.Equal(marked, IsMarkedNotATestProject(projectFile));
+    }
+
     [Fact]
     public void StageCommand_ignores_comment_shadow_above_wrapped_command()
     {
@@ -653,6 +670,12 @@ public sealed class GateParityTests
 
     private static readonly Regex TestProjectArgument = new(@"^dotnet test\s+(?<project>\S+\.csproj)");
 
+    // The declaration that marks a project as one `dotnet test` does not run. Case-insensitive
+    // and accepting 0 as well as false, because that is how MSBuild spells a boolean.
+    private static readonly Regex DeclaredNotATestProject = new(
+        @"<IsTestProject\s*>\s*(?:false|0)\s*</IsTestProject\s*>",
+        RegexOptions.IgnoreCase);
+
     internal static string FormatShape(string command) =>
         Regex.Replace(
             command,
@@ -784,11 +807,43 @@ public sealed class GateParityTests
     // The test projects the solution itself holds, read out of SqlHarness.sln rather than
     // hard-coded. That is what makes Every_gate_names_every_test_project_in_the_solution
     // fail on the day a third test project is added instead of on the day someone notices.
+    // What the solution holds under tests\ is not the whole of it: a project that declares
+    // IsTestProject false is one `dotnet test` skips, so no gate may be made to name it, and
+    // requiring that would fail the build over a project that must not be tested.
     internal static string[] SolutionTestProjects() =>
         Regex.Matches(ReadRepositoryFile("SqlHarness.sln"), @"""(?<project>tests\\[^""]+\.csproj)""", RegexOptions.IgnoreCase)
             .Select(match => match.Groups["project"].Value.Replace('\\', '/'))
+            .Where(DotnetTestWouldRun)
             .OrderBy(project => project, StringComparer.Ordinal)
             .ToArray();
+
+    // Whether `dotnet test` would run the project the solution names. The marker the SDK
+    // honours decides it, not the project's name and not a list kept here, so the next project
+    // that declares the marker is handled without anybody editing this file.
+    //
+    // A project whose file cannot be read fails loudly instead of defaulting either way.
+    // Assuming it is not a test project would drop a real one from the two guards above, which
+    // is the single drift those guards exist to catch; assuming it is would demand a test step
+    // for a project no gate can run. Both guesses are quiet, and a solution this test cannot
+    // read is drift too - so it is a red guard naming the file, never a pass.
+    private static bool DotnetTestWouldRun(string project)
+    {
+        try
+        {
+            return !IsMarkedNotATestProject(ReadRepositoryFile(project.Split('/')));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Assert.Fail($"SqlHarness.sln lists {project}, but reading it failed, so whether `dotnet test` runs it is unknown. {ex.Message}");
+
+            throw;
+        }
+    }
+
+    // The marker `dotnet test` skips a project on, read from the project's own text. A project
+    // that says nothing here is a test project, because that is the SDK's default.
+    internal static bool IsMarkedNotATestProject(string projectFile) =>
+        DeclaredNotATestProject.IsMatch(projectFile);
 
     private static string[] ParseStringArray(string literal) =>
         Regex.Matches(literal, @"'(?<value>[^']*)'|""(?<value>[^""]*)""")
