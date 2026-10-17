@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -22,20 +23,10 @@ public sealed class ActivityJournal : IActivityJournal
 {
     private const int SqliteCorrupt = 11;
     private const int SqliteNotADatabase = 26;
-    private const int MaximumCompareConditionsBytes = 64 * 1024;
+    private const int MaximumConditionsBytes = 1024 * 1024;
     private const int MaximumPhaseEventDetailLength = 512;
     private const int MaximumPhaseEventInputLength = 4096;
     private const int MaximumPhaseEvents = OperationPhaseRecorder.MaximumEvents;
-
-    private static readonly (string Name, Func<CompareJournalConditions, object?> Value)[] SensitiveCompareConditionFields =
-    [
-        ("setupSql", conditions => conditions.SetupSql),
-        ("parameters", conditions => conditions.Parameters),
-        ("matrixText", conditions => conditions.MatrixText),
-        ("matrix", conditions => conditions.Matrix),
-        ("parameterSets", conditions => conditions.ParameterSets),
-        ("typedParameters", conditions => conditions.TypedParameters),
-    ];
 
     private static readonly JsonSerializerOptions WaitJson = new(JsonSerializerDefaults.Web);
 
@@ -125,7 +116,7 @@ public sealed class ActivityJournal : IActivityJournal
             insert.Parameters.AddWithValue("$dryRun", start.DryRun ? 1 : 0);
             insert.Parameters.AddWithValue("$compareSubject", (object?)start.Context?.Subject ?? DBNull.Value);
             insert.Parameters.AddWithValue("$compareScope", (object?)start.Context?.Scope ?? DBNull.Value);
-            insert.Parameters.AddWithValue("$compareConditions", (object?)CompareConditionsJson(start.CompareConditions) ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$compareConditions", DBNull.Value);
             insert.Parameters.AddWithValue("$setupSqlText", _storeSensitive ? (object?)start.SetupSqlText ?? DBNull.Value : DBNull.Value);
             var id = (long)insert.ExecuteScalar()!;
             transaction.Commit();
@@ -554,6 +545,123 @@ public sealed class ActivityJournal : IActivityJournal
         }
     }
 
+    public void RecordConditions(JournalHandle handle, ConditionsModel model)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentNullException.ThrowIfNull(model);
+        try
+        {
+            using var connection = Connect();
+            var salt = ReadFingerprintSalt(connection);
+            var sealedModel = SealConditions(model, salt);
+            var persisted = BoundConditions(sealedModel, _storeSensitive);
+            var json = JsonSerializer.Serialize(persisted, WaitJson);
+            if (Encoding.UTF8.GetByteCount(json) > MaximumConditionsBytes)
+            {
+                persisted = OmitOversizedConditions(persisted);
+                json = JsonSerializer.Serialize(persisted, WaitJson);
+            }
+            if (Encoding.UTF8.GetByteCount(json) > MaximumConditionsBytes)
+                return;
+
+            using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE operations SET conditions_json = $json, conditions_fingerprint = $fingerprint WHERE id = $id;";
+            update.Parameters.AddWithValue("$json", json);
+            update.Parameters.AddWithValue("$fingerprint", persisted.Fingerprint);
+            update.Parameters.AddWithValue("$id", handle.OperationId);
+            update.ExecuteNonQuery();
+        }
+        catch (Exception)
+        {
+            Warn();
+        }
+    }
+
+    private static byte[] ReadFingerprintSalt(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT value FROM journal_meta WHERE key = 'fingerprint_salt';";
+        return (byte[]?)command.ExecuteScalar() ?? throw new InvalidOperationException("Journal fingerprint salt is unavailable.");
+    }
+
+    internal static ConditionsModel SealConditions(ConditionsModel model, byte[] salt)
+    {
+        var setupHash = model.Setup is null ? string.Empty : Hmac(salt, ConditionsModelBuilder.SetupContentBytes(model));
+        var cases = model.Cases.Select(item => item with
+        {
+            Fingerprint = Hmac(salt, ConditionsModelBuilder.CaseFingerprintPayload(model, setupHash, item)),
+        }).ToArray();
+        return model with
+        {
+            Setup = model.Setup is null ? null : model.Setup with { Hash = setupHash },
+            Cases = cases,
+            Fingerprint = Hmac(salt, ConditionsModelBuilder.OperationFingerprintPayload(model, setupHash)),
+        };
+    }
+
+    private static string Hmac(byte[] salt, byte[] bytes) => Convert.ToHexStringLower(HMACSHA256.HashData(salt, bytes));
+
+    private static ConditionsModel BoundConditions(ConditionsModel model, bool storeSensitive)
+    {
+        var conditionsCase = model.Cases.Select(item => item with
+        {
+            Varying = item.Varying.Select(parameter => storeSensitive ? parameter : parameter with { Value = null }).ToArray(),
+        }).ToArray();
+        conditionsCase = conditionsCase.Select(item => item with
+        {
+            Label = CaseLabel.Format(item, conditionsCase.Length, storeSensitive),
+        }).ToArray();
+        return model with
+        {
+            Setup = model.Setup is null ? null : model.Setup with { Text = storeSensitive ? model.Setup.Text : null },
+            Fixed = model.Fixed.Select(parameter => storeSensitive ? parameter : parameter with { Value = null }).ToArray(),
+            Cases = conditionsCase,
+        };
+    }
+
+    private static ConditionsModel OmitOversizedConditions(ConditionsModel model)
+    {
+        var omitted = model.Omitted.ToList();
+        if (model.Setup?.Text is not null)
+        {
+            model = model with { Setup = model.Setup with { Text = null } };
+            omitted.Add("setup.text");
+        }
+
+        var candidates = model.Fixed.Select((parameter, index) => (IsFixed: true, Case: -1, Index: index, Parameter: parameter))
+            .Concat(model.Cases.SelectMany((item, caseIndex) => item.Varying.Select((parameter, index) =>
+                (IsFixed: false, Case: caseIndex, Index: index, Parameter: parameter))))
+            .Where(item => item.Parameter.Value.HasValue)
+            .OrderByDescending(item => JsonSerializer.SerializeToUtf8Bytes(item.Parameter.Value, WaitJson).Length)
+            .ToArray();
+        foreach (var candidate in candidates)
+        {
+            var path = candidate.IsFixed
+                ? $"fixed.{candidate.Parameter.Name}.value"
+                : $"cases.{model.Cases[candidate.Case].Id}.{candidate.Parameter.Name}.value";
+            if (candidate.IsFixed)
+            {
+                var fixedParameters = model.Fixed.ToArray();
+                fixedParameters[candidate.Index] = fixedParameters[candidate.Index] with { Value = null };
+                model = model with { Fixed = fixedParameters };
+            }
+            else
+            {
+                var cases = model.Cases.ToArray();
+                var varying = cases[candidate.Case].Varying.ToArray();
+                varying[candidate.Index] = varying[candidate.Index] with { Value = null };
+                cases[candidate.Case] = cases[candidate.Case] with { Varying = varying };
+                model = model with { Cases = cases };
+            }
+            omitted.Add(path);
+            model = model with { Omitted = omitted.ToArray() };
+            if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(model, WaitJson)) <= MaximumConditionsBytes)
+                break;
+        }
+
+        return model with { Omitted = omitted.ToArray() };
+    }
+
     private void Initialize()
     {
         var directory = Path.GetDirectoryName(_path)!;
@@ -943,54 +1051,6 @@ public sealed class ActivityJournal : IActivityJournal
             ? null
             : JsonSerializer.Serialize(new SortedDictionary<string, string>(
                 vars.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal), StringComparer.Ordinal));
-
-    private string? CompareConditionsJson(CompareJournalConditions? conditions)
-    {
-        if (conditions is null)
-            return null;
-
-        var json = new Dictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["timeoutSeconds"] = conditions.TimeoutSeconds,
-            ["repeat"] = conditions.Repeat,
-            ["comparisonMode"] = conditions.ComparisonMode.ToString(),
-            ["compareNullability"] = conditions.CompareNullability,
-        };
-        if (!_storeSensitive)
-            return JsonSerializer.Serialize(json, WaitJson);
-
-        var omitted = new List<string>();
-        foreach (var field in SensitiveCompareConditionFields)
-        {
-            var candidate = new Dictionary<string, object?>(json, StringComparer.Ordinal)
-            {
-                [field.Name] = field.Value(conditions),
-                // Reserve room for the largest omission marker before accepting another field.
-                ["omittedSensitiveFields"] = SensitiveCompareConditionFields.Select(item => item.Name).ToArray(),
-            };
-            if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(candidate, WaitJson)) <= MaximumCompareConditionsBytes)
-                json = candidate;
-            else
-                omitted.Add(field.Name);
-        }
-
-        json["omittedSensitiveFields"] = omitted;
-        var serialized = JsonSerializer.Serialize(json, WaitJson);
-        if (Encoding.UTF8.GetByteCount(serialized) <= MaximumCompareConditionsBytes)
-            return serialized;
-
-        // Keep the safe settings and an explicit indication if an unexpected serializer expansion
-        // exceeds the reserved margin; never persist truncated or invalid JSON.
-        var safeFallback = new Dictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["timeoutSeconds"] = conditions.TimeoutSeconds,
-            ["repeat"] = conditions.Repeat,
-            ["comparisonMode"] = conditions.ComparisonMode.ToString(),
-            ["compareNullability"] = conditions.CompareNullability,
-            ["omittedSensitiveFields"] = SensitiveCompareConditionFields.Select(item => item.Name).ToArray(),
-        };
-        return JsonSerializer.Serialize(safeFallback, WaitJson);
-    }
 
     private static object Nullable(DateTimeOffset? value) => value is null ? DBNull.Value : Timestamp(value.Value);
 

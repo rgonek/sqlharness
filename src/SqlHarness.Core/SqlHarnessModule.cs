@@ -449,6 +449,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 compare.CandidateSql,
                 [prepared.FixedParameters]);
             var target = prepared.Target;
+            RecordConditions(compare, () => ConditionsModelBuilder.Build(
+                compare, target, prepared.Dialect, prepared.FixedParameters,
+                [new ConditionsCaseInput("0", null, [])], storeSensitive: true));
 
             if (compare.DryRun)
             {
@@ -567,6 +570,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 cellParameters);
 
             var target = prepared.Target;
+            RecordConditions(operation, () => ConditionsModelBuilder.Build(
+                operation, target, dialect, fixedParameters,
+                sets.Select(set => new ConditionsCaseInput(
+                    set.Name,
+                    matrixInput is null ? set.Name : null,
+                    set.Parameters)).ToArray(),
+                storeSensitive: true));
 
             if (operation.DryRun)
             {
@@ -690,6 +700,18 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         };
     }
 
+    private static void RecordConditions(SqlHarnessOperation operation, Func<ConditionsModel> build)
+    {
+        try
+        {
+            operation.RecordConditions?.Invoke(build());
+        }
+        catch (Exception)
+        {
+            // A journal failure must not change SQL execution or its reported outcome.
+        }
+    }
+
     private static string FormatMatrixCellError(CompareMatrixCellFailedException failed, IReadOnlyList<string> knownSecrets)
     {
         var original = failed.InnerException ?? failed;
@@ -729,6 +751,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             CompareOperationPreparer.EnsureSafe(querySafety, "query");
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
             var parameterSets = ResolveMeasureParameterSets(measure, dialect, parameters);
+            if (parameterSets is null)
+                RecordConditions(measure, () => ConditionsModelBuilder.Build(
+                    measure, target, dialect, parameters,
+                    [new ConditionsCaseInput("0", null, [])], storeSensitive: true));
             if (dialect.Engine == SqlEngine.SqlServer && parameterSets is null)
                 SqlSetupVariableReferenceValidator.Validate(measure.SetupSql, parameters, measure.QuerySql);
             dialect.ValidateParameterReferences(parameters, measure.SetupSql, measure.QuerySql);
@@ -738,6 +764,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (parameterSets is not null)
             {
                 var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets);
+                var fixedNames = new HashSet<string>(parameters.Select(parameter => parameter.Name), StringComparer.OrdinalIgnoreCase);
+                RecordConditions(measure, () => ConditionsModelBuilder.Build(
+                    measure, target, dialect, parameters,
+                    boundSets.Select(set => new ConditionsCaseInput(
+                        set.Name,
+                        measure.TypedMatrix is null ? set.Name : null,
+                        set.Parameters.Where(parameter => !fixedNames.Contains(parameter.Name)).ToArray())).ToArray(),
+                    storeSensitive: true));
                 if (measure.DryRun)
                 {
                     foreach (var boundSet in boundSets)

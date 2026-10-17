@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 
 using SqlHarness.Core;
+using SqlHarness.Tests.Journal;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests;
@@ -12,6 +13,25 @@ public class CompareMatrixTests
     private const string BaselineSql = "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant";
     private const string CandidateSql = "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant -- candidate";
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
+
+    [Fact]
+    public async Task Journaling_wrapper_records_bound_matrix_conditions_for_the_current_operation()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var journal = new ConditionsCaptureJournal();
+        var module = new JournalingModule(Module(new MatrixSessionFactory(), artifacts), () => journal,
+            () => JournalTestData.Session());
+
+        var outcome = await module.ExecuteAsync(Matrix("BatchSize:int=1,20"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.NotNull(journal.Model);
+        Assert.Equal("compare", journal.Model.Execution.Operation);
+        Assert.Equal("sqlserver", journal.Model.Engine);
+        Assert.Equal(["0", "1"], journal.Model.Cases.Select(item => item.Id));
+        Assert.Equal(["1", "20"], journal.Model.Cases.Select(item => item.Varying.Single().Value!.Value.GetRawText()));
+        Assert.Equal("7", journal.Model.Fixed.Single().Value!.Value.GetRawText());
+    }
 
     [Fact]
     public async Task Matrix_dry_run_binds_every_value_without_connecting_or_preflighting_artifacts()
@@ -1207,6 +1227,15 @@ public class CompareMatrixTests
             Sessions.Add(session);
             return Task.FromResult<ISqlSession>(session);
         }
+    }
+
+    private sealed class ConditionsCaptureJournal : IActivityJournal
+    {
+        public ConditionsModel? Model { get; private set; }
+        public JournalHandle? Begin(SessionIdentity session, OperationStart start) => new(1);
+        public bool Complete(JournalHandle? handle, OperationEnd end) => true;
+        public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted) { }
+        public void RecordConditions(JournalHandle handle, ConditionsModel model) => Model = model;
     }
 
     private sealed class MatrixSession : ISqlSession

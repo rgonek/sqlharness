@@ -85,7 +85,7 @@
 
 **Files:**
 - Create: `src/SqlHarness.Core/Journal/ConditionsModel.cs`, `src/SqlHarness.Core/Journal/ConditionsModelBuilder.cs`, `src/SqlHarness.Core/CaseLabel.cs`
-- Modify: `src/SqlHarness.Core/Journal/JournalModels.cs:51-61` (remove `CompareJournalConditions`; `OperationStart.Conditions`), `src/SqlHarness.Core/Journal/OperationJournalDescriber.cs:28-46`, `src/SqlHarness.Core/Journal/ActivityJournal.cs:24-37,730-775` (sensitive-field handling, size bound), `JournalSchema.cs` (`operations.conditions_json`, `operations.conditions_fingerprint`)
+- Modify: `src/SqlHarness.Core/Journal/JournalModels.cs` (remove raw `CompareJournalConditions`), `OperationJournalDescriber.cs`, `ActivityJournal.cs` (keyed fingerprints and size bound), `IActivityJournal.cs`, `JournalingModule.cs`, `SqlHarnessModule.cs` (build after binding), and `src/SqlHarness.Dashboard/JournalReader.cs` (read `conditions_json`); schema columns were added in Task 1
 - Test: create `tests/SqlHarness.Tests/Journal/ConditionsModelBuilderTests.cs`, `tests/SqlHarness.Tests/CaseLabelTests.cs`; update `OperationJournalDescriberTests.cs`, `ActivityJournalTests.cs`
 
 **Interfaces:**
@@ -96,22 +96,23 @@
   - `sealed record ConditionsSetup(string Hash, string? Text)`
   - `sealed record ConditionsParameter(string Name, string EffectiveType, JsonElement? Value)` — `Value` null when not stored; JSON `null` literal for SQL NULL.
   - `sealed record ConditionsCase(string Id, int Index, string Label, string? SetName, IReadOnlyList<ConditionsParameter> Varying, string Fingerprint)`
-  - `static ConditionsModel ConditionsModelBuilder.Build(SqlHarnessOperation operation, ISqlDialect dialect, ReadOnlySpan<byte> salt, bool storeSensitive)`
+  - `static ConditionsModel ConditionsModelBuilder.Build(SqlHarnessOperation operation, ResolvedTarget target, ISqlDialect dialect, IReadOnlyList<SqlHarnessParameter> fixedParameters, IReadOnlyList<ConditionsCaseInput> cases, bool storeSensitive)`
+  - `IActivityJournal.RecordConditions(JournalHandle handle, ConditionsModel model)`; `ActivityJournal` owns the per-journal salt and computes the setup content hash and fingerprints.
   - `static string SqlTypes.Effective(SqlHarnessParameter p)` — e.g. `nvarchar(4000)`, `nvarchar(max)`, `varchar(15)`, `decimal(18,4)`, `datetime`, `datetime2(7)`.
   - `static string CaseLabel.Format(ConditionsCase c, int total, bool valuesStored)`; long literals middle-truncated only by the UI.
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - `Matrix_and_equivalent_sets_build_identical_models` — MCP matrix `@ClassType nvarchar(4000) [A,B]` and inline sets `{a:[@ClassType=A]}, {b:[@ClassType=B]}` produce equal `Fixed`/`Varying`/fingerprints (case ids differ: `0`,`1` vs `a`,`b`).
   - `Effective_types_are_bound_types` — unsized `nvarchar` value of 10 chars → `nvarchar(4000)`; 5000 chars → `nvarchar(max)`; `decimal(18,4)`; `datetime`.
   - `Fingerprint_is_keyed_and_value_sensitive` — same model, different salt → different fingerprint; `@N int = 0` vs `1` → different; `repeat` 5 vs 10 → same.
   - `Values_and_setup_text_absent_without_storeSensitive` — `Value` null, `Setup.Text` null, `Setup.Hash` and fingerprints present.
-  - `Measure_journals_conditions` (describer test) — a `measure` start now carries `Conditions` with `Operation = "measure"`.
+  - `Measure_journals_conditions` — a measure operation builds and records conditions after target resolution and parameter binding.
   - `CaseLabel` tests: `@ClassType = N'A'`; two varying → `@A = 1, @B = N'x'`; values absent with set name → `a`; neither → `Case 2 of 3`; NULL → `@X = NULL`.
   - `Oversized_conditions_record_omissions` — a 2 MiB setup text with storeSensitive is journaled without `Setup.Text`, `Omitted` contains `setup.text`, the rest intact.
-- [ ] **Step 2:** Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~ConditionsModel|FullyQualifiedName~CaseLabel|FullyQualifiedName~OperationJournalDescriber"` → FAIL.
-- [ ] **Step 3:** Implement. Fingerprint = lowercase hex HMAC-SHA256(salt, canonical JSON of {engine, server, database, setup.hash, fixed, varying for the case, execution.sessionPolicy, execution.setupBinding, execution.comparisonMode}); operation fingerprint covers all cases in order. Size bound for `conditions_json`: 1 MiB; omit in order `setup.text`, then per-value `value` (largest first), recording each in `Omitted`. Delete the raw input fields (`parameters`, `typedParameters`, `matrix`, `matrixText`, `parameterSets`) from journaling.
-- [ ] **Step 4:** Run the same filter → PASS; run the full journal folder → PASS.
-- [ ] **Step 5:** Commit `feat(079): journal canonical conditions with keyed fingerprints`.
+- [x] **Step 2:** Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~ConditionsModel|FullyQualifiedName~CaseLabel|FullyQualifiedName~OperationJournalDescriber"` → FAIL.
+- [x] **Step 3:** Implement. Fingerprint = lowercase hex HMAC-SHA256(salt, canonical JSON of {engine, server, database, setup.hash, fixed, varying for the case, execution.sessionPolicy, execution.setupBinding, execution.comparisonMode}); operation fingerprint covers all cases in order. Size bound for `conditions_json`: 1 MiB; omit in order `setup.text`, then per-value `value` (largest first), recording each in `Omitted`. Delete the raw input fields (`parameters`, `typedParameters`, `matrix`, `matrixText`, `parameterSets`) from journaling.
+- [x] **Step 4:** Run the same filter → PASS; run the full journal folder → PASS.
+- [x] **Step 5:** Commit `feat(079): journal canonical conditions with keyed fingerprints`.
 
 ### Task 3: Case labels on journaled runs
 

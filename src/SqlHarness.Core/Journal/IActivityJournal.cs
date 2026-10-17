@@ -18,6 +18,9 @@ public interface IActivityJournal
     /// <summary>Per-variant benchmark metrics; full plan documents only when the journal stores sensitive content.</summary>
     void RecordBenchmark(JournalHandle? handle, BenchmarkJournalRecord record) { }
 
+    /// <summary>Stores canonical, bounded conditions for a resolved measure or compare operation.</summary>
+    void RecordConditions(JournalHandle handle, ConditionsModel model) { }
+
     /// <summary>Phase aggregates and bounded diagnostic events for one operation.</summary>
     void RecordPhases(JournalHandle? handle, IReadOnlyList<PhaseAggregate> phases, IReadOnlyList<PhaseEvent> events, int droppedEvents) { }
 

@@ -30,6 +30,9 @@ public abstract record SqlHarnessOperation
 {
     [JsonIgnore]
     public string? OperationRef { get; init; }
+
+    [JsonIgnore]
+    internal Action<ConditionsModel>? RecordConditions { get; init; }
 }
 
 public sealed record SqlHarnessArtifactReadOperation(

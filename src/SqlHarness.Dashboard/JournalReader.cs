@@ -318,7 +318,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             var parameters = ids.Select((id, index) => ($"$id{index}", (object?)id)).ToArray();
             var placeholders = string.Join(",", parameters.Select(parameter => parameter.Item1));
             foreach (var row in Query(connection, $"""
-                SELECT id, summary_json, compare_conditions_json
+                SELECT id, summary_json, conditions_json
                 FROM operations WHERE operation = 'compare' AND id IN ({placeholders});
                 """, parameters, reader => (
                     Id: reader.GetInt64(0),
@@ -408,7 +408,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var extra = Query(connection, """
             SELECT vars_json, candidate_sql_hash, sql_text, candidate_sql_text, raw_tokens, emitted_tokens, artifact_dir, summary_json,
                    client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source,
-                   raw_bytes, emitted_bytes, compare_subject, compare_scope, compare_conditions_json, l.model, l.effort, c.title, setup_sql_text
+                   raw_bytes, emitted_bytes, compare_subject, compare_scope, conditions_json, l.model, l.effort, c.title, setup_sql_text
             FROM operations
             LEFT JOIN operation_agent_links l ON l.operation_id = operations.id
             LEFT JOIN agent_conversations c ON c.id = l.conversation

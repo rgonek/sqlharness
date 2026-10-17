@@ -336,7 +336,7 @@ public sealed class JournalReaderTests
     {
         using var connection = OpenSeedDatabase(databasePath);
         using var command = connection.CreateCommand();
-        command.CommandText = "UPDATE operations SET summary_json = X'010203', compare_conditions_json = X'010203' WHERE id = $id;";
+        command.CommandText = "UPDATE operations SET summary_json = X'010203', conditions_json = X'010203' WHERE id = $id;";
         command.Parameters.AddWithValue("$id", operationId);
         command.ExecuteNonQuery();
     }

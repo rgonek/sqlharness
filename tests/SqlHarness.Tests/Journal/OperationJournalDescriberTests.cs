@@ -42,16 +42,12 @@ public sealed class OperationJournalDescriberTests
         Assert.Equal("SELECT 2", start.CandidateSqlText);
         Assert.NotEqual(start.SqlHash, start.CandidateSqlHash);
         Assert.Equal(new CompareContext("orders-report", "whole"), start.Context);
-        Assert.Equal("CREATE TABLE #t (id int)", start.CompareConditions!.SetupSql);
-        Assert.Equal(["id:int=SQLH_PARAM_MARKER"], start.CompareConditions.Parameters);
-        Assert.Equal(30, start.CompareConditions.TimeoutSeconds);
-        Assert.Equal(5, start.CompareConditions.Repeat);
-        Assert.Equal(ResultComparisonMode.Multiset, start.CompareConditions.ComparisonMode);
-        Assert.True(start.CompareConditions.CompareNullability);
+        Assert.Equal("CREATE TABLE #t (id int)", start.SetupSqlText);
+        Assert.DoesNotContain("SQLH_PARAM_MARKER", System.Text.Json.JsonSerializer.Serialize(start));
     }
 
     [Fact]
-    public void Compare_matrix_start_retains_legacy_cli_matrix_text_for_sensitive_persistence()
+    public void Compare_matrix_start_does_not_capture_raw_matrix_inputs()
     {
         var operation = new SqlHarnessCompareMatrixOperation(
             Target, null, "SELECT @tenant", "SELECT @tenant", [], 30, 5, "tenant:nvarchar=acme,contoso")
@@ -62,7 +58,7 @@ public sealed class OperationJournalDescriberTests
         var start = OperationJournalDescriber.DescribeStart(operation);
 
         Assert.Equal(new CompareContext("orders-report", "whole"), start.Context);
-        Assert.Equal("tenant:nvarchar=acme,contoso", start.CompareConditions!.MatrixText);
+        Assert.DoesNotContain("tenant:nvarchar=", System.Text.Json.JsonSerializer.Serialize(start));
     }
 
     [Fact]

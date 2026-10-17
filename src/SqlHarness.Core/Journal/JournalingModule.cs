@@ -72,9 +72,11 @@ public sealed class JournalingModule : ISqlHarnessModule
 
         try
         {
-            var effective = journal is not null && handle is not null && operation is SqlHarnessWatchOperation watch
-                ? watch with { Progress = ProgressRecorder(journal, handle) }
+            var effective = journal is not null && handle is not null
+                ? operation with { RecordConditions = model => RecordConditions(journal, handle, model) }
                 : operation;
+            if (effective is SqlHarnessWatchOperation watch && journal is not null && handle is not null)
+                effective = watch with { Progress = ProgressRecorder(journal, handle) };
             var stopwatch = Stopwatch.StartNew();
             SqlHarnessOutcome outcome;
             try
@@ -241,6 +243,18 @@ public sealed class JournalingModule : ISqlHarnessModule
         catch (Exception)
         {
             // Best-effort: the journal row stays completed without benchmark detail.
+        }
+    }
+
+    private static void RecordConditions(IActivityJournal journal, JournalHandle handle, ConditionsModel model)
+    {
+        try
+        {
+            journal.RecordConditions(handle, model);
+        }
+        catch (Exception)
+        {
+            // Conditions journaling is best-effort and cannot change SQL execution.
         }
     }
 

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Data;
 using System.Runtime.Versioning;
 
 using Microsoft.Data.Sqlite;
@@ -187,7 +188,7 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
-    public void Compare_context_and_conditions_follow_journal_sensitivity()
+    public void Compare_begin_keeps_context_without_raw_conditions()
     {
         using var hashOnly = new JournalTempDirectory();
         using var sensitive = new JournalTempDirectory();
@@ -207,13 +208,14 @@ public sealed class ActivityJournalTests
         sensitiveJournal.Begin(JournalTestData.Session(), start);
 
         var hashOnlyRow = JournalDb.Rows(hashOnly.DatabasePath,
-            "SELECT compare_subject, compare_scope, compare_conditions_json FROM operations").Single();
+            "SELECT compare_subject, compare_scope, compare_conditions_json, conditions_json FROM operations").Single();
         Assert.Equal("orders-report", hashOnlyRow["compare_subject"]);
         Assert.Equal("whole", hashOnlyRow["compare_scope"]);
         var hashOnlyBytes = JournalDb.AllBytes(hashOnly.DatabasePath);
         Assert.False(JournalDb.Contains(hashOnlyBytes, "SQLH_SETUP_MARKER"));
         Assert.False(JournalDb.Contains(hashOnlyBytes, "SQLH_VALUE_MARKER"));
-        Assert.True(JournalDb.Contains(hashOnlyBytes, "Multiset"));
+        Assert.Null(hashOnlyRow["compare_conditions_json"]);
+        Assert.Null(hashOnlyRow["conditions_json"]);
         Assert.True(JournalDb.Contains(hashOnlyBytes, "orders-report"));
 
         var matrix = new SqlHarnessCompareMatrixOperation(
@@ -226,16 +228,17 @@ public sealed class ActivityJournalTests
         hashOnlyJournal.Begin(JournalTestData.Session(), matrixStart);
         sensitiveJournal.Begin(JournalTestData.Session(), matrixStart);
         var matrixRow = JournalDb.Rows(hashOnly.DatabasePath,
-            "SELECT compare_subject, compare_scope, compare_conditions_json FROM operations ORDER BY id DESC LIMIT 1").Single();
+            "SELECT compare_subject, compare_scope, compare_conditions_json, conditions_json FROM operations ORDER BY id DESC LIMIT 1").Single();
         Assert.Equal("orders-report", matrixRow["compare_subject"]);
         Assert.Equal("history", matrixRow["compare_scope"]);
-        Assert.DoesNotContain("SQLH_CLI_MATRIX_MARKER", (string)matrixRow["compare_conditions_json"]!);
+        Assert.Null(matrixRow["compare_conditions_json"]);
+        Assert.Null(matrixRow["conditions_json"]);
         Assert.False(JournalDb.Contains(JournalDb.AllBytes(hashOnly.DatabasePath), "SQLH_CLI_MATRIX_MARKER"));
 
         var sensitiveBytes = JournalDb.AllBytes(sensitive.DatabasePath);
         Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_SETUP_MARKER"));
-        Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_VALUE_MARKER"));
-        Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_CLI_MATRIX_MARKER"));
+        Assert.False(JournalDb.Contains(sensitiveBytes, "SQLH_VALUE_MARKER"));
+        Assert.False(JournalDb.Contains(sensitiveBytes, "SQLH_CLI_MATRIX_MARKER"));
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(sensitive.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
     }
 
@@ -268,10 +271,6 @@ public sealed class ActivityJournalTests
         Assert.All(normalRows, row => Assert.Null(row["setup_sql_text"]));
         Assert.All(sensitiveRows, row => Assert.Equal(setup, row["setup_sql_text"]));
         Assert.False(JournalDb.Contains(JournalDb.AllBytes(hashOnly.DatabasePath), "SQLH_SETUP_MARKER"));
-        // The dedicated column retains setup even if the bounded compare-conditions JSON omits it.
-        var compareJson = (string)JournalDb.Rows(sensitive.DatabasePath,
-            "SELECT compare_conditions_json FROM operations WHERE operation = 'compare' ORDER BY id LIMIT 1").Single()["compare_conditions_json"]!;
-        Assert.Contains("omittedSensitiveFields", compareJson);
     }
 
     [Fact]
@@ -279,24 +278,94 @@ public sealed class ActivityJournalTests
     {
         using var temp = new JournalTempDirectory();
         var journal = Open(temp, TextWriter.Null, storeSensitive: true);
+        var setup = "/* SQLH_SETUP_MARKER */" + new string('x', 2 * 1024 * 1024);
         var operation = new SqlHarnessCompareOperation(
             new SqlTargetRequest("local", new Dictionary<string, string>()),
-            new string('\0', 12_000), "SELECT @id", "SELECT @id", ["id:int=SQLH_RETAIN_MARKER"], 30, 5);
+            setup, "SELECT @id", "SELECT @id", [], 30, 5);
         var start = OperationJournalDescriber.DescribeStart(operation);
 
-        journal.Begin(JournalTestData.Session(), start);
+        var handle = journal.Begin(JournalTestData.Session(), start)!;
+        var model = ConditionsModelBuilder.Build(operation,
+            new SqlHarness.Core.Targets.ResolvedTarget("server", "database", null!, "integrated"),
+            new SqlHarness.Core.Dialect.SqlServerDialect(),
+            [new SqlHarnessParameter("@id", SqlDbType.Int, 7, null)],
+            [new ConditionsCaseInput("0", null, [])], true);
+        journal.RecordConditions(handle, model);
 
         var jsonText = (string)JournalDb.Rows(temp.DatabasePath,
-            "SELECT compare_conditions_json FROM operations").Single()["compare_conditions_json"]!;
-        Assert.True(System.Text.Encoding.UTF8.GetByteCount(jsonText) <= 64 * 1024);
+            "SELECT conditions_json FROM operations").Single()["conditions_json"]!;
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(jsonText) <= 1024 * 1024);
         using var json = System.Text.Json.JsonDocument.Parse(jsonText);
         var root = json.RootElement;
-        Assert.Equal(30, root.GetProperty("timeoutSeconds").GetInt32());
-        Assert.Equal(5, root.GetProperty("repeat").GetInt32());
-        Assert.Equal("Ordered", root.GetProperty("comparisonMode").GetString());
-        Assert.Contains("setupSql", root.GetProperty("omittedSensitiveFields").EnumerateArray().Select(value => value.GetString()));
-        Assert.Contains("SQLH_RETAIN_MARKER", root.GetProperty("parameters").GetRawText());
-        Assert.False(root.TryGetProperty("setupSql", out _));
+        Assert.Equal(30, root.GetProperty("execution").GetProperty("timeoutSeconds").GetInt32());
+        Assert.Equal(5, root.GetProperty("execution").GetProperty("repeat").GetInt32());
+        Assert.Contains("setup.text", root.GetProperty("omitted").EnumerateArray().Select(value => value.GetString()));
+        Assert.False(root.GetProperty("setup").TryGetProperty("text", out _));
+        Assert.DoesNotContain("SQLH_SETUP_MARKER", jsonText);
+        Assert.NotEmpty((string)JournalDb.Rows(temp.DatabasePath, "SELECT conditions_fingerprint FROM operations").Single()["conditions_fingerprint"]!);
+    }
+
+    [Fact]
+    public void Conditions_store_keyed_fingerprints_but_hide_values_without_sensitive_storage()
+    {
+        using var first = new JournalTempDirectory();
+        using var second = new JournalTempDirectory();
+        var operation = new SqlHarnessMeasureOperation(
+            new SqlTargetRequest("local", new Dictionary<string, string>()),
+            "-- SQLH_SETUP_PRIVATE", "SELECT @secret", [], 30, 5);
+        var model = ConditionsModelBuilder.Build(operation,
+            new SqlHarness.Core.Targets.ResolvedTarget("server", "database", null!, "integrated"),
+            new SqlHarness.Core.Dialect.SqlServerDialect(),
+            [new SqlHarnessParameter("@secret", SqlDbType.NVarChar, "SQLH_VALUE_PRIVATE", 4000)],
+            [new ConditionsCaseInput("0", null, [])], true);
+
+        var firstJournal = Open(first, TextWriter.Null);
+        var secondJournal = Open(second, TextWriter.Null);
+        var firstHandle = firstJournal.Begin(JournalTestData.Session(), OperationJournalDescriber.DescribeStart(operation))!;
+        var secondHandle = secondJournal.Begin(JournalTestData.Session(), OperationJournalDescriber.DescribeStart(operation))!;
+        firstJournal.RecordConditions(firstHandle, model);
+        secondJournal.RecordConditions(secondHandle, model);
+
+        var firstRow = JournalDb.Rows(first.DatabasePath,
+            "SELECT conditions_json, conditions_fingerprint FROM operations").Single();
+        var secondFingerprint = (string)JournalDb.Rows(second.DatabasePath,
+            "SELECT conditions_fingerprint FROM operations").Single()["conditions_fingerprint"]!;
+        var json = (string)firstRow["conditions_json"]!;
+        Assert.False(JournalDb.Contains(JournalDb.AllBytes(first.DatabasePath), "SQLH_VALUE_PRIVATE"));
+        Assert.False(JournalDb.Contains(JournalDb.AllBytes(first.DatabasePath), "SQLH_SETUP_PRIVATE"));
+        Assert.NotEmpty((string)firstRow["conditions_fingerprint"]!);
+        Assert.NotEqual(firstRow["conditions_fingerprint"], secondFingerprint);
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal(firstRow["conditions_fingerprint"], document.RootElement.GetProperty("fingerprint").GetString());
+        Assert.NotEmpty(document.RootElement.GetProperty("setup").GetProperty("hash").GetString()!);
+    }
+
+    [Fact]
+    public void Oversized_conditions_omit_setup_then_the_largest_values_first()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null, storeSensitive: true);
+        var operation = new SqlHarnessMeasureOperation(
+            new SqlTargetRequest("local", new Dictionary<string, string>()), "-- setup", "SELECT @small, @large", [], 30, 5);
+        var model = ConditionsModelBuilder.Build(operation,
+            new SqlHarness.Core.Targets.ResolvedTarget("server", "database", null!, "integrated"),
+            new SqlHarness.Core.Dialect.SqlServerDialect(),
+            [
+                new SqlHarnessParameter("@small", SqlDbType.NVarChar, "small", 4000),
+                new SqlHarnessParameter("@large", SqlDbType.NVarChar, new string('L', 1_100_000), -1),
+            ],
+            [new ConditionsCaseInput("0", null, [])], true);
+        var handle = journal.Begin(JournalTestData.Session(), OperationJournalDescriber.DescribeStart(operation))!;
+        journal.RecordConditions(handle, model);
+
+        var jsonText = (string)JournalDb.Rows(temp.DatabasePath, "SELECT conditions_json FROM operations").Single()["conditions_json"]!;
+        using var document = System.Text.Json.JsonDocument.Parse(jsonText);
+        var root = document.RootElement;
+        var omitted = root.GetProperty("omitted").EnumerateArray().Select(value => value.GetString()!).ToArray();
+        Assert.Equal(["setup.text", "fixed.@large.value"], omitted);
+        Assert.Equal("small", root.GetProperty("fixed")[0].GetProperty("value").GetString());
+        Assert.False(root.GetProperty("setup").TryGetProperty("text", out _));
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(jsonText) <= 1024 * 1024);
     }
 
     [Fact]

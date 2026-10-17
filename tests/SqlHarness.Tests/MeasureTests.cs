@@ -5,6 +5,7 @@ using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
+using SqlHarness.Tests.Journal;
 
 namespace SqlHarness.Tests;
 
@@ -12,6 +13,30 @@ public class SqlHarnessMeasureTests
 {
     private const string Token = "eyJsynthetic.access-never-emit.signature";
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
+
+    [Fact]
+    public async Task Measure_records_conditions_after_binding()
+    {
+        var journal = new ConditionsCaptureJournal();
+        var module = new JournalingModule(Module(FakeMeasureSession.Create()), () => journal,
+            () => JournalTestData.Session());
+        var operation = Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @Id",
+            TypedParameters = [new SqlHarnessParameterInput("Id", "int", "1")],
+            DryRun = true,
+        };
+
+        var outcome = await module.ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.NotNull(journal.Model);
+        Assert.Equal("measure", journal.Model.Execution.Operation);
+        Assert.Equal("sqlserver", journal.Model.Engine);
+        Assert.Equal("1", journal.Model.Fixed.Single().Value!.Value.GetRawText());
+        Assert.Equal("0", Assert.Single(journal.Model.Cases).Id);
+    }
 
     [Fact]
     public async Task Measure_dry_run_validates_temp_setup_and_parameter_without_connecting_or_preflighting_artifacts()
@@ -747,6 +772,15 @@ public class SqlHarnessMeasureTests
             Runs = runs.ToArray();
             return "measure-artifacts";
         }
+    }
+
+    private sealed class ConditionsCaptureJournal : IActivityJournal
+    {
+        public ConditionsModel? Model { get; private set; }
+        public JournalHandle? Begin(SessionIdentity session, OperationStart start) => new(1);
+        public bool Complete(JournalHandle? handle, OperationEnd end) => true;
+        public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted) { }
+        public void RecordConditions(JournalHandle handle, ConditionsModel model) => Model = model;
     }
 
     private sealed class ThrowingArtifactWriter : ICompareArtifactWriter
