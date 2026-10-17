@@ -23,7 +23,7 @@
 
 ## Status and dependencies
 
-- DONE on feature branch `plan-080`; Tasks 1–6 are implemented and reviewed, and Task 7 documentation and Windows verification are complete. The final review fix wave and scoped re-review are approved; local integration remains pending. The owner's visual check remains unverified by the implementation session. Planning base `4154fe7` (2026-10-16); dependencies 077 and 079 are present.
+- DONE and integrated locally into `main` at `42a1e365`; Tasks 1–6 are implemented and reviewed, and Task 7 documentation and Windows verification are complete. The final review fix wave and scoped re-review are approved. The owner's visual check remains unverified by the implementation session. Planning base `4154fe7` (2026-10-16); dependencies 077 and 079 are present.
 - Priority P1; effort L; risk MEDIUM (UI-wide changes; comparison semantics shown to reviewers).
 
 ## Global Constraints
@@ -215,4 +215,8 @@ TDD RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:IsTestPr
 
 On revision `ed8b20e`, UI typecheck and lint exited 0, and UI build exited 0 with the existing chunk-size advisory. The required `just verify --LogDirectory .superpowers/sdd/080-optimization-dashboard/final-fix-verify-20261018` exited 0: `verify: OK stages=5 7m44s`; install skipped; build passed in 1m02s with 0 warnings/errors; UI check passed in 5m12s (55 files, 288 tests); Core passed 4,178 with 11 skipped; MCP passed 426 with 4 skipped. Format reported skipped (0 changed C# files). Logs are in the plan-local directory above. UI output contains non-failing `localhost:3000` connection refusals and Node `DEP0190`.
 
-The initial Task 7 gate failures and their focused reruns remain documented above and were not overwritten. This final fix gate had no failures. Sol low's scoped re-review approved all four Important findings as addressed and found no new breakage. Local integration remains pending; owner visual review remains waived/unverified; Linux remains outside the current completion policy. No merge, push, hosted CI, or live database check was performed.
+The initial Task 7 gate failures and their focused reruns remain documented above and were not overwritten. This final fix gate had no failures. Sol low's scoped re-review approved all four Important findings as addressed and found no new breakage. Owner visual review remains waived/unverified; Linux remains outside the current completion policy. No push, hosted CI, or live database check was performed.
+
+### Local integration — 2026-10-18
+
+Merged locally into `main` at `42a1e365`. Main-side changes since the branch base contain only new plans/specifications and queue dependencies. Product paths (`src`, `tests`, `scripts`) are identical to verified product `ed8b20e`. At the owner's request the redundant integrated gate was stopped; it is not reported as passed. Prior Windows evidence above applies to the unchanged product. Documentation diff and the merged queue were checked; plans 087 and 088 are preserved. No push.
