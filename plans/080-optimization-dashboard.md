@@ -23,7 +23,7 @@
 
 ## Status and dependencies
 
-- DONE on feature branch `plan-080`; Tasks 1–6 are implemented and reviewed, and Task 7 documentation and Windows verification are complete. The owner's visual check remains unverified by the implementation session. Task 7 review, whole-branch review, and local integration remain pending. Planning base `4154fe7` (2026-10-16); dependencies 077 and 079 are present.
+- DONE on feature branch `plan-080`; Tasks 1–6 are implemented and reviewed, and Task 7 documentation and Windows verification are complete. The final review fix wave is committed and verified; its scoped re-review and local integration remain pending. The owner's visual check remains unverified by the implementation session. Planning base `4154fe7` (2026-10-16); dependencies 077 and 079 are present.
 - Priority P1; effort L; risk MEDIUM (UI-wide changes; comparison semantics shown to reviewers).
 
 ## Global Constraints
@@ -206,3 +206,13 @@ On feature branch `plan-080`, product revision `23dd105189ff0e979ed27b1bf8a0f79b
 The full gate was rerun once with `just verify -LogDirectory .superpowers/sdd/080-optimization-dashboard/task-7-verify-rerun-20261017`; it exited 0: `verify: OK stages=5 6m38s`. Install was skipped (unchanged lockfile); build passed in 28.95s with 0 warnings/errors; UI check passed in 4m00s (55 files, 284 tests); Core passed 4,177 with 11 skipped; MCP passed 426 with 4 skipped; formatting was skipped with 0 changed C# files. Rerun logs are in `.superpowers/sdd/080-optimization-dashboard/task-7-verify-rerun-20261017/`. UI logs contain non-failing localhost:3000 connection refusals and Node `DEP0190`.
 
 The README updates contain no new Markdown links. The changed-doc plan and history links were checked against the files in the repository. This is feature-branch evidence only; it is not verification of an integrated `main` tree. Linux was not run because it is not a completion criterion under [repository verification policy](../docs/agents/verification.md). The owner waived the visual review and will perform it personally; it remains unverified here. No live database, merge, push, installation, or publication occurred.
+
+#### Final review fix wave (2026-10-18)
+
+The final whole-branch review at `58af265` identified four Important findings. Product commit `ed8b20e04eaef948f455b8fd75972573000e3345` fixes them: a null scope-local default B stays unset with a selection prompt; PostgreSQL cases are selected from common elapsed/CPU/buffer metrics even when logical reads are absent, with reads marked unavailable and CPU/buffers shown in both panel and Markdown; every retained measurement operation is linked with session return context; and every subject/database has its own card with group/scope-specific URL selection. Numeric `case=0`, group/scope defaults, and unassigned-compare return context remain covered.
+
+TDD RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:IsTestProject=true --filter FullyQualifiedName~Postgres_cases_without_logical_reads --no-restore` failed as expected because no cases were selected (0 passed, 1 failed). `npm --prefix src/SqlHarness.Dashboard/ui test -- OptimizationSection.test.tsx` failed the three added regressions for the missing B prompt, multiple cards, and measurement links (4 passed, 3 failed). GREEN: the focused comparer suite passed 22/22; `npm --prefix src/SqlHarness.Dashboard/ui test -- OptimizationSection.test.tsx ComparisonPanel.test.tsx` passed 14/14.
+
+On revision `ed8b20e`, UI typecheck and lint exited 0, and UI build exited 0 with the existing chunk-size advisory. The required `just verify --LogDirectory .superpowers/sdd/080-optimization-dashboard/final-fix-verify-20261018` exited 0: `verify: OK stages=5 7m44s`; install skipped; build passed in 1m02s with 0 warnings/errors; UI check passed in 5m12s (55 files, 288 tests); Core passed 4,178 with 11 skipped; MCP passed 426 with 4 skipped. Format reported skipped (0 changed C# files). Logs are in the plan-local directory above. UI output contains non-failing `localhost:3000` connection refusals and Node `DEP0190`.
+
+The initial Task 7 gate failures and their focused reruns remain documented above and were not overwritten. This final fix gate had no failures. The scoped re-review remains pending; owner visual review remains waived/unverified, Linux remains outside the current completion policy, and no merge, push, hosted CI, or live database check was performed.
