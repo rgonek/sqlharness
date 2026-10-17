@@ -38,7 +38,11 @@ public sealed record JournalVariantMetrics(
     IReadOnlyList<JournalWait> Waits,
     PostgresBufferCounters? Postgres,
     IReadOnlyList<JournalTableIo> TableIo,
-    IReadOnlyList<JournalPlanLink> PlanLinks);
+    IReadOnlyList<JournalPlanLink> PlanLinks)
+{
+    public string CaseId { get; init; } = "0";
+    public string CaseLabel { get; init; } = "Case 1 of 1";
+}
 
 /// <summary>Full plan text. Sensitive: the journal stores it only with journal.storeSensitive.</summary>
 public sealed record JournalPlanDocument(string Hash, string Format, string Document);
@@ -52,7 +56,11 @@ public sealed record JournalStatementMetrics(
     long? CpuMilliseconds,
     long? ElapsedMilliseconds,
     int? DegreeOfParallelism,
-    IReadOnlyList<StatementOperatorSummary> TopOperators);
+    IReadOnlyList<StatementOperatorSummary> TopOperators)
+{
+    public string CaseId { get; init; } = "0";
+    public string CaseLabel { get; init; } = "Case 1 of 1";
+}
 
 public sealed record BenchmarkJournalRecord(
     IReadOnlyList<JournalVariantMetrics> Variants,

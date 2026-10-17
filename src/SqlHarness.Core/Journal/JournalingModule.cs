@@ -55,6 +55,7 @@ public sealed class JournalingModule : ISqlHarnessModule
         operation = SqlHarnessOperationReferences.Ensure(operation);
         var journal = _journal.Value;
         var handle = Begin(journal, operation, ct);
+        ConditionsModel? conditionsModel = null;
         IDisposable? phaseRecording = null;
         OperationPhaseRecorder? phaseRecorder = null;
         if (journal is not null && handle is not null)
@@ -73,7 +74,14 @@ public sealed class JournalingModule : ISqlHarnessModule
         try
         {
             var effective = journal is not null && handle is not null
-                ? operation with { RecordConditions = model => RecordConditions(journal, handle, model) }
+                ? operation with
+                {
+                    RecordConditions = model =>
+                    {
+                        conditionsModel = model;
+                        RecordConditions(journal, handle, model);
+                    },
+                }
                 : operation;
             if (effective is SqlHarnessWatchOperation watch && journal is not null && handle is not null)
                 effective = watch with { Progress = ProgressRecorder(journal, handle) };
@@ -102,9 +110,10 @@ public sealed class JournalingModule : ISqlHarnessModule
                 return outcome with { OperationRef = operation.OperationRef };
             }
 
-            var completed = Complete(journal, handle, phaseRecorder, () => OperationJournalDescriber.DescribeEnd(outcome, stopwatch.ElapsedMilliseconds));
+            var completed = Complete(journal, handle, phaseRecorder,
+                () => OperationJournalDescriber.DescribeEnd(outcome, stopwatch.ElapsedMilliseconds, conditionsModel));
             if (completed && journal is not null && handle is not null && outcome.BenchmarkRuns is { Count: > 0 } runs)
-                RecordBenchmark(journal, handle, runs);
+                RecordBenchmark(journal, handle, runs, conditionsModel);
 
             // A failed completion (busy or broken journal) skips the emission write, so one
             // operation never waits on a locked journal a second time.
@@ -232,13 +241,14 @@ public sealed class JournalingModule : ISqlHarnessModule
         }
     }
 
-    private static void RecordBenchmark(IActivityJournal journal, JournalHandle handle, IReadOnlyList<CompareRunArtifact> runs)
+    private static void RecordBenchmark(
+        IActivityJournal journal, JournalHandle handle, IReadOnlyList<CompareRunArtifact> runs, ConditionsModel? conditions)
     {
         try
         {
             // Plan parsing and aggregation run inside the guard: a malformed run never
             // turns a successful benchmark into an exception.
-            journal.RecordBenchmark(handle, JournalBenchmarkBuilder.Build(runs));
+            journal.RecordBenchmark(handle, JournalBenchmarkBuilder.Build(runs, conditions));
         }
         catch (Exception)
         {

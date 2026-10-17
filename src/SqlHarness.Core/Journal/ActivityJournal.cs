@@ -472,9 +472,14 @@ public sealed class ActivityJournal : IActivityJournal
             var now = Timestamp(_time.GetUtcNow());
             using var connection = Connect();
             using var transaction = connection.BeginTransaction();
+            var caseIdentities = ReadCaseIdentities(connection, transaction, handle.OperationId);
+            var caseCount = Math.Max(1, record.Variants.Select(item => item.MatrixCell)
+                .Concat(record.Statements.Select(item => item.MatrixCell)).OfType<int>().DefaultIfEmpty(0).Max() + 1);
             for (var ordinal = 0; ordinal < record.Variants.Count; ordinal++)
             {
                 var variant = record.Variants[ordinal];
+                var identity = ResolveCaseIdentity(variant.MatrixCell, caseIdentities, caseCount, variant.CaseId, variant.CaseLabel);
+                variant = variant with { CaseId = identity.Id, CaseLabel = identity.Label };
                 var metricId = InsertMetric(connection, transaction, handle.OperationId, ordinal, variant);
                 foreach (var table in variant.TableIo)
                     InsertTableIo(connection, transaction, metricId, table);
@@ -495,17 +500,20 @@ public sealed class ActivityJournal : IActivityJournal
             for (var ordinal = 0; ordinal < record.Statements.Count; ordinal++)
             {
                 var statement = record.Statements[ordinal];
+                var identity = ResolveCaseIdentity(statement.MatrixCell, caseIdentities, caseCount, statement.CaseId, statement.CaseLabel);
                 using var insert = Command(connection, transaction, """
                     INSERT INTO operation_statements (operation_id, ordinal, variant, parameter_set, matrix_cell,
-                        statement_ordinal, statement_hash, cpu_ms, elapsed_ms, dop, operators_json)
-                    VALUES ($operation, $ordinal, $variant, $set, $cell, $statementOrdinal, $hash,
-                        $cpu, $elapsed, $dop, $operators);
+                        case_id, case_label, statement_ordinal, statement_hash, cpu_ms, elapsed_ms, dop, operators_json)
+                    VALUES ($operation, $ordinal, $variant, $set, $cell, $caseId, $caseLabel,
+                        $statementOrdinal, $hash, $cpu, $elapsed, $dop, $operators);
                     """);
                 insert.Parameters.AddWithValue("$operation", handle.OperationId);
                 insert.Parameters.AddWithValue("$ordinal", ordinal);
                 insert.Parameters.AddWithValue("$variant", statement.Variant);
                 insert.Parameters.AddWithValue("$set", (object?)statement.ParameterSet ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$cell", (object?)statement.MatrixCell ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$caseId", identity.Id);
+                insert.Parameters.AddWithValue("$caseLabel", identity.Label);
                 insert.Parameters.AddWithValue("$statementOrdinal", statement.StatementOrdinal);
                 insert.Parameters.AddWithValue("$hash", statement.StatementHash);
                 insert.Parameters.AddWithValue("$cpu", (object?)statement.CpuMilliseconds ?? DBNull.Value);
@@ -543,6 +551,52 @@ public sealed class ActivityJournal : IActivityJournal
         {
             Warn();
         }
+    }
+
+    private sealed record JournalCaseIdentity(string Id, string Label);
+
+    private static Dictionary<int, JournalCaseIdentity> ReadCaseIdentities(
+        SqliteConnection connection, SqliteTransaction transaction, long operationId)
+    {
+        try
+        {
+            using var query = Command(connection, transaction, "SELECT conditions_json FROM operations WHERE id = $id;");
+            query.Parameters.AddWithValue("$id", operationId);
+            if (query.ExecuteScalar() is not string json)
+                return [];
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("cases", out var cases) || cases.ValueKind != JsonValueKind.Array)
+                return [];
+            var identities = new Dictionary<int, JournalCaseIdentity>();
+            foreach (var item in cases.EnumerateArray())
+            {
+                if (!item.TryGetProperty("index", out var index) || !index.TryGetInt32(out var caseIndex)
+                    || !item.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.String
+                    || !item.TryGetProperty("label", out var label) || label.ValueKind != JsonValueKind.String)
+                    continue;
+                identities[caseIndex] = new JournalCaseIdentity(id.GetString()!, label.GetString()!);
+            }
+            return identities;
+        }
+        catch (Exception)
+        {
+            // Missing, malformed, or irreducibly oversized conditions do not suppress benchmark rows.
+            return [];
+        }
+    }
+
+    private static JournalCaseIdentity ResolveCaseIdentity(
+        int? matrixCell,
+        IReadOnlyDictionary<int, JournalCaseIdentity> identities,
+        int caseCount,
+        string fallbackId,
+        string fallbackLabel)
+    {
+        var index = matrixCell ?? 0;
+        if (identities.TryGetValue(index, out var identity))
+            return identity;
+        return new JournalCaseIdentity(fallbackId,
+            fallbackLabel == "Case 1 of 1" && caseCount > 1 ? $"Case {index + 1} of {caseCount}" : fallbackLabel);
     }
 
     public void RecordConditions(JournalHandle handle, ConditionsModel model)
@@ -964,13 +1018,13 @@ public sealed class ActivityJournal : IActivityJournal
     private static long InsertMetric(SqliteConnection connection, SqliteTransaction transaction, long operationId, int ordinal, JournalVariantMetrics v)
     {
         using var insert = Command(connection, transaction, """
-            INSERT INTO operation_metrics (operation_id, ordinal, variant, parameter_set, matrix_cell, runs,
+            INSERT INTO operation_metrics (operation_id, ordinal, variant, parameter_set, matrix_cell, case_id, case_label, runs,
                 elapsed_ms_min, elapsed_ms_median, elapsed_ms_max, cpu_ms_min, cpu_ms_median, cpu_ms_max,
                 logical_reads_min, logical_reads_median, logical_reads_max,
                 grant_requested_kb, grant_granted_kb, grant_max_used_kb, dop, compile_time_ms, compile_cpu_ms,
                 spill_count, has_warnings, has_implicit_conversion, missing_index_count, waits_json,
                 pg_shared_hit, pg_shared_read, pg_shared_dirtied, pg_shared_written, pg_temp_read, pg_temp_written)
-            VALUES ($operation, $ordinal, $variant, $set, $cell, $runs,
+            VALUES ($operation, $ordinal, $variant, $set, $cell, $caseId, $caseLabel, $runs,
                 $eMin, $eMed, $eMax, $cMin, $cMed, $cMax, $rMin, $rMed, $rMax,
                 $gReq, $gGrant, $gUsed, $dop, $compileTime, $compileCpu,
                 $spills, $warnings, $implicit, $missing, $waits,
@@ -982,6 +1036,8 @@ public sealed class ActivityJournal : IActivityJournal
         insert.Parameters.AddWithValue("$variant", v.Variant);
         insert.Parameters.AddWithValue("$set", (object?)v.ParameterSet ?? DBNull.Value);
         insert.Parameters.AddWithValue("$cell", (object?)v.MatrixCell ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$caseId", v.CaseId);
+        insert.Parameters.AddWithValue("$caseLabel", v.CaseLabel);
         insert.Parameters.AddWithValue("$runs", v.Runs);
         AddSpread(insert, "$e", v.ElapsedMilliseconds);
         AddSpread(insert, "$c", v.CpuMilliseconds);

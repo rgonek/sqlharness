@@ -57,6 +57,8 @@ public sealed class ActivityJournalBenchmarkTests
         var metric = JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_metrics").Single();
         Assert.Equal("baseline", metric["variant"]);
         Assert.Equal(2L, metric["matrix_cell"]);
+        Assert.Equal("2", metric["case_id"]);
+        Assert.Equal("Case 3 of 3", metric["case_label"]);
         Assert.Equal(1L, metric["runs"]);
         Assert.Equal(10L, metric["cpu_ms_median"]);
         Assert.Equal(4096L, metric["grant_granted_kb"]);
@@ -90,8 +92,13 @@ public sealed class ActivityJournalBenchmarkTests
         journal.RecordBenchmark(handle, record);
 
         var statements = JournalDb.Rows(temp.DatabasePath,
-            "SELECT statement_ordinal, statement_hash, cpu_ms, elapsed_ms, dop, operators_json FROM operation_statements ORDER BY statement_ordinal");
+            "SELECT statement_ordinal, statement_hash, cpu_ms, elapsed_ms, dop, operators_json, case_id, case_label FROM operation_statements ORDER BY statement_ordinal");
         Assert.Equal(2, statements.Count);
+        Assert.All(statements, row =>
+        {
+            Assert.Equal("0", row["case_id"]);
+            Assert.Equal("Case 1 of 1", row["case_label"]);
+        });
         Assert.Equal([10L, 20L], statements.Select(row => (long)row["cpu_ms"]!).ToArray());
         Assert.Equal([15L, 25L], statements.Select(row => (long)row["elapsed_ms"]!).ToArray());
         Assert.All(statements, row => Assert.Equal(64, ((string)row["statement_hash"]!).Length));

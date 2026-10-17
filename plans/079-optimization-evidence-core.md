@@ -124,9 +124,9 @@
 - Consumes: `ConditionsCase.Id`, `CaseLabel.Format`.
 - Produces: every journaled run row carries `case_id`/`case_label`; `JournalReader` exposes them as `caseId`/`caseLabel` on compare cases (Task 7).
 
-- [ ] **Step 1:** Failing test `Matrix_runs_journal_case_label` — matrix `@ClassType [A,B]` with storeSensitive journals labels `@ClassType = N'A'`, `@ClassType = N'B'`; without storeSensitive `Case 1 of 2`, `Case 2 of 2`.
-- [ ] **Step 2:** Run → FAIL. **Step 3:** Implement. **Step 4:** Run → PASS.
-- [ ] **Step 5:** Commit `feat(079): journal case identity and labels`.
+- [x] **Step 1:** Failing test `Matrix_runs_journal_case_label` — matrix `@ClassType [A,B]` with storeSensitive journals labels `@ClassType = N'A'`, `@ClassType = N'B'`; without storeSensitive `Case 1 of 2`, `Case 2 of 2`.
+- [x] **Step 2:** Run → FAIL. **Step 3:** Implement. **Step 4:** Run → PASS.
+- [x] **Step 5:** Commit `feat(079): journal case identity and labels`.
 
 ### Task 4: `measure` uses compare's per-case session contract
 

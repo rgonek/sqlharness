@@ -51,7 +51,7 @@ internal static class OperationJournalDescriber
         _ => false,
     };
 
-    internal static OperationEnd DescribeEnd(SqlHarnessOutcome outcome, long durationMilliseconds)
+    internal static OperationEnd DescribeEnd(SqlHarnessOutcome outcome, long durationMilliseconds, ConditionsModel? conditions = null)
     {
         var status = Status(outcome.ExitCode);
         var identity = TargetOf(outcome.Report);
@@ -78,7 +78,7 @@ internal static class OperationJournalDescriber
             // MCP never completes the emission receipt, so the raw footprint is recorded here.
             outcome.EmissionReceipt?.RawFootprint?.EstimatedTokenCount,
             ArtifactDirectory: artifactDirectory,
-            SummaryJson: JournalSummary.Build(outcome.Report),
+            SummaryJson: JournalSummary.Build(outcome.Report, conditions),
             ErrorMessage: status is "failed" or "rejected" ? Message(outcome.MachineError) : null,
             ParentOperationRef: outcome.ParentOperationRef);
     }

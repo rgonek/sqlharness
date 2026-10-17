@@ -13,7 +13,7 @@ internal static class JournalSummary
 
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 
-    internal static string? Build(object? report) => report switch
+    internal static string? Build(object? report, ConditionsModel? conditions = null) => report switch
     {
         SqlHarnessMeasureReport measure => Serialize(new
         {
@@ -50,6 +50,8 @@ internal static class JournalSummary
             cases = matrix.Cells.OrderBy(cell => cell.Index).Select(cell => new
             {
                 index = cell.Index,
+                caseId = conditions?.Cases.FirstOrDefault(item => item.Index == cell.Index)?.Id
+                    ?? cell.Index.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 equivalence = cell.Compare.Equivalence,
                 regression = cell.Compare.Regression,
             }),

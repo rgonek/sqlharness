@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace SqlHarness.Core;
 
 /// <summary>
@@ -9,7 +11,7 @@ internal static class JournalBenchmarkBuilder
 {
     internal const int MaximumWaits = 10;
 
-    internal static BenchmarkJournalRecord Build(IReadOnlyList<CompareRunArtifact> runs)
+    internal static BenchmarkJournalRecord Build(IReadOnlyList<CompareRunArtifact> runs, ConditionsModel? conditions = null)
     {
         ArgumentNullException.ThrowIfNull(runs);
         var documents = new Dictionary<string, JournalPlanDocument>(StringComparer.Ordinal);
@@ -17,10 +19,34 @@ internal static class JournalBenchmarkBuilder
             .GroupBy(run => (run.Variant, run.ParameterSet, run.MatrixCell))
             .Select(group => BuildVariant(group.Key.Variant, group.Key.ParameterSet, group.Key.MatrixCell, group.ToArray(), documents))
             .ToArray();
-        return new BenchmarkJournalRecord(variants, documents.Values.ToArray())
+        var caseCount = Math.Max(1, runs.Where(run => run.MatrixCell.HasValue).Select(run => run.MatrixCell!.Value)
+            .DefaultIfEmpty(0).Max() + 1);
+        return new BenchmarkJournalRecord(
+            variants.Select(metric => WithFallbackMetricIdentity(metric)).ToArray(), documents.Values.ToArray())
         {
-            Statements = BuildStatements(runs),
+            Statements = BuildStatements(runs).Select(statement => WithFallbackStatementIdentity(statement)).ToArray(),
         };
+
+        JournalVariantMetrics WithFallbackMetricIdentity(JournalVariantMetrics metric)
+        {
+            var identity = FallbackIdentity(metric.MatrixCell);
+            return metric with { CaseId = identity.Id, CaseLabel = identity.Label };
+        }
+
+        JournalStatementMetrics WithFallbackStatementIdentity(JournalStatementMetrics statement)
+        {
+            var identity = FallbackIdentity(statement.MatrixCell);
+            return statement with { CaseId = identity.Id, CaseLabel = identity.Label };
+        }
+
+        (string Id, string Label) FallbackIdentity(int? matrixCell)
+        {
+            var index = matrixCell ?? 0;
+            var conditionCase = conditions?.Cases.FirstOrDefault(item => item.Index == index);
+            if (conditionCase is not null)
+                return (conditionCase.Id, conditionCase.SetName ?? $"Case {index + 1} of {conditions!.Cases.Count}");
+            return (index.ToString(CultureInfo.InvariantCulture), $"Case {index + 1} of {caseCount}");
+        }
     }
 
     private static IReadOnlyList<JournalStatementMetrics> BuildStatements(IReadOnlyList<CompareRunArtifact> runs)
