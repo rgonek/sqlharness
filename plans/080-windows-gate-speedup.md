@@ -50,11 +50,11 @@ This is a **known recurring** flake: `plans/history.md` and `plans/076-partial-m
 - Consumes: `DashboardHostOptions` is a positional record, so `Error` is an `init` property settable through `with`.
 - Produces: `private static DashboardHostOptions Options(TempHome home, TimeSpan? idle, TimeProvider time, Passes passes, SqlHarnessConfig? config = null, TextWriter? errors = null)` — when `errors` is non-null it replaces the `TextWriter.Null` passed as `Error`. Every other caller is unaffected because the parameter defaults to null.
 
-- [ ] **Step 1: Add the error sink parameter to the `Options` helper**
+- [x] **Step 1: Add the error sink parameter to the `Options` helper**
 
 Change the signature at `DashboardHousekeepingTests.cs:73` to the one in the Interfaces block and change the `TextWriter.Null` in the `Error` position (line 76) to `errors ?? TextWriter.Null`. Leave `Output` as `TextWriter.Null`.
 
-- [ ] **Step 2: Rewrite the assertion so the failure names the cause**
+- [x] **Step 2: Rewrite the assertion so the failure names the cause**
 
 In `External_journal_commit_during_matching_refreshes_the_idle_window`, replace lines 406-422 with:
 
@@ -84,16 +84,16 @@ Assert.False(run.IsCompleted,
 
 The message deliberately carries both the host's exit code and whatever the host wrote to `Error`, which is where `DashboardHost.cs:88` puts the type name of a swallowed exception.
 
-- [ ] **Step 3: Verify the test still passes and still guards the same behaviour**
+- [x] **Step 3: Verify the test still passes and still guards the same behaviour**
 
 Run: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName~DashboardHousekeepingTests'`
 Expected: 14 passed, 0 failed.
 
-- [ ] **Step 4: Verify the message actually appears when the loop is down**
+- [x] **Step 4: Verify the message actually appears when the loop is down**
 
 Temporarily change the `await nextPass;` line to `await nextPass.WaitAsync(TimeSpan.FromMilliseconds(1));`, run the same filter, and confirm the failure text mentions `host exited with`. Then revert that one line. This proves the new message is wired, not just written.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/SqlHarness.Tests/Dashboard/DashboardHousekeepingTests.cs
@@ -115,11 +115,11 @@ git commit -m "test: report why the housekeeping loop ended in the idle-window r
 **Interfaces:**
 - Produces: `public static void Operations(string databasePath, int count, Action<int, long>? onSession = null)` in `SqlHarness.Tests.Dashboard.JournalSeed`. Opens one pooled connection, wraps the whole loop in a single `BEGIN`/`COMMIT`, and inserts `count` sessions with session keys `cli:000` … `cli:{count-1:D3}`, each with one completed `query` operation and `last_seen` = `JournalSeed.HostStarted.AddSeconds(count - 1)` so ordering by time matches ordering by id. `onSession(index, sessionId)` is invoked inside the transaction after each session insert so callers can annotate or link.
 
-- [ ] **Step 1: Write the bulk helper**
+- [x] **Step 1: Write the bulk helper**
 
 Add to `JournalSeed.cs`. Insert into `sessions` and `operations` with the column names taken from `JournalSchema` — read `src/SqlHarness.Core/Journal/JournalSchema.cs` for the exact current column list of `operations` and use only columns the reader tests select. Use `using var command = connection.CreateCommand()` with `command.Transaction` set, executed once per row (a prepared statement reused in the loop, not string-concatenated SQL). Commit once at the end.
 
-- [ ] **Step 2: Switch the id-cursor test to the bulk helper**
+- [x] **Step 2: Switch the id-cursor test to the bulk helper**
 
 Replace the `for` loop at `JournalReaderTests.cs:1371-1376` with:
 
@@ -133,34 +133,34 @@ JournalSeed.Operations(home.DatabasePath, 240, (index, id) =>
 
 Keep the existing assertions (`Assert.Equal(120, seen.Count)` and the distinctness check) and the existing comment about two full pages proving the cursor.
 
-- [ ] **Step 3: Switch the compare-paging test to the bulk helper the same way**
+- [x] **Step 3: Switch the compare-paging test to the bulk helper the same way**
 
 Apply the identical replacement in `Compare_pages_have_no_gaps_and_versions_use_all_retained_history_before_paging`, keeping its own assertions untouched.
 
-- [ ] **Step 4: Prove the seeding is still correct before trusting the time**
+- [x] **Step 4: Prove the seeding is still correct before trusting the time**
 
 Run: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName~JournalReaderTests'`
 Expected: 64 passed, 0 failed. If a reader assertion fails, the bulk rows do not match what the writer produced — fix the helper, do not relax the assertion.
 
-- [ ] **Step 5: Measure the change**
+- [x] **Step 5: Measure the change**
 
 Run the same filter with `--logger "trx;LogFileName=jr.trx" --results-directory D:/temp/opencode/trx-seed`, then sum `UnitTestResult/@duration` for the class. Expected: class total well below the recorded 52,9 s. Record both numbers in `plans/080-verification-evidence.md` (Step 8).
 
-- [ ] **Step 6: Prove no writer test uses the bulk helper**
+- [x] **Step 6: Prove no writer test uses the bulk helper**
 
 Run: `Select-String -Path tests/SqlHarness.Tests/**/*.cs -Pattern 'JournalSeed\.Operations'`
 Expected: matches only in `JournalReaderTests.cs`. A match in a test that asserts what `ActivityJournal` wrote is a Review Focus item 6 violation — move that test back to `seed.Operation`.
 
-- [ ] **Step 7: Format and build**
+- [x] **Step 7: Format and build**
 
 Run: `pwsh ./scripts/format-changed.ps1 -Fix` then `dotnet build SqlHarness.sln --no-restore -warnaserror`
 Expected: 0 warnings, 0 errors.
 
-- [ ] **Step 8: Write the evidence note**
+- [x] **Step 8: Write the evidence note**
 
 Create `plans/080-verification-evidence.md` with the before/after `JournalReaderTests` class totals, the `dotnet test` command used, and the resulting date.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add tests/SqlHarness.Tests/Dashboard/JournalSeed.cs tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs plans/080-verification-evidence.md
@@ -186,36 +186,36 @@ git commit -m "test: seed reader fixtures in one transaction"
   `Invoke-ParallelGateStage -Name <string> -LogDirectory <string> -Project <string[]> -Arguments <string[]> -Skipped -SkipReason <string>`.
   It starts one `dotnet test <project> <Arguments>` process per entry of `-Project`, waits for all of them, writes each project's output to `<LogDirectory>/<Name>-<leaf>.log`, returns a single object shaped like `Invoke-GateStage`'s (`Name`, `ExitCode`, `Seconds`, `LogPath`, `Skipped`, `SkipReason`) whose `ExitCode` is the first non-zero project exit code and whose `LogPath` is the log of the first failing project. `-Skipped` returns the same skipped object `Invoke-GateStage` returns. Projects are listed explicitly, never discovered by glob.
 
-- [ ] **Step 1: Write the failing Pester test**
+- [x] **Step 1: Write the failing Pester test**
 
 In `tests/scripts/gate-scripts.Tests.ps1`, add a test that dot-sources `scripts/gate-output.ps1`, calls `Invoke-ParallelGateStage` with two fake projects that both exit 0, and asserts `ExitCode` is 0 and both per-project logs exist. Then add a second case with one fake project exiting 3 and assert `ExitCode` is 3 and `LogPath` names that project's log. Fake projects are `.cmd` shims on `PATH` that `exit %1%`, matching the pattern already used by `setup-local-*.Tests.ps1`.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `powershell.exe -NoProfile -Command "Import-Module Pester -MaximumVersion 3.99; Invoke-Pester -Path tests/scripts/gate-output.Tests.ps1 -EnableExit"`
 Expected: FAIL — `Invoke-ParallelGateStage` is not a recognized command.
 
-- [ ] **Step 3: Implement `Invoke-ParallelGateStage`**
+- [x] **Step 3: Implement `Invoke-ParallelGateStage`**
 
 Start every process with `System.Diagnostics.Process` exactly as `Invoke-NativeStageCommand` does (redirect both pipes, drain both concurrently — the comment at `gate-output.ps1:46-48` records the deadlock that a serial drain caused). Wait for all, then write the logs. Return the object in the Interfaces block. Keep `Invoke-GateStage` untouched so `ui-install`, `ui-check`, `build` and `format` keep their current reporting.
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 Run the Pester command from Step 2. Expected: PASS.
 
-- [ ] **Step 5: Rewire `verify.ps1`**
+- [x] **Step 5: Rewire `verify.ps1`**
 
 Delete the `Add-Stage -Name 'test'` line at `scripts/verify.ps1:79` and replace it with a single `Add-Stage` whose action calls `Invoke-ParallelGateStage` for `SqlHarness.sln`'s two test projects with the arguments `--no-build --filter FullyQualifiedName!~Integration`. Print the per-project exit codes into the stage log so a failure names the project (Review Focus 1).
 
-- [ ] **Step 6: Rewire `verify-linux.ps1`**
+- [x] **Step 6: Rewire `verify-linux.ps1`**
 
 Replace the `test` stage lines at `verify-linux.ps1:248-251` with a bash block that starts both `dotnet test <project> ...` in the background, records each PID, `wait`s for each and exits non-zero if either failed. Keep the `--logger "console;verbosity=normal"` on both lines, because `GateParityTests.The_two_gates_have_equal_test_commands_modulo_the_linux_logger` compares the two gates literally.
 
-- [ ] **Step 7: Rewire `ci.yml`**
+- [x] **Step 7: Rewire `ci.yml`**
 
 Replace the single `dotnet test` step with two `dotnet test` steps, each naming one project and keeping `--no-build --filter "FullyQualifiedName!~Integration" --logger trx --results-directory TestResults`. Two steps rather than one shell block, so the GitHub job summary names the failing project.
 
-- [ ] **Step 8: Update the parity tests**
+- [x] **Step 8: Update the parity tests**
 
 In `GateParityTests.cs` make these changes:
 
@@ -225,16 +225,16 @@ In `GateParityTests.cs` make these changes:
 - Update `The_extractor_returns_the_expected_commands_for_the_real_gate_files` (line 229) to the two new per-project command strings.
 - Leave `The_windows_test_command_does_not_include_a_logger` and `The_only_logger_occurrence_is_in_the_linux_test_command` asserting over every `dotnet test` command in each file rather than the first match.
 
-- [ ] **Step 9: Run the parity and script tests**
+- [x] **Step 9: Run the parity and script tests**
 
 Run: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName~GateParityTests|FullyQualifiedName~VerifyLinuxScriptTests'`
 Expected: all pass. Then run the Pester command from Step 2 over `tests/scripts` and expect it to pass.
 
-- [ ] **Step 10: Measure both orders before committing**
+- [x] **Step 10: Measure both orders before committing**
 
 Run the two projects sequentially, then concurrently, on the quiet machine, three runs each, and record the medians in `plans/080-verification-evidence.md`. If the concurrent median is not at least 15 % better, stop and report the measurement instead of landing a change that only adds contention — this is the configuration in which the housekeeping flake in Task 1 appeared.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add scripts/gate-output.ps1 scripts/verify.ps1 scripts/verify-linux.ps1 .github/workflows/ci.yml tests/SqlHarness.Tests/GateParityTests.cs tests/scripts/gate-output.Tests.ps1 plans/080-verification-evidence.md
@@ -259,7 +259,7 @@ git commit -m "build: run the two test projects concurrently"
 **Interfaces:**
 - Produces: `Start-BackgroundGateStage -Name <string> -LogDirectory <string> -FilePath <string> -Arguments <string[]>` and `Complete-BackgroundGateStage -Name <string> -LogDirectory <string> -Process <System.Diagnostics.Process>` in `scripts/gate-output.ps1`. Both take the native command directly rather than a scriptblock, because the only overlapped stage is `npm run check`, a native command — a scriptblock would force the caller to re-implement output capture. `Start-` launches the process with both pipes redirected and returns it; `Complete-` calls `WaitForExit`, drains both pipes, writes `<LogDirectory>/<Name>.log`, prints the same one-line stage summary `Get-StageLine` produces today, prints `Get-StageFailureText` on failure, and returns the same object shape as `Invoke-GateStage`. There is no skipped variant: `ui-install` stays a foreground stage, so the only stage that can be skipped (`format`) never overlaps.
 
-- [ ] **Step 1: Update the parity expectations first, so the change is driven by a failing test**
+- [x] **Step 1: Update the parity expectations first, so the change is driven by a failing test**
 
 In `GateParityTests.cs` change `ExpectedVerbs` to `["build", "test", "format"]` and update:
 - `Every_local_gate_builds_and_formats_identically` (line 19) — drop the `--no-restore` assertion and assert instead that no gate passes `--no-restore` to `build`.
@@ -269,48 +269,48 @@ In `GateParityTests.cs` change `ExpectedVerbs` to `["build", "test", "format"]` 
 
 In `VerifyLinuxScriptTests.cs` rename `Linux_gate_runs_the_four_ci_stages_in_order` to `..._the_three_ci_stages_in_order` and expect `build`, `test`, `format`.
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName~GateParityTests|FullyQualifiedName~VerifyLinuxScriptTests'`
 Expected: FAIL on the stage list and the restore assertions.
 
-- [ ] **Step 3: Fold restore into build in `verify.ps1`**
+- [x] **Step 3: Fold restore into build in `verify.ps1`**
 
 Delete the `Add-Stage -Name 'restore'` line (`scripts/verify.ps1:77`) and change the build line (78) to `dotnet build SqlHarness.sln -warnaserror`.
 
-- [ ] **Step 4: Fold restore into build in `verify-linux.ps1` and `ci.yml`**
+- [x] **Step 4: Fold restore into build in `verify-linux.ps1` and `ci.yml`**
 
 Delete the `restore` stage (`scripts/verify-linux.ps1:238-241`) and drop `--no-restore` from its build line (245). Delete the `dotnet restore` step from `ci.yml` and drop `--no-restore` from its `dotnet build` step.
 
-- [ ] **Step 5: Add the background stage helpers to `gate-output.ps1`**
+- [x] **Step 5: Add the background stage helpers to `gate-output.ps1`**
 
 Implement the two signatures in the Interfaces block. Reuse `Get-StageLine`, `Get-StageFailureText` and `Format-Duration` so a background stage prints exactly the same line as a foreground one.
 
-- [ ] **Step 6: Start `ui-check` before `build` and join it after**
+- [x] **Step 6: Start `ui-check` before `build` and join it after**
 
 In `verify.ps1` start `ui-check` with `Start-BackgroundGateStage -Name 'ui-check' -FilePath 'npm' -Arguments @('run', 'check', '--prefix', 'src/SqlHarness.Dashboard/ui')`, then run `build` as a foreground `Add-Stage`, then call `Complete-BackgroundGateStage` for `ui-check`. The join must happen before the `test` stage starts, because `test` is the memory-hungry one and the box has 8 logical cores. Report `ui-check` after `build` in the stage lines and say so in the script's `.DESCRIPTION`: the stage order is no longer execution order.
 
 If `ui-check` failed, its stage line and log tail must still print even when `build` also failed — print both, then exit with the build's code (Review Focus 2). Make `ui-install` stay a foreground stage so its skip reason is reported before anything starts.
 
-- [ ] **Step 7: Mirror the overlap in `verify-linux.ps1`**
+- [x] **Step 7: Mirror the overlap in `verify-linux.ps1`**
 
 The Linux gate runs stages inside WSL through one bash script per stage, so overlapping needs the `ui-check` script to run in the background inside the `build` stage's bash block: `npm run check ... &`, then the build, then `wait`. Record in a comment that this couples the two stages inside one WSL invocation and is why the Linux gate's stage lines stay sequential.
 
-- [ ] **Step 8: Run the parity, script and gate-output tests**
+- [x] **Step 8: Run the parity, script and gate-output tests**
 
 Run the `dotnet test` command from Step 2, then `powershell.exe -NoProfile -Command "Import-Module Pester -MaximumVersion 3.99; Invoke-Pester -Path tests/scripts -EnableExit"`.
 Expected: all pass.
 
-- [ ] **Step 9: Update `docs/agents/verification.md` and any surface that names the stages**
+- [x] **Step 9: Update `docs/agents/verification.md` and any surface that names the stages**
 
 Run: `Select-String -Path README.md,docs/agents/*.md,docs/mcp.md -Pattern 'four.*stage|restore, build, test|cztery'`
 Fix every hit so the documentation matches the gate, and keep `GateParityTests.The_verification_contract_uses_the_justfile_rather_than_the_raw_scripts` (line 312) passing.
 
-- [ ] **Step 10: Measure**
+- [x] **Step 10: Measure**
 
 Run `just verify` three times on the quiet machine and record the stage lines in `plans/080-verification-evidence.md`. Compare against the 2m25s baseline: expect the restore stage gone and `ui-check` overlapping `build`.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add scripts/verify.ps1 scripts/verify-linux.ps1 scripts/gate-output.ps1 .github/workflows/ci.yml tests/SqlHarness.Tests/GateParityTests.cs tests/SqlHarness.Tests/VerifyLinuxScriptTests.cs tests/scripts/gate-scripts.Tests.ps1 docs/agents/verification.md plans/080-verification-evidence.md
@@ -329,24 +329,24 @@ git commit -m "build: fold restore into build and overlap the UI check"
 **Interfaces:**
 - None. Nothing else references the class.
 
-- [ ] **Step 1: Confirm nothing references it**
+- [x] **Step 1: Confirm nothing references it**
 
 Run: `Select-String -Path src/**/*.cs,tests/**/*.cs -Pattern 'PlatformFactAttributesTests'`
 Expected: no matches.
 
-- [ ] **Step 2: Delete the file**
+- [x] **Step 2: Delete the file**
 
-- [ ] **Step 3: Confirm the attributes are still used**
+- [x] **Step 3: Confirm the attributes are still used**
 
 Run: `Select-String -Path tests/SqlHarness.Tests/**/*.cs -Pattern '\[WindowsFact|\[UnixFact' | Measure-Object`
 Expected: more than zero matches. If zero, the attributes in `PlatformFactAttributes.cs` are dead too and the plan needs a second decision rather than a silent deletion.
 
-- [ ] **Step 4: Run the suite to confirm the count drops by two**
+- [x] **Step 4: Run the suite to confirm the count drops by two**
 
 Run: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName!~Integration'`
 Expected: passed count is 2 lower than the count recorded in `plans/080-verification-evidence.md` before this task, 0 failed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A tests/SqlHarness.Tests/PlatformFactAttributesTests.cs
