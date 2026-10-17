@@ -20,6 +20,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         long OperationId, string? Subject, string? Scope, string? Database, string? Engine, string? Fingerprint,
         string? BaselineHash, string? CandidateHash, string StartedAt, string Status, string? ConditionsJson, string? SummaryJson,
         long? MetricId, string? Variant, string? CaseId, string? CaseLabel, long? LogicalReadsMedian, long? ElapsedMedianMs,
+        long? CpuMedianMs, long? PgSharedHit, long? PgSharedRead, long? PgSharedDirtied, long? PgSharedWritten,
+        long? PgTempRead, long? PgTempWritten,
         string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount);
 
     private static readonly JsonSerializerOptions ConditionsJsonOptions = new(JsonSerializerDefaults.Web);
@@ -231,6 +233,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                    o.sql_hash, o.candidate_sql_hash, o.started_at, o.status, o.host_pid, o.host_started_at,
                    o.conditions_json, o.summary_json,
                    m.id, m.variant, m.case_id, m.case_label, m.logical_reads_median, m.elapsed_ms_median,
+                   m.cpu_ms_median, m.pg_shared_hit, m.pg_shared_read, m.pg_shared_dirtied,
+                   m.pg_shared_written, m.pg_temp_read, m.pg_temp_written,
                    t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count
             FROM operations o
             LEFT JOIN operation_metrics m ON m.operation_id = o.id
@@ -242,7 +246,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             NullableString(r, 6), NullableString(r, 7), r.GetString(8),
             liveness.Status(r.GetString(9), r.GetInt64(10), NullableString(r, 11)), NullableString(r, 12), NullableString(r, 13),
             r.IsDBNull(14) ? null : r.GetInt64(14), NullableString(r, 15), NullableString(r, 16), NullableString(r, 17),
-            NullableLong(r, 18), NullableLong(r, 19), NullableString(r, 20), NullableLong(r, 21), NullableLong(r, 22), NullableLong(r, 23)));
+            NullableLong(r, 18), NullableLong(r, 19), NullableLong(r, 20), NullableLong(r, 21), NullableLong(r, 22),
+            NullableLong(r, 23), NullableLong(r, 24), NullableLong(r, 25), NullableLong(r, 26), NullableString(r, 27),
+            NullableLong(r, 28), NullableLong(r, 29), NullableLong(r, 30)));
 
         var compares = rows.GroupBy(row => row.OperationId).Select(group =>
         {
@@ -258,8 +264,18 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     long? scans = tableRows.Length == 0 || tableRows.Any(row => row.Scans is null)
                         ? null
                         : tableRows.Sum(row => row.Scans!.Value);
+                    var postgres = samples.Any(row => row.PgSharedHit.HasValue || row.PgSharedRead.HasValue
+                        || row.PgSharedDirtied.HasValue || row.PgSharedWritten.HasValue || row.PgTempRead.HasValue
+                        || row.PgTempWritten.HasValue)
+                        ? new PostgresBuffers(samples[0].PgSharedHit, samples[0].PgSharedRead, samples[0].PgSharedDirtied,
+                            samples[0].PgSharedWritten, samples[0].PgTempRead, samples[0].PgTempWritten)
+                        : null;
                     return new CompareMetricEvidence(metric.Key.Variant!, metric.Key.CaseId!, metric.Key.CaseLabel!,
-                        samples[0].LogicalReadsMedian, samples[0].ElapsedMedianMs, scans, tableRows);
+                        samples[0].LogicalReadsMedian, samples[0].ElapsedMedianMs, scans, tableRows)
+                    {
+                        CpuMedianMs = samples[0].CpuMedianMs,
+                        Postgres = postgres,
+                    };
                 }).ToArray();
             var conditions = DeserializeConditions(first.ConditionsJson);
             var summary = Json(first.SummaryJson);

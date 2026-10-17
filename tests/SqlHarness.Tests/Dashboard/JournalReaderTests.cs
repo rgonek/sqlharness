@@ -110,8 +110,8 @@ public sealed class JournalReaderTests
         var handle = seed.Compare(JournalSeed.Session("cli:optimization"), "orders", "whole", "baseline-hash", "candidate-hash");
         var metrics = new BenchmarkJournalRecord(
         [
-            OptimizationMetric("baseline", 100, 10, 2),
-            OptimizationMetric("candidate", 80, 8, 1),
+            OptimizationMetric("baseline", 100, 10, 2) with { Postgres = new PostgresBufferCounters(7, 2, 1, 0, 0, 3) },
+            OptimizationMetric("candidate", 80, 8, 1) with { Postgres = new PostgresBufferCounters(5, 1, 0, 0, 0, 1) },
         ], []);
         seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
             """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"regression":{"verdict":"pass"},"cases":[{"caseId":"0","caseLabel":"@CustomerId = 1","equivalence":{"mode":"Ordered","equivalent":true},"regression":{"verdict":"pass"}}]}""",
@@ -133,6 +133,8 @@ public sealed class JournalReaderTests
         var baseline = Assert.Single(evidence.Metrics, metric => metric.Variant == "baseline");
         Assert.Equal(100, baseline.LogicalReadsMedian);
         Assert.Equal(10, baseline.ElapsedMedianMs);
+        Assert.Equal(10, baseline.CpuMedianMs);
+        Assert.Equal(new PostgresBuffers(7, 2, 1, 0, 0, 3), baseline.Postgres);
         Assert.Equal(2, baseline.ScansSum);
         Assert.Equal(new CompareTableIoEvidence("Orders", 90, 10, 2), Assert.Single(baseline.TableRows));
 

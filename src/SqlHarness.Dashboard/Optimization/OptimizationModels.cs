@@ -65,6 +65,30 @@ public sealed record CompareMetricEvidence(
     long? LogicalReadsMedian,
     long? ElapsedMedianMs,
     long? ScansSum,
-    IReadOnlyList<CompareTableIoEvidence> TableRows);
+    IReadOnlyList<CompareTableIoEvidence> TableRows)
+{
+    public double? CpuMedianMs { get; init; }
+    public PostgresBuffers? Postgres { get; init; }
+}
 
 public sealed record CompareTableIoEvidence(string Table, long LogicalReads, long? LobLogicalReads, long? Scans);
+
+public enum PairBasis { MeasuredTogether, DifferentRunsSameConditions, ConditionsDiffer, SameSql }
+
+public sealed record OptimizationComparison(
+    string A, string B, PairBasis Basis, long? OperationId, string EquivalenceLabel,
+    IReadOnlyList<CaseOption> Cases, string SelectedCase, string Aggregate, string CoverageLabel,
+    MixedWarning? Mixed, IReadOnlyList<TableRow> Tables, CollapsedRow? Collapsed, ElapsedInfo Elapsed)
+{
+    public bool TableIoUnavailable { get; init; }
+    public double? CpuBeforeMs { get; init; }
+    public double? CpuAfterMs { get; init; }
+    public PostgresBuffers? BuffersBefore { get; init; }
+    public PostgresBuffers? BuffersAfter { get; init; }
+}
+
+public sealed record CaseOption(string Id, string Label, string Outcome);
+public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);
+public sealed record TableRow(string Table, long? ScansBefore, long? ScansAfter, long? ReadsBefore, long? ReadsAfter, string Change);
+public sealed record CollapsedRow(int Count, string Label);
+public sealed record ElapsedInfo(double? BeforeMs, double? AfterMs, string? PolicyVerdict, bool DifferentRun);
