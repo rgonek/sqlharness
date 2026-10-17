@@ -84,10 +84,7 @@ public class SqlSafetyTests
         Assert.False(ClassifyQuery(sql).Allowed);
 
     [Theory]
-    [InlineData("WHILE 1 = 0 SELECT 1 AS A;", "WhileStatement")]
-    [InlineData("BEGIN TRY SELECT 1 AS A; END TRY BEGIN CATCH SELECT 2 AS A; END CATCH", "TryCatchStatement")]
     [InlineData("IF 1 = 1 WAITFOR DELAY '00:00:01';", "WaitForStatement")]
-    [InlineData("IF 1 = 1 RETURN;", "ReturnStatement")]
     public void Query_still_denies_other_control_flow(string sql, string kind)
     {
         var decision = ClassifyQuery(sql);
@@ -131,8 +128,12 @@ public class SqlSafetyTests
     [InlineData("BEGIN TRANSACTION")]
     [InlineData("COMMIT TRANSACTION")]
     [InlineData("ROLLBACK TRANSACTION")]
-    public void Query_denies_transaction_control(string sql) =>
-        Assert.False(ClassifyQuery(sql).Allowed);
+    public void Query_admits_transaction_control_as_session_local(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+    }
 
     [Theory]
     [InlineData("EXEC dbo.DoWork")]
@@ -156,18 +157,18 @@ public class SqlSafetyTests
     [Fact]
     public void Unsupported_statement_names_its_kind_and_line()
     {
-        var decision = ClassifyQuery("SELECT 1 AS A;\nWHILE 1 = 0 BEGIN SELECT 2 AS B; END;");
+        var decision = ClassifyQuery("SELECT 1 AS A;\nWAITFOR DELAY '00:00:01';");
 
         Assert.False(decision.Allowed);
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
-        Assert.Equal("WhileStatement at line 2", decision.Detail);
+        Assert.Equal("WaitForStatement at line 2", decision.Detail);
     }
 
     [Fact]
     public void Compare_setup_unsupported_statement_names_its_kind_and_line()
     {
         var decision = _classifier.Classify(
-            "SELECT 1 AS A;\nWHILE 1 = 0 BEGIN SELECT 2 AS B; END;",
+            "SELECT 1 AS A;\nWAITFOR DELAY '00:00:01';",
             SqlUsage.CompareSetup,
             "db",
             false,
@@ -175,7 +176,7 @@ public class SqlSafetyTests
 
         Assert.False(decision.Allowed);
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
-        Assert.Equal("WhileStatement at line 2", decision.Detail);
+        Assert.Equal("WaitForStatement at line 2", decision.Detail);
     }
 
     [Theory]
@@ -615,7 +616,6 @@ public class SqlSafetyTests
     [InlineData("EXEC dbo.DoWork")]
     [InlineData("USE otherdb")]
     [InlineData("SELECT * FROM otherdb.dbo.Clients")]
-    [InlineData("BEGIN TRANSACTION")]
     public void Compare_setup_keeps_always_forbidden_constructs_denied(string sql) =>
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
 
@@ -874,16 +874,8 @@ public class SqlSafetyTests
     }
 
     [Theory]
-    [InlineData("SET NOCOUNT ON")]
-    [InlineData("SET ANSI_NULLS ON")]
-    [InlineData("SET QUOTED_IDENTIFIER ON")]
-    [InlineData("SET XACT_ABORT ON")]
-    [InlineData("SET DATEFORMAT dmy")]
-    [InlineData("SET DEADLOCK_PRIORITY LOW")]
-    [InlineData("SET LOCK_TIMEOUT 1000")]
     [InlineData("SET LANGUAGE British")]
     [InlineData("SET ROWCOUNT 10")]
-    [InlineData("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")]
     [InlineData("SET IDENTITY_INSERT dbo.Clients ON")]
     [InlineData("SET STATISTICS IO ON")]
     [InlineData("SET TEXTSIZE 100")]
@@ -1325,8 +1317,6 @@ public class SqlSafetyTests
     [InlineData("DECLARE @v dbo.SomeType; SET @v::Member = 2;", "UnsupportedStatement")]
     [InlineData("DECLARE @v dbo.SomeType; SET @v.DoIt(2);", "UnsupportedStatement")]
     [InlineData("DECLARE @v int; SET @v = CURSOR FOR SELECT 1;", "UnsupportedStatement")]
-    [InlineData("SET NOCOUNT ON;", "UnsupportedStatement")]
-    [InlineData("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;", "UnsupportedStatement")]
     [InlineData("DECLARE @v int; SET @v = NEXT VALUE FOR dbo.Seq;", "UnsupportedStatement")]
     [InlineData("DECLARE @v int; SET @v = (SELECT COUNT(*) FROM OPENROWSET('MSOLEDBSQL', 'Server=other;Trusted_Connection=yes;', 'SELECT 1') AS r);", "UnsupportedStatement")]
     [InlineData("DECLARE @v int; SET @v = (SELECT MAX(Id) FROM otherdb.dbo.Clients);", "CrossDatabaseReference")]

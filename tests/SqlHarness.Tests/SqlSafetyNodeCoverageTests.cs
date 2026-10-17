@@ -50,6 +50,19 @@ public class SqlSafetyNodeCoverageTests
         typeof(ExecuteStatement),
     };
 
+    // Plan 081: these nodes are admitted only by the read-only classifier gate;
+    // mutation usages continue to deny them through the same fail-closed path.
+    private static readonly IReadOnlySet<Type> KnownReadOnlyAdmissionStatementTypes = new HashSet<Type>
+    {
+        typeof(BeginTransactionStatement), typeof(BreakStatement), typeof(CloseCursorStatement),
+        typeof(CommitTransactionStatement), typeof(ContinueStatement), typeof(DeallocateCursorStatement),
+        typeof(DeclareCursorStatement), typeof(FetchCursorStatement), typeof(OpenCursorStatement),
+        typeof(PredicateSetStatement), typeof(PrintStatement), typeof(RaiseErrorLegacyStatement),
+        typeof(RaiseErrorStatement), typeof(ReturnStatement), typeof(RollbackTransactionStatement),
+        typeof(SaveTransactionStatement), typeof(SetCommandStatement), typeof(SetTransactionIsolationLevelStatement),
+        typeof(ThrowStatement), typeof(TryCatchStatement), typeof(WhileStatement),
+    };
+
     // New or unsupported T-SQL statements stay denied by the classifier's fail-closed default.
     private static readonly IReadOnlySet<Type> KnownDeniedByOmission = new HashSet<Type>
     {
@@ -119,19 +132,16 @@ public class SqlSafetyNodeCoverageTests
         typeof(IndexDefinition), typeof(RenameEntityStatement), typeof(ResourcePoolStatement),
 
         // Cursor, conversation, transaction, and other procedural commands remain unsupported.
-        typeof(BeginConversationTimerStatement), typeof(BeginDialogStatement), typeof(BeginTransactionStatement),
-        typeof(BreakStatement), typeof(CloseCursorStatement), typeof(CloseMasterKeyStatement), typeof(CloseSymmetricKeyStatement),
-        typeof(CommitTransactionStatement), typeof(ContinueStatement), typeof(DeallocateCursorStatement),
-        typeof(DeclareCursorStatement), typeof(EndConversationStatement), typeof(FetchCursorStatement),
+        typeof(BeginConversationTimerStatement), typeof(BeginDialogStatement),
+        typeof(CloseMasterKeyStatement), typeof(CloseSymmetricKeyStatement),
+        typeof(EndConversationStatement),
         typeof(GetConversationGroupStatement), typeof(GoToStatement), typeof(KillQueryNotificationSubscriptionStatement),
-        typeof(KillStatsJobStatement), typeof(LabelStatement), typeof(MoveConversationStatement), typeof(OpenCursorStatement),
-        typeof(OpenMasterKeyStatement), typeof(OpenSymmetricKeyStatement), typeof(PredicateSetStatement), typeof(PrintStatement),
-        typeof(RaiseErrorLegacyStatement), typeof(RaiseErrorStatement), typeof(ReadTextStatement), typeof(ReceiveStatement),
-        typeof(ReturnStatement), typeof(RevertStatement), typeof(RollbackTransactionStatement), typeof(SaveTransactionStatement),
-        typeof(SendStatement), typeof(SetCommandStatement), typeof(SetErrorLevelStatement), typeof(SetIdentityInsertStatement),
+        typeof(KillStatsJobStatement), typeof(LabelStatement), typeof(MoveConversationStatement),
+        typeof(OpenMasterKeyStatement), typeof(OpenSymmetricKeyStatement), typeof(ReadTextStatement), typeof(ReceiveStatement),
+        typeof(RevertStatement),
+        typeof(SendStatement), typeof(SetErrorLevelStatement), typeof(SetIdentityInsertStatement),
         typeof(SetOffsetsStatement), typeof(SetRowCountStatement), typeof(SetStatisticsStatement), typeof(SetTextSizeStatement),
-        typeof(SetTransactionIsolationLevelStatement), typeof(SetUserStatement), typeof(ThrowStatement), typeof(TryCatchStatement),
-        typeof(UpdateTextStatement), typeof(UseFederationStatement), typeof(WaitForStatement), typeof(WhileStatement),
+        typeof(SetUserStatement), typeof(UpdateTextStatement), typeof(UseFederationStatement), typeof(WaitForStatement),
         typeof(WriteTextStatement), typeof(LineNoStatement),
 
         // Engine-specific and parser-snippet nodes without an explicit safe classification.
@@ -168,6 +178,7 @@ public class SqlSafetyNodeCoverageTests
                 && !IsMapped(type, SqlMutationStatementMap.PrivilegeStatementTypes)
                 && !IsMapped(type, SqlMutationStatementMap.RejectedStatementTypes)
                 && !KnownQueryOrOpaqueStatementTypes.Contains(type)
+                && !KnownReadOnlyAdmissionStatementTypes.Contains(type)
                 && !KnownDeniedByOmission.Contains(type))
             .Select(type => type.Name)
             .OrderBy(name => name, StringComparer.Ordinal)

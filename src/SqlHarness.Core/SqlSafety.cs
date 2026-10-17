@@ -106,6 +106,8 @@ internal sealed record SqlSafetyDecision(
 
     internal IReadOnlyList<string> Grantees { get; init; } = [];
 
+    internal IReadOnlyList<string> Notices { get; init; } = [];
+
     internal IReadOnlySet<string> SessionTempTables { get; init; } = NoSessionTempTables;
 
     internal string RejectionDescription =>
@@ -229,13 +231,24 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.SelectIntoNotAllowed);
         }
 
-        var denied = ClassifyStatements(batches, inspection, out var hasMutation, out var hasSessionLocal, out var tier, out _);
+        var denied = ClassifyStatements(
+            batches,
+            inspection,
+            out var hasMutation,
+            out var hasSessionLocal,
+            out var tier,
+            out _,
+            readOnlyAdmissions: !allowMutation);
         if (denied is not null)
             return denied;
 
         if (!hasMutation)
         {
-            return Allowed(hasSessionLocal: hasSessionLocal) with { Tier = tier };
+            return Allowed(hasSessionLocal: hasSessionLocal) with
+            {
+                Tier = tier,
+                Notices = SessionSafetyNotices(batches),
+            };
         }
 
         if (!allowMutation)
@@ -253,7 +266,11 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.DatabaseConfirmationMismatch);
         }
 
-        return Allowed(hasMutation: true, hasSessionLocal: hasSessionLocal) with { Tier = tier };
+        return Allowed(hasMutation: true, hasSessionLocal: hasSessionLocal) with
+        {
+            Tier = tier,
+            Notices = SessionSafetyNotices(batches),
+        };
     }
 
     private static SqlSafetyDecision ClassifyMutation(
@@ -267,7 +284,8 @@ internal sealed class SqlSafetyClassifier
             out var hasSessionLocal,
             out var tier,
             out var grantees,
-            mutationUsage: true);
+            mutationUsage: true,
+            readOnlyAdmissions: false);
         if (denied is null && inspection.HasSequenceAdvance)
             tier = SqlRiskTiers.Max(tier, SqlRiskTier.Schema);
         return denied is null
@@ -282,7 +300,8 @@ internal sealed class SqlSafetyClassifier
         out bool hasSessionLocal,
         out SqlRiskTier tier,
         out IReadOnlyList<string> grantees,
-        bool mutationUsage = false)
+        bool mutationUsage = false,
+        bool readOnlyAdmissions = false)
     {
         hasMutation = false;
         hasSessionLocal = false;
@@ -297,7 +316,7 @@ internal sealed class SqlSafetyClassifier
             foreach (var statement in batch.Statements)
             {
                 var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
-                var classification = ClassifyStatement(statement, scope);
+                var classification = ClassifyStatement(statement, scope, readOnlyAdmissions);
                 if (mutationUsage)
                     classification = ClassifyMutationStatement(statement, scope, classification, hasUnprovenUse);
                 if (classification.DenyReason is { } deny)
@@ -332,6 +351,7 @@ internal sealed class SqlSafetyClassifier
 
         var hasSessionLocal = false;
         var tier = SqlRiskTier.ReadOnly;
+        var notices = new List<string>();
         foreach (var batch in batches)
         {
             // Table variables and scalar assignments reuse the same-batch
@@ -347,7 +367,7 @@ internal sealed class SqlSafetyClassifier
 
                 var classification = hasUnprovenUse
                     ? StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement)
-                    : ClassifyProvenStatement(statement, scope);
+                    : ClassifyProvenStatement(statement, scope, readOnlyAdmissions: true);
                 if (classification.DenyReason is { } deny)
                 {
                     // Setup never takes the mutation-approval path; any write outside local temps is NonTemporaryWrite.
@@ -374,7 +394,7 @@ internal sealed class SqlSafetyClassifier
                 // A SET reaches this point only after the existing plain scalar
                 // assignment proof succeeds; unsafe SET variants remain denied.
                 if (!classification.HasSessionLocalWrite &&
-                    statement is not (SelectStatement or SetVariableStatement or IfStatement or BeginEndBlockStatement))
+                    !IsCompareSetupReadOnlyStatement(statement))
                 {
                     return Denied(
                         IsWrite(statement) ? SqlSafetyReason.NonTemporaryWrite : SqlSafetyReason.UnsupportedStatement,
@@ -385,20 +405,30 @@ internal sealed class SqlSafetyClassifier
 
                 hasSessionLocal |= classification.HasSessionLocalWrite;
                 tier = SqlRiskTiers.Max(tier, classification.Tier);
+                notices.AddRange(SessionSafetyNotices([statement]));
             }
         }
 
-        return Allowed(hasSessionLocal: hasSessionLocal) with { Tier = tier };
+        return Allowed(hasSessionLocal: hasSessionLocal) with { Tier = tier, Notices = notices.Distinct(StringComparer.Ordinal).ToArray() };
     }
 
-    private static StatementClassification ClassifyStatement(TSqlStatement statement, BatchVariableScope scope)
+    private static bool IsCompareSetupReadOnlyStatement(TSqlStatement statement) =>
+        statement is SelectStatement or SetVariableStatement or IfStatement or BeginEndBlockStatement or
+            WhileStatement or TryCatchStatement or ReturnStatement or ThrowStatement or RaiseErrorStatement or
+            RaiseErrorLegacyStatement or PrintStatement or BreakStatement or ContinueStatement;
+
+    private static StatementClassification ClassifyStatement(
+        TSqlStatement statement,
+        BatchVariableScope scope,
+        bool readOnlyAdmissions = false,
+        bool insideLoop = false)
     {
         // 011/T3: every table-position @name anywhere in the statement (DML
         // target, FROM, subquery, OUTPUT INTO) must be a proven same-batch
         // table variable, and a table variable never appears as a scalar.
         return HasUnprovenTableVariableUse(statement, scope)
             ? StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement)
-            : ClassifyProvenStatement(statement, scope);
+            : ClassifyProvenStatement(statement, scope, readOnlyAdmissions, insideLoop);
     }
 
     private static StatementClassification ClassifyMutationStatement(
@@ -484,7 +514,11 @@ internal sealed class SqlSafetyClassifier
     }
 
     // Callers have already established that the statement holds no unproven table-variable use.
-    private static StatementClassification ClassifyProvenStatement(TSqlStatement statement, BatchVariableScope scope)
+    private static StatementClassification ClassifyProvenStatement(
+        TSqlStatement statement,
+        BatchVariableScope scope,
+        bool readOnlyAdmissions = false,
+        bool insideLoop = false)
     {
         switch (statement)
         {
@@ -499,9 +533,46 @@ internal sealed class SqlSafetyClassifier
                 // 011/T2: plain scalar assignment to a proven same-batch scalar
                 // local only (Ruling R3, fail closed). The RHS rides on the
                 // global inspection (external/stateful/cross-db/EXEC sources).
-                return IsProvenScalarAssignment(setVariable, scope)
+                return IsProvenScalarAssignment(setVariable, scope, readOnlyAdmissions && insideLoop)
                     ? StatementClassification.ReadOnly
                     : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
+            case PredicateSetStatement set when readOnlyAdmissions && IsAllowedPredicateSet(set.Options):
+                return StatementClassification.SessionLocal;
+
+            case SetCommandStatement set when readOnlyAdmissions && IsAllowedSetCommands(set):
+                return StatementClassification.SessionLocal;
+
+            case SetTransactionIsolationLevelStatement isolation when readOnlyAdmissions && isolation.Level != Microsoft.SqlServer.TransactSql.ScriptDom.IsolationLevel.None:
+                return StatementClassification.SessionLocal;
+
+            case BeginTransactionStatement begin when readOnlyAdmissions && !begin.Distributed && !begin.MarkDefined && begin.MarkDescription is null:
+            case CommitTransactionStatement when readOnlyAdmissions:
+            case RollbackTransactionStatement when readOnlyAdmissions:
+            case SaveTransactionStatement when readOnlyAdmissions:
+                return StatementClassification.SessionLocal;
+
+            case DeclareCursorStatement declareCursor when readOnlyAdmissions:
+                return ClassifyLocalCursorDeclaration(declareCursor, scope, readOnlyAdmissions);
+
+            case OpenCursorStatement open when readOnlyAdmissions && IsDeclaredLocalCursor(open, scope):
+            case CloseCursorStatement close when readOnlyAdmissions && IsDeclaredLocalCursor(close, scope):
+            case DeallocateCursorStatement deallocate when readOnlyAdmissions && IsDeclaredLocalCursor(deallocate, scope):
+                return StatementClassification.SessionLocal;
+
+            case FetchCursorStatement fetch when readOnlyAdmissions &&
+                IsDeclaredLocalCursor(fetch, scope) && fetch.IntoVariables.All(scope.IsProvenScalarLocal):
+                return StatementClassification.SessionLocal;
+
+            case PrintStatement when readOnlyAdmissions:
+            case ThrowStatement when readOnlyAdmissions:
+            case RaiseErrorStatement raiseError when readOnlyAdmissions &&
+                !raiseError.RaiseErrorOptions.HasFlag(RaiseErrorOptions.Log):
+            case RaiseErrorLegacyStatement when readOnlyAdmissions:
+            case ReturnStatement { Expression: null } when readOnlyAdmissions:
+            case BreakStatement when readOnlyAdmissions && insideLoop:
+            case ContinueStatement when readOnlyAdmissions && insideLoop:
+                return StatementClassification.ReadOnly;
 
             case DeclareVariableStatement declare:
                 // Scalar variables only; initializers are covered by the global
@@ -556,6 +627,10 @@ internal sealed class SqlSafetyClassifier
                     scope);
 
             case UpdateStatement update:
+                if (readOnlyAdmissions && TryResolveLocalCteWriteTarget(update, scope, out var localTarget))
+                {
+                    return ClassifyDmlWrites(localTarget, update.UpdateSpecification.OutputIntoClause, update, scope);
+                }
                 return ClassifyDmlWrites(
                     ResolveTarget(update.UpdateSpecification.Target, update.UpdateSpecification.FromClause, scope),
                     update.UpdateSpecification.OutputIntoClause,
@@ -583,13 +658,13 @@ internal sealed class SqlSafetyClassifier
                 {
                     // The predicate rides on the global inspection. Classify every
                     // branch without evaluating whether its condition is true.
-                    var thenClassification = ClassifyNestedStatement(ifStatement.ThenStatement, scope);
+                    var thenClassification = ClassifyNestedStatement(ifStatement.ThenStatement, scope, readOnlyAdmissions, insideLoop);
                     if (ifStatement.ElseStatement is null)
                         return thenClassification;
 
                     return Combine(
                         thenClassification,
-                        ClassifyNestedStatement(ifStatement.ElseStatement, scope));
+                        ClassifyNestedStatement(ifStatement.ElseStatement, scope, readOnlyAdmissions, insideLoop));
                 }
 
             case BeginEndBlockStatement block:
@@ -597,7 +672,22 @@ internal sealed class SqlSafetyClassifier
                     var combined = StatementClassification.ReadOnly;
                     foreach (var inner in block.StatementList.Statements)
                     {
-                        combined = Combine(combined, ClassifyNestedStatement(inner, scope));
+                        combined = Combine(combined, ClassifyNestedStatement(inner, scope, readOnlyAdmissions, insideLoop));
+                        if (combined.DenyReason is not null)
+                            return combined;
+                    }
+                    return combined;
+                }
+
+            case WhileStatement whileStatement when readOnlyAdmissions:
+                return ClassifyNestedStatement(whileStatement.Statement, scope, readOnlyAdmissions, insideLoop: true);
+
+            case TryCatchStatement tryCatch when readOnlyAdmissions:
+                {
+                    var combined = StatementClassification.ReadOnly;
+                    foreach (var inner in tryCatch.TryStatements.Statements.Concat(tryCatch.CatchStatements.Statements))
+                    {
+                        combined = Combine(combined, ClassifyNestedStatement(inner, scope, readOnlyAdmissions, insideLoop));
                         if (combined.DenyReason is not null)
                             return combined;
                     }
@@ -611,9 +701,13 @@ internal sealed class SqlSafetyClassifier
         }
     }
 
-    private static StatementClassification ClassifyNestedStatement(TSqlStatement statement, BatchVariableScope scope)
+    private static StatementClassification ClassifyNestedStatement(
+        TSqlStatement statement,
+        BatchVariableScope scope,
+        bool readOnlyAdmissions = false,
+        bool insideLoop = false)
     {
-        var classification = ClassifyProvenStatement(statement, scope);
+        var classification = ClassifyProvenStatement(statement, scope, readOnlyAdmissions, insideLoop);
         return classification.DenyReason is { } reason && classification.DeniedStatement is null
             ? StatementClassification.Denied(reason, statement)
             : classification;
@@ -650,9 +744,13 @@ internal sealed class SqlSafetyClassifier
     private sealed class BatchVariableScope(
         IReadOnlyDictionary<string, int> scalarLocals,
         IReadOnlyDictionary<string, int> tableVariables,
+        IReadOnlyDictionary<string, int> localTempTables,
+        IReadOnlyDictionary<string, int> localCursors,
         IReadOnlySet<string> nonTableDeclarations)
     {
         internal static BatchVariableScope Empty { get; } = new(
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             new HashSet<string>(StringComparer.OrdinalIgnoreCase));
@@ -669,6 +767,14 @@ internal sealed class SqlSafetyClassifier
             variable?.Name is { Length: > 0 } name &&
             IsDeclaredBefore(scalarLocals, name, variable) &&
             !tableVariables.ContainsKey(name);
+
+        internal bool IsProvenLocalTempTable(SchemaObjectName? name, TSqlFragment use) =>
+            IsLocalTemp(name) &&
+            IsDeclaredBefore(localTempTables, name!.BaseIdentifier.Value, use);
+
+        internal bool IsProvenLocalCursor(CursorStatement statement) =>
+            statement.Cursor is { IsGlobal: false, Name.Identifier.Value: { Length: > 0 } name } cursor &&
+            IsDeclaredBefore(localCursors, name, cursor);
 
         private static bool IsDeclaredBefore(IReadOnlyDictionary<string, int> declarations, string name, TSqlFragment use) =>
             declarations.TryGetValue(name, out var declarationEnd) &&
@@ -694,6 +800,8 @@ internal sealed class SqlSafetyClassifier
     {
         var scalars = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var tables = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var localTemps = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var localCursors = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var nonTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var statement in SqlServerControlFlowTraversal.Flatten(batch.Statements))
         {
@@ -715,9 +823,24 @@ internal sealed class SqlSafetyClassifier
             {
                 tables.TryAdd(tableName, DeclarationEnd(statement));
             }
+            else if (statement is CreateTableStatement createTable &&
+                IsLocalTemp(createTable.SchemaObjectName))
+            {
+                localTemps.TryAdd(createTable.SchemaObjectName.BaseIdentifier.Value, DeclarationEnd(statement));
+            }
+            else if (statement is SelectStatement { Into: { } into } && IsLocalTemp(into))
+            {
+                localTemps.TryAdd(into.BaseIdentifier.Value, DeclarationEnd(statement));
+            }
+            else if (statement is DeclareCursorStatement declareCursor &&
+                IsLocalCursorDeclarationShape(declareCursor) &&
+                declareCursor.Name?.Value is { Length: > 0 } cursorName)
+            {
+                localCursors.TryAdd(cursorName, DeclarationEnd(statement));
+            }
         }
 
-        return new BatchVariableScope(scalars, tables, nonTables);
+        return new BatchVariableScope(scalars, tables, localTemps, localCursors, nonTables);
     }
 
     private static bool HasUnprovenTableVariableUse(TSqlFragment statement, BatchVariableScope scope)
@@ -749,11 +872,14 @@ internal sealed class SqlSafetyClassifier
         }
     }
 
-    private static bool IsProvenScalarAssignment(SetVariableStatement set, BatchVariableScope scope)
+    private static bool IsProvenScalarAssignment(
+        SetVariableStatement set,
+        BatchVariableScope scope,
+        bool allowCompoundAssignment = false)
     {
-        // Only plain `SET @v = <rhs>`; cursor assignments and compound
-        // operators (+=, ...) stay denied.
-        if (set.AssignmentKind != AssignmentKind.Equals || set.Expression is null)
+        // Compound assignments are admitted only behind the read-only gate;
+        // they can affect only a proven scalar local in this batch.
+        if ((!allowCompoundAssignment && set.AssignmentKind != AssignmentKind.Equals) || set.Expression is null)
             return false;
         // The target is the variable itself: a member (@v.Member), a static
         // member (@v::Member) or a method call (@v.Method(...)) is another shape.
@@ -763,6 +889,193 @@ internal sealed class SqlSafetyClassifier
             return false;
         return scope.IsProvenScalarLocal(set.Variable);
     }
+
+    private static bool IsAllowedPredicateSet(SetOptions options) => options is
+        SetOptions.NoCount or
+        SetOptions.XactAbort or
+        SetOptions.ArithAbort or
+        SetOptions.AnsiNulls or
+        SetOptions.AnsiWarnings or
+        SetOptions.AnsiPadding or
+        SetOptions.QuotedIdentifier or
+        SetOptions.ConcatNullYieldsNull or
+        SetOptions.NumericRoundAbort;
+
+    private static bool IsAllowedSetCommands(SetCommandStatement statement) =>
+        statement.Commands.Count > 0 && statement.Commands.All(command =>
+        {
+            if (command is not GeneralSetCommand general)
+                return false;
+
+            return general.CommandType switch
+            {
+                GeneralSetCommandType.DateFirst or GeneralSetCommandType.DateFormat or GeneralSetCommandType.LockTimeout => true,
+                GeneralSetCommandType.DeadlockPriority => IsAllowedDeadlockPriority(general.Parameter),
+                _ => false,
+            };
+        });
+
+    private static bool IsAllowedDeadlockPriority(ScalarExpression? parameter)
+    {
+        if (parameter is IdentifierLiteral identifier)
+            return identifier.Value.Equals("LOW", StringComparison.OrdinalIgnoreCase)
+                || identifier.Value.Equals("NORMAL", StringComparison.OrdinalIgnoreCase);
+
+        return TryGetNumericLiteral(parameter, out var value) && value <= 0;
+    }
+
+    private static bool TryGetNumericLiteral(ScalarExpression? expression, out decimal value)
+    {
+        switch (expression)
+        {
+            case IntegerLiteral integer when decimal.TryParse(integer.Value, NumberStyles.None, CultureInfo.InvariantCulture, out value):
+                return true;
+            case NumericLiteral numeric when decimal.TryParse(numeric.Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value):
+                return true;
+            case UnaryExpression
+                {
+                    UnaryExpressionType: UnaryExpressionType.Negative,
+                    Expression: IntegerLiteral integer,
+                } when decimal.TryParse(integer.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var magnitude):
+                value = -magnitude;
+                return true;
+            case UnaryExpression
+                {
+                    UnaryExpressionType: UnaryExpressionType.Negative,
+                    Expression: NumericLiteral numeric,
+                } when decimal.TryParse(numeric.Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var decimalMagnitude):
+                value = -decimalMagnitude;
+                return true;
+            default:
+                value = 0;
+                return false;
+        }
+    }
+
+    private static bool IsLocalCursorDeclarationShape(DeclareCursorStatement statement)
+    {
+        var definition = statement.CursorDefinition;
+        return definition is not null &&
+            definition.Options.Any(option => option.OptionKind == CursorOptionKind.Local) &&
+            definition.Options.All(option => option.OptionKind is
+                CursorOptionKind.Local or
+                CursorOptionKind.Scroll or
+                CursorOptionKind.ForwardOnly or
+                CursorOptionKind.Insensitive or
+                CursorOptionKind.Keyset or
+                CursorOptionKind.Dynamic or
+                CursorOptionKind.FastForward or
+                CursorOptionKind.Optimistic or
+                CursorOptionKind.ReadOnly or
+                CursorOptionKind.Static or
+                CursorOptionKind.TypeWarning) &&
+            definition.Select is not null &&
+            !HasCursorUpdateClause(definition.Select);
+    }
+
+    private static bool HasCursorUpdateClause(SelectStatement select)
+    {
+        var visitor = new CursorUpdateClauseVisitor();
+        select.Accept(visitor);
+        return visitor.Found;
+    }
+
+    private sealed class CursorUpdateClauseVisitor : TSqlFragmentVisitor
+    {
+        internal bool Found { get; private set; }
+
+        public override void ExplicitVisit(UpdateForClause node) => Found = true;
+    }
+
+    private static bool IsDeclaredLocalCursor(CursorStatement statement, BatchVariableScope scope) =>
+        scope.IsProvenLocalCursor(statement);
+
+    private static StatementClassification ClassifyLocalCursorDeclaration(
+        DeclareCursorStatement statement,
+        BatchVariableScope scope,
+        bool readOnlyAdmissions)
+    {
+        if (!IsLocalCursorDeclarationShape(statement) || statement.CursorDefinition.Select is null)
+            return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
+        var select = ClassifyNestedStatement(statement.CursorDefinition.Select, scope, readOnlyAdmissions);
+        if (select.DenyReason is not null)
+            return select;
+
+        return Combine(StatementClassification.SessionLocal, select);
+    }
+
+    private static bool TryResolveLocalCteWriteTarget(
+        UpdateStatement update,
+        BatchVariableScope scope,
+        out TargetResolution target)
+    {
+        target = TargetResolution.Unsupported;
+        var ctes = update.WithCtesAndXmlNamespaces?.CommonTableExpressions;
+        var targetName = (update.UpdateSpecification.Target as NamedTableReference)?.SchemaObject.BaseIdentifier.Value;
+        if (ctes is null || ctes.Count == 0 || string.IsNullOrEmpty(targetName) || update.UpdateSpecification.FromClause is not null)
+            return false;
+
+        var cteByName = new Dictionary<string, CommonTableExpression>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cte in ctes)
+        {
+            if (cte.ExpressionName?.Value is not { Length: > 0 } name || !cteByName.TryAdd(name, cte))
+                return false;
+        }
+
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return TryResolveCteBase(targetName, cteByName, visited, scope, update, out target);
+    }
+
+    private static bool TryResolveCteBase(
+        string cteName,
+        IReadOnlyDictionary<string, CommonTableExpression> ctes,
+        ISet<string> visited,
+        BatchVariableScope scope,
+        TSqlFragment use,
+        out TargetResolution target)
+    {
+        target = TargetResolution.Unsupported;
+        if (!visited.Add(cteName) || !ctes.TryGetValue(cteName, out var cte) ||
+            cte.QueryExpression is not QuerySpecification query ||
+            query.FromClause?.TableReferences.Count != 1)
+            return false;
+
+        var source = query.FromClause.TableReferences[0];
+        switch (source)
+        {
+            case VariableTableReference variable when scope.IsProvenTableVariable(variable):
+                target = TargetResolution.TableVariable;
+                return true;
+            case NamedTableReference named when ctes.ContainsKey(named.SchemaObject.BaseIdentifier.Value):
+                return TryResolveCteBase(named.SchemaObject.BaseIdentifier.Value, ctes, visited, scope, use, out target);
+            case NamedTableReference named when scope.IsProvenLocalTempTable(named.SchemaObject, use):
+                target = TargetResolution.Resolved(named.SchemaObject);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static IReadOnlyList<string> SessionSafetyNotices(IList<TSqlBatch> batches) =>
+        batches.SelectMany(batch => SessionSafetyNotices(batch.Statements)).Distinct(StringComparer.Ordinal).ToArray();
+
+    private static IReadOnlyList<string> SessionSafetyNotices(TSqlStatement statement) =>
+        SessionSafetyNotices([statement]);
+
+    private static IReadOnlyList<string> SessionSafetyNotices(IEnumerable<TSqlStatement> statements) =>
+        SqlServerControlFlowTraversal.Flatten(statements)
+            .OfType<SetTransactionIsolationLevelStatement>()
+            .Select(statement => statement.Level switch
+            {
+                Microsoft.SqlServer.TransactSql.ScriptDom.IsolationLevel.Serializable => "isolation level SERIALIZABLE in effect",
+                Microsoft.SqlServer.TransactSql.ScriptDom.IsolationLevel.RepeatableRead => "isolation level REPEATABLE READ in effect",
+                _ => null,
+            })
+            .Where(notice => notice is not null)
+            .Select(notice => notice!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
     private static StatementClassification ClassifyDmlWrites(
         TargetResolution primary,
@@ -1968,6 +2281,8 @@ internal static class SqlServerControlFlowTraversal
                 IfStatement ifStatement => new TSqlStatement[] { ifStatement.ThenStatement },
                 BeginEndAtomicBlockStatement => Array.Empty<TSqlStatement>(),
                 BeginEndBlockStatement block => block.StatementList.Statements,
+                WhileStatement whileStatement => new TSqlStatement[] { whileStatement.Statement },
+                TryCatchStatement tryCatch => tryCatch.TryStatements.Statements.Concat(tryCatch.CatchStatements.Statements),
                 _ => Array.Empty<TSqlStatement>(),
             };
 
