@@ -193,6 +193,12 @@ No candidate conclusion or evidence selection was produced, so correctness count
 
 The final Windows gate passed on product commit `2ce4870` (Task 7 semantic changes were captured at `617153c`; `2ce4870` adds only branch-wide C# formatting cleanup), log directory `D:\temp\sqlharness-gate-logs\plan-077-task7-final-2ce4870-20261017`: UI-install skipped (lockfile unchanged), UI-check passed (50 files / 260 tests, 162.43s), restore passed (4.4s), build passed (14.5s), tests passed (Core 4060 passed / 11 skipped; MCP 425 passed / 4 skipped), and format skipped because the committed tree had no working-tree C# changes. The supplemental branch formatter was applied to 14 files, then verified successfully across 50 C# files with `pwsh scripts/format-changed.ps1 -Mode branch -BaseRef main`. Final gate: `verify: OK stages=6`, 5m05s. Before branch formatting, repeated default vmThreads UI runs stalled without summaries; a full `vitest run --pool=forks --maxWorkers=1 --reporter=verbose` completed 50 files / 260 tests in 170.26s. Vite now uses forks/1, trading runtime for a completed Windows gate while leaving vmThreads-specific behavior unverified. Linux and live-database lanes were not run; no install, push, merge or publish occurred.
 
+### Local main integration — 2026-10-17
+
+Implementation branch `plan-077` (`b9786b3`) was merged locally into `main` at `4bd57e4`. The existing plan 079 design, plan and queue entry were preserved. The integrated executable sources, tests, bundled skill, README and solution are identical to the reviewed feature branch; `git diff plan-077 4bd57e4 -- src tests skills README.md SqlHarness.sln` is empty. The only main-side differences are the three planning documents for plan 079.
+
+The passing product gate on `2ce4870` above remains the verification evidence for the unchanged code. At the operator's instruction, no repeated full gate is required for the documentation-only integration difference. A redundant post-merge gate was started and then interrupted at that instruction; it is not reported as a completed integrated-tree gate. The merge and this integration note introduce no product changes. Agent acceptance remains unavailable after the nine HTTP 402 attempts; no push, installation or publication was performed.
+
 ## Concerns
 
 - `InternalsVisibleTo` for `SqlHarness.Mcp.WorkflowHost` on Core and Mcp is a test-host seam, not a product fixture flag.

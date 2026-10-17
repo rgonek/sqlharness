@@ -16,7 +16,7 @@
 
 ## Status and dependencies
 
-- IN PROGRESS — Tasks 0–7 implementation recorded; actual-agent acceptance and efficiency remain unverified because all nine candidate attempts stopped at provider HTTP 402. No installation, publication or push.
+- IN PROGRESS — Tasks 0–7 implementation merged locally into `main` at `4bd57e4`; actual-agent acceptance and efficiency remain unverified because all nine candidate attempts stopped at provider HTTP 402. No installation, publication or push.
 - Planning base: `cd7bab8280259dc1f41679db973019120d3f0681`, 2026-10-16.
 - Priority P1–P2; effort L; risk MEDIUM (model-facing wire shape and additive saved evidence).
 - Prerequisites already implemented: 055–061 (agent/output/artifact foundations), 065 (saved-plan paging/clipping), 066 (regression policy v2), 067 (cell limits), 076 (partial matrix journal runs). Coordinate with 063 on plan DTOs; it remains a separate TODO. Coordinate with 073 if its new mutation tool lands first; this plan does not add mutation capability.

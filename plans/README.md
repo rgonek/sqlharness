@@ -12,7 +12,7 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 | Plan | Zakres | Zależności | Status |
 |---|---|---|---|
 | [036](036-live-database-ci-lane.md) | Direction: opt-in CI lane against throwaway PG/SQL Server containers | 016 (028 for pins) | TODO |
-| [077](077-agent-sql-optimization-evidence.md) | Lean MCP JSON and actionable SQL optimization evidence; portable real-MCP fixture requests and paired agent trials verify the complete workflow | 055–061/065–067/076 DONE; coordinate 063/073 | IN PROGRESS — Tasks 0–7 implementation recorded; actual-agent acceptance unverified (nine provider HTTP 402 errors) |
+| [077](077-agent-sql-optimization-evidence.md) | Lean MCP JSON and actionable SQL optimization evidence; portable real-MCP fixture requests and paired agent trials verify the complete workflow | 055–061/065–067/076 DONE; coordinate 063/073 | IN PROGRESS — implementation merged locally into main (`4bd57e4`); actual-agent acceptance unverified (nine provider HTTP 402 errors) |
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |
 | [079](079-optimization-evidence-core.md) | Stage A optimization evidence: canonical conditions with keyed fingerprints and case labels (next journal version, breaking), measure uses compare's per-case sessions, table IO survives message caps, journal-side reads definition and table-variable grouping, SQL Server reproduction scripts in the dashboard | 077 merged; next free journal version | TODO |
 
