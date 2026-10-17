@@ -1,6 +1,6 @@
 # Plan 079: Optimization evidence core (stage A) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 >
 > **Drift check (run first):** plan 077 must be merged to `main`. Rebase this plan's line references on that merge commit: `git diff --stat f3655f8..HEAD -- src/SqlHarness.Core/MeasureParameterSets.cs src/SqlHarness.Core/CompareMatrixRunner.cs src/SqlHarness.Core/CompareCellRunner.cs src/SqlHarness.Core/SqlHarnessModule.cs src/SqlHarness.Core/SqlExecution.cs src/SqlHarness.Core/Dialect/SqlServerDialect.cs src/SqlHarness.Core/Diagnostics.cs src/SqlHarness.Core/Journal src/SqlHarness.Mcp src/SqlHarness.Dashboard`. Adapt compatible drift; never change 077's MCP envelope, case decision fields or `ValueHash`.
 
@@ -27,8 +27,8 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `f3655f8` (2026-10-16; 073 DONE, journal at version 13). Blocked until plan 077 is merged (executing on another machine).
-- Journal: 073 is DONE and the journal is at version 13; this plan takes the next free version (14 at planning time) and removes the legacy
+- DONE on feature branch `plan-079` at `19c714d7a842fdebbaa49bde539608ba34f089a6` plus Task 9 documentation. Plan 077 is merged locally; Tasks 0–8 are implemented and reviewed.
+- Journal: 073 was DONE at version 13; this plan creates v14 with fresh-start backup behavior and canonical optimization evidence.
   migration chain; later plans migrate normally from it.
 - Priority P1; effort L; risk MEDIUM (breaking journal, measure semantics change).
 
@@ -58,8 +58,8 @@
 
 **Files:** none changed.
 
-- [ ] **Step 1:** Confirm 077 is merged (`git log --oneline main | grep -i 077`) and run the drift check from the header. Record the base commit in this plan's status line.
-- [ ] **Step 2:** Run `just verify` on the base; record the result as the pre-change baseline.
+- [x] **Step 1:** Confirm 077 is merged (`git log --oneline main | grep -i 077`) and run the drift check from the header. Record the base commit in this plan's status line.
+- [x] **Step 2:** Run `just verify` on the base; record the result as the pre-change baseline.
 
 ### Task 1: Journal fresh start at the next version
 
@@ -71,15 +71,15 @@
 **Interfaces:**
 - Produces: `JournalSchema.CurrentVersion = 14` (next free at execution); `JournalSchema.Current` (create script); tables/columns listed in Tasks 2–3 exist in it; `journal_meta(key TEXT PRIMARY KEY, value BLOB)` holding `fingerprint_salt` (32 random bytes created with the journal).
 
-- [ ] **Step 1: Write failing tests** in `ActivityJournalTests`:
+- [x] **Step 1: Write failing tests** in `ActivityJournalTests`:
   - `Opening_older_journal_keeps_backup_and_creates_current`: seed a file with `PRAGMA user_version = 13` and one row; open; assert a sibling `<name>.v13-<utc>.bak` (plus `-wal`/`-shm` when present) exists with the row, and the new file has `user_version = 14`, empty `operations`, and a 32-byte `fingerprint_salt`.
   - `Current_journal_opens_without_rename`.
   - `Newer_journal_still_throws_too_new` (existing behavior kept).
   - `Locked_old_journal_reports_and_keeps_file`: hold an open connection to a v13 file; opening must fail with the existing journal-unavailable warning path (no exception to the caller, operation not journaled) and the v13 file must remain intact.
-- [ ] **Step 2:** Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~ActivityJournalTests"` → new tests FAIL.
-- [ ] **Step 3:** Implement: in `Migrate`, `0 < version < CurrentVersion` → rename via the quarantine helper with suffix `.v{version}-{utc}.bak`, then create; `version == 0` → execute `JournalSchema.Current`, insert salt, set `user_version`. Remove the per-version chain. Update `JournalContractTests` pins.
-- [ ] **Step 4:** Run the journal test folder → PASS.
-- [ ] **Step 5:** Commit `feat(079): start a fresh journal version and back up older journals`.
+- [x] **Step 2:** Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~ActivityJournalTests"` → new tests FAIL.
+- [x] **Step 3:** Implement: in `Migrate`, `0 < version < CurrentVersion` → rename via the quarantine helper with suffix `.v{version}-{utc}.bak`, then create; `version == 0` → execute `JournalSchema.Current`, insert salt, set `user_version`. Remove the per-version chain. Update `JournalContractTests` pins.
+- [x] **Step 4:** Run the journal test folder → PASS.
+- [x] **Step 5:** Commit `feat(079): start a fresh journal version and back up older journals`.
 
 ### Task 2: Canonical conditions model and fingerprints
 
@@ -208,13 +208,13 @@
   - Operation detail JSON: `conditions` (the model), compare cases with `caseId`, `caseLabel`, per-table rows `{ table, scans, logicalReads, lobLogicalReads, totalLogicalReads }`, headline `totalLogicalReadsMedian` labelled "median of run totals (data + LOB)".
   - `GET /api/operations/{id}/repro?side=baseline|candidate|query&case=<caseId>&form=as-executed|local-variables` → `{ text, completeness, label }`; 404 for unknown operation/case; 400 for bad side/form.
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - `Table_variables_group_before_medians` — three runs each with a different `#A1B2C3D4`-style name reading 10 pages → journal row `table variables` median 10 (today 0).
   - `Headline_equals_per_table_definition` — per run sum of (logical + LOB) across tables; median of those sums equals the stored headline.
   - `Repro_endpoint_returns_script` and `Repro_endpoint_without_sensitive_storage_is_unavailable` (seeded via `JournalSeed`).
-- [ ] **Step 2:** Run `--filter "FullyQualifiedName~JournalBenchmarkBuilder|FullyQualifiedName~JournalReader|FullyQualifiedName~DashboardServer"` → FAIL.
-- [ ] **Step 3:** Implement. **Step 4:** Run → PASS.
-- [ ] **Step 5:** Commit `feat(079): normalize journaled table IO and serve reproduction scripts`.
+- [x] **Step 2:** Run `--filter "FullyQualifiedName~JournalBenchmarkBuilder|FullyQualifiedName~JournalReader|FullyQualifiedName~DashboardServer"` → FAIL.
+- [x] **Step 3:** Implement. **Step 4:** Run → PASS.
+- [x] **Step 5:** Commit `feat(079): normalize journaled table IO and serve reproduction scripts`.
 
 ### Task 8: Dashboard minimal surfaces
 
@@ -227,23 +227,27 @@
 - Consumes: Task 7 JSON and endpoint.
 - Produces: `planChangeStatus(baseline, candidate): { same: boolean; changed: { ordinal: number; statement: string }[] }` over each variant's plan list (the same entries `firstPlanHash` reads today; it replaces `firstPlanHash`); `<ConditionsList conditions={…} />`; `<ReproScriptButtons operationId side caseId />` with two buttons labelled `Copy script (as executed)` and `Copy script (local variables)`, disabled with the API label as tooltip when not `Complete`/`ValuesMissing`.
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - Case headings render `caseLabel` (`@ClassType = N'ClientConfigurationModel2'`), not `Cell 1`; long labels middle-truncated with full value in `title`.
   - `ConditionsList` renders setup, fixed parameters and per-case varying values as a definition list; empty fields are not rendered; no raw field names (`typedParameters`, `matrixText`).
   - `planChangeStatus`: second statement hash differs → `same=false`, `changed=[{ordinal:1,…}]`; different statement counts → `same=false`; all equal → `same=true`.
   - `prMarkdown` includes `Scans` columns, groups `table variables`, and uses the same equivalence wording as the screen.
   - Table IO shows `Logical`, `LOB logical`, `Total` and the headline label "median of run totals (data + LOB)".
   - `ReproScriptButtons` copies the endpoint text; shows "Incomplete — values not stored" warning; disabled for `Unavailable`.
-- [ ] **Step 2:** Run `npm --prefix src/SqlHarness.Dashboard/ui test` → FAIL.
-- [ ] **Step 3:** Implement with existing components and styles; no layout redesign (stage B).
-- [ ] **Step 4:** Run → PASS; `npm --prefix src/SqlHarness.Dashboard/ui run build`.
-- [ ] **Step 5:** Commit `feat(079): show conditions, case labels and reproduction scripts in dashboard`.
+- [x] **Step 2:** Run `npm --prefix src/SqlHarness.Dashboard/ui test` → FAIL.
+- [x] **Step 3:** Implement with existing components and styles; no layout redesign (stage B).
+- [x] **Step 4:** Run → PASS; `npm --prefix src/SqlHarness.Dashboard/ui run build`.
+- [x] **Step 5:** Commit `feat(079): show conditions, case labels and reproduction scripts in dashboard`.
 
 ### Task 9: Documentation, verification and queue
 
 **Files:** `README.md`, `docs/mcp.md` (journal/dashboard and measure semantics), `plans/README.md`, `plans/history.md` (at completion), `skills/sqlharness/SKILL.md` only if it states measure rotation.
 
-- [ ] **Step 1:** Update docs; check links and contract pins.
-- [ ] **Step 2:** Run `just verify` → exit 0. Record the revision and result in this plan.
-- [ ] **Step 3 (operator-authorized, optional):** with `storeSensitive` on, run one UAT compare with a matrix and setup, copy both scripts into SSMS, confirm per-table logical reads match the journal. Record the outcome without business data.
-- [ ] **Step 4:** Move the queue entry to history with evidence; commit `docs(079): record plan 079 evidence`.
+- [x] **Step 1:** Updated README and MCP journal/benchmark guidance; removed stale schema-v12 and `compare_conditions_json` setup-SQL claims. Link, diff, and contract checks passed.
+- [x] **Step 2:** `just verify -LogDirectory .superpowers/sdd/079-optimization-evidence-core/task-9-verify-20261017-101500` passed on tested base revision `19c714d7a842fdebbaa49bde539608ba34f089a6` with the Task 9 product documentation changes. `verify: OK  stages=5  5m38s`; logs and stage details are in [verification evidence](079-verification-evidence.md).
+- [ ] **Step 3 (operator-authorized, optional):** UNVERIFIED — no operator-authorized live database/SSMS UAT was performed.
+- [x] **Step 4:** Moved the queue entry to history with evidence; committed `docs(079): record plan 079 evidence`.
+
+## Final verification evidence
+
+See [Plan 079 verification evidence](079-verification-evidence.md) for the Windows gate stages, test counts, log directory, documentation checks, and unverified live UAT/Linux scope. The verified product changes are feature-branch evidence; no live database, SSMS, Linux, merge, or push result is claimed here.

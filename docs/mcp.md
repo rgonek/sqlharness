@@ -36,6 +36,10 @@ Read [client workspace roots](mcp/inputs.md#client-workspace-roots).
 
 Read [tools](mcp/tools.md#tools).
 
+## Benchmark evidence and local journal
+
+`measure` and `compare` share per-case sessions: setup is bound to that case, cases run sequentially, the first failure stops the operation, and completed cases remain reportable. MCP descriptions and schemas remain authoritative for tool inputs and output; the [README benchmark and journal sections](../README.md#parameter-sets) explain local conditions, keyed fingerprints, journal-only table IO totals, and SQL Server dashboard reproduction scripts. Journal retention and `storeSensitive` behavior are documented in [Activity journal](../README.md#activity-journal).
+
 ## Persistent mutations
 
 Read [persistent mutations](mcp/tools.md#persistent-mutations) for the `sqlharness_mutation` contract, approval outcomes, and capability disclosure.

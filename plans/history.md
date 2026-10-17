@@ -2,6 +2,12 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 079 completion — 2026-10-17
+
+Plan [079](079-optimization-evidence-core.md) is DONE on feature branch `plan-079`, product implementation range `9915eca..19c714d`. It adds canonical, privacy-aware optimization conditions and keyed fingerprints, sequential per-case `measure` sessions, streamed table IO, journal-side data-plus-LOB reads and table-variable grouping, SQL Server reproduction scripts, and minimal dashboard evidence surfaces. Task reviews for Tasks 1–8 were clean. Task 9 documentation and final Windows verification are recorded in [verification evidence](079-verification-evidence.md).
+
+Windows `just verify` on tested product revision `19c714d7a842fdebbaa49bde539608ba34f089a6` with README and MCP documentation changes exited 0: five stages in 5m38s. UI install skipped because the lockfile was unchanged; build passed with zero warnings/errors; UI passed; Core passed 4,135 with 11 skipped; MCP passed 426 with 4 skipped; format skipped with zero changed C# files. Logs: `.superpowers/sdd/079-optimization-evidence-core/task-9-verify-20261017-101500` in local scratch. Linux was explicitly skipped and remains unverified. Live database/SSMS UAT was not authorized or performed and remains unverified. No merge, push, install, publication or live database execution occurred.
+
 ## Plan 063 completion — 2026-10-16
 
 Plan [063](063-missing-index-overlap.md) is DONE and integrated locally into `main` at `84e3c26` (merge of `plan-063`; product commit `ba02e91`). Missing-index hints in an artifact `plan` section carry `overlap` (`covered`, `include-gap`, `partial-key`, `new-shape`) from `index-inventory.json`, captured on SQL Server after the last measured run when a hint exists. Post-merge Windows `just verify` on `84e3c26` exited 0: `verify: OK  stages=6  2m27s` (ui-install skipped; ui-check 23,3s; restore 5,9s; build 34,7s; test 1m23s; format skipped, 0 changed C# files). Feature-branch `just verify` on `ba02e91` also exited 0 (`verify: OK  stages=6  2m30s`). An earlier documentation commit `50a8b0f` passed (`verify: OK  stages=6  2m58s`; SqlHarness.Tests 3,884 passed/11 skipped; SqlHarness.Mcp.Tests 387 passed/4 skipped). Linux was not run and is not a completion criterion while CI is local. No push, installation, or publication.
