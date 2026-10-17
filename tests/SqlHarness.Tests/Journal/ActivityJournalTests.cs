@@ -369,6 +369,65 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
+    public void Oversized_varying_value_uses_fallback_label_and_preserves_partial_values_and_fingerprints()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null, storeSensitive: true);
+        var operation = new SqlHarnessMeasureOperation(
+            new SqlTargetRequest("local", new Dictionary<string, string>()), "-- setup", "SELECT @large, @small", [], 30, 5);
+        var model = ConditionsModelBuilder.Build(operation,
+            new SqlHarness.Core.Targets.ResolvedTarget("server", "database", null!, "integrated"),
+            new SqlHarness.Core.Dialect.SqlServerDialect(),
+            [],
+            [new ConditionsCaseInput("named-case", "named-set", [
+                new SqlHarnessParameter("@large", SqlDbType.NVarChar, new string('L', 1_100_000), -1),
+                new SqlHarnessParameter("@small", SqlDbType.NVarChar, "small", 4000),
+            ])], true);
+        var handle = journal.Begin(JournalTestData.Session(), OperationJournalDescriber.DescribeStart(operation))!;
+
+        journal.RecordConditions(handle, model);
+
+        var row = JournalDb.Rows(temp.DatabasePath,
+            "SELECT conditions_json, conditions_fingerprint FROM operations").Single();
+        var jsonText = Assert.IsType<string>(row["conditions_json"]);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(jsonText) <= 1024 * 1024);
+        var fingerprint = Assert.IsType<string>(row["conditions_fingerprint"]);
+        Assert.NotEmpty(fingerprint);
+        using var document = System.Text.Json.JsonDocument.Parse(jsonText);
+        var root = document.RootElement;
+        var conditionCase = root.GetProperty("cases")[0];
+        Assert.Equal("named-set", conditionCase.GetProperty("label").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null,
+            conditionCase.GetProperty("varying")[0].GetProperty("value").ValueKind);
+        Assert.Equal("small", conditionCase.GetProperty("varying")[1].GetProperty("value").GetString());
+        Assert.Contains("cases.named-case.@large.value", root.GetProperty("omitted").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(fingerprint, root.GetProperty("fingerprint").GetString());
+        Assert.NotEmpty(conditionCase.GetProperty("fingerprint").GetString()!);
+    }
+
+    [Fact]
+    public void Conditions_fingerprint_is_persisted_when_minimal_model_exceeds_size_limit()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null, storeSensitive: true);
+        var operation = new SqlHarnessMeasureOperation(
+            new SqlTargetRequest("local", new Dictionary<string, string>()), null, "SELECT 1", [], 30, 1);
+        var model = ConditionsModelBuilder.Build(operation,
+            new SqlHarness.Core.Targets.ResolvedTarget(new string('S', 1_100_000), "database", null!, "integrated"),
+            new SqlHarness.Core.Dialect.SqlServerDialect(),
+            [],
+            [new ConditionsCaseInput("0", null, [])], true);
+        var handle = journal.Begin(JournalTestData.Session(), OperationJournalDescriber.DescribeStart(operation))!;
+
+        journal.RecordConditions(handle, model);
+
+        var row = JournalDb.Rows(temp.DatabasePath,
+            "SELECT conditions_json, conditions_fingerprint FROM operations").Single();
+        Assert.Null(row["conditions_json"]);
+        Assert.NotEmpty(Assert.IsType<string>(row["conditions_fingerprint"]));
+    }
+
+    [Fact]
     public void Known_compare_context_survives_rejected_and_failed_completion()
     {
         using var temp = new JournalTempDirectory();

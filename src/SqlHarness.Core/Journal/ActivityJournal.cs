@@ -555,18 +555,18 @@ public sealed class ActivityJournal : IActivityJournal
             var salt = ReadFingerprintSalt(connection);
             var sealedModel = SealConditions(model, salt);
             var persisted = BoundConditions(sealedModel, _storeSensitive);
-            var json = JsonSerializer.Serialize(persisted, WaitJson);
-            if (Encoding.UTF8.GetByteCount(json) > MaximumConditionsBytes)
+            string? json = JsonSerializer.Serialize(persisted, WaitJson);
+            if (Encoding.UTF8.GetByteCount(json!) > MaximumConditionsBytes)
             {
                 persisted = OmitOversizedConditions(persisted);
                 json = JsonSerializer.Serialize(persisted, WaitJson);
             }
-            if (Encoding.UTF8.GetByteCount(json) > MaximumConditionsBytes)
-                return;
+            if (Encoding.UTF8.GetByteCount(json!) > MaximumConditionsBytes)
+                json = null;
 
             using var update = connection.CreateCommand();
             update.CommandText = "UPDATE operations SET conditions_json = $json, conditions_fingerprint = $fingerprint WHERE id = $id;";
-            update.Parameters.AddWithValue("$json", json);
+            update.Parameters.AddWithValue("$json", (object?)json ?? DBNull.Value);
             update.Parameters.AddWithValue("$fingerprint", persisted.Fingerprint);
             update.Parameters.AddWithValue("$id", handle.OperationId);
             update.ExecuteNonQuery();
@@ -650,7 +650,11 @@ public sealed class ActivityJournal : IActivityJournal
                 var cases = model.Cases.ToArray();
                 var varying = cases[candidate.Case].Varying.ToArray();
                 varying[candidate.Index] = varying[candidate.Index] with { Value = null };
-                cases[candidate.Case] = cases[candidate.Case] with { Varying = varying };
+                var updatedCase = cases[candidate.Case] with { Varying = varying };
+                cases[candidate.Case] = updatedCase with
+                {
+                    Label = CaseLabel.Format(updatedCase, cases.Length, valuesStored: true),
+                };
                 model = model with { Cases = cases };
             }
             omitted.Add(path);
