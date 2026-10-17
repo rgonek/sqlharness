@@ -103,6 +103,53 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Optimization_evidence_reads_case_metrics_table_io_and_verdicts_from_the_journal()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:optimization"), "orders", "whole", "baseline-hash", "candidate-hash");
+        var metrics = new BenchmarkJournalRecord(
+        [
+            OptimizationMetric("baseline", 100, 10, 2),
+            OptimizationMetric("candidate", 80, 8, 1),
+        ], []);
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"regression":{"verdict":"pass"},"cases":[{"caseId":"0","caseLabel":"@CustomerId = 1","equivalence":{"mode":"Ordered","equivalent":true},"regression":{"verdict":"pass"}}]}""",
+            metrics);
+
+        var sessionId = Assert.Single(Reader(home).Sessions(new SessionQuery()).Items).Id;
+        var evidence = Assert.Single(Reader(home).OptimizationEvidence(sessionId));
+
+        Assert.Equal("orders", evidence.Subject);
+        Assert.Equal("whole", evidence.Scope);
+        Assert.Equal("db", evidence.Database);
+        Assert.Equal("sqlserver", evidence.Engine);
+        Assert.False(string.IsNullOrWhiteSpace(evidence.Fingerprint));
+        Assert.Equal("baseline-hash", evidence.BaselineHash);
+        Assert.Equal("candidate-hash", evidence.CandidateHash);
+        Assert.Equal("succeeded", evidence.Status);
+        Assert.Equal("pass", evidence.RegressionVerdict);
+        Assert.Equal((true, "pass"), (Assert.Single(evidence.Cases).ResultsEquivalent, evidence.Cases[0].RegressionVerdict));
+        var baseline = Assert.Single(evidence.Metrics, metric => metric.Variant == "baseline");
+        Assert.Equal(100, baseline.LogicalReadsMedian);
+        Assert.Equal(10, baseline.ElapsedMedianMs);
+        Assert.Equal(2, baseline.ScansSum);
+        Assert.Equal(new CompareTableIoEvidence("Orders", 90, 10, 2), Assert.Single(baseline.TableRows));
+
+        var section = OptimizationSummaryBuilder.Build([evidence]);
+        Assert.Single(section.Subjects);
+    }
+
+    private static JournalVariantMetrics OptimizationMetric(string variant, long logicalReads, long elapsed, long scans) =>
+        new(variant, null, null, 3, new CompareDistribution(elapsed, elapsed, elapsed), new CompareDistribution(elapsed, elapsed, elapsed),
+            new CompareDistribution(logicalReads, logicalReads, logicalReads), null, null, null, null, null, null, 0, false, false, 0,
+            [], null, [new JournalTableIo("Orders", logicalReads - 10, scans, 0, null, null, 10, null, null, 0)], [])
+        {
+            CaseId = "0",
+            CaseLabel = "@CustomerId = 1",
+        };
+
+    [Fact]
     public void Session_and_operation_carry_title_roots_and_cancel_reason()
     {
         using var home = new TempHome();
