@@ -1,7 +1,6 @@
 using System.Data;
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
@@ -35,7 +34,6 @@ internal static partial class SqlServerReproScriptWriter
         builder.AppendLine("-- new connection; setup runs per case");
         builder.AppendLine("-- SQLHarness discards one warm-up and reports medians; this script runs once");
         builder.AppendLine("-- ARITHABORT OFF reflects SqlClient's documented client default; this session setting was not journaled");
-        builder.AppendLine("SET NOCOUNT ON;");
         builder.AppendLine("SET STATISTICS IO, TIME ON;");
         builder.AppendLine("SET ARITHABORT OFF;");
         builder.AppendLine();
@@ -167,20 +165,31 @@ internal static partial class SqlServerReproScriptWriter
             var fragment = parser.Parse(reader, out var errors);
             if (errors.Count > 0 || fragment is not TSqlScript script)
                 return false;
-            foreach (TSqlBatch batch in script.Batches)
-            {
-                foreach (var statement in batch.Statements)
-                {
-                    foundAny = true;
-                    var text = sql!.Substring(statement.StartOffset, statement.FragmentLength);
-                    if (!RecompileHint().IsMatch(text))
-                        return false;
-                }
-            }
+            var hints = new QueryHintVisitor();
+            script.Accept(hints);
+            foundAny |= hints.QueryCount > 0;
+            if (!hints.AllQueriesRecompile)
+                return false;
         }
         return foundAny;
     }
 
-    [GeneratedRegex(@"\bOPTION\s*\(\s*RECOMPILE\s*\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex RecompileHint();
+    private sealed class QueryHintVisitor : TSqlFragmentVisitor
+    {
+        internal int QueryCount { get; private set; }
+        internal bool AllQueriesRecompile { get; private set; } = true;
+
+        public override void ExplicitVisit(SelectStatement node) => Add(node);
+        public override void ExplicitVisit(InsertStatement node) => Add(node);
+        public override void ExplicitVisit(UpdateStatement node) => Add(node);
+        public override void ExplicitVisit(DeleteStatement node) => Add(node);
+        public override void ExplicitVisit(MergeStatement node) => Add(node);
+
+        private void Add(StatementWithCtesAndXmlNamespaces statement)
+        {
+            QueryCount++;
+            if (statement.OptimizerHints?.Any(hint => hint.HintKind == OptimizerHintKind.Recompile) != true)
+                AllQueriesRecompile = false;
+        }
+    }
 }

@@ -31,6 +31,7 @@ public sealed class SqlServerReproScriptWriterTests
         Assert.Contains("new connection; setup runs per case", result.Text);
         Assert.Contains("SQLHarness discards one warm-up and reports medians; this script runs once", result.Text);
         Assert.Contains("ARITHABORT OFF reflects SqlClient's documented client default; this session setting was not journaled", result.Text);
+        Assert.DoesNotContain("SET NOCOUNT ON", result.Text);
         Assert.Empty(ParseErrors(result.Text!));
     }
 
@@ -54,6 +55,23 @@ public sealed class SqlServerReproScriptWriterTests
         var model = Model();
         var result = ReproScripts.Create(model, "SELECT 1 OPTION (RECOMPILE)", "query", "0", ReproScriptForm.LocalVariables);
         Assert.Equal("Local variables — equivalent (every statement uses OPTION (RECOMPILE))", result.Label);
+    }
+
+    [Theory]
+    [InlineData("SELECT N'OPTION (RECOMPILE)'")]
+    [InlineData("SELECT 1 /* OPTION (RECOMPILE) */")]
+    [InlineData("SELECT [OPTION (RECOMPILE)] FROM dbo.T")]
+    public void Recompile_text_without_an_ast_hint_does_not_claim_equivalence(string sql)
+    {
+        var result = ReproScripts.Create(Model(), sql, "query", "0", ReproScriptForm.LocalVariables);
+        Assert.Equal("Local variables — estimates may differ", result.Label);
+    }
+
+    [Fact]
+    public void Every_query_statement_must_have_an_ast_recompile_hint()
+    {
+        var result = ReproScripts.Create(Model(), "SELECT 1 OPTION (RECOMPILE); SELECT 2", "query", "0", ReproScriptForm.LocalVariables);
+        Assert.Equal("Local variables — estimates may differ", result.Label);
     }
 
     [Fact]
@@ -92,11 +110,22 @@ public sealed class SqlServerReproScriptWriterTests
     [Fact]
     public void Missing_values_render_typed_placeholders()
     {
-        var model = Model(Parameter("N", "int", "null") with { Value = null });
-        var result = ReproScripts.Create(model, "SELECT @N", "query", "0", ReproScriptForm.LocalVariables);
-        Assert.Equal(ReproCompleteness.ValuesMissing, result.Completeness);
-        Assert.Contains("@N int = /* value not stored */", result.Text);
-        Assert.Equal("Incomplete — values not stored", result.Label);
+        foreach (var missingValue in new JsonElement?[] { null, default(JsonElement) })
+        {
+            var model = Model(new ConditionsParameter("@N", "int", missingValue));
+            foreach (var form in new[] { ReproScriptForm.AsExecuted, ReproScriptForm.LocalVariables })
+            {
+                var result = ReproScripts.Create(model, "SELECT @N", "query", "0", form);
+                Assert.Equal(ReproCompleteness.ValuesMissing, result.Completeness);
+                Assert.Equal("Incomplete — values not stored", result.Label);
+                Assert.Contains(form == ReproScriptForm.AsExecuted
+                    ? "@N = /* value not stored */"
+                    : "DECLARE @N int = /* value not stored */;", result.Text);
+                if (form == ReproScriptForm.AsExecuted)
+                    Assert.Contains("N'@N int'", result.Text);
+                Assert.DoesNotContain("@N = NULL", result.Text);
+            }
+        }
     }
 
     [Fact]
