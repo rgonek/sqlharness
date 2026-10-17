@@ -27,9 +27,8 @@
 
 ## Status and dependencies
 
-- DONE on feature branch `plan-079` at `19c714d7a842fdebbaa49bde539608ba34f089a6` plus Task 9 documentation. Plan 077 is merged locally; Tasks 0–8 are implemented and reviewed.
-- Journal: 073 was DONE at version 13; this plan creates v14 with fresh-start backup behavior and canonical optimization evidence.
-  migration chain; later plans migrate normally from it.
+- DONE on feature branch `plan-079` at `d4478c5f2b711cf60bf4e7006fa7c6a06a845e99` with Task 9 documentation and final review fixes. Plan 077 is merged locally; Tasks 0–8 are implemented and reviewed.
+- Journal: 073 was DONE at version 13; this plan creates v14 with fresh-start backup behavior and canonical optimization evidence; later plans migrate normally from it.
 - Priority P1; effort L; risk MEDIUM (breaking journal, measure semantics change).
 
 ## Global Constraints
