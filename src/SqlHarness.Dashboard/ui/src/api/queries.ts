@@ -1,6 +1,6 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
-import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, MutationRequestSummary, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
+import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, MutationRequestSummary, OperationDetail, OperationSummary, OptimizationComparison, OptimizationSection, Page, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string }
 
@@ -14,6 +14,8 @@ export const queryKeys = {
   sessions: (filters: SessionFilters) => ["sessions", filters] as const,
   session: (id: number) => ["session", id] as const,
   compares: (id: number) => ["session-compares", id] as const,
+  optimization: (id: number) => ["session-optimization", id] as const,
+  optimizationComparison: (id: number, params: OptimizationCompareParams) => ["session-optimization-comparison", id, params] as const,
   operation: (id: number) => ["operation", id] as const,
   operations: (filters: OperationFilters) => ["operations", filters] as const,
   stats: (range: StatsRange, window: StatsWindow, profile?: string | null, dimensions?: Record<string, string | null>, rowDimension?: string, columnDimension?: string, unprofiled?: boolean) =>
@@ -109,6 +111,36 @@ export function useSessionCompares(id: number) {
     queryFn: ({ pageParam }) => getJson<Page<CompareAttemptSummary>>(`/api/sessions/${id}/compares`, { cursor: pageParam, limit: 100 }),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: page => page.nextCursor ?? undefined,
+  })
+}
+
+export type OptimizationCompareParams = {
+  subject: string; database: string; group: string; scope?: string; a: string; b: string; case: string; aggregate: string
+}
+
+export function useSessionOptimization(id: number, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.optimization(id),
+    queryFn: () => getJson<OptimizationSection>(`/api/sessions/${id}/optimization`),
+    enabled,
+  })
+}
+
+export function useSessionOptimizationComparison(id: number, params: OptimizationCompareParams | null) {
+  return useQuery({
+    queryKey: params ? queryKeys.optimizationComparison(id, params) : ["session-optimization-comparison", id, null],
+    queryFn: () => getJson<OptimizationComparison>(`/api/sessions/${id}/optimization/compare`, {
+      subject: params!.subject, database: params!.database, group: params!.group, scope: params!.scope,
+      a: params!.a, b: params!.b, case: params!.case, aggregate: params!.aggregate,
+    }),
+    enabled: params !== null,
+  })
+}
+
+export function useOperationOptimization(id: number, selectedCase = "all", aggregate = "sum") {
+  return useQuery({
+    queryKey: ["operation-optimization", id, selectedCase, aggregate],
+    queryFn: () => getJson<OptimizationComparison>(`/api/operations/${id}/optimization`, { case: selectedCase, aggregate }),
   })
 }
 

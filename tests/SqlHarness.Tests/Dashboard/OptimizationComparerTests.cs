@@ -14,8 +14,27 @@ public sealed class OptimizationComparerTests
 
         Assert.Equal(PairBasis.MeasuredTogether, result.Basis);
         Assert.Equal(214, result.OperationId);
+        AssertAction(result.BeforeAction, 214, "baseline", "0");
+        AssertAction(result.AfterAction, 214, "candidate", "0");
         Assert.Equal(2000, Assert.Single(result.Tables).ReadsBefore);
         Assert.Equal(2000, result.Elapsed.BeforeMs);
+    }
+
+    [Fact]
+    public void Different_runs_keep_the_actual_source_operation_and_variant_for_each_version()
+    {
+        var compares = new[]
+        {
+            Evidence(201, "h0", "h1", (1200, 1000)),
+            Evidence(214, "h2", "h3", (900, 700)),
+        };
+
+        var result = OptimizationComparer.Compare(Group("h0", "h1", "h2", "h3"), compares, "v1", "v2", "all", "sum");
+
+        Assert.Equal(PairBasis.DifferentRunsSameConditions, result.Basis);
+        Assert.Null(result.OperationId);
+        AssertAction(result.BeforeAction, 201, "candidate", "0");
+        AssertAction(result.AfterAction, 214, "baseline", "0");
     }
 
     [Fact]
@@ -301,6 +320,14 @@ public sealed class OptimizationComparerTests
 
     private static OptimizationComparison Compare(IReadOnlyList<CompareEvidence> evidence, string a, string b) =>
         OptimizationComparer.Compare(Group("h1", "h2", "h3"), evidence, a, b, "all", "sum");
+
+    private static void AssertAction(OptimizationActionReference? action, long operationId, string side, string caseId)
+    {
+        Assert.NotNull(action);
+        Assert.Equal(operationId, action.OperationId);
+        Assert.Equal(side, action.Side);
+        Assert.Equal([caseId], action.CaseIds);
+    }
 
     private static ConditionsGroup Group(params string[] hashes)
     {

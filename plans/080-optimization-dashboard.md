@@ -152,14 +152,14 @@
 - Consumes: Task 3 endpoints; 079 `ReproScriptButtons`.
 - Produces: `<ComparisonPanel comparison={OptimizationComparison} sessionId={number} />` (reused by Task 5); `optimizationMarkdown(c: OptimizationComparison, subject: string, scope: string): string`.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:** Focused UI RED for missing Markdown/panel/section modules and C# RED for missing retained action-reference contract; see [Task 4 report](../.superpowers/sdd/080-optimization-dashboard/task-4-report.md).
   - section absent for a session without compares; present and first otherwise; unassigned compares listed with links.
   - version table: rows, `whole query` first, outcome text, A/B radios default to `DefaultA`/`DefaultB`; group selector shown only with >1 group; `renders forty versions` (40 rows, defaults selected, picker change updates URL `a`/`b`).
   - panel: basis badge text (`measured together in #214` / `different runs, same conditions` / `conditions differ`), case chips with labels, Sum/Mean toggle updates URL `agg`, Mixed warning text `Mixed: 2 better, 1 worse — @CustomerId = 9001: logical reads +35%`, collapsed row text, `per-table IO not available for this engine`.
   - actions: copy summary uses `optimizationMarkdown`; script buttons for both versions; links to SQL diff, plans, operation.
   - `optimizationMarkdown` produces a header line (subject, scope, `v0 → v3`, case or aggregate label, basis, equivalence label) and a table `| Table | Scans before | Scans after | Logical reads before | Logical reads after | Change |` matching the panel rows, plus the collapsed row and Mixed line.
-- [ ] **Step 2:** `npm --prefix src/SqlHarness.Dashboard/ui test` → FAIL. **Step 3:** Implement with existing shadcn components. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(080): session optimization section`.
+- [x] **Step 2:** Focused tests failed on the missing implementation/contracts. **Step 3:** Implemented the section, reusable comparison panel/Markdown, URL-backed selection, and actual retained action references. **Step 4:** → PASS (focused UI 26/26, full UI tests 274/274, typecheck, lint, build, focused comparer 21/21; see report).
+- [x] **Step 5:** Commit `feat(080): session optimization section` (recorded in Task 4 report).
 
 ### Task 5: Compare-first operation page
 

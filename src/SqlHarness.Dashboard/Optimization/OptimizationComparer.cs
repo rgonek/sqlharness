@@ -106,12 +106,18 @@ public static class OptimizationComparer
             resolvedSelection, normalizedAggregate, coverage, mixed, visibleTables, collapsed,
             new ElapsedInfo(elapsedBefore, elapsedAfter, direct?.RegressionVerdict, basis == PairBasis.DifferentRunsSameConditions))
         {
+            BeforeAction = Action(before),
+            AfterAction = Action(after),
             TableIoUnavailable = tableIoUnavailable,
             CpuBeforeMs = cpuBefore,
             CpuAfterMs = cpuAfter,
             BuffersBefore = buffersBefore,
             BuffersAfter = buffersAfter,
         };
+
+        static OptimizationActionReference Action(VersionSnapshot snapshot) =>
+            new(snapshot.OperationId, snapshot.Variant, snapshot.Metrics.Keys.Order(StringComparer.Ordinal).ToArray());
+
     }
 
     private static OptimizationComparison Empty(string a, string b, PairBasis basis, string equivalence,
@@ -221,7 +227,7 @@ public static class OptimizationComparer
         var metrics = compare.Metrics.Where(metric => metric.Variant.Equals(variant, StringComparison.OrdinalIgnoreCase))
             .GroupBy(metric => metric.CaseId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
-        return new VersionSnapshot(compare.Engine, compare.OperationId, metrics);
+        return new VersionSnapshot(compare.Engine, compare.OperationId, variant, metrics);
     }
 
     private static string Outcome(long before, long after)
@@ -394,7 +400,7 @@ public static class OptimizationComparer
         return new MixedWarning(better, worse, increases.Case.Label, increases.Percent);
     }
 
-    private sealed record VersionSnapshot(string? Engine, long OperationId,
+    private sealed record VersionSnapshot(string? Engine, long OperationId, string Variant,
         IReadOnlyDictionary<string, CompareMetricEvidence> Metrics);
 
     private sealed record VersionIdentity(string Scope, string Hash);

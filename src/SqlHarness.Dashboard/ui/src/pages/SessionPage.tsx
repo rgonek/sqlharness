@@ -1,4 +1,4 @@
-import { useParams, useSearch } from "@tanstack/react-router"
+import { useParams } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
 import { useSession } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SessionAnnotationHeader } from "@/components/SessionAnnotationHeader"
 import { SessionNoteCard } from "@/components/SessionNoteCard"
 import { SessionConversations } from "@/components/SessionConversations"
-import { CompareSessionOverview } from "@/components/CompareSessionOverview"
+import { OptimizationSection } from "@/components/optimization/OptimizationSection"
 import { formatTimestamp } from "@/lib/format"
 import { clientLabel, rootLabel } from "@/lib/roots"
 import { agentLabel } from "@/lib/agents"
@@ -28,20 +28,18 @@ function Fact({ label, value }: { label: string; value: string | null | undefine
 
 export function SessionPage() {
   const raw = useParams({ from: "/sessions/$id" }).id
-  const search = useSearch({ from: "/sessions/$id" })
   const id = parseRouteId(raw)
   if (id === null) return <ErrorState error={new NotFoundError(`/sessions/${raw}`)} />
-  return <SessionView id={id} returnSubject={search.subject} returnScope={search.scope} returnUnassigned={search.unassigned} />
+  return <SessionView id={id} />
 }
 
-function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id: number; returnSubject?: string; returnScope?: string; returnUnassigned?: boolean }) {
+function SessionView({ id }: { id: number }) {
   const detail = useSession(id)
 
   if (detail.error) return <ErrorState error={detail.error} />
   if (detail.isPending) return <Skeleton className="h-64 w-full" />
 
-  const { session, operations, note = null, compareSubjects = [], unassignedCompareCount = 0, conversations = [] } = detail.data
-  const engine = operations.find(operation => operation.operation === "compare")?.engine ?? null
+  const { session, operations, note = null, conversations = [] } = detail.data
   return (
     <div className="space-y-4">
       <Card>
@@ -86,9 +84,9 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
           </details>
         </CardContent>
       </Card>
+      {session.hasCompare && <OptimizationSection sessionId={id} />}
       <SessionNoteCard key={session.id} sessionId={session.id} note={note} />
       {conversations.length > 0 && <SessionConversations conversations={conversations} />}
-      <CompareSessionOverview sessionId={id} engine={engine} subjects={compareSubjects} unassignedCompareCount={unassignedCompareCount} returnSubject={returnSubject} returnScope={returnScope} returnUnassigned={returnUnassigned} />
       <Card>
         <CardHeader>
           <CardTitle>All operations</CardTitle>

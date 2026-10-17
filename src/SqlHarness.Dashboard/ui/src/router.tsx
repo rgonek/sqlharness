@@ -11,7 +11,7 @@ import { SessionsPage } from "@/pages/SessionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { StatsPage } from "@/pages/StatsPage"
 
-export type SessionSearch = { subject?: string; scope?: string; unassigned?: boolean }
+export type SessionSearch = { subject?: string; db?: string; group?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; unassigned?: boolean }
 export type OperationDetailSearch = { returnSession?: number; returnSubject?: string; returnScope?: string; returnUnassigned?: boolean }
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
@@ -21,7 +21,13 @@ const sessionsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/ses
 const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$id", component: SessionPage,
   validateSearch: (search: Record<string, unknown>): SessionSearch => ({
     subject: typeof search.subject === "string" && search.subject.length <= 64 ? search.subject : undefined,
+    db: typeof search.db === "string" && search.db.length <= 128 ? search.db : undefined,
+    group: typeof search.group === "string" && search.group.length <= 256 ? search.group : undefined,
     scope: typeof search.scope === "string" && search.scope.length <= 64 ? search.scope : undefined,
+    a: typeof search.a === "string" && search.a.length <= 64 ? search.a : undefined,
+    b: typeof search.b === "string" && search.b.length <= 64 ? search.b : undefined,
+    case: typeof search.case === "string" && search.case.length <= 256 ? search.case : undefined,
+    agg: search.agg === "mean" ? "mean" : search.agg === "sum" ? "sum" : undefined,
     unassigned: search.unassigned === true || search.unassigned === "true",
   }) })
 const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: OperationPage,
