@@ -333,7 +333,9 @@ public static partial class McpOperationMapper
         CancellationToken ct,
         bool dryRun = false,
         IReadOnlyList<McpParameterSetArgument>? parameterSets = null,
-        McpMatrixArgument? matrix = null)
+        McpMatrixArgument? matrix = null,
+        string? subject = null,
+        string? optimizationScope = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(query);
@@ -341,6 +343,15 @@ public static partial class McpOperationMapper
         var querySql = await McpInputReader.ReadSqlAsync(query.Sql, query.File, scope, ct);
         var setupSql = await ReadOptionalSourceAsync(setup, scope, "setup", ct);
         var sets = await MapParameterSetsAsync(parameterSets, parameterSetFiles, scope, ct);
+        CompareContext? context;
+        try
+        {
+            context = CompareContext.Parse(subject, optimizationScope, required: false);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new McpMappingException(exception.Message);
+        }
         return new SqlHarnessMeasureOperation(
             scope.TargetRequest, setupSql, querySql, [],
             RequireTimeout(timeout), RequireRepeat(repeat), sets)
@@ -348,6 +359,7 @@ public static partial class McpOperationMapper
             TypedParameters = MapParameters(parameters),
             TypedMatrix = matrix is null ? null : MapMatrix(matrix),
             DryRun = dryRun,
+            Context = context,
         };
     }
 

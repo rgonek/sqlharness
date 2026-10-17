@@ -82,8 +82,10 @@ public sealed class McpRequestToolHandlers(
         [Description("Cell clip 0..4096 characters; default 2048.")] int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")] int? maxOperationSeconds = null,
         [Description("Offline validation only; no execution or writes.")] bool dryRun = false,
-        CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_measure", target, ["target", "query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"], handler => handler.MeasureAsync(ctx, query, setup, parameters, parameterSetFiles, parameterSets, matrix, repeat, timeout, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct));
+        CancellationToken ct = default,
+        [Description("Optional optimization subject; provide together with scope.")] string? subject = null,
+        [Description("Optional optimization scope; provide together with subject.")] string? scope = null) =>
+        Invoke(ctx, "sqlharness_measure", target, ["target", "query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", "subject", "scope"], handler => handler.MeasureAsync(ctx, query, setup, parameters, parameterSetFiles, parameterSets, matrix, repeat, timeout, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct, subject, scope));
 
     public Task<CallToolResult> CompareAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Baseline source.")] McpSqlSourceArgument baseline,
