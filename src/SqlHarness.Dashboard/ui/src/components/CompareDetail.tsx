@@ -21,6 +21,7 @@ import { SqlBlock } from "@/components/SqlBlock"
 import { ConditionsList } from "@/components/ConditionsList"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { displayCaseLabel } from "@/lib/caseLabel"
+import type { StatementPlanChanges } from "@/lib/prMarkdown"
 
 type JsonObject = Record<string, unknown>
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
@@ -53,9 +54,13 @@ function compareCards(detail: OperationDetail): CompareCard[] {
   const cells = detail.compareCases ?? []
   const casesByIndex = new Map((detail.conditions?.cases ?? []).map(item => [item.index, item]))
   const casePairs = new Map(pairs.filter(pair => pair.baseline.matrixCell !== null).map(pair => [pair.baseline.matrixCell!, pair]))
+  const availableCaseLabel = (index: number, pair?: ReturnType<typeof comparePairs>[number]) => {
+    const candidates = [casesByIndex.get(index)?.label, pair?.baseline.caseLabel, pair?.candidate.caseLabel]
+    return candidates.find(label => label && label !== "Case 1 of 1") ?? null
+  }
   return cells.length > 0 ? cells.map(matrixCase => {
     const index = typeof matrixCase.index === "number" ? matrixCase.index : -1
-    const caseLabel = casesByIndex.get(index)?.label
+    const caseLabel = availableCaseLabel(index, casePairs.get(index) ?? undefined)
     return {
       key: `cell ${String(matrixCase.index)}`,
       label: caseLabel && caseLabel !== "Case 1 of 1" ? caseLabel : `Cell ${String(matrixCase.index)}`,
@@ -63,13 +68,16 @@ function compareCards(detail: OperationDetail): CompareCard[] {
       equivalence: object(matrixCase.equivalence),
       regression: object(matrixCase.regression),
     }
-  }) : pairs.map(pair => ({
-    key: pair.label,
-    label: pair.baseline.matrixCell === null ? "Compare" : `Cell ${pair.baseline.matrixCell}`,
-    pair,
-    equivalence: object(detail.summary),
-    regression: object(detail.compareRegression),
-  }))
+  }) : pairs.map(pair => {
+    const index = pair.baseline.matrixCell
+    return {
+      key: pair.label,
+      label: index === null ? "Compare" : availableCaseLabel(index, pair) ?? `Cell ${index}`,
+      pair,
+      equivalence: object(detail.summary),
+      regression: object(detail.compareRegression),
+    }
+  })
 }
 
 function Cases({ detail }: { detail: OperationDetail }) {
@@ -114,7 +122,7 @@ export function CompareDetail({ detail }: { detail: OperationDetail }) {
   const equivalence = summary && !isMatrix ? summary : null
 
   async function copyMarkdown(): Promise<string> {
-    const plans = new Map<string, ReturnType<typeof planChanges> | "same" | "unavailable">()
+    const plans = new Map<string, StatementPlanChanges | "same" | "unavailable">()
     await Promise.all(cards.flatMap(card => {
       const pair = card.pair
       if (!pair) return []
@@ -123,17 +131,22 @@ export function CompareDetail({ detail }: { detail: OperationDetail }) {
         plans.set(pair.label, "same")
         return []
       }
-      const change = status.changed[0]
-      if (!change) {
+      if (status.changed.length === 0) {
         plans.set(pair.label, "unavailable")
         return []
       }
-      const baselineHash = storedPlanStatements(pair.baseline).find(plan => plan.ordinal === change.ordinal)?.hash
-      const candidateHash = storedPlanStatements(pair.candidate).find(plan => plan.ordinal === change.ordinal)?.hash
-      if (!baselineHash || !candidateHash) { plans.set(pair.label, "unavailable"); return [] }
-      return [queryClient.fetchQuery({ queryKey: queryKeys.plan(baselineHash), queryFn: () => fetchDistilledPlan(baselineHash), staleTime: Infinity })
-        .then(baseline => queryClient.fetchQuery({ queryKey: queryKeys.plan(candidateHash), queryFn: () => fetchDistilledPlan(candidateHash), staleTime: Infinity })
-          .then(candidate => plans.set(pair.label, planChanges(baseline, candidate))))
+      const beforeLinks = storedPlanStatements(pair.baseline)
+      const afterLinks = storedPlanStatements(pair.candidate)
+      const emptyPlan = { statements: [] }
+      return [Promise.all(status.changed.map(async change => {
+        const baselineHash = beforeLinks.find(plan => plan.ordinal === change.ordinal)?.hash
+        const candidateHash = afterLinks.find(plan => plan.ordinal === change.ordinal)?.hash
+        const [baseline, candidate] = await Promise.all([
+          baselineHash ? queryClient.fetchQuery({ queryKey: queryKeys.plan(baselineHash), queryFn: () => fetchDistilledPlan(baselineHash), staleTime: Infinity }) : emptyPlan,
+          candidateHash ? queryClient.fetchQuery({ queryKey: queryKeys.plan(candidateHash), queryFn: () => fetchDistilledPlan(candidateHash), staleTime: Infinity }) : emptyPlan,
+        ])
+        return { ordinal: change.ordinal, changes: planChanges(baseline, candidate) }
+      })).then(changes => plans.set(pair.label, changes))
         .catch(() => plans.set(pair.label, "unavailable"))]
     }))
 

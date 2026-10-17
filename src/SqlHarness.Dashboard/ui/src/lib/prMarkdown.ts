@@ -5,6 +5,7 @@ import { tableIoDelta } from "@/lib/tableIoDelta"
 import type { planChanges } from "@/lib/planChanges"
 
 type PlanChanges = ReturnType<typeof planChanges>
+export type StatementPlanChanges = { ordinal: number; changes: PlanChanges }[]
 
 export type PrMarkdownInput = {
   subject: string | null
@@ -17,7 +18,7 @@ export type PrMarkdownInput = {
   equivalence: Record<string, unknown> | null
   isMatrix: boolean
   cases: { label: string; pair: ComparePair | null; regression: Record<string, unknown> | null; equivalence: Record<string, unknown> | null }[]
-  plans: Map<string, PlanChanges | "same" | "unavailable">
+  plans: Map<string, StatementPlanChanges | "same" | "unavailable">
   sqlDiff: string | null
 }
 
@@ -36,16 +37,19 @@ const displayEngine = (engine: string | null): string => {
 }
 const accessTypes = (values: string[]): string => values.length ? values.map(safeText).join(", ") : "—"
 
-function planMarkdown(value: PlanChanges | "same" | "unavailable" | undefined): string[] {
+function planMarkdown(value: StatementPlanChanges | "same" | "unavailable" | undefined): string[] {
   if (!value || value === "unavailable") return ["Plan changes unavailable."]
   if (value === "same") return ["Same plan."]
   const lines: string[] = []
-  if (value.access.length === 0) lines.push("No access changes.")
-  else for (const change of value.access) {
-    lines.push(`${safeText(change.object)}: ${accessTypes(change.baseline)} → ${accessTypes(change.candidate)}`)
-  }
-  for (const warning of value.warnings) {
-    lines.push(`${safeText(warning.warning)}: ${formatNumber(warning.baseline)} → ${formatNumber(warning.candidate)}`)
+  for (const statement of value) {
+    lines.push(`Statement ${statement.ordinal}`)
+    if (statement.changes.access.length === 0) lines.push("No access changes.")
+    else for (const change of statement.changes.access) {
+      lines.push(`${safeText(change.object)}: ${accessTypes(change.baseline)} → ${accessTypes(change.candidate)}`)
+    }
+    for (const warning of statement.changes.warnings) {
+      lines.push(`${safeText(warning.warning)}: ${formatNumber(warning.baseline)} → ${formatNumber(warning.candidate)}`)
+    }
   }
   return lines
 }

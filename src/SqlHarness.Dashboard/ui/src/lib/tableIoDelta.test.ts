@@ -32,3 +32,15 @@ test("uses data plus LOB reads for totals and combines table-variable rows", () 
   expect(result.rows[0].baseline).toMatchObject({ logicalReads: 30, lobLogicalReads: 12, totalLogicalReads: 42, scans: 2 })
   expect(result.total).toEqual({ baseline: 42, candidate: 14, delta: -2 / 3 })
 })
+
+test("sorts by the displayed total-read change when LOB reads dominate", () => {
+  const before = [
+    { ...io("Data-only", 100), totalLogicalReads: 100 },
+    { ...io("LOB-heavy", 10), lobLogicalReads: 100, totalLogicalReads: 110 },
+  ]
+  const after = [
+    { ...io("Data-only", 0), totalLogicalReads: 0 },
+    { ...io("LOB-heavy", 20), lobLogicalReads: 240, totalLogicalReads: 260 },
+  ]
+  expect(tableIoDelta(before, after).rows.map(row => row.table)).toEqual(["LOB-heavy", "Data-only"])
+})

@@ -28,7 +28,7 @@ test("builds readable PR Markdown with compare metrics, per-table IO, plans, and
     engine: "sqlserver", status: "succeeded", regression: { verdict: "pass" },
     equivalence: { mode: "Ordered", equivalent: true }, isMatrix: false,
     cases: [{ label: "Compare", pair, regression: { verdict: "pass" }, equivalence: { mode: "Ordered", equivalent: true } }],
-    plans: new Map([["compare", planChanges(before, after)]]),
+    plans: new Map([["compare", [{ ordinal: 0, changes: planChanges(before, after) }]]]),
     sqlDiff: "@@ -1,1 +1,1 @@\n-SELECT 1\n+SELECT 2",
   })
 
@@ -63,6 +63,25 @@ test("groups table variables and reports data, LOB, total reads, and scans", () 
   expect(markdown).toContain("| Table | Logical (baseline) | Logical (candidate) | LOB logical (baseline) | LOB logical (candidate) | Total (baseline) | Total (candidate) | Scans (baseline) | Scans (candidate) | Change |")
   expect(markdown.match(/\| table variables \|/g)).toHaveLength(1)
   expect(markdown).toContain("| table variables | 20 | 10 | 8 | 4 | 28 | 14 | 2 | 1 | -50% |")
+})
+
+test("includes plan deltas for every changed statement ordinal", () => {
+  const beforeFirst: DistilledPlan = { statements: [{ root: { physicalOp: "Index Scan", objectName: "dbo.First" } }] }
+  const afterFirst: DistilledPlan = { statements: [{ root: { physicalOp: "Index Seek", objectName: "dbo.First" } }] }
+  const beforeSecond: DistilledPlan = { statements: [{ root: { physicalOp: "Table Scan", objectName: "dbo.Second" }, missingIndexes: [] }] }
+  const afterSecond: DistilledPlan = { statements: [{ root: { physicalOp: "Index Seek", objectName: "dbo.Second" }, missingIndexes: [] }] }
+  const markdown = buildPrMarkdown({
+    subject: "batch", scope: "whole", baselineVersion: "v0", candidateVersion: "v1", engine: "sqlserver", status: "succeeded",
+    regression: null, equivalence: null, isMatrix: false,
+    cases: [{ label: "Compare", pair, regression: null, equivalence: null }],
+    plans: new Map([["compare", [
+      { ordinal: 1, changes: planChanges(beforeFirst, afterFirst) },
+      { ordinal: 2, changes: planChanges(beforeSecond, afterSecond) },
+    ]]]),
+    sqlDiff: null,
+  })
+  expect(markdown).toContain("Statement 1\ndbo.First: Index Scan → Index Seek")
+  expect(markdown).toContain("Statement 2\ndbo.Second: Table Scan → Index Seek")
 })
 
 test("shows every matrix cell's per-table regression and omits SQL diff when unavailable", () => {

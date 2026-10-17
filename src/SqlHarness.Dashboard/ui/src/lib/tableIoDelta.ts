@@ -55,8 +55,8 @@ export function tableIoDelta(baseline: TableIoRow[], candidate: TableIoRow[]): {
         : (candidateReads - baselineReads) / baselineReads,
     }
   }).sort((left, right) => {
-    const leftChange = Math.abs((left.candidate?.logicalReads ?? 0) - (left.baseline?.logicalReads ?? 0))
-    const rightChange = Math.abs((right.candidate?.logicalReads ?? 0) - (right.baseline?.logicalReads ?? 0))
+    const leftChange = Math.abs((left.candidate?.totalLogicalReads ?? 0) - (left.baseline?.totalLogicalReads ?? 0))
+    const rightChange = Math.abs((right.candidate?.totalLogicalReads ?? 0) - (right.baseline?.totalLogicalReads ?? 0))
     if (leftChange !== rightChange) return rightChange - leftChange
     return left.table < right.table ? -1 : left.table > right.table ? 1 : 0
   })

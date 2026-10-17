@@ -6,8 +6,8 @@ import { CompareDetail } from "./CompareDetail"
 import { conditions, operation, operationDetail, variant } from "@/test/fixtures"
 import { stubFetch } from "@/test/render"
 
-const renderCompare = (detail: ReturnType<typeof operationDetail>) => {
-  stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" } })
+const renderCompare = (detail: ReturnType<typeof operationDetail>, routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)> = {}) => {
+  stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" }, ...routes })
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>)
 }
 
@@ -67,6 +67,21 @@ test("shows canonical case labels, truncates long labels, and hides the single-c
   expect(single.queryByText("Case 1 of 1")).not.toBeInTheDocument()
 })
 
+test("uses variant case labels when compare case summaries are absent", () => {
+  renderCompare(operationDetail({
+    operation: operation({ operation: "compare" }),
+    summary: { kind: "compare-matrix", comparison: "Ordered", cases: 1 }, compareCases: null,
+    conditions: null,
+    variants: [
+      variant({ ordinal: 0, variant: "baseline", matrixCell: 0, caseLabel: "@tenant = N'gold'" }),
+      variant({ ordinal: 1, variant: "candidate", matrixCell: 0, caseLabel: "@tenant = N'gold'" }),
+    ],
+  }))
+
+  expect(screen.getByTitle("@tenant = N'gold'")).toHaveTextContent("@tenant = N'gold'")
+  expect(screen.queryByText("Cell 0")).not.toBeInTheDocument()
+})
+
 test("shows missing historic conditions and unrecorded equivalence without borrowing an assessment", async () => {
   renderCompare(operationDetail({
     operation: operation({ operation: "compare" }),
@@ -115,6 +130,42 @@ test("copies compare Markdown without operation metadata or SQL when SQL text is
   for (const secret of ["server-secret", "database-secret", "profile-secret", "var-secret", "setup-secret", "parameter-secret", "artifact-secret"]) {
     expect(markdown).not.toContain(secret)
   }
+})
+
+test("copied Markdown includes detailed changes for every changed statement ordinal", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  const statementPlan = (physicalOp: string, objectName: string) => ({ statements: [{ root: { physicalOp, objectName }, missingIndexes: [] }] })
+  renderCompare(operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareSubject: "batch", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v1",
+    sqlText: null, candidateSqlText: null,
+    variants: [
+      variant({ ordinal: 0, variant: "baseline", plans: [
+        { repetition: 0, ordinal: 0, hash: "same", stored: true },
+        { repetition: 0, ordinal: 1, hash: "before1", stored: true },
+        { repetition: 0, ordinal: 2, hash: "before2", stored: true },
+      ] }),
+      variant({ ordinal: 1, variant: "candidate", plans: [
+        { repetition: 0, ordinal: 0, hash: "same", stored: true },
+        { repetition: 0, ordinal: 1, hash: "after1", stored: true },
+        { repetition: 0, ordinal: 2, hash: "after2", stored: true },
+      ] }),
+    ],
+  }), {
+    "/api/plans/before1?view=distilled": statementPlan("Index Scan", "dbo.First"),
+    "/api/plans/after1?view=distilled": statementPlan("Index Seek", "dbo.First"),
+    "/api/plans/before2?view=distilled": statementPlan("Table Scan", "dbo.Second"),
+    "/api/plans/after2?view=distilled": statementPlan("Index Seek", "dbo.Second"),
+  })
+
+  await userEvent.click(screen.getByRole("button", { name: "Copy" }))
+  await waitFor(() => expect(writeText).toHaveBeenCalledOnce())
+  const markdown = writeText.mock.calls[0][0] as string
+  expect(markdown).toContain("Statement 1")
+  expect(markdown).toContain("dbo.First: Index Scan → Index Seek")
+  expect(markdown).toContain("Statement 2")
+  expect(markdown).toContain("dbo.Second: Table Scan → Index Seek")
 })
 
 test("shows original setup SQL with an independent copy control beside compare SQL", async () => {

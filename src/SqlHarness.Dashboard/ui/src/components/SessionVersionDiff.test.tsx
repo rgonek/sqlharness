@@ -40,7 +40,7 @@ test("builds distinct hash-backed versions in numeric order", () => {
 test("adds hash suffixes when retained versions share a label", () => {
   const labeled = versionOptions([{ version: "v2", hash: "sha256:aaaaaaaa" }, { version: "v2", hash: "sha256:bbbbbbbb" }])
   stubFetch({
-    "/api/sessions/5/sql": url => {
+    "/api/sessions/5/sql": (url: URL) => {
       const hash = url.searchParams.get("hash")
       return new Response(JSON.stringify({ hash, text: "SELECT 1", tooLarge: false }), { status: 200 })
     },
