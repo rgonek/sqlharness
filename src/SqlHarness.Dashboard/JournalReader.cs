@@ -16,6 +16,7 @@ namespace SqlHarness.Dashboard;
 /// </summary>
 public sealed class JournalReader(string databasePath, IProcessInfo processes)
 {
+    private static readonly JsonSerializerOptions ConditionsJsonOptions = new(JsonSerializerDefaults.Web);
     public const int DefaultLimit = 50;
     internal const int MaximumSearchLength = 200;
     public const int MaximumLimit = 200;
@@ -482,7 +483,45 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             CompareConditions: extra.CompareConditions,
             Phases: phases,
             Events: events.Count == 0 ? null : events,
-            SetupSqlText: extra.SetupSqlText);
+            SetupSqlText: extra.SetupSqlText,
+            Conditions: extra.CompareConditions);
+    }
+
+    public ReproScript? Reproduction(long operationId, string side, string caseId, ReproScriptForm form)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return null;
+        var row = Query(connection, """
+            SELECT engine, sql_text, candidate_sql_text, conditions_json FROM operations WHERE id = $id;
+            """, [("$id", operationId)], reader => (
+                Engine: NullableString(reader, 0),
+                Sql: NullableString(reader, 1),
+                CandidateSql: NullableString(reader, 2),
+                Conditions: NullableString(reader, 3))).FirstOrDefault();
+        if (row.Conditions is null)
+            return null;
+
+        ConditionsModel? conditions;
+        try
+        {
+            conditions = JsonSerializer.Deserialize<ConditionsModel>(row.Conditions, ConditionsJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        if (conditions is null || !conditions.Cases.Any(item => string.Equals(item.Id, caseId, StringComparison.Ordinal)))
+            return null;
+
+        var sql = side switch
+        {
+            "baseline" => row.Sql,
+            "candidate" => row.CandidateSql,
+            "query" => row.Sql,
+            _ => null,
+        };
+        return ReproScripts.Create(conditions with { Engine = row.Engine ?? conditions.Engine }, sql, side, caseId, form);
     }
 
     private static OperationEventSummary ReadOperationEvent(SqliteDataReader reader)
@@ -863,6 +902,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             SELECT id, ordinal, variant, parameter_set, matrix_cell, runs,
                 elapsed_ms_min, elapsed_ms_median, elapsed_ms_max, cpu_ms_min, cpu_ms_median, cpu_ms_max,
                 logical_reads_min, logical_reads_median, logical_reads_max,
+                case_id, case_label,
                 grant_requested_kb, grant_granted_kb, grant_max_used_kb, dop, compile_time_ms, compile_cpu_ms,
                 spill_count, has_warnings, has_implicit_conversion, missing_index_count, waits_json,
                 pg_shared_hit, pg_shared_read, pg_shared_dirtied, pg_shared_written, pg_temp_read, pg_temp_written
@@ -954,13 +994,17 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     private static VariantDetail ReadVariant(SqliteDataReader r) => new(
         r.GetInt32(1), r.GetString(2), NullableString(r, 3), r.IsDBNull(4) ? null : r.GetInt32(4), r.GetInt32(5),
         SpreadAt(r, 6), SpreadAt(r, 9), SpreadAt(r, 12),
-        NullableLong(r, 15), NullableLong(r, 16), NullableLong(r, 17), r.IsDBNull(18) ? null : r.GetInt32(18),
-        NullableLong(r, 19), NullableLong(r, 20),
-        r.GetInt32(21), r.GetInt64(22) != 0, r.GetInt64(23) != 0, r.GetInt32(24),
-        Json(NullableString(r, 25)),
-        r.IsDBNull(26) ? null : new PostgresBuffers(NullableLong(r, 26), NullableLong(r, 27), NullableLong(r, 28),
-            NullableLong(r, 29), NullableLong(r, 30), NullableLong(r, 31)),
-        [], []);
+        NullableLong(r, 17), NullableLong(r, 18), NullableLong(r, 19), r.IsDBNull(20) ? null : r.GetInt32(20),
+        NullableLong(r, 21), NullableLong(r, 22),
+        r.GetInt32(23), r.GetInt64(24) != 0, r.GetInt64(25) != 0, r.GetInt32(26),
+        Json(NullableString(r, 27)),
+        r.IsDBNull(28) ? null : new PostgresBuffers(NullableLong(r, 28), NullableLong(r, 29), NullableLong(r, 30),
+            NullableLong(r, 31), NullableLong(r, 32), NullableLong(r, 33)),
+        [], [])
+    {
+        CaseId = r.GetString(15),
+        CaseLabel = r.GetString(16),
+    };
 
     private static SqlHashStat ReadSqlStat(SqliteDataReader r) =>
         new(r.GetString(0), r.GetInt32(1), r.GetInt64(2), r.GetInt64(3));

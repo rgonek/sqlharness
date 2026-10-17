@@ -52,6 +52,8 @@ internal static class JournalSummary
                 index = cell.Index,
                 caseId = conditions?.Cases.FirstOrDefault(item => item.Index == cell.Index)?.Id
                     ?? cell.Index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                caseLabel = conditions?.Cases.FirstOrDefault(item => item.Index == cell.Index)?.Label
+                    ?? $"Case {cell.Index + 1} of {matrix.Cells.Count}",
                 equivalence = cell.Compare.Equivalence,
                 regression = cell.Compare.Regression,
             }),

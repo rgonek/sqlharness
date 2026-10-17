@@ -30,11 +30,13 @@ export const variant = (over: Partial<VariantDetail> = {}): VariantDetail => ({
   ordinal: 0, variant: "measure", parameterSet: null, matrixCell: null, runs: 3,
   elapsedMs: { min: 10, median: 12, max: 14 }, cpuMs: { min: 8, median: 9, max: 10 },
   logicalReads: { min: 50, median: 50, max: 50 },
+  totalLogicalReadsMedian: 50, totalLogicalReadsLabel: "median of run totals (data + LOB)",
   grantRequestedKb: 8192, grantGrantedKb: 8192, grantMaxUsedKb: 512, dop: 4, compileTimeMs: 12, compileCpuMs: 10,
   spillCount: 1, hasWarnings: true, hasImplicitConversion: true, missingIndexCount: 1,
   waits: [{ waitType: "PAGEIOLATCH_SH", averageWaitMs: 40, averageWaitCount: 7 }], postgres: null,
-  tableIo: [{ table: "Orders", logicalReads: 50, scanCount: 1, physicalReads: 3, pageServerReads: 0, readAheadReads: 0,
-    lobLogicalReads: 0, lobPhysicalReads: 0, lobReadAheadReads: 0, coldRuns: 1 }],
+  tableIo: [{ table: "Orders", logicalReads: 50, scanCount: 1, scans: 1, physicalReads: 3, pageServerReads: 0, readAheadReads: 0,
+    lobLogicalReads: 0, lobPhysicalReads: 0, lobReadAheadReads: 0, coldRuns: 1, totalLogicalReads: 50 }],
+  caseId: "0", caseLabel: "Case 1 of 1",
   plans: [{ repetition: 1, ordinal: 0, hash: "A".repeat(64), stored: false }], ...over,
 })
 
@@ -47,7 +49,7 @@ export const operationDetail = (over: Partial<OperationDetail> = {}): OperationD
     operations: null, percentage: null, totalDurationMs: null, durationAvailableOperations: null,
     durationUnavailableOperations: null, failed: null, rejected: null }] }, agent: null,
   compareSubject: null, compareScope: null, baselineVersion: null, candidateVersion: null,
-  compareRegression: null, compareCases: null, compareConditions: null, phases: [], ...over,
+  compareRegression: null, compareCases: null, compareConditions: null, conditions: null, phases: [], ...over,
 })
 
 export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({

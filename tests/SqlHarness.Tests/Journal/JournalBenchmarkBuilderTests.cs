@@ -53,6 +53,56 @@ public sealed class JournalBenchmarkBuilderTests
     }
 
     [Fact]
+    public void Table_variables_group_before_medians()
+    {
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            Run("measure", 1, 1, 1, 10, io: [new TableIoCounters("#A1B2C3D4", 1, 10, 0, 0, 0, 0, 0, 0)]),
+            Run("measure", 2, 1, 1, 10, io: [new TableIoCounters("[dbo].[#B2C3D4E5]", 1, 10, 0, 0, 0, 0, 0, 0)]),
+            Run("measure", 3, 1, 1, 10, io: [new TableIoCounters("[#C3D4E5F6]", 1, 10, 0, 0, 0, 0, 0, 0)]),
+        ]);
+
+        var table = Assert.Single(Assert.Single(record.Variants).TableIo);
+        Assert.Equal("table variables", table.Table);
+        Assert.Equal(10, table.LogicalReads);
+    }
+
+    [Fact]
+    public void Headline_equals_per_table_definition()
+    {
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            Run("measure", 1, 1, 1, 999, io: [
+                new TableIoCounters("A", 1, 10, 0, 0, 0, 2, 0, 0),
+                new TableIoCounters("B", 1, 20, 0, 0, 0, 1, 0, 0)]),
+            Run("measure", 2, 1, 1, 999, io: [
+                new TableIoCounters("A", 1, 20, 0, 0, 0, 1, 0, 0),
+                new TableIoCounters("B", 1, 40, 0, 0, 0, 2, 0, 0)]),
+            Run("measure", 3, 1, 1, 999, io: [
+                new TableIoCounters("A", 1, 30, 0, 0, 0, 2, 0, 0),
+                new TableIoCounters("B", 1, 60, 0, 0, 0, 3, 0, 0)]),
+        ]);
+
+        var variant = Assert.Single(record.Variants);
+        Assert.Equal(63, variant.LogicalReads!.Median);
+        Assert.Equal(2, variant.TableIo.Single(t => t.Table == "A").LobLogicalReads);
+        Assert.Equal(21, variant.TableIo.Single(t => t.Table == "A").LogicalReads);
+    }
+
+    [Fact]
+    public void Case_metrics_keep_the_canonical_display_label()
+    {
+        var conditions = new ConditionsModel(1, "sqlserver", "srv", "db",
+            new ConditionsExecution("compare", "new-session-per-case", "bound-per-case", 0, 1, 30, null, null),
+            null, [], [new ConditionsCase("class-a", 0, "@Class = N'X'", null, [], "fingerprint")], "fingerprint", []);
+
+        var record = JournalBenchmarkBuilder.Build([Run("baseline", 1, 1, 1, 10, cell: 0)], conditions);
+
+        Assert.Equal("class-a", Assert.Single(record.Variants).CaseId);
+        Assert.Equal("@Class = N'X'", record.Variants[0].CaseLabel);
+    }
+
+    [Fact]
     public void Runs_without_detail_fall_back_to_logical_reads_by_table()
     {
         var record = JournalBenchmarkBuilder.Build([Run("measure", 1, 0, 5, 9, io: [])]);

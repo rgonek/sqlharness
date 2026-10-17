@@ -653,6 +653,34 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Operation_detail_exposes_canonical_conditions_case_labels_and_total_reads()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var benchmark = JournalSeed.Benchmark(readsMedian: 50) with
+        {
+            Variants = [JournalSeed.Benchmark(readsMedian: 50).Variants[0] with { CaseId = "tenant-a", CaseLabel = "@Tenant = N'A'" }],
+        };
+        var handle = seed.Operation(JournalSeed.Session("cli:case-contract"), operation: "measure", benchmark: benchmark);
+        seed.RecordConditions(handle, JournalSeed.ReproConditions() with
+        {
+            Cases = [new ConditionsCase("tenant-a", 0, "@Tenant = N'A'", null, [], "fingerprint")],
+        });
+
+        var detail = Reader(home).Operation(handle.OperationId)!;
+        var variant = Assert.Single(detail.Variants);
+        var table = Assert.Single(variant.TableIo);
+
+        Assert.Equal("tenant-a", variant.CaseId);
+        Assert.Equal("@Tenant = N'A'", variant.CaseLabel);
+        Assert.Equal(50, variant.TotalLogicalReadsMedian);
+        Assert.Equal("median of run totals (data + LOB)", variant.TotalLogicalReadsLabel);
+        Assert.Equal(50, table.TotalLogicalReads);
+        Assert.Equal(JsonValueKind.Object, detail.Conditions!.Value.ValueKind);
+        Assert.Equal("sqlserver", detail.Conditions.Value.GetProperty("engine").GetString());
+    }
+
+    [Fact]
     public void Sensitive_journal_exposes_sql_text_and_stored_plans()
     {
         using var home = new TempHome();

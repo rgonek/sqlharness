@@ -67,6 +67,14 @@ internal sealed class JournalSeed
         return handle;
     }
 
+    public void RecordConditions(JournalHandle handle, ConditionsModel? conditions = null) =>
+        _journal.RecordConditions(handle, conditions ?? ReproConditions());
+
+    public static ConditionsModel ReproConditions() => new(
+        1, "sqlserver", "srv", "db",
+        new ConditionsExecution("measure", "new-session-per-case", "bound-per-case", 0, 1, 30, null, null),
+        null, [], [new ConditionsCase("0", 0, "Case 1 of 1", null, [], "fingerprint")], "fingerprint", []);
+
     public static BenchmarkJournalRecord Benchmark(long readsMedian = 5, long physical = 0, long granted = 4096, long used = 256) =>
         new(
         [

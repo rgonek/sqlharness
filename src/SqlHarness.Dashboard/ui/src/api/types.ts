@@ -135,6 +135,7 @@ export type TableIoRow = {
   table: string
   logicalReads: number
   scanCount: number | null
+  scans: number | null
   physicalReads: number | null
   pageServerReads: number | null
   readAheadReads: number | null
@@ -142,6 +143,7 @@ export type TableIoRow = {
   lobPhysicalReads: number | null
   lobReadAheadReads: number | null
   coldRuns: number
+  totalLogicalReads: number
 }
 
 export type PlanLinkRow = { repetition: number; ordinal: number; hash: string; stored: boolean }
@@ -166,6 +168,8 @@ export type VariantDetail = {
   elapsedMs: Spread | null
   cpuMs: Spread | null
   logicalReads: Spread | null
+  totalLogicalReadsMedian: number | null
+  totalLogicalReadsLabel: string
   grantRequestedKb: number | null
   grantGrantedKb: number | null
   grantMaxUsedKb: number | null
@@ -180,6 +184,8 @@ export type VariantDetail = {
   postgres: PostgresBuffers | null
   tableIo: TableIoRow[]
   plans: PlanLinkRow[]
+  caseId: string
+  caseLabel: string
 }
 
 export type OperationDetail = {
@@ -209,6 +215,7 @@ export type OperationDetail = {
   compareConditions: Record<string, unknown> | null
   phases: OperationPhaseSummary[]
   events?: OperationEventSummary[]
+  conditions: Record<string, unknown> | null
 }
 
 export type OperationPhaseSummary = { phase: string; count: number; totalMs: number; maxMs: number }

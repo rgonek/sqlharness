@@ -237,6 +237,23 @@ public static partial class DashboardServer
             reader.Operation(id, DashboardProfiles.DimensionNames(options.TargetsPath)) is { } detail
                 ? Results.Json(detail, Json)
                 : Results.NotFound());
+        MapRead(api, "/operations/{id:long}/repro", (long id, string? side, string? @case, string? form) =>
+        {
+            if (side is not ("baseline" or "candidate" or "query"))
+                return BadRequest("side must be baseline, candidate or query.");
+            if (form is not ("as-executed" or "local-variables"))
+                return BadRequest("form must be as-executed or local-variables.");
+            if (string.IsNullOrWhiteSpace(@case))
+                return BadRequest("case is required.");
+            var script = reader.Reproduction(id, side, @case,
+                form == "as-executed" ? ReproScriptForm.AsExecuted : ReproScriptForm.LocalVariables);
+            return script is null ? Results.NotFound() : Results.Json(new
+            {
+                script.Text,
+                completeness = script.Completeness.ToString(),
+                script.Label,
+            }, Json);
+        });
         MutationEndpoints.Map(api, mutationServices, reader);
         MapRead(api, "/plans/{hash}", (string hash, string? view) => Plan(reader, hash, view));
         MapRead(api, "/stats", (string? from, string? to, string? profile, string? dimensions,

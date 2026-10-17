@@ -64,7 +64,11 @@ public sealed record Spread(long Min, long Median, long Max);
 
 public sealed record TableIoRow(
     string Table, long LogicalReads, long? ScanCount, long? PhysicalReads, long? PageServerReads, long? ReadAheadReads,
-    long? LobLogicalReads, long? LobPhysicalReads, long? LobReadAheadReads, int ColdRuns);
+    long? LobLogicalReads, long? LobPhysicalReads, long? LobReadAheadReads, int ColdRuns)
+{
+    public long? Scans => ScanCount;
+    public long TotalLogicalReads => LogicalReads;
+}
 
 public sealed record PlanLinkRow(int Repetition, int Ordinal, string Hash, bool Stored);
 
@@ -75,7 +79,13 @@ public sealed record VariantDetail(
     Spread? ElapsedMs, Spread? CpuMs, Spread? LogicalReads,
     long? GrantRequestedKb, long? GrantGrantedKb, long? GrantMaxUsedKb, int? Dop, long? CompileTimeMs, long? CompileCpuMs,
     int SpillCount, bool HasWarnings, bool HasImplicitConversion, int MissingIndexCount,
-    JsonElement? Waits, PostgresBuffers? Postgres, IReadOnlyList<TableIoRow> TableIo, IReadOnlyList<PlanLinkRow> Plans);
+    JsonElement? Waits, PostgresBuffers? Postgres, IReadOnlyList<TableIoRow> TableIo, IReadOnlyList<PlanLinkRow> Plans)
+{
+    public string CaseId { get; init; } = "0";
+    public string CaseLabel { get; init; } = "Case 1 of 1";
+    public long? TotalLogicalReadsMedian => LogicalReads?.Median;
+    public string TotalLogicalReadsLabel => "median of run totals (data + LOB)";
+}
 
 public sealed record OperationDetail(
     OperationSummary Operation, SessionSummary Session, IReadOnlyDictionary<string, string>? Vars,
@@ -89,7 +99,7 @@ public sealed record OperationDetail(
     IReadOnlyList<JsonElement>? CompareCases = null, JsonElement? CompareConditions = null,
     IReadOnlyList<OperationPhaseSummary>? Phases = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<OperationEventSummary>? Events = null,
-    string? SetupSqlText = null);
+    string? SetupSqlText = null, JsonElement? Conditions = null);
 
 public sealed record OperationPhaseSummary(string Phase, int Count, long TotalMs, long MaxMs);
 

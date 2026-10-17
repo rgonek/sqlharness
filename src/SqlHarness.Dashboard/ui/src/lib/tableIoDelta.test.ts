@@ -3,8 +3,8 @@ import type { TableIoRow } from "@/api/types"
 import { tableIoDelta } from "./tableIoDelta"
 
 const io = (table: string, logicalReads: number, scanCount: number | null = 1): TableIoRow => ({
-  table, logicalReads, scanCount, physicalReads: 0, pageServerReads: null, readAheadReads: 0,
-  lobLogicalReads: 0, lobPhysicalReads: 0, lobReadAheadReads: 0, coldRuns: 0,
+  table, logicalReads, scanCount, scans: scanCount, physicalReads: 0, pageServerReads: null, readAheadReads: 0,
+  lobLogicalReads: 0, lobPhysicalReads: 0, lobReadAheadReads: 0, coldRuns: 0, totalLogicalReads: logicalReads,
 })
 
 test("joins tables, labels one-sided rows, sorts by absolute change and totals", () => {

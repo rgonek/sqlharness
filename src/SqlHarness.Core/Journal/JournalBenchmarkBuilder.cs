@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
 
@@ -10,6 +11,7 @@ namespace SqlHarness.Core;
 internal static class JournalBenchmarkBuilder
 {
     internal const int MaximumWaits = 10;
+    private static readonly Regex TableVariableName = new(@"^(?:\[dbo\]\.)?\[?(?<name>#[0-9A-Fa-f]{8})\]?$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     internal static BenchmarkJournalRecord Build(IReadOnlyList<CompareRunArtifact> runs, ConditionsModel? conditions = null)
     {
@@ -44,7 +46,7 @@ internal static class JournalBenchmarkBuilder
             var index = matrixCell ?? 0;
             var conditionCase = conditions?.Cases.FirstOrDefault(item => item.Index == index);
             if (conditionCase is not null)
-                return (conditionCase.Id, conditionCase.SetName ?? $"Case {index + 1} of {conditions!.Cases.Count}");
+                return (conditionCase.Id, conditionCase.Label);
             return (index.ToString(CultureInfo.InvariantCulture), $"Case {index + 1} of {caseCount}");
         }
     }
@@ -142,7 +144,7 @@ internal static class JournalBenchmarkBuilder
             runs.Length,
             elapsedAvailable ? Spread(runs.Select(run => run.ElapsedTimeMilliseconds)) : null,
             cpuAvailable ? Spread(runs.Select(run => run.CpuTimeMilliseconds)) : null,
-            readsAvailable ? Spread(runs.Select(run => run.LogicalReads)) : null,
+            readsAvailable ? Spread(runs.Select(run => TotalLogicalReads(run, tableIoAvailable))) : null,
             Median(planMetrics.Select(metrics => metrics.GrantRequestedKb)),
             Median(planMetrics.Select(metrics => metrics.GrantGrantedKb)),
             Median(planMetrics.Select(metrics => metrics.GrantMaxUsedKb)),
@@ -165,8 +167,9 @@ internal static class JournalBenchmarkBuilder
     private static IReadOnlyList<JournalTableIo> TableIo(CompareRunArtifact[] runs)
     {
         var detailed = runs.All(run => run.TableIo.Count > 0);
-        var tables = runs
-            .SelectMany(run => detailed ? run.TableIo.Select(io => io.Table) : run.LogicalReadsByTable.Keys)
+        var normalized = runs.Select(run => Normalize(run, detailed)).ToArray();
+        var tables = normalized
+            .SelectMany(run => run.Select(io => io.Table))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         return tables.Select(table =>
@@ -175,17 +178,19 @@ internal static class JournalBenchmarkBuilder
             {
                 return new JournalTableIo(
                     table,
-                    MedianOf(runs.Select(run => run.LogicalReadsByTable.GetValueOrDefault(table))),
-                    null, null, null, null, null, null, null, 0);
+                    MedianOf(normalized.Select(run => run.FirstOrDefault(io => io.Table == table)?.LogicalReads ?? 0)),
+                    null, null, null, null,
+                    MedianOf(normalized.Select(run => run.FirstOrDefault(io => io.Table == table)?.LobLogicalReads ?? 0)),
+                    null, null, 0);
             }
 
-            var counters = runs
-                .Select(run => run.TableIo.FirstOrDefault(io => io.Table == table)
+            var counters = normalized
+                .Select(run => run.FirstOrDefault(io => io.Table == table)
                     ?? new TableIoCounters(table, 0, 0, 0, 0, 0, 0, 0, 0))
                 .ToArray();
             return new JournalTableIo(
                 table,
-                MedianOf(counters.Select(c => c.LogicalReads)),
+                MedianOf(counters.Select(c => SaturatingAdd(c.LogicalReads, c.LobLogicalReads))),
                 MedianOf(counters.Select(c => c.ScanCount)),
                 MedianOf(counters.Select(c => c.PhysicalReads)),
                 MedianOf(counters.Select(c => c.PageServerReads)),
@@ -196,6 +201,38 @@ internal static class JournalBenchmarkBuilder
                 counters.Count(IsCold));
         }).ToArray();
     }
+
+    private static long TotalLogicalReads(CompareRunArtifact run, bool detailed) =>
+        Normalize(run, detailed).Aggregate(0L, (total, counters) =>
+            SaturatingAdd(total, SaturatingAdd(counters.LogicalReads, counters.LobLogicalReads)));
+
+    private static IReadOnlyList<TableIoCounters> Normalize(CompareRunArtifact run, bool detailed)
+    {
+        var counters = detailed
+            ? run.TableIo
+            : run.LogicalReadsByTable.Select(pair => new TableIoCounters(pair.Key, 0, pair.Value, 0, 0, 0, 0, 0, 0)).ToArray();
+        return counters
+            .GroupBy(counter => NormalizeName(counter.Table), StringComparer.Ordinal)
+            .Select(group => new TableIoCounters(
+                group.Key,
+                Sum(group, item => item.ScanCount),
+                Sum(group, item => item.LogicalReads),
+                Sum(group, item => item.PhysicalReads),
+                Sum(group, item => item.PageServerReads),
+                Sum(group, item => item.ReadAheadReads),
+                Sum(group, item => item.LobLogicalReads),
+                Sum(group, item => item.LobPhysicalReads),
+                Sum(group, item => item.LobReadAheadReads)))
+            .ToArray();
+
+        static long Sum(IEnumerable<TableIoCounters> counters, Func<TableIoCounters, long> select) =>
+            counters.Aggregate(0L, (total, item) => SaturatingAdd(total, select(item)));
+    }
+
+    private static long SaturatingAdd(long left, long right) =>
+        right > 0 && left > long.MaxValue - right ? long.MaxValue : left + right;
+
+    private static string NormalizeName(string table) => TableVariableName.IsMatch(table) ? "table variables" : table;
 
     // Counters are non-negative; testing each one avoids overflow from summing them.
     private static bool IsCold(TableIoCounters counters) =>

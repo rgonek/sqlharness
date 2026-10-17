@@ -126,6 +126,61 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Repro_endpoint_returns_script()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
+        var handle = seed.Operation(JournalSeed.Session("cli:repro"), operation: "measure", sql: "SELECT 42");
+        seed.RecordConditions(handle);
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync($"/api/operations/{handle.OperationId}/repro?side=query&case=0&form=as-executed");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("SELECT 42", document.RootElement.GetProperty("text").GetString());
+        Assert.Equal("Complete", document.RootElement.GetProperty("completeness").GetString());
+        Assert.Equal("As executed (sp_executesql)", document.RootElement.GetProperty("label").GetString());
+    }
+
+    [Fact]
+    public async Task Repro_endpoint_without_sensitive_storage_is_unavailable()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Operation(JournalSeed.Session("cli:repro-no-sensitive"), operation: "measure", sql: "SELECT 42");
+        seed.RecordConditions(handle);
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync($"/api/operations/{handle.OperationId}/repro?side=query&case=0&form=as-executed");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("text").ValueKind);
+        Assert.Equal("Unavailable", document.RootElement.GetProperty("completeness").GetString());
+        Assert.Equal("Script not available — enable storeSensitive", document.RootElement.GetProperty("label").GetString());
+    }
+
+    [Fact]
+    public async Task Repro_endpoint_validates_side_form_operation_and_case()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
+        var handle = seed.Operation(JournalSeed.Session("cli:repro-validation"), operation: "measure", sql: "SELECT 42");
+        seed.RecordConditions(handle);
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync($"/api/operations/{handle.OperationId}/repro?side=other&case=0&form=as-executed")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync($"/api/operations/{handle.OperationId}/repro?side=query&case=0&form=other")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync($"/api/operations/{handle.OperationId}/repro?side=query&form=as-executed")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/operations/{handle.OperationId}/repro?side=query&case=missing&form=as-executed")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/operations/987654/repro?side=query&case=0&form=as-executed")).StatusCode);
+    }
+
+    [Fact]
     public async Task Price_refresh_writes_the_reduced_table_and_failure_keeps_it()
     {
         using var home = new TempHome();

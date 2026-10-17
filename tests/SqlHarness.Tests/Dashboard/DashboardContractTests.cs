@@ -70,8 +70,14 @@ public sealed class DashboardContractTests
         Assert.Equal(
             ["ordinal", "variant", "parameterSet", "matrixCell", "runs", "elapsedMs", "cpuMs", "logicalReads",
              "grantRequestedKb", "grantGrantedKb", "grantMaxUsedKb", "dop", "compileTimeMs", "compileCpuMs", "spillCount",
-             "hasWarnings", "hasImplicitConversion", "missingIndexCount", "waits", "postgres", "tableIo", "plans"],
+             "hasWarnings", "hasImplicitConversion", "missingIndexCount", "waits", "postgres", "tableIo", "plans", "caseId", "caseLabel",
+             "totalLogicalReadsMedian", "totalLogicalReadsLabel"],
             Names(variant));
+        AssertTypescriptFieldsMatch("VariantDetail", variant);
+        var tableIo = new TableIoRow("Orders", 4, 1, 0, 0, 0, 1, 0, 0, 0);
+        Assert.Equal(["table", "logicalReads", "scanCount", "physicalReads", "pageServerReads", "readAheadReads",
+            "lobLogicalReads", "lobPhysicalReads", "lobReadAheadReads", "coldRuns", "scans", "totalLogicalReads"], Names(tableIo));
+        AssertTypescriptFieldsMatch("TableIoRow", tableIo);
         Assert.Equal(
             ["operationsPerDay", "statuses", "exitCodes", "operations", "topSqlByCount", "topSqlByDuration",
              "topTablesByLogicalReads", "topWaits", "targets", "spillOperations", "coldCacheOperations",
@@ -112,7 +118,7 @@ public sealed class DashboardContractTests
         Assert.Equal(["operation", "session", "vars", "candidateSqlHash", "sqlText", "candidateSqlText", "rawTokens",
                 "emittedTokens", "artifactDirectory", "summary", "variants", "dimensions", "agent", "rawBytes", "emittedBytes",
                 "tokenEstimationMethod", "compareSubject", "compareScope", "baselineVersion", "candidateVersion",
-                "compareRegression", "compareCases", "compareConditions", "phases", "setupSqlText"],
+                "compareRegression", "compareCases", "compareConditions", "phases", "setupSqlText", "conditions"],
             Names(new OperationDetail(default!, default!, null, null, null, null, null, null, null, null, [], default!, null)));
     }
 
