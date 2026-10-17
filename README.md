@@ -218,7 +218,7 @@ and [the audit roadmap](docs/superpowers/plans/2026-09-26-audit-roadmap.md).
 
 ## Benchmark setup contract
 
-For `measure` and for `compare` without `--matrix`, SQLHarness opens one connection per invocation:
+For single-set `measure` and for `compare` without `--matrix`, SQLHarness opens one connection per invocation. Multi-set `measure` opens one session per parameter set, as described in the parameter-set contract below:
 
 1. Runs optional `--setup` SQL **exactly once** on that connection.
 2. Runs warm-up(s) on the same connection.

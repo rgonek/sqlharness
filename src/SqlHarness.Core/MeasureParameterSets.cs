@@ -309,6 +309,8 @@ internal sealed class MeasureParameterSetRunner
             var set = sets[index];
             ISqlSession? session = null;
             var phase = "authentication";
+            Exception? failure = null;
+            var caseRuns = new List<CollectedBenchmarkRun>(operation.Repeat);
             try
             {
                 session = await _sessions.ConnectAsync(target, ct, knownSecrets ?? []);
@@ -329,28 +331,35 @@ internal sealed class MeasureParameterSetRunner
                 }
 
                 await ExecuteSetAsync(session, set, repetition: 0);
-                var caseRuns = new List<CollectedBenchmarkRun>(operation.Repeat);
                 for (var repetition = 1; repetition <= operation.Repeat; repetition++)
                     caseRuns.Add(await ExecuteSetAsync(session, set, repetition));
-
-                runs.AddRange(caseRuns);
-                warmupOrder.Add(set.Name);
-                completedCases++;
-                if (index == sets.Count - 1)
-                    finalSession = session;
-                else
-                    await session.DisposeAsync();
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                if (session is not null)
-                    await session.DisposeAsync();
-                throw;
             }
             catch (Exception exception)
             {
-                if (session is not null)
+                failure = exception;
+            }
+
+            if (session is not null && (failure is not null || index < sets.Count - 1))
+            {
+                try
+                {
                     await session.DisposeAsync();
+                }
+                catch (Exception) when (failure is not null)
+                {
+                    // Keep the case failure (including cancellation) as the primary outcome.
+                }
+                catch (Exception cleanupFailure)
+                {
+                    failure = cleanupFailure;
+                }
+            }
+
+            if (failure is not null)
+            {
+                if (failure is OperationCanceledException && ct.IsCancellationRequested)
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+
                 var failedCase = new MeasureCaseFailure(index, set.Name, phase);
                 var execution = new MeasureParameterSetExecution(
                     setupExecutionCount, warmupOrder, runs, completedCases, failedCase);
@@ -361,8 +370,14 @@ internal sealed class MeasureParameterSetRunner
                         operation.Repeat,
                         execution,
                         sets.Take(completedCases).ToArray());
-                throw new MeasureCaseFailedException(exception, runs, partialReport, execution, sets.Count);
+                throw new MeasureCaseFailedException(failure, runs, partialReport, execution, sets.Count);
             }
+
+            if (index == sets.Count - 1)
+                finalSession = session;
+            runs.AddRange(caseRuns);
+            warmupOrder.Add(set.Name);
+            completedCases++;
         }
 
         return new MeasureParameterSetExecution(setupExecutionCount, warmupOrder, runs, completedCases)

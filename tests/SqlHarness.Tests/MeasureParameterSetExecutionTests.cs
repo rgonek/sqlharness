@@ -378,6 +378,49 @@ public sealed class MeasureParameterSetExecutionTests
     }
 
     [Fact]
+    public async Task Intermediate_disposal_failure_does_not_count_case_complete_or_corrupt_matrix_coverage()
+    {
+        var disposeFailure = new IOException("session cleanup failed");
+        var session = RecordingSession.Create(setCount: 2, failDisposeOnConnectionNumber: 1, disposeFailure: disposeFailure);
+
+        var outcome = await Module(session).ExecuteAsync(MeasureSets(1, Inputs("A", "B")));
+
+        var coverage = new MatrixExecutionCoverage(2, 0, 1, new MatrixFailedCase(0, SetName: "A", Phase: "sql"));
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        Assert.Equal(coverage, outcome.Coverage);
+        Assert.Equal(coverage, outcome.Error?.MatrixStop);
+        Assert.Empty(outcome.BenchmarkRuns!);
+        Assert.Null(outcome.Report);
+        Assert.Contains(disposeFailure.Message, outcome.SafeError, StringComparison.Ordinal);
+        Assert.Equal(1, session.ConnectionCount);
+        Assert.Equal(1, session.DisposeCount);
+    }
+
+    [Fact]
+    public async Task Cleanup_failure_does_not_replace_sql_failure_or_discard_completed_case_runs()
+    {
+        var sqlFailure = new TimeoutException("measured run failed");
+        var session = RecordingSession.Create(
+            setCount: 2,
+            failOnQueryNumber: 5,
+            failure: sqlFailure,
+            failDisposeOnConnectionNumber: 2,
+            disposeFailure: new IOException("session cleanup failed"));
+
+        var exception = await Assert.ThrowsAsync<MeasureCaseFailedException>(() =>
+            Runner(session).ExecuteAsync(Operation(repeat: 2), Prepared("A", "B")));
+
+        Assert.Same(sqlFailure, exception.InnerException);
+        Assert.Equal(new MeasureCaseFailure(1, "B", "sql"), exception.Execution.FailedCase);
+        Assert.Equal(1, exception.Execution.CompletedCases);
+        Assert.Equal(["A", "A"], exception.CompletedRuns.Select(run => run.Artifact.ParameterSet));
+        Assert.Equal(["A"], exception.Execution.WarmupOrder);
+        Assert.Equal(["A"], exception.PartialReport?.Sets.Select(set => set.Name));
+        Assert.Equal(2, session.ConnectionCount);
+        Assert.Equal(2, session.DisposeCount);
+    }
+
+    [Fact]
     public async Task Module_maps_artifact_failure_to_local_storage_without_a_report()
     {
         var session = RecordingSession.Create(setCount: 2);
@@ -716,6 +759,8 @@ public sealed class MeasureParameterSetExecutionTests
         private readonly int? _failOnQueryNumber;
         private readonly Exception? _failure;
         private readonly int _resultRowCount;
+        private readonly int? _failDisposeOnConnectionNumber;
+        private readonly Exception? _disposeFailure;
         private readonly List<string> _messages = [];
         private int _setCount;
         private int _queryCount;
@@ -727,7 +772,9 @@ public sealed class MeasureParameterSetExecutionTests
             bool failSetup,
             int? failOnQueryNumber,
             Exception? failure,
-            int resultRowCount)
+            int resultRowCount,
+            int? failDisposeOnConnectionNumber,
+            Exception? disposeFailure)
         {
             _setCount = setCount;
             _setupSql = setupSql;
@@ -736,6 +783,8 @@ public sealed class MeasureParameterSetExecutionTests
             _failOnQueryNumber = failOnQueryNumber;
             _failure = failure;
             _resultRowCount = resultRowCount;
+            _failDisposeOnConnectionNumber = failDisposeOnConnectionNumber;
+            _disposeFailure = disposeFailure;
         }
 
         public List<string> WarmupSetNames { get; } = [];
@@ -744,6 +793,7 @@ public sealed class MeasureParameterSetExecutionTests
         public List<CancellationToken> Tokens { get; } = [];
         public int SetupCount { get; private set; }
         public int ConnectionCount { get; private set; }
+        public int DisposeCount { get; private set; }
         public string SetupSql => _setupSql;
         public string QuerySql => _querySql;
         public IReadOnlyList<string> Messages => _messages;
@@ -757,7 +807,9 @@ public sealed class MeasureParameterSetExecutionTests
             bool failSetup = false,
             int? failOnQueryNumber = null,
             Exception? failure = null,
-            int resultRowCount = 1) =>
+            int resultRowCount = 1,
+            int? failDisposeOnConnectionNumber = null,
+            Exception? disposeFailure = null) =>
             new(
                 setCount,
                 setupSql ?? MeasureParameterSetExecutionTests.SetupSql,
@@ -765,7 +817,9 @@ public sealed class MeasureParameterSetExecutionTests
                 failSetup,
                 failOnQueryNumber,
                 failure,
-                resultRowCount);
+                resultRowCount,
+                failDisposeOnConnectionNumber,
+                disposeFailure);
 
         public void UseSuppliedSession(int setCount)
         {
@@ -832,7 +886,13 @@ public sealed class MeasureParameterSetExecutionTests
             return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, Plan));
         }
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync()
+        {
+            DisposeCount++;
+            if (_failDisposeOnConnectionNumber == ConnectionCount)
+                return ValueTask.FromException(_disposeFailure ?? new IOException("session cleanup failed"));
+            return ValueTask.CompletedTask;
+        }
 
         private static bool TryGetSetName(SqlExecutionCommand command, out string name)
         {

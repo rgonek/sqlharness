@@ -66,3 +66,41 @@ dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualif
 - Credentials continue through the factory's known-secret overload and error text is redacted by the module.
 - The final successful case session stays open only through the existing inventory and artifact capture path, then is disposed by the module. Earlier and failed-case sessions are disposed in the runner.
 - No unresolved correctness concerns found. The full repository gate was not run by this task.
+
+## Review fix round 1
+
+Moved intermediate-session disposal out of case execution classification. A successful case is counted and its runs retained only after its intermediate session disposes successfully. A disposal failure after a successful body becomes that case's failure and is not retried. If setup or SQL already failed, a cleanup exception is suppressed so the original failure, completed-set runs, and coverage remain authoritative. The final successful session remains owned through the existing inventory and artifact capture path. Scoped the earlier README benchmark statement to single-set measure.
+
+**RED command**
+
+```powershell
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~MeasureParameterSetExecutionTests.Intermediate_disposal_failure_fails_the_current_case_once_without_counting_it_complete|FullyQualifiedName~MeasureParameterSetExecutionTests.Cleanup_failure_does_not_replace_sql_failure_or_discard_completed_case_runs" --no-restore
+```
+
+**RED output:** `Failed: 2, Passed: 0, Skipped: 0, Total: 2`. Both expected assertions failed because the raw cleanup `IOException` escaped. For SQL failure plus cleanup failure, the actual exception was `IOException: session cleanup failed`; for successful intermediate disposal failure, the raw IOException escaped after the cleanup path attempted disposal again.
+
+**Runner and module GREEN command**
+
+```powershell
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~MeasureParameterSetExecutionTests" --no-restore
+```
+
+**Output:** `Failed: 0, Passed: 24, Skipped: 0, Total: 24`.
+
+**README documentation contract command**
+
+```powershell
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~DocsSyncTests" --no-restore
+```
+
+**Output:** `Failed: 0, Passed: 6, Skipped: 0, Total: 6`.
+
+**MCP partial-stop contract command**
+
+```powershell
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "FullyQualifiedName~McpOutputTests.Partial_measure_keeps_coverage_on_error_matrix_stop" --no-restore
+```
+
+**Output:** `Failed: 0, Passed: 1, Skipped: 0, Total: 1`.
+
+`git diff --check` completed without output. The full repository gate remains with the controller.
