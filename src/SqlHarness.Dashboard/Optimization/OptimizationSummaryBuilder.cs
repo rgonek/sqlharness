@@ -73,7 +73,11 @@ public static class OptimizationSummaryBuilder
         var defaultB = NewestEquivalentReachable(primary, defaultA);
 
         return new ConditionsGroup(fingerprint, GroupLabel(compares), scopes, defaultA,
-            defaultB == defaultA ? null : defaultB);
+            defaultB == defaultA ? null : defaultB)
+        {
+            Subject = compares.Select(item => item.Compare.Subject).FirstOrDefault(subject => subject is not null),
+            Database = compares.Select(item => item.Compare.Database ?? string.Empty).FirstOrDefault(),
+        };
     }
 
     private static string NewestEquivalentReachable(IReadOnlyList<VersionedCompare> compares, string start)

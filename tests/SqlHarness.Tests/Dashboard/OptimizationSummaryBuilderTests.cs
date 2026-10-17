@@ -14,8 +14,12 @@ public sealed class OptimizationSummaryBuilderTests
         ]);
 
         Assert.Equal(2, section.Subjects.Count);
-        Assert.Equal(2, section.Subjects.Single(subject => subject.Database == "db1").Groups.Count);
-        Assert.Single(section.Subjects.Single(subject => subject.Database == "db2").Groups);
+        var db1 = section.Subjects.Single(subject => subject.Database == "db1");
+        var db2 = section.Subjects.Single(subject => subject.Database == "db2");
+        Assert.Equal(2, db1.Groups.Count);
+        Assert.Equal("orders", Assert.Single(db1.Groups, group => group.Fingerprint == "f1").Subject);
+        Assert.Equal("db1", Assert.Single(db1.Groups, group => group.Fingerprint == "f1").Database);
+        Assert.Equal("db2", Assert.Single(db2.Groups).Database);
     }
 
     [Fact]

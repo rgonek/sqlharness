@@ -15,7 +15,11 @@ public sealed record ConditionsGroup(
     string Label,
     IReadOnlyList<ScopeVersions> Scopes,
     string DefaultA,
-    string? DefaultB);
+    string? DefaultB)
+{
+    public string? Subject { get; init; }
+    public string? Database { get; init; }
+}
 
 public sealed record ScopeVersions(string Scope, IReadOnlyList<VersionRow> Versions);
 

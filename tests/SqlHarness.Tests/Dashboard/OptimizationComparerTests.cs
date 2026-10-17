@@ -66,6 +66,38 @@ public sealed class OptimizationComparerTests
     }
 
     [Fact]
+    public void Builder_identity_filters_same_fingerprint_and_scope_collisions()
+    {
+        var target = Evidence(201, "h1", "h2", (1000, 900));
+        var otherSubject = Evidence(214, "h1", "h2", (1000, 100)) with { Subject = "customers" };
+        var otherDatabase = Evidence(216, "h1", "h2", (1000, 50)) with { Database = "db2" };
+        var evidence = new[] { target, otherSubject, otherDatabase };
+        var group = Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build([target]).Subjects).Groups);
+
+        var result = OptimizationComparer.Compare(group, evidence, "v0", "v1", "all", "sum");
+
+        Assert.Equal(201, result.OperationId);
+        Assert.Equal(900, Assert.Single(result.Tables).ReadsAfter);
+    }
+
+    [Fact]
+    public void Unidentified_group_rejects_colliding_evidence()
+    {
+        var group = Group("h1", "h2");
+        var evidence = new[]
+        {
+            Evidence(201, "h1", "h2", (100, 90)),
+            Evidence(214, "h1", "h2", (100, 20)) with { Subject = "customers" },
+        };
+
+        var result = OptimizationComparer.Compare(group, evidence, "v1", "v2", "all", "sum");
+
+        Assert.Equal(PairBasis.ConditionsDiffer, result.Basis);
+        Assert.Empty(result.Tables);
+        Assert.Null(result.Elapsed.AfterMs);
+    }
+
+    [Fact]
     public void Identical_versions_show_same_sql()
     {
         var result = Compare([Evidence(214, "h1", "h1", (1000, 1000))], "v1", "v1");
@@ -218,6 +250,17 @@ public sealed class OptimizationComparerTests
             Evidence(201, "h1", "h2", (100, 90)),
             Evidence(214, "h2", "h3", (90, 80)),
         ], "v1", "v3");
+        var viaGroup = Group("h1", "h2", "h3") with
+        {
+            Scopes =
+            [
+                new ScopeVersions("fragment", [Version("v8", "h2")]),
+                new ScopeVersions("whole query", [Version("v1", "h1"), Version("v2", "h2"), Version("v3", "h3")]),
+            ],
+        };
+        var viaSelectedScope = OptimizationComparer.Compare(viaGroup,
+            [Evidence(201, "h1", "h2", (100, 90)), Evidence(214, "h2", "h3", (90, 80))],
+            "v1", "v3", "all", "sum");
         var viaReverse = Compare([
             Evidence(201, "h2", "h1", (90, 100)),
             Evidence(214, "h3", "h2", (80, 90)),
@@ -228,6 +271,7 @@ public sealed class OptimizationComparerTests
 
         Assert.Equal("results equivalent (direct)", direct.EquivalenceLabel);
         Assert.Equal("results equivalent via v2", via.EquivalenceLabel);
+        Assert.Equal("results equivalent via v2", viaSelectedScope.EquivalenceLabel);
         Assert.Equal("results equivalent via v2", viaReverse.EquivalenceLabel);
         Assert.Equal("results not compared", unrelated.EquivalenceLabel);
     }

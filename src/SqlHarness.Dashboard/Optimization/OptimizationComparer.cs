@@ -28,17 +28,23 @@ public static class OptimizationComparer
         var versionB = versionsB[0];
         var hashA = versionA.Hash;
         var hashB = versionB.Hash;
-        var groupCompares = compares.Where(compare =>
+        var scopeCompares = compares.Where(compare =>
                 string.Equals(compare.Fingerprint ?? string.Empty, group.Fingerprint, StringComparison.Ordinal)
                 && string.Equals(NormalizeScope(compare.Scope), versionA.Scope, StringComparison.Ordinal))
             .OrderBy(compare => compare.StartedAt, StringComparer.Ordinal)
             .ThenBy(compare => compare.OperationId)
             .ToArray();
+        if (!TryResolveIdentity(group, scopeCompares, out var subject, out var database))
+            return Empty(a, b, PairBasis.ConditionsDiffer, "conditions differ", selectedCase, aggregate);
+
+        var groupCompares = scopeCompares.Where(compare => compare.Subject == subject
+                && string.Equals(compare.Database ?? string.Empty, database, StringComparison.Ordinal))
+            .ToArray();
         var direct = groupCompares.Where(compare => Connects(compare, hashA, hashB))
             .LastOrDefault();
 
         var path = EquivalentPath(groupCompares, hashA, hashB);
-        var equivalence = EquivalenceLabel(group, direct, path);
+        var equivalence = EquivalenceLabel(group, versionA.Scope, direct, path);
         var directForward = direct is not null && direct.BaselineHash == hashA;
         var basis = direct is not null ? PairBasis.MeasuredTogether : PairBasis.DifferentRunsSameConditions;
 
@@ -118,6 +124,29 @@ public static class OptimizationComparer
             .Select(row => new VersionIdentity(NormalizeScope(scope.Scope)!, row.Hash)))
         .Distinct().ToArray();
 
+    private static bool TryResolveIdentity(ConditionsGroup group, IReadOnlyList<CompareEvidence> compares,
+        out string? subject, out string? database)
+    {
+        subject = group.Subject;
+        database = group.Database;
+        if (subject is not null && database is not null)
+            return true;
+
+        var knownSubject = subject;
+        var knownDatabase = database;
+        var candidates = compares.Where(compare =>
+                (knownSubject is null || compare.Subject == knownSubject)
+                && (knownDatabase is null || string.Equals(compare.Database ?? string.Empty, knownDatabase, StringComparison.Ordinal)))
+            .Select(compare => (compare.Subject, Database: compare.Database ?? string.Empty))
+            .Distinct().ToArray();
+        if (candidates.Length != 1 || candidates[0].Subject is null)
+            return false;
+
+        subject ??= candidates[0].Subject;
+        database ??= candidates[0].Database;
+        return true;
+    }
+
     private static string? NormalizeScope(string? scope) => scope == "whole query" ? "whole" : scope;
 
     private static bool Connects(CompareEvidence compare, string a, string b) =>
@@ -146,7 +175,8 @@ public static class OptimizationComparer
         return null;
     }
 
-    private static string EquivalenceLabel(ConditionsGroup group, CompareEvidence? direct, IReadOnlyList<string>? path)
+    private static string EquivalenceLabel(ConditionsGroup group, string selectedScope,
+        CompareEvidence? direct, IReadOnlyList<string>? path)
     {
         if (direct is not null)
         {
@@ -157,7 +187,8 @@ public static class OptimizationComparer
             return "results not compared";
         }
         return path is { Count: > 2 }
-            ? $"results equivalent via {group.Scopes.SelectMany(scope => scope.Versions)
+            ? $"results equivalent via {group.Scopes
+                .FirstOrDefault(scope => NormalizeScope(scope.Scope) == selectedScope)?.Versions
                 .FirstOrDefault(version => version.Hash == path[1])?.Version ?? VersionName(path[1])}"
             : "results not compared";
     }
