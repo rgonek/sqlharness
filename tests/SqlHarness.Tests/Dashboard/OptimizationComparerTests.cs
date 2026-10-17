@@ -318,6 +318,33 @@ public sealed class OptimizationComparerTests
         Assert.Equal(new PostgresBuffers(5, 1, 0, 0, 0, 1), result.BuffersAfter);
     }
 
+    [Fact]
+    public void Postgres_cases_without_logical_reads_keep_available_elapsed_cpu_and_buffers()
+    {
+        var evidence = Evidence(214, "h1", "h2", (100, 80)) with
+        {
+            Engine = "postgres",
+            Metrics =
+            [
+                Metric("baseline", "0", 100) with { LogicalReadsMedian = null, ElapsedMedianMs = 12, CpuMedianMs = 10, Postgres = new PostgresBuffers(7, 2, 1, 0, 0, 3) },
+                Metric("candidate", "0", 80) with { LogicalReadsMedian = null, ElapsedMedianMs = 8, CpuMedianMs = 6, Postgres = new PostgresBuffers(5, 1, 0, 0, 0, 1) },
+            ],
+        };
+
+        var result = Compare([evidence], "v1", "v2");
+
+        Assert.Single(result.Cases);
+        Assert.Equal("unavailable", Assert.Single(result.Cases).Outcome);
+        Assert.True(result.TableIoUnavailable);
+        Assert.Empty(result.Tables);
+        Assert.Equal(12, result.Elapsed.BeforeMs);
+        Assert.Equal(8, result.Elapsed.AfterMs);
+        Assert.Equal(10, result.CpuBeforeMs);
+        Assert.Equal(6, result.CpuAfterMs);
+        Assert.Equal(new PostgresBuffers(7, 2, 1, 0, 0, 3), result.BuffersBefore);
+        Assert.Equal(new PostgresBuffers(5, 1, 0, 0, 0, 1), result.BuffersAfter);
+    }
+
     private static OptimizationComparison Compare(IReadOnlyList<CompareEvidence> evidence, string a, string b) =>
         OptimizationComparer.Compare(Group("h1", "h2", "h3"), evidence, a, b, "all", "sum");
 

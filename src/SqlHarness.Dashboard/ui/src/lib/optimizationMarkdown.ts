@@ -15,6 +15,23 @@ function number(value: number | null): string {
   return value === null ? "—" : String(value)
 }
 
+function bufferSummary(value: NonNullable<OptimizationComparison["buffersBefore"]>): string {
+  const fields: [string, number | null][] = [
+    ["shared hit", value.sharedHit], ["shared read", value.sharedRead], ["shared dirtied", value.sharedDirtied],
+    ["shared written", value.sharedWritten], ["temp read", value.tempRead], ["temp written", value.tempWritten],
+  ]
+  return fields.map(([label, count]) => `${label} ${number(count)}`).join(", ")
+}
+
+export function optimizationMetricRows(comparison: OptimizationComparison): { label: string; before: string; after: string }[] {
+  const rows: { label: string; before: string; after: string }[] = []
+  if (comparison.cpuBeforeMs != null || comparison.cpuAfterMs != null)
+    rows.push({ label: "CPU (ms)", before: number(comparison.cpuBeforeMs ?? null), after: number(comparison.cpuAfterMs ?? null) })
+  if (comparison.buffersBefore || comparison.buffersAfter)
+    rows.push({ label: "Buffers", before: comparison.buffersBefore ? bufferSummary(comparison.buffersBefore) : "—", after: comparison.buffersAfter ? bufferSummary(comparison.buffersAfter) : "—" })
+  return rows
+}
+
 export function optimizationMarkdown(comparison: OptimizationComparison, subject: string, scope: string): string {
   const selected = comparison.cases.find(option => option.id === comparison.selectedCase)
   const caseLabel = selected ? selected.label : comparison.selectedCase === "all" ? "all cases" : comparison.selectedCase
@@ -39,6 +56,7 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
 
   if (comparison.tableIoUnavailable) {
     lines.push("per-table IO not available for this engine")
+    appendMetrics(lines, comparison)
     return lines.join("\n")
   }
 
@@ -50,5 +68,11 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
   if (comparison.collapsed) {
     lines.push(`| ${comparison.collapsed.label} |`)
   }
+  appendMetrics(lines, comparison)
   return lines.join("\n")
+}
+
+function appendMetrics(lines: string[], comparison: OptimizationComparison): void {
+  const metrics = optimizationMetricRows(comparison)
+  if (metrics.length) lines.push("", "| Metric | Before | After |", "| --- | --- | --- |", ...metrics.map(row => `| ${row.label} | ${row.before} | ${row.after} |`))
 }

@@ -71,16 +71,20 @@ public static class OptimizationComparer
             .ToDictionary(grouping => grouping.Key,
                 grouping => grouping.Select(item => item.Label).LastOrDefault(label => !string.IsNullOrWhiteSpace(label)) ?? grouping.Key,
                 StringComparer.Ordinal);
+        var postgresMetrics = IsPostgres(before.Engine ?? after.Engine);
         var commonIds = before.Metrics.Keys.Intersect(after.Metrics.Keys, StringComparer.Ordinal)
-            .Where(id => before.Metrics[id].LogicalReadsMedian.HasValue && after.Metrics[id].LogicalReadsMedian.HasValue)
+            .Where(id => postgresMetrics
+                ? HasComparablePostgresMetric(before.Metrics[id], after.Metrics[id])
+                : before.Metrics[id].LogicalReadsMedian.HasValue && after.Metrics[id].LogicalReadsMedian.HasValue)
             .OrderBy(id => CaseOrder(id, caseLabels), StringComparer.Ordinal)
             .ThenBy(id => id, StringComparer.Ordinal)
             .ToArray();
         var differingCases = direct?.Cases.Where(item => item.ResultsEquivalent == false)
             .Select(item => item.CaseId).ToHashSet(StringComparer.Ordinal) ?? [];
         var caseOptions = commonIds.Select(id => new CaseOption(id, caseLabels.GetValueOrDefault(id, id),
-            differingCases.Contains(id) ? "results differ" : Outcome(before.Metrics[id].LogicalReadsMedian!.Value,
-                after.Metrics[id].LogicalReadsMedian!.Value))).ToArray();
+            differingCases.Contains(id) ? "results differ"
+                : before.Metrics[id].LogicalReadsMedian is { } readsBefore && after.Metrics[id].LogicalReadsMedian is { } readsAfter
+                    ? Outcome(readsBefore, readsAfter) : "unavailable")).ToArray();
         var validSelection = selectedCase == "all" || commonIds.Contains(selectedCase, StringComparer.Ordinal);
         var resolvedSelection = validSelection ? selectedCase : "all";
         var selectedIds = resolvedSelection == "all" ? commonIds : [resolvedSelection];
@@ -88,7 +92,7 @@ public static class OptimizationComparer
             ? $"{commonIds.Length.ToString(CultureInfo.InvariantCulture)} of {totalCaseIds.Length.ToString(CultureInfo.InvariantCulture)} cases"
             : string.Empty;
         var normalizedAggregate = aggregate.Equals("mean", StringComparison.OrdinalIgnoreCase) ? "mean" : "sum";
-        var tableIoUnavailable = IsPostgres(before.Engine ?? after.Engine);
+        var tableIoUnavailable = postgresMetrics;
         var tableRows = tableIoUnavailable
             ? []
             : BuildTableRows(before, after, selectedIds, normalizedAggregate);
@@ -379,12 +383,18 @@ public static class OptimizationComparer
     private static bool IsPostgres(string? engine) =>
         engine?.Contains("postgres", StringComparison.OrdinalIgnoreCase) == true;
 
+    private static bool HasComparablePostgresMetric(CompareMetricEvidence before, CompareMetricEvidence after) =>
+        before.ElapsedMedianMs.HasValue && after.ElapsedMedianMs.HasValue
+        || before.CpuMedianMs.HasValue && after.CpuMedianMs.HasValue
+        || before.Postgres is not null && after.Postgres is not null;
+
     private static MixedWarning? Mixed(IReadOnlyList<CaseOption> cases,
         IReadOnlyDictionary<string, CompareMetricEvidence> before,
         IReadOnlyDictionary<string, CompareMetricEvidence> after)
     {
-        var better = cases.Count(item => item.Outcome == "better");
-        var worse = cases.Count(item => item.Outcome == "worse");
+        var comparableCases = cases.Where(item => item.Outcome is "better" or "worse" or "same").ToArray();
+        var better = comparableCases.Count(item => item.Outcome == "better");
+        var worse = comparableCases.Count(item => item.Outcome == "worse");
         if (better == 0 || worse == 0) return null;
         var increases = cases.Where(item => item.Outcome == "worse")
             .Select(item =>

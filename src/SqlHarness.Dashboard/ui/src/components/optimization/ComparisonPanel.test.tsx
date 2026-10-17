@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test, vi } from "vitest"
 import type { OptimizationComparison } from "@/api/types"
@@ -49,7 +49,7 @@ test("shows basis, case chips, mixed warning, collapsed rows and URL-backed sele
 test("shows different-run and conditions-differ badges without making up an operation link", async () => {
   const { unmount } = renderPanel({ ...comparison, basis: "DifferentRunsSameConditions", operationId: null, beforeAction: null, afterAction: null })
   expect(await screen.findByText("different runs, same conditions")).toBeInTheDocument()
-  expect(screen.queryByRole("link", { name: /Operation #/ })).not.toBeInTheDocument()
+  expect(within(screen.getByRole("region", { name: "Version comparison" })).queryByRole("link", { name: /Operation #/ })).not.toBeInTheDocument()
   unmount()
 
   renderPanel({ ...comparison, basis: "ConditionsDiffer", operationId: null, beforeAction: null, afterAction: null })
@@ -99,7 +99,7 @@ test("operation navigation round-trips the selected multi-group session search",
   const planLink = await screen.findByRole("link", { name: "Plans for v0" })
   const planTarget = new URL(planLink.getAttribute("href")!, "http://dashboard")
   expect(Object.fromEntries(planTarget.searchParams)).toMatchObject({ returnSession: "7", returnSubject: "Orders", returnDb: "shop", returnGroup: "fp-2", returnScope: "fragment:customer", returnA: "v1", returnB: "v2", returnCase: "customer-9001", returnAgg: "mean" })
-  await userEvent.click(await screen.findByRole("link", { name: "Operation #214" }))
+  await userEvent.click((await screen.findAllByRole("link", { name: "Operation #214" }))[0]!)
   const back = await screen.findByRole("link", { name: /mcp:session/ })
   const target = new URL(back.getAttribute("href")!, "http://dashboard")
   expect(target.pathname).toBe("/sessions/7")
@@ -120,4 +120,17 @@ test("conditions-differ wording and collapsed row match their copied Markdown", 
   await userEvent.click(screen.getByRole("button", { name: "Copy summary" }))
   await expect.poll(() => writeText.mock.calls[1]?.[0]).toContain("| 2 smaller tables |")
   expect(writeText.mock.calls[1]?.[0]).not.toContain("collapsed")
+})
+
+test("shows PostgreSQL CPU and buffer totals in the panel and copied summary when reads are unavailable", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  renderPanel({ ...comparison, tableIoUnavailable: true, tables: [], cpuBeforeMs: 12, cpuAfterMs: 8,
+    buffersBefore: { sharedHit: 7, sharedRead: 2, sharedDirtied: 1, sharedWritten: 0, tempRead: 0, tempWritten: 3 },
+    buffersAfter: { sharedHit: 5, sharedRead: 1, sharedDirtied: 0, sharedWritten: 0, tempRead: 0, tempWritten: 1 } })
+  expect(await screen.findByText("12 → 8", { exact: false })).toBeInTheDocument()
+  expect(screen.getByText(/shared hit 7, shared read 2/)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Copy summary" }))
+  await expect.poll(() => writeText.mock.calls[0]?.[0]).toContain("| CPU (ms) | 12 | 8 |")
+  expect(writeText.mock.calls[0]?.[0]).toContain("| Buffers | shared hit 7, shared read 2, shared dirtied 1, shared written 0, temp read 0, temp written 3 | shared hit 5, shared read 1, shared dirtied 0, shared written 0, temp read 0, temp written 1 |")
 })

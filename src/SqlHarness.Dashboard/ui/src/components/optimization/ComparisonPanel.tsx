@@ -1,11 +1,11 @@
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import type { OptimizationActionReference, OptimizationComparison, ScopeVersions } from "@/api/types"
 import { CopyButton } from "@/components/CopyButton"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { SessionVersionDiff } from "@/components/SessionVersionDiff"
 import { Button } from "@/components/ui/button"
-import { conditionsDifferMessage, optimizationMarkdown } from "@/lib/optimizationMarkdown"
+import { conditionsDifferMessage, optimizationMarkdown, optimizationMetricRows } from "@/lib/optimizationMarkdown"
 import { badgeTier } from "@/lib/flags"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SqlVersionOption } from "@/lib/compare"
@@ -88,7 +88,9 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
           <tbody>{comparison.tables.map(row => <tr key={row.table} className="border-b"><th scope="row" className="py-2 pr-3 text-left font-normal">{row.table}</th><td className="px-3 py-2">{row.scansBefore ?? "—"}</td><td className="px-3 py-2">{row.scansAfter ?? "—"}</td><td className="px-3 py-2">{row.readsBefore ?? "—"}</td><td className="px-3 py-2">{row.readsAfter ?? "—"}</td><td className="px-3 py-2">{row.change}</td></tr>)}
             {comparison.collapsed && <tr><td colSpan={6} className="py-2 text-muted-foreground">{comparison.collapsed.label}</td></tr>}</tbody></table>
       </div>}
-      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict}</dd>}</dl>
+      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict}</dd>}
+        {optimizationMetricRows(comparison).map(row => <Fragment key={row.label}><dt className="font-medium">{row.label}</dt><dd>{row.before} → {row.after}</dd></Fragment>)}
+      </dl>
     </>}
     {comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">Operation #{comparison.operationId}</Link>
       : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} /></div>}
