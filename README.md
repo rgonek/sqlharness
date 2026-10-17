@@ -287,13 +287,13 @@ sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\ord
 
 Each CLI `--param-set` or MCP `parameterSetFiles` file is JSON containing only `name` and `parameters`, at most 64 KiB. A UTF-8 BOM, JSON comments, and trailing commas are accepted. Those files are locally sensitive. SQLHarness does not copy parameter values or source paths into reports. `.sqlplan` artifacts stay locally sensitive because server plan XML may still embed parameter values; do not publish them without review.
 
-Multi-set measure uses one connection and runs setup once. Setup binds the first parameter set's merged parameters; later sets do not re-run setup. Each set is warmed once in user-supplied order, then measured rounds rotate on that same connection. In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order. Per-set stability is the only stability result; SQLHarness does not claim cross-set result equivalence.
+Multi-set measure uses one session per parameter set. Setup runs on that set's session with that set's merged parameters. Sets run sequentially in user-supplied order: each set is warmed once and then receives all measured repetitions before the next set starts. The first failed set stops the run, and completed sets remain in the report. Per-set stability is the only stability result; SQLHarness does not claim cross-set result equivalence.
 
 Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache. Timings are order-dependent because of that shared cache. Compare runs one connection per set and runs setup once on each connection. Compare cell reports include the set name and its bound parameters; one-parameter matrix cells also retain `parameterValue` (JSON null only for a typed NULL). These labels are additive in new artifacts, and older matrix artifacts remain readable.
 
 The CLI `--param-set` file grammar and `compare --matrix` text grammar are unchanged. MCP's `parameterSets`, `parameterSetFiles`, and `matrix` inputs use the same validation for both tools; matrix values remain typed strings or JSON null, so commas, empty text and typed NULL stay distinct.
 
-`--json-summary` for a multi-set measure is a bounded projection: the cache warning, the rotation rule, each set name, parameter type metadata, the value hash, per-set stability, median elapsed/CPU/reads, cross-set labels, and the artifact directory. It omits parameter values, plan XML, and full run arrays. Noteworthy operators, when included, stay capped at ten.
+`--json-summary` for a multi-set measure is a bounded projection: the server plan-cache warning, the sequential order rule, each set name, parameter type metadata, the value hash, per-set stability, median elapsed/CPU/reads, cross-set labels, and the artifact directory. It omits parameter values, plan XML, and full run arrays. Noteworthy operators, when included, stay capped at ten.
 
 ## Result equivalence and compact output
 

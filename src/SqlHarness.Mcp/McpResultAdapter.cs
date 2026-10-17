@@ -321,7 +321,10 @@ public static class McpResultAdapter
         {
             SqlHarnessExitCode.WatchMaxDuration => "watch_max_duration",
             SqlHarnessExitCode.SnapshotDifferences => "snapshot_differences",
-            _ => outcome.Report is SqlHarnessCompareMatrixReport ? "partial" : "error",
+            _ => outcome.Report is SqlHarnessCompareMatrixReport ||
+                outcome.Report is SqlHarnessMeasureSetReport && outcome.Coverage is { CompletedCases: > 0 }
+                    ? "partial"
+                    : "error",
         };
     }
 

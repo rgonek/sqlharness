@@ -276,7 +276,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
-        [Description("2..32 named JSON sets with matching declared types; only name and parameters (64 KiB; BOM/comments/trailing commas accepted). Fixed --param names must not overlap. One shared session/cache; setup binds the first set once; measured order rotates. Report per-set stability, not cross-set equivalence.")]
+        [Description("2..32 named JSON sets with matching declared types; only name and parameters (64 KiB; BOM/comments/trailing commas accepted). Fixed --param names must not overlap. Each set runs on its own session with setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Report per-set stability, not cross-set equivalence.")]
         [CommandOption("--param-set <PATH>")]
         public string[] ParameterSets { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;

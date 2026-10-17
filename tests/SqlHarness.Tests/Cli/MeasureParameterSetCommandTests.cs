@@ -271,9 +271,9 @@ public sealed class MeasureParameterSetCommandTests
     private const string SourcePath = @"D:\ticket\sets\small.sqljson";
     private const string PlanXmlSentinel = "PLAN-XML-SHOULD-NOT-LEAK";
     private const string MeasuredOrderRule =
-        "In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order.";
+        "Measured runs execute parameter sets sequentially in user-supplied order.";
     private const string PlanCacheWarning =
-        "Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache.";
+        "Parameter-set measurements use separate sessions; SQLHarness did not clear or isolate the server plan cache.";
 
     private static string Render(SqlHarnessMeasureSetReport report, OutputMode mode)
     {

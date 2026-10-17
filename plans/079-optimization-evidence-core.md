@@ -139,15 +139,15 @@
 - Produces: `MeasureParameterSetRunner(ISqlDialect dialect, ISqlSessionFactory sessions, int comparisonMaximumRows)`; `ExecuteAsync(ResolvedTarget target, SqlHarnessMeasureOperation operation, IReadOnlyList<PreparedMeasureParameterSet> sets, CanonicalResultAccumulator raw, CancellationToken ct, SqlSafetyDecision? setupSafety = null)`; `MeasureParameterSetExecution` gains `int CompletedCases` and `MeasureCaseFailure? FailedCase` (`Index`, `SetName`, `Phase`).
 - New `MeasureDescription`: `"Measure one query across repeats. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence."`
 
-- [ ] **Step 1: Write failing tests:**
+- [x] **Step 1: Write failing tests:**
   - `Measure_opens_one_session_per_set` — fake factory `ConnectCount == 2` for two sets (replace the plan-061 test asserting `1`).
   - `Measure_setup_binds_each_sets_parameters` — setup `SELECT @N AS n INTO #s` observed bound with 1 for set A and 2 for set B.
   - `Measure_second_case_failure_retains_first_case` — second set throws during execute; outcome error with `FailedCase.Index == 1`, journal has the first set's runs.
   - Docs contract pin updated to the new description.
-- [ ] **Step 2:** Run `--filter "FullyQualifiedName~MeasureParameterSet|FullyQualifiedName~MeasureTests"` → FAIL.
-- [ ] **Step 3:** Implement sequentially per set: connect, setup (bound to that set), warm-up, `Repeat` measured runs, dispose; remove round rotation and `warmupOrder` rotation semantics (keep the report field if 077 relies on it, filled with the sequential order).
-- [ ] **Step 4:** Run → PASS. Update README/docs/mcp.md text that says "rotates on one connection".
-- [ ] **Step 5:** Commit `feat(079): measure runs each parameter set on its own session`.
+- [x] **Step 2:** Run `--filter "FullyQualifiedName~MeasureParameterSet|FullyQualifiedName~MeasureTests"` → FAIL.
+- [x] **Step 3:** Implement sequentially per set: connect, setup (bound to that set), warm-up, `Repeat` measured runs, dispose; remove round rotation and `warmupOrder` rotation semantics (keep the report field if 077 relies on it, filled with the sequential order).
+- [x] **Step 4:** Run → PASS. Update README/docs/mcp.md text that says "rotates on one connection".
+- [x] **Step 5:** Commit `feat(079): measure runs each parameter set on its own session`.
 
 ### Task 5: Table IO survives message caps
 

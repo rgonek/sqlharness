@@ -788,17 +788,18 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
                 _artifactWriter.CheckStorage();
                 phase = OperationPhase.Authentication;
-                await using var multiSession = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
                 phase = OperationPhase.Sql;
 
                 raw = new CanonicalResultAccumulator();
-                var execution = await new MeasureParameterSetRunner(dialect, ComparisonMaximumRows).ExecuteAsync(
-                    multiSession,
+                var execution = await new MeasureParameterSetRunner(dialect, _sessionFactory, ComparisonMaximumRows).ExecuteAsync(
+                    target,
                     measure,
                     boundSets,
                     raw,
                     ct,
-                    setupSafety);
+                    setupSafety,
+                    knownSecrets);
+                await using var multiSession = execution.FinalSession!;
                 rawFootprint = raw.Complete().Footprint;
                 var setReport = MeasureParameterSetReportProjector.Project(
                     multiSession.Identity,
@@ -903,6 +904,30 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 BenchmarkRuns = runs.Select(run => run.Artifact).ToArray(),
             };
             return WithReceipt(success, rawFootprint);
+        }
+        catch (MeasureCaseFailedException failed)
+        {
+            if (raw is not null)
+                rawFootprint = raw.SnapshotFootprint();
+            var failurePhase = string.Equals(failed.Execution.FailedCase?.Phase, "authentication", StringComparison.Ordinal)
+                ? OperationPhase.Authentication
+                : OperationPhase.Sql;
+            var exitCode = OperationFailureMapper.Map(failed.InnerException ?? failed, failurePhase);
+            var original = failed.InnerException ?? failed;
+            var detail = SecretRedactor.Redact(original, knownSecrets);
+            var failedCase = failed.Execution.FailedCase!;
+            var safeError = $"Measure parameter set {failedCase.Index} ('{failedCase.SetName}') failed. {detail}";
+            var coverage = MatrixExecutionCoverage.IdentifiedFailure(
+                failed.RequestedCases,
+                failed.Execution.CompletedCases,
+                new MatrixFailedCase(failedCase.Index, SetName: failedCase.SetName, Phase: failedCase.Phase));
+            var error = SqlHarnessError.From(exitCode, safeError) with { MatrixStop = coverage };
+            var failure = new SqlHarnessOutcome(exitCode, failed.PartialReport, safeError, Error: error)
+            {
+                BenchmarkRuns = failed.CompletedRuns.Select(run => run.Artifact).ToArray(),
+                Coverage = coverage,
+            };
+            return WithReceipt(failure, rawFootprint);
         }
         catch (Exception exception)
         {

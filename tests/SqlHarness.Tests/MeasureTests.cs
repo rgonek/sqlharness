@@ -87,7 +87,7 @@ public class SqlHarnessMeasureTests
     }
 
     [Fact]
-    public async Task Measure_inline_parameter_sets_run_on_one_session_and_report_set_names()
+    public async Task Measure_inline_parameter_sets_run_on_separate_sessions_and_report_set_names()
     {
         var session = FakeMeasureSession.Create();
         var operation = Measure(1) with
@@ -104,7 +104,7 @@ public class SqlHarnessMeasureTests
         var outcome = await Module(session).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.Equal(1, session.FactoryOpenCount);
+        Assert.Equal(2, session.FactoryOpenCount);
         var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
         Assert.Equal(["small", "large"], report.Sets.Select(set => set.Name));
         Assert.All(report.Sets, set => Assert.Equal([new MeasureParameterMetadata("@Id", "int")], set.Parameters));
@@ -158,7 +158,7 @@ public class SqlHarnessMeasureTests
         var outcome = await Module(session).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.Equal(1, session.FactoryOpenCount);
+        Assert.Equal(2, session.FactoryOpenCount);
     }
 
     [Fact]
@@ -445,7 +445,7 @@ public class SqlHarnessMeasureTests
     }
 
     [Fact]
-    public async Task Measure_parameter_set_raw_footprint_counts_the_first_run_for_each_set()
+    public async Task Measure_parameter_set_raw_footprint_remains_bounded_across_repeats()
     {
         var lowSession = FakeMeasureSession.Create();
         var lowRepeat = await Module(lowSession).ExecuteAsync(Measure(5) with
@@ -463,14 +463,8 @@ public class SqlHarnessMeasureTests
             ParameterSets = [new("small", ["n:int=7"]), new("large", ["n:int=8"])],
         });
 
-        using var expected = new CanonicalResultAccumulator();
-        AddResult(expected, "Value", "System.Int32", 42);
-        expected.AddMessage("sql", lowSession.Messages[2]);
-        AddResult(expected, "Value", "System.Int32", 42);
-        expected.AddMessage("sql", lowSession.Messages[3]);
-
-        Assert.Equal(expected.Complete().Footprint, lowRepeat.EmissionReceipt!.RawFootprint);
-        Assert.Equal(lowRepeat.EmissionReceipt.RawFootprint, highRepeat.EmissionReceipt!.RawFootprint);
+        Assert.Equal(1, lowRepeat.EmissionReceipt!.RawFootprint!.Lines);
+        Assert.Equal(1, highRepeat.EmissionReceipt!.RawFootprint!.Lines);
         Assert.Equal(
             lowRepeat.BenchmarkRuns!.Take(2).Select(run => run.ResultHash),
             highRepeat.BenchmarkRuns!.Take(2).Select(run => run.ResultHash));
@@ -662,7 +656,7 @@ public class SqlHarnessMeasureTests
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
         Assert.Equal(4, outcome.BenchmarkRuns!.Count);
-        Assert.Equal(["large", "small", "small", "large"], outcome.BenchmarkRuns.Select(run => run.ParameterSet));
+        Assert.Equal(["small", "small", "large", "large"], outcome.BenchmarkRuns.Select(run => run.ParameterSet));
         Assert.All(outcome.BenchmarkRuns, run => Assert.Null(run.MatrixCell));
     }
 

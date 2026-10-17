@@ -6,6 +6,7 @@ using System.Text;
 using Microsoft.SqlServer.Types;
 
 using SqlHarness.Core.Dialect;
+using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
 
@@ -238,69 +239,138 @@ file static class MeasureParameterTyping
 internal sealed record MeasureParameterSetExecution(
     int SetupExecutionCount,
     IReadOnlyList<string> WarmupOrder,
-    IReadOnlyList<CollectedBenchmarkRun> Runs);
+    IReadOnlyList<CollectedBenchmarkRun> Runs,
+    int CompletedCases = 0,
+    MeasureCaseFailure? FailedCase = null)
+{
+    internal ISqlSession? FinalSession { get; init; }
+}
+
+internal sealed record MeasureCaseFailure(int Index, string SetName, string? Phase);
+
+internal sealed class MeasureCaseFailedException : Exception
+{
+    internal IReadOnlyList<CollectedBenchmarkRun> CompletedRuns { get; }
+    internal SqlHarnessMeasureSetReport? PartialReport { get; }
+    internal MeasureParameterSetExecution Execution { get; }
+    internal int RequestedCases { get; }
+
+    internal MeasureCaseFailedException(
+        Exception inner,
+        IReadOnlyList<CollectedBenchmarkRun> completedRuns,
+        SqlHarnessMeasureSetReport? partialReport,
+        MeasureParameterSetExecution execution,
+        int requestedCases)
+        : base(inner.Message, inner)
+    {
+        CompletedRuns = completedRuns.ToArray();
+        PartialReport = partialReport;
+        Execution = execution;
+        RequestedCases = requestedCases;
+    }
+}
 
 internal sealed class MeasureParameterSetRunner
 {
     private readonly ISqlDialect _dialect;
+    private readonly ISqlSessionFactory _sessions;
     private readonly int _comparisonMaximumRows;
 
-    internal MeasureParameterSetRunner(ISqlDialect dialect, int comparisonMaximumRows)
+    internal MeasureParameterSetRunner(ISqlDialect dialect, ISqlSessionFactory sessions, int comparisonMaximumRows)
     {
         _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
+        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         ArgumentOutOfRangeException.ThrowIfNegative(comparisonMaximumRows);
         _comparisonMaximumRows = comparisonMaximumRows;
     }
 
     internal async Task<MeasureParameterSetExecution> ExecuteAsync(
-        ISqlSession session,
+        ResolvedTarget target,
         SqlHarnessMeasureOperation operation,
         IReadOnlyList<PreparedMeasureParameterSet> sets,
         CanonicalResultAccumulator raw,
         CancellationToken ct,
-        SqlSafetyDecision? setupSafety = null)
+        SqlSafetyDecision? setupSafety = null,
+        List<string>? knownSecrets = null)
     {
-        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentNullException.ThrowIfNull(sets);
         ArgumentNullException.ThrowIfNull(raw);
 
         var setupExecutionCount = 0;
-        if (!string.IsNullOrWhiteSpace(operation.SetupSql))
-        {
-            await SetupSqlExecution.ExecuteSetupAsync(
-                _dialect.Engine,
-                operation.SetupSql,
-                sets[0].Parameters,
-                operation.TimeoutSeconds,
-                session,
-                raw: null,
-                ct,
-                setupSafety);
-            setupExecutionCount = 1;
-        }
-
         var warmupOrder = new List<string>(sets.Count);
-        foreach (var set in sets)
-        {
-            await ExecuteSetAsync(set, repetition: 0);
-            warmupOrder.Add(set.Name);
-        }
-
         var runs = new List<CollectedBenchmarkRun>(operation.Repeat * sets.Count);
-        for (var round = 1; round <= operation.Repeat; round++)
+        var completedCases = 0;
+        SqlHarnessTargetIdentityReport? identity = null;
+        ISqlSession? finalSession = null;
+        for (var index = 0; index < sets.Count; index++)
         {
-            var start = round % sets.Count;
-            for (var offset = 0; offset < sets.Count; offset++)
+            var set = sets[index];
+            ISqlSession? session = null;
+            var phase = "authentication";
+            try
             {
-                var set = sets[(start + offset) % sets.Count];
-                runs.Add(await ExecuteSetAsync(set, repetition: round));
+                session = await _sessions.ConnectAsync(target, ct, knownSecrets ?? []);
+                identity ??= session.Identity;
+                phase = "sql";
+                if (!string.IsNullOrWhiteSpace(operation.SetupSql))
+                {
+                    await SetupSqlExecution.ExecuteSetupAsync(
+                        _dialect.Engine,
+                        operation.SetupSql,
+                        set.Parameters,
+                        operation.TimeoutSeconds,
+                        session,
+                        raw: null,
+                        ct,
+                        setupSafety);
+                    setupExecutionCount++;
+                }
+
+                await ExecuteSetAsync(session, set, repetition: 0);
+                var caseRuns = new List<CollectedBenchmarkRun>(operation.Repeat);
+                for (var repetition = 1; repetition <= operation.Repeat; repetition++)
+                    caseRuns.Add(await ExecuteSetAsync(session, set, repetition));
+
+                runs.AddRange(caseRuns);
+                warmupOrder.Add(set.Name);
+                completedCases++;
+                if (index == sets.Count - 1)
+                    finalSession = session;
+                else
+                    await session.DisposeAsync();
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                if (session is not null)
+                    await session.DisposeAsync();
+                throw;
+            }
+            catch (Exception exception)
+            {
+                if (session is not null)
+                    await session.DisposeAsync();
+                var failedCase = new MeasureCaseFailure(index, set.Name, phase);
+                var execution = new MeasureParameterSetExecution(
+                    setupExecutionCount, warmupOrder, runs, completedCases, failedCase);
+                var partialReport = completedCases == 0 || identity is null
+                    ? null
+                    : MeasureParameterSetReportProjector.Project(
+                        identity,
+                        operation.Repeat,
+                        execution,
+                        sets.Take(completedCases).ToArray());
+                throw new MeasureCaseFailedException(exception, runs, partialReport, execution, sets.Count);
             }
         }
 
-        return new MeasureParameterSetExecution(setupExecutionCount, warmupOrder, runs);
+        return new MeasureParameterSetExecution(setupExecutionCount, warmupOrder, runs, completedCases)
+        {
+            FinalSession = finalSession,
+        };
 
-        Task<CollectedBenchmarkRun> ExecuteSetAsync(PreparedMeasureParameterSet set, int repetition) =>
+        Task<CollectedBenchmarkRun> ExecuteSetAsync(ISqlSession session, PreparedMeasureParameterSet set, int repetition) =>
             BenchmarkRunner.ExecuteAsync(
                 _dialect,
                 session,
@@ -320,10 +390,10 @@ internal sealed class MeasureParameterSetRunner
 internal static class MeasureParameterSetReportProjector
 {
     internal const string MeasuredOrderRule =
-        "In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order.";
+        "Measured runs execute parameter sets sequentially in user-supplied order.";
 
     internal const string PlanCacheWarning =
-        "Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache.";
+        "Parameter-set measurements use separate sessions; SQLHarness did not clear or isolate the server plan cache.";
 
     internal static SqlHarnessMeasureSetReport Project(
         SqlHarnessTargetIdentityReport target,
@@ -339,6 +409,9 @@ internal static class MeasureParameterSetReportProjector
         if (sets.Count == 0)
             throw new ArgumentException("At least one parameter set is required.", nameof(sets));
 
+        if (execution.CompletedCases > 0 && execution.FailedCase is not null && execution.CompletedCases < sets.Count)
+            sets = sets.Take(execution.CompletedCases).ToArray();
+
         var setReports = new MeasureParameterSetReport[sets.Count];
         for (var index = 0; index < sets.Count; index++)
             setReports[index] = ProjectSet(sets[index], repeat, execution.Runs);
@@ -346,7 +419,7 @@ internal static class MeasureParameterSetReportProjector
         return new SqlHarnessMeasureSetReport(
             target,
             repeat,
-            repeat * sets.Count,
+            execution.Runs.Count,
             execution.SetupExecutionCount,
             execution.WarmupOrder,
             MeasuredOrderRule,

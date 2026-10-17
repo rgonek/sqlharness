@@ -422,6 +422,50 @@ public sealed class McpOutputTests
     }
 
     [Fact]
+    public void Partial_measure_keeps_coverage_on_error_matrix_stop()
+    {
+        var coverage = MatrixExecutionCoverage.IdentifiedFailure(
+            2, 1, new MatrixFailedCase(1, SetName: "large", Phase: "sql"));
+        var report = new SqlHarnessMeasureSetReport(
+            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
+            2,
+            2,
+            1,
+            ["small"],
+            "Measured runs execute parameter sets sequentially in user-supplied order.",
+            "Parameter-set measurements use separate sessions; SQLHarness did not clear or isolate the server plan cache.",
+            [new MeasureParameterSetReport(
+                "small",
+                [new MeasureParameterMetadata("@id", "int")],
+                "value-hash",
+                2,
+                true,
+                "result-hash",
+                new CompareVariantReport("small", new(1, 1, 1), new(2, 2, 2), new(3, 3, 3), new Dictionary<string, long>(), [], []),
+                [])],
+            new MeasureCrossSetSummary(null, 0, null, 0, null, 0, null, 0, null, 0, null, 0),
+            null);
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, report, "Measure parameter set 1 failed.",
+            Error: SqlHarnessError.From(SqlHarnessExitCode.SqlExecution, "Measure parameter set 1 failed.") with { MatrixStop = coverage })
+        {
+            Coverage = coverage,
+        };
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_measure");
+        var envelope = EnvelopeOf(result);
+
+        Assert.True(result.IsError == true);
+        Assert.Equal("partial", envelope.GetProperty("status").GetString());
+        var stop = envelope.GetProperty("error").GetProperty("matrixStop");
+        Assert.Equal(2, stop.GetProperty("requestedCases").GetInt32());
+        Assert.Equal(1, stop.GetProperty("completedCases").GetInt32());
+        Assert.Equal(0, stop.GetProperty("notExecutedCases").GetInt32());
+        Assert.Equal(1, stop.GetProperty("failedCase").GetProperty("index").GetInt32());
+        Assert.Equal("large", stop.GetProperty("failedCase").GetProperty("setName").GetString());
+        Assert.Equal("sql", stop.GetProperty("failedCase").GetProperty("phase").GetString());
+    }
+
+    [Fact]
     public void Failure_carries_a_stable_error_object_and_is_error()
     {
         var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, "The query was cancelled.");

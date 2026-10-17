@@ -12,12 +12,12 @@ public sealed class MeasureParameterSetExecutionTests
     private const string QuerySql = "SELECT Value FROM dbo.Clients WHERE Id = @id";
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
     private const string MeasuredOrderRule =
-        "In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order.";
+        "Measured runs execute parameter sets sequentially in user-supplied order.";
     private const string PlanCacheWarning =
-        "Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache.";
+        "Parameter-set measurements use separate sessions; SQLHarness did not clear or isolate the server plan cache.";
 
     [Fact]
-    public async Task Three_sets_warm_in_input_order_and_rotate_each_round()
+    public async Task Three_sets_warm_and_measure_in_input_order_on_one_session_per_set()
     {
         var session = RecordingSession.Create();
         var runner = Runner(session);
@@ -25,18 +25,18 @@ public sealed class MeasureParameterSetExecutionTests
 
         Assert.Equal(["A", "B", "C"], session.WarmupSetNames);
         Assert.Equal(
-            ["B", "C", "A", "C", "A", "B", "A", "B", "C"],
+            ["A", "A", "A", "B", "B", "B", "C", "C", "C"],
             session.MeasuredSetNames);
-        Assert.Equal(1, session.SetupCount);
-        Assert.Equal(1, session.ConnectionCount);
+        Assert.Equal(3, session.SetupCount);
+        Assert.Equal(3, session.ConnectionCount);
 
-        Assert.Equal(1, execution.SetupExecutionCount);
+        Assert.Equal(3, execution.SetupExecutionCount);
         Assert.Equal(["A", "B", "C"], execution.WarmupOrder);
         Assert.Equal(
-            ["B", "C", "A", "C", "A", "B", "A", "B", "C"],
+            ["A", "A", "A", "B", "B", "B", "C", "C", "C"],
             execution.Runs.Select(run => run.Artifact.ParameterSet));
-        Assert.Equal([1, 1, 1, 2, 2, 2, 3, 3, 3], execution.Runs.Select(run => run.Artifact.Repetition));
-        Assert.Equal([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3], runner.Dialect.Calls.Select(call => call.Repetition));
+        Assert.Equal([1, 2, 3, 1, 2, 3, 1, 2, 3], execution.Runs.Select(run => run.Artifact.Repetition));
+        Assert.Equal([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3], runner.Dialect.Calls.Select(call => call.Repetition));
         Assert.All(runner.Dialect.Calls, call =>
         {
             Assert.False(call.CaptureComparison);
@@ -45,7 +45,10 @@ public sealed class MeasureParameterSetExecutionTests
             Assert.Equal(30, call.TimeoutSeconds);
             Assert.Same(session, call.Session);
         });
-        Assert.Equal(11, ParameterId(Assert.Single(session.Commands, command => command.Sql.Contains("INSERT #ids", StringComparison.Ordinal))));
+        Assert.Equal(
+            [11, 22, 33],
+            session.Commands.Where(command => command.Sql.Contains("INSERT #ids", StringComparison.Ordinal))
+                .Select(ParameterId));
         AssertNoCacheControl(session.Commands);
     }
 
@@ -53,7 +56,7 @@ public sealed class MeasureParameterSetExecutionTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
-    public async Task No_setup_still_warms_in_input_order_and_rotates_one_round(string? setupSql)
+    public async Task No_setup_still_warms_and_measures_in_input_order(string? setupSql)
     {
         var session = RecordingSession.Create();
         var execution = await Runner(session).ExecuteAsync(Operation(repeat: 1, setupSql: setupSql), Prepared("A", "B"));
@@ -62,38 +65,32 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(0, execution.SetupExecutionCount);
         Assert.DoesNotContain(session.Commands, command => command.Sql == SetupSql);
         Assert.Equal(["A", "B"], session.WarmupSetNames);
-        Assert.Equal(["B", "A"], session.MeasuredSetNames);
-        Assert.Equal(1, session.ConnectionCount);
+        Assert.Equal(["A", "B"], session.MeasuredSetNames);
+        Assert.Equal(2, session.ConnectionCount);
     }
 
     [Fact]
-    public async Task Each_round_executes_every_set_once()
+    public async Task Each_set_executes_all_repetitions_before_the_next_set()
     {
         var session = RecordingSession.Create();
         var execution = await Runner(session).ExecuteAsync(Operation(repeat: 4), Prepared("A", "B"));
 
         Assert.Equal(["A", "B"], session.WarmupSetNames);
-        Assert.Equal(["B", "A", "A", "B", "B", "A", "A", "B"], session.MeasuredSetNames);
+        Assert.Equal(["A", "A", "A", "A", "B", "B", "B", "B"], session.MeasuredSetNames);
         Assert.Equal(8, execution.Runs.Count);
-        for (var index = 0; index < execution.Runs.Count; index += 2)
-        {
-            var round = session.MeasuredSetNames.Skip(index).Take(2).OrderBy(name => name, StringComparer.Ordinal).ToArray();
-            Assert.Equal(["A", "B"], round);
-            Assert.Equal(index / 2 + 1, execution.Runs[index].Artifact.Repetition);
-            Assert.Equal(execution.Runs[index].Artifact.Repetition, execution.Runs[index + 1].Artifact.Repetition);
-        }
+        Assert.Equal([1, 2, 3, 4, 1, 2, 3, 4], execution.Runs.Select(run => run.Artifact.Repetition));
 
         Assert.All(["A", "B"], name => Assert.Equal(4, session.MeasuredSetNames.Count(candidate => candidate == name)));
     }
 
     [Fact]
-    public async Task Repeat_one_executes_a_single_rotated_round()
+    public async Task Repeat_one_measures_in_input_order()
     {
         var session = RecordingSession.Create();
         var execution = await Runner(session).ExecuteAsync(Operation(repeat: 1), Prepared("A", "B", "C"));
 
         Assert.Equal(["A", "B", "C"], session.WarmupSetNames);
-        Assert.Equal(["B", "C", "A"], session.MeasuredSetNames);
+        Assert.Equal(["A", "B", "C"], session.MeasuredSetNames);
         Assert.Equal([1, 1, 1], execution.Runs.Select(run => run.Artifact.Repetition));
         Assert.All(execution.Runs, run => Assert.Single(run.PlanHashes));
     }
@@ -121,10 +118,11 @@ public sealed class MeasureParameterSetExecutionTests
         var failure = new TimeoutException("setup failed");
         var session = RecordingSession.Create(failSetup: true, failure: failure);
 
-        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+        var exception = await Assert.ThrowsAsync<MeasureCaseFailedException>(() =>
             Runner(session).ExecuteAsync(Operation(repeat: 3), Prepared("A", "B", "C")));
 
-        Assert.Same(failure, exception);
+        Assert.Same(failure, exception.InnerException);
+        Assert.Equal(0, exception.Execution.FailedCase?.Index);
         Assert.Equal(0, session.SetupCount);
         Assert.Empty(session.WarmupSetNames);
         Assert.Empty(session.MeasuredSetNames);
@@ -136,16 +134,17 @@ public sealed class MeasureParameterSetExecutionTests
     public async Task Warmup_failure_stops_before_later_sets()
     {
         var failure = new TimeoutException("warmup failed");
-        var session = RecordingSession.Create(failOnQueryNumber: 2, failure: failure);
+        var session = RecordingSession.Create(failOnQueryNumber: 1, failure: failure);
 
-        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+        var exception = await Assert.ThrowsAsync<MeasureCaseFailedException>(() =>
             Runner(session).ExecuteAsync(Operation(repeat: 3), Prepared("A", "B", "C")));
 
-        Assert.Same(failure, exception);
-        Assert.Equal(["A"], session.WarmupSetNames);
+        Assert.Same(failure, exception.InnerException);
+        Assert.Equal(0, exception.Execution.FailedCase?.Index);
+        Assert.Empty(session.WarmupSetNames);
         Assert.Empty(session.MeasuredSetNames);
         Assert.Equal(1, QueryCount(session, 11));
-        Assert.Equal(1, QueryCount(session, 22));
+        Assert.Equal(0, QueryCount(session, 22));
         Assert.Equal(0, QueryCount(session, 33));
     }
 
@@ -155,14 +154,16 @@ public sealed class MeasureParameterSetExecutionTests
         var failure = new TimeoutException("measured run failed");
         var session = RecordingSession.Create(failOnQueryNumber: 3, failure: failure);
 
-        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+        var exception = await Assert.ThrowsAsync<MeasureCaseFailedException>(() =>
             Runner(session).ExecuteAsync(Operation(repeat: 2), Prepared("A", "B")));
 
-        Assert.Same(failure, exception);
-        Assert.Equal(["A", "B"], session.WarmupSetNames);
-        Assert.Empty(session.MeasuredSetNames);
-        Assert.Equal(1, QueryCount(session, 11));
-        Assert.Equal(2, QueryCount(session, 22));
+        Assert.Same(failure, exception.InnerException);
+        Assert.Equal(0, exception.Execution.CompletedCases);
+        Assert.Equal(["A"], session.WarmupSetNames);
+        Assert.Equal(["A"], session.MeasuredSetNames);
+        Assert.Empty(exception.CompletedRuns);
+        Assert.Equal(3, QueryCount(session, 11));
+        Assert.Equal(0, QueryCount(session, 22));
     }
 
     [Fact]
@@ -180,7 +181,7 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(0, session.SetupCount);
         Assert.Empty(session.WarmupSetNames);
         Assert.Empty(session.MeasuredSetNames);
-        Assert.Equal(caller.Token, Assert.Single(session.Tokens));
+        Assert.Empty(session.Tokens);
     }
 
     [Fact]
@@ -243,7 +244,7 @@ public sealed class MeasureParameterSetExecutionTests
     }
 
     [Fact]
-    public async Task Module_rotates_on_one_session_and_returns_set_report()
+    public async Task Module_uses_one_session_and_setup_per_set_and_returns_set_report()
     {
         const string tenant = "acme-secret-884422";
         var session = RecordingSession.Create(
@@ -267,17 +268,18 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Null(outcome.SafeError);
         Assert.Equal(1, writer.Writes);
         Assert.Equal("testdb-a", writer.Target);
-        Assert.Equal(["B", "A", "A", "B"], writer.Runs.Select(run => run.ParameterSet));
-        Assert.Equal([1, 1, 2, 2], writer.Runs.Select(run => run.Repetition));
+        Assert.Equal(["A", "A", "B", "B"], writer.Runs.Select(run => run.ParameterSet));
+        Assert.Equal([1, 2, 1, 2], writer.Runs.Select(run => run.Repetition));
         Assert.DoesNotContain(writer.Runs, run => run.Repetition == 0);
-        Assert.Equal(1, session.ConnectionCount);
-        Assert.Equal(1, session.SetupCount);
+        Assert.Equal(2, session.ConnectionCount);
+        Assert.Equal(2, session.SetupCount);
         Assert.Equal(["A", "B"], session.WarmupSetNames);
-        Assert.Equal(["B", "A", "A", "B"], session.MeasuredSetNames);
-        var setup = Assert.Single(session.Commands, command => command.Sql.Contains("INSERT #ids", StringComparison.Ordinal));
-        Assert.Equal(["@tenant", "@id"], setup.Parameters.Select(parameter => parameter.Name));
-        Assert.Equal(tenant, setup.Parameters[0].Value);
-        Assert.Equal(11, setup.Parameters[1].Value);
+        Assert.Equal(["A", "A", "B", "B"], session.MeasuredSetNames);
+        var setups = session.Commands.Where(command => command.Sql.Contains("INSERT #ids", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, setups.Length);
+        Assert.All(setups, setup => Assert.Equal(["@tenant", "@id"], setup.Parameters.Select(parameter => parameter.Name)));
+        Assert.Equal([11, 22], setups.Select(setup => Assert.IsType<int>(setup.Parameters[1].Value)));
+        Assert.All(setups, setup => Assert.Equal(tenant, setup.Parameters[0].Value));
         Assert.All(session.Commands, command => Assert.Equal(17, command.TimeoutSeconds));
         AssertNoCacheControl(session.Commands);
 
@@ -296,7 +298,7 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(session.Identity, report.Target);
         Assert.Equal(2, report.Repeat);
         Assert.Equal(4, report.MeasuredRunCount);
-        Assert.Equal(1, report.SetupExecutionCount);
+        Assert.Equal(2, report.SetupExecutionCount);
         Assert.Equal(["A", "B"], report.WarmupOrder);
         Assert.Equal(MeasuredOrderRule, report.MeasuredOrderRule);
         Assert.Equal(PlanCacheWarning, report.PlanCacheWarning);
@@ -356,6 +358,26 @@ public sealed class MeasureParameterSetExecutionTests
     }
 
     [Fact]
+    public async Task Module_second_case_failure_retains_first_case_runs_and_reports_matrix_stop()
+    {
+        var session = RecordingSession.Create(setCount: 2, failOnQueryNumber: 4);
+
+        var outcome = await Module(session).ExecuteAsync(MeasureSets(2, Inputs("A", "B")));
+
+        Assert.NotEqual(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
+        Assert.Equal(["A"], report.Sets.Select(set => set.Name));
+        Assert.Equal(["A", "A"], Assert.IsAssignableFrom<IReadOnlyList<CompareRunArtifact>>(outcome.BenchmarkRuns!)
+            .Select(run => run.ParameterSet));
+        Assert.Equal(new MatrixExecutionCoverage(2, 1, 0, new MatrixFailedCase(1, SetName: "B", Phase: "sql")), outcome.Coverage);
+        Assert.Equal(outcome.Coverage, outcome.Error?.MatrixStop);
+        Assert.Equal(2, session.ConnectionCount);
+        Assert.Equal(2, session.SetupCount);
+        Assert.Equal(["A"], session.WarmupSetNames);
+        Assert.Equal(["A", "A"], session.MeasuredSetNames);
+    }
+
+    [Fact]
     public async Task Module_maps_artifact_failure_to_local_storage_without_a_report()
     {
         var session = RecordingSession.Create(setCount: 2);
@@ -365,9 +387,9 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(SqlHarnessExitCode.LocalStorage, outcome.ExitCode);
         Assert.Null(outcome.Report);
         Assert.Contains("disk unavailable", outcome.SafeError, StringComparison.Ordinal);
-        Assert.Equal(1, session.ConnectionCount);
+        Assert.Equal(2, session.ConnectionCount);
         Assert.Equal(["A", "B"], session.WarmupSetNames);
-        Assert.Equal(["B", "A"], session.MeasuredSetNames);
+        Assert.Equal(["A", "B"], session.MeasuredSetNames);
     }
 
     [Fact]
@@ -434,7 +456,7 @@ public sealed class MeasureParameterSetExecutionTests
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Null(outcome.Report);
-        Assert.Equal($"failed 1000 and 10000 and {base64}", outcome.SafeError);
+        Assert.Contains($"failed 1000 and 10000 and {base64}", outcome.SafeError, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -448,10 +470,10 @@ public sealed class MeasureParameterSetExecutionTests
         var outcome = await Module(session).ExecuteAsync(MeasureSets(2, Inputs("A", "B", "C")));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.Null(outcome.Report);
-        Assert.Equal(1, session.ConnectionCount);
-        Assert.Equal(["A", "B", "C"], session.WarmupSetNames);
-        Assert.Empty(session.MeasuredSetNames);
+        Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
+        Assert.Equal(2, session.ConnectionCount);
+        Assert.Equal(["A"], session.WarmupSetNames);
+        Assert.Equal(["A", "A"], session.MeasuredSetNames);
         Assert.Contains("measured run failed", outcome.SafeError, StringComparison.Ordinal);
     }
 
@@ -575,10 +597,15 @@ public sealed class MeasureParameterSetExecutionTests
             IReadOnlyList<PreparedMeasureParameterSet> sets,
             CancellationToken cancellationToken = default)
         {
-            session.UseSuppliedSession(sets.Count);
             using var raw = new CanonicalResultAccumulator();
-            return await new MeasureParameterSetRunner(Dialect, comparisonMaximumRows)
-                .ExecuteAsync(session, operation, sets, raw, cancellationToken);
+            session.UseSuppliedSession(sets.Count);
+            return await new MeasureParameterSetRunner(Dialect, session, comparisonMaximumRows)
+                .ExecuteAsync(
+                    TargetResolver.Resolve(Target(), Profiles()),
+                    operation,
+                    sets,
+                    raw,
+                    cancellationToken);
         }
     }
 
@@ -744,10 +771,7 @@ public sealed class MeasureParameterSetExecutionTests
         {
             if (setCount < 1)
                 throw new ArgumentOutOfRangeException(nameof(setCount));
-            if (ConnectionCount != 0)
-                throw new InvalidOperationException("The physical session was already opened.");
             _setCount = setCount;
-            ConnectionCount = 1;
         }
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
@@ -795,7 +819,7 @@ public sealed class MeasureParameterSetExecutionTests
             _queryCount = number;
             if (TryGetSetName(command, out var setName))
             {
-                if (number <= _setCount)
+                if (!WarmupSetNames.Contains(setName, StringComparer.Ordinal))
                     WarmupSetNames.Add(setName);
                 else
                     MeasuredSetNames.Add(setName);

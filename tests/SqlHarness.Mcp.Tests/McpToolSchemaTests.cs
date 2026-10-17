@@ -898,9 +898,9 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("executions", query, StringComparison.Ordinal);
             Assert.Contains("validation: passed", query, StringComparison.Ordinal);
             Assert.Contains("execution: not-run", query, StringComparison.Ordinal);
-            Assert.Contains("validation: passed", measure, StringComparison.Ordinal);
-            Assert.Contains("execution: not-run", measure, StringComparison.Ordinal);
-            Assert.Contains("setup classification", measure, StringComparison.Ordinal);
+            Assert.Equal(
+                "Measure one query across repeats. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence.",
+                measure);
             Assert.Contains("pass means no elapsed regression", compare, StringComparison.Ordinal);
             Assert.Contains("not improvement", compare, StringComparison.Ordinal);
             Assert.Contains("not domain equivalence", compare, StringComparison.Ordinal);
