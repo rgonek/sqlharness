@@ -79,6 +79,9 @@ public sealed class SqlSafetyControlFlowTests
     [InlineData("EXEC dbo.P")]
     [InlineData("EXEC sp_executesql N'SELECT 1'")]
     [InlineData("RETURN 1")]
+    [InlineData("DECLARE @t TABLE (a int); WITH x AS (SELECT a FROM @t) UPDATE dbo.x SET a = 2")]
+    [InlineData("DECLARE @t TABLE (a int); WITH x AS (SELECT a FROM @t) UPDATE appdb.dbo.x SET a = 2")]
+    [InlineData("DECLARE @t TABLE (a int); WITH y AS (SELECT a FROM @t), x AS (SELECT a FROM dbo.y) UPDATE x SET a = 2")]
     public void Read_only_execution_rejects_unsafe_session_and_control_commands(string sql)
     {
         var decision = Query(sql);

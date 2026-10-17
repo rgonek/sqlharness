@@ -198,6 +198,53 @@ public class SqlSafetyTierTests
     }
 
     [Theory]
+    [InlineData("SET NOCOUNT ON")]
+    [InlineData("SET TRANSACTION ISOLATION LEVEL SNAPSHOT")]
+    [InlineData("BEGIN TRAN; COMMIT")]
+    [InlineData("DECLARE @a int; DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT a FROM dbo.T; OPEN c; FETCH NEXT FROM c INTO @a; CLOSE c; DEALLOCATE c")]
+    public void Read_only_session_admissions_report_session_tier_and_flags(string sql)
+    {
+        AssertReadOnlySessionTier(Query(sql));
+        AssertReadOnlySessionTier(_classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false));
+    }
+
+    [Theory]
+    [InlineData("PRINT 'message'")]
+    [InlineData("RETURN")]
+    [InlineData("WHILE 1 = 0 BEGIN SELECT 1; END")]
+    [InlineData("BEGIN TRY SELECT 1; END TRY BEGIN CATCH SELECT 2; END CATCH")]
+    public void Read_only_output_and_control_flow_report_read_only_tier_and_flags(string sql)
+    {
+        AssertReadOnlyTier(Query(sql));
+        AssertReadOnlyTier(_classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false));
+    }
+
+    [Theory]
+    [InlineData("DECLARE @t TABLE (a int); WITH x AS (SELECT a FROM @t) UPDATE x SET a = 2")]
+    [InlineData("CREATE TABLE #t (a int); WITH x AS (SELECT a FROM #t) UPDATE x SET a = 2")]
+    public void Read_only_local_cte_dml_reports_session_tier_without_persistent_mutation(string sql)
+    {
+        AssertReadOnlySessionTier(Query(sql));
+        AssertReadOnlySessionTier(_classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false));
+    }
+
+    private static void AssertReadOnlySessionTier(SqlSafetyDecision decision)
+    {
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.Equal(SqlRiskTier.Session, decision.Tier);
+        Assert.False(decision.HasMutation);
+        Assert.True(decision.HasSessionLocalWork);
+    }
+
+    private static void AssertReadOnlyTier(SqlSafetyDecision decision)
+    {
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.Equal(SqlRiskTier.ReadOnly, decision.Tier);
+        Assert.False(decision.HasMutation);
+        Assert.False(decision.HasSessionLocalWork);
+    }
+
+    [Theory]
     [InlineData(SqlRiskTier.ReadOnly, "read-only")]
     [InlineData(SqlRiskTier.Session, "session")]
     [InlineData(SqlRiskTier.Dml, "dml")]

@@ -1012,8 +1012,14 @@ internal sealed class SqlSafetyClassifier
     {
         target = TargetResolution.Unsupported;
         var ctes = update.WithCtesAndXmlNamespaces?.CommonTableExpressions;
-        var targetName = (update.UpdateSpecification.Target as NamedTableReference)?.SchemaObject.BaseIdentifier.Value;
-        if (ctes is null || ctes.Count == 0 || string.IsNullOrEmpty(targetName) || update.UpdateSpecification.FromClause is not null)
+        if (update.UpdateSpecification.Target is not NamedTableReference namedTarget ||
+            namedTarget.SchemaObject.Identifiers.Count != 1 ||
+            namedTarget.Alias is not null ||
+            ctes is null || ctes.Count == 0 ||
+            update.UpdateSpecification.FromClause is not null)
+            return false;
+        var targetName = namedTarget.SchemaObject.BaseIdentifier.Value;
+        if (string.IsNullOrEmpty(targetName))
             return false;
 
         var cteByName = new Dictionary<string, CommonTableExpression>(StringComparer.OrdinalIgnoreCase);
@@ -1047,7 +1053,8 @@ internal sealed class SqlSafetyClassifier
             case VariableTableReference variable when scope.IsProvenTableVariable(variable):
                 target = TargetResolution.TableVariable;
                 return true;
-            case NamedTableReference named when ctes.ContainsKey(named.SchemaObject.BaseIdentifier.Value):
+            case NamedTableReference named when named.SchemaObject.Identifiers.Count == 1 &&
+                ctes.ContainsKey(named.SchemaObject.BaseIdentifier.Value):
                 return TryResolveCteBase(named.SchemaObject.BaseIdentifier.Value, ctes, visited, scope, use, out target);
             case NamedTableReference named when scope.IsProvenLocalTempTable(named.SchemaObject, use):
                 target = TargetResolution.Resolved(named.SchemaObject);
