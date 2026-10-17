@@ -566,7 +566,7 @@ public sealed class ActivityJournal : IActivityJournal
         }
         catch (SqliteException exception) when (exception.SqliteErrorCode is SqliteCorrupt or SqliteNotADatabase)
         {
-            Quarantine();
+            QuarantineIfStillCorrupt();
             Migrate();
         }
     }
@@ -616,11 +616,30 @@ public sealed class ActivityJournal : IActivityJournal
         CreateCurrentJournal(fresh);
     }
 
-    private void Quarantine()
+    internal void QuarantineIfStillCorrupt()
     {
         var suffix = ".corrupt-" + _time.GetUtcNow().UtcDateTime.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
         using var migrationLock = AcquireMigrationLock();
-        RenameJournal(suffix);
+        if (IsCorruptJournalAtCurrentPath())
+            RenameJournal(suffix);
+    }
+
+    private bool IsCorruptJournalAtCurrentPath()
+    {
+        if (!File.Exists(_path))
+            return false;
+
+        try
+        {
+            using var connection = Connect();
+            using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA quick_check(1);";
+            return !string.Equals(Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture), "ok", StringComparison.Ordinal);
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode is SqliteCorrupt or SqliteNotADatabase)
+        {
+            return true;
+        }
     }
 
     private FileStream AcquireMigrationLock()

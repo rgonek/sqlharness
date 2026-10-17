@@ -99,6 +99,20 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
+    public void Delayed_quarantine_does_not_rename_replacement_journal()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Assert.IsType<ActivityJournal>(Open(temp, TextWriter.Null));
+        journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+
+        journal.QuarantineIfStillCorrupt();
+
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operations"));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "activity.db.corrupt-*"));
+    }
+
+    [Fact]
     public async Task Concurrent_old_journal_openers_create_one_backup_and_keep_new_journal()
     {
         using var temp = new JournalTempDirectory();
