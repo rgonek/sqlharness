@@ -27,6 +27,9 @@ function renderPanel(payload = comparison, versions = [{ version: "v0", hash: "h
     ] }], unassigned: [] },
     "/api/sessions/7/optimization/compare": payload,
     "/api/operations/214": operationDetail({ operation: operation({ id: 214, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }),
+    "/api/operations/214/optimization": comparison,
+    "/api/operations/214/optimization?case=all&aggregate=sum": comparison,
+    "/api/operations/214/optimization?case=customer-9001&aggregate=mean": comparison,
   })
   return renderApp(searchUrl)
 }
@@ -97,7 +100,7 @@ test("operation navigation round-trips the selected multi-group session search",
   const planTarget = new URL(planLink.getAttribute("href")!, "http://dashboard")
   expect(Object.fromEntries(planTarget.searchParams)).toMatchObject({ returnSession: "7", returnSubject: "Orders", returnDb: "shop", returnGroup: "fp-2", returnScope: "fragment:customer", returnA: "v1", returnB: "v2", returnCase: "customer-9001", returnAgg: "mean" })
   await userEvent.click(await screen.findByRole("link", { name: "Operation #214" }))
-  const back = await screen.findByRole("link", { name: "mcp:session" })
+  const back = await screen.findByRole("link", { name: /mcp:session/ })
   const target = new URL(back.getAttribute("href")!, "http://dashboard")
   expect(target.pathname).toBe("/sessions/7")
   expect(Object.fromEntries(target.searchParams)).toMatchObject({ subject: "Orders", db: "shop", group: "fp-2", scope: "fragment:customer", a: "v1", b: "v2", case: "customer-9001", agg: "mean" })

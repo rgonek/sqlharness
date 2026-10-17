@@ -7,7 +7,8 @@ import { agentLabel } from "@/lib/agents"
 import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
 
 /** Live elapsed time for running rows when `now` is given; recorded duration otherwise. */
-export function OperationTable({ operations, now }: { operations: OperationSummary[]; now?: number }) {
+export function OperationTable({ operations, now, showInternal }: { operations: OperationSummary[]; now?: number; showInternal: boolean }) {
+  const visibleOperations = showInternal ? operations : operations.filter(operation => !operation.operation.toLowerCase().includes("artifact"))
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -15,6 +16,7 @@ export function OperationTable({ operations, now }: { operations: OperationSumma
           <TableRow>
             <TableHead>#</TableHead>
             <TableHead>Started</TableHead>
+            <TableHead>Session / subject</TableHead>
             <TableHead>Agent</TableHead>
             <TableHead>Operation</TableHead>
             <TableHead>Status</TableHead>
@@ -25,21 +27,25 @@ export function OperationTable({ operations, now }: { operations: OperationSumma
           </TableRow>
         </TableHeader>
         <TableBody>
-          {operations.map(operation => (
+          {visibleOperations.map(operation => (
             <TableRow key={operation.id}>
               <TableCell>
-                <Link to="/operations/$id" params={{ id: String(operation.id) }}>
+                <Link to="/operations/$id" params={{ id: String(operation.id) }} search={{ returnSession: operation.sessionId }}>
                   {operation.id}
                 </Link>
               </TableCell>
               <TableCell className="whitespace-nowrap">{formatTimestamp(operation.startedAt)}</TableCell>
               <TableCell>
-                {agentLabel(operation.agentKind)}
-                {operation.agentModel && <div className="text-sm text-muted-foreground">{operation.agentModel}{operation.agentModelSource === "transcript" ? " (transcript)" : ""}</div>}
+                <Link to="/sessions/$id" params={{ id: String(operation.sessionId) }} className="underline">Session #{operation.sessionId}</Link>
+                {operation.subject && <div className="text-sm text-muted-foreground">{operation.subject}</div>}
+              </TableCell>
+              <TableCell>
+                <span className="whitespace-nowrap" title={operation.agentModel ? `${operation.agentModel}${operation.agentModelSource === "transcript" ? " (transcript)" : ""}` : undefined}>{agentLabel(operation.agentKind)}</span>
               </TableCell>
               <TableCell>
                 <div>{operation.operation}</div>
                 {operation.progress && <div className="text-sm text-muted-foreground">{operation.progress.polls} polls</div>}
+                {operation.versionPair && <div className="text-sm text-muted-foreground">{operation.versionPair} · {formatNumber(operation.readsBefore)} → {formatNumber(operation.readsAfter)}</div>}
               </TableCell>
               <TableCell>
                 <StatusBadge operation={operation} />

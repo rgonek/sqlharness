@@ -2,7 +2,7 @@ import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery,
 import { ConflictError, getJson, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
 import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, MutationRequestSummary, OperationDetail, OperationSummary, OptimizationComparison, OptimizationSection, Page, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
-export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string }
+export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string; hasCompare?: boolean }
 
 const flag = (value: boolean | undefined) => (value === undefined ? undefined : String(value))
 export type OperationFilters = { from?: string; to?: string; profile?: string; unprofiled?: boolean; dimensions?: Record<string, string | null>; status?: string; operation?: string }
@@ -59,6 +59,7 @@ export function useSessions(filters: SessionFilters) {
     queryFn: ({ pageParam }) => getJson<Page<SessionSummary>>("/api/sessions", {
       agent: filters.agent, transport: filters.transport,
       archived: flag(filters.archived), starred: flag(filters.starred), q: filters.q,
+      hasCompare: flag(filters.hasCompare),
       cursor: pageParam, limit: 50,
     }),
     initialPageParam: undefined as number | undefined,

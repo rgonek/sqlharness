@@ -6,6 +6,7 @@ import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { SessionVersionDiff } from "@/components/SessionVersionDiff"
 import { Button } from "@/components/ui/button"
 import { conditionsDifferMessage, optimizationMarkdown } from "@/lib/optimizationMarkdown"
+import { badgeTier } from "@/lib/flags"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SqlVersionOption } from "@/lib/compare"
 import type { SessionSearch } from "@/router"
@@ -80,14 +81,14 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
       <Button type="button" size="sm" variant={activeAggregate === "mean" ? "secondary" : "outline"} aria-pressed={activeAggregate === "mean"} onClick={() => updateSearch({ agg: "mean" })}>Mean</Button>
     </div>
     {comparison.coverageLabel && <p className="text-sm text-muted-foreground">{comparison.coverageLabel}</p>}
-    {comparison.mixed && <p className="text-sm text-amber-700 dark:text-amber-300">Mixed: {comparison.mixed.better} better, {comparison.mixed.worse} worse — {comparison.mixed.worstCaseLabel}: logical reads {comparison.mixed.worstChangePercent > 0 ? "+" : ""}{Math.round(comparison.mixed.worstChangePercent)}%</p>}
+    {comparison.mixed && <p data-tier={badgeTier("mixed")} className="text-sm text-amber-700 dark:text-amber-300">Mixed: {comparison.mixed.better} better, {comparison.mixed.worse} worse — {comparison.mixed.worstCaseLabel}: logical reads {comparison.mixed.worstChangePercent > 0 ? "+" : ""}{Math.round(comparison.mixed.worstChangePercent)}%</p>}
     {comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <>
       {comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <div className="overflow-x-auto">
         <table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2 pr-3">Table</th><th className="px-3 py-2">Scans before</th><th className="px-3 py-2">Scans after</th><th className="px-3 py-2">Logical reads before</th><th className="px-3 py-2">Logical reads after</th><th className="px-3 py-2">Change</th></tr></thead>
           <tbody>{comparison.tables.map(row => <tr key={row.table} className="border-b"><th scope="row" className="py-2 pr-3 text-left font-normal">{row.table}</th><td className="px-3 py-2">{row.scansBefore ?? "—"}</td><td className="px-3 py-2">{row.scansAfter ?? "—"}</td><td className="px-3 py-2">{row.readsBefore ?? "—"}</td><td className="px-3 py-2">{row.readsAfter ?? "—"}</td><td className="px-3 py-2">{row.change}</td></tr>)}
             {comparison.collapsed && <tr><td colSpan={6} className="py-2 text-muted-foreground">{comparison.collapsed.label}</td></tr>}</tbody></table>
       </div>}
-      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict} (policy v2)</dd>}</dl>
+      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict}</dd>}</dl>
     </>}
     {comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">Operation #{comparison.operationId}</Link>
       : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} /></div>}

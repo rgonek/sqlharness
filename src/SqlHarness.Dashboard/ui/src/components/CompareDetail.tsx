@@ -8,6 +8,7 @@ import { PlanChanges } from "@/components/PlanChanges"
 import { SqlBlock } from "@/components/SqlBlock"
 import { ConditionsList } from "@/components/ConditionsList"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
+import { badgeTier } from "@/lib/flags"
 
 type JsonObject = Record<string, unknown>
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
@@ -28,7 +29,7 @@ function compareCards(detail: OperationDetail): CompareCard[] {
     const caseLabel = availableCaseLabel(index, casePairs.get(index) ?? undefined)
     return {
       key: `cell ${String(matrixCase.index)}`,
-      label: caseLabel && caseLabel !== "Case 1 of 1" ? caseLabel : `Cell ${String(matrixCase.index)}`,
+      label: caseLabel && caseLabel !== "Case 1 of 1" ? caseLabel : `Case ${String(matrixCase.index)}`,
       pair: casePairs.get(index) ?? null,
       equivalence: object(matrixCase.equivalence),
       regression: object(matrixCase.regression),
@@ -37,7 +38,7 @@ function compareCards(detail: OperationDetail): CompareCard[] {
     const index = pair.baseline.matrixCell
     return {
       key: pair.label,
-      label: index === null ? "Compare" : availableCaseLabel(index, pair) ?? `Cell ${index}`,
+      label: index === null ? "Compare" : availableCaseLabel(index, pair) ?? `Case ${index}`,
       pair,
       equivalence: object(detail.summary),
       regression: object(detail.compareRegression),
@@ -58,7 +59,7 @@ function Cases({ detail, selectedCase, onCaseChange }: { detail: OperationDetail
     <div className="flex flex-wrap items-center gap-3">
       <label className="text-sm">Case <select aria-label="Case" value={card?.pair?.baseline.caseId ?? selectedCase} onChange={event => onCaseChange?.(event.target.value)} className="ml-2 rounded-md border bg-background px-2 py-1">{cards.filter(item => item.pair).map(item => <option key={item.pair!.baseline.caseId} value={item.pair!.baseline.caseId}>{item.label}</option>)}</select></label>
       <label className="text-sm">Side <select aria-label="Side" value={side} onChange={event => setSide(event.target.value as typeof side)} className="ml-2 rounded-md border bg-background px-2 py-1"><option value="baseline">Baseline</option><option value="candidate">Candidate</option></select></label>
-      {card && <span className="text-sm text-muted-foreground">Execution {detail.operation.status} · {regressionLabel(card.regression)} · {equivalenceLabel(card.equivalence)}</span>}
+      {card && <span className="text-sm text-muted-foreground">Execution {detail.operation.status} · <span data-tier={card.regression?.verdict === "fail" ? badgeTier("regression") : undefined} title={regressionLabel(card.regression) === "No assessment" ? "No regression assessment is available for this comparison." : typeof card.regression?.policyVersion === "number" ? `Policy v${card.regression.policyVersion}` : undefined}>{regressionLabel(card.regression)}</span> · <span data-tier={card.equivalence?.equivalent === false ? badgeTier("results-differ") : undefined}>{equivalenceLabel(card.equivalence)}</span></span>}
     </div>
     {selected ? <><VariantPanel variant={selected} engine={detail.operation.engine} compareMetrics />
       <ReproScriptButtons operationId={detail.operation.id} side={selected.variant as "baseline" | "candidate"} caseId={selected.caseId} />

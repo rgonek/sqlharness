@@ -3,6 +3,7 @@ import { NotFoundError } from "@/api/client"
 import { useSession } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { OperationTable } from "@/components/OperationTable"
+import { InternalOperationsToggle } from "@/components/InternalOperationsToggle"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SessionAnnotationHeader } from "@/components/SessionAnnotationHeader"
@@ -13,6 +14,7 @@ import { formatTimestamp } from "@/lib/format"
 import { clientLabel, rootLabel } from "@/lib/roots"
 import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
+import { useShowInternalOperations } from "@/lib/internalOperations"
 
 const unknownRootsHint =
   "Unknown: the client did not declare roots, has not answered yet, or uses MCP 2026-07-28, where SQLHarness does not request roots."
@@ -34,6 +36,7 @@ export function SessionPage() {
 }
 
 function SessionView({ id }: { id: number }) {
+  const [showInternal, setShowInternal] = useShowInternalOperations()
   const detail = useSession(id)
 
   if (detail.error) return <ErrorState error={detail.error} />
@@ -93,7 +96,8 @@ function SessionView({ id }: { id: number }) {
           <CardDescription>Newest first, up to 500.</CardDescription>
         </CardHeader>
         <CardContent>
-          <OperationTable operations={operations} />
+          <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />
+          <OperationTable operations={operations} showInternal={showInternal} />
         </CardContent>
       </Card>
     </div>

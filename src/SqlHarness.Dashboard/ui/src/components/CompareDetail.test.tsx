@@ -18,6 +18,26 @@ test("compare detail disclosures start collapsed", () => {
   }
 })
 
+test("no assessment explains its meaning and keeps policy version in a tooltip", () => {
+  renderCompare(operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareCases: [{ index: 0, equivalence: { mode: "Ordered", equivalent: false }, regression: { policyVersion: 2 } }],
+    variants: [variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0 })],
+  }))
+  expect(screen.getByText("No assessment")).toHaveAttribute("title", "No regression assessment is available for this comparison.")
+  expect(screen.getByText("Results differ").closest("[data-tier='warning']")).not.toBeNull()
+})
+
+test("policy version appears only in the assessment tooltip", () => {
+  renderCompare(operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareCases: [{ index: 0, equivalence: { mode: "Ordered", equivalent: true }, regression: { verdict: "fail", policyVersion: 2 } }],
+    variants: [variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0 })],
+  }))
+  expect(screen.getByText("Regression detected")).toHaveAttribute("title", "Policy v2")
+  expect(screen.queryByText("policy v2", { exact: false })).toBeNull()
+})
+
 test("per-run details select one case and one side at a time", async () => {
   const onCaseChange = vi.fn()
   const detail = operationDetail({

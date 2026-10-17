@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { Archive, ArchiveRestore, Star, StickyNote } from "lucide-react"
+import { Archive, ArchiveRestore, Star, StickyNote, TriangleAlert } from "lucide-react"
 import type { SessionSummary } from "@/api/types"
 import { useUpdateSessionAnnotation } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
@@ -44,10 +44,18 @@ function SessionRow({ session, now }: { session: SessionSummary; now: number }) 
         {clientLabel(session) && <div className="text-sm text-muted-foreground">{clientLabel(session)}</div>}
       </TableCell>
       <TableCell>{session.transport}{session.mcpMode ? ` (${session.mcpMode})` : ""}</TableCell>
-      <TableCell className="max-w-64 truncate font-mono">{session.cwd ?? "—"}</TableCell>
+      <TableCell className="font-mono" title={session.cwd ?? undefined}>{session.cwd ? session.cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? session.cwd : "—"}</TableCell>
       <TableCell className="whitespace-nowrap">{formatTimestamp(session.firstSeen)}</TableCell>
       <TableCell className="whitespace-nowrap">{formatAge(session.lastSeen, now)}</TableCell>
       <TableCell className="text-right">{session.operations}</TableCell>
+      <TableCell>
+        {session.hasCompare && <Link to="/sessions/$id" params={{ id: String(session.id) }} className="flex flex-wrap gap-1" aria-label="Optimization compares">
+          {session.optimization.map(item => <Badge key={item.subject} variant="outline" className="gap-1">
+            {item.warning && <TriangleAlert aria-label="Warning" className="size-3 text-amber-600" />}
+            {item.subject} {item.change}
+          </Badge>)}
+        </Link>}
+      </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">
           {session.running > 0 && <Badge>{session.running} running</Badge>}
@@ -81,6 +89,7 @@ export function SessionTable({ pinned, sessions, now }: { pinned: SessionSummary
             <TableHead>First seen</TableHead>
             <TableHead>Last seen</TableHead>
             <TableHead className="text-right">Operations</TableHead>
+            <TableHead>Optimization</TableHead>
             <TableHead>State</TableHead>
             <TableHead className="w-8"><span className="sr-only">Actions</span></TableHead>
           </TableRow>
@@ -88,7 +97,7 @@ export function SessionTable({ pinned, sessions, now }: { pinned: SessionSummary
         <TableBody>
           {pinned.map(session => <SessionRow key={session.id} session={session} now={now} />)}
           {pinned.length > 0 && sessions.length > 0 && (
-            <TableRow aria-hidden="true"><TableCell colSpan={10} className="h-0 border-b-2 p-0" /></TableRow>
+            <TableRow aria-hidden="true"><TableCell colSpan={11} className="h-0 border-b-2 p-0" /></TableRow>
           )}
           {sessions.map(session => <SessionRow key={session.id} session={session} now={now} />)}
         </TableBody>

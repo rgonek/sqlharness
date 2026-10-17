@@ -6,8 +6,14 @@ import { operation } from "@/test/fixtures"
 
 test("succeeded is a plain badge", () => {
   render(<StatusBadge operation={operation()} />)
-  expect(screen.getByText("succeeded")).toBeInTheDocument()
+  expect(screen.getByText("succeeded").closest("[data-slot='badge']")).toHaveAttribute("data-tier", "outcome")
   expect(screen.queryByRole("button")).not.toBeInTheDocument()
+})
+
+test("running is muted informational text", () => {
+  render(<StatusBadge operation={operation({ status: "running" })} />)
+  expect(screen.getByText("running")).toHaveClass("text-muted-foreground")
+  expect(screen.getByText("running").closest("[data-slot='badge']")).toBeNull()
 })
 
 test("failed opens a dialog with the stored message", async () => {

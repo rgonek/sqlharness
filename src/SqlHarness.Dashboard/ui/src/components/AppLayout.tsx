@@ -15,7 +15,7 @@ const links = [
   { to: "/", label: "Live", exact: true },
   { to: "/sessions", label: "Sessions", exact: false },
   { to: "/operations", label: "Operations", exact: false },
-  { to: "/stats", label: "Statistics", exact: false },
+  { to: "/stats", label: "Usage", exact: false },
   { to: "/profiles", label: "Profiles", exact: false },
   { to: "/mutations", label: "Mutations", exact: false },
   { to: "/settings", label: "Settings", exact: false },

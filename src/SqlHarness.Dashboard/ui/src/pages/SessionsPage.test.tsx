@@ -52,6 +52,27 @@ test("starred sessions are pinned above the others and show titles", async () =>
   expect(screen.getByRole("button", { name: "Unstar session cli:pin" })).toBeInTheDocument()
 })
 
+test("shows concise working directories and optimization badges without clipping state", async () => {
+  stubFetch({
+    "/api/agents": [],
+    "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
+    "/api/sessions?archived=false&starred=false&limit=50": { items: [session({
+      cwd: "C:\\work\\sqlharness", hasCompare: true,
+      optimization: [{ subject: "orders-by-customer", change: "−94%", warning: true }],
+      running: 2, failed: 1, rejected: 1, abandoned: 1,
+    })], nextCursor: null },
+  })
+  renderApp("/sessions")
+  expect(await screen.findByText("sqlharness")).toHaveAttribute("title", "C:\\work\\sqlharness")
+  expect(screen.getByText("orders-by-customer −94%")).toBeInTheDocument()
+  expect(screen.getByLabelText("Warning")).toBeInTheDocument()
+  const states = screen.getByText("2 running").parentElement!
+  expect(states).toHaveTextContent("1 failed")
+  expect(states).toHaveTextContent("1 rejected")
+  expect(states).toHaveTextContent("1 abandoned")
+  expect(states).not.toHaveClass("truncate")
+})
+
 test("archived view and search change the query", async () => {
   const calls = stubFetch({
     "/api/agents": [],
@@ -62,6 +83,19 @@ test("archived view and search change the query", async () => {
   expect(calls).toContain("/api/sessions?archived=true&starred=false&limit=50")
   await userEvent.type(screen.getByRole("searchbox", { name: "Search sessions" }), "BSI_1")
   await waitFor(() => expect(calls).toContain("/api/sessions?archived=true&starred=false&q=BSI_1&limit=50"))
+})
+
+test("contains compare filters both starred and unstarred session queries", async () => {
+  const calls = stubFetch({
+    "/api/agents": [],
+    "/api/sessions": { items: [], nextCursor: null },
+  })
+  renderApp("/sessions")
+  await userEvent.click(await screen.findByRole("checkbox", { name: "Contains compare" }))
+  await waitFor(() => {
+    expect(calls).toContain("/api/sessions?archived=false&starred=true&hasCompare=true&limit=50")
+    expect(calls).toContain("/api/sessions?archived=false&starred=false&hasCompare=true&limit=50")
+  })
 })
 
 test("star and archive buttons patch the annotation and refetch", async () => {

@@ -2,15 +2,18 @@ import { useSearch } from "@tanstack/react-router"
 import { useOperations } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { OperationTable } from "@/components/OperationTable"
+import { InternalOperationsToggle } from "@/components/InternalOperationsToggle"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useShowInternalOperations } from "@/lib/internalOperations"
 
 export type OperationListSearch = {
   from?: string; to?: string; profile?: string; unprofiled?: boolean; dimensions?: string
 }
 
 export function OperationsPage() {
+  const [showInternal, setShowInternal] = useShowInternalOperations()
   const search = useSearch({ from: "/operations" }) as OperationListSearch
   let dimensions: Record<string, string | null> = {}
   try {
@@ -31,6 +34,7 @@ export function OperationsPage() {
     <Card>
       <CardHeader><CardTitle>Filtered operation history</CardTitle></CardHeader>
       <CardContent className="space-y-3">
+        <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />
         <p className="text-sm text-muted-foreground">
           {search.profile ? `Profile: ${search.profile}` : search.unprofiled ? "Profile: No profile" : "All profiles"}
           {Object.entries(dimensions).map(([name, value]) => ` · ${name} = ${value ?? "Unknown (missing)"}`)}
@@ -38,7 +42,7 @@ export function OperationsPage() {
         </p>
         {query.isPending ? <Skeleton className="h-32 w-full" /> : operations.length === 0
           ? <p className="text-sm text-muted-foreground">No operations match this scope.</p>
-          : <OperationTable operations={operations} />}
+          : <OperationTable operations={operations} showInternal={showInternal} />}
         {query.hasNextPage && <Button type="button" variant="outline" disabled={query.isFetchingNextPage}
           onClick={() => void query.fetchNextPage()}>
           {query.isFetchingNextPage ? "Loading…" : "Load more operations"}
