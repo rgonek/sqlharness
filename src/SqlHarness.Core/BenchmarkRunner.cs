@@ -54,7 +54,23 @@ internal static class BenchmarkRunner
         }
         catch
         {
-            _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
+            try
+            {
+                // Cleanup still runs so a connection with an open transaction is
+                // discarded. Its diagnostic must not replace the SQL failure that
+                // caused this path; SessionCleanupException carries its warnings to
+                // the owning operation when cleanup itself is the primary failure.
+                _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
+            }
+            catch (SessionCleanupException)
+            {
+                // A failed rollback/discard is the authoritative operation failure.
+                throw;
+            }
+            catch
+            {
+                // Preserve the original execution exception.
+            }
             if (sessionState is not null)
             {
                 try
@@ -135,9 +151,30 @@ internal static class BenchmarkRunner
             OperationFailureMapper.CompleteCleanup(
                 primaryException,
                 () => BenchmarkCollector.AppendMessages(session, messageStart, raw));
-            _ = session.ConsumeMessages(messageStart);
+            try
+            {
+                _ = session.ConsumeMessages(messageStart);
+            }
+            catch when (primaryException is not null)
+            {
+                // Preserve the SQL failure when diagnostics cannot be snapshotted.
+            }
             if (endLogicalBatch)
-                _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
+            {
+                try
+                {
+                    _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
+                }
+                catch (SessionCleanupException)
+                {
+                    throw;
+                }
+                catch when (primaryException is not null)
+                {
+                    // Keep setup/query failure identity while session cleanup still
+                    // performs its fail-closed discard behavior.
+                }
+            }
         }
     }
 }

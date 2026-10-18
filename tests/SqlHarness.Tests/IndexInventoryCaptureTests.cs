@@ -139,7 +139,9 @@ public sealed class IndexInventoryCaptureTests
         Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
         Assert.Equal(["setup", "warmup", "query-1", "query-2"], session.Labels);
         var measured = session.Commands
-            .Where(command => !command.Sql.Contains("STATISTICS", StringComparison.Ordinal))
+            .Where(command => !command.Sql.Contains("STATISTICS", StringComparison.Ordinal)
+                && !command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal)
+                && !command.Sql.StartsWith("SET NOCOUNT", StringComparison.Ordinal))
             .Select(command => command.Sql)
             .ToArray();
         Assert.Equal(

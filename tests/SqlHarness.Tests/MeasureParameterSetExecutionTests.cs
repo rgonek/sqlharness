@@ -280,7 +280,10 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.All(setups, setup => Assert.Equal(["@tenant", "@id"], setup.Parameters.Select(parameter => parameter.Name)));
         Assert.Equal([11, 22], setups.Select(setup => Assert.IsType<int>(setup.Parameters[1].Value)));
         Assert.All(setups, setup => Assert.Equal(tenant, setup.Parameters[0].Value));
-        Assert.All(session.Commands, command => Assert.Equal(17, command.TimeoutSeconds));
+        Assert.All(session.Commands.Where(command =>
+            !command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal)
+            && !command.Sql.StartsWith("SET NOCOUNT", StringComparison.Ordinal)),
+            command => Assert.Equal(17, command.TimeoutSeconds));
         AssertNoCacheControl(session.Commands);
 
         var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
@@ -355,6 +358,30 @@ public sealed class MeasureParameterSetExecutionTests
         var gainRecord = outcome.EmissionReceipt!.RawFootprint!;
         Assert.True(gainRecord.Bytes > 0);
         Assert.DoesNotContain(tenant, gainRecord.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Each_parameter_set_captures_post_setup_state_and_restores_after_warmup_and_repetitions()
+    {
+        var session = RecordingSession.Create(setCount: 2);
+        var runner = Runner(session);
+        var operation = Operation(repeat: 2);
+        var result = await runner.ExecuteAsync(operation, Prepared("A", "B"));
+
+        Assert.Equal(4, result.Runs.Count);
+        var captures = session.Commands.Where(command => command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal)).ToArray();
+        var restores = session.Commands.Where(command => command.Sql.StartsWith("SET NOCOUNT", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, captures.Length);
+        Assert.Equal(6, restores.Length); // one warmup and two repetitions per set
+        var commands = session.Commands.ToArray();
+        var setupIndexes = commands.Select((command, index) => (command, index))
+            .Where(item => item.command.Sql.StartsWith("INSERT #ids", StringComparison.Ordinal))
+            .Select(item => item.index).ToArray();
+        var captureIndexes = commands.Select((command, index) => (command, index))
+            .Where(item => item.command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal))
+            .Select(item => item.index).ToArray();
+        Assert.Equal(2, setupIndexes.Length);
+        Assert.All(Enumerable.Range(0, 2), index => Assert.True(captureIndexes[index] > setupIndexes[index]));
     }
 
     [Fact]
@@ -688,6 +715,12 @@ public sealed class MeasureParameterSetExecutionTests
 
         public void ValidateMeasuredBatch(string sql) => inner.ValidateMeasuredBatch(sql);
 
+        public Task<SessionState?> CaptureSessionStateAsync(ISqlSession session, CancellationToken ct) =>
+            inner.CaptureSessionStateAsync(session, ct);
+
+        public Task RestoreSessionStateAsync(ISqlSession session, SessionState? state, CancellationToken ct) =>
+            inner.RestoreSessionStateAsync(session, state, ct);
+
         public Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
             ISqlSession session,
             string sql,
@@ -848,6 +881,12 @@ public sealed class MeasureParameterSetExecutionTests
             if (command.Sql.Contains("STATISTICS", StringComparison.Ordinal))
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
 
+            if (command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal))
+                return Task.FromResult<ISqlReader>(FakeReader.SessionState());
+
+            if (command.Sql.StartsWith("SET NOCOUNT", StringComparison.Ordinal))
+                return Task.FromResult<ISqlReader>(FakeReader.Empty());
+
             if (command.Sql.Contains("CREATE TABLE #ids", StringComparison.Ordinal))
             {
                 if (_failSetup)
@@ -927,6 +966,8 @@ public sealed class MeasureParameterSetExecutionTests
         public int FieldCount => _results.Count == 0 ? 0 : Current.Names.Length;
         public int RecordsAffected => -1;
         public static FakeReader Empty() => new([]);
+        public static FakeReader SessionState() => new(
+            [new(["Options", "Isolation", "LockTimeout", "DateFirst", "DateFormat", "DeadlockPriority"], [[29560, 2, -1, 7, "mdy", 0]])]);
         public static FakeReader WithPlan(string[] names, object?[][] rows, string plan) =>
             new([new(names, rows), new(["Microsoft SQL Server 2005 XML Showplan"], [[plan]])]);
         public string GetName(int ordinal) => Current.Names[ordinal];

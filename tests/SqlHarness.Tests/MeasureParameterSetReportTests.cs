@@ -277,7 +277,7 @@ public sealed class MeasureParameterSetReportTests
         Assert.Equal(
             [
                 "target", "repeat", "measuredRunCount", "setupExecutionCount", "warmupOrder",
-                "measuredOrderRule", "planCacheWarning", "sets", "crossSetSummary", "artifactDirectory",
+                "measuredOrderRule", "planCacheWarning", "sets", "crossSetSummary", "artifactDirectory", "warnings",
             ],
             root.EnumerateObject().Select(property => property.Name).ToArray());
         Assert.Equal(MeasuredOrderRule, root.GetProperty("measuredOrderRule").GetString());

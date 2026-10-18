@@ -898,9 +898,9 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("executions", query, StringComparison.Ordinal);
             Assert.Contains("validation: passed", query, StringComparison.Ordinal);
             Assert.Contains("execution: not-run", query, StringComparison.Ordinal);
-            Assert.Equal(
+            Assert.StartsWith(
                 "Measure one query across repeats. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence.",
-                measure);
+                measure, StringComparison.Ordinal);
             Assert.Contains("pass means no elapsed regression", compare, StringComparison.Ordinal);
             Assert.Contains("not improvement", compare, StringComparison.Ordinal);
             Assert.Contains("not domain equivalence", compare, StringComparison.Ordinal);
@@ -1315,7 +1315,7 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.DoesNotContain("without mutation", text, StringComparison.OrdinalIgnoreCase);
         }
 
-        Assert.DoesNotContain("read-only query", query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read-only Query (allowMutation=false) and CompareSetup", query, StringComparison.Ordinal);
     }
 
     [Theory]

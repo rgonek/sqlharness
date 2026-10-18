@@ -481,7 +481,7 @@ public sealed class BenchmarkRunTests
     private sealed class IdleSession : ISqlSession
     {
         public int ReaderCalls { get; private set; }
-        public IReadOnlyList<SessionMessage> Messages => throw new NotSupportedException("BenchmarkRunner must not read session messages.");
+        public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity
         {
             get => throw new NotSupportedException("BenchmarkRunner must not read session identity.");

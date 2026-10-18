@@ -493,6 +493,8 @@ internal sealed class CoreSessionFactory : ISqlSessionFactory
                 await released.WaitAsync(ct);
             }
             ct.ThrowIfCancellationRequested();
+            if (command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal))
+                return new CoreReader([[29560, 2, -1, 7, "mdy", 0]]);
             return new CoreReader();
         }
         public ValueTask DisposeAsync() { disposed(); return ValueTask.CompletedTask; }
@@ -500,13 +502,16 @@ internal sealed class CoreSessionFactory : ISqlSessionFactory
 
     private sealed class CoreReader : ISqlReader
     {
-        public int FieldCount => 0;
+        private readonly object?[][] _rows;
+        private int _row = -1;
+        public CoreReader(object?[][]? rows = null) => _rows = rows ?? [];
+        public int FieldCount => _rows.Length == 0 ? 0 : _rows[0].Length;
         public int RecordsAffected => 0;
-        public string GetName(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
-        public Type GetFieldType(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public string GetName(int ordinal) => new[] { "Options", "Isolation", "LockTimeout", "DateFirst", "DateFormat", "DeadlockPriority" }[ordinal];
+        public Type GetFieldType(int ordinal) => _rows[_row][ordinal]!.GetType();
         public bool GetAllowNull(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
-        public object GetValue(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
-        public Task<bool> ReadAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
+        public object GetValue(int ordinal) => _rows[_row][ordinal]!;
+        public Task<bool> ReadAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(_rows.Length > 0 && ++_row < _rows.Length); }
         public Task<bool> NextResultAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

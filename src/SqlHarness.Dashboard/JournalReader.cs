@@ -465,7 +465,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 """,
                 parameters,
                 reader => (Operation: ReadOperation(reader, liveness),
-                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 36))));
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 37))));
             var filteredRows = rows.Where(row => !variableFiltered
                 || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
             matches.AddRange(liveFiltered

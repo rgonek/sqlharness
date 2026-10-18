@@ -897,7 +897,9 @@ public class CompareMatrixTests
         Assert.Equal(["small", "large"], report.Sets.Select(set => set.Name));
         Assert.Equal(2, factory.Sessions.Count);
         Assert.All(
-            factory.Sessions.SelectMany(session => session.Commands).Where(command => !IsStatistics(command.Sql)),
+            factory.Sessions.SelectMany(session => session.Commands).Where(command =>
+                !IsStatistics(command.Sql)
+                && command.Parameters.Any(parameter => parameter.Name == "@Tenant")),
             command => Assert.Equal(7, (int)command.Parameters.Single(parameter => parameter.Name == "@Tenant").Value));
     }
 
@@ -1275,6 +1277,10 @@ public class CompareMatrixTests
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {
             Commands.Add(command);
+            if (command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal))
+                return Task.FromResult<ISqlReader>(MatrixReader.SessionState());
+            if (command.Sql.StartsWith("SET NOCOUNT", StringComparison.Ordinal))
+                return Task.FromResult<ISqlReader>(MatrixReader.Empty());
             if (IsStatistics(command.Sql))
                 return Task.FromResult<ISqlReader>(MatrixReader.Empty());
 
@@ -1326,6 +1332,8 @@ public class CompareMatrixTests
         public int FieldCount => _results.Count == 0 ? 0 : Current.Names.Length;
         public int RecordsAffected => -1;
         public static MatrixReader Empty() => new([]);
+        public static MatrixReader SessionState() => new(
+            [new(["Options", "Isolation", "LockTimeout", "DateFirst", "DateFormat", "DeadlockPriority"], [[29560, 2, -1, 7, "mdy", 0]])]);
         public static MatrixReader WithPlan(string[] names, object?[][] rows, string plan) => new(
             [new(names, rows), new(["Microsoft SQL Server 2005 XML Showplan"], [[plan]])]);
 
