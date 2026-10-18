@@ -332,9 +332,10 @@ internal sealed class MeasureParameterSetRunner
                     setupExecutionCount++;
                 }
 
-                await ExecuteSetAsync(session, set, repetition: 0);
+                var sessionState = await _dialect.CaptureSessionStateAsync(session, ct);
+                await ExecuteSetAsync(session, set, repetition: 0, sessionState);
                 for (var repetition = 1; repetition <= operation.Repeat; repetition++)
-                    caseRuns.Add(await ExecuteSetAsync(session, set, repetition));
+                    caseRuns.Add(await ExecuteSetAsync(session, set, repetition, sessionState));
             }
             catch (Exception exception)
             {
@@ -393,7 +394,11 @@ internal sealed class MeasureParameterSetRunner
                 .Distinct(StringComparer.Ordinal).ToArray(),
         };
 
-        Task<CollectedBenchmarkRun> ExecuteSetAsync(ISqlSession session, PreparedMeasureParameterSet set, int repetition) =>
+        Task<CollectedBenchmarkRun> ExecuteSetAsync(
+            ISqlSession session,
+            PreparedMeasureParameterSet set,
+            int repetition,
+            SessionState? sessionState = null) =>
             BenchmarkRunner.ExecuteAsync(
                 _dialect,
                 session,
@@ -406,7 +411,8 @@ internal sealed class MeasureParameterSetRunner
                 repetition == 1 ? raw : null,
                 captureComparison: false,
                 _comparisonMaximumRows,
-                ct);
+                ct,
+                sessionState);
     }
 }
 

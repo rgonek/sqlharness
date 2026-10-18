@@ -14,6 +14,95 @@ internal sealed class SqlServerDialect : ISqlDialect
 
     public SqlEngine Engine => SqlEngine.SqlServer;
 
+    private static readonly (string Name, int Bit)[] RestorableOptions =
+    [
+        ("NOCOUNT", 512),
+        ("XACT_ABORT", 16384),
+        ("ARITHABORT", 64),
+        ("ANSI_NULLS", 32),
+        ("ANSI_WARNINGS", 8),
+        ("ANSI_PADDING", 16),
+        ("QUOTED_IDENTIFIER", 256),
+        ("CONCAT_NULL_YIELDS_NULL", 4096),
+        ("NUMERIC_ROUNDABORT", 8192),
+    ];
+
+    public async Task<SessionState?> CaptureSessionStateAsync(ISqlSession session, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        const string sql = "SELECT @@OPTIONS, transaction_isolation_level, @@LOCK_TIMEOUT, @@DATEFIRST, date_format, deadlock_priority FROM sys.dm_exec_sessions WHERE session_id = @@SPID";
+        var messageStart = session.Messages.Count;
+        await using var reader = await session.ExecuteReaderAsync(new SqlExecutionCommand(sql, [], 30), ct);
+        try
+        {
+            if (!await reader.ReadAsync(ct))
+                throw new InvalidOperationException("SQL Server did not return the current session state.");
+
+            return new SessionState(
+                Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture),
+                Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture),
+                Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture),
+                Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture),
+                Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture)
+                    ?? throw new InvalidOperationException("SQL Server returned no DATEFORMAT state."),
+                Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            _ = session.ConsumeMessages(messageStart);
+        }
+    }
+
+    public async Task RestoreSessionStateAsync(ISqlSession session, SessionState? state, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (state is null)
+            return;
+
+        var statements = RestorableOptions.Select(option =>
+            $"SET {option.Name} {((state.Options & option.Bit) == 0 ? "OFF" : "ON")}");
+        var isolation = state.IsolationLevel switch
+        {
+            1 => "READ UNCOMMITTED",
+            2 => "READ COMMITTED",
+            3 => "REPEATABLE READ",
+            4 => "SERIALIZABLE",
+            5 => "SNAPSHOT",
+            _ => throw new InvalidOperationException($"SQL Server returned unsupported isolation level {state.IsolationLevel}."),
+        };
+        var dateFormat = state.DateFormat.ToLowerInvariant() switch
+        {
+            "mdy" => "mdy",
+            "dmy" => "dmy",
+            "ymd" => "ymd",
+            "ydm" => "ydm",
+            "myd" => "myd",
+            "dym" => "dym",
+            _ => throw new InvalidOperationException("SQL Server returned an unsupported DATEFORMAT state."),
+        };
+        statements = statements.Concat(
+        [
+            $"SET TRANSACTION ISOLATION LEVEL {isolation}",
+            $"SET LOCK_TIMEOUT {state.LockTimeout.ToString(CultureInfo.InvariantCulture)}",
+            $"SET DATEFIRST {state.DateFirst.ToString(CultureInfo.InvariantCulture)}",
+            $"SET DATEFORMAT {dateFormat}",
+            $"SET DEADLOCK_PRIORITY {state.DeadlockPriority.ToString(CultureInfo.InvariantCulture)}",
+        ]);
+
+        var messageStart = session.Messages.Count;
+        try
+        {
+            await BenchmarkCollector.ExecuteAndDrainAsync(
+                session,
+                new SqlExecutionCommand(string.Join("; ", statements), [], 30),
+                ct);
+        }
+        finally
+        {
+            _ = session.ConsumeMessages(messageStart);
+        }
+    }
+
     public SqlSafetyDecision Classify(
         string sql,
         SqlUsage usage,

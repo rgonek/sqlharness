@@ -6,6 +6,7 @@ using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests;
@@ -142,6 +143,41 @@ public class SqlHarnessCompareTests
         Assert.Equal(
             ["baseline", "candidate", "candidate", "baseline"],
             cell.Runs.Select(run => run.Variant));
+    }
+
+    [Fact]
+    public async Task Measured_options_do_not_leak_between_variants()
+    {
+        var session = FakeCompareSession.Create();
+        var operation = Compare(repeat: 2) with
+        {
+            SetupSql = "SET ANSI_NULLS ON",
+            BaselineSql = "SET ANSI_NULLS OFF; SELECT Value FROM dbo.Clients",
+            CandidateSql = "SELECT Value FROM dbo.Clients -- candidate",
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        Assert.Equal([true, true, true], session.CandidateAnsiNullsAtStart);
+    }
+
+    [Fact]
+    public async Task SqlServerDialect_round_trips_the_captured_session_state()
+    {
+        var session = FakeCompareSession.Create();
+        var dialect = new SqlServerDialect();
+        var setupState = new SessionState(29560, 4, 1234, 3, "dmy", -5);
+        session.SetSessionState(setupState);
+
+        var captured = await dialect.CaptureSessionStateAsync(session, CancellationToken.None);
+        await session.ExecuteReaderAsync(new SqlExecutionCommand(
+            "SET NOCOUNT OFF; SET XACT_ABORT OFF; SET ARITHABORT OFF; SET ANSI_NULLS OFF; SET ANSI_WARNINGS OFF; SET ANSI_PADDING OFF; SET QUOTED_IDENTIFIER OFF; SET CONCAT_NULL_YIELDS_NULL OFF; SET NUMERIC_ROUNDABORT OFF; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SET LOCK_TIMEOUT -1; SET DATEFIRST 7; SET DATEFORMAT mdy; SET DEADLOCK_PRIORITY 0",
+            [], 30), CancellationToken.None);
+        await dialect.RestoreSessionStateAsync(session, captured, CancellationToken.None);
+
+        Assert.Equal(setupState, captured);
+        Assert.Equal(setupState, session.CurrentSessionState);
     }
 
     [Fact]
@@ -1014,12 +1050,15 @@ public class SqlHarnessCompareTests
         private readonly string? _plan;
         private int _baseline;
         private int _candidate;
+        private SessionState _sessionState = new(32, 2, -1, 7, "mdy", 0);
         private readonly List<SessionMessage> _messages = [];
 
         public List<string> Labels { get; } = [];
         public List<SqlExecutionCommand> Commands { get; } = [];
         public int FactoryOpenCount { get; private set; }
         public List<CancellationToken> StatisticsCleanupTokens { get; } = [];
+        public List<bool> CandidateAnsiNullsAtStart { get; } = [];
+        public SessionState CurrentSessionState => _sessionState;
         public IReadOnlyList<SessionMessage> Messages => _messages;
 
         // When set, benchmark commands emit these messages instead of English STATISTICS text.
@@ -1094,6 +1133,13 @@ public class SqlHarnessCompareTests
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {
             Commands.Add(command);
+            if (command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal))
+                return Task.FromResult<ISqlReader>(FakeReader.Single(
+                    ["Options", "Isolation", "LockTimeout", "DateFirst", "DateFormat", "DeadlockPriority"],
+                    [_sessionState.Options, _sessionState.IsolationLevel, _sessionState.LockTimeout,
+                        _sessionState.DateFirst, _sessionState.DateFormat, _sessionState.DeadlockPriority]));
+            if (!command.Sql.Contains("STATISTICS", StringComparison.OrdinalIgnoreCase) && TryExecuteSetBatch(command.Sql))
+                return Task.FromResult<ISqlReader>(FakeReader.Empty());
             if (command.Sql.Contains("STATISTICS IO ON", StringComparison.Ordinal))
             {
                 if (_failStatisticsEnable)
@@ -1123,6 +1169,8 @@ public class SqlHarnessCompareTests
             }
 
             var baseline = !command.Sql.Contains("candidate", StringComparison.Ordinal);
+            if (!baseline)
+                CandidateAnsiNullsAtStart.Add((_sessionState.Options & 32) != 0);
             var count = baseline ? ++_baseline : ++_candidate;
             var benchmarkNumber = _baseline + _candidate;
             if (_failOnBenchmarkNumber == benchmarkNumber)
@@ -1172,6 +1220,72 @@ public class SqlHarnessCompareTests
                 valueRows,
                 plans,
                 UnknownNullability));
+        }
+
+        public void SetSessionState(SessionState state) => _sessionState = state;
+
+        private bool TryExecuteSetBatch(string sql)
+        {
+            var statements = sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var hasSet = false;
+            foreach (var statement in statements)
+            {
+                if (!statement.StartsWith("SET ", StringComparison.OrdinalIgnoreCase))
+                    break;
+                hasSet = true;
+                var tokens = statement.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (tokens.Length >= 3 && tokens[1].Equals("TRANSACTION", StringComparison.OrdinalIgnoreCase))
+                {
+                    var level = string.Join(' ', tokens.Skip(4)).ToUpperInvariant() switch
+                    {
+                        "READ UNCOMMITTED" => 1,
+                        "READ COMMITTED" => 2,
+                        "REPEATABLE READ" => 3,
+                        "SERIALIZABLE" => 4,
+                        "SNAPSHOT" => 5,
+                        _ => throw new InvalidOperationException($"Unexpected isolation command: {statement}"),
+                    };
+                    _sessionState = _sessionState with { IsolationLevel = level };
+                    continue;
+                }
+
+                if (tokens.Length < 3)
+                    throw new InvalidOperationException($"Unexpected SET command: {statement}");
+                var name = tokens[1].ToUpperInvariant();
+                var value = tokens[2];
+                var bit = name switch
+                {
+                    "NOCOUNT" => 512,
+                    "XACT_ABORT" => 16384,
+                    "ARITHABORT" => 64,
+                    "ANSI_NULLS" => 32,
+                    "ANSI_WARNINGS" => 8,
+                    "ANSI_PADDING" => 16,
+                    "QUOTED_IDENTIFIER" => 256,
+                    "CONCAT_NULL_YIELDS_NULL" => 4096,
+                    "NUMERIC_ROUNDABORT" => 8192,
+                    _ => 0,
+                };
+                if (bit != 0)
+                {
+                    var options = value.Equals("ON", StringComparison.OrdinalIgnoreCase)
+                        ? _sessionState.Options | bit
+                        : _sessionState.Options & ~bit;
+                    _sessionState = _sessionState with { Options = options };
+                }
+                else if (name == "LOCK_TIMEOUT")
+                    _sessionState = _sessionState with { LockTimeout = int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) };
+                else if (name == "DATEFIRST")
+                    _sessionState = _sessionState with { DateFirst = int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) };
+                else if (name == "DATEFORMAT")
+                    _sessionState = _sessionState with { DateFormat = value };
+                else if (name == "DEADLOCK_PRIORITY")
+                    _sessionState = _sessionState with { DeadlockPriority = int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) };
+                else
+                    throw new InvalidOperationException($"Unexpected SET command: {statement}");
+            }
+
+            return hasSet && statements.All(statement => statement.StartsWith("SET ", StringComparison.OrdinalIgnoreCase));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

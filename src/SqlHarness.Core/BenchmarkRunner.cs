@@ -32,7 +32,8 @@ internal static class BenchmarkRunner
         CanonicalResultAccumulator? raw,
         bool captureComparison,
         int comparisonMaximumRows,
-        CancellationToken ct)
+        CancellationToken ct,
+        SessionState? sessionState = null)
     {
         CollectedCompareRun collected;
         IReadOnlyList<string> warnings;
@@ -54,9 +55,21 @@ internal static class BenchmarkRunner
         catch
         {
             _ = await SqlSessionLogicalBatch.EndAsync(session, ct);
+            if (sessionState is not null)
+            {
+                try
+                {
+                    await dialect.RestoreSessionStateAsync(session, sessionState, ct);
+                }
+                catch
+                {
+                    // Preserve the benchmark failure; the session will be disposed by its owning runner.
+                }
+            }
             throw;
         }
         warnings = await SqlSessionLogicalBatch.EndAsync(session, ct);
+        await dialect.RestoreSessionStateAsync(session, sessionState, ct);
         var artifact = collected.Artifact with { ParameterSet = parameterSet };
         return new CollectedBenchmarkRun(artifact, collected.Plans, artifact.PlanXmls.Select(PlanIdentity.Hash).ToArray())
         {

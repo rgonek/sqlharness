@@ -217,6 +217,24 @@ public class SqlHarnessMeasureTests
     }
 
     [Fact]
+    public async Task Setup_options_persist_for_the_case_after_each_run()
+    {
+        var session = FakeMeasureSession.Create();
+        var operation = Measure(1) with
+        {
+            SetupSql = "SET NOCOUNT ON",
+            QuerySql = "SET NOCOUNT OFF; SELECT Value FROM dbo.Clients",
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal([true, true], session.NoCountAtQueryStart);
+        Assert.Contains(session.Commands, command => command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal));
+        Assert.Contains(session.Commands, command => command.Sql.StartsWith("SET NOCOUNT ON; SET XACT_ABORT", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Measure_without_setup_starts_with_warmup()
     {
         var session = FakeMeasureSession.Create();
@@ -839,11 +857,13 @@ public class SqlHarnessMeasureTests
         private readonly string _plan;
         private readonly List<SessionMessage> _messages = [];
         private int _queryCount;
+        private bool _noCount;
 
         public List<string> Labels { get; } = [];
         public List<SqlExecutionCommand> Commands { get; } = [];
         public int FactoryOpenCount { get; private set; }
         public List<CancellationToken> StatisticsCleanupTokens { get; } = [];
+        public List<bool> NoCountAtQueryStart { get; } = [];
         public IReadOnlyList<SessionMessage> Messages => _messages;
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
@@ -902,11 +922,26 @@ public class SqlHarnessMeasureTests
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {
             Commands.Add(command);
+            if (command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal))
+                return Task.FromResult<ISqlReader>(FakeReader.Single(
+                    ["Options", "Isolation", "LockTimeout", "DateFirst", "DateFormat", "DeadlockPriority"],
+                    [(_noCount ? 512 : 0), 2, -1, 7, "mdy", 0]));
             if (command.Sql.Contains("STATISTICS IO ON", StringComparison.Ordinal))
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
             if (command.Sql.Contains("STATISTICS IO OFF", StringComparison.Ordinal))
             {
                 StatisticsCleanupTokens.Add(ct);
+                return Task.FromResult<ISqlReader>(FakeReader.Empty());
+            }
+            if (command.Sql.StartsWith("SET NOCOUNT ", StringComparison.OrdinalIgnoreCase) &&
+                command.Sql.Contains("; SET XACT_ABORT ", StringComparison.OrdinalIgnoreCase))
+            {
+                _noCount = command.Sql.StartsWith("SET NOCOUNT ON", StringComparison.OrdinalIgnoreCase);
+                return Task.FromResult<ISqlReader>(FakeReader.Empty());
+            }
+            if (command.Sql.StartsWith("SET NOCOUNT ON", StringComparison.OrdinalIgnoreCase))
+            {
+                _noCount = true;
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
             }
             if (command.Sql.Contains("CREATE TABLE #ids", StringComparison.Ordinal) ||
@@ -952,6 +987,9 @@ public class SqlHarnessMeasureTests
                 return Task.FromException<ISqlReader>(QueryFailure ?? new TimeoutException("measured run failed"));
             }
             Labels.Add(queryNumber == 1 ? "warmup" : $"query-{queryNumber - 1}");
+            NoCountAtQueryStart.Add(_noCount);
+            if (command.Sql.Contains("SET NOCOUNT OFF", StringComparison.OrdinalIgnoreCase))
+                _noCount = false;
             var measured = Math.Max(queryNumber - 1, 1);
             var reads = _tableReadsForMeasured?.Invoke(measured) ?? measured * 5L;
             var lines = StatisticsMessage(reads, measured * 10, measured * 10 + 2, _ioTable).Split('\n');

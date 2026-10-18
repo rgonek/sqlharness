@@ -203,25 +203,26 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 raw: null,
                 ct,
                 request.SetupSafety);
+            var sessionState = await dialect.CaptureSessionStateAsync(session, ct);
 
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.
             // Warmup is EXPLAIN/STATISTICS only; sidecar follows measured repetitions.
             var captureComparison = request.CompareResults != ResultComparisonMode.Off;
-            await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, 0, "baseline", raw: null, captureComparison: false, ct);
-            await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, 0, "candidate", raw: null, captureComparison: false, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, 0, "baseline", raw: null, captureComparison: false, sessionState, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, 0, "candidate", raw: null, captureComparison: false, sessionState, ct);
 
             var runs = new List<CollectedBenchmarkRun>(request.Repeat * 2);
             for (var repetition = 1; repetition <= request.Repeat; repetition++)
             {
                 if (repetition % 2 == 1)
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
                 }
                 else
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
                 }
             }
 
@@ -319,6 +320,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
         string variant,
         CanonicalResultAccumulator? raw,
         bool captureComparison,
+        SessionState? sessionState,
         CancellationToken ct) =>
         BenchmarkRunner.ExecuteAsync(
             dialect,
@@ -332,5 +334,6 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             raw,
             captureComparison,
             ComparisonMaximumRows,
-            ct);
+            ct,
+            sessionState);
 }

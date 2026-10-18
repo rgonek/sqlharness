@@ -887,12 +887,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 raw: null,
                 ct,
                 setupSafety);
+            var sessionState = await dialect.CaptureSessionStateAsync(session, ct);
 
             // Measure never runs ResultComparer; skip fingerprint retention and the 1M row comparison cap.
-            await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw: null, captureComparison: false, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw: null, captureComparison: false, sessionState, ct);
             var runs = new List<CollectedBenchmarkRun>(measure.Repeat);
             for (var repetition = 1; repetition <= measure.Repeat; repetition++)
-                runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", repetition == 1 ? raw : null, captureComparison: false, ct));
+                runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", repetition == 1 ? raw : null, captureComparison: false, sessionState, ct));
 
             rawFootprint = raw.Complete().Footprint;
             var targetReport = session.Identity;
@@ -1025,6 +1026,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         string variant,
         CanonicalResultAccumulator? raw,
         bool captureComparison,
+        SessionState? sessionState,
         CancellationToken ct) =>
         BenchmarkRunner.ExecuteAsync(
             dialect,
@@ -1038,7 +1040,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             raw,
             captureComparison,
             ComparisonMaximumRows,
-            ct);
+            ct,
+            sessionState);
 
     private static void ValidateMeasure(SqlHarnessMeasureOperation measure)
     {

@@ -22,6 +22,12 @@ internal interface ISqlDialect
 
     void ValidateMeasuredBatch(string sql);
 
+    Task<SessionState?> CaptureSessionStateAsync(ISqlSession session, CancellationToken ct) =>
+        Task.FromResult<SessionState?>(null);
+
+    Task RestoreSessionStateAsync(ISqlSession session, SessionState? state, CancellationToken ct) =>
+        Task.CompletedTask;
+
     Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,
