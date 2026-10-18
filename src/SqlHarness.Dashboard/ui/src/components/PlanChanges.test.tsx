@@ -1,94 +1,159 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
-import type { DistilledPlan } from "@/api/types"
 import type { ComparePair } from "@/lib/compare"
 import { variant } from "@/test/fixtures"
-import { PlanChanges } from "./PlanChanges"
 import { stubFetch } from "@/test/render"
+import { PlanChanges } from "./PlanChanges"
 
-const renderPlanChanges = (pair: ComparePair) => {
+const baselineA = "a".repeat(64)
+const baselineB = "b".repeat(64)
+const candidateA = "c".repeat(64)
+const candidateB = "d".repeat(64)
+const shapeHash = "e".repeat(64)
+
+const pair = (before = variant({ variant: "baseline", plans: [] }), after = variant({ variant: "candidate", plans: [] })): ComparePair => ({
+  label: "compare · Case 1",
+  baseline: before,
+  candidate: after,
+})
+
+const occurrence = (variantName: string, documentSha256: string, repetition: number, operator: string, actualRows: number) => ({
+  variant: variantName,
+  parameterSet: null,
+  caseId: "0",
+  caseLabel: "Case 1",
+  repetition,
+  documentOrdinal: 0,
+  statementIndex: 0,
+  spanStart: 0,
+  spanLength: 26,
+  statementId: 1,
+  statementCompId: 1,
+  documentSha256,
+  shapeHash,
+  format: "showplan-xml",
+  matchKind: "exact",
+  omitted: false,
+  stored: true,
+  operator,
+  actualRows,
+})
+
+const graph = (operator: string, actualRows: number) => ({
+  engine: "sqlserver",
+  error: null,
+  graph: {
+    engine: "sqlserver",
+    statements: [{ index: 0, statementId: 1, statementCompId: 1, rootNodeId: "0:0" }],
+    nodes: [{
+      id: "0:0", statementIndex: 0, showplanNodeId: 1, physicalOperator: operator, logicalOperator: operator,
+      object: { database: null, schema: "dbo", table: "Orders", index: null, alias: null }, tableReferenceId: null,
+      predicates: [], definedValues: [], estimatedRows: 10, actualRows, executions: 1, costFraction: 1,
+      warnings: actualRows > 20 ? ["Spill"] : [],
+    }],
+    edges: [],
+  },
+})
+
+const manifest = (occurrences: unknown[]) => ({ operationId: 10, state: "stored", occurrences })
+const sourceMap = (variantName: string, repetition: number) => ({
+  operationId: 10, state: "stored", engine: "sqlserver", variant: variantName, parameterSet: null,
+  caseId: "0", caseLabel: "Case 1", repetition, executedText: "SELECT * FROM dbo.Orders;",
+  algorithmVersion: 1, links: [], omittedDocuments: [], errors: [],
+})
+
+const renderPlanChanges = (value: ComparePair = pair()) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={client}><PlanChanges pair={pair} /></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><PlanChanges operationId={10} pair={value} /></QueryClientProvider>)
 }
 
-const plan: DistilledPlan = { statements: [{ root: { physicalOp: "Index Seek", objectName: "dbo.Orders", actualRows: 12, executions: 3 }, missingIndexes: [] }] }
+test("requires exact occurrence selection when same-shape actuals have multiple documents and repetitions", async () => {
+  const calls = stubFetch({
+    "/api/operations/10/plans": manifest([
+      occurrence("baseline", baselineA, 1, "Index Scan", 40),
+      occurrence("baseline", baselineB, 2, "Clustered Scan", 80),
+      occurrence("candidate", candidateA, 1, "Index Seek", 5),
+      occurrence("candidate", candidateB, 2, "Index Seek", 8),
+    ]),
+    "/api/operations/10/source-map": (url: URL) => new Response(JSON.stringify(sourceMap(url.searchParams.get("variant")!, Number(url.searchParams.get("repetition")))), { status: 200 }),
+    [`/api/plan-documents/${baselineB}/graph`]: graph("Clustered Scan", 80),
+    [`/api/plan-documents/${candidateB}/graph`]: graph("Index Seek", 8),
+  })
+  renderPlanChanges()
+  const before = await screen.findByRole("combobox", { name: "Baseline occurrence" }) as HTMLSelectElement
+  const after = screen.getByRole("combobox", { name: "Candidate occurrence" }) as HTMLSelectElement
+  expect(before).toHaveValue("")
+  expect(after).toHaveValue("")
+  expect(screen.getByText("Choose an exact baseline occurrence; multiple repetitions or documents are available.")).toBeInTheDocument()
+  expect(calls.filter(url => url.endsWith("/graph"))).toEqual([])
 
-test("same stored hash is stated explicitly without fetching plan details", async () => {
-  const calls = stubFetch({ "/api/plans/shared?view=distilled": plan })
-  renderPlanChanges({ label: "compare", baseline: variant({ plans: [{ repetition: 0, ordinal: 0, hash: "shared", stored: true }] }), candidate: variant({ variant: "candidate", plans: [{ repetition: 0, ordinal: 0, hash: "shared", stored: true }] }) })
-  expect(await screen.findByText("Same plan")).toBeInTheDocument()
-  expect(calls).toEqual([])
+  const baselineOption = Array.from(before.options).find(option => option.textContent?.includes(`Repetition 2 · document 1 · statement 1 · ${baselineB.slice(0, 8)}`))!
+  const candidateOption = Array.from(after.options).find(option => option.textContent?.includes(`Repetition 2 · document 1 · statement 1 · ${candidateB.slice(0, 8)}`))!
+  await userEvent.selectOptions(before, baselineOption.value)
+  await userEvent.selectOptions(after, candidateOption.value)
+  expect(await screen.findByRole("region", { name: "Statement 1 plan changes" })).toBeInTheDocument()
+  expect(screen.getByText("Clustered Scan")).toBeInTheDocument()
+  expect(screen.getByText("Index Seek")).toBeInTheDocument()
+  expect(screen.getByText("Clustered Scan: 80 rows / 1 executions")).toBeInTheDocument()
+  expect(calls).toContain(`/api/plan-documents/${baselineB}/graph`)
+  expect(calls).toContain(`/api/plan-documents/${candidateB}/graph`)
+  expect(calls.some(url => url.includes("source-map?variant=baseline&repetition=2&caseId=0"))).toBe(true)
+  expect(calls.some(url => url.includes("source-map?variant=candidate&repetition=2&caseId=0"))).toBe(true)
 })
 
-test("missing candidate plan is unavailable before hash equality", () => {
-  renderPlanChanges({ label: "compare", baseline: variant({ plans: [{ repetition: 0, ordinal: 0, hash: "same", stored: true }] }), candidate: variant({ variant: "candidate", plans: [{ repetition: 0, ordinal: 1, hash: "same", stored: false }] }) })
-  expect(screen.getByText("Plan not stored for the candidate.")).toBeInTheDocument()
+test("compares a unique selected occurrence through renderer-neutral graph data and exact SQL spans", async () => {
+  const calls = stubFetch({
+    "/api/operations/10/plans": manifest([
+      occurrence("baseline", baselineA, 2, "Index Scan", 40),
+      occurrence("candidate", candidateA, 2, "Index Seek", 5),
+    ]),
+    "/api/operations/10/source-map": (url: URL) => {
+      const variantName = url.searchParams.get("variant")!
+      const repetition = Number(url.searchParams.get("repetition"))
+      return new Response(JSON.stringify(sourceMap(variantName, repetition)), { status: 200 })
+    },
+    [`/api/plan-documents/${baselineA}/graph`]: graph("Index Scan", 40),
+    [`/api/plan-documents/${candidateA}/graph`]: graph("Index Seek", 5),
+  })
+  renderPlanChanges()
+  const region = await screen.findByRole("region", { name: "Statement 1 plan changes" })
+  expect(within(region).getByText("dbo.Orders")).toBeInTheDocument()
+  expect(within(region).getAllByText("SELECT * FROM dbo.Orders;")).toHaveLength(2)
+  expect(screen.getByText("Index Scan: 40 rows / 1 executions")).toBeInTheDocument()
+  expect(screen.getByText("Index Seek: 5 rows / 1 executions")).toBeInTheDocument()
+  expect(calls).toContain(`/api/plan-documents/${baselineA}/graph`)
+  expect(calls).toContain(`/api/plan-documents/${candidateA}/graph`)
 })
 
-test("renders access details and marks omitted actual rows and executions unavailable", async () => {
+test("reports identical raw documents without requesting or choosing an arbitrary occurrence", async () => {
+  const calls = stubFetch({
+    "/api/operations/10/plans": manifest([
+      occurrence("baseline", baselineA, 1, "Index Scan", 40),
+      occurrence("candidate", baselineA, 1, "Index Scan", 40),
+    ]),
+  })
+  renderPlanChanges()
+  expect(await screen.findByText("Same plan document")).toBeInTheDocument()
+  expect(calls.filter(url => url.includes("/graph"))).toEqual([])
+})
+
+test("shows plans-not-stored state and surfaces graph 422 errors", async () => {
+  stubFetch({ "/api/operations/10/plans": { operationId: 10, state: "plans not stored", occurrences: [] } })
+  const firstRender = renderPlanChanges()
+  expect(await screen.findByText(/Plans not stored/)).toBeInTheDocument()
+  firstRender.unmount()
+
   stubFetch({
-    "/api/plans/unchanged?view=distilled": plan,
-    "/api/plans/baseline?view=distilled": { statements: [{ root: { physicalOp: "Clustered Index Scan", objectName: "dbo.Orders", actualRows: 40, executions: 2, warnings: ["Implicit conversion"] }, missingIndexes: [] }] },
-    "/api/plans/candidate?view=distilled": { statements: [{ root: { physicalOp: "Index Seek", objectName: "dbo.Orders", actualRows: 5 }, missingIndexes: [{ table: "Orders", equalityColumns: ["CustomerId"], inequalityColumns: [], includeColumns: [], impact: 90 }] }] },
+    "/api/operations/10/plans": manifest([
+      occurrence("baseline", baselineA, 1, "Index Scan", 40),
+      occurrence("candidate", candidateA, 1, "Index Seek", 5),
+    ]),
+    [`/api/plan-documents/${baselineA}/graph`]: () => new Response(JSON.stringify({ engine: "sqlserver", graph: null, error: { code: "invalid_plan_graph", message: "Plan document could not be parsed." } }), { status: 422, headers: { "Content-Type": "application/json" } }),
+    [`/api/plan-documents/${candidateA}/graph`]: graph("Index Seek", 5),
   })
-  renderPlanChanges({ label: "compare", baseline: variant({ plans: [{ repetition: 0, ordinal: 0, hash: "baseline", stored: true }] }), candidate: variant({ variant: "candidate", plans: [{ repetition: 0, ordinal: 0, hash: "candidate", stored: true }] }) })
-  const table = await screen.findByRole("table", { name: /Access changes/ })
-  expect(within(within(table).getByRole("row", { name: /dbo.Orders/ })).getByText("Clustered Index Scan")).toBeInTheDocument()
-  expect(within(within(table).getByRole("row", { name: /dbo.Orders/ })).getByText("Index Seek")).toBeInTheDocument()
-  expect(screen.getByText("Clustered Index Scan: 40 rows / 2 executions")).toBeInTheDocument()
-  expect(screen.getByText("Index Seek: 5 rows / unavailable executions")).toBeInTheDocument()
-  expect(screen.getByText("Implicit conversion: resolved (1 → 0)")).toBeInTheDocument()
-  expect(screen.getByText("Missing index: introduced (0 → 1)")).toBeInTheDocument()
-})
-
-test("renders access and warning deltas against each changed statement plan", async () => {
-  const statementPlan = (physicalOp: string, objectName: string, warnings: string[] = []) => ({
-    statements: [{ root: { physicalOp, objectName, warnings, actualRows: 10, executions: 1 }, missingIndexes: [] }],
-  })
-  stubFetch({
-    "/api/plans/before1?view=distilled": statementPlan("Index Scan", "dbo.First"),
-    "/api/plans/after1?view=distilled": statementPlan("Index Seek", "dbo.First"),
-    "/api/plans/before2?view=distilled": statementPlan("Table Scan", "dbo.Second", ["Spill"]),
-    "/api/plans/after2?view=distilled": statementPlan("Index Seek", "dbo.Second"),
-  })
-  renderPlanChanges({ label: "compare", baseline: variant({ plans: [
-    { repetition: 0, ordinal: 0, hash: "unchanged", stored: true },
-    { repetition: 0, ordinal: 1, hash: "before1", stored: true },
-    { repetition: 0, ordinal: 2, hash: "before2", stored: true },
-  ] }), candidate: variant({ variant: "candidate", plans: [
-    { repetition: 0, ordinal: 0, hash: "unchanged", stored: true },
-    { repetition: 0, ordinal: 1, hash: "after1", stored: true },
-    { repetition: 0, ordinal: 2, hash: "after2", stored: true },
-  ] }) })
-
-  const first = await screen.findByRole("region", { name: "Statement 1 plan changes" })
-  const second = await screen.findByRole("region", { name: "Statement 2 plan changes" })
-  expect(within(first).getByRole("cell", { name: "dbo.First" })).toBeInTheDocument()
-  expect(within(first).getByText("Index Scan")).toBeInTheDocument()
-  expect(within(first).getByText("Index Seek")).toBeInTheDocument()
-  expect(within(first).queryByText("dbo.Second")).not.toBeInTheDocument()
-  expect(within(second).getByRole("cell", { name: "dbo.Second" })).toBeInTheDocument()
-  expect(within(second).getByText("Table Scan")).toBeInTheDocument()
-  expect(within(second).getByText("Index Seek")).toBeInTheDocument()
-  expect(within(second).getByText("Spill: resolved (1 → 0)")).toBeInTheDocument()
-})
-
-test("shows plan request failures through ErrorState", async () => {
-  stubFetch({
-    "/api/plans/baseline?view=distilled": () => new Response("broken", { status: 500 }),
-    "/api/plans/candidate?view=distilled": plan,
-  })
-  renderPlanChanges({ label: "compare", baseline: variant({ plans: [{ repetition: 0, ordinal: 0, hash: "baseline", stored: true }] }), candidate: variant({ variant: "candidate", plans: [{ repetition: 0, ordinal: 0, hash: "candidate", stored: true }] }) })
-  expect(await screen.findByText("Request failed")).toBeInTheDocument()
-  expect(screen.getByText(/500/)).toBeInTheDocument()
-})
-
-test("uses the statement text stored in plan XML and falls back to ordinal and hash when absent", async () => {
-  stubFetch({
-    "/api/plans/baseline?view=distilled": { statements: [{ root: { physicalOp: "Index Scan" } }] },
-    "/api/plans/candidate?view=distilled": { statements: [{ root: { physicalOp: "Index Seek" } }] },
-  })
-  renderPlanChanges({ label: "compare", baseline: variant({ plans: [{ repetition: 0, ordinal: 0, hash: "baseline", stored: true }] }), candidate: variant({ variant: "candidate", plans: [{ repetition: 0, ordinal: 0, hash: "candidate", stored: true }] }) })
-  expect(await screen.findByText("statement 0 (candidate)")).toBeInTheDocument()
+  renderPlanChanges()
+  expect(await screen.findByRole("alert")).toHaveTextContent("422")
+  expect(screen.getByRole("alert")).toHaveTextContent("invalid_plan_graph")
 })

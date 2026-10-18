@@ -3,7 +3,7 @@ import * as monaco from "monaco-editor/editor/editor.api"
 import EditorWorker from "monaco-editor/editor/editor.worker?worker"
 import { useEffect, useRef, useState } from "react"
 import type { editor as MonacoEditorApi } from "monaco-editor"
-import type { SqlMergeViewProps, SqlViewerProps } from "@/lib/sqlDiff"
+import type { PlanSqlViewerProps, SqlMergeViewProps, SqlViewerProps, SqlSourceSpan } from "@/lib/sqlDiff"
 
 globalThis.MonacoEnvironment = {
   getWorker: () => new EditorWorker(),
@@ -211,5 +211,83 @@ export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeVie
     <div className="h-[32rem] max-h-[32rem] overflow-hidden rounded border">
       <div ref={container} className="h-[32rem] w-full" />
     </div>
+  )
+}
+
+function sourceRange(model: MonacoEditorApi.ITextModel, span: SqlSourceSpan): MonacoEditorApi.IModelDeltaDecoration["range"] | null {
+  const start = Math.max(0, Math.min(span.start, model.getValueLength()))
+  const end = Math.max(start, Math.min(span.start + span.length, model.getValueLength()))
+  if (start === end) return null
+  const from = model.getPositionAt(start)
+  const to = model.getPositionAt(end)
+  return new monaco.Range(from.lineNumber, from.column, to.lineNumber, to.column)
+}
+
+/** Read-only executed SQL with source-map decorations; input text and offsets stay byte-for-byte as captured. */
+export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSelectionChange }: PlanSqlViewerProps) {
+  const theme = useSqlTheme()
+  const editorRef = useRef<MonacoEditorApi.IStandaloneCodeEditor | null>(null)
+  const decorationIdsRef = useRef<string[]>([])
+  const [ready, setReady] = useState(false)
+  const selectionRef = useRef(onSelectionChange)
+
+  useEffect(() => {
+    selectionRef.current = onSelectionChange
+  }, [onSelectionChange])
+
+  useEffect(() => {
+    if (!ready) return
+    const editor = editorRef.current
+    if (!editor) return
+    const model = editor.getModel()
+    if (!model) return
+    const decorations = highlightedSpans.flatMap(span => {
+      const range = sourceRange(model, span)
+      return range ? [{
+        range,
+        options: {
+          inlineClassName: "plan-source-highlight",
+          overviewRuler: { color: "var(--primary)", position: monaco.editor.OverviewRulerLane.Center },
+        },
+      }] : []
+    })
+    decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, decorations)
+    const revealRange = revealSpan ? sourceRange(model, revealSpan) : null
+    if (revealRange) editor.revealRangeInCenter(revealRange, monaco.editor.ScrollType.Smooth)
+  }, [highlightedSpans, ready, revealSpan, sql])
+
+  useEffect(() => {
+    if (!ready) return
+    const editor = editorRef.current
+    if (!editor) return
+    const listener = editor.onDidChangeCursorSelection(event => {
+      const model = editor.getModel()
+      if (!model) return
+      const start = model.getOffsetAt(event.selection.getStartPosition())
+      const end = model.getOffsetAt(event.selection.getEndPosition())
+      selectionRef.current(end > start ? { start, end } : null)
+    })
+    return () => listener.dispose()
+  }, [ready])
+
+  const onMount = (editor: MonacoEditorApi.IStandaloneCodeEditor) => {
+    editorRef.current = editor
+    setReady(true)
+  }
+
+  return (
+    <section aria-label="Executed SQL" className="space-y-2">
+      <h3 className="text-sm font-medium">Executed SQL batch</h3>
+      <div className="h-[32rem] max-h-[32rem] overflow-hidden rounded border">
+        <Editor
+          height="32rem"
+          language={languageFor(dialect)}
+          value={sql}
+          theme={theme}
+          onMount={onMount}
+          options={{ ...editorOptions, wordWrap: "off" }}
+        />
+      </div>
+    </section>
   )
 }

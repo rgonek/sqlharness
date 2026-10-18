@@ -166,7 +166,7 @@ test("compare shows baseline versus candidate and stored plans with operators", 
       ],
     }),
     // The server writes the statement text as "sql" and omits empty missing-index lists.
-    [`/api/plans/${hash}?view=distilled`]: { statements: [{ sql: "SELECT 1 /* plan */", root: { physicalOp: "Clustered Index Scan", objectName: "Orders" } }] },
+    "/api/operations/10/plans": { operationId: 10, state: "plans not stored", occurrences: [] },
   })
   renderApp("/operations/10")
 

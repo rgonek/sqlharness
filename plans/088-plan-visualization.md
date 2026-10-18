@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- IN PROGRESS — Tasks 0–5 implemented on `plan-088`; Task 2 review fixes await re-review, Task 3 awaits task review, Task 4 review-fix rounds 1–2 await scoped re-review, and Task 5 awaits scoped review. Final gate pending. Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
+- IN PROGRESS — Tasks 0–6 implemented on `plan-088`; Task 2 review fixes await re-review, Task 3 awaits task review, Task 4 review-fix rounds 1–2 await scoped re-review, Task 5 awaits scoped review, and Task 6 awaits scoped review. Final gate pending. Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
 - Priority P2; effort L; risk MEDIUM (undocumented `TableReferenceId`, Showplan schema drift).
 
 ## Global Constraints
@@ -95,8 +95,8 @@ The prototypes use no icon set. The official [vscode-mssql repository license](h
 
 ### Task 6: Plan viewer with two-way linking
 **Files:** UI `src/SqlHarness.Dashboard/ui/src/api/types.ts`, `queries.ts`; new `components/plan/PlanGraphView.tsx` (renderer from Task 0, lazy chunk, own layout, icons, cost %, estimated vs actual rows, warning badge, edge width by `log(rows)`, collapse subtrees, fit to selection), `PlanPropertiesPanel.tsx`, `PlanStatementSwitcher.tsx`, `PlanSourceView.tsx` (Monaco from `components/sql-editor/monaco.tsx` / `SqlEditors.tsx`, decorations, reveal, selection events), `PlanWorkbench.tsx` (shared selection state); replace `PlanTree` use in `VariantPanel.tsx`; theme tokens for dark mode; tests next to components.
-- [ ] Failing tests: click node → its spans decorated and revealed; select SQL → overlapping links' nodes highlighted and fitted; statement switch keeps the batch view; `exact`/`inferred`/`ambiguous`/`none` styles and rule tooltip; keyboard selection; `plans not stored` and `unmatched` states; dark theme.
-- [ ] FAIL → implement → PASS (`npm --prefix src/SqlHarness.Dashboard/ui test`, `ui-check`). Commit `feat(088): graphical plan viewer with SQL linking`.
+- [x] Failing tests: click node → its spans decorated and revealed; select SQL → overlapping links' nodes highlighted and fitted; statement switch keeps the batch view; `exact`/`inferred`/`ambiguous`/`none` styles and rule tooltip; keyboard selection; `plans not stored` and `unmatched` states; dark theme. Direct Monaco lifecycle coverage verifies exact source ranges, callback replacement, and listener cleanup.
+- [x] FAIL → implement → PASS (`npm --prefix src/SqlHarness.Dashboard/ui test`, `ui-check`). See the [Task 6 report](../.superpowers/sdd/088-plan-visualization/task-6-report.md). Commit `feat(088): graphical plan viewer with SQL linking`.
 
 ### Task 7: Documentation and verification
 - [ ] README (plan viewer, storage gate, what linking covers and what it does not), `docs/mcp.md` / capabilities text if the plan-storage state is exposed; remove `PlanTree`-only paths no longer used; `plans/README.md`; `just verify`; queue → history; commit `docs(088): record plan 088 evidence`.

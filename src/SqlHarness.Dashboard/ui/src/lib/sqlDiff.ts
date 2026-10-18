@@ -13,6 +13,16 @@ export interface SqlViewerProps {
   dialect: SqlDialect
 }
 
+export type SqlSourceSpan = { start: number; length: number }
+export type SqlSourceSelection = { start: number; end: number } | null
+export interface PlanSqlViewerProps {
+  sql: string
+  dialect: SqlDialect
+  highlightedSpans: SqlSourceSpan[]
+  revealSpan: SqlSourceSpan | null
+  onSelectionChange: (selection: SqlSourceSelection) => void
+}
+
 export interface SqlMergeViewProps {
   baseline: string
   candidate: string

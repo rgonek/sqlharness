@@ -187,13 +187,13 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
         </CardContent>
       </Card>
 
-      {detail.variants.length === 1 && <VariantPanel variant={detail.variants[0]} engine={op.engine} />}
+      {detail.variants.length === 1 && <VariantPanel operationId={op.id} variant={detail.variants[0]} engine={op.engine} />}
       {detail.variants.length > 1 && (
         <Tabs defaultValue={String(detail.variants[0].ordinal)}>
           <TabsList>
             {detail.variants.map(v => <TabsTrigger key={v.ordinal} value={String(v.ordinal)}>{variantLabel(v)}</TabsTrigger>)}
           </TabsList>
-          {detail.variants.map(v => <TabsContent key={v.ordinal} value={String(v.ordinal)}><VariantPanel variant={v} engine={op.engine} /></TabsContent>)}
+          {detail.variants.map(v => <TabsContent key={v.ordinal} value={String(v.ordinal)}><VariantPanel operationId={op.id} variant={v} engine={op.engine} /></TabsContent>)}
         </Tabs>
       )}
       <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Run diagnostics</summary><div className="mt-4 space-y-4">
