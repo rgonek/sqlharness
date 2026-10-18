@@ -3,7 +3,7 @@
 Status: addressed by plan 083 implementation on the `plan-083` feature branch. Recorded 2026-10-15
 against repository HEAD `4f1e5a1`; implementation and final-fix evidence are in
 [plan 083](../../plans/083-table-and-list-parameters.md) and its [verification record](../../plans/083-verification-evidence.md).
-The final review findings and controller gate failures have been fixed, with focused regressions passing. Windows `just verify` passed on the integrated feature tree; the final scoped Sol re-review and operator UAT remain pending before main integration. Linux verification was explicitly waived by the operator. Live SQL Server behavior is not yet verified.
+The final review findings and controller gate failures have been fixed, with focused regressions passing. Windows `just verify` passed on the integrated product tree, and the scoped Sol review approved the fixes with no new Critical or Important issues. Plan 083 is locally integrated into `main` at `55d23ba`. Linux verification was explicitly waived by the operator. Live SQL Server/SSMS behavior remains unverified pending operator-authorized UAT.
 
 ## Observed workflow
 

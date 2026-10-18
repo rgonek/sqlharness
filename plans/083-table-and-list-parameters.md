@@ -24,7 +24,7 @@
 
 ## Status and dependencies
 
-- IMPLEMENTATION VERIFIED on the integrated feature tree: main `66f47c3` was merged into the feature; Windows `just verify` passed on product tree `6c843243a3fc6ae69c08916d7191a51c5e8ecc4e`, preserved by integration commit `348ce019dd0d3c3a59e56c38652d7d423e42c39f`. Final scoped Sol re-review remains pending before the authorized feature-to-main fast-forward. Linux verification was explicitly waived by the operator. Live SQL Server/SSMS UAT remains pending; do not treat the plan as complete or claim it is merged into main. See [verification evidence](083-verification-evidence.md). Planning base `3be878e`; depends on 077 (MCP schemas) and 079 (conditions, scripts); independent of 080–082.
+- IMPLEMENTATION VERIFIED and locally integrated into `main` at `55d23bafa60edbec1e0d21ce787863794828a253`. The integrated Windows `just verify` passed on unchanged product tree `6c843243a3fc6ae69c08916d7191a51c5e8ecc4e` (see [verification evidence](083-verification-evidence.md)); final scoped Sol review approved both findings with no new Critical or Important issues. Task 5 automated verification is complete. Operator-authorized live SQL Server/SSMS UAT remains pending and its checklist item stays unchecked. Linux verification was explicitly waived. No push. Planning base `3be878e`; depends on 077 (MCP schemas) and 079 (conditions, scripts); independent of 080–082.
 - Priority P2; effort L; risk MEDIUM (binding fidelity; new execution step before setup).
 
 ## Global Constraints
@@ -109,6 +109,6 @@
 ### Task 5: Documentation, observation closure, verification
 
 - [x] **Step 1:** README parameters section and safety contract (rowsFrom classification, mutation rejection), `docs/mcp.md`, tool descriptions and capabilities; mark `docs/observations/table-valued-parameter-substitution.md` as addressed by 083; `skills/sqlharness/SKILL.md` guidance to pass TVPs/lists as parameters instead of in-batch fills. Capabilities already exposed all four configured limits, so its interface shape required no change.
-- [ ] **Step 2 (controller-owned):** `just verify` → exit 0; record tested revision/result after whole-branch review.
+- [x] **Step 2 (controller-owned):** `just verify` → exit 0 on integrated product tree `6c843243a3fc6ae69c08916d7191a51c5e8ecc4e`; details in [verification evidence](083-verification-evidence.md).
 - [ ] **Step 3 (operator-authorized):** UAT compare with a TVP from `rowsFrom` (500 ids) and an empty TVP case, plus a list matrix; confirm binding, labels, scripts run in SSMS; record without business data. No live UAT is authorized by this task.
-- [ ] **Step 4:** Record the Task 5 evidence with commit `docs(083): record plan 083 evidence`. Keep Plan 083 in the in-progress queue until controller review, gate, and UAT are complete; move it to history only at final completion.
+- [x] **Step 4:** Record and commit the Task 5 and final-fix evidence in [verification evidence](083-verification-evidence.md). Implementation verification and scoped review are complete; live UAT remains pending, so Plan 083 stays in progress.
