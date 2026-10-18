@@ -1484,6 +1484,22 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public async Task Non_scalar_parameter_descriptions_name_read_only_paths_and_mutation_rejection()
+    {
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        var tools = await ServedToolsAsync(served);
+        var parameters = ArgumentDescription(tools, "sqlharness_query", "parameters");
+        var parameterSetFiles = ArgumentDescription(tools, "sqlharness_measure", "parameterSetFiles");
+        var mutationParameters = ArgumentDescription(tools, "sqlharness_mutation", "parameters");
+
+        Assert.Contains("read-only query, measure, compare, watch, and snapshot", parameters, StringComparison.Ordinal);
+        Assert.Contains("Mutation rejects non-scalar inputs", parameters, StringComparison.Ordinal);
+        Assert.Contains("read-only measure and compare", parameterSetFiles, StringComparison.Ordinal);
+        Assert.Contains("Table-valued and list parameters are not supported", ToolDescription(tools, "sqlharness_mutation"), StringComparison.Ordinal);
+        Assert.Contains("Mutation rejects non-scalar inputs", mutationParameters, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Engine_guidance_changes_descriptions_only()
     {
         await using var sqlServer = await ServedCatalog.CreateAsync(Scope());

@@ -31,4 +31,23 @@ The focused tests include list execution on query/watch/snapshot, list execution
 
 No live SQL Server database was used, so catalog/source behavior against an actual server remains unverified. The requested full verification gate is intentionally left to the controller. The current scoped tests and in-memory SqlClient binding checks pass. No other known implementation blocker remains.
 
-Commit: pending.
+Initial implementation commit: `172a01b feat(083): resolve and bind table and list parameters`.
+
+## Fix round 1/5
+
+Addressed both Important findings from `task-3-review.md`:
+
+- `rowsFrom` now compares each source column name with the catalog TVP column at the same ordinal, in addition to the existing type/size/precision/scale checks. It rejects a source NULL immediately with the source row number and target column name when the target column is non-nullable.
+- Shared MCP parameter descriptions now name the supported read-only execution paths. Parameter-set-file descriptions identify read-only measure/compare support. Mutation's tool description and shared parameter field retain the explicit non-scalar rejection.
+- Added regressions for same-typed source columns in the wrong order/name and NULL into a non-nullable catalog column; added a served-schema assertion for parameter and parameterSetFiles contract text.
+
+TDD evidence:
+
+- RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter FullyQualifiedName~TableParameterMaterializerTests` — Failed 2, Passed 6. The same-typed reordered source was accepted; the NULL test exposed that the later record conversion rejected it without source row/column context.
+- GREEN materializer: same command — Passed 8, Failed 0, Skipped 0.
+- GREEN MCP schema: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -p:IsTestProject=true --no-restore --filter FullyQualifiedName~Non_scalar_parameter_descriptions_name_read_only_paths_and_mutation_rejection` — Passed 1, Failed 0, Skipped 0.
+- GREEN catalog budget: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -p:IsTestProject=true --no-restore --filter FullyQualifiedName~Served_tools_list_fits_32KiB_without_full_examples_or_runtime_cuts` — Passed 1, Failed 0, Skipped 0.
+
+The NULL path is now explicitly checked while reading `rowsFrom` output, before records are constructed. No live DB or full verification gate was run, per controller instructions.
+
+Fix-round commit message: `feat(083): validate rowsFrom column identity and nulls`.

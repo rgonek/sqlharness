@@ -93,7 +93,7 @@ public sealed class TableParameterMaterializerTests
         var session = FakeSession.WithSource(
             "dbo", "IdList",
             [new FakeColumn("Id", "int", 4, 10, 0, false)],
-            "nvarchar", ["1"]);
+            [new FakeColumn("Id", "nvarchar", 2, 0, 0, true)], [["1"]]);
         var input = new SqlHarnessParameterInput("Ids", "dbo.IdList", null)
         {
             Kind = "tvp",
@@ -108,13 +108,53 @@ public sealed class TableParameterMaterializerTests
     }
 
     [Fact]
+    public async Task Rows_from_rejects_same_typed_source_columns_with_wrong_names_or_order()
+    {
+        var session = FakeSession.WithSource(
+            "dbo", "Pair",
+            [new FakeColumn("LeftId", "int", 4, 10, 0, false), new FakeColumn("RightId", "int", 4, 10, 0, false)],
+            [new FakeColumn("RightId", "int", 4, 10, 0, false), new FakeColumn("LeftId", "int", 4, 10, 0, false)],
+            [[1, 2]]);
+        var input = new SqlHarnessParameterInput("Pairs", "dbo.Pair", null)
+        {
+            Kind = "tvp",
+            SourceSql = "SELECT RightId, LeftId FROM dbo.Source",
+        };
+
+        var exception = await Assert.ThrowsAsync<SqlHarnessSafetyException>(() =>
+            TableParameterMaterializer.MaterializeAsync(session, [input], SqlDialects.For(SqlEngine.SqlServer), CancellationToken.None));
+
+        Assert.Contains("column 1 is named 'RightId', expected 'LeftId'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rows_from_rejects_null_for_nonnullable_target_column()
+    {
+        var session = FakeSession.WithSource(
+            "dbo", "IdList",
+            [new FakeColumn("Id", "int", 4, 10, 0, false)],
+            [new FakeColumn("Id", "int", 4, 10, 0, true)],
+            [[null]]);
+        var input = new SqlHarnessParameterInput("Ids", "dbo.IdList", null)
+        {
+            Kind = "tvp",
+            SourceSql = "SELECT Id FROM dbo.Source",
+        };
+
+        var exception = await Assert.ThrowsAsync<SqlHarnessSafetyException>(() =>
+            TableParameterMaterializer.MaterializeAsync(session, [input], SqlDialects.For(SqlEngine.SqlServer), CancellationToken.None));
+
+        Assert.Contains("row 1 column 'Id' is NULL but the target column is not nullable", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Rows_from_enforces_combined_row_limit_during_materialization()
     {
         var values = Enumerable.Range(0, 100_001).Cast<object?>().ToArray();
         var session = FakeSession.WithSource(
             "dbo", "IdList",
             [new FakeColumn("Id", "int", 4, 10, 0, false)],
-            "int", values);
+            [new FakeColumn("Id", "int", 4, 10, 0, false)], values.Select(value => new object?[] { value }).ToArray());
         var input = new SqlHarnessParameterInput("Ids", "dbo.IdList", null)
         {
             Kind = "tvp",
@@ -129,32 +169,32 @@ public sealed class TableParameterMaterializerTests
 
     private sealed record FakeColumn(string Name, string TypeName, int Size, byte Precision, byte Scale, bool Nullable);
 
-    private sealed class FakeSession(string qualifiedName, FakeColumn[] catalogColumns, string? sourceType = null, object?[]? sourceValues = null) : ISqlSession
+    private sealed class FakeSession(string qualifiedName, FakeColumn[] catalogColumns, FakeColumn[]? sourceColumns = null, object?[][]? sourceRows = null) : ISqlSession
     {
         public IReadOnlyList<SessionMessage> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
         public static FakeSession Catalog(string schema, string type, FakeColumn[] columns) => new($"[{schema}].[{type}]", columns);
-        public static FakeSession WithSource(string schema, string type, FakeColumn[] columns, string sourceType, object?[] sourceValues) =>
-            new($"[{schema}].[{type}]", columns, sourceType, sourceValues);
+        public static FakeSession WithSource(string schema, string type, FakeColumn[] columns, FakeColumn[] sourceColumns, object?[][] sourceRows) =>
+            new($"[{schema}].[{type}]", columns, sourceColumns, sourceRows);
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct) => Task.FromResult<ISqlReader>(
             command.Sql.Contains("sys.table_types", StringComparison.Ordinal)
                 ? new FakeReader(qualifiedName, catalogColumns)
-                : new FakeSourceReader(sourceType!, sourceValues!));
+                : new FakeSourceReader(sourceColumns!, sourceRows!));
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class FakeSourceReader(string typeName, object?[] values) : ISqlReader
+    private sealed class FakeSourceReader(FakeColumn[] columns, object?[][] rows) : ISqlReader
     {
         private int index = -1;
-        public int FieldCount => 1;
+        public int FieldCount => columns.Length;
         public int RecordsAffected => -1;
-        public string GetName(int ordinal) => "SourceValue";
-        public Type GetFieldType(int ordinal) => values.FirstOrDefault()?.GetType() ?? typeof(string);
-        public string GetSqlTypeName(int ordinal) => typeName;
-        public SqlReaderColumnMetadata GetColumnMetadata(int ordinal) => new(typeName, null, null, null);
-        public bool GetAllowNull(int ordinal) => true;
-        public object GetValue(int ordinal) => values[index]!;
-        public Task<bool> ReadAsync(CancellationToken ct) { index++; return Task.FromResult(index < values.Length); }
+        public string GetName(int ordinal) => columns[ordinal].Name;
+        public Type GetFieldType(int ordinal) => rows.FirstOrDefault()?[ordinal]?.GetType() ?? typeof(string);
+        public string GetSqlTypeName(int ordinal) => columns[ordinal].TypeName;
+        public SqlReaderColumnMetadata GetColumnMetadata(int ordinal) => new(columns[ordinal].TypeName, columns[ordinal].Size, columns[ordinal].Precision, columns[ordinal].Scale);
+        public bool GetAllowNull(int ordinal) => columns[ordinal].Nullable;
+        public object GetValue(int ordinal) => rows[index][ordinal]!;
+        public Task<bool> ReadAsync(CancellationToken ct) { index++; return Task.FromResult(index < rows.Length); }
         public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

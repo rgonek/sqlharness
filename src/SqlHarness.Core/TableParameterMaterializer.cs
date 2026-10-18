@@ -80,7 +80,11 @@ internal static class TableParameterMaterializer
                     {
                         var row = new object?[reader.FieldCount];
                         for (var index = 0; index < row.Length; index++)
+                        {
                             row[index] = reader.GetValue(index) is DBNull ? null : reader.GetValue(index);
+                            if (row[index] is null && !tableShape!.Columns[index].Nullable)
+                                throw new SqlHarnessSafetyException($"rows for @{input.Name} row {collected.Count + 1} column '{tableShape.Columns[index].Name}' is NULL but the target column is not nullable");
+                        }
                         collected.Add(row);
                         totalValues++;
                         foreach (var value in row)
@@ -184,6 +188,9 @@ internal static class TableParameterMaterializer
         for (var index = 0; index < expected.Count; index++)
         {
             var expectedColumn = expected[index];
+            var actualName = reader.GetName(index);
+            if (!string.Equals(expectedColumn.Name, actualName, StringComparison.OrdinalIgnoreCase))
+                throw new SqlHarnessSafetyException($"rows for @{name} do not match {type}: column {index + 1} is named '{actualName}', expected '{expectedColumn.Name}'");
             var actual = reader.GetColumnMetadata(index);
             var expectedSize = expectedColumn.Type is SqlDbType.NVarChar or SqlDbType.NChar ? expectedColumn.Size / 2 : expectedColumn.Size;
             var sizedType = expectedColumn.Type is SqlDbType.NVarChar or SqlDbType.NChar or SqlDbType.VarChar or SqlDbType.Char or SqlDbType.VarBinary or SqlDbType.Binary;
