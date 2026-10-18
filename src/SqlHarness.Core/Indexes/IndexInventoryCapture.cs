@@ -100,6 +100,15 @@ internal static class IndexInventoryCapture
         {
             throw;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            if (commandStarted && !logicalBatchEnded)
+            {
+                logicalBatchEnded = true;
+                _ = await SqlSessionLogicalBatch.EndAsync(session, CancellationToken.None);
+            }
+            throw;
+        }
         catch (Exception exception) when (exception is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             if (commandStarted && !logicalBatchEnded)

@@ -12,6 +12,44 @@ namespace SqlHarness.Tests;
 
 public class SqlHarnessCompareTests
 {
+    [Fact]
+    public async Task Compare_report_includes_setup_and_variant_isolation_notices()
+    {
+        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(1) with
+        {
+            SetupSql = "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+            BaselineSql = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+            CandidateSql = "SELECT Value FROM dbo.Clients",
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Equal(
+            ["isolation level SERIALIZABLE in effect", "isolation level REPEATABLE READ in effect"],
+            report.Warnings);
+    }
+
+    [Fact]
+    public async Task Compare_matrix_failure_preserves_typed_session_warnings()
+    {
+        var session = FakeCompareSession.Create(failOnBenchmarkNumber: 1);
+        session.BenchmarkFailure = new SessionCleanupException(
+            "cleanup failed",
+            warnings: [SqlClientSession.BatchTimeoutWarning, SqlClientSession.ConnectionDiscardedWarning]);
+        var operation = new SqlHarnessCompareMatrixOperation(
+            Target(), null, "SELECT @Id AS Value", "SELECT @Id AS Value", [], 30, 1, "Id:int=1,2")
+        {
+            Context = new CompareContext("test-query", "whole"),
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Contains("cleanup failed", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(
+            [SqlClientSession.BatchTimeoutWarning, SqlClientSession.ConnectionDiscardedWarning],
+            outcome.SessionWarnings);
+    }
+
     private const string Token = "eyJsynthetic.access-never-emit.signature";
     private const string PlanA = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
     private const string PlanB = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"2\" PhysicalOp=\"Hash Match\"><Warnings><SpillToTempDb /></Warnings><Hash /></RelOp></BatchSequence></ShowPlanXML>";
@@ -990,6 +1028,8 @@ public class SqlHarnessCompareTests
         // When set, candidate benchmark commands emit these messages instead of StatisticsMessages.
         public IReadOnlyList<SessionMessage>? CandidateStatisticsMessages { get; set; }
 
+        public Exception? BenchmarkFailure { get; set; }
+
         // Simulates SqlClient reporting no AllowDBNull for result columns.
         public bool UnknownNullability { get; set; }
 
@@ -1086,7 +1126,7 @@ public class SqlHarnessCompareTests
             var count = baseline ? ++_baseline : ++_candidate;
             var benchmarkNumber = _baseline + _candidate;
             if (_failOnBenchmarkNumber == benchmarkNumber)
-                return Task.FromException<ISqlReader>(new TimeoutException("measured run failed"));
+                return Task.FromException<ISqlReader>(BenchmarkFailure ?? new TimeoutException("measured run failed"));
             var measured = Math.Max(count - 1, 1);
             Labels.Add(count == 1 ? $"warmup-{(baseline ? "A" : "B")}" : baseline ? "A" : "B");
             var overrideMessages = baseline ? StatisticsMessages : CandidateStatisticsMessages ?? StatisticsMessages;

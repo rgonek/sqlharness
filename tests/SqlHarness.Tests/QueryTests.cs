@@ -17,6 +17,21 @@ public class SqlHarnessQueryTests
     private const string Token = "eyJsynthetic.access-never-emit.signature";
 
     [Fact]
+    public async Task Query_report_includes_isolation_level_safety_notice()
+    {
+        var session = FakeSqlSession.WithIdentity(
+            "test-server",
+            "testdb-a",
+            FakeSqlReader.Rows(["Value"], [1]));
+
+        var outcome = await Module(session).ExecuteAsync(Query("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessQueryReport>(outcome.Report);
+        Assert.Equal(["isolation level SERIALIZABLE in effect"], report.Warnings);
+    }
+
+    [Fact]
     public async Task Query_dry_run_binds_parameters_without_authenticating_or_emitting_raw_tokens()
     {
         var azure = new FakeAzureCli(Token);

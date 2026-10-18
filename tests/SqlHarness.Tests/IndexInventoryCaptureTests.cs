@@ -210,6 +210,36 @@ public sealed class IndexInventoryCaptureTests
     }
 
     [Fact]
+    public async Task Cancellation_during_inventory_ends_batch_and_clears_doomed_pool()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var clearPoolCalls = 0;
+        await using var session = new SqlClientSession(
+            new Microsoft.Data.SqlClient.SqlConnection(),
+            new SessionMessageBuffer(),
+            (_, _) => { },
+            (_, _) =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ISqlReader>(new OperationCanceledException(cancellation.Token));
+            },
+            clearPool: _ => clearPoolCalls++);
+        session.Identity = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "test");
+
+        var exception = await Assert.ThrowsAsync<SessionCleanupException>(() =>
+            IndexInventoryCapture.CaptureAsync(
+                SqlEngine.SqlServer,
+                session,
+                [Showplan(new MissingHint(null, "dbo", "Orders"))],
+                10,
+                [],
+                cancellation.Token));
+
+        Assert.Equal([SqlClientSession.ConnectionDiscardedWarning], exception.Warnings);
+        Assert.Equal(1, clearPoolCalls);
+    }
+
+    [Fact]
     public async Task Same_table_name_in_two_schemas_maps_each_hint_to_its_own_slot()
     {
         using var temp = new TempDirectory();

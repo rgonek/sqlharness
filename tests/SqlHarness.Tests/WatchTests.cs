@@ -15,6 +15,21 @@ public class WatchTests
     private const string Token = "eyJsynthetic.access-never-emit.signature";
 
     [Fact]
+    public async Task Watch_report_includes_isolation_level_safety_notice()
+    {
+        var outcome = await Module(
+            FakeSession.WithScalarPolls(1, 1),
+            new FakeWatchClock()).ExecuteAsync(Watch(
+                sql: "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; SELECT 1 AS Value",
+                untilUnchanged: 1));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(
+            ["isolation level SERIALIZABLE in effect"],
+            Assert.IsType<SqlHarnessWatchReport>(outcome.Report).Warnings);
+    }
+
+    [Fact]
     public void Watch_projection_uses_compact_query_rows_and_keeps_source_and_projection_omissions()
     {
         var columns = new[]

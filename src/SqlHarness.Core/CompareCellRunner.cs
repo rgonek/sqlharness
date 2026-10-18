@@ -19,6 +19,7 @@ internal sealed record PreparedCompareFamily(
 {
     internal SqlSafetyDecision? SetupSafety { get; init; }
     internal SqlRiskTier Tier { get; init; }
+    internal IReadOnlyList<string> SafetyNotices { get; init; } = [];
 }
 
 internal static class CompareOperationPreparer
@@ -90,6 +91,10 @@ internal static class CompareOperationPreparer
             setupTemps)
         {
             SetupSafety = setupSafety,
+            SafetyNotices = (setupSafety?.Notices ?? [])
+                .Concat(baselineSafety.Notices)
+                .Concat(candidateSafety.Notices)
+                .Distinct(StringComparer.Ordinal).ToArray(),
             Tier = SqlRiskTiers.Max(
                 setupSafety?.Tier ?? SqlRiskTier.ReadOnly,
                 SqlRiskTiers.Max(baselineSafety.Tier, candidateSafety.Tier)),
@@ -137,6 +142,8 @@ internal sealed record CompareCellRequest(
     internal string? OperationRef { get; init; }
 
     internal SqlSafetyDecision? SetupSafety { get; init; }
+
+    internal IReadOnlyList<string> SafetyNotices { get; init; } = [];
 
     internal List<string> KnownSecrets { get; init; } = [];
 }
@@ -242,6 +249,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 Classification = request.Classification,
                 Parameters = BenchmarkReports.ToParameterReports(request.Parameters),
                 Warnings = setupWarnings
+                    .Concat(request.SafetyNotices)
                     .Concat(baselineRuns.SelectMany(run => run.Warnings))
                     .Concat(candidateRuns.SelectMany(run => run.Warnings))
                     .Distinct(StringComparer.Ordinal).ToArray(),

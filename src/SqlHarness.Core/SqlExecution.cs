@@ -442,6 +442,7 @@ internal sealed class SqlClientSession(
     private bool _discardAfterFailure;
     private Exception? _lastFailure;
     private bool _unusable;
+    private bool _poolCleared;
 
     public IReadOnlyList<SessionMessage> Messages => messages.Snapshot();
     public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
@@ -530,10 +531,7 @@ internal sealed class SqlClientSession(
         if (!_unusable)
         {
             _unusable = true;
-            if (clearPool is null)
-                SqlConnection.ClearPool(connection);
-            else
-                clearPool(connection);
+            ClearPool();
         }
         var warnings = IsTimeout(innerException)
             ? new[] { BatchTimeoutWarning, ConnectionDiscardedWarning }
@@ -559,6 +557,17 @@ internal sealed class SqlClientSession(
             _discardAfterFailure = true;
     }
 
+    private void ClearPool()
+    {
+        if (_poolCleared)
+            return;
+        _poolCleared = true;
+        if (clearPool is null)
+            SqlConnection.ClearPool(connection);
+        else
+            clearPool(connection);
+    }
+
     internal static void BindCommand(SqlCommand command, SqlExecutionCommand execution)
     {
         command.CommandText = execution.Sql;
@@ -581,6 +590,11 @@ internal sealed class SqlClientSession(
 
     public async ValueTask DisposeAsync()
     {
+        if (_discardAfterFailure || _unusable)
+        {
+            _unusable = true;
+            ClearPool();
+        }
         connection.InfoMessage -= infoMessageHandler;
         await connection.DisposeAsync();
     }

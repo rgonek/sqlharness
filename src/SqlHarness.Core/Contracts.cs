@@ -342,14 +342,20 @@ public sealed record SqlHarnessWatchPoll(
 public sealed record SqlHarnessWatchReport(
     SqlHarnessTargetIdentityReport Target, int PollCount, long ElapsedMilliseconds,
     WatchExitReason ExitReason, IReadOnlyList<SqlHarnessWatchPoll> EmittedPolls,
-    int TotalChangedPolls = 0, int OmittedPolls = 0);
+    int TotalChangedPolls = 0, int OmittedPolls = 0)
+{
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+}
 
 public sealed record SqlHarnessSnapshotDifference(
     int ResultSet, long? Row, int? Column, string Kind);
 
 public sealed record SqlHarnessSnapshotReport(
     SqlHarnessTargetIdentityReport Target, string Name, SnapshotVerdict Verdict,
-    int DifferenceCount, IReadOnlyList<SqlHarnessSnapshotDifference> Differences);
+    int DifferenceCount, IReadOnlyList<SqlHarnessSnapshotDifference> Differences)
+{
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+}
 
 public sealed record SqlTargetRequest(
     string? Profile,

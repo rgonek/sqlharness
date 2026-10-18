@@ -15,6 +15,45 @@ public class SqlHarnessMeasureTests
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
 
     [Fact]
+    public async Task Measure_report_includes_setup_and_query_isolation_notices()
+    {
+        var session = FakeMeasureSession.Create();
+        var outcome = await Module(session).ExecuteAsync(Measure(1) with
+        {
+            SetupSql = "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+            QuerySql = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
+        Assert.Equal(
+            ["isolation level SERIALIZABLE in effect", "isolation level REPEATABLE READ in effect"],
+            report.Warnings);
+    }
+
+    [Fact]
+    public async Task Measure_parameter_set_failure_preserves_typed_session_warnings()
+    {
+        var session = FakeMeasureSession.Create(failOnQueryNumber: 1);
+        session.QueryFailure = new SessionCleanupException(
+            "cleanup failed",
+            warnings: [SqlClientSession.BatchTimeoutWarning, SqlClientSession.ConnectionDiscardedWarning]);
+
+        var outcome = await Module(session).ExecuteAsync(Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @Id",
+            ParameterSets = [new("one", ["Id:int=1"]), new("two", ["Id:int=2"])],
+        });
+
+        Assert.NotEqual(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Contains("cleanup failed", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(
+            [SqlClientSession.BatchTimeoutWarning, SqlClientSession.ConnectionDiscardedWarning],
+            outcome.SessionWarnings);
+    }
+
+    [Fact]
     public async Task Measure_records_conditions_after_binding()
     {
         var journal = new ConditionsCaptureJournal();
@@ -811,6 +850,7 @@ public class SqlHarnessMeasureTests
         public Func<string, string>? PlanForSql { get; set; }
         public CancellationTokenSource? CancelInventory { get; set; }
         public Exception? InventoryFailure { get; set; }
+        public Exception? QueryFailure { get; set; }
         public IReadOnlyList<(string[] Names, object?[][] Rows)>? InventoryResults { get; set; }
 
         private FakeMeasureSession(
@@ -909,7 +949,7 @@ public class SqlHarnessMeasureTests
             {
                 if (_emitMessageBeforeQueryFailure)
                     _messages.Add(new SessionMessage(0, "diagnostic before query failure"));
-                return Task.FromException<ISqlReader>(new TimeoutException("measured run failed"));
+                return Task.FromException<ISqlReader>(QueryFailure ?? new TimeoutException("measured run failed"));
             }
             Labels.Add(queryNumber == 1 ? "warmup" : $"query-{queryNumber - 1}");
             var measured = Math.Max(queryNumber - 1, 1);

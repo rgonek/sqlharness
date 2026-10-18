@@ -368,6 +368,21 @@ public sealed class SqlExecutionTests
     }
 
     [Fact]
+    public async Task Disposing_a_doomed_session_clears_pool_once_even_without_batch_cleanup()
+    {
+        var clearPoolCalls = 0;
+        var session = CreateCleanupSession(
+            execute: (_, _) => Task.FromException<ISqlReader>(new TimeoutException("command timed out")),
+            clearPool: _ => clearPoolCalls++);
+
+        await Assert.ThrowsAsync<TimeoutException>(() => session.ExecuteReaderAsync(
+            new SqlExecutionCommand("SELECT 1", [], 1), CancellationToken.None));
+        await session.DisposeAsync();
+
+        Assert.Equal(1, clearPoolCalls);
+    }
+
+    [Fact]
     public async Task Setup_split_rolls_back_once_after_whole_setup()
     {
         var session = new CleanupTrackingSession();

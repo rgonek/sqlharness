@@ -241,7 +241,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 rawFootprint,
                 collected.OmittedMessageCount)
             {
-                Warnings = collected.Warnings ?? [],
+                Warnings = (collected.Warnings ?? []).Concat(safety.Notices)
+                    .Distinct(StringComparer.Ordinal).ToArray(),
             };
             var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
             return Checked(query, WithReceipt(success, rawFootprint));
@@ -487,6 +488,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 Classification = prepared.Classification,
                 SetupSafety = prepared.SetupSafety,
+                SafetyNotices = prepared.SafetyNotices,
                 Owner = ArtifactOwner.From(compare.Target, prepared.Target),
                 KnownSecrets = knownSecrets,
                 OperationRef = compare.OperationRef,
@@ -616,6 +618,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 Classification = prepared.Classification,
                 SetupSafety = prepared.SetupSafety,
+                SafetyNotices = prepared.SafetyNotices,
                 Owner = ArtifactOwner.From(operation.Target, prepared.Target),
                 KnownSecrets = knownSecrets,
                 OperationRef = operation.OperationRef,
@@ -657,7 +660,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                                 partialReport,
                                 SecretRedactor.Redact(exception, knownSecrets),
                                 failed.Coverage,
-                                failed.CompletedRuns),
+                                failed.CompletedRuns) with
+                            {
+                                SessionWarnings = SqlSessionWarningProjection.For(failed.InnerException ?? failed),
+                            },
                             rawFootprint);
                     }
                     phase = failed.Phase switch
@@ -672,7 +678,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     : OperationFailureMapper.Map(failed.InnerException ?? failed, phase);
                 var message = FormatMatrixCellError(failed, knownSecrets);
                 return WithReceipt(
-                    MatrixOutcome(exitCode, failed.PartialReport, message, failed.Coverage, failed.CompletedRuns),
+                    MatrixOutcome(exitCode, failed.PartialReport, message, failed.Coverage, failed.CompletedRuns) with
+                    {
+                        SessionWarnings = SqlSessionWarningProjection.For(failed.InnerException ?? failed),
+                    },
                     rawFootprint);
             }
 
@@ -818,7 +827,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     multiSession.Identity,
                     measure.Repeat,
                     execution,
-                    boundSets);
+                    boundSets) with
+                {
+                    Warnings = execution.Warnings
+                        .Concat(setupSafety?.Notices ?? [])
+                        .Concat(querySafety.Notices)
+                        .Distinct(StringComparer.Ordinal).ToArray(),
+                };
 
                 // Still the measured-SQL phase: a catalog failure stays a gap and cancellation maps like a measured batch.
                 var setInventory = await IndexInventoryCapture.CaptureAsync(
@@ -893,7 +908,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     BenchmarkReports.ClassificationLabel(setupSafety),
                     BenchmarkReports.ClassificationLabel(querySafety)),
                 Parameters = BenchmarkReports.ToParameterReports(parameters),
-                Warnings = setupWarnings.Concat(runs.SelectMany(run => run.Warnings))
+                Warnings = setupWarnings
+                    .Concat(setupSafety?.Notices ?? [])
+                    .Concat(querySafety.Notices)
+                    .Concat(runs.SelectMany(run => run.Warnings))
                     .Distinct(StringComparer.Ordinal).ToArray(),
             };
 
@@ -941,6 +959,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 BenchmarkRuns = failed.CompletedRuns.Select(run => run.Artifact).ToArray(),
                 Coverage = coverage,
+                SessionWarnings = SqlSessionWarningProjection.For(failed.InnerException ?? failed),
             };
             return WithReceipt(failure, rawFootprint);
         }
@@ -1087,6 +1106,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 knownSecrets,
                 ct);
             rawFootprint = raw;
+            if (outcome.Report is SqlHarnessWatchReport watchReport)
+                outcome = outcome with
+                {
+                    Report = watchReport with { Warnings = watchReport.Warnings.Concat(safety.Notices).Distinct(StringComparer.Ordinal).ToArray() },
+                    SessionWarnings = outcome.SessionWarnings.Concat(safety.Notices).Distinct(StringComparer.Ordinal).ToArray(),
+                };
             // Runner already mapped connect/SQL failures; preserve its exit code and report.
             return WithReceipt(outcome, rawFootprint);
         }
@@ -1158,6 +1183,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 stream,
                 ct);
             rawFootprint = raw;
+            outcome = outcome with
+            {
+                SessionWarnings = outcome.SessionWarnings.Concat(safety.Notices).Distinct(StringComparer.Ordinal).ToArray(),
+            };
             // Runner already mapped connect/SQL failures; preserve its exit code.
             return Checked(watch, WithReceipt(outcome, rawFootprint) with { OperationRef = watch.OperationRef });
         }
@@ -1255,6 +1284,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 knownSecrets,
                 ct);
             rawFootprint = raw;
+            if (outcome.Report is SqlHarnessSnapshotReport snapshotReport)
+                outcome = outcome with
+                {
+                    Report = snapshotReport with { Warnings = snapshotReport.Warnings.Concat(safety.Notices).Distinct(StringComparer.Ordinal).ToArray() },
+                    SessionWarnings = outcome.SessionWarnings.Concat(safety.Notices).Distinct(StringComparer.Ordinal).ToArray(),
+                };
             // Runner already mapped connect/SQL/storage failures; preserve its exit code and report.
             return WithReceipt(outcome, rawFootprint);
         }

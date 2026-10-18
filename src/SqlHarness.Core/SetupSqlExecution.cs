@@ -112,7 +112,7 @@ internal static class SetupSqlExecution
         SqlSafetyDecision? setupSafety = null)
     {
         if (string.IsNullOrWhiteSpace(setupSql))
-            return [];
+            return setupSafety?.Notices ?? [];
 
         if (engine == SqlEngine.Postgres && setupSafety?.Allowed != true)
             throw new SqlHarnessSafetyException("PostgreSQL setup execution requires successful setup classification.");
@@ -136,7 +136,9 @@ internal static class SetupSqlExecution
         {
             warnings = await SqlSessionLogicalBatch.EndAsync(session, ct);
         }
-        return warnings;
+        return warnings.Concat(setupSafety?.Notices ?? [])
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static bool ReferencesParameter(TSqlScript script)

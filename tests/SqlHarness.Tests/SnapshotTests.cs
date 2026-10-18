@@ -16,6 +16,20 @@ public class SnapshotTests
     private const string Name = "before-import";
 
     [Fact]
+    public async Task Snapshot_report_includes_isolation_level_safety_notice()
+    {
+        var outcome = await Module(
+            FakeSession.WithRows(1),
+            new FakeSnapshotStore()).ExecuteAsync(Snapshot(
+                sql: "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(
+            ["isolation level SERIALIZABLE in effect"],
+            Assert.IsType<SqlHarnessSnapshotReport>(outcome.Report).Warnings);
+    }
+
+    [Fact]
     public async Task Snapshot_records_execute_and_publication_phases()
     {
         using var journalTemp = new JournalTempDirectory();
