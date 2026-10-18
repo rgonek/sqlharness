@@ -20,7 +20,7 @@
 ## Global Constraints
 
 - Membership values: `exact`, `inferred`, `unassigned`; inferred never feeds Optimization history or authorization.
-- Inferred: unlinked operation in an MCP/CLI session whose exact links all point to one conversation; CLI session only when all MCP sessions sharing its `agent_pid` + `agent_started_at` point to one conversation.
+- Inferred: unlinked operation in an MCP/CLI session whose exact links all point to one conversation and which lies between two exact links to it (leading/trailing unlinked operations stay `unassigned`); CLI session only when all MCP sessions sharing its `agent_pid` + `agent_started_at` point to one conversation.
 - Codex/OpenCode: conversation from `operations.agent_session_id`; Claude: from transcript tool-use ids (existing matcher).
 - Subagents: Claude folds by transcript `sessionId`; Codex subagent threads separate, labelled `subagent of unknown parent`, until the Task 0 spike says otherwise.
 - Event-driven matching: on `PRAGMA data_version` change, debounce 1.5 s, targeted cycle; 60 s sweep stays.
@@ -36,6 +36,7 @@
 3. Turning matching off immediately restores per-session lists and scopes → Task 5 `Matching_off_restores_session_view`.
 4. Codex thread whose index entry was read before its first operation → linked (cursor bug) → Task 1 `Codex_links_without_index_timing`.
 5. `Clear matched data` keeps owner agent-session titles/stars → Task 3 `Clear_matched_keeps_agent_annotations`.
+6. Owner-confirmed: `/new` in an agent keeps the same MCP session for the next conversation; until its first link lands, its operations must not be inferred into the previous conversation → Task 2 `New_conversation_in_same_session_not_inferred_into_previous`.
 
 ---
 
@@ -53,7 +54,7 @@
 ### Task 2: Membership model
 **Files:** create `src/SqlHarness.Dashboard/AgentSessions/AgentSessionMembership.cs`; modify `src/SqlHarness.Dashboard/JournalReader.cs`; tests `tests/SqlHarness.Tests/Dashboard/AgentSessionMembershipTests.cs`.
 **Interfaces:** `sealed record AgentSessionKey(string AgentKind, string ConversationId)`; `enum Membership { Exact, Inferred, Unassigned }`; `static IReadOnlyList<OperationMembership> AgentSessionMembership.Resolve(IReadOnlyList<OperationIdentityRow> ops, IReadOnlyList<LinkRow> links)` with `sealed record OperationMembership(long OperationId, long SessionId, AgentSessionKey? Key, Membership Membership)`.
-- [ ] Failing tests: single-conversation MCP session → unlinked inherit `Inferred`; `Shared_session_splits_and_counts_once`; CLI inferred only when all same-process MCP sessions agree; Codex by `agent_session_id`; Claude subagent lines fold into parent; Codex subagent separate with label.
+- [ ] Failing tests: single-conversation MCP session → unlinked operations between exact links inherit `Inferred`; `Shared_session_splits_and_counts_once`; `New_conversation_in_same_session_not_inferred_into_previous`; CLI inferred only when all same-process MCP sessions agree; Codex by `agent_session_id`; Claude subagent lines fold into parent; Codex subagent separate with label.
 - [ ] FAIL → implement → PASS. Commit `feat(084): derive agent-session membership`.
 
 ### Task 3: Agent-session annotations and API
