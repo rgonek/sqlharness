@@ -25,7 +25,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `1737091`. Depends on 079 (message numbers). Independent of 080. Stage C becomes plan 082, stage D plan 083.
+- IMPLEMENTED on `plan-081`; final verification pending (not DONE). See [verification evidence](081-verification-evidence.md). Planning base `1737091`. Depends on 079 (message numbers). Independent of 080. Stage C becomes plan 082, stage D plan 083.
 - Priority P1; effort M; risk HIGH (safety classifier) — security review required before completion.
 
 ## Global Constraints
@@ -51,7 +51,7 @@
 
 ### Task 0: Drift check and baseline
 
-- [ ] Confirm 079 merged; run the drift check; `just verify`; record base commit and result here.
+- [x] Confirm 079 merged; run the drift check; run baseline `just verify`; record base commit and result here. 079 is an ancestor (`13b468a`); drift checked against `1737091`. Baseline gate exited 1 because the in-progress Task 1 RED tests were compiled into the test run; build and UI passed, all existing tests passed, and 29 expected new RED failures were reported. This is not a baseline gate pass; see [verification evidence](081-verification-evidence.md).
 
 ### Task 1: Classifier admissions (read-only usages)
 
@@ -62,17 +62,17 @@
 **Interfaces:**
 - Produces: `StatementClassification` unchanged in shape; new admitted statements classify `ReadOnly` or `SessionLocal` (transactions, cursors, options: `SessionLocal`); `SqlSafetyDecision.Notices` (new `IReadOnlyList<string>`, e.g. `isolation level SERIALIZABLE in effect`) consumed by Task 2.
 
-- [ ] **Step 1: Write failing tests** (`[Theory]` over SQL text; usage `Query`, `allowMutation=false` unless stated):
+- [x] **Step 1: Write failing tests** (`[Theory]` over SQL text; usage `Query`, `allowMutation=false` unless stated):
   - Admitted: each allowed `SET` option; `SET TRANSACTION ISOLATION LEVEL SNAPSHOT`; `DECLARE @i int = 0; WHILE @i < 3 BEGIN SET @i += 1; IF @i = 2 CONTINUE; IF @i = 3 BREAK; END`; `BEGIN TRY SELECT 1 END TRY BEGIN CATCH SELECT ERROR_NUMBER() END CATCH`; `IF 1=0 RETURN; SELECT 1`; `THROW 50000, 'x', 1`; `RAISERROR('x', 10, 1) WITH NOWAIT`; `PRINT 'x'`; `BEGIN TRAN; INSERT #t VALUES (1); COMMIT`; `SAVE TRAN s; ROLLBACK TRAN s`; `DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT a FROM dbo.T; OPEN c; FETCH NEXT FROM c INTO @a; CLOSE c; DEALLOCATE c`; `WITH x AS (SELECT a FROM @t) UPDATE x SET a = 2` (table variable declared earlier).
   - Denied: `SET STATISTICS IO ON`, `SET SHOWPLAN_XML ON`, `SET ROWCOUNT 10`, `SET IDENTITY_INSERT #t ON`, `SET DEADLOCK_PRIORITY HIGH`, `SET DEADLOCK_PRIORITY 5`, `WAITFOR DELAY '00:00:01'`, `GOTO x; x: SELECT 1`, `RAISERROR('x', 10, 1) WITH LOG`, `BEGIN DISTRIBUTED TRAN`, `BEGIN TRAN t WITH MARK`, `DECLARE c CURSOR SCROLL_LOCKS FOR SELECT a FROM dbo.T`, `DECLARE c CURSOR FOR SELECT a FROM dbo.T FOR UPDATE`, `DECLARE @c CURSOR; SET @c = CURSOR FOR SELECT 1`, `EXEC dbo.P`, `EXEC sp_executesql N'SELECT 1'`, `WITH x AS (SELECT t.a FROM @t t JOIN dbo.T d ON d.a = t.a) UPDATE x SET a = 2`.
   - `Loop_around_persistent_dml_is_denied`: `WHILE 1=0 UPDATE dbo.T SET a = 1` → denied (`NonTemporaryWrite`/`MutationNotAllowed` as today for the bare statement). `Try_around_persistent_dml_is_denied` likewise.
   - `Mutation_path_unchanged_for_new_constructs`: for every admitted sample, `SqlUsage.Mutation` and `Query` with `allowMutation=true` return the same decision as at the planning base (record expected values by running the base first).
   - Parameterized setup (`SqlUsage.CompareSetup` with parameters): `BEGIN TRAN` or `RETURN` in the parameter-free prefix → denied.
   - Notices: `SET TRANSACTION ISOLATION LEVEL SERIALIZABLE` → notice `isolation level SERIALIZABLE in effect`.
-- [ ] **Step 2:** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SqlSafety"` → new tests FAIL, existing PASS.
-- [ ] **Step 3:** Implement admissions in `ClassifyProvenStatement` behind `IsReadOnlyUsage`; recurse into `WhileStatement`, `TryCatchStatement` like `BeginEndBlockStatement`; cursor `SELECT` classified by existing rules; CTE fix per spec "Calls settled" item 7. Extend `SqlSafetyNodeCoverageTests` for new node types.
-- [ ] **Step 4:** Run → PASS.
-- [ ] **Step 5:** Commit `feat(081): admit session control flow on read-only paths`.
+- [x] **Step 2:** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SqlSafety"` → new tests FAIL, existing PASS.
+- [x] **Step 3:** Implement admissions in `ClassifyProvenStatement` behind `IsReadOnlyUsage`; recurse into `WhileStatement`, `TryCatchStatement` like `BeginEndBlockStatement`; cursor `SELECT` classified by existing rules; CTE fix per spec "Calls settled" item 7. Extend `SqlSafetyNodeCoverageTests` for new node types.
+- [x] **Step 4:** Focused safety suite passed (595 tests after review fixes).
+- [x] **Step 5:** Committed `feat(081): admit session control flow on read-only paths` (implementation commit chain `c8a449b..abbd601`). Review clean of Critical/Important findings.
 
 ### Task 2: Transaction cleanup and connection discard
 
@@ -83,9 +83,9 @@
 **Interfaces:**
 - Produces: `ISqlSession.EndLogicalBatchAsync(CancellationToken ct) : Task<IReadOnlyList<string>>` — runs `IF @@TRANCOUNT > 0 ROLLBACK;` and returns warnings (`open transaction rolled back`); on failure or after a timeout/cancel it calls `SqlConnection.ClearPool`, marks the session unusable and throws `SessionCleanupException("open transaction could not be rolled back; connection discarded")`. All runners (query, measure, compare, watch, snapshot, setup) call it after each logical batch.
 
-- [ ] **Step 1: Failing tests:** `Open_transaction_is_rolled_back_with_warning`; `Timeout_inside_transaction_discards_connection` (fake throws timeout → `ClearPool` called, operation error text exact); `Failed_rollback_fails_operation`; `Setup_split_rolls_back_once_after_whole_setup`; `Print_imitating_statistics_is_ignored` (fake session emits message number 0 with IO-like text; measured IO unchanged).
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(081): roll back open transactions and discard unclean connections`.
+- [x] **Step 1: Failing tests:** `Open_transaction_is_rolled_back_with_warning`; `Timeout_inside_transaction_discards_connection` (fake throws timeout → `ClearPool` called, operation error text exact); `Failed_rollback_fails_operation`; `Setup_split_rolls_back_once_after_whole_setup`; `Print_imitating_statistics_is_ignored` (fake session emits message number 0 with IO-like text; measured IO unchanged).
+- [x] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS (focused cleanup/setup/message suite 64 passed after review fixes).
+- [x] **Step 5:** Committed `feat(081): roll back open transactions and discard unclean connections` (implementation commit chain `2232730..fd25a55`). Review clean of Critical/Important findings.
 
 ### Task 3: Session option isolation between measured commands
 
@@ -96,14 +96,14 @@
 **Interfaces:**
 - Produces: `SqlServerDialect.CaptureSessionStateAsync(ISqlSession s, CancellationToken ct) : Task<SessionState>` (`@@OPTIONS`, isolation level from `sys.dm_exec_sessions`, `@@LOCK_TIMEOUT`, `@@DATEFIRST`, `DATEFORMAT`, deadlock priority) and `RestoreSessionStateAsync(ISqlSession s, SessionState state, CancellationToken ct)`; runners capture after setup and restore after every measured command.
 
-- [ ] **Step 1: Failing tests:** `Measured_options_do_not_leak_between_variants` (baseline sets `ANSI_NULLS OFF`, candidate observes the post-setup state); `Setup_options_persist_for_the_case` (setup `SET NOCOUNT ON` visible in measured runs).
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(081): isolate session options between measured commands`.
+- [x] **Step 1: Failing tests:** `Measured_options_do_not_leak_between_variants` (baseline sets `ANSI_NULLS OFF`, candidate observes the post-setup state); `Setup_options_persist_for_the_case` (setup `SET NOCOUNT ON` visible in measured runs).
+- [x] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS (Compare/Measure focused suite 96 passed).
+- [x] **Step 5:** Committed `feat(081): isolate session options between measured commands` (`4eb2315`). One deferred minor review note: no dedicated per-parameter-set capture/restore regression. Review found no Critical/Important issues.
 
 ### Task 4: Notices, journal and opt-in dashboard notifications
 
 **Files:**
-- Modify: `src/SqlHarness.Core/SqlHarnessConfig.cs:22-28` (`DashboardConfig.SafetyNotifications` bool, default `false`), journal operation warnings (existing `has_warnings` + stored warning list, next free journal version only if a column is needed), `src/SqlHarness.Dashboard/LiveFeed.cs` (operation event carries `safetyNotices`), `src/SqlHarness.Dashboard/DashboardSettings.cs`, `ui/src/pages/SettingsPage.tsx`, create `ui/src/components/SafetyNoticeToast.tsx`, mount in `ui/src/components/AppLayout.tsx`
+- Modify: `src/SqlHarness.Core/SqlHarnessConfig.cs` (`DashboardConfig.SafetyNotifications`, default `false`), operation warning journal storage, MCP query warning projection, `src/SqlHarness.Dashboard/JournalReader.cs` and `DashboardModels.cs`, settings UI and safety-notice toast. `LiveFeed.cs` and `DashboardSettings.cs` needed no changes: existing generic warning/config pass-through already supports the behavior, as confirmed in Task 4 review.
 - Test: `tests/SqlHarness.Tests/Journal/SqlHarnessConfigTests.cs`, `Dashboard/LiveFeedTests.cs`, `DashboardSettingsTests.cs`; `SettingsPage.test.tsx`; create `SafetyNoticeToast.test.tsx`
 
 - [x] **Step 1: Failing tests:** config default `false` and round-trip; live feed operation event includes notices from Tasks 1–3; toast renders notice text and links to the operation only when the setting is `true`; never rendered when `false`; toast does not block or alter anything else.
@@ -112,7 +112,7 @@
 
 ### Task 5: Contracts, documentation, security review, verification
 
-- [ ] **Step 1:** README "Safety contract": admitted constructs, explicit denied options and statements, rollback and connection-discard rules, option isolation, notification setting; tool descriptions/capabilities where they state the read-only grammar; `skills/sqlharness/SKILL.md` only if it names rejected constructs.
+- [x] **Step 1:** README "Safety contract" documents admitted constructs, explicit denied options/statements, rollback/discard rules, option isolation and notifications; SQL Server engine guidance/capabilities and MCP tool docs carry the interface contract. The user skill does not name rejected constructs and needed no change.
 - [ ] **Step 2:** Security review of the classifier and executor diff (repo `/security-review` or a fresh reviewer focused on persistent-effect paths); fix findings.
 - [ ] **Step 3:** `just verify` → exit 0; record revision and result.
 - [ ] **Step 4 (operator-authorized, optional):** UAT dry-run of the 20-construct survey and one measured procedure body with `SET NOCOUNT ON; SET XACT_ABORT ON; BEGIN TRAN … COMMIT`; record outcomes without business data.

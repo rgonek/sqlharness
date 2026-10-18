@@ -1446,7 +1446,10 @@ public sealed class McpToolSchemaTests : IDisposable
     public async Task Fixed_sql_server_catalog_carries_only_sql_server_guidance()
     {
         await using var served = await ServedCatalog.CreateAsync(Scope());
-        AssertEngineGuidance(await ServedToolsAsync(served), SqlServerTokens, PostgresTokens);
+        var tools = await ServedToolsAsync(served);
+        AssertEngineGuidance(tools, SqlServerTokens, PostgresTokens);
+        Assert.Contains("Read-only Query (allowMutation=false) and CompareSetup", ToolDescription(tools, "sqlharness_measure"), StringComparison.Ordinal);
+        Assert.Contains("Read-only Query (allowMutation=false) and CompareSetup", ToolDescription(tools, "sqlharness_compare"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1462,7 +1465,10 @@ public sealed class McpToolSchemaTests : IDisposable
     public async Task Request_scope_catalog_carries_sql_server_guidance()
     {
         await using var served = await ServedCatalog.CreateAsync(RequestProcess());
-        AssertEngineGuidance(await ServedToolsAsync(served), SqlServerTokens, PostgresTokens);
+        var tools = await ServedToolsAsync(served);
+        AssertEngineGuidance(tools, SqlServerTokens, PostgresTokens);
+        Assert.Contains("Read-only Query (allowMutation=false) and CompareSetup", ToolDescription(tools, "sqlharness_measure"), StringComparison.Ordinal);
+        Assert.Contains("Read-only Query (allowMutation=false) and CompareSetup", ToolDescription(tools, "sqlharness_compare"), StringComparison.Ordinal);
     }
 
     [Fact]

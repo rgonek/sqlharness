@@ -82,16 +82,16 @@ public static class SqlHarnessCapabilitiesProvider
         new(
             SqlEngine.SqlServer,
             "sqlserver",
-            "SQL Server and Azure SQL: all commands. IF/ELSE/BEGIN…END (nested) allowed; scan every branch regardless of predicate; WHILE/BREAK/CONTINUE/GOTO/labels/RETURN/TRY…CATCH/WAITFOR/THROW/RAISERROR denied.",
+            "SQL Server and Azure SQL. Read-only Query (allowMutation=false) and CompareSetup admit the documented session/control-flow allowlist; scan every branch regardless of predicate; persistent-mutation classification is unchanged. EXEC/EXECUTE, WAITFOR, GOTO, labels, value-bearing RETURN, and RAISERROR WITH LOG remain denied.",
             [.. SharedParameterTypes, "money", "smallmoney", "smalldatetime", "hierarchyid", "geography", "geometry"],
             new Dictionary<string, object>(StringComparer.Ordinal),
             new SqlHarnessEngineGuidance(
-                "",
+                "Read-only Query (allowMutation=false) and CompareSetup admit IF/ELSE/BEGIN…END, WHILE with BREAK/CONTINUE, TRY/CATCH, value-less batch RETURN, THROW, RAISERROR without LOG, PRINT, local transactions/savepoints, and LOCAL cursors over admitted SELECTs. Allowed SET options only: NOCOUNT, XACT_ABORT, ARITHABORT, ANSI_NULLS, ANSI_WARNINGS, ANSI_PADDING, QUOTED_IDENTIFIER, CONCAT_NULL_YIELDS_NULL, NUMERIC_ROUNDABORT, DATEFIRST, DATEFORMAT, LOCK_TIMEOUT, DEADLOCK_PRIORITY (LOW, NORMAL, or numeric <= 0), and TRANSACTION ISOLATION LEVEL. Other SET options remain denied, including STATISTICS, SHOWPLAN_*, NOEXEC, PARSEONLY, FMTONLY, ROWCOUNT, IDENTITY_INSERT, CONTEXT_INFO, LANGUAGE, FORCEPLAN, IMPLICIT_TRANSACTIONS, REMOTE_PROC_TRANSACTIONS, and OFFSETS. EXEC/EXECUTE, WAITFOR, GOTO, labels, value-bearing RETURN, RAISERROR WITH LOG, distributed or marked transactions, GLOBAL cursors, cursor variables, SCROLL_LOCKS, and cursor FOR UPDATE remain denied. Every branch and nested statement is classified. Transactions left open at a logical batch boundary are rolled back with a warning; failed cleanup discards the connection and fails the operation. Setup options persist for that case; measured commands restore the state captured after setup.",
                 "Create #temps before the first parameter reference, populate afterwards."),
             DefaultTargetServer,
             [
                 "DECLARE scalar variables with analyzed initializers",
-                "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query, measured SQL and --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor, member and session/transaction option SET stay denied",
+                "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query, measured SQL and --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor and member-variable SET stay denied; session and transaction option SET follow the SQL Server query guidance allowlist",
                 "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against it, declared earlier in the same batch. A table variable from --setup is not visible to measured SQL (separate batch): carry data in #temp. OUTPUT INTO @t only when the primary target is also proven local (persistent primary target: MutationNotAllowed). Aliased DML targets and user-defined table types stay denied",
                 "TRUNCATE TABLE #temp (unambiguous local temp only)",
                 "ALTER TABLE #temp ADD/DROP COLUMN and local CHECK/DEFAULT/NULL/UNIQUE constraints"]),

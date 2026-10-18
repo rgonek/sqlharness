@@ -413,7 +413,7 @@ public sealed class CapabilitiesCommandTests
     }
 
     private const string CapabilitySetEntry =
-        "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query, measured SQL and --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor, member and session/transaction option SET stay denied";
+        "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query, measured SQL and --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor and member-variable SET stay denied; session and transaction option SET follow the SQL Server query guidance allowlist";
 
     private const string CapabilityTableVariableEntry =
         "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against it, declared earlier in the same batch. A table variable from --setup is not visible to measured SQL (separate batch): carry data in #temp. OUTPUT INTO @t only when the primary target is also proven local (persistent primary target: MutationNotAllowed). Aliased DML targets and user-defined table types stay denied";
@@ -470,9 +470,9 @@ public sealed class CapabilitiesCommandTests
         var sqlServerSummary = SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p").Engines.Single().Summary;
         var postgresSummary = SqlHarnessCapabilitiesProvider.Get(SqlEngine.Postgres, "p").Engines.Single().Summary;
 
-        Assert.Contains("IF/ELSE/BEGIN…END (nested) allowed", sqlServerSummary, StringComparison.Ordinal);
+        Assert.Contains("Read-only Query (allowMutation=false) and CompareSetup", sqlServerSummary, StringComparison.Ordinal);
         Assert.Contains("scan every branch regardless of predicate", sqlServerSummary, StringComparison.Ordinal);
-        Assert.Contains("WHILE/BREAK/CONTINUE/GOTO/labels/RETURN/TRY…CATCH/WAITFOR/THROW/RAISERROR denied", sqlServerSummary, StringComparison.Ordinal);
+        Assert.Contains("EXEC/EXECUTE, WAITFOR, GOTO, labels, value-bearing RETURN, and RAISERROR WITH LOG remain denied", sqlServerSummary, StringComparison.Ordinal);
         Assert.DoesNotContain("Allowed control flow", postgresSummary, StringComparison.Ordinal);
     }
 
@@ -526,12 +526,10 @@ public sealed class CapabilitiesCommandTests
     [InlineData("DECLARE @n int; SET @n = (SELECT COUNT(*) FROM OPENROWSET('MSOLEDBSQL', 'Server=other;Trusted_Connection=yes;', 'SELECT 1') AS r); SELECT @n", "UnsupportedStatement")]
     [InlineData("DECLARE @n int; SET @n = NEXT VALUE FOR dbo.Seq; SELECT @n", "UnsupportedStatement")]
     [InlineData("DECLARE @m int; SET @m = (SELECT MAX(Id) FROM otherdb.dbo.Clients); SELECT @m", "CrossDatabaseReference")]
-    // "Compound, cursor, member and session/transaction option SET stay denied"
+    // Compound variable assignment, cursor assignment and member assignment stay denied.
     [InlineData("DECLARE @v int; SET @v += 1; SELECT @v", "UnsupportedStatement")]
     [InlineData("DECLARE @cur int; SET @cur = CURSOR FOR SELECT Id FROM dbo.Clients; SELECT @cur", "UnsupportedStatement")]
     [InlineData("DECLARE @v dbo.SomeType; SET @v.Member = 1", "UnsupportedStatement")]
-    [InlineData("SET NOCOUNT ON", "UnsupportedStatement")]
-    [InlineData("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", "UnsupportedStatement")]
     public void SessionTempStatements_sqlserver_SET_entry_denies_what_it_names(string sql, string expected)
     {
         Assert.Contains(CapabilitySetEntry, SessionTempStatements(SqlEngine.SqlServer));
@@ -539,6 +537,18 @@ public sealed class CapabilitiesCommandTests
         var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.Query, "db", allowMutation: false);
         Assert.False(decision.Allowed);
         Assert.Equal(expected, decision.Reason.ToString());
+    }
+
+    [Theory]
+    [InlineData("SET NOCOUNT ON")]
+    [InlineData("SET XACT_ABORT ON")]
+    [InlineData("SET DEADLOCK_PRIORITY LOW")]
+    [InlineData("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")]
+    public void Sqlserver_query_capability_options_are_admitted(string sql)
+    {
+        var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.Query, "db", allowMutation: false);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
     }
 
     [Theory]

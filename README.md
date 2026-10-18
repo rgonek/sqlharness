@@ -246,7 +246,7 @@ The set also includes plan-only `EXPLAIN` over a safe `SELECT`, and `EXPLAIN ANA
 
 An unqualified name assumes the default `search_path`, which SQLHarness does not check; when `search_path` may be non-default, write to session temps as `pg_temp.<name>`, which does not depend on it (details in [PostgreSQL temp target proof](#postgresql-temp-target-proof)). Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
 
-SQL Server accepts IF, ELSE and BEGIN … END at any nesting depth. WHILE, BREAK, CONTINUE, GOTO, labels, RETURN, TRY … CATCH, WAITFOR, THROW and RAISERROR are denied. The classifier checks every branch, including branches with a constant-false predicate; it does not evaluate predicates. These rules apply only to SQL Server. PostgreSQL control flow is unchanged.
+SQL Server's read-only Query path (`allowMutation=false`) and CompareSetup also admit the session and control-flow constructs listed in the [Safety contract](#safety-contract). The classifier checks every branch, including branches with a constant-false predicate; it does not evaluate predicates. PostgreSQL control flow is unchanged.
 
 <details>
 <summary>PostgreSQL TEMP target rules</summary>
@@ -389,6 +389,18 @@ sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\queries\progre
 
 Use a least-privilege reader account for each profile. The classifier and mutation flags help prevent accidental writes; database permissions enforce the account's access. A CLI agent shares the shell's environment: it can read the profile's password variable, call `az`, and run `--unsafe-direct`, so the principal's database permissions are the real boundary.
 
+### SQL Server read-only session and control flow
+
+On SQL Server, read-only Query (`allowMutation=false`) and CompareSetup admit `IF`/`ELSE`/`BEGIN`/`END`, `WHILE` with `BREAK`/`CONTINUE`, `BEGIN TRY`/`BEGIN CATCH`, value-less batch-level `RETURN`, `THROW`, `RAISERROR` without `WITH LOG`, `PRINT`, local transaction control (`BEGIN TRAN`, `COMMIT`, `ROLLBACK`, `SAVE TRAN`), and `LOCAL` cursors over admitted `SELECT` statements. Nested statements and every branch still pass the existing safety checks. `EXEC`/`EXECUTE` remains denied on read-only paths. These admissions do not change `mutation` or query with `allowMutation=true` classification.
+
+DML through a CTE chain is session-local only when it resolves to one same-batch table variable or local `#temp` source with no joins; other CTE write targets follow the usual classifier rules.
+
+Only these `SET` options are admitted on those read-only paths: `NOCOUNT`, `XACT_ABORT`, `ARITHABORT`, `ANSI_NULLS`, `ANSI_WARNINGS`, `ANSI_PADDING`, `QUOTED_IDENTIFIER`, `CONCAT_NULL_YIELDS_NULL`, `NUMERIC_ROUNDABORT`, `DATEFIRST`, `DATEFORMAT`, `LOCK_TIMEOUT`, `DEADLOCK_PRIORITY` (`LOW`, `NORMAL`, or a numeric value no greater than zero), and `TRANSACTION ISOLATION LEVEL`. Other options remain denied, including `STATISTICS *`, `SHOWPLAN_*`, `NOEXEC`, `PARSEONLY`, `FMTONLY`, `ROWCOUNT`, `IDENTITY_INSERT`, `CONTEXT_INFO`, `LANGUAGE`, `FORCEPLAN`, `IMPLICIT_TRANSACTIONS`, `REMOTE_PROC_TRANSACTIONS`, and `OFFSETS`. `WAITFOR`, `GOTO`, labels, value-bearing batch `RETURN`, `RAISERROR ... WITH LOG`, distributed transactions, marked transactions, `GLOBAL` cursors, cursor variables, `SCROLL_LOCKS`, and cursor `FOR UPDATE` remain denied.
+
+SQLHarness checks transaction state at each logical user-batch boundary and rolls back any transaction still open, adding the warning `open transaction rolled back`. Cleanup after timeout or cancellation must complete before a connection can be reused. If rollback or cleanup fails, SQLHarness discards the SQL Server connection from its pool and fails the operation with `open transaction could not be rolled back; connection discarded`. Session options set by setup persist for that case; options changed by measured commands are restored to the state captured after setup (`@@OPTIONS`, isolation level, `LOCK_TIMEOUT`, `DATEFIRST`, `DATEFORMAT`, and deadlock priority) before the next measured command. Other warning texts are `isolation level SERIALIZABLE in effect`, `isolation level REPEATABLE READ in effect`, `batch reached its timeout`, and `connection discarded after failed cleanup`. PostgreSQL execution is unchanged.
+
+The dashboard's `dashboard.safetyNotifications` setting controls non-blocking notifications for rollback, notable isolation levels, batch timeout, and connection discard. It defaults to `false`; report warnings are available regardless of this setting.
+
 An MCP client without a shell reaches the database only through the server's tools. Persistent changes use the `sqlharness_mutation` tool and the local dashboard policy; PostgreSQL TEMP setup can still reach a persistent-writing user function, so the least-privilege principal applies here too ([docs/mcp.md](docs/mcp.md#persistent-mutations)).
 
 ### Exit codes
@@ -428,7 +440,7 @@ Review setup SQL and use a least-privilege role, but do not treat validation or 
 
 ### Session `#temp` / `TEMP`
 
-SQL Server: local `#temp` setup/DML/indexes are session-only and do not require mutation confirmation, plus scalar `DECLARE`, table variables declared earlier in the same batch, `TRUNCATE TABLE #t`, and `ALTER TABLE #t` add/drop columns with local constraints; plain `SET @v = <expr>` to a same-batch scalar local in query, measured SQL and setup.
+SQL Server: local `#temp` setup/DML/indexes are session-only and do not require mutation confirmation, plus scalar `DECLARE`, table variables declared earlier in the same batch, `TRUNCATE TABLE #t`, and `ALTER TABLE #t` add/drop columns with local constraints; plain `SET @v = <expr>` to a same-batch scalar local in query, measured SQL and setup. Read-only session/control-flow admissions are listed in the [Safety contract](#sql-server-read-only-session-and-control-flow).
 
 Postgres: use native `CREATE TEMP TABLE` / `TEMPORARY` (no `#temp` translation), `SELECT INTO TEMP TABLE` with an unambiguous name, `TRUNCATE [ONLY]` of proven current-session temps, plan-only `EXPLAIN` over a safe `SELECT`, and `EXPLAIN ANALYZE` with full effect analysis. Setup runs once per connection and shares that session with warm-up and measured runs.
 
