@@ -24,6 +24,7 @@ public sealed record DashboardConfig
     public bool AutoStart { get; init; }
     public int Port { get; init; } = 47800;
     public int IdleShutdownHours { get; init; } = 8;
+    public bool SafetyNotifications { get; init; }
     public AgentTranscriptsConfig AgentTranscripts { get; init; } = new();
 }
 

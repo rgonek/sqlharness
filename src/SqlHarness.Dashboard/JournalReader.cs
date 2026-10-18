@@ -60,7 +60,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         END AS agent_model_source,
         o.compare_subject,
         (SELECT SUM(m.logical_reads_median) FROM operation_metrics m WHERE m.operation_id = o.id AND lower(m.variant) = 'baseline') AS reads_before,
-        (SELECT SUM(m.logical_reads_median) FROM operation_metrics m WHERE m.operation_id = o.id AND lower(m.variant) = 'candidate') AS reads_after
+        (SELECT SUM(m.logical_reads_median) FROM operation_metrics m WHERE m.operation_id = o.id AND lower(m.variant) = 'candidate') AS reads_after,
+        o.warnings_json
         """;
 
     private const string SessionColumns = """
@@ -1126,7 +1127,26 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         r.GetInt64(22) != 0, r.GetInt64(23) != 0, r.GetInt64(24) != 0, Json(NullableString(r, 18)),
         NullableString(r, 25), NullableString(r, 26), NullableString(r, 27), NullableString(r, 28),
         NullableString(r, 29), NullableString(r, 30), r.GetInt64(31) != 0, NullableString(r, 32),
-        NullableString(r, 33), null, NullableLong(r, 34), NullableLong(r, 35));
+        NullableString(r, 33), null, NullableLong(r, 34), NullableLong(r, 35))
+    {
+        SafetyNotices = StringArray(NullableString(r, 36)),
+    };
+
+    private static IReadOnlyList<string> StringArray(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return [];
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == JsonValueKind.Array
+                ? document.RootElement.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!).ToArray()
+                : [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
 
     private static IReadOnlyList<SessionRoot>? Roots(string? json)
     {

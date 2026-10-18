@@ -83,6 +83,7 @@ export type OperationSummary = {
   versionPair: string | null
   readsBefore: number | null
   readsAfter: number | null
+  safetyNotices: string[]
 }
 
 /** Allowlisted, client-supplied labels from tools/call _meta; never verified, never content. */
@@ -366,7 +367,7 @@ export type JournalSettings = {
   storeSensitive: boolean
   retention: { enabled: boolean; maxAgeDays: number; maxSizeMb: number }
 }
-export type DashboardSettings = { autoStart: boolean; port: number; idleShutdownHours: number; agentTranscripts: { enabled: boolean } }
+export type DashboardSettings = { autoStart: boolean; port: number; idleShutdownHours: number; safetyNotifications: boolean; agentTranscripts: { enabled: boolean } }
 export type DiagnosticsSettings = { enabled: boolean }
 export type MutationSettings = { defaultMode: "never" | "operator" | "yolo"; verification: string; approvalTimeoutSeconds: number }
 export type Settings = { journal: JournalSettings; dashboard: DashboardSettings; compare: { requireContext: boolean }; diagnostics: DiagnosticsSettings; mutations: MutationSettings }

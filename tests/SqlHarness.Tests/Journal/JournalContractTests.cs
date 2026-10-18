@@ -25,19 +25,20 @@ public sealed class JournalContractTests : IDisposable
     };
 
     [Fact]
-    public void Journal_v14_pins_fresh_schema_and_fingerprint_salt()
+    public void Journal_v15_pins_fresh_schema_and_fingerprint_salt()
     {
         var path = Path.Combine(_temp.Path, "data", "activity.db");
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
         Assert.Equal(14, JournalSchema.FirstRetainedVersion);
-        Assert.Equal(14, JournalSchema.CurrentVersion);
+        Assert.Equal(15, JournalSchema.CurrentVersion);
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         var operationColumns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operations')")
             .Select(row => (string)row["name"]!).ToArray();
         Assert.Contains("conditions_json", operationColumns);
         Assert.Contains("conditions_fingerprint", operationColumns);
+        Assert.Contains("warnings_json", operationColumns);
         Assert.Contains("case_id", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_metrics')")
             .Select(row => (string)row["name"]!));
         Assert.Contains("case_label", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_statements')")
@@ -45,6 +46,28 @@ public sealed class JournalContractTests : IDisposable
         var salt = Assert.IsType<byte[]>(JournalDb.Rows(path,
             "SELECT value FROM journal_meta WHERE key = 'fingerprint_salt'").Single()["value"]);
         Assert.Equal(32, salt.Length);
+    }
+
+    [Fact]
+    public void Journal_v14_is_upgraded_with_operation_warnings()
+    {
+        var path = Path.Combine(_temp.Path, "data", "activity.db");
+        _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null, new FixedTimeProvider(JournalTestData.T0));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            connection.Open();
+            using var downgrade = connection.CreateCommand();
+            downgrade.CommandText = "ALTER TABLE operations DROP COLUMN warnings_json; PRAGMA user_version = 14;";
+            downgrade.ExecuteNonQuery();
+        }
+
+        _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null, new FixedTimeProvider(JournalTestData.T0));
+
+        Assert.Equal(15, JournalSchema.CurrentVersion);
+        Assert.Equal(14, JournalSchema.FirstRetainedVersion);
+        Assert.Equal(15L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Contains("warnings_json", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operations')")
+            .Select(row => (string)row["name"]!));
     }
 
     [Theory]

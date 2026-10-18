@@ -10,6 +10,15 @@ namespace SqlHarness.Core;
 /// </summary>
 internal static class OperationJournalDescriber
 {
+    private static readonly HashSet<string> SafetyNoticeTexts = new(StringComparer.Ordinal)
+    {
+        "open transaction rolled back",
+        "isolation level SERIALIZABLE in effect",
+        "isolation level REPEATABLE READ in effect",
+        "batch reached its timeout",
+        "connection discarded after failed cleanup",
+    };
+
     internal static OperationStart DescribeStart(SqlHarnessOperation operation)
     {
         var start = operation switch
@@ -80,11 +89,25 @@ internal static class OperationJournalDescriber
             ArtifactDirectory: artifactDirectory,
             SummaryJson: JournalSummary.Build(outcome.Report, conditions),
             ErrorMessage: status is "failed" or "rejected" ? Message(outcome.MachineError) : null,
-            ParentOperationRef: outcome.ParentOperationRef);
+            ParentOperationRef: outcome.ParentOperationRef,
+            Warnings: ReportWarnings(outcome.Report).Concat(outcome.SessionWarnings)
+                .Where(SafetyNoticeTexts.Contains).Distinct(StringComparer.Ordinal).ToArray());
     }
 
-    internal static OperationEnd Cancelled(long durationMilliseconds, string? reason = null) =>
-        new("failed", -1, "cancelled", Math.Max(durationMilliseconds, 0), null, null, null, null, null, CancelReason: reason);
+    private static IReadOnlyList<string> ReportWarnings(object? report) => report switch
+    {
+        SqlHarnessQueryReport value => value.Warnings,
+        SqlHarnessMeasureReport value => value.Warnings,
+        SqlHarnessCompareReport value => value.Warnings,
+        SqlHarnessMeasureSetReport value => value.Sets.SelectMany(set => set.Metrics.Warnings).Distinct(StringComparer.Ordinal).ToArray(),
+        SqlHarnessCompareMatrixReport value => value.Cells.SelectMany(cell => cell.Compare.Warnings).Distinct(StringComparer.Ordinal).ToArray(),
+        SqlHarnessWatchReport value => value.Warnings,
+        SqlHarnessSnapshotReport value => value.Warnings,
+        _ => [],
+    };
+
+    internal static OperationEnd Cancelled(long durationMilliseconds, string? reason = null, IReadOnlyList<string>? warnings = null) =>
+        new("failed", -1, "cancelled", Math.Max(durationMilliseconds, 0), null, null, null, null, null, CancelReason: reason, Warnings: warnings);
 
     internal static OperationEnd Crashed(long durationMilliseconds) =>
         new("failed", -1, "unhandled_exception", Math.Max(durationMilliseconds, 0), null, null, null, null, null);

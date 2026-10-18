@@ -64,6 +64,7 @@ test("live page shows running, recent and pushed operations", async () => {
   })
 
   renderApp("/")
+  await waitFor(() => expect(FakeEventSource.instances.filter(source => source.url === "/api/live")).toHaveLength(1))
 
   const running = await screen.findByRole("region", { name: "Running" })
   expect(await within(running).findByText("watch")).toBeInTheDocument()
@@ -78,6 +79,25 @@ test("live page shows running, recent and pushed operations", async () => {
   const recent = screen.getByRole("region", { name: "Recent operations" })
   expect(await within(recent).findByText("measure")).toBeInTheDocument()
   expect(screen.getByText("connected")).toBeInTheDocument()
+})
+
+test("an enabled safety notice from the live feed links to its operation", async () => {
+  useFakeEventSource()
+  stubFetch({
+    "/api/settings": { status: "valid", path: "config.json", settings: { dashboard: { safetyNotifications: true } } },
+    [RECENT]: page([]), [RUNNING]: page([]), [STARRED]: page([]), [SESSIONS]: page([]),
+  })
+  const { client } = renderApp("/")
+  await screen.findByRole("region", { name: "Running" })
+  await waitFor(() => expect(client.getQueryData(["settings"])).toBeDefined())
+
+  act(() => {
+    liveFeed().open()
+    liveFeed().emit("operation", operation({ id: 31, safetyNotices: ["open transaction rolled back"] }))
+  })
+
+  expect(await screen.findByText("open transaction rolled back")).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "View operation" })).toHaveAttribute("href", "/operations/31")
 })
 
 test("an archived session that is still active stays on the live page", async () => {
@@ -203,7 +223,7 @@ test("clearing transcript data removes stale titles and models from the live cac
     [SESSIONS]: () => json(page([liveSession()])),
     "/api/settings": { status: "valid", path: "settings.json", settings: {
       journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
-      dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, agentTranscripts: { enabled: false } }, compare: { requireContext: true },
+      dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled: false } }, compare: { requireContext: true },
       diagnostics: { enabled: false },
       mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
     } },

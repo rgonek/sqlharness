@@ -23,6 +23,7 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.False(result.Config.Diagnostics.Enabled);
         Assert.False(result.Config.Dashboard.AutoStart);
         Assert.Equal(47800, result.Config.Dashboard.Port);
+        Assert.False(result.Config.Dashboard.SafetyNotifications);
         Assert.True(System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(result.Config)).RootElement
             .GetProperty("compare").GetProperty("requireContext").GetBoolean());
     }
@@ -132,6 +133,19 @@ public sealed class SqlHarnessConfigTests : IDisposable
             Assert.Equal(required, System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(parsed.Config!))
                 .RootElement.GetProperty("compare").GetProperty("requireContext").GetBoolean());
         }
+    }
+
+    [Fact]
+    public void Dashboard_safety_notifications_default_off_and_round_trip()
+    {
+        var defaults = SqlHarnessConfigLoader.Parse("{}"u8.ToArray()).Config!;
+        Assert.False(defaults.Dashboard.SafetyNotifications);
+        var parsed = SqlHarnessConfigLoader.Parse("""{ "dashboard": { "safetyNotifications": true } }"""u8.ToArray());
+
+        Assert.Empty(parsed.Errors);
+        Assert.True(parsed.Config!.Dashboard.SafetyNotifications);
+        Assert.True(System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(parsed.Config)).RootElement
+            .GetProperty("dashboard").GetProperty("safetyNotifications").GetBoolean());
     }
 
     [Theory]

@@ -10,14 +10,14 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { isActiveSession, mergeOperations, mergeSessions, reconcileRunning, runningOnly } from "@/live/liveStore"
-import { useLiveFeed } from "@/live/useLiveFeed"
+import { useLiveFeedState } from "@/live/useLiveFeed"
 import { useNow } from "@/lib/useNow"
 import { isInternalOperation, useShowInternalOperations } from "@/lib/internalOperations"
 
 export function LivePage() {
   const [showInternal, setShowInternal] = useShowInternalOperations()
   const client = useQueryClient()
-  const state = useLiveFeed()
+  const state = useLiveFeedState()
   const now = useNow(1000)
   // Fetched on load and on every live-feed (re)connect; in between, pushed events keep these
   // caches current through setQueryData. A fetch merges into the cache instead of replacing it.

@@ -150,7 +150,7 @@ public sealed class ActivityJournal : IActivityJournal
                 UPDATE operations SET status = $status, exit_code = $exit, error_kind = $error, error_message = $message, duration_ms = $duration,
                     engine = $engine, server = $server, database = $database, result_sets = $sets, rows_returned = $rows,
                     raw_tokens = COALESCE($raw, raw_tokens), artifact_dir = $artifact, summary_json = $summary, cancel_reason = $cancel,
-                    parent_operation_ref = $parentOperationRef, finished_at = $now, updated_at = $now
+                    parent_operation_ref = $parentOperationRef, warnings_json = $warningsJson, finished_at = $now, updated_at = $now
                 WHERE id = $id;
                 UPDATE sessions SET last_seen = $now
                 WHERE id = (SELECT session_id FROM operations WHERE id = $id);
@@ -171,6 +171,7 @@ public sealed class ActivityJournal : IActivityJournal
             update.Parameters.AddWithValue("$artifact", (object?)end.ArtifactDirectory ?? DBNull.Value);
             update.Parameters.AddWithValue("$summary", (object?)end.SummaryJson ?? DBNull.Value);
             update.Parameters.AddWithValue("$parentOperationRef", (object?)end.ParentOperationRef ?? DBNull.Value);
+            update.Parameters.AddWithValue("$warningsJson", JsonSerializer.Serialize(end.Warnings ?? [], WaitJson));
             update.Parameters.AddWithValue("$now", now);
             update.ExecuteNonQuery();
 

@@ -49,6 +49,22 @@ public sealed class McpOutputTests
         Assert.False(envelope.TryGetProperty(name, out _), $"optional field '{name}' must be omitted when empty");
 
     [Fact]
+    public void Mcp_v3_projection_preserves_session_safety_report_warnings()
+    {
+        var report = new SqlHarnessQueryReport(Target, "read-only", [], [], 0, 1, "hash", new OutputFootprint(0, 0))
+        {
+            Warnings = ["isolation level SERIALIZABLE in effect"],
+        };
+
+        var envelope = EnvelopeOf(McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query"));
+
+        AssertV3Shape(envelope);
+        Assert.Equal("isolation level SERIALIZABLE in effect",
+            Assert.Single(envelope.GetProperty("result").GetProperty("warnings").EnumerateArray()).GetString());
+    }
+
+    [Fact]
     public void Mcp_v3_preserves_partial_and_controlled_outcomes_without_cli_fields()
     {
         var dryRun = EnvelopeOf(McpResultAdapter.Adapt(

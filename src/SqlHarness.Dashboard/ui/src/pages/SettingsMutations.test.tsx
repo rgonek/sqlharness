@@ -7,7 +7,7 @@ import * as sound from "@/mutations/sound"
 const initial = {
   status: "valid", path: "config.json", settings: {
     journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
-    dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, agentTranscripts: { enabled: false } },
+    dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled: false } },
     compare: { requireContext: true }, diagnostics: { enabled: false },
     mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
   },

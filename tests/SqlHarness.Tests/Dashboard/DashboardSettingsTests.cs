@@ -12,7 +12,7 @@ public sealed class DashboardSettingsTests
     private const string ValidBody = """
         { "journal": { "enabled": true, "storeSensitive": true,
                        "retention": { "enabled": true, "maxAgeDays": 7, "maxSizeMb": 100 } },
-          "dashboard": { "autoStart": true, "port": 50000, "idleShutdownHours": 2 },
+          "dashboard": { "autoStart": true, "port": 50000, "idleShutdownHours": 2, "safetyNotifications": true },
           "mutations": { "defaultMode": "operator", "verification": "click", "approvalTimeoutSeconds": 150 },
           "diagnostics": { "enabled": true } }
         """;
@@ -46,6 +46,7 @@ public sealed class DashboardSettingsTests
         Assert.False(body.GetProperty("settings").GetProperty("journal").GetProperty("storeSensitive").GetBoolean());
         Assert.Equal(47800, body.GetProperty("settings").GetProperty("dashboard").GetProperty("port").GetInt32());
         Assert.False(body.GetProperty("settings").GetProperty("diagnostics").GetProperty("enabled").GetBoolean());
+        Assert.False(body.GetProperty("settings").GetProperty("dashboard").GetProperty("safetyNotifications").GetBoolean());
     }
 
     [Fact]
@@ -81,6 +82,7 @@ public sealed class DashboardSettingsTests
         Assert.Equal("click", loaded.Config.Mutations.Verification);
         Assert.Equal(150, loaded.Config.Mutations.ApprovalTimeoutSeconds);
         Assert.Equal(47800, loaded.Config.Dashboard.Port);
+        Assert.True(loaded.Config.Dashboard.SafetyNotifications);
         Assert.Equal("valid", (await Json(response)).GetProperty("status").GetString());
     }
 

@@ -110,6 +110,24 @@ public sealed class OperationJournalDescriberTests
     }
 
     [Fact]
+    public void Operation_warnings_combine_report_and_typed_session_notices()
+    {
+        var report = new SqlHarnessQueryReport(new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
+            "read-only", [], [], 0, 1, "hash", new OutputFootprint(0, 0))
+        {
+            Warnings = ["PlanWarning", "isolation level SERIALIZABLE in effect"],
+        };
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, report, "failed")
+        {
+            SessionWarnings = ["batch reached its timeout", "connection discarded after failed cleanup"],
+        };
+
+        var end = OperationJournalDescriber.DescribeEnd(outcome, 1);
+
+        Assert.Equal(new[] { "isolation level SERIALIZABLE in effect", "batch reached its timeout", "connection discarded after failed cleanup" }, end.Warnings);
+    }
+
+    [Fact]
     public void Failure_end_carries_machine_error_code_and_message()
     {
         var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, "SQL safety rejection: SELECT secret");

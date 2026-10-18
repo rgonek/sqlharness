@@ -40,7 +40,8 @@ public sealed record AgentCompactQuery(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedResultSetCount = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string?>? Messages = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? RecordsAffected = null,
-    long DurationMilliseconds = 0);
+    long DurationMilliseconds = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Warnings = null);
 
 /// <summary>Bounded agent projection of a mutation broker response.</summary>
 public sealed record AgentMutationResult(string Status, string? Message, object? Result);
@@ -166,9 +167,10 @@ public static class AgentOutputProjection
                 case SqlHarnessQueryReport query:
                     {
                         var messages = Take(query.Messages).Select(Clip).ToArray();
+                        var warnings = Take(query.Warnings).Select(warning => Clip(warning)!).ToArray();
                         var queryProjection = detailLimit > 0
-                            ? ProjectQueryRowSample(query, messages, detailLimit, maximumCellCharacters, maximumBytes, out var queryOmitted)
-                            : ProjectQueryInventory(query, messages, maximumCellCharacters, maximumBytes, out queryOmitted);
+                            ? ProjectQueryRowSample(query, messages, warnings, detailLimit, maximumCellCharacters, maximumBytes, out var queryOmitted)
+                            : ProjectQueryInventory(query, messages, warnings, maximumCellCharacters, maximumBytes, out queryOmitted);
                         omissions += queryOmitted;
                         omissions += clippedItems;
                         return queryProjection;
@@ -338,8 +340,8 @@ public static class AgentOutputProjection
                         var query = new SqlHarnessQueryReport(
                             watch.Target, "read-only", poll.ResultSets, [], 0, poll.ElapsedMilliseconds, poll.ResultHash, new OutputFootprint(0, 0));
                         var compact = detailLimit > 0
-                            ? ProjectQueryRowSample(query, [], detailLimit, maximumCellCharacters, maximumBytes, out var pollOmitted)
-                            : ProjectQueryInventory(query, [], maximumCellCharacters, maximumBytes, out pollOmitted);
+                            ? ProjectQueryRowSample(query, [], [], detailLimit, maximumCellCharacters, maximumBytes, out var pollOmitted)
+                            : ProjectQueryInventory(query, [], [], maximumCellCharacters, maximumBytes, out pollOmitted);
                         omissions += pollOmitted;
                         return new AgentWatchPollOutput(poll.Poll, poll.ElapsedMilliseconds, poll.ResultHash, compact.ResultSets);
                     }).ToArray();
@@ -596,6 +598,7 @@ public static class AgentOutputProjection
     private static AgentCompactQuery ProjectQueryRowSample(
         SqlHarnessQueryReport query,
         IReadOnlyList<string?> messages,
+        IReadOnlyList<string> warnings,
         int rowLimit,
         int maximumCellCharacters,
         int maximumBytes,
@@ -611,7 +614,7 @@ public static class AgentOutputProjection
                 set.OmittedRowCount + set.Rows.Count, 0, null, set.Rows.Count, set.OmittedRowCount);
         }
 
-        long reserve = PreFilterBudget(maximumBytes) - SerializedLength(QueryShell(query, rowless, 0, messages));
+        long reserve = PreFilterBudget(maximumBytes) - SerializedLength(QueryShell(query, rowless, 0, messages, warnings));
         var whole = new bool[count];
         if (reserve > 0)
         {
@@ -649,7 +652,7 @@ public static class AgentOutputProjection
         }
 
         omittedItems = omitted;
-        return QueryShell(query, sets, 0, messages);
+        return QueryShell(query, sets, 0, messages, warnings);
     }
 
     /// <summary>
@@ -677,11 +680,12 @@ public static class AgentOutputProjection
     private static AgentCompactQuery ProjectQueryInventory(
         SqlHarnessQueryReport query,
         IReadOnlyList<string?> messages,
+        IReadOnlyList<string> warnings,
         int maximumCellCharacters,
         int maximumBytes,
         out int omittedItems)
     {
-        long remaining = PreFilterBudget(maximumBytes) - SerializedLength(QueryShell(query, [], query.ResultSets.Count, messages));
+        long remaining = PreFilterBudget(maximumBytes) - SerializedLength(QueryShell(query, [], query.ResultSets.Count, messages, warnings));
 
         // 1. Inventory for a prefix of the result sets.
         var kept = 0;
@@ -798,7 +802,7 @@ public static class AgentOutputProjection
         }
 
         omittedItems = omitted;
-        return QueryShell(query, sets, source.Count - kept, messages);
+        return QueryShell(query, sets, source.Count - kept, messages, warnings);
     }
 
     /// <summary>
@@ -925,11 +929,13 @@ public static class AgentOutputProjection
         SqlHarnessQueryReport query,
         IReadOnlyList<AgentCompactResultSet> sets,
         int omittedResultSets,
-        IReadOnlyList<string?> messages) =>
+        IReadOnlyList<string?> messages,
+        IReadOnlyList<string> warnings) =>
         new(query.Target.ActualDatabase, query.StatementClassification, sets, omittedResultSets,
             messages.Count == 0 ? null : messages,
             query.RecordsAffected < 0 ? null : query.RecordsAffected,
-            query.DurationMilliseconds);
+            query.DurationMilliseconds,
+            warnings.Count == 0 ? null : warnings);
 
     private static AgentQueryColumn CompactColumn(SqlHarnessColumnReport column) =>
         new(column.Name, ValueTypeName(column.DataType), column.AllowNull);

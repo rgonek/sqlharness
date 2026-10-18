@@ -1,11 +1,29 @@
 import { useQueryClient } from "@tanstack/react-query"
-import { useEffect, useState } from "react"
+import { useEffect, useSyncExternalStore } from "react"
 import { connection } from "@/api/connection"
 import { queryKeys } from "@/api/queries"
 import type { OperationSummary, SessionSummary } from "@/api/types"
 import { mergeOperation, mergeSession, pushRunning } from "./liveStore"
 
 export type LiveFeedState = "connecting" | "connected" | "disconnected"
+
+let feedState: LiveFeedState = "connecting"
+const stateListeners = new Set<() => void>()
+function setFeedState(next: LiveFeedState) {
+  if (feedState === next) return
+  feedState = next
+  stateListeners.forEach(listener => listener())
+}
+export function useLiveFeedState(): LiveFeedState {
+  return useSyncExternalStore(listener => { stateListeners.add(listener); return () => stateListeners.delete(listener) }, () => feedState, () => feedState)
+}
+
+type SafetyNoticeEvent = { operationId: number; notices: string[] }
+const noticeListeners = new Set<(item: SafetyNoticeEvent) => void>()
+export function subscribeSafetyNotices(listener: (item: SafetyNoticeEvent) => void) {
+  noticeListeners.add(listener)
+  return () => noticeListeners.delete(listener)
+}
 
 const liveLists = [queryKeys.liveOperations, queryKeys.liveRunning, queryKeys.liveSessions]
 
@@ -26,25 +44,27 @@ const liveLists = [queryKeys.liveOperations, queryKeys.liveRunning, queryKeys.li
  */
 export function useLiveFeed(): LiveFeedState {
   const client = useQueryClient()
-  const [state, setState] = useState<LiveFeedState>("connecting")
 
   useEffect(() => {
+    setFeedState("connecting")
     const refetchLists = () => {
       for (const queryKey of liveLists) void client.invalidateQueries({ queryKey })
     }
     const source = new EventSource("/api/live")
     source.onopen = () => {
-      setState("connected")
+      setFeedState("connected")
       connection.reportSuccess()
       refetchLists()
     }
     source.onerror = () => {
-      setState("disconnected")
+      setFeedState("disconnected")
       if (source.readyState !== EventSource.OPEN) connection.reportFailure()
       if (source.readyState === EventSource.CLOSED) refetchLists()
     }
     source.addEventListener("operation", event => {
       const operation = JSON.parse((event as MessageEvent<string>).data) as OperationSummary
+      if (operation.safetyNotices?.length)
+        noticeListeners.forEach(listener => listener({ operationId: operation.id, notices: operation.safetyNotices }))
       client.setQueryData<OperationSummary[]>(queryKeys.liveOperations, (current = []) => mergeOperation(current, operation))
       client.setQueryData<OperationSummary[]>(queryKeys.liveRunning, (current = []) => pushRunning(current, operation))
       void client.invalidateQueries({ queryKey: queryKeys.operation(operation.id) })
@@ -58,5 +78,5 @@ export function useLiveFeed(): LiveFeedState {
     return () => source.close()
   }, [client])
 
-  return state
+  return useLiveFeedState()
 }

@@ -9,7 +9,7 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
   path: "C:/Users/me/.sqlharness/config.json",
   settings: {
     journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
-    dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, agentTranscripts: { enabled: false } },
+    dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled: false } },
     compare: { requireContext: true },
     diagnostics: { enabled: false },
     mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
@@ -62,6 +62,17 @@ test("connection diagnostics saves without confirmation and preserves other sett
   expect((puts[0].body as { diagnostics: { enabled: boolean } }).diagnostics.enabled).toBe(true)
   expect((puts[0].body as { journal: unknown }).journal).toEqual(response().settings.journal)
   expect((puts[0].body as { compare: unknown }).compare).toEqual(response().settings.compare)
+})
+
+test("safety notifications are opt-in and save with dashboard settings", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  const toggle = await screen.findByRole("switch", { name: "Safety notifications" })
+  expect(toggle).not.toBeChecked()
+  await userEvent.click(toggle)
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as Put & { dashboard: { safetyNotifications: boolean } }).dashboard.safetyNotifications).toBe(true)
 })
 
 test("enabling storeSensitive asks for confirmation, then saves", async () => {

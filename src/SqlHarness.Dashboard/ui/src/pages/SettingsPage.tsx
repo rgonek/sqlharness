@@ -298,6 +298,8 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent className="grid gap-4">
           <Toggle id="dashboard-autostart" label="Start with mcp serve" checked={draft.dashboard.autoStart} onChange={value => setDashboard({ autoStart: value })} />
+          <Toggle id="dashboard-safety-notifications" label="Safety notifications" checked={draft.dashboard.safetyNotifications}
+            onChange={value => setDashboard({ safetyNotifications: value })} />
           <div className="grid gap-2">
             <Toggle id="dashboard-agent-transcripts" label="Read agent transcripts" checked={draft.dashboard.agentTranscripts.enabled}
               onChange={value => setDashboard({ agentTranscripts: { enabled: value } })} />

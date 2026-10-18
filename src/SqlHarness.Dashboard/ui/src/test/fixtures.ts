@@ -20,7 +20,7 @@ export const operation = (over: Partial<OperationSummary> = {}): OperationSummar
   durationMs: 1200, profile: "local", engine: "sqlserver", server: "srv", database: "db", mutationRequested: false,
   sqlHash: "sha256:0123456789abcdef", rowsReturned: 3, logicalReadsMedian: null, hasSpill: false, coldCache: false,
   overGranted: false, progress: null, errorMessage: null, cancelReason: null, agentModel: null, agentReasoningEffort: null,
-  operationRef: null, parentOperationRef: null, dryRun: false, agentModelSource: null, subject: null, versionPair: null, readsBefore: null, readsAfter: null, ...over,
+  operationRef: null, parentOperationRef: null, dryRun: false, agentModelSource: null, subject: null, versionPair: null, readsBefore: null, readsAfter: null, safetyNotices: [], ...over,
 })
 
 export const agentCall = (over: Partial<AgentCall> = {}): AgentCall => ({

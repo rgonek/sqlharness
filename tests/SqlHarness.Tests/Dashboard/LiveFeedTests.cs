@@ -101,6 +101,27 @@ public sealed class LiveFeedTests
     }
 
     [Fact]
+    public async Task Operation_event_includes_structured_safety_notices()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:old"));
+        var (server, client, stream) = await Connect(home, new FakeProcesses().Alive(5151, JournalSeed.HostStarted));
+        await using var _ = server;
+        using var __ = client;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var handle = seed.Operation(JournalSeed.Session("cli:notice"), complete: false);
+        var journal = Journal(home, TimeProvider.System);
+        journal.Complete(handle, new OperationEnd("failed", 3, "sql_execution_failed", 1, "sqlserver", "srv", "db", null, null,
+            Warnings: ["batch reached its timeout", "connection discarded after failed cleanup"]));
+
+        var data = await NextOperationAsync(stream, handle.OperationId, "failed", timeout.Token);
+        Assert.Equal(new[] { "batch reached its timeout", "connection discarded after failed cleanup" },
+            data.GetProperty("safetyNotices").EnumerateArray().Select(item => item.GetString()));
+    }
+
+    [Fact]
     public async Task Live_feed_reports_a_running_operation_turning_abandoned()
     {
         using var home = new TempHome();

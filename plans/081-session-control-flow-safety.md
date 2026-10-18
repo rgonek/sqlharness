@@ -106,9 +106,9 @@
 - Modify: `src/SqlHarness.Core/SqlHarnessConfig.cs:22-28` (`DashboardConfig.SafetyNotifications` bool, default `false`), journal operation warnings (existing `has_warnings` + stored warning list, next free journal version only if a column is needed), `src/SqlHarness.Dashboard/LiveFeed.cs` (operation event carries `safetyNotices`), `src/SqlHarness.Dashboard/DashboardSettings.cs`, `ui/src/pages/SettingsPage.tsx`, create `ui/src/components/SafetyNoticeToast.tsx`, mount in `ui/src/components/AppLayout.tsx`
 - Test: `tests/SqlHarness.Tests/Journal/SqlHarnessConfigTests.cs`, `Dashboard/LiveFeedTests.cs`, `DashboardSettingsTests.cs`; `SettingsPage.test.tsx`; create `SafetyNoticeToast.test.tsx`
 
-- [ ] **Step 1: Failing tests:** config default `false` and round-trip; live feed operation event includes notices from Tasks 1–3; toast renders notice text and links to the operation only when the setting is `true`; never rendered when `false`; toast does not block or alter anything else.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS (`dotnet test`, `npm --prefix src/SqlHarness.Dashboard/ui test`).
-- [ ] **Step 5:** Commit `feat(081): opt-in dashboard safety notifications`.
+- [x] **Step 1: Failing tests:** config default `false` and round-trip; live feed operation event includes notices from Tasks 1–3; toast renders notice text and links to the operation only when the setting is `true`; never rendered when `false`; toast does not block or alter anything else.
+- [x] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS (scoped backend, MCP, and UI tests; see Task 4 report).
+- [x] **Step 5:** Commit `feat(081): opt-in dashboard safety notifications`.
 
 ### Task 5: Contracts, documentation, security review, verification
 

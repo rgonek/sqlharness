@@ -52,7 +52,10 @@ public sealed record OperationSummary(
     long? LogicalReadsMedian, bool HasSpill, bool ColdCache, bool OverGranted, JsonElement? Progress,
     string? ErrorMessage, string? CancelReason, string? AgentModel, string? AgentReasoningEffort,
     string? OperationRef = null, string? ParentOperationRef = null, bool DryRun = false, string? AgentModelSource = null,
-    string? Subject = null, string? VersionPair = null, long? ReadsBefore = null, long? ReadsAfter = null);
+    string? Subject = null, string? VersionPair = null, long? ReadsBefore = null, long? ReadsAfter = null)
+{
+    public IReadOnlyList<string> SafetyNotices { get; init; } = [];
+}
 
 public sealed record AgentCall(
     string? CallId, string? Model, string? ReasoningEffort, string? SessionId, string? TurnId,

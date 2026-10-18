@@ -106,7 +106,7 @@ public sealed class JournalingModule : ISqlHarnessModule
             // its session; MCP reports such a call as cancelled, so the journal does too.
             if (ct.IsCancellationRequested && IsCancellableFailure(outcome.ExitCode))
             {
-                Complete(journal, handle, phaseRecorder, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct)));
+                Complete(journal, handle, phaseRecorder, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct), outcome.SessionWarnings));
                 return outcome with { OperationRef = operation.OperationRef };
             }
 

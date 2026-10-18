@@ -72,7 +72,8 @@ public sealed record OperationEnd(
     string? SummaryJson = null,
     string? ErrorMessage = null,
     string? CancelReason = null,
-    string? ParentOperationRef = null);
+    string? ParentOperationRef = null,
+    IReadOnlyList<string>? Warnings = null);
 
 public sealed record JournalHandle(long OperationId);
 
