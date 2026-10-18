@@ -123,7 +123,11 @@ internal static class JournalBenchmarkBuilder
                 var sha256 = PlanIdentity.DocumentSha256(document);
                 var shapeHash = PlanIdentity.Hash(document);
                 links.Add(new JournalPlanLink(run.Repetition, ordinal, sha256));
-                occurrences.Add(new JournalPlanOccurrence(run.Repetition, ordinal, 0, sha256));
+                var statementCount = StatementMetricsExtractor.CountStatements(document);
+                if (statementCount == 0)
+                    statementCount = 1;
+                for (var statementIndex = 0; statementIndex < statementCount; statementIndex++)
+                    occurrences.Add(new JournalPlanOccurrence(run.Repetition, ordinal, statementIndex, sha256));
                 documents.TryAdd(sha256, new JournalPlanDocument(sha256, shapeHash,
                     IsJson(document) ? "explain-json" : "showplan-xml", document));
             }

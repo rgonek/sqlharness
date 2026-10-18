@@ -43,6 +43,17 @@ internal static class StatementMetricsExtractor
     internal static IReadOnlyList<StatementMetrics> Extract(string document, out int omittedStatements)
     {
         omittedStatements = 0;
+        var statements = ReadStatements(document);
+        if (statements.Length == 0)
+            return [];
+        omittedStatements = Math.Max(0, statements.Length - MaximumStatements);
+        return statements.Take(MaximumStatements).Select((statement, ordinal) => Parse(statement, ordinal)).ToArray();
+    }
+
+    internal static int CountStatements(string document) => ReadStatements(document).Length;
+
+    private static XElement[] ReadStatements(string document)
+    {
         if (string.IsNullOrWhiteSpace(document) || document.AsSpan().TrimStart()[0] is '{' or '[')
             return [];
 
@@ -58,12 +69,9 @@ internal static class StatementMetricsExtractor
             using var text = new StringReader(document);
             using var reader = XmlReader.Create(text, settings);
             var xml = XDocument.Load(reader, LoadOptions.None);
-            if (xml.Root?.Name != Showplan + "ShowPlanXML")
-                return [];
-
-            var statements = xml.Descendants(Showplan + "StmtSimple").ToArray();
-            omittedStatements = Math.Max(0, statements.Length - MaximumStatements);
-            return statements.Take(MaximumStatements).Select((statement, ordinal) => Parse(statement, ordinal)).ToArray();
+            return xml.Root?.Name == Showplan + "ShowPlanXML"
+                ? xml.Descendants(Showplan + "StmtSimple").ToArray()
+                : [];
         }
         catch (Exception exception) when (exception is XmlException or InvalidOperationException or FormatException or OverflowException)
         {
