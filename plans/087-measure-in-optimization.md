@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- DONE on feature branch `plan-087`, tested product revision `a0752bd5480eacdf44e08a8bd0ca4ca22447ea68`; not merged. Depends on 080. Plans 082 and 084 follow this plan. See [completion evidence](history.md#plan-087-completion--2026-10-18).
+- DONE; merged locally into `main` at `c4de0da03878be7d7ed230ba90a4e8d2e1b92c4c`. Tested product revision `a0752bd5480eacdf44e08a8bd0ca4ca22447ea68`. Depends on 080. Plans 082 and 084 follow this plan. See [completion evidence](history.md#plan-087-completion--2026-10-18).
 - Priority P2; effort M; risk LOW–MEDIUM.
 
 ## Global Constraints
