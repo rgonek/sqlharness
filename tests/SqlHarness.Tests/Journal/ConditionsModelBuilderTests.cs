@@ -115,6 +115,26 @@ public sealed class ConditionsModelBuilderTests
     }
 
     [Fact]
+    public void Measurement_fingerprint_ignores_compare_nullability()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var operation = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("profile", new Dictionary<string, string>()), null,
+            "SELECT @N", "SELECT @N", ["N:int=7"], 30, 5, ResultComparisonMode.Ordered, true);
+        var cases = new[] { new ConditionsCaseInput("0", null, [Parameter("N", SqlDbType.Int, 7, null)]) };
+        var compareNullability = ConditionsModelBuilder.Build(operation, target, new SqlServerDialect(), [], cases, true);
+        var ignoreNullability = ConditionsModelBuilder.Build(operation with { CompareNullability = false },
+            target, new SqlServerDialect(), [], cases, true);
+        var salt = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+
+        var includeNullability = ActivityJournal.SealConditions(compareNullability, salt);
+        var excludeNullability = ActivityJournal.SealConditions(ignoreNullability, salt);
+
+        Assert.Equal(includeNullability.MeasurementFingerprint, excludeNullability.MeasurementFingerprint);
+        Assert.Equal(includeNullability.Cases[0].MeasurementFingerprint, excludeNullability.Cases[0].MeasurementFingerprint);
+    }
+
+    [Fact]
     public void Legacy_rows_fall_back_to_operation_fingerprint()
     {
         var model = new ConditionsModel(1, "sqlserver", "server", "database",
