@@ -924,7 +924,7 @@ public sealed class JournalReaderTests
         var reader = Reader(home);
 
         var detail = reader.Operation(handle.OperationId)!;
-        var stored = reader.Plan(new string('A', 64))!;
+        var stored = reader.Plan(JournalSeed.PlanDocumentSha256)!;
 
         Assert.Equal("SELECT 42", detail.SqlText);
         Assert.True(Assert.Single(Assert.Single(detail.Variants).Plans).Stored);

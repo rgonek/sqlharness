@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -33,6 +34,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     public const int MutationHistoryPageLimit = 100;
     public const int TopLimit = 20;
     internal const int MaximumSqlVersionBytes = 256 * 1024;
+    internal const int MaximumStoredPlanBytes = 16 * 1024 * 1024;
     internal const long OverGrantMinimumKb = 1024;
 
     // Shared across reads and threads (live feed ticks, API requests): dead hosts stay dead.
@@ -674,17 +676,153 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         return agent == new AgentCall(null, null, null, null, null, null, null) ? null : agent;
     }
 
+    public OperationPlanManifest? Plans(long operationId, bool storeSensitive)
+    {
+        using var connection = OpenReadOnly();
+        if (connection is null)
+            return null;
+
+        var exists = Scalar<long>(connection, "SELECT COUNT(*) FROM operations WHERE id = $id;", [("$id", operationId)]) > 0;
+        if (!exists)
+            return null;
+        if (!storeSensitive)
+            return new OperationPlanManifest(operationId, "plans not stored", []);
+
+        var occurrences = ReadPlanOccurrences(connection, "m.operation_id = $operation",
+            [("$operation", operationId)], repetition: null);
+        return new OperationPlanManifest(operationId, "stored", occurrences);
+    }
+
+    public PlanSourceMapSelection? PlanSourceMap(long operationId, string variant, string? parameterSet,
+        int repetition, string? caseId, bool storeSensitive)
+    {
+        using var connection = OpenReadOnly();
+        if (connection is null)
+            return null;
+
+        var operation = Query(connection, "SELECT engine, sql_text, candidate_sql_text FROM operations WHERE id = $id;",
+            [("$id", operationId)], reader => new
+            {
+                Engine = NullableString(reader, 0),
+                SqlText = NullableString(reader, 1),
+                CandidateSqlText = NullableString(reader, 2),
+            }).FirstOrDefault();
+        if (operation is null)
+            return null;
+        if (!storeSensitive)
+            return new PlanSourceMapSelection(operationId, "plans not stored", operation.Engine, variant, parameterSet,
+                caseId, null, repetition, null, []);
+
+        var metrics = Query(connection, """
+            SELECT id, variant, parameter_set, case_id, case_label
+            FROM operation_metrics
+            WHERE operation_id = $operation AND lower(variant) = lower($variant)
+                AND parameter_set IS $parameterSet
+                AND ($caseId IS NULL OR case_id = $caseId)
+            ORDER BY ordinal;
+            """, [("$operation", operationId), ("$variant", variant), ("$parameterSet", parameterSet), ("$caseId", caseId)], reader =>
+            (Id: reader.GetInt64(0), Variant: reader.GetString(1), ParameterSet: NullableString(reader, 2),
+                CaseId: reader.GetString(3), CaseLabel: reader.GetString(4)));
+
+        if (metrics.Count == 0)
+            return null;
+        if (metrics.Count > 1)
+            return new PlanSourceMapSelection(operationId, "stored", operation.Engine, variant, parameterSet,
+                caseId, null, repetition, null, [], "case_required",
+                "The selected variant and parameter set match multiple cases; supply caseId.");
+
+        var metric = metrics[0];
+        var executedText = string.Equals(metric.Variant, "candidate", StringComparison.OrdinalIgnoreCase)
+            ? operation.CandidateSqlText
+            : operation.SqlText;
+        if (executedText is null)
+            return new PlanSourceMapSelection(operationId, "stored", operation.Engine, metric.Variant, metric.ParameterSet,
+                metric.CaseId, metric.CaseLabel, repetition, null, [], "executed_sql_unavailable",
+                "The exact executed SQL text is unavailable in the sensitive journal.");
+
+        var occurrences = ReadPlanOccurrences(connection, "m.id = $metric", [("$metric", metric.Id)], repetition);
+        if (occurrences.Count == 0)
+            return null;
+
+        return new PlanSourceMapSelection(operationId, "stored", operation.Engine, metric.Variant, metric.ParameterSet,
+            metric.CaseId, metric.CaseLabel, repetition, executedText, occurrences);
+    }
+
     public StoredPlan? Plan(string hash)
     {
         using var connection = OpenReadOnly();
         if (connection is null)
             return null;
-        return Query(connection, "SELECT sha256, format, gz FROM plan_documents WHERE sha256 = $hash;", [("$hash", hash)], reader =>
+        return Query(connection, "SELECT sha256, format, raw_size, gz FROM plan_documents WHERE sha256 = $hash;", [("$hash", hash)], reader =>
         {
-            using var gzip = new GZipStream(new MemoryStream((byte[])reader.GetValue(2)), CompressionMode.Decompress);
-            using var text = new StreamReader(gzip, Encoding.UTF8);
-            return new StoredPlan(reader.GetString(0), reader.GetString(1), text.ReadToEnd());
+            var sha256 = reader.GetString(0);
+            var format = reader.GetString(1);
+            var rawSize = reader.GetInt64(2);
+            if (rawSize < 0 || rawSize > MaximumStoredPlanBytes)
+                throw new InvalidDataException("The stored plan document exceeds the raw byte limit.");
+
+            using var gzip = new GZipStream(new MemoryStream((byte[])reader.GetValue(3)), CompressionMode.Decompress);
+            using var output = new MemoryStream((int)rawSize);
+            var buffer = new byte[8192];
+            while (true)
+            {
+                var read = gzip.Read(buffer, 0, buffer.Length);
+                if (read == 0)
+                    break;
+                if (output.Length + read > rawSize || output.Length + read > MaximumStoredPlanBytes)
+                    throw new InvalidDataException("The stored plan document does not match its declared size.");
+                output.Write(buffer, 0, read);
+            }
+
+            if (output.Length != rawSize)
+                throw new InvalidDataException("The stored plan document does not match its declared size.");
+            var bytes = output.ToArray();
+            var actualSha = Convert.ToHexString(SHA256.HashData(bytes));
+            if (!string.Equals(actualSha, sha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The stored plan document does not match its content address.");
+
+            string document;
+            try
+            {
+                document = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
+            }
+            catch (DecoderFallbackException exception)
+            {
+                throw new InvalidDataException("The stored plan document is not valid UTF-8.", exception);
+            }
+
+            return new StoredPlan(sha256, format, document);
         }).FirstOrDefault();
+    }
+
+    private static IReadOnlyList<PlanOccurrenceManifest> ReadPlanOccurrences(SqliteConnection connection, string metricPredicate,
+        (string Name, object? Value)[] parameters, int? repetition)
+    {
+        var repetitionClause = repetition is null ? string.Empty : " AND p.repetition = $repetition";
+        (string Name, object? Value)[] queryParameters = repetition is null
+            ? parameters
+            : [.. parameters, ("$repetition", (object?)repetition.Value)];
+        return Query(connection, $"""
+            SELECT m.variant, m.parameter_set, m.case_id, m.case_label,
+                p.repetition, p.document_ordinal, p.statement_index, p.span_start, p.span_length,
+                p.statement_id, p.statement_comp_id, p.document_sha, p.omitted, p.match_kind,
+                d.shape_hash, d.format, d.sha256
+            FROM operation_metrics m
+            JOIN plan_occurrences p ON p.metric_id = m.id
+            LEFT JOIN plan_documents d ON d.sha256 = p.document_sha
+            WHERE {metricPredicate}{repetitionClause}
+            ORDER BY m.ordinal, p.repetition, p.document_ordinal, p.statement_index;
+            """, queryParameters, reader =>
+            {
+                var omitted = reader.GetInt32(12) != 0;
+                return new PlanOccurrenceManifest(
+                    reader.GetString(0), NullableString(reader, 1), reader.GetString(2), reader.GetString(3),
+                    reader.GetInt32(4), reader.GetInt32(5), reader.GetInt32(6),
+                    reader.IsDBNull(7) ? null : reader.GetInt32(7), reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                    reader.IsDBNull(9) ? null : reader.GetInt32(9), reader.IsDBNull(10) ? null : reader.GetInt32(10),
+                    NullableString(reader, 11), NullableString(reader, 14), NullableString(reader, 15),
+                    reader.GetString(13), omitted, !omitted && !reader.IsDBNull(16));
+            });
     }
 
     public DashboardStats Stats(

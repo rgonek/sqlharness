@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- IN PROGRESS — Tasks 0–3 implemented on `plan-088`; Task 2 review fixes await re-review and Task 3 awaits task review. Final gate pending. Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
+- IN PROGRESS — Tasks 0–5 implemented on `plan-088`; Task 2 review fixes await re-review, Task 3 awaits task review, Task 4 review-fix rounds 1–2 await scoped re-review, and Task 5 awaits scoped review. Final gate pending. Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
 - Priority P2; effort L; risk MEDIUM (undocumented `TableReferenceId`, Showplan schema drift).
 
 ## Global Constraints
@@ -90,8 +90,8 @@ The prototypes use no icon set. The official [vscode-mssql repository license](h
 
 ### Task 5: Dashboard API and capabilities
 **Files:** `src/SqlHarness.Dashboard/DashboardServer.cs` (replace `/api/plans/{hash}`: `GET /api/operations/{id}/plans` manifest of variant/case/repetition/statement/span/document/shape/match kind; `GET /api/plan-documents/{sha}/graph`; `GET /api/plan-documents/{sha}/nodes/{nodeId}/properties`; `GET /api/operations/{id}/source-map?variant&parameterSet&repetition`; raw `.sqlplan` download), `JournalReader.cs`, `DashboardModels.cs`, `src/SqlHarness.Core/Capabilities.cs` (~`:195` plan storage state); tests in dashboard server suites.
-- [ ] Failing tests: manifest per repetition; graph and properties bounded; source map returns executed text and links; `Plans_not_stored_is_explicit`; invalid sha → 400; missing → 404.
-- [ ] FAIL → implement → PASS. Commit `feat(088): plan graph and source-map API`.
+- [x] Failing tests: manifest per repetition; graph and properties bounded; source map returns exact executed text and document-scoped links; runtime `storeSensitive` off hides previously stored SQL/plans/occurrences; invalid SHA → 400; missing → 404; complete manifest/source-map responses → explicit 413 when over their byte bounds.
+- [x] FAIL → implement → PASS. Focused RED/GREEN evidence, response contracts and bounds, and reader/config semantics are in the [Task 5 report](../.superpowers/sdd/088-plan-visualization/task-5-report.md). Commit `feat(088): plan graph and source-map API`.
 
 ### Task 6: Plan viewer with two-way linking
 **Files:** UI `src/SqlHarness.Dashboard/ui/src/api/types.ts`, `queries.ts`; new `components/plan/PlanGraphView.tsx` (renderer from Task 0, lazy chunk, own layout, icons, cost %, estimated vs actual rows, warning badge, edge width by `log(rows)`, collapse subtrees, fit to selection), `PlanPropertiesPanel.tsx`, `PlanStatementSwitcher.tsx`, `PlanSourceView.tsx` (Monaco from `components/sql-editor/monaco.tsx` / `SqlEditors.tsx`, decorations, reveal, selection events), `PlanWorkbench.tsx` (shared selection state); replace `PlanTree` use in `VariantPanel.tsx`; theme tokens for dark mode; tests next to components.

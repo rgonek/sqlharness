@@ -9,7 +9,7 @@ using SqlHarness.Dashboard;
 
 namespace SqlHarness.Cli.Commands;
 
-[Description("Describe the local SQLHarness command contract, including query and mutation, and the engine contract plus active compare-context policy; with a profile, add that engine's parameter types, limits and engineGuidance (offline, never connects).")]
+[Description("Describe the local SQLHarness command contract, including query and mutation, and the engine contract plus active compare-context and sensitive plan-storage state; with a profile, add that engine's parameter types, limits and engineGuidance (offline, never connects).")]
 public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer, CompareConfig compareConfig, SqlHarnessConfig config) : AsyncCommand<CapabilitiesCommand.Settings>
 {
     public sealed class Settings : CommandSettings
@@ -31,7 +31,8 @@ public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer,
         SqlHarnessCapabilities capabilities;
         if (string.IsNullOrWhiteSpace(settings.Profile))
         {
-            capabilities = SqlHarnessCapabilitiesProvider.Get(compareConfig, config.Mutations, DashboardLock.ReadRunning(SqlHarnessPaths.Home, ProcessInfo.Current) is not null);
+            capabilities = SqlHarnessCapabilitiesProvider.Get(compareConfig, config.Mutations,
+                DashboardLock.ReadRunning(SqlHarnessPaths.Home, ProcessInfo.Current) is not null, config.Journal);
         }
         else
         {
@@ -41,7 +42,7 @@ public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer,
                 if (!profiles.TryGetValue(settings.Profile, out var profile))
                     return Task.FromResult(RejectProfile("profile_unknown", UnknownProfileMessage(settings.Profile, profiles.Keys)));
                 capabilities = SqlHarnessCapabilitiesProvider.Get(settings.Profile, profile.Engine, compareConfig, profile, config.Mutations,
-                    DashboardLock.ReadRunning(SqlHarnessPaths.Home, ProcessInfo.Current) is not null);
+                    DashboardLock.ReadRunning(SqlHarnessPaths.Home, ProcessInfo.Current) is not null, config.Journal);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
