@@ -47,6 +47,8 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --subject orders-repo
 sqlharness plan .\artifacts\orders.sqlplan --json
 ```
 
+When a measurement belongs to an optimization subject, pass the same optional `--subject` and `--scope` pair to `measure` and `compare`. Measure context is optional even when `compare.requireContext` requires it for comparisons.
+
 `plan` is offline and returns a compact tree with bounded statement text and predicates unchanged from the caller-supplied plan. Output limits clip long cells and mark truncation.
 
 Compare context identifies the optimization target (`--subject`) and the tested fragment (`--scope`). Use stable short labels; use exactly `whole` for a direct whole-query comparison. The global `compare.requireContext` setting in `~/.sqlharness/config.json` enables context by default, independently of the journal. With it enabled, both labels are required for `compare`; when disabled, both options may be omitted or supplied together. MCP freezes this setting when the server starts, so changing it requires restarting the server and reconnecting the client.
