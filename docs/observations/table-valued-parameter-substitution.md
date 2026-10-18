@@ -3,7 +3,7 @@
 Status: addressed by plan 083 implementation on the `plan-083` feature branch. Recorded 2026-10-15
 against repository HEAD `4f1e5a1`; implementation and final-fix evidence are in
 [plan 083](../../plans/083-table-and-list-parameters.md) and its [verification record](../../plans/083-verification-evidence.md).
-The final review findings have been fixed. The controller gate and operator UAT remain pending;
+The final review findings and controller gate failures have been fixed, with focused regressions passing. The integrated controller gate and operator UAT remain pending; Linux verification was explicitly waived by the operator.
 live SQL Server behavior is not yet verified.
 
 ## Observed workflow

@@ -24,7 +24,7 @@
 
 ## Status and dependencies
 
-- IN PROGRESS. Tasks 1–5 are implemented on the `plan-083` feature branch, and both Important findings from the whole-branch review have been fixed. The final controller-owned `just verify` and operator-authorized live UAT remain pending. See [verification evidence](083-verification-evidence.md). Do not treat this plan as complete or integrated. Planning base `3be878e`; depends on 077 (MCP schemas) and 079 (conditions, scripts); independent of 080–082.
+- IN PROGRESS. Tasks 1–5 and both Important whole-branch findings are fixed. The controller gate on `e15137a` exposed three failures, fixed in `35b8d4a`; focused Core and MCP regression groups pass. The controller will integrate with current `main` and run the final gate on that product tree. Linux verification is explicitly waived by the operator. Live SQL Server/SSMS UAT remains pending. See [verification evidence](083-verification-evidence.md); do not treat this plan as complete. Planning base `3be878e`; depends on 077 (MCP schemas) and 079 (conditions, scripts); independent of 080–082.
 - Priority P2; effort L; risk MEDIUM (binding fidelity; new execution step before setup).
 
 ## Global Constraints

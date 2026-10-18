@@ -8,7 +8,7 @@ Plan: [083 — table-valued and list parameters](083-table-and-list-parameters.m
 
 The whole-branch review identified two Important findings. Both product and evidence hygiene are addressed in this wave. The reproduction writer now redeclares and repopulates TVPs inside each generated setup command batch that binds them, then again before the measured batch after setup `GO` separators. Setup command preparation now recognizes table-valued parameters used as table sources (`FROM @Ids`) and includes their structured binding. The source setup SQL retains its existing command splitting and parameter-free temp-table prefix behavior. A fake-session test verifies the parameterized setup command reaches execution with `SqlDbType.Structured` and the resolved type name; safety coverage verifies the TVP is accepted only as a source while populating a local setup table.
 
-The five plan-083 task report files are removed from the Git index with `git rm --cached`; their physical copies are preserved in the local SDD workspace. No other plan scratch file is changed. The controller-owned final `just verify` has not yet run. Operator-authorized live SQL Server/SSMS UAT remains pending and no live database was used. Plan 083 remains in progress and is not integrated into `main`; no merge or push is claimed.
+The five plan-083 task report files are removed from the Git index with `git rm --cached`; their physical copies are preserved in the local SDD workspace. No other plan scratch file is changed. The controller gate on `e15137a` failed as recorded below; corrective product commit `35b8d4a` passes its focused regressions. The controller will integrate the current feature with `main` and run the final gate on the integrated product tree. The operator explicitly waived Linux verification. Live SQL Server/SSMS UAT remains pending; no live database was used. Plan 083 remains in progress and is not complete.
 
 ## SDD rulings preserved from progress.md
 
@@ -19,6 +19,31 @@ Ruling: No live DB UAT without exact operator authorization; report pending sepa
 Ruling: Retain validated string Kind from approved Task 1, superseding the earlier enum preference — explicit model task text uses string and existing JSON transport is string-based; supported values are centrally validated — cost if wrong: future public enum migration and mapper changes.
 Ruling: Use 10 vs 5000 TVP rows for large-case coverage and list lengths below 2100 for list version-identity regression — required 2100 command parameter ceiling makes a 5000-value Dapper list impossible — cost if wrong: narrower large-list acceptance example; larger lists remain explicitly rejected.
 Ruling: Extend final TVP scope fix to SetupSqlExecution table-source parameter recognition — setup FROM @Tvp was not bound, so script-only declarations would leave accepted runtime setup broken — cost if wrong: shared setup regression; covered by focused command preparation/execution tests and final gate.
+
+## Controller gate failure and corrective fix
+
+The controller's `just verify` on `e15137a` failed after build and UI passed. Test totals were Core 4,392 passed / 2 failed / 11 skipped (4,405 total), and MCP 434 passed / 1 failed / 4 skipped (439 total). The failing cases were:
+
+- `DryRunCommandTests.Setup_only_parameter_reference_is_allowed_when_the_batch_needs_no_parameter`
+- `DryRunCommandTests.Measure_missing_parameter_is_rejected_and_setup_only_references_are_not_required`
+- `McpToolSchemaTests.Fixed_postgres_catalog_carries_only_postgres_guidance`
+
+Root causes: measure and compare dry-run callers included setup SQL in `MissingParameterCheck`, although its documented contract checks measured SQL only; shared parameter and parameter-set-file descriptions also included SQL Server-only guidance in PostgreSQL schemas. The dry-run callers now check measured SQL only. MCP descriptions are selected according to catalog engine, retaining SQL Server guidance in SQL Server schemas.
+
+Corrective product commit: `35b8d4a5664b165f21cb94fa844c77a015376397 fix(083): preserve dry-run and engine-specific contracts`. The exact Core failures were reproduced RED (2 failed) before the product fix and passed GREEN (2 passed) afterward. The additional compare setup-only regression was also RED (1 failed) before and GREEN (1 passed) after. Serial covering results on this fix:
+
+```text
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter 'FullyQualifiedName~DryRunCommandTests'
+Passed 109, Failed 0, Skipped 0.
+
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -p:IsTestProject=true --no-restore --filter 'FullyQualifiedName~McpToolSchemaTests.Fixed_postgres_catalog_carries_only_postgres_guidance|FullyQualifiedName~McpToolSchemaTests.Non_scalar_parameter_descriptions_name_read_only_paths_and_mutation_rejection|FullyQualifiedName~McpToolSchemaTests.Fixed_sql_server_catalog_carries_only_sql_server_guidance'
+Passed 3, Failed 0, Skipped 0.
+
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -p:IsTestProject=true --no-restore --filter 'FullyQualifiedName~McpToolSchemaTests'
+Passed 51, Failed 0, Skipped 0.
+```
+
+`git diff --check` passed. The final gate on `35b8d4a` and the integrated product tree is pending. Linux verification was explicitly waived by the operator; live SQL Server/SSMS UAT remains pending.
 
 ## Archived task reports
 
