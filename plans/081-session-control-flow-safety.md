@@ -25,7 +25,7 @@
 
 ## Status and dependencies
 
-- IMPLEMENTED on `plan-081`; final verification pending (not DONE). See [verification evidence](081-verification-evidence.md). Planning base `1737091`. Depends on 079 (message numbers). Independent of 080. Stage C becomes plan 082, stage D plan 083.
+- IMPLEMENTED on feature branch `plan-081`; required Windows gate and classifier/executor security review passed on the final product tree. Final Sol low whole-branch review remains pending; local integration has not occurred. See [verification evidence](081-verification-evidence.md). Planning base `1737091`. Depends on 079 (message numbers). Independent of 080. Stage C becomes plan 082, stage D plan 083.
 - Priority P1; effort M; risk HIGH (safety classifier) — security review required before completion.
 
 ## Global Constraints
@@ -113,7 +113,7 @@
 ### Task 5: Contracts, documentation, security review, verification
 
 - [x] **Step 1:** README "Safety contract" documents admitted constructs, explicit denied options/statements, rollback/discard rules, option isolation and notifications; SQL Server engine guidance/capabilities and MCP tool docs carry the interface contract. The user skill does not name rejected constructs and needed no change.
-- [ ] **Step 2:** Security review of the classifier and executor diff (repo `/security-review` or a fresh reviewer focused on persistent-effect paths); fix findings.
-- [ ] **Step 3:** `just verify` → exit 0; record revision and result.
-- [ ] **Step 4 (operator-authorized, optional):** UAT dry-run of the 20-construct survey and one measured procedure body with `SET NOCOUNT ON; SET XACT_ABORT ON; BEGIN TRAN … COMMIT`; record outcomes without business data.
-- [ ] **Step 5:** Queue → history with evidence; commit `docs(081): record plan 081 evidence`.
+- [x] **Step 2:** Security review approved the classifier/executor diff at `90afb5c` with no persistent-effect reachability findings. The subsequent cleanup and journal fixes were reviewed at `d65cfac` with no Critical or Important findings. Final Sol whole-branch review remains pending.
+- [x] **Step 3:** `just verify` passed at `d65cfac7b9c472b82daaca132e090709c57b8b87`; see [verification evidence](081-verification-evidence.md) for stage results and scope.
+- [x] **Step 4 (operator-authorized, optional):** Not performed; optional live UAT was not authorized. No live database calls were made.
+- [x] **Step 5:** Moved the implementation record from the queue to [history](history.md#plan-081-feature-branch-evidence) with evidence. Task 5 documentation commit: `90afb5c`; final evidence update is recorded separately.

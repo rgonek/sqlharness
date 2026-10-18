@@ -2,6 +2,14 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 081 feature branch evidence
+
+Plan [081](081-session-control-flow-safety.md) implements SQL Server read-only session/control-flow admissions, logical-batch rollback and connection discard, measured-session option restoration, operation warnings, and opt-in dashboard notices. The required feature-branch checks passed at product revision `d65cfac7b9c472b82daaca132e090709c57b8b87` on branch `plan-081`. The classifier/executor security review was approved at `90afb5c` with no persistent-effect reachability findings; the subsequent cleanup and journal fixes were reviewed at `d65cfac` with no Critical or Important findings.
+
+Windows `just verify` on `d65cfac` exited 0 in 4m57s. Build passed with zero warnings/errors; UI passed 56 files and 291 tests; Core passed 4,300 with 11 skipped; MCP passed 427 with 4 skipped. UI install was skipped because the lockfile was unchanged. Formatting was skipped with zero changed C# files, so no full-tree format pass is claimed. The UI test run printed non-failing localhost:3000 connection refusals and Node `DEP0190`. Logs: `.superpowers/sdd/081-session-control-flow-safety/verify-final-d65cfac` in local ignored scratch.
+
+The task/security reviews are approved. The final Sol low whole-branch review remains PENDING and must triage the remaining minor test-order coverage note: the per-parameter-set regression checks capture/restore counts and capture-after-setup, but does not fully assert each set's capture, warmup, repetitions and restore ordering. Local integration is not done; no merge or push occurred. No live SQL Server UAT was authorized or performed. Linux was not run and is not required under current local-CI policy. See [verification evidence](081-verification-evidence.md).
+
 ## Plan 079 completion — 2026-10-17
 
 Plan [079](079-optimization-evidence-core.md) is DONE on feature branch `plan-079`, product implementation range `9915eca..19c714d`. It adds canonical, privacy-aware optimization conditions and keyed fingerprints, sequential per-case `measure` sessions, streamed table IO, journal-side data-plus-LOB reads and table-variable grouping, SQL Server reproduction scripts, and minimal dashboard evidence surfaces. Task reviews for Tasks 1–8 were clean. Task 9 documentation and final Windows verification are recorded in [verification evidence](079-verification-evidence.md).
