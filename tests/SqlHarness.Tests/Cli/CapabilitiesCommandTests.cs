@@ -24,7 +24,7 @@ public sealed class CapabilitiesCommandTests
         Assert.Empty(module.Operations);
         using var document = JsonDocument.Parse(output.ToString());
         var root = document.RootElement;
-        Assert.Equal(5, root.GetProperty("contractVersion").GetInt32());
+        Assert.Equal(6, root.GetProperty("contractVersion").GetInt32());
         var mutations = root.GetProperty("mutations");
         Assert.Equal("never", mutations.GetProperty("defaultMode").GetString());
         Assert.Equal("click", mutations.GetProperty("verification").GetString());
@@ -46,6 +46,8 @@ public sealed class CapabilitiesCommandTests
         var journalStorage = limits.GetProperty("activityJournalStorage");
         Assert.Equal("credential-redacted error messages are stored by default", journalStorage.GetProperty("errorMessages").GetString());
         Assert.Equal("journal.storeSensitive", journalStorage.GetProperty("sqlTextAndPlans").GetString());
+        Assert.Equal("plans not stored", journalStorage.GetProperty("planStorage").GetProperty("state").GetString());
+        Assert.Equal("journal.storeSensitive", journalStorage.GetProperty("planStorage").GetProperty("enabledBy").GetString());
         Assert.Equal(1000000, limits.GetProperty("comparisonRowCapPerRun").GetProperty("max").GetInt32());
         Assert.Equal(2000000, limits.GetProperty("comparisonUniqueFingerprintBudgetPerCell").GetProperty("max").GetInt32());
         foreach (var engineOnly in new[] { "sessionTempStatements" })
@@ -55,8 +57,21 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public void Contract_version_is_pinned()
     {
-        Assert.Equal(5, SqlHarnessCapabilitiesProvider.ContractVersion);
-        Assert.Equal(5, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+        Assert.Equal(6, SqlHarnessCapabilitiesProvider.ContractVersion);
+        Assert.Equal(6, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+    }
+
+    [Fact]
+    public void Capabilities_reports_sensitive_plan_storage_state()
+    {
+        using var disabled = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get()));
+        using var enabled = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get(
+            journalConfig: new JournalConfig { StoreSensitive = true })));
+
+        Assert.Equal("plans not stored", disabled.RootElement.GetProperty("limits").GetProperty("activityJournalStorage")
+            .GetProperty("planStorage").GetProperty("state").GetString());
+        Assert.Equal("stored", enabled.RootElement.GetProperty("limits").GetProperty("activityJournalStorage")
+            .GetProperty("planStorage").GetProperty("state").GetString());
     }
 
     [Fact]

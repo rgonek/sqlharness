@@ -1,16 +1,16 @@
-# Plan 013: Doprecyzuj i przygotuj wdrożenie decyzji regresji CI
+# Plan 013: Clarify and prepare the implementation of the CI regression decision
 
 > **2026-10-11:** the decision thresholds here are reused by [051](051-compare-regression-verdict.md). Everything about reading saved artifacts offline (run-count inference, legacy producer proof, `regress` command) is superseded.
 
-Status: **DONE — etap projektowy/diagnostyczny** (funkcja nadal **PLANNED**; dokumenty: `plans/013-regression-contract.md`, `plans/013-regression-implementation.md`; commity `983f7b6..f6c8d7a`)
-Rewizja kontraktu i planu implementacji: 2026-10-11, HEAD729d88f. Historyczny etap projektowy pozostaje DONE; funkcja nadal PLANNED.
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
-Priorytet: P2; nakład: L; ryzyko zmiany: MED.
-Pokrycie: **propozycja funkcji regresji**. Zależności: **003, 006, 009**.
+Status: **DONE — design/diagnostic stage** (the function is still **PLANNED**; documents: `plans/013-regression-contract.md`, `plans/013-regression-implementation.md`; commits `983f7b6..f6c8d7a`)
+Contract and implementation plan revision: 2026-10-11, HEAD729d88f. The historical design stage remains DONE; the function is still PLANNED.
+Date: 2026-09-29. Base: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priority: P2; effort: L; change risk: MED.
+Coverage: **regression feature proposal**. Dependencies: **003, 006, 009**.
 
-## Kontekst i instrukcja wykonania
+## Context and execution instruction
 
-Czytaj cały plan. Pracuj w izolowanym worktree, zachowaj cudze zmiany. Zapis planu nie jest wdrożeniem. Po ukończeniu zaktualizuj plans/README.md wraz z dowodem; nie pushuj ani nie publikuj bez zlecenia.
+Read the whole plan. Work in an isolated worktree, preserve others' changes. Writing the plan is not an implementation. On completion update plans/README.md together with the evidence; do not push or publish without an order.
 
 Drift check:
 ```powershell
@@ -18,70 +18,70 @@ git status --short
 git diff --stat 8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b..HEAD -- "plans/013-regression-contract.md" "plans/013-regression-implementation.md"
 ```
 
-Zmiany poprzedników są oczekiwane: przeczytaj je i dopasuj plan przed kodowaniem. Niewyjaśniony rozjazd wymaga aktualizacji założeń, nie mechanicznego wklejania starego kodu.
+Predecessor changes are expected: read them and align the plan before coding. An unexplained divergence requires updating the assumptions, not mechanically pasting old code.
 
-Spec docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md jest projektem. R1/R2 zwracają pass dla zer zanim R4–R7 sprawdzą brak danych/niestabilność/equivalence, co koliduje z deklarowaną ostrożnością. ArtifactMetricsSection nie zawiera wszystkich wejść postulowanych tabelą spec.
+The spec docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md is a design. R1/R2 return pass for zeros before R4–R7 check missing data/instability/equivalence, which collides with the declared caution. ArtifactMetricsSection does not contain all the inputs postulated by the spec table.
 
-Punkt odniesienia z kodu/komendy:
+Reference point from the code/command:
 ```text
 public sealed record ArtifactMetricsSection(
 ```
 
-.NET8/C#/xUnit. Dopasuj wzorce do testów wymienionych w zakresie. Core pozostaje wspólnym miejscem safety; adaptery nie tworzą własnego klasyfikatora. Stosuj istniejące fake reader/session/module i syntetyczny SQLHARNESS_HOME. Nie czytaj rzeczywistych sekretów ani artefaktów użytkownika.
+.NET8/C#/xUnit. Align the patterns with the tests listed in the scope. Core remains the common place for safety; the adapters do not create their own classifier. Use the existing fake reader/session/module and the synthetic SQLHARNESS_HOME. Do not read real secrets or user artifacts.
 
-## Zakres
+## Scope
 
 - `plans/013-regression-contract.md`
 - `plans/013-regression-implementation.md`
 
-Dodatkowo: nowe pliki nazwane w krokach, dokumenty wynikowe plans/013-*.md oraz status w indeksie. Inne pliki wymagają jawnej korekty zakresu i uzasadnienia przed zmianą.
+Additionally: the new files named in the steps, the resulting documents plans/013-*.md and the status in the index. Other files require an explicit scope correction and justification before any change.
 
-Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push, globalne wyłączenie walidacji i niepowiązane refaktoryzacje. Ten etap tworzy dokumenty; nie dodaje komend, stubów ani capabilities.
+Out of scope: live DB, deploy, user profiles and passwords, installation, push, global disabling of validation and unrelated refactorings. This stage creates documents; it adds no commands, stubs or capabilities.
 
-## Zadania
+## Tasks
 
 ### 013/T1
 
-- [x] Zmapuj potrzebne dane do ArtifactReader, CompareReport i MetricReport: liczba przebiegów, spread, dostępność czasu/CPU/reads, equivalence, stabilność. W kontrakcie oznacz brakujące pola jako unknown; nie domyślaj ich.
+- [x] Map the needed data onto ArtifactReader, CompareReport and MetricReport: run count, spread, time/CPU/reads availability, equivalence, stability. In the contract mark the missing fields as unknown; do not default them.
 
-**Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
+**Verification:** check the indicated sources and local references; `git diff --check` → exit 0; the step result recorded in the resulting document.
 
 ### 013/T2
 
-- [x] Zapisz jednoznaczną kolejność: kompletność/dostępność/equivalence/stabilność przed progami i przypadkami zero. Udokumentuj zmianę względem starej spec. Dodaj tabelę oczekiwań dla kombinacji zero + mismatch/missing/unstable, a nie wyłącznie izolowanych przypadków.
+- [x] Write an unambiguous order: completeness/availability/equivalence/stability before the thresholds and the zero cases. Document the change relative to the old spec. Add an expectations table for the zero combinations + mismatch/missing/unstable, and not only for isolated cases.
 
-**Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
+**Verification:** check the indicated sources and local references; `git diff --check` → exit 0; the step result recorded in the resulting document.
 
 ### 013/T3
 
-- [x] Zachowaj offline odczyt bez rebenchmark, pass/fail/inconclusive jako verdict z exit0, brak przejęcia exit8, CPU PG unavailable i AND progów względny+absolutny. Zachowaj minimum5 i spread25%. Rewizja 2026-10-11 jawnie usuwa obowiązkową korroborację: stabilna regresja czasu daje fail niezależnie od reads/CPU; koszty są osobną diagnostyką. Czas0 do >5ms daje fail po bramach; brak dowodu dostępności nadal inconclusive.
+- [x] Preserve the offline read without re-benchmark, pass/fail/inconclusive as a verdict with exit0, no takeover of exit8, PG CPU unavailable and the AND of the relative+absolute thresholds. Preserve minimum5 and spread25%. The 2026-10-11 revision explicitly removes the mandatory corroboration: a stable time regression gives fail regardless of reads/CPU; costs are a separate diagnostic. Time0 to >5ms gives fail after the gates; a lack of availability evidence is still inconclusive.
 
-**Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
+**Verification:** check the indicated sources and local references; `git diff --check` → exit 0; the step result recorded in the resulting document.
 
 ### 013/T4
 
-- [x] Napisz samodzielny plan implementacji RegressionPolicy.cs, RegressionDecider.cs, RegressCommand.cs i testów; wskaż konieczne addytywne metadane artefaktu, kompatybilność legacy, offline błędy i przykładowy CI gate po verdict. MCP dodawaj dopiero w osobnym uzgodnionym rozszerzeniu katalogu.
+- [x] Write a standalone implementation plan for RegressionPolicy.cs, RegressionDecider.cs, RegressCommand.cs and the tests; indicate the necessary additional artifact metadata, legacy compatibility, offline errors and a sample CI gate on the verdict. Add MCP only in a separately agreed scope extension.
 
-**Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
+**Verification:** check the indicated sources and local references; `git diff --check` → exit 0; the step result recorded in the resulting document.
 
-## Testy i zakończenie
+## Tests and completion
 
-Powstają dwa dokumenty: kontrakt bez sprzecznej kolejności i wykonawczy plan z pełną tabelą testów. Stan funkcji nadal PLANNED, bez capabilities ani stubów.
+Two documents result: a contract without a conflicting order and an executive plan with the full test table. The feature status is still PLANNED, without capabilities or stubs.
 
-- [x] Dokumenty wynikowe zawierają decyzje, granice, zakres przyszłych plików oraz tabelę testów.
-- [x] Niepewności oznaczone UNPROVEN z warunkiem uzyskania dowodu.
-- [x] Nie uruchamiaj testów aplikacji przy samym zapisie dokumentów.
+- [x] The resulting documents contain the decisions, boundaries, scope of future files and the test table.
+- [x] Uncertainties are marked UNPROVEN with the condition for obtaining evidence.
+- [x] Do not run the application tests when writing the documents alone.
 - [x] `git diff --check` → exit 0.
-- [x] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [x] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
-- [x] Brak dowodu live/platformowego jest jawny.
+- [x] `git status --short` shows only the author's changes within the scope.
+- [x] The index contains status, commit and evidence; local paths exist or are marked as new.
+- [x] The absence of live/platform evidence is explicit.
 
-Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
+Audit baseline: 1895 Core/CLI passed; MCP 122 passed, 2 timeouts, 4 skipped. Plan005 diagnoses the timeouts. An earlier safety fix may be ready for review when there is a documented independent gate failure; do not announce a full PASS then.
 
-## Warunki zatrzymania i utrzymanie
+## Stop conditions and maintenance
 
-Ten etap jest projektowy. Nie implementuj starej macierzy wprost i nie udawaj metryki dostępnej na podstawie wartości 0.
+This stage is design. Do not implement the old matrix directly and do not pretend a metric is available on the basis of the value 0.
 
-Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
+If a step requires a real DB target, secrets or going beyond authorization, stop that step and record the absence. Complete the independent tasks. Do not mark the whole thing DONE without all the required results.
 
-Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
+The reviewer checks the safety of negative cases, compatibility and the truthfulness of the evidence. After a change to the parser/SDK/operation, return to these tests. Small commits of the fix/test/docs type, without push. The required characteristic tests must precede the refactoring.

@@ -6,8 +6,8 @@ import { CompareDetail } from "./CompareDetail"
 import { conditions, operation, operationDetail, variant } from "@/test/fixtures"
 import { stubFetch } from "@/test/render"
 
-const renderCompare = (detail: ReturnType<typeof operationDetail>) => {
-  const calls = stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" } })
+const renderCompare = (detail: ReturnType<typeof operationDetail>, routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)> = {}) => {
+  const calls = stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" }, ...routes })
   return { ...render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>), calls }
 }
 
@@ -91,17 +91,44 @@ test("SQL, conditions, and plans stay within their disclosures", async () => {
 test("plans and reproduction scripts use the selected operation's actual baseline and candidate variants", async () => {
   const before = "C".repeat(64)
   const after = "D".repeat(64)
+  const shapeHash = "E".repeat(64)
   const { calls } = renderCompare(operationDetail({
     operation: operation({ operation: "compare" }),
     variants: [
       variant({ ordinal: 0, variant: "baseline", caseId: "0", plans: [{ repetition: 1, ordinal: 0, hash: before, stored: true }] }),
       variant({ ordinal: 1, variant: "candidate", caseId: "0", plans: [{ repetition: 1, ordinal: 0, hash: after, stored: true }] }),
     ],
-  }))
+  }), {
+    "/api/operations/10/plans": {
+      operationId: 10,
+      state: "stored",
+      occurrences: [before, after].map((documentSha256, index) => ({
+        variant: index === 0 ? "baseline" : "candidate", parameterSet: null, caseId: "0", caseLabel: "Case 1",
+        repetition: 1, documentOrdinal: 0, statementIndex: 0, spanStart: 0, spanLength: 8,
+        statementId: 1, statementCompId: 1, documentSha256, shapeHash, format: "showplan-xml",
+        matchKind: "exact", omitted: false, stored: true,
+      })),
+    },
+    "/api/operations/10/source-map": (url: URL) => new Response(JSON.stringify({
+      operationId: 10, state: "stored", engine: "sqlserver", variant: url.searchParams.get("variant"),
+      parameterSet: null, caseId: "0", caseLabel: "Case 1", repetition: 1,
+      executedText: url.searchParams.get("variant") === "baseline" ? "SELECT 1" : "SELECT 2",
+      algorithmVersion: 1, links: [], omittedDocuments: [], errors: [],
+    }), { status: 200 }),
+    [`/api/plan-documents/${before}/graph`]: {
+      engine: "sqlserver", error: null, graph: { engine: "sqlserver", statements: [{ index: 0, statementId: 1, statementCompId: 1, rootNodeId: "0:0" }], nodes: [{ id: "0:0", statementIndex: 0, showplanNodeId: 1, physicalOperator: "Index Scan", logicalOperator: "Index Scan", object: null, tableReferenceId: null, predicates: [], definedValues: [], estimatedRows: null, actualRows: null, executions: null, costFraction: null, warnings: [] }], edges: [] },
+    },
+    [`/api/plan-documents/${after}/graph`]: {
+      engine: "sqlserver", error: null, graph: { engine: "sqlserver", statements: [{ index: 0, statementId: 1, statementCompId: 1, rootNodeId: "0:0" }], nodes: [{ id: "0:0", statementIndex: 0, showplanNodeId: 1, physicalOperator: "Index Seek", logicalOperator: "Index Seek", object: null, tableReferenceId: null, predicates: [], definedValues: [], estimatedRows: null, actualRows: null, executions: null, costFraction: null, warnings: [] }], edges: [] },
+    },
+  })
   await userEvent.click(screen.getAllByText("Plans").find(element => element.tagName.toLowerCase() === "summary")!)
-  const planHrefs = screen.getAllByRole("link", { name: "Download plan" }).map(link => link.getAttribute("href"))
-  expect(planHrefs).toContain(`/api/plans/${before}`)
-  expect(planHrefs).toContain(`/api/plans/${after}`)
+  const documentSelectors = await screen.findAllByRole("combobox", { name: "Plan document" })
+  await userEvent.selectOptions(documentSelectors[0], `${before}:0`)
+  await userEvent.selectOptions(documentSelectors[1], `${after}:0`)
+  const planHrefs = screen.getAllByRole("link", { name: "Download selected plan" }).map(link => link.getAttribute("href"))
+  expect(planHrefs).toContain(`/api/plan-documents/${before}`)
+  expect(planHrefs).toContain(`/api/plan-documents/${after}`)
   await userEvent.click(screen.getByText("Per-case & per-run details"))
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "Side" }), "candidate")
   await waitFor(() => expect(calls.some(call => {

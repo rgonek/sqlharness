@@ -2,27 +2,27 @@
 
 Code tip: `f64a3da` (`docs(010/T4): record preserved interface boundary decisions`),
 branch `fix/plan-010-shared-runtime-contracts`, worktree
-`.worktrees/plan-010-shared-runtime-contracts` (baza worktree: `20a2aaf` = main).
-Wszystkie gate'y (filtr planu 125+50/0, build -warnaserror 0/0, pełny suite
-bez Integration 2074/0/0 + 193/0/4 pre-existing skips, diff --check clean)
-zaobserwowano na code tipie `f64a3da`. Commity po nim (`98e8eb6` closure
-proof + wiersz indeksu; ten fix) są docs-only (`git show --stat`: tylko
-`plans/*.md`) i nie wymagają re-gatingu poza `git diff --check` oraz świeżym
-przebiegiem filtra planu na finalnym drzewie (wyniki niżej). Nagłówek celowo
-nie podaje ruchomego HEAD, żeby nie zdezaktualizować się przy kolejnych
-commitach docs-only.
-Gate runs: 2026-09-30, w worktree. Brak pusha i merge'a (plan zabrania bez zlecenia).
+`.worktrees/plan-010-shared-runtime-contracts` (worktree base: `20a2aaf` = main).
+All gates (plan filter 125+50/0, build -warnaserror 0/0, full suite
+without Integration 2074/0/0 + 193/0/4 pre-existing skips, diff --check clean)
+were observed on code tip `f64a3da`. Commits after it (`98e8eb6` closure
+proof + index row; this fix) are docs-only (`git show --stat`: only
+`plans/*.md`) and do not require re-gating beyond `git diff --check` and a fresh
+run of the plan filter on the final tree (results below). The header deliberately
+does not state a moving HEAD, so it does not go stale with subsequent
+docs-only commits.
+Gate runs: 2026-09-30, in the worktree. No push and no merge (the plan forbids them without an instruction).
 
 ## Goal
 
-Jeden silnik polling watch emitujący zdarzenia do dwóch odbiorników
-(raport z ograniczoną historią / strumień NDJSON bez retencji) przy
-identycznych decyzjach terminalnych; wyłącznie identyczne czyste reguły
-bounds/duration we wspólnym Core `OperationLimits`; granice interfejsów
-(CLI/MCP, query/measure/compare, param-set/matrix, writery, zegary)
-udokumentowane jako zachowane, nie scalone.
+A single watch polling engine emitting events to two sinks
+(report with bounded history / NDJSON stream without retention) with
+identical terminal decisions; only the identical pure bounds/duration rules
+in shared Core `OperationLimits`; interface boundaries
+(CLI/MCP, query/measure/compare, param-set/matrix, writers, clocks)
+documented as preserved, not merged.
 
-## Commits (kod: 20a2aaf..f64a3da, 5; potem tylko docs-only)
+## Commits (code: 20a2aaf..f64a3da, 5; then docs-only only)
 
 | Commit | Task | Subject |
 |---|---|---|
@@ -32,57 +32,57 @@ udokumentowane jako zachowane, nie scalone.
 | 7f3687e | T3 | refactor(010/T3): share pure operation bounds and durations via Core OperationLimits |
 | f64a3da | T4 | docs(010/T4): record preserved interface boundary decisions |
 
-Docs-only po code tipie: `98e8eb6` (ten dowód + wiersz indeksu 010
-w `plans/README.md`); ten fix (2 doc nits z final review, tylko ten plik).
-Zakres liczone od bazy `20a2aaf`, nie od ruchomego HEAD.
+Docs-only after the code tip: `98e8eb6` (this evidence + the 010 index
+row in `plans/README.md`); this fix (2 doc nits from the final review, only this file).
+Scope is counted from the base `20a2aaf`, not from a moving HEAD.
 
-Każde zadanie reviewed clean (spec ✅ + Approved; zero Critical/Important).
-Final whole-branch review: poniżej w „Final review".
-Rulinge: nazwa `ExecuteWatchNdjsonAsync` istnieje na warstwie modułu
-(Contracts.cs:21) — plan był poprawny, brak rozjazdu; reguły o różnych
-jednostkach/defaultach (s/m/h z cap 24h vs m/h/d→minuty vs liczniki)
-świadomie niescalone (hard-stop planu), w tym różna polityka case
-(CLI watch folduje, CLI qstop odrzuca wielkie litery, MCP folduje).
-Incydent: pierwszy dispatch T3 utracony przez infrastrukturę
-(model service unreachable, brak rozpoczęcia pracy); re-dispatch świeżego
-implementera, drzewo nienaruszone.
+Each task reviewed clean (spec ✅ + Approved; zero Critical/Important).
+Final whole-branch review: below in "Final review".
+Rulings: the name `ExecuteWatchNdjsonAsync` exists on the module layer
+(Contracts.cs:21) — the plan was correct, no divergence; rules with different
+units/defaults (s/m/h with a 24h cap vs m/h/d→minutes vs counters)
+are deliberately unmerged (the plan's hard stop), including a different case policy
+(CLI watch folds case, CLI qstop rejects capitals, MCP folds case).
+Incident: the first T3 dispatch was lost to infrastructure
+(model service unreachable, no work started); re-dispatch of a fresh
+implementer, tree untouched.
 
-## Gates (2026-09-30, code tip f64a3da; filtr planu powtórzony na finalnym drzewie)
+## Gates (2026-09-30, code tip f64a3da; the plan filter rerun on the final tree)
 
-- Filtr planu
+- Plan filter
   `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~WatchTests|FullyQualifiedName~WatchNdjsonTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~OperationLimitsTests'`:
   SqlHarness.Tests 125/125, SqlHarness.Mcp.Tests 50/50 → exit 0.
 - `dotnet build SqlHarness.sln --no-restore -warnaserror`: 0 warnings, 0 errors.
-- Pełny suite bez Integration: Core/CLI 2074 passed / 0 failed / 0 skipped;
+- Full suite without Integration: Core/CLI 2074 passed / 0 failed / 0 skipped;
   MCP 193 passed / 0 failed / 4 skipped (2 live opt-in + 2 foreign-RID smoke,
   pre-existing).
-- `git diff --check`: 0. `git status --short`: czysto. Gałąź (20a2aaf..HEAD)
-  dotyka 12 plików, wszystkie w zakresie planu (§Zakres: kod T1–T3 + T4
-  `plans/010-*.md` + status w indeksie): 6 plików kodu, 3 pliki testów,
-  `plans/010-interface-decisions.md` (T4), ten dowód oraz wiersz indeksu 010
-  w `plans/README.md`.
-- Świeży przebieg filtra planu na finalnym drzewie (delta docs-only):
+- `git diff --check`: 0. `git status --short`: clean. The branch (20a2aaf..HEAD)
+  touches 12 files, all within the plan scope (§Scope: T1–T3 code + T4
+  `plans/010-*.md` + status in the index): 6 code files, 3 test files,
+  `plans/010-interface-decisions.md` (T4), this evidence and the 010 index row
+  in `plans/README.md`.
+- A fresh run of the plan filter on the final tree (docs-only delta):
   SqlHarness.Tests 125/125, SqlHarness.Mcp.Tests 50/50 → exit 0.
-- Red → green: T1/T3-red to piny charakteryzujące (zielone przed i po —
-  uczciwie raportowane jako siatka, nie witness-fail); pętle T2 już zgodne
-  (10/10 parity od pierwszego biegu); T4 krok dokumentacyjny (filtr zielony
-  = brak regresji).
+- Red → green: T1/T3-red are characterizing pins (green before and after —
+  reported honestly as a grid, not witness-fails); the T2 loops were already
+  aligned (10/10 parity from the first run); T4 a documentation step (green filter
+  = no regression).
 
-## Dokumenty wynikowe
+## Result documents
 
-- `plans/010-interface-decisions.md` — decyzje zachowania granic (T4).
-- Ten dowód: `plans/010-shared-runtime-contracts-proof.md`.
+- `plans/010-interface-decisions.md` — the boundary-preservation decisions (T4).
+- This evidence: `plans/010-shared-runtime-contracts-proof.md`.
 
-## Braki i reszty (jawne)
+## Gaps and leftovers (explicit)
 
-- Brak live DB (plan zabrania; testy na fakach; live testy skip).
-- Brak dowodu platformowego poza Windows/x64 (jak wyżej).
-- Deferred minors (non-blocking, do triage'u przed merge): zbędna pusta
-  linia w McpMappingTests.cs; mismatch etykiety DONE_WITH_CONCERNS/Brak
-  w task-4-report; zakresy linii ORC 13–30/52–61 vs faktyczne 19/52–58.
+- No live DB (the plan forbids it; tests on fakes; live tests skip).
+- No platform evidence beyond Windows/x64 (as above).
+- Deferred minors (non-blocking, to triage before merge): a redundant blank
+  line in McpMappingTests.cs; DONE_WITH_CONCERNS/Gaps label mismatch
+  in task-4-report; ORC line ranges 13–30/52–61 vs actual 19/52–58.
 
 ## Final review
 
-Whole-branch review: 0 Critical / 0 Important, 2 minor doc nits (stale HEAD
-w nagłówku dowodu; nieścisła notka o zakresie/liczbie plików) — oba
-zaadresowane tym fixem, bez zmian kodu i testów.
+Whole-branch review: 0 Critical / 0 Important, 2 minor doc nits (a stale HEAD
+in the evidence header; an imprecise note about scope/file count) — both
+addressed by this fix, without changes to code and tests.

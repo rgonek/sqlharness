@@ -380,6 +380,10 @@ internal sealed record CompareRunArtifact(
     /// <summary>Zero-based compare --matrix cell index; never the matrix value. Journal only; never serialized.</summary>
     [JsonIgnore]
     public int? MatrixCell { get; init; }
+
+    /// <summary>Exact SQL text passed to the dialect for this run; journal-only sensitive source for plan pairing.</summary>
+    [JsonIgnore]
+    public string? ExecutedSql { get; init; }
 }
 
 internal interface ICompareArtifactWriter

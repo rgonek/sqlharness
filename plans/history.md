@@ -2,6 +2,10 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 088 implementation archived — 2026-10-18
+
+Plan [088](088-plan-visualization.md) is DONE and locally integrated into `main`. The final Windows branch gate passed on tested product commit `f503c2203ff8c20356ed838a2c8ab29183722d94`; the merge retained that exact non-documentation product tree, so no separate integrated-tree gate ran. All task reviews, the Sol low whole-branch review, and the final scoped re-review are approved. The final gate, baseline MCP failure, skipped Linux/live UAT boundaries, diagnostic rulings, and complete decision ledger are recorded in [verification evidence](088-verification-evidence.md). No push was performed.
+
 ## Plan 081 completion locally integrated
 
 Plan [081](081-session-control-flow-safety.md) implements SQL Server read-only session/control-flow admissions, logical-batch rollback and connection discard, measured-session option restoration, operation warnings, and opt-in dashboard notices. It is DONE and locally integrated on `main` at `e88c7fdd76ce3ce188296a56e2d63e73c57a52c7`. The integrated product tree `a717d579a6b8be0f96d6d745283442a769cbbcc6` passed the required Windows gate before merge commit `93122e886d40bef7c746ea91272c0169d819b56c`; the local `main` advance did not change product code.
@@ -85,144 +89,144 @@ Plan 067 was subsequently integrated locally into `main` at `0fdd9db78e91698f064
 |---|---|
 | [067](067-cell-limit-parity-and-default.md) | DONE on feature branch `feat/plan-067-cell-limit` at implementation HEAD `3ae4dc5`; final Windows `just verify` passed on that exact revision (UI 163; Core/CLI 3519 passed, 11 skipped; MCP 381 passed, 4 skipped; build 0 warnings/errors; format skipped because no C# files changed). Linux was explicitly waived and remains unverified. No integration, installation or publication. See durable [final completion report](../final-completion-report.md). |
 
-# Plany po audycie SQLHarness 2026-09-28
+# Plans after the SQLHarness audit 2026-09-28
 
-Zapis: 2026-09-29, skill improve. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
-Źródło: [audyt](2026-09-28-project-audit.md). Użytkownik zlecił zapis wszystkich ustaleń; plany nie są jeszcze wdrożone.
+Written on: 2026-09-29, skill improve. Base: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Source: [audit](2026-09-28-project-audit.md). The user commissioned a record of all findings; the plans are not implemented yet.
 
-## Aktualna kolejka wykonania — 2026-10-13
+## Current execution queue — 2026-10-13
 
-Odświeżono na `a296e91`: sprawdzono main, statusy planów i worktree. Preferencja: ogólne i SQL Server przed wyłącznie PostgreSQL. **Każdy plan jest wykonywany w całości**, bez osobno odkładanych faz.
+Refreshed on `a296e91`: main, plan statuses and the worktree were checked. Preference: general and SQL Server before PostgreSQL-only. **Each plan is executed in full**, with no separately deferred phases.
 
-### W wykonaniu
+### In progress
 
-| Plan | Kategoria | Dowód |
+| Plan | Category | Evidence |
 |---|---|---|
-| [047](047-postgres-temp-target-proof.md) | PostgreSQL: uproszczenie dowodu TEMP dla setupu | DONE 2026-10-14 (branch `feat/plan-047-temp-proof`; dowód w [047-readonly-proof.md](047-readonly-proof.md); oba wiersze Grupy 4 i wiersz kolejki poniżej) |
+| [047](047-postgres-temp-target-proof.md) | PostgreSQL: simplification of the TEMP proof for setup | DONE 2026-10-14 (branch `feat/plan-047-temp-proof`; evidence in [047-readonly-proof.md](047-readonly-proof.md); both Group 4 rows and the queue row below) |
 
-### Zakończone od poprzedniej kolejki
+### Completed since the previous queue
 
-028, 029, 031, 034, 049–060 są DONE według aktualnego indeksu. Ograniczenia weryfikacji pozostają zapisane w wierszach historycznych. 049 jest już w main (sprawdzono przodka `58fab51`); starsze „not merged” jest nieaktualne. 024/045/046 i ceny modeli również zakończone. Zachowano źródła i ograniczenia dowodów w tabeli historycznej; przy tym odświeżeniu nie uruchamiano bramek.
+028, 029, 031, 034, 049–060 are DONE according to the current index. The verification restrictions remain recorded in the historical rows. 049 is already in main (ancestor `58fab51` checked); the older "not merged" is out of date. 024/045/046 and the model prices are also completed. The evidence sources and restrictions are preserved in the historical table; no gates were run during this refresh.
 
-### Grupa 1 — kontrakt i skuteczność pracy agenta
+### Group 1 — contract and agent work effectiveness
 
-| Kolejność | Plan | Kategoria | Warunek |
+| Order | Plan | Category | Condition |
 |---|---|---|---|
-| 1 | [061](061-unified-parameter-sets.md) | Ogólne / P3: wspólne zestawy parametrów measure/compare | DONE — feature branch gates green; evidence: [061 verification](061-verification-evidence.md) |
-| 2 | [065](065-artifact-plan-pages-and-clipping.md) | Ogólne / P1–P2: licznik obcięć i strony planu dopasowane do budżetu | TODO — zaakceptowany zapis planu; zachować 14 odczytów artifact: 6 pierwszych stron + 6 kontynuacji + 2 powtórzenia agenta; implementacja wymaga osobnego zlecenia |
+| 1 | [061](061-unified-parameter-sets.md) | General / P3: shared measure/compare parameter sets | DONE — feature branch gates green; evidence: [061 verification](061-verification-evidence.md) |
+| 2 | [065](065-artifact-plan-pages-and-clipping.md) | General / P1–P2: clipping counter and budget-aware plan pages | TODO — accepted plan write-up; preserve 14 artifact reads: 6 first pages + 6 continuations + 2 agent repetitions; the implementation requires a separate commission |
 
-### Grupa 2 — historia optymalizacji i dashboard
+### Group 2 — optimization history and dashboard
 
-| Plan | Kategoria | Warunek |
+| Plan | Category | Condition |
 |---|---|---|
-| [062](062-compare-context-dashboard.md) | Ogólne / P2: kontekst compare, historia prób, dashboard | 051 jest DONE. Nie wymaga całej fali 055–061; uzgodnić aktualną bazę po 055 i realizować sekwencyjnie względem zmian MCP w 060/061 |
-| [069](069-dashboard-session-curation.md) | Ogólne / P2: porządkowanie sesji w dashboardzie | Po 062; potem plany dla specu C (dopasowanie transkryptów) i B (compare dla reviewera) |
-| [070](070-dashboard-agent-transcript-matching.md) | Ogólne / P2: tytuły i model z transkryptów agentów (opt-in) | Po 069 |
-| [071](071-dashboard-compare-review.md) | Ogólne / P2: compare dla reviewera (diff SQL, IO per tabela, zmiany planu, Copy) | Po 062; przed startem potwierdzić u operatora CodeMirror 6 |
+| [062](062-compare-context-dashboard.md) | General / P2: compare context, attempt history, dashboard | 051 is DONE. It does not require the whole 055–061 wave; agree the current base after 055 and execute sequentially with respect to the MCP changes in 060/061 |
+| [069](069-dashboard-session-curation.md) | General / P2: dashboard session curation | After 062; then the plans for spec C (transcript matching) and B (compare for the reviewer) |
+| [070](070-dashboard-agent-transcript-matching.md) | General / P2: titles and model from agent transcripts (opt-in) | After 069 |
+| [071](071-dashboard-compare-review.md) | General / P2: compare for the reviewer (SQL diff, per-table IO, plan changes, Copy) | After 062; confirm CodeMirror 6 with the operator before starting |
 
-062 jest odrębnym wyborem produktowym. Nie uruchamiać na podstawie samego numeru planu równolegle ze zmianami wspólnego katalogu MCP i kontraktów compare. Plan obejmuje cały kontekst, journal, API, ekrany i dokumentację.
+062 is a separate product choice. Do not start it on the basis of the plan number alone, in parallel with changes to the shared MCP catalog and compare contracts. The plan covers the full context, journal, API, screens and documentation.
 
-### Grupa 3 — dostarczanie i utrzymanie
+### Group 3 — delivery and maintenance
 
-| Kolejność | Plan | Kategoria | Warunek |
+| Order | Plan | Category | Condition |
 |---|---|---|---|
-| 2 | [032](032-ci-matrix-and-test-hygiene.md) | CI Windows/Linux i stabilność testów | DONE — lokalnie scalono do main w `d4ea971` (`15c1b9c`, `0fd0958`); zintegrowane bramki Windows i Linux zielone; dowód CI oczekuje na pierwszy push; [weryfikacja](032-verification.md) |
-| 3 | [036](036-live-database-ci-lane.md) | Izolowane testy SQL Server + PG | TODO; oba silniki w jednym wykonaniu |
+| 2 | [032](032-ci-matrix-and-test-hygiene.md) | Windows/Linux CI and test stability | DONE — locally merged into main at `d4ea971` (`15c1b9c`, `0fd0958`); integrated Windows and Linux gates green; CI evidence awaits the first push; [verification](032-verification.md) |
+| 3 | [036](036-live-database-ci-lane.md) | Isolated SQL Server + PG tests | TODO; both engines in one run |
 
-028 jest DONE i lokalnie scalone do main (`8ed77af`); post-merge bramki Windows i Linux zielone, exit 0. Bez push; zależność 032 od 028 jest spełniona.
+028 is DONE and locally merged into main (`8ed77af`); post-merge Windows and Linux gates green, exit 0. No push; 032's dependency on 028 is satisfied.
 
-Pomysł szerszej automatyzacji PR/release/updater pozostaje odłożony zgodnie z decyzją użytkownika do czasu wejścia 028/032; nie jest nowym zleceniem implementacji.
+The idea of broader PR/release/updater automation remains deferred in line with the user's decision until 028/032 land; it is not a new implementation commission.
 
-### Grupa 4 — wyłącznie PostgreSQL
+### Group 4 — PostgreSQL only
 
-| Kolejność | Plan | Kategoria | Warunek |
+| Order | Plan | Category | Condition |
 |---|---|---|---|
-| 1 | [031](031-pg-session-hardening.md) | standard_conforming_strings | DONE (branch fix/plan-031-pg-session, fdd788e..2ffe8ae; Windows verify: OK; Krok 4 (playground live) NIEuruchomiony — brak zgody operatora w tej sesji; bez push) |
-| 2 | [047](047-postgres-temp-target-proof.md) | Uproszczenie dowodu TEMP dla setupu | DONE (dowód w [047-readonly-proof.md](047-readonly-proof.md); fazy read-only dostarcza 052, więc nie dodano przełącznika sesyjnego; DML bez dowodu nazwy w query i measured SQL, setup DDL i ścieżka zatwierdzonej mutacji zachowują dowód; bramki: Windows verify: OK, Linux verify-linux: OK na f3f7dd2; branch feat/plan-047-temp-proof, `d46a4c9..13e87ad`) |
+| 1 | [031](031-pg-session-hardening.md) | standard_conforming_strings | DONE (branch fix/plan-031-pg-session, fdd788e..2ffe8ae; Windows verify: OK; Step 4 (playground live) NOT run — no operator approval in this session; no push) |
+| 2 | [047](047-postgres-temp-target-proof.md) | Simplification of the TEMP proof for setup | DONE (evidence in [047-readonly-proof.md](047-readonly-proof.md); the read-only phases are delivered by 052, so no session switch was added; DML without a name proof in query and measured SQL, setup DDL and the approved mutation path keep the proof; gates: Windows verify: OK, Linux verify-linux: OK at f3f7dd2; branch feat/plan-047-temp-proof, `d46a4c9..13e87ad`) |
 
-031 i 047 są DONE. Brak innych oczekujących planów w tej grupie.
+031 and 047 are DONE. No other pending plans in this group.
 
-033 zastąpiony przez 050, 035 przez 051; 014/037 odrzucone; 048 wycofany. Draft report API nie jest planem implementacji. Nie przywracać usuniętego gain ani historycznych nazw i liczby narzędzi MCP.
+033 superseded by 050, 035 by 051; 014/037 rejected; 048 reverted. The Draft report API is not an implementation plan. Do not restore the removed gain or the historical MCP tool names and count.
 
-## Kolejność i status
+## Order and status
 
-| Plan | Pokrycie | Priorytet | Nakład | Zależności | Status |
+| Plan | Coverage | Priority | Effort | Dependencies | Status |
 |---|---|---|---|---|---|
-| [001 — Zamknij wyciek SQL i parametrów przez stderr](001-mcp-safe-logging.md) | S1 | P1 | S | — | DONE (branch fix/plan-001-mcp-safe-logging, 48e33e5..4423386; merge/push czeka na decyzję) |
-| [002 — Napraw zakres i normalizację ścieżek wejściowych](002-mcp-input-roots.md) | S3, A1; badanie tożsamości pliku | P1 | M | — | DONE (branch fix/plan-002-mcp-input-roots, f343d2b..c241921) |
-| [003 — Powiąż dostęp do artefaktów z zakresem MCP](003-mcp-artifact-scope.md) | S2; przestrzeń nazw snapshotów | P1 | L | 001, 002 | DONE (branch fix/plan-003-mcp-artifact-scope, 637a59b..c5ce1ad; merge lokalny do main, push czeka na decyzję) |
-| [004 — Obejmij inspect wspólną blokadą operacji DB](004-mcp-inspect-gate.md) | R1 | P1 | S | 001 | DONE (branch fix/plan-004-mcp-inspect-gate, ff5d0b6..bc5758c; merge/push czeka na decyzję) |
-| [005 — Ustal przyczyny timeoutów testów MCP](005-mcp-verification.md) | T1 | P2 | M | 001, 004 | DONE (branch fix/plan-005-mcp-verification, 6c41f91..0bc179d; dowód: [005-verification-evidence](005-verification-evidence.md); merge/push czeka na decyzję) |
-| [006 — Ogranicz pamięć i czas porównywania wyników](006-equivalence-budget.md) | R2 | P1 | L | 005 | DONE (branch fix/plan-006-equivalence-budget, 6671ba1..0286f5d; merge/push czeka na decyzję) |
-| [007 — Zbuduj wspólny preflight query/setup/benchmark](007-mode-aware-validation.md) | A2; funkcja preflight | P2 | L | 005 | DONE (merge lokalny do main 039bb7e; dowód: [007-mode-aware-validation-proof](007-mode-aware-validation-proof.md); filtr 82/0/0, pełny suite bez Integration Core 1962/0/0 + MCP 164/0/4, build -warnaserror 0 warn; push czeka na decyzję) |
-| [008 — Udostępnij wersjonowany schemat odpowiedzi MCP](008-mcp-output-schema.md) | A3 | P2 | M | 005, 007 | DONE (branch feat/plan-008-mcp-output-schema, 70a4ca2..b1e1985; dowód: [008-mcp-output-schema-proof](008-mcp-output-schema-proof.md); merge/push czeka na decyzję) |
-| [009 — Uczyń granicę statycznego safety widoczną dla klientów](009-safety-contract.md) | A4; świadome ograniczenia funkcji PG | P2 | M | 007, 008 | DONE (main, 0227180..29b3102; dowód: [009-safety-contract-proof](009-safety-contract-proof.md); push czeka na decyzję) |
-| [010 — Usuń powielone pętle watch i czyste reguły adapterów](010-shared-runtime-contracts.md) | D1; ocena interfejsów | P3 | L | 004, 007, 008, 009 | DONE (branch fix/plan-010-shared-runtime-contracts, 20a2aaf..f64a3da; dowód: [010-shared-runtime-contracts-proof](010-shared-runtime-contracts-proof.md); merge/push czeka na decyzję) |
-| [011 — Zaplanuj i dodaj wąskie rozszerzenia bezpiecznej składni](011-safe-sql-extensions.md) | nadmiarowe blokady SET, table variables, PG TEMP TRUNCATE i ANALYZE | P2 | L | 007, 009 | DONE — kod i dokumentacja kompletne, NIE pełny PASS (branch feat/plan-011-safe-sql-extensions, zakres 0fad2a8.. do commita z końcową wersją dowodu, poprzedza go d9b7479; projekt testów MCP jest niestabilny na czubku brancha i na bazie 0fad2a8 — niezależna awaria gate, właściciel: plan 005; jeden test ProcessRunnerTests w SqlHarness.Tests zawiódł w 2 z 10 przebiegów fali końcowej; T5 ANALYZE DESIGN COMPLETE, nie IMPLEMENTED; dowód: [011-safe-sql-extensions-proof](011-safe-sql-extensions-proof.md); merge/push czeka na decyzję) |
-| [012 — Zastąp tekstowy most MCP typowanym modelem parametrów](012-typed-matrix.md) | matrix z przecinkami/pustą wartością; funkcja typowanych wejść | P2 | L | 007, 009 | DONE (merge lokalny do main 1f312a6; branch feat/plan-012-typed-matrix, 3d56a81..da73e14 + final fix wave F1-F10 e906fbd..6760a96; dowód: [012-typed-matrix-proof](012-typed-matrix-proof.md); po merge: build -warnaserror 0 warn, pełny suite bez Integration Core 2811/0/0 + MCP 212/0/4; push czeka na decyzję) |
-| [013 — Doprecyzuj i przygotuj wdrożenie decyzji regresji CI](013-regression-policy-design.md) (progi użyte w 051; część offline-reader zastąpiona przez 051, zaimplementowane na `feat/plan-051-regression-verdict`) | propozycja funkcji regresji | P2 | L | 003, 006, 009 | DONE (branch docs/plan-013-regression-policy, 983f7b6..f6c8d7a; dowód: [013-regression-contract](013-regression-contract.md), [013-regression-implementation](013-regression-implementation.md); tylko etap projektowy, funkcja PLANNED; brak suite i live DB; nie scalono; push czeka) |
-| [014 — Przygotuj wykonalny kontrakt diagnostyki pg_stat_statements](014-postgres-diagnostics-design.md) (REJECTED 2026-10-11: pgstop nie powstanie) | propozycja diagnostyki PG | P2 | L | 003, 004, 009 | DONE (branch docs/plan-014-postgres-diagnostics, f0934b3..7d82bf1; dowód: [014-pg-statements-contract](014-pg-statements-contract.md), [014-pg-statements-implementation](014-pg-statements-implementation.md); tylko etap projektowy, funkcja pgstop PLANNED, nie zaimplementowana; brak suite i live DB; nie scalono; push czeka) |
-| [015 — Zdiagnozuj rozjazd zainstalowanego CLI i repozytorium](015-installation-alignment.md) | obserwacja PATH i nieaktualnego help | P3 | S | 005 | DONE (branch docs/plan-015-installation-alignment, d2a0729..8e00431; dowód: [015-installation-evidence](015-installation-evidence.md); jest follow-up guard procedury; tylko diagnoza; binarka PATH nie zastąpiona; rozjazd zostaje; nie scalono; push czeka) |
+| [001 — Close the SQL and parameter leak via stderr](001-mcp-safe-logging.md) | S1 | P1 | S | — | DONE (branch fix/plan-001-mcp-safe-logging, 48e33e5..4423386; merge/push awaits a decision) |
+| [002 — Fix the scope and normalization of input paths](002-mcp-input-roots.md) | S3, A1; file identity study | P1 | M | — | DONE (branch fix/plan-002-mcp-input-roots, f343d2b..c241921) |
+| [003 — Tie artifact access to the MCP scope](003-mcp-artifact-scope.md) | S2; snapshot namespace | P1 | L | 001, 002 | DONE (branch fix/plan-003-mcp-artifact-scope, 637a59b..c5ce1ad; local merge to main, push awaits a decision) |
+| [004 — Cover inspect with the shared DB operation lock](004-mcp-inspect-gate.md) | R1 | P1 | S | 001 | DONE (branch fix/plan-004-mcp-inspect-gate, ff5d0b6..bc5758c; merge/push awaits a decision) |
+| [005 — Determine the causes of MCP test timeouts](005-mcp-verification.md) | T1 | P2 | M | 001, 004 | DONE (branch fix/plan-005-mcp-verification, 6c41f91..0bc179d; evidence: [005-verification-evidence](005-verification-evidence.md); merge/push awaits a decision) |
+| [006 — Limit the memory and time of result comparison](006-equivalence-budget.md) | R2 | P1 | L | 005 | DONE (branch fix/plan-006-equivalence-budget, 6671ba1..0286f5d; merge/push awaits a decision) |
+| [007 — Build a shared query/setup/benchmark preflight](007-mode-aware-validation.md) | A2; preflight feature | P2 | L | 005 | DONE (local merge to main 039bb7e; evidence: [007-mode-aware-validation-proof](007-mode-aware-validation-proof.md); filter 82/0/0, full suite without Integration Core 1962/0/0 + MCP 164/0/4, build -warnaserror 0 warn; push awaits a decision) |
+| [008 — Publish a versioned MCP response schema](008-mcp-output-schema.md) | A3 | P2 | M | 005, 007 | DONE (branch feat/plan-008-mcp-output-schema, 70a4ca2..b1e1985; evidence: [008-mcp-output-schema-proof](008-mcp-output-schema-proof.md); merge/push awaits a decision) |
+| [009 — Make the static safety boundary visible to clients](009-safety-contract.md) | A4; PG-aware feature restrictions | P2 | M | 007, 008 | DONE (main, 0227180..29b3102; evidence: [009-safety-contract-proof](009-safety-contract-proof.md); push awaits a decision) |
+| [010 — Remove duplicate watch loops and pure adapter rules](010-shared-runtime-contracts.md) | D1; interface assessment | P3 | L | 004, 007, 008, 009 | DONE (branch fix/plan-010-shared-runtime-contracts, 20a2aaf..f64a3da; evidence: [010-shared-runtime-contracts-proof](010-shared-runtime-contracts-proof.md); merge/push awaits a decision) |
+| [011 — Plan and add narrow safe-syntax extensions](011-safe-sql-extensions.md) | over-broad blocks for SET, table variables, PG TEMP TRUNCATE and ANALYZE | P2 | L | 007, 009 | DONE — code and documentation complete, NOT a full PASS (branch feat/plan-011-safe-sql-extensions, range 0fad2a8.. to the commit with the final proof version, d9b7479 precedes it; the MCP test design is unstable at the branch tip and at base 0fad2a8 — an independent gate failure, owner: plan 005; one ProcessRunnerTests test in SqlHarness.Tests failed in 2 of 10 runs of the final wave; T5 ANALYZE DESIGN COMPLETE, not IMPLEMENTED; evidence: [011-safe-sql-extensions-proof](011-safe-sql-extensions-proof.md); merge/push awaits a decision) |
+| [012 — Replace the MCP text bridge with a typed parameter model](012-typed-matrix.md) | matrix with commas/empty value; typed input feature | P2 | L | 007, 009 | DONE (local merge to main 1f312a6; branch feat/plan-012-typed-matrix, 3d56a81..da73e14 + final fix wave F1-F10 e906fbd..6760a96; evidence: [012-typed-matrix-proof](012-typed-matrix-proof.md); after the merge: build -warnaserror 0 warn, full suite without Integration Core 2811/0/0 + MCP 212/0/4; push awaits a decision) |
+| [013 — Specify and prepare the implementation of the CI regression decision](013-regression-policy-design.md) (thresholds used in 051; the offline-reader part replaced by 051, implemented on `feat/plan-051-regression-verdict`) | regression feature proposal | P2 | L | 003, 006, 009 | DONE (branch docs/plan-013-regression-policy, 983f7b6..f6c8d7a; evidence: [013-regression-contract](013-regression-contract.md), [013-regression-implementation](013-regression-implementation.md); design stage only, feature PLANNED; no suite and no live DB; not merged; push awaits) |
+| [014 — Prepare an actionable pg_stat_statements diagnostics contract](014-postgres-diagnostics-design.md) (REJECTED 2026-10-11: pgstop will not be created) | PG diagnostics proposal | P2 | L | 003, 004, 009 | DONE (branch docs/plan-014-postgres-diagnostics, f0934b3..7d82bf1; evidence: [014-pg-statements-contract](014-pg-statements-contract.md), [014-pg-statements-implementation](014-pg-statements-implementation.md); design stage only, pgstop feature PLANNED, not implemented; no suite and no live DB; not merged; push awaits) |
+| [015 — Diagnose the divergence between the installed CLI and the repository](015-installation-alignment.md) | observation of PATH and outdated help | P3 | S | 005 | DONE (branch docs/plan-015-installation-alignment, d2a0729..8e00431; evidence: [015-installation-evidence](015-installation-evidence.md); it is a procedure follow-up guard; diagnosis only; the PATH binary was not replaced; the divergence remains; not merged; push awaits) |
 
-Statusy: TODO / IN PROGRESS / DONE / BLOCKED (konkretny powód) / RESOLVED EXTERNALLY (dowód). Dla 013–015 DONE oznacza dokumentację/diagnozę, nie implementację przyszłej funkcji. W011 ANALYZE może zakończyć się projektem zależności parsera — osobno DESIGN COMPLETE, nie IMPLEMENTED.
+Statuses: TODO / IN PROGRESS / DONE / BLOCKED (concrete reason) / RESOLVED EXTERNALLY (evidence). For 013–015, DONE means documentation/diagnosis, not implementation of a future feature. In 011, ANALYZE may end with a parser-dependency design — separately DESIGN COMPLETE, not IMPLEMENTED.
 
-## Zależności
+## Dependencies
 
-- 001 i002 niezależne; 003 korzysta z bezpiecznych błędów i granic plików.
-- 004 domyka gate DB; 005 diagnozuje jego weryfikację. Historyczny timeout nie blokuje przygotowania pilnej naprawy bezpieczeństwa, ale ograniczenie dowodu musi zostać zapisane.
-- 006: testy charakterystyczne przed optymalizacją equivalence.
-- 007 ustala preflight, 008 publikuje schema, 009 opisuje granicę safety.
-- 010 konsoliduje ustalone kontrakty. 011/012 nie wymagają ukończenia całego refaktoru010.
-- 013/014 doprecyzowują istniejące specyfikacje, w tym wykryte sprzeczności, przed pisaniem kodu.
-- Nie wykonuj równoległych zmian wspólnych plików w jednym worktree: McpOperationMapper, McpToolCatalog, Contracts, Capabilities.
-- Brak zgody na live DB, konfigurację użytkownika, instalację, publikację lub push.
+- 001 and 002 are independent; 003 uses the safe errors and file boundaries.
+- 004 completes the DB gate; 005 diagnoses its verification. The historical timeout does not block preparing the urgent safety fix, but the evidence restriction must be recorded.
+- 006: characterization tests before optimizing equivalence.
+- 007 establishes preflight, 008 publishes the schema, 009 describes the safety boundary.
+- 010 consolidates the established contracts. 011/012 do not require completing the whole 010 refactor.
+- 013/014 refine the existing specifications, including the detected contradictions, before writing code.
+- Do not make parallel changes to shared files in one worktree: McpOperationMapper, McpToolCatalog, Contracts, Capabilities.
+- No approval for a live DB, user configuration, installation, publication or push.
 
-## Mapa wszystkich ustaleń
+## Map of all findings
 
-| Ustalenie | Plan |
+| Finding | Plan |
 |---|---|
 | S1 logger | 001 |
-| S2 scope artefaktów i snapshotów | 003 |
+| S2 artifact and snapshot scope | 003 |
 | S3 case sensitivity, A1 separator | 002 |
 | R1 inspect concurrency | 004 |
-| R2 pamięć/CPU/cancellation equivalence | 006 |
-| A2 usage i funkcja preflight | 007 |
+| R2 memory/CPU/cancellation equivalence | 006 |
+| A2 usage and the preflight feature | 007 |
 | A3 outputSchema | 008 |
-| A4 granica read-only PG | 009 |
-| T1 timeouty testów/publish | 005 |
-| D1 watch i reguły adapterów | 010 |
+| A4 PG read-only boundary | 009 |
+| T1 test/publish timeouts | 005 |
+| D1 watch and adapter rules | 010 |
 | SET scalar, table variables, TEMP TRUNCATE | 011 |
 | ANALYZE/parser | 011/T5 |
-| Świadome prefiksy PG i projekt strict profile | 009 |
-| Matrix przecinki/puste wartości, typowane wejścia | 012 |
-| Regresja CI | 013 |
+| PG-aware prefixes and the strict profile design | 009 |
+| Matrix commas/empty values, typed inputs | 012 |
+| CI regression | 013 |
 | pg_stat_statements | 014 |
-| Stara binarka PATH | 015 |
-| Podmiana pliku/tożsamość uchwytu — do zbadania | 002/T3 |
-| Zachowanie dobrych granic interfejsów | 010 i ograniczenia wszystkich planów |
+| Old PATH binary | 015 |
+| File replacement/handle identity — to be examined | 002/T3 |
+| Preservation of good interface boundaries | 010 and the restrictions of all plans |
 
-## Decyzje zachowane bez naprawy
+## Decisions preserved without a fix
 
-CLI/MCP, query/measure/compare, param-set/matrix, schema/space/indexes i writery domenowe mają odrębne role. Nie scalać ich mechanicznie. Object Report ma ADR i OperationReportContract. Dwie reprezentacje MCP liczą się do budżetu wire. Validate może poprawnie zakończyć analizę z allowed=false. Brak trwałych mutacji i force snapshot w MCP to granica v1. Historycznych napraw OUTPUT INTO/parametrów PG/buforów nie otwierać bez dowodu regresji.
+CLI/MCP, query/measure/compare, param-set/matrix, schema/space/indexes and the domain writers have separate roles. Do not merge them mechanically. Object Report has an ADR and OperationReportContract. Both MCP representations count toward the wire budget. Validate may correctly end the analysis with allowed=false. The absence of persistent mutations and force snapshot in MCP is the v1 boundary. Do not reopen the historical OUTPUT INTO/PG parameters/buffers fixes without regression evidence.
 
-## Dowody realizacji
+## Implementation evidence
 
-Przy zapisie sprawdzono dokumenty i ścieżki. Historyczny wynik audytu nie jest dowodem przyszłej implementacji.
+When writing this, the documents and paths were checked. A historical audit result is not evidence of a future implementation.
 
-| Plan | Commit | Komendy i wyniki / dokument wynikowy | Braki |
+| Plan | Commit | Commands and results / result document | Gaps |
 |---|---|---|---|
-| 001 | 48e33e5..4423386 (a21c8d1 T1 oracle, 8cc8481 T2 logger, 4423386 T3 piny) | gate McpSecretRedaction/McpStdioProcess/McpStderrLeak: 11 passed, 0 failed, 2 skipped (foreign-RID); build -warnaserror: 0 warn; pełny suite bez Integration: Core 1895/0/0, MCP 129/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; final review: Ready to merge, 0 Critical/Important | Brak live DB (jawny; live testy skip) |
-| 002 | f343d2b..c241921 (6749163 T1 testy, f71ed8f T1 fix1, 8654c23 T2 normalizacja, c241921 T3 ocena) | gate McpInputReader/McpStartup: 24 passed, 0 failed (SqlHarness.Tests: 0 dopasowanych); build -warnaserror: 0 warn, 0 error; pełny suite bez Integration: Core 1895/0/0, MCP 136/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; doc: plans/002-file-identity-assessment.md; final review: Ready to merge, 0 Critical/Important | Brak dowodu na case-sensitive FS Linuksa (gałąź Ordinal + test Case_only_sibling nie wykonane na takim FS); brak live DB (plan zabrania); smoke publish-timeout nie zaobserwowany (win-x64 przeszedł; znany baseline plan-005) |
-| 003 | 637a59b..c5ce1ad (54e4eba T1 kontrakt, 999b632/1de3b2a/708eff1 T2 RED+fix, 930dfa3/0d02470/2ae6949 T3 owner threading, 45833e1/6b6acf7/913542b T4 snapshot scope, c5ce1ad T5 docs) | gate McpScope/McpMapping/ArtifactReader/SnapshotStore: Mcp 41/41 + Tests 57/57, exit 0; build -warnaserror: 0 warn, 0 error; pełny suite bez Integration: Core 1915/0/0, MCP 147/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; docs: plans/003-scope-contract.md; final review: Ready to merge, 0 Critical/Important | Brak live DB (jawny; live testy skip); flake McpStdioProcessTests pod obciążeniem przeszedł w rerun i pełnym suite (znany baseline plan-005) |
-| 004 | ff5d0b6..bc5758c (ff5d0b6 T1 testy RED, 32f0cc2 T2 gate, 9735b1a T3 release, bc5758c T3 docs) | fokus McpLifecycle/McpCancellation: 28 passed, 0 failed; build -warnaserror: 0 warn, 0 error; pełny suite bez Integration: Core 1915/0/0, MCP 154/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; doc: plans/004-inspect-gate-proof.md; final review: Ready to merge, 0 Critical/Important | Brak live DB (jawny; live testy skip); flake Progress pre-existing zielony w tych runach (baseline plan-005); T3 RED-phase zaparkowany rulingiem (RED-run nie dyskryminuje; dowód T1 RED 3/24 + T2 GREEN 24/24) |
-| 006 | 6671ba1..0286f5d (9 commits: 6671ba1/3bbc0b3 T1 oracle+charakterystyka, 7f55cde T2 kontrakt, ac38e4c/a1a28e3 T3 dedup+budżet+token, fe55b80 T4 sweep/limit/cancel/alokacje, f069d42/54f86d8 T5 capabilities+matrix, 0286f5d fix byte-pin) | gate ResultEquivalence/Compare/McpCancellation: 68+8 passed, 0 failed; build -warnaserror: 0 warn, 0 error; pełny suite bez Integration: Core 1934/0/0, MCP 154/0/4 (2 foreign-RID + 2 live opt-in, bez timeoutów); git diff --check: 0; doc: plans/006-resource-contract.md; final review: Ready to merge, 0 Critical/Important (3 minory T3 non-blocking, M1/M2 zaparkowane) | Brak live DB (jawny; live testy skip); brak dowodu na innej platformie niż Windows (jak 001–004) |
-| 008 | 70a4ca2..b1e1985 (5cc5f84 T1 wiring, 14df2a2 T2 transport, e456af4 T3 budget+race, 837fa11 T4 guard, b1e1985 fix M2/M3/R5-sweep) | gate McpToolSchema/McpProtocol/McpOutput/McpTokenBudget: 48 passed, 0 failed; build -warnaserror: 0 warn, 0 error; pełny suite bez Integration: Core 1962/0/0, MCP 172/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; doc: plans/008-mcp-output-schema-proof.md; final review: With fixes → fix wave → re-review all addressed, 0 Critical/Important | Brak live DB (jawny; live testy skip); R5 ctx-race: containment (McpScopeHome) + tracked remainder (McpStdioProcess seam tests, theoretical) |
-| 009 | 0227180..29b3102 (13477be/a58c15c/1cbafab T1 metadane, 993e3c4/84ec9f8/1d3052b T2 opisy, 7493ad9/361280b T3 stałość+denylist, 914238c T4 assessment, 86c3b3e/29b3102 final watch-fix) | gate Capabilities/Validate/McpToolSchema: Tests 73/73 + Mcp 33/33, exit 0; build -warnaserror: 0 warn, 0 error; pełny suite bez Integration: Core 1997/0/0, MCP 181/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; docs: plans/009-strict-profile-assessment.md + plans/009-safety-contract-proof.md; final review: With fixes → fix wave → re-review ADDRESSED, 0 Critical/Important | Brak live DB (jawny; live testy skip); zaparkowana fraza watch/read-only w AGENTS.md (docs-only, follow-up) |
-| 012 | 3d56a81..da73e14 (8bf6331..7b6afd4 T1 model+binder, a451014..879526e T2 mapper bez join/split, e57b1fc..30950eb T3 testy, c06e940/da73e14 T4 inwarianty runnera + redakcja) + final fix wave e906fbd..6760a96 (F1-F10 z finalnego review) | gate SqlParameterMatrix/CompareMatrix/McpMapping/McpSecretRedaction: Tests 137/0/0 + Mcp 73/0/0; build -warnaserror: 0 warn, 0 error; pełny suite bez Integration: Core 2811/0/0, MCP 212/0/4 (2 foreign-RID + 2 live opt-in, bez timeoutów w tej sesji, dwa przebiegi MCP); git diff --check: 0; doc: [012-typed-matrix-proof](012-typed-matrix-proof.md) | Brak live DB (jawny; live testy skip); brak dowodu na innej platformie niż Windows; dwa znane niestabilne testy hosta MCP (właściciel plan 005) nie zaobserwowane w tej sesji, ale nie wygaszone; R2/R3 oczekują potwierdzenia użytkownika (zob. dowód) |
-| 013 | 983f7b6..f6c8d7a (983f7b6 T1, 14bde0a/16f1094 T2, 837cb54/057bcb0 T3, d5f994f T4, f6c8d7a follow-up) | dowód: [013-regression-contract](013-regression-contract.md), [013-regression-implementation](013-regression-implementation.md); tylko etap projektowy, funkcja PLANNED; suite nieuruchomiony (plan zabrania testów aplikacji przy zapisie dokumentów); git diff --check: 0 | Brak live DB; brak dowodu z innej platformy; nie scalono; push czeka |
-| 014 | f0934b3..7d82bf1 (f0934b3 T1, 281a634 T2, 905d336/cac1df8 T3, 7334c17 T4, 6627b0a/08e7526/7d82bf1 T5) | dowód: [014-pg-statements-contract](014-pg-statements-contract.md), [014-pg-statements-implementation](014-pg-statements-implementation.md); tylko etap projektowy, funkcja pgstop PLANNED, nie zaimplementowana; suite nieuruchomiony (plan zabrania testów aplikacji przy zapisie dokumentów); git diff --check: 0 | Brak live DB; brak dowodu z innej platformy; nie scalono; push czeka |
-| 015 | d2a0729..8e00431 (d2a0729 T1, 783842e T2, 22c0644 T3, 8e00431 follow-up guard) | dowód: [015-installation-evidence](015-installation-evidence.md); jest follow-up guard procedury; tylko diagnoza; binarka PATH nie zastąpiona; rozjazd zostaje; git diff --check: 0; suite aplikacji nieuruchomiony (plan zabrania testów aplikacji przy zapisie dokumentów) | Brak live DB; brak dowodu z innej platformy; instalacja nie wykonana; nie scalono; push czeka |
-| 083 (in progress) | Tasks 1–5 and final-fix commits are listed in the [verification evidence](083-verification-evidence.md) | Task documentation and review findings are covered in the same durable record | Final controller `just verify` and operator-authorized live UAT pending; no integration into `main` claimed |
+| 001 | 48e33e5..4423386 (a21c8d1 T1 oracle, 8cc8481 T2 logger, 4423386 T3 piny) | gate McpSecretRedaction/McpStdioProcess/McpStderrLeak: 11 passed, 0 failed, 2 skipped (foreign-RID); build -warnaserror: 0 warn; full suite without Integration: Core 1895/0/0, MCP 129/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; final review: Ready to merge, 0 Critical/Important | No live DB (explicit; live tests skip) |
+| 002 | f343d2b..c241921 (6749163 T1 tests, f71ed8f T1 fix1, 8654c23 T2 normalization, c241921 T3 assessment) | gate McpInputReader/McpStartup: 24 passed, 0 failed (SqlHarness.Tests: 0 matched); build -warnaserror: 0 warn, 0 error; full suite without Integration: Core 1895/0/0, MCP 136/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; doc: plans/002-file-identity-assessment.md; final review: Ready to merge, 0 Critical/Important | No evidence for a case-sensitive Linux FS (the Ordinal branch + the Case_only_sibling test were not run on such an FS); no live DB (the plan forbids it); the publish-timeout smoke was not observed (win-x64 passed; known plan-005 baseline) |
+| 003 | 637a59b..c5ce1ad (54e4eba T1 contract, 999b632/1de3b2a/708eff1 T2 RED+fix, 930dfa3/0d02470/2ae6949 T3 owner threading, 45833e1/6b6acf7/913542b T4 snapshot scope, c5ce1ad T5 docs) | gate McpScope/McpMapping/ArtifactReader/SnapshotStore: Mcp 41/41 + Tests 57/57, exit 0; build -warnaserror: 0 warn, 0 error; full suite without Integration: Core 1915/0/0, MCP 147/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; docs: plans/003-scope-contract.md; final review: Ready to merge, 0 Critical/Important | No live DB (explicit; live tests skip); the McpStdioProcessTests flake under load passed in the rerun and the full suite (known plan-005 baseline) |
+| 004 | ff5d0b6..bc5758c (ff5d0b6 T1 tests RED, 32f0cc2 T2 gate, 9735b1a T3 release, bc5758c T3 docs) | focus McpLifecycle/McpCancellation: 28 passed, 0 failed; build -warnaserror: 0 warn, 0 error; full suite without Integration: Core 1915/0/0, MCP 154/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; doc: plans/004-inspect-gate-proof.md; final review: Ready to merge, 0 Critical/Important | No live DB (explicit; live tests skip); the pre-existing Progress flake was green in these runs (plan-005 baseline); the T3 RED phase was parked by ruling (the RED run does not discriminate; evidence T1 RED 3/24 + T2 GREEN 24/24) |
+| 006 | 6671ba1..0286f5d (9 commits: 6671ba1/3bbc0b3 T1 oracle+characterization, 7f55cde T2 contract, ac38e4c/a1a28e3 T3 dedup+budget+token, fe55b80 T4 sweep/limit/cancel/allocations, f069d42/54f86d8 T5 capabilities+matrix, 0286f5d fix byte-pin) | gate ResultEquivalence/Compare/McpCancellation: 68+8 passed, 0 failed; build -warnaserror: 0 warn, 0 error; full suite without Integration: Core 1934/0/0, MCP 154/0/4 (2 foreign-RID + 2 live opt-in, without timeouts); git diff --check: 0; doc: plans/006-resource-contract.md; final review: Ready to merge, 0 Critical/Important (3 minor T3 non-blocking, M1/M2 parked) | No live DB (explicit; live tests skip); no evidence on a platform other than Windows (as for 001–004) |
+| 008 | 70a4ca2..b1e1985 (5cc5f84 T1 wiring, 14df2a2 T2 transport, e456af4 T3 budget+race, 837fa11 T4 guard, b1e1985 fix M2/M3/R5-sweep) | gate McpToolSchema/McpProtocol/McpOutput/McpTokenBudget: 48 passed, 0 failed; build -warnaserror: 0 warn, 0 error; full suite without Integration: Core 1962/0/0, MCP 172/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; doc: plans/008-mcp-output-schema-proof.md; final review: With fixes → fix wave → re-review all addressed, 0 Critical/Important | No live DB (explicit; live tests skip); R5 ctx-race: containment (McpScopeHome) + tracked remainder (McpStdioProcess seam tests, theoretical) |
+| 009 | 0227180..29b3102 (13477be/a58c15c/1cbafab T1 metadata, 993e3c4/84ec9f8/1d3052b T2 descriptions, 7493ad9/361280b T3 stability+denylist, 914238c T4 assessment, 86c3b3e/29b3102 final watch-fix) | gate Capabilities/Validate/McpToolSchema: Tests 73/73 + Mcp 33/33, exit 0; build -warnaserror: 0 warn, 0 error; full suite without Integration: Core 1997/0/0, MCP 181/0/4 (2 foreign-RID + 2 live opt-in); git diff --check: 0; docs: plans/009-strict-profile-assessment.md + plans/009-safety-contract-proof.md; final review: With fixes → fix wave → re-review ADDRESSED, 0 Critical/Important | No live DB (explicit; live tests skip); the watch/read-only phrase is parked in AGENTS.md (docs-only, follow-up) |
+| 012 | 3d56a81..da73e14 (8bf6331..7b6afd4 T1 model+binder, a451014..879526e T2 mapper without join/split, e57b1fc..30950eb T3 tests, c06e940/da73e14 T4 runner invariants + redaction) + final fix wave e906fbd..6760a96 (F1-F10 from the final review) | gate SqlParameterMatrix/CompareMatrix/McpMapping/McpSecretRedaction: Tests 137/0/0 + Mcp 73/0/0; build -warnaserror: 0 warn, 0 error; full suite without Integration: Core 2811/0/0, MCP 212/0/4 (2 foreign-RID + 2 live opt-in, without timeouts in this session, two MCP runs); git diff --check: 0; doc: [012-typed-matrix-proof](012-typed-matrix-proof.md) | No live DB (explicit; live tests skip); no evidence on a platform other than Windows; two known unstable MCP host tests (owner plan 005) were not observed in this session, but were not disabled; R2/R3 await user confirmation (see evidence) |
+| 013 | 983f7b6..f6c8d7a (983f7b6 T1, 14bde0a/16f1094 T2, 837cb54/057bcb0 T3, d5f994f T4, f6c8d7a follow-up) | evidence: [013-regression-contract](013-regression-contract.md), [013-regression-implementation](013-regression-implementation.md); design stage only, feature PLANNED; suite not run (the plan forbids application tests when writing documents); git diff --check: 0 | No live DB; no evidence from another platform; not merged; push awaits |
+| 014 | f0934b3..7d82bf1 (f0934b3 T1, 281a634 T2, 905d336/cac1df8 T3, 7334c17 T4, 6627b0a/08e7526/7d82bf1 T5) | evidence: [014-pg-statements-contract](014-pg-statements-contract.md), [014-pg-statements-implementation](014-pg-statements-implementation.md); design stage only, pgstop feature PLANNED, not implemented; suite not run (the plan forbids application tests when writing documents); git diff --check: 0 | No live DB; no evidence from another platform; not merged; push awaits |
+| 015 | d2a0729..8e00431 (d2a0729 T1, 783842e T2, 22c0644 T3, 8e00431 follow-up guard) | evidence: [015-installation-evidence](015-installation-evidence.md); it is a procedure follow-up guard; diagnosis only; the PATH binary was not replaced; the divergence remains; git diff --check: 0; the application suite was not run (the plan forbids application tests when writing documents) | No live DB; no evidence from another platform; installation not performed; not merged; push awaits |
+| 083 (in progress) | Tasks 1–5 and final fixes (`75ee6f0`, `35b8d4a`) are documented in the [verification evidence](083-verification-evidence.md) | Task reports, all current rulings, review findings, and the failed controller gate/corrective regressions are preserved in the durable record | Integrated controller gate pending; Linux waived by operator; live SQL Server/SSMS UAT pending |
 
 ---
 
@@ -349,7 +353,7 @@ Planning base: `729d88f`. The user requested plans/corrections for all findings 
 | Minor: private-home plan describes removed gain store | Revised 034 | Cover the actual journal and sensitive artifact creation paths |
 | Minor: mechanical drift STOP and unnecessary repeated full gates | Revised pending plan headers and 030/032 | Inspect and adapt drift; use focused repeats for an actual flake and final Windows/Linux gates |
 
-Current execution order is in **Aktualna kolejka wykonania — 2026-10-13** above. Execute whole plans; no separately deferred A/B scopes. 060 and 061 are DONE, as recorded in the status table below. Preserve actual dependencies of 056–061 and 028 → 032. Plan 062 remains a separate product choice; account for the completed 060/061 MCP and compare contract changes when selecting its base and execution order. Do not infer a dependency solely from plan numbering.
+Current execution order is in **Current execution queue — 2026-10-13** above. Execute whole plans; no separately deferred A/B scopes. 060 and 061 are DONE, as recorded in the status table below. Preserve actual dependencies of 056–061 and 028 → 032. Plan 062 remains a separate product choice; account for the completed 060/061 MCP and compare contract changes when selecting its base and execution order. Do not infer a dependency solely from plan numbering.
 
 For pending execution plans, historical snippets and tests are evidence to inspect. A changed file alone is not a reason to stop or request permission. Keep the approved intent and update obsolete details; stop for an incompatible contract, missing required proof or actions beyond authorization. Run the final Windows and Linux gates after relevant code changes. Repeat complete gates only for a concrete remaining risk. Documentation-only revisions use diff/link/consistency checks; they do not require application builds or live database calls.
 

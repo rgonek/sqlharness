@@ -880,8 +880,7 @@ public sealed class JournalReaderTests
         Assert.Equal("PAGEIOLATCH_SH", variant.Waits!.Value[0].GetProperty("waitType").GetString());
         var table = Assert.Single(variant.TableIo);
         Assert.Equal(("Orders", 3L, 1), (table.Table, table.PhysicalReads, table.ColdRuns));
-        var plan = Assert.Single(variant.Plans);
-        Assert.False(plan.Stored);
+        Assert.Empty(variant.Plans);
         Assert.Equal(50, detail.Operation.LogicalReadsMedian);
         Assert.True(detail.Operation.HasSpill);
         Assert.True(detail.Operation.ColdCache);
@@ -925,7 +924,7 @@ public sealed class JournalReaderTests
         var reader = Reader(home);
 
         var detail = reader.Operation(handle.OperationId)!;
-        var stored = reader.Plan(new string('A', 64))!;
+        var stored = reader.Plan(JournalSeed.PlanDocumentSha256)!;
 
         Assert.Equal("SELECT 42", detail.SqlText);
         Assert.True(Assert.Single(Assert.Single(detail.Variants).Plans).Stored);

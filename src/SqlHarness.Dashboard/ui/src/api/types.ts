@@ -197,6 +197,94 @@ export type TableIoRow = {
 
 export type PlanLinkRow = { repetition: number; ordinal: number; hash: string; stored: boolean }
 
+export type PlanOccurrenceManifest = {
+  variant: string
+  parameterSet: string | null
+  caseId: string
+  caseLabel: string
+  repetition: number
+  documentOrdinal: number
+  statementIndex: number
+  spanStart: number | null
+  spanLength: number | null
+  statementId: number | null
+  statementCompId: number | null
+  documentSha256: string | null
+  shapeHash: string | null
+  format: string | null
+  matchKind: string
+  omitted: boolean
+  stored: boolean
+}
+
+export type OperationPlanManifest = { operationId: number; state: "stored" | "plans not stored"; occurrences: PlanOccurrenceManifest[] }
+
+export type PlanGraphBuildError = { code: string; message: string }
+export type PlanGraphObject = { database: string | null; schema: string | null; table: string | null; index: string | null; alias: string | null }
+export type PlanGraphDefinedValue = { columns: PlanGraphColumnReference[]; expressions: string[] }
+export type PlanGraphColumnReference = { database: string | null; schema: string | null; table: string | null; column: string | null; alias: string | null }
+export type PlanGraphNode = {
+  /** Stable graph path such as `0:0/1`; distinct from the engine's native node id. */
+  id: string
+  statementIndex: number
+  showplanNodeId: number | null
+  physicalOperator: string
+  logicalOperator: string | null
+  object: PlanGraphObject | null
+  tableReferenceId: number | null
+  predicates: string[]
+  definedValues: PlanGraphDefinedValue[]
+  estimatedRows: number | null
+  actualRows: number | null
+  executions: number | null
+  costFraction: number | null
+  warnings: string[]
+}
+export type PlanGraphEdge = { source: string; target: string; estimatedRows: number | null; actualRows: number | null; estimatedSizeBytes: number | null }
+export type PlanGraphStatement = { index: number; statementId: number | null; statementCompId: number | null; rootNodeId: string }
+export type PlanGraph = { engine: string; statements: PlanGraphStatement[]; nodes: PlanGraphNode[]; edges: PlanGraphEdge[] }
+export type PlanGraphBuildResult = { engine: string; graph: PlanGraph | null; error: PlanGraphBuildError | null }
+
+export type PlanGraphPropertyAttribute = { name: string; value: string }
+export type PlanGraphPropertyNode = {
+  name: string
+  attributes: PlanGraphPropertyAttribute[]
+  children: PlanGraphPropertyNode[]
+  text: string | null
+  isTruncationMarker: boolean
+  omittedNodeCount: number
+}
+export type PlanGraphPropertyTree = { properties: PlanGraphPropertyNode[]; isTruncated: boolean; omittedNodeCount: number }
+export type PlanGraphPropertyResult = { engine: string; nodeId: string; tree: PlanGraphPropertyTree | null; error: PlanGraphBuildError | null }
+
+export type SourceMapState = "exact" | "inferred" | "ambiguous" | "none"
+export type SourceMapLink = {
+  nodeId: string | null
+  spanStart: number | null
+  spanLength: number | null
+  kind: "statement" | "table_reference" | string
+  state: SourceMapState
+  rule: string
+}
+export type PlanSourceMapLink = { documentSha256: string; documentOrdinal: number; link: SourceMapLink }
+export type PlanSourceMapOmission = { documentOrdinal: number; statementIndex: number; documentSha256: string | null; matchKind: string; omitted: boolean; stored: boolean }
+export type PlanSourceMapError = { documentOrdinal: number; documentSha256: string | null; code: string; message: string }
+export type PlanSourceMapResponse = {
+  operationId: number
+  state: "stored" | "plans not stored"
+  engine: string | null
+  variant: string | null
+  parameterSet: string | null
+  caseId: string | null
+  caseLabel: string | null
+  repetition: number | null
+  executedText: string | null
+  algorithmVersion: number | null
+  links: PlanSourceMapLink[]
+  omittedDocuments: PlanSourceMapOmission[]
+  errors: PlanSourceMapError[]
+}
+
 export type PostgresBuffers = {
   sharedHit: number | null
   sharedRead: number | null
@@ -336,7 +424,7 @@ export type DashboardStats = {
   workflowCosts: WorkflowCost[]
 }
 
-// GET /api/plans/{hash}?view=distilled (PlanDistiller / PostgresPlanDistiller, camelCase).
+// Renderer-neutral comparison tree adapted from PlanGraph where legacy diff helpers still expect this shape.
 export type PlanNode = {
   physicalOp: string
   logicalOp?: string

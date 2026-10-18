@@ -1,6 +1,6 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ConflictError, getJson, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
-import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, MutationRequestSummary, OperationDetail, OperationSummary, OptimizationComparison, OptimizationSection, Page, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
+import { ConflictError, getJson, HttpStatusError, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
+import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, KeyCount, MutationRequestSummary, OperationDetail, OperationPlanManifest, OperationSummary, OptimizationComparison, OptimizationSection, Page, PlanGraphBuildResult, PlanGraphPropertyResult, PlanSourceMapResponse, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string; hasCompare?: boolean }
 
@@ -17,13 +17,16 @@ export const queryKeys = {
   optimization: (id: number) => ["session-optimization", id] as const,
   optimizationComparison: (id: number, params: OptimizationCompareParams) => ["session-optimization-comparison", id, params] as const,
   operation: (id: number) => ["operation", id] as const,
+  operationPlans: (id: number) => ["operation-plans", id] as const,
+  planSourceMap: (id: number, selection: PlanSourceMapParams) => ["plan-source-map", id, selection] as const,
+  planGraph: (sha: string) => ["plan-graph", sha] as const,
+  planProperties: (sha: string, nodeId: string) => ["plan-properties", sha, nodeId] as const,
   operations: (filters: OperationFilters) => ["operations", filters] as const,
   stats: (range: StatsRange, window: StatsWindow, profile?: string | null, dimensions?: Record<string, string | null>, rowDimension?: string, columnDimension?: string, unprofiled?: boolean) =>
     ["stats", range, window, profile, dimensions, rowDimension, columnDimension, unprofiled] as const,
   settings: () => ["settings"] as const,
   profiles: () => ["profiles"] as const,
   prices: () => ["prices"] as const,
-  plan: (hash: string) => ["plan", hash] as const,
   mutations: ["mutations"] as const,
   liveOperations: ["live", "operations"] as const,
   liveRunning: ["live", "running"] as const,
@@ -32,6 +35,7 @@ export const queryKeys = {
 
 export const shouldRetry = (count: number, error: unknown) =>
   error instanceof NetworkError ? true
+  : error instanceof HttpStatusError ? error.status >= 500 && count < 2
   : !(error instanceof UnauthorizedError || error instanceof NotFoundError) && count < 2
 
 export const retryDelay = (attempt: number) => Math.min(1000 * 2 ** attempt, 30_000)
@@ -158,6 +162,50 @@ export function useOperation(id: number) {
   return useQuery({ queryKey: queryKeys.operation(id), queryFn: () => getJson<OperationDetail>(`/api/operations/${id}`) })
 }
 
+export type PlanSourceMapParams = { variant: string; parameterSet?: string | null; repetition: number; caseId: string }
+
+export function useOperationPlans(id: number) {
+  return useQuery({ queryKey: queryKeys.operationPlans(id), queryFn: () => fetchOperationPlans(id) })
+}
+
+export function fetchOperationPlans(id: number): Promise<OperationPlanManifest> {
+  return getJson<OperationPlanManifest>(`/api/operations/${id}/plans`)
+}
+
+export function usePlanSourceMap(id: number, selection: PlanSourceMapParams | null) {
+  return useQuery({
+    queryKey: queryKeys.planSourceMap(id, selection ?? { variant: "", repetition: 0, caseId: "" }),
+    queryFn: () => fetchPlanSourceMap(id, selection!),
+    enabled: selection !== null,
+    staleTime: Infinity,
+  })
+}
+
+export function fetchPlanSourceMap(id: number, selection: PlanSourceMapParams): Promise<PlanSourceMapResponse> {
+  return getJson<PlanSourceMapResponse>(`/api/operations/${id}/source-map`, {
+    variant: selection.variant,
+    parameterSet: selection.parameterSet,
+    repetition: selection.repetition,
+    caseId: selection.caseId,
+  })
+}
+
+export function usePlanGraph(sha: string, enabled = true) {
+  return useQuery({ queryKey: queryKeys.planGraph(sha), queryFn: () => fetchPlanGraph(sha), enabled, staleTime: Infinity })
+}
+
+export function fetchPlanGraph(sha: string): Promise<PlanGraphBuildResult> {
+  return getJson<PlanGraphBuildResult>(`/api/plan-documents/${sha}/graph`)
+}
+
+export function usePlanProperties(sha: string, nodeId: string, enabled = true) {
+  return useQuery({ queryKey: queryKeys.planProperties(sha, nodeId), queryFn: () => fetchPlanProperties(sha, nodeId), enabled, staleTime: Infinity })
+}
+
+export function fetchPlanProperties(sha: string, nodeId: string): Promise<PlanGraphPropertyResult> {
+  return getJson<PlanGraphPropertyResult>(`/api/plan-documents/${sha}/nodes/${encodeURIComponent(nodeId)}/properties`)
+}
+
 export function fetchReproScript(operationId: number, side: string, caseId: string, form: ReproScriptForm): Promise<ReproScript> {
   return getJson<ReproScript>(`/api/operations/${operationId}/repro`, { side, case: caseId, form })
 }
@@ -207,19 +255,6 @@ export function useStats(
       columnDimension,
     }),
   })
-}
-
-export function useDistilledPlan(hash: string, enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.plan(hash),
-    queryFn: () => fetchDistilledPlan(hash),
-    enabled,
-    staleTime: Infinity,
-  })
-}
-
-export function fetchDistilledPlan(hash: string): Promise<DistilledPlan> {
-  return getJson<DistilledPlan>(`/api/plans/${hash}`, { view: "distilled" })
 }
 
 export function useSettings() {

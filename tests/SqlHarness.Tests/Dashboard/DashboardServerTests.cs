@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
 
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+
 using SqlHarness.Core;
 using SqlHarness.Dashboard;
 
@@ -439,10 +442,11 @@ public sealed class DashboardServerTests
     public async Task Api_serves_journal_data_and_validates_input()
     {
         using var home = new TempHome();
+        await SetStoreSensitiveAsync(home, true);
         var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
         var handle = seed.Operation(JournalSeed.Session("cli:a"), operation: "measure", benchmark: JournalSeed.Benchmark());
         await using var dashboard = await StartAuthenticated(home);
-        var (server, client) = dashboard;
+        var (_, client) = dashboard;
 
         using var sessions = JsonDocument.Parse(await client.GetStringAsync("/api/sessions?limit=10"));
         Assert.Equal("claude", sessions.RootElement.GetProperty("items")[0].GetProperty("agentKind").GetString());
@@ -455,16 +459,13 @@ public sealed class DashboardServerTests
         using var abandoned = JsonDocument.Parse(await client.GetStringAsync($"/api/operations/{orphan.OperationId}"));
         Assert.Equal("abandoned", abandoned.RootElement.GetProperty("operation").GetProperty("status").GetString());
 
-        var raw = await client.GetAsync($"/api/plans/{new string('A', 64)}");
+        var raw = await client.GetAsync($"/api/plan-documents/{JournalSeed.PlanDocumentSha256}");
         Assert.Equal("application/xml", raw.Content.Headers.ContentType!.MediaType);
         Assert.Equal("attachment", raw.Content.Headers.ContentDisposition!.DispositionType);
 
-        using var distilled = JsonDocument.Parse(await client.GetStringAsync($"/api/plans/{new string('A', 64)}?view=distilled"));
-        Assert.True(distilled.RootElement.TryGetProperty("statements", out _));
-
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/operations/999999")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/plans/{new string('B', 64)}")).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/plans/not-a-hash")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/plan-documents/{new string('B', 64)}")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/plan-documents/not-a-hash")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/stats?from=yesterday")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/operations?limit=abc")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/sessions?archived=maybe")).StatusCode);
@@ -787,25 +788,308 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Plan_manifest_includes_variant_case_repetition_document_and_statement_identity()
+    {
+        using var home = new TempHome();
+        await SetStoreSensitiveAsync(home, true);
+        var sql = "SELECT * FROM dbo.Parent AS p;";
+        var first = PlanXml(actualRows: 5);
+        var second = PlanXml(actualRows: 6);
+        var firstDocument = PlanDocument(first);
+        var secondDocument = PlanDocument(second);
+        var baseline = Metric("baseline", null, "case-eu", "Europe", [
+            Occurrence(1, 0, firstDocument.Sha256, sql),
+            Occurrence(2, 1, secondDocument.Sha256, sql, matchKind: "prefix"),
+        ]);
+        var candidate = Metric("candidate", "set-us", "case-us", "United States", [
+            Occurrence(1, 0, secondDocument.Sha256, sql, matchKind: "normalized"),
+        ]);
+        var benchmark = new BenchmarkJournalRecord([baseline, candidate], [firstDocument, secondDocument]);
+        var handle = new JournalSeed(home.DatabasePath, storeSensitive: true)
+            .Operation(JournalSeed.Session("cli:plan-manifest"), operation: "compare", sql: sql, benchmark: benchmark);
+        SetOmittedOccurrence(home.DatabasePath, handle.OperationId, "baseline", repetition: 2, documentOrdinal: 1);
+
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync($"/api/operations/{handle.OperationId}/plans");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        Assert.Equal("stored", root.GetProperty("state").GetString());
+        var occurrences = root.GetProperty("occurrences").EnumerateArray().ToArray();
+        Assert.Equal(3, occurrences.Length);
+
+        var firstRow = Assert.Single(occurrences, row => row.GetProperty("variant").GetString() == "baseline"
+            && row.GetProperty("repetition").GetInt32() == 1);
+        Assert.Equal("case-eu", firstRow.GetProperty("caseId").GetString());
+        Assert.Equal("Europe", firstRow.GetProperty("caseLabel").GetString());
+        Assert.Equal(firstDocument.Sha256, firstRow.GetProperty("documentSha256").GetString());
+        Assert.Equal(firstDocument.ShapeHash, firstRow.GetProperty("shapeHash").GetString());
+        Assert.Equal(0, firstRow.GetProperty("spanStart").GetInt32());
+        Assert.Equal(sql.Length, firstRow.GetProperty("spanLength").GetInt32());
+        Assert.Equal("exact", firstRow.GetProperty("matchKind").GetString());
+        Assert.Equal(7, firstRow.GetProperty("statementId").GetInt32());
+        Assert.Equal(2, firstRow.GetProperty("statementCompId").GetInt32());
+        Assert.False(firstRow.GetProperty("omitted").GetBoolean());
+        Assert.True(firstRow.GetProperty("stored").GetBoolean());
+
+        var omitted = Assert.Single(occurrences, row => row.GetProperty("variant").GetString() == "baseline"
+            && row.GetProperty("repetition").GetInt32() == 2);
+        Assert.True(omitted.GetProperty("omitted").GetBoolean());
+        Assert.Null(omitted.GetProperty("documentSha256").GetString());
+        Assert.Null(omitted.GetProperty("shapeHash").GetString());
+
+        var candidateRow = Assert.Single(occurrences, row => row.GetProperty("variant").GetString() == "candidate");
+        Assert.Equal("case-us", candidateRow.GetProperty("caseId").GetString());
+        Assert.Equal("set-us", candidateRow.GetProperty("parameterSet").GetString());
+        Assert.Equal("normalized", candidateRow.GetProperty("matchKind").GetString());
+    }
+
+    [Fact]
+    public async Task Plan_graph_and_property_endpoints_expose_the_builder_size_bounds()
+    {
+        using var home = new TempHome();
+        await SetStoreSensitiveAsync(home, true);
+        var largePlan = PlanXml(predicate: new string('x', 1_100_000));
+        var document = PlanDocument(largePlan);
+        var benchmark = new BenchmarkJournalRecord(
+            [Metric("measure", null, "0", "Case 1 of 1", [Occurrence(1, 0, document.Sha256, "SELECT 1;")])],
+            [document]);
+        new JournalSeed(home.DatabasePath, storeSensitive: true)
+            .Operation(JournalSeed.Session("cli:bounded-plan"), operation: "measure", sql: "SELECT 1;", benchmark: benchmark);
+
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var graphResponse = await client.GetAsync($"/api/plan-documents/{document.Sha256}/graph");
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, graphResponse.StatusCode);
+        var graphBytes = await graphResponse.Content.ReadAsByteArrayAsync();
+        Assert.True(graphBytes.Length < 1024 * 1024);
+        using var graph = JsonDocument.Parse(graphBytes);
+        Assert.Equal("graph_size_limit_exceeded", graph.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.True(graph.RootElement.GetProperty("graph").ValueKind == JsonValueKind.Null);
+
+        using var propertiesResponse = await client.GetAsync($"/api/plan-documents/{document.Sha256}/nodes/0:0/properties");
+        Assert.Equal(HttpStatusCode.OK, propertiesResponse.StatusCode);
+        var propertiesBytes = await propertiesResponse.Content.ReadAsByteArrayAsync();
+        Assert.True(propertiesBytes.Length <= 128 * 1024);
+        using var properties = JsonDocument.Parse(propertiesBytes);
+        Assert.True(properties.RootElement.GetProperty("tree").GetProperty("isTruncated").GetBoolean());
+        Assert.Contains(FlattenProperties(properties.RootElement.GetProperty("tree").GetProperty("properties")),
+            property => property.GetProperty("isTruncationMarker").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Plan_source_map_returns_exact_executed_sql_and_document_scoped_links()
+    {
+        using var home = new TempHome();
+        await SetStoreSensitiveAsync(home, true);
+        const string sql = "SELECT * FROM dbo.Parent AS p;";
+        var plan = PlanXml(actualRows: 5);
+        var document = PlanDocument(plan);
+        var benchmark = new BenchmarkJournalRecord(
+            [Metric("measure", "set-a", "case-a", "Set A", [Occurrence(1, 0, document.Sha256, sql)])],
+            [document]);
+        var handle = new JournalSeed(home.DatabasePath, storeSensitive: true)
+            .Operation(JournalSeed.Session("cli:source-map"), operation: "measure", sql: sql, benchmark: benchmark);
+
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync($"/api/operations/{handle.OperationId}/source-map?variant=measure&parameterSet=set-a&repetition=1&caseId=case-a");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = result.RootElement;
+        Assert.Equal("stored", root.GetProperty("state").GetString());
+        Assert.Equal(sql, root.GetProperty("executedText").GetString());
+        Assert.Equal("sqlserver", root.GetProperty("engine").GetString());
+        Assert.Equal(1, root.GetProperty("algorithmVersion").GetInt32());
+        var tableLink = Assert.Single(root.GetProperty("links").EnumerateArray(), link =>
+            link.GetProperty("link").GetProperty("kind").GetString() == "table_reference");
+        Assert.Equal(document.Sha256, tableLink.GetProperty("documentSha256").GetString());
+        Assert.Equal(0, tableLink.GetProperty("documentOrdinal").GetInt32());
+        Assert.Equal("0:0", tableLink.GetProperty("link").GetProperty("nodeId").GetString());
+        Assert.Equal("exact", tableLink.GetProperty("link").GetProperty("state").GetString());
+
+        using var raw = await client.GetAsync($"/api/plan-documents/{document.Sha256}");
+        Assert.Equal(HttpStatusCode.OK, raw.StatusCode);
+        Assert.Equal(plan, await raw.Content.ReadAsStringAsync());
+        Assert.Equal(document.Sha256.ToLowerInvariant() + ".sqlplan", raw.Content.Headers.ContentDisposition!.FileName);
+    }
+
+    [Fact]
+    public async Task Plan_source_map_selects_case_repetition_and_document_without_other_case_links()
+    {
+        using var home = new TempHome();
+        await SetStoreSensitiveAsync(home, true);
+        const string sql = "SELECT * FROM dbo.Parent AS p;";
+        var caseAFirst = PlanDocument(PlanXml(actualRows: 1));
+        var caseASecond = PlanDocument(PlanXml(actualRows: 2));
+        var caseBFirst = PlanDocument(PlanXml(actualRows: 3));
+        var caseBSecond = PlanDocument(PlanXml(actualRows: 5));
+        var benchmark = new BenchmarkJournalRecord(
+        [
+            Metric("measure", "set-a", "case-a", "Case A", [
+                Occurrence(1, 0, caseAFirst.Sha256, sql),
+                Occurrence(2, 0, caseASecond.Sha256, sql),
+            ]),
+            Metric("measure", "set-a", "case-b", "Case B", [
+                Occurrence(1, 0, caseBFirst.Sha256, sql),
+                Occurrence(2, 1, caseBSecond.Sha256, sql),
+            ]),
+        ], [caseAFirst, caseASecond, caseBFirst, caseBSecond]);
+        var handle = new JournalSeed(home.DatabasePath, storeSensitive: true)
+            .Operation(JournalSeed.Session("cli:source-map-selectors"), operation: "measure", sql: sql, benchmark: benchmark);
+
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync($"/api/operations/{handle.OperationId}/source-map?variant=measure&parameterSet=set-a&repetition=2&caseId=case-b");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = result.RootElement;
+        Assert.Equal("case-b", root.GetProperty("caseId").GetString());
+        Assert.Equal("Case B", root.GetProperty("caseLabel").GetString());
+        Assert.Equal(2, root.GetProperty("repetition").GetInt32());
+        Assert.Equal(sql, root.GetProperty("executedText").GetString());
+
+        var links = root.GetProperty("links").EnumerateArray().ToArray();
+        Assert.NotEmpty(links);
+        Assert.Equal(new string?[] { caseBSecond.Sha256 }, links.Select(link => link.GetProperty("documentSha256").GetString()).Distinct().ToArray());
+        Assert.All(links, link => Assert.Equal(1, link.GetProperty("documentOrdinal").GetInt32()));
+        var tableLink = Assert.Single(links, link => link.GetProperty("link").GetProperty("kind").GetString() == "table_reference");
+        Assert.Equal("0:0", tableLink.GetProperty("link").GetProperty("nodeId").GetString());
+        Assert.Equal("exact", tableLink.GetProperty("link").GetProperty("state").GetString());
+    }
+
+    [Fact]
+    public async Task Source_map_response_limit_returns_explicit_payload_too_large()
+    {
+        var response = new PlanSourceMapResponse(1, "stored", "sqlserver", "baseline", null,
+            "case-1", "case one", 1, new string('x', 1024), 1, [], [], []);
+        var result = DashboardServer.BoundedPlanSourceMap(response, StatusCodes.Status200OK, maximumBytes: 512);
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider(),
+        };
+        context.Response.Body = new MemoryStream();
+
+        await result.ExecuteAsync(context);
+
+        Assert.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
+        context.Response.Body.Position = 0;
+        using var document = await JsonDocument.ParseAsync(context.Response.Body);
+        Assert.Equal("source_map_size_limit_exceeded", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Plan_manifest_response_limit_returns_explicit_payload_too_large()
+    {
+        var manifest = new OperationPlanManifest(1, "stored", [new PlanOccurrenceManifest(
+            "measure", null, "case-1", new string('x', 1024), 1, 0, 0, 0, 10, 1, 1,
+            new string('A', 64), new string('B', 64), "showplan-xml", "exact", false, true)]);
+        var result = DashboardServer.BoundedPlanManifest(manifest, maximumBytes: 512);
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider(),
+        };
+        context.Response.Body = new MemoryStream();
+
+        await result.ExecuteAsync(context);
+
+        Assert.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
+        context.Response.Body.Position = 0;
+        using var document = await JsonDocument.ParseAsync(context.Response.Body);
+        Assert.Equal("plan_manifest_size_limit_exceeded", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Plans_not_stored_is_explicit_and_suppresses_sql_and_occurrences()
+    {
+        using var home = new TempHome();
+        await SetStoreSensitiveAsync(home, true);
+        const string sql = "SELECT secret_sql;";
+        var storedDocument = PlanDocument(PlanXml());
+        var benchmark = new BenchmarkJournalRecord(
+            [Metric("measure", null, "case-1", "Case 1", [Occurrence(1, 0, storedDocument.Sha256, sql)])],
+            [storedDocument]);
+        var handle = new JournalSeed(home.DatabasePath, storeSensitive: true)
+            .Operation(JournalSeed.Session("cli:plans-disabled"), operation: "measure", sql: sql, benchmark: benchmark);
+        // Runtime config is authoritative for reads and suppresses earlier sensitive rows too.
+        await SetStoreSensitiveAsync(home, false);
+
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var manifestResponse = await client.GetAsync($"/api/operations/{handle.OperationId}/plans");
+        Assert.Equal(HttpStatusCode.OK, manifestResponse.StatusCode);
+        var manifestBody = await manifestResponse.Content.ReadAsStringAsync();
+        using var manifest = JsonDocument.Parse(manifestBody);
+        Assert.Equal("plans not stored", manifest.RootElement.GetProperty("state").GetString());
+        Assert.Empty(manifest.RootElement.GetProperty("occurrences").EnumerateArray());
+        Assert.DoesNotContain("secret_sql", manifestBody, StringComparison.Ordinal);
+
+        using var sourceMapResponse = await client.GetAsync($"/api/operations/{handle.OperationId}/source-map?variant=measure&repetition=1");
+        Assert.Equal(HttpStatusCode.OK, sourceMapResponse.StatusCode);
+        var sourceMapBody = await sourceMapResponse.Content.ReadAsStringAsync();
+        using var sourceMap = JsonDocument.Parse(sourceMapBody);
+        Assert.Equal("plans not stored", sourceMap.RootElement.GetProperty("state").GetString());
+        Assert.Null(sourceMap.RootElement.GetProperty("executedText").GetString());
+        Assert.Empty(sourceMap.RootElement.GetProperty("links").EnumerateArray());
+        Assert.DoesNotContain("secret_sql", sourceMapBody, StringComparison.Ordinal);
+
+        using var graphResponse = await client.GetAsync($"/api/plan-documents/{storedDocument.Sha256}/graph");
+        Assert.Equal(HttpStatusCode.Conflict, graphResponse.StatusCode);
+        using var graph = JsonDocument.Parse(await graphResponse.Content.ReadAsStringAsync());
+        Assert.Equal("plans not stored", graph.RootElement.GetProperty("state").GetString());
+
+        using var rawResponse = await client.GetAsync($"/api/plan-documents/{storedDocument.Sha256}");
+        Assert.Equal(HttpStatusCode.Conflict, rawResponse.StatusCode);
+        using var raw = JsonDocument.Parse(await rawResponse.Content.ReadAsStringAsync());
+        Assert.Equal("plans not stored", raw.RootElement.GetProperty("state").GetString());
+    }
+
+    [Fact]
+    public async Task Plan_document_routes_validate_sha_and_return_not_found_for_missing_documents()
+    {
+        using var home = new TempHome();
+        await SetStoreSensitiveAsync(home, true);
+        var handle = new JournalSeed(home.DatabasePath, storeSensitive: true)
+            .Operation(JournalSeed.Session("cli:plan-hash"), operation: "measure", sql: "SELECT 1;");
+        _ = handle;
+
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/plan-documents/not-a-sha/graph")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/plan-documents/not-a-sha")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/plan-documents/{new string('F', 64)}/graph")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/plan-documents/{new string('F', 64)}")).StatusCode);
+    }
+
+    [Fact]
     public async Task Corrupt_stored_plan_is_unprocessable()
     {
         using var home = new TempHome();
+        await SetStoreSensitiveAsync(home, true);
         var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
         seed.Operation(JournalSeed.Session("cli:a"));
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
         {
             connection.Open();
             using var insert = connection.CreateCommand();
-            insert.CommandText = "INSERT INTO plans (hash, format, raw_size, gz, first_seen) VALUES ($h, 'showplan-xml', 3, x'00010203', '2026-10-07T09:00:00Z');";
+            insert.CommandText = "INSERT INTO plan_documents (sha256, shape_hash, format, raw_size, gz) VALUES ($h, $shape, 'showplan-xml', 3, x'00010203');";
             insert.Parameters.AddWithValue("$h", new string('C', 64));
+            insert.Parameters.AddWithValue("$shape", new string('D', 64));
             insert.ExecuteNonQuery();
         }
 
         await using var dashboard = await StartAuthenticated(home);
         var (server, client) = dashboard;
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync($"/api/plans/{new string('C', 64)}")).StatusCode);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync($"/api/plans/{new string('C', 64)}?view=distilled")).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync($"/api/plan-documents/{new string('C', 64)}/graph")).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync($"/api/plan-documents/{new string('C', 64)}")).StatusCode);
     }
 
     [Fact]
@@ -846,5 +1130,77 @@ public sealed class DashboardServerTests
         var response = await client.GetAsync("/api/sessions?q=" + new string('a', 201));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    private static async Task SetStoreSensitiveAsync(TempHome home, bool enabled) =>
+        await File.WriteAllTextAsync(Path.Combine(home.Path, "config.json"),
+            $"{{\"journal\":{{\"storeSensitive\":{enabled.ToString().ToLowerInvariant()}}}}}");
+
+    private static JournalPlanDocument PlanDocument(string xml) =>
+        new(PlanIdentity.DocumentSha256(xml), PlanIdentity.Hash(xml), "showplan-xml", xml);
+
+    private static JournalPlanOccurrence Occurrence(int repetition, int documentOrdinal, string sha256, string sql,
+        string matchKind = "exact") => new(repetition, documentOrdinal, 0, sha256)
+        {
+            SpanStart = 0,
+            SpanLength = sql.Length,
+            MatchKind = matchKind,
+            StatementId = 7,
+            StatementCompId = 2,
+        };
+
+    private static JournalVariantMetrics Metric(string variant, string? parameterSet, string caseId, string caseLabel,
+        IReadOnlyList<JournalPlanOccurrence> occurrences)
+    {
+        var defaults = JournalSeed.Benchmark().Variants[0];
+        return defaults with
+        {
+            Variant = variant,
+            ParameterSet = parameterSet,
+            CaseId = caseId,
+            CaseLabel = caseLabel,
+            PlanLinks = occurrences.Select(item => new JournalPlanLink(item.Repetition, item.DocumentOrdinal, item.DocumentSha!)).ToArray(),
+            PlanOccurrences = occurrences,
+        };
+    }
+
+    private static string PlanXml(int actualRows = 1, string? predicate = "p.Id = 42") =>
+        $"""
+        <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+          <BatchSequence><Batch><Statements><StmtSimple StatementId="7" StatementCompId="2" StatementText="SELECT * FROM dbo.Parent AS p;">
+            <QueryPlan QueryPlanHash="0xA1"><RelOp NodeId="0" PhysicalOp="Index Seek" LogicalOp="Index Seek" EstimateRows="1" EstimatedTotalSubtreeCost="1">
+              <IndexScan><Object Database="[db]" Schema="[dbo]" Table="[Parent]" Index="[IX_Parent]" Alias="[p]" TableReferenceId="1" /></IndexScan>
+              <Predicate><ScalarOperator ScalarString="{predicate}" /></Predicate>
+              <RunTimeInformation><RunTimeCountersPerThread ActualRows="{actualRows}" ActualExecutions="1" /></RunTimeInformation>
+            </RelOp></QueryPlan></StmtSimple></Statements></Batch></BatchSequence>
+        </ShowPlanXML>
+        """;
+
+    private static IEnumerable<JsonElement> FlattenProperties(JsonElement nodes)
+    {
+        foreach (var node in nodes.EnumerateArray())
+        {
+            yield return node;
+            foreach (var child in FlattenProperties(node.GetProperty("children")))
+                yield return child;
+        }
+    }
+
+    private static void SetOmittedOccurrence(string databasePath, long operationId, string variant, int repetition, int documentOrdinal)
+    {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var update = connection.CreateCommand();
+        update.CommandText = """
+            UPDATE plan_occurrences
+            SET document_sha = NULL, omitted = 1
+            WHERE metric_id = (SELECT id FROM operation_metrics WHERE operation_id = $operation AND variant = $variant)
+              AND repetition = $repetition AND document_ordinal = $documentOrdinal;
+            """;
+        update.Parameters.AddWithValue("$operation", operationId);
+        update.Parameters.AddWithValue("$variant", variant);
+        update.Parameters.AddWithValue("$repetition", repetition);
+        update.Parameters.AddWithValue("$documentOrdinal", documentOrdinal);
+        Assert.Equal(1, update.ExecuteNonQuery());
     }
 }

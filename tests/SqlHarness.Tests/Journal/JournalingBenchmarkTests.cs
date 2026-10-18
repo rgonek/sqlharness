@@ -90,8 +90,8 @@ public sealed class JournalingBenchmarkTests
         using var temp = await RunAsync(BenchmarkOutcome(), storeSensitive: false);
 
         Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operation_metrics"));
-        Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT plan_hash FROM operation_plans"));
-        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT hash FROM plans"));
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM plan_occurrences"));
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT sha256 FROM plan_documents"));
         var bytes = JournalDb.AllBytes(temp.DatabasePath);
         Assert.False(JournalDb.Contains(bytes, "SQLH_SQL_MARKER"));
         Assert.False(JournalDb.Contains(bytes, "SQLH_PARAM_MARKER"));
@@ -103,7 +103,7 @@ public sealed class JournalingBenchmarkTests
     {
         using var temp = await RunAsync(BenchmarkOutcome(), storeSensitive: true);
 
-        Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT hash FROM plans"));
+        Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT sha256 FROM plan_documents"));
         Assert.True(JournalDb.Contains(JournalDb.AllBytes(temp.DatabasePath), "SQLH_SQL_MARKER"));
     }
 

@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using SqlHarness.Core;
+
 namespace SqlHarness.Dashboard;
 
 public sealed record Page<T>(IReadOnlyList<T> Items, long? NextCursor);
@@ -118,6 +120,75 @@ public sealed record OperationEventSummary(
     string? ClientConnectionId, int? DroppedCount);
 
 public sealed record StoredPlan(string Hash, string Format, string Document);
+
+public sealed record PlanOccurrenceManifest(
+    string Variant,
+    string? ParameterSet,
+    string CaseId,
+    string CaseLabel,
+    int Repetition,
+    int DocumentOrdinal,
+    int StatementIndex,
+    int? SpanStart,
+    int? SpanLength,
+    int? StatementId,
+    int? StatementCompId,
+    string? DocumentSha256,
+    string? ShapeHash,
+    string? Format,
+    string MatchKind,
+    bool Omitted,
+    bool Stored);
+
+public sealed record OperationPlanManifest(
+    long OperationId,
+    string State,
+    IReadOnlyList<PlanOccurrenceManifest> Occurrences);
+
+public sealed record PlanSourceMapSelection(
+    long OperationId,
+    string State,
+    string? Engine,
+    string? Variant,
+    string? ParameterSet,
+    string? CaseId,
+    string? CaseLabel,
+    int? Repetition,
+    string? ExecutedText,
+    IReadOnlyList<PlanOccurrenceManifest> Occurrences,
+    string? ErrorCode = null,
+    string? Error = null);
+
+public sealed record PlanSourceMapResponse(
+    long OperationId,
+    string State,
+    string? Engine,
+    string? Variant,
+    string? ParameterSet,
+    string? CaseId,
+    string? CaseLabel,
+    int? Repetition,
+    string? ExecutedText,
+    int? AlgorithmVersion,
+    IReadOnlyList<PlanSourceMapLink> Links,
+    IReadOnlyList<PlanSourceMapOmission> OmittedDocuments,
+    IReadOnlyList<PlanSourceMapError> Errors);
+
+public sealed record PlanSourceMapLink(string DocumentSha256, int DocumentOrdinal, SourceLink Link);
+
+public sealed record PlanSourceMapOmission(
+    int DocumentOrdinal,
+    int StatementIndex,
+    string? DocumentSha256,
+    string MatchKind,
+    bool Omitted,
+    bool Stored);
+
+public sealed record PlanSourceMapError(
+    int DocumentOrdinal,
+    string? DocumentSha256,
+    string Code,
+    string Message);
 
 public sealed record DayAgentCount(string Day, string AgentKind, int Count);
 

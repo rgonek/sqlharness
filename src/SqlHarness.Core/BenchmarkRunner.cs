@@ -86,7 +86,7 @@ internal static class BenchmarkRunner
         }
         warnings = await SqlSessionLogicalBatch.EndAsync(session, ct);
         await dialect.RestoreSessionStateAsync(session, sessionState, ct);
-        var artifact = collected.Artifact with { ParameterSet = parameterSet };
+        var artifact = collected.Artifact with { ParameterSet = parameterSet, ExecutedSql = sql };
         return new CollectedBenchmarkRun(artifact, collected.Plans, artifact.PlanXmls.Select(PlanIdentity.Hash).ToArray())
         {
             Comparison = collected.Comparison,

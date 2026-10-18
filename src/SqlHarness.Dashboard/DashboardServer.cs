@@ -109,6 +109,9 @@ public sealed class RunningDashboard : IAsyncDisposable
 public static partial class DashboardServer
 {
     public const int PortAttempts = 20;
+    private const int MaximumPlanManifestResponseBytes = 1024 * 1024;
+    private const int MaximumPlanGraphResponseBytes = 1024 * 1024;
+    private const int MaximumPlanSourceMapResponseBytes = 16 * 1024 * 1024;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -261,8 +264,19 @@ public static partial class DashboardServer
                 script.Label,
             }, Json);
         });
+        MapRead(api, "/operations/{id:long}/plans", (long id) =>
+        {
+            var manifest = reader.Plans(id, loadConfig().Journal.StoreSensitive);
+            return manifest is null ? Results.NotFound() : BoundedPlanManifest(manifest);
+        });
+        MapRead(api, "/operations/{id:long}/source-map", (long id, string? variant, string? parameterSet,
+            int? repetition, string? caseId) => PlanSourceMap(reader, id, variant, parameterSet, repetition, caseId,
+                loadConfig().Journal.StoreSensitive));
         MutationEndpoints.Map(api, mutationServices, reader);
-        MapRead(api, "/plans/{hash}", (string hash, string? view) => Plan(reader, hash, view));
+        MapRead(api, "/plan-documents/{sha}", (string sha) => RawPlanDocument(reader, sha, loadConfig().Journal.StoreSensitive));
+        MapRead(api, "/plan-documents/{sha}/graph", (string sha) => PlanGraph(reader, sha, loadConfig().Journal.StoreSensitive));
+        MapRead(api, "/plan-documents/{sha}/nodes/{nodeId}/properties", (string sha, string nodeId) =>
+            PlanProperties(reader, sha, nodeId, loadConfig().Journal.StoreSensitive));
         MapRead(api, "/stats", (string? from, string? to, string? profile, string? dimensions,
             string? rowDimension, string? columnDimension, bool? unprofiled) =>
             !TryWindow(from, to, out var window)
@@ -468,42 +482,207 @@ public static partial class DashboardServer
     private static bool TranscriptsEnabled(string configPath) =>
         SqlHarnessConfigLoader.Load(configPath).Config.Dashboard.AgentTranscripts.Enabled;
 
-    private static IResult Plan(JournalReader reader, string hash, string? view)
+    private static IResult RawPlanDocument(JournalReader reader, string sha, bool storeSensitive)
     {
-        if (!PlanHash().IsMatch(hash))
-            return BadRequest("Plan hash must be 64 hexadecimal characters.");
+        if (!PlanHash().IsMatch(sha))
+            return BadRequest("Plan document SHA-256 must be 64 hexadecimal characters.");
+        if (!storeSensitive)
+            return PlansNotStored();
+
         StoredPlan? plan;
         try
         {
-            plan = reader.Plan(hash.ToUpperInvariant());
+            plan = reader.Plan(sha.ToUpperInvariant());
         }
         catch (InvalidDataException)
         {
-            // A corrupt gzip body is the same outcome as a plan that cannot be distilled.
             return Results.UnprocessableEntity();
         }
 
         if (plan is null)
             return Results.NotFound();
-        if (string.Equals(view, "distilled", StringComparison.Ordinal))
-        {
-            try
-            {
-                var distilled = plan.Format == "explain-json"
-                    ? Core.Postgres.PostgresPlanDistiller.Distill(plan.Document)
-                    : PlanDistiller.Distill(plan.Document);
-                return Results.Json(distilled, Json);
-            }
-            catch (Exception exception) when (exception is SqlHarnessSafetyException or System.Xml.XmlException or JsonException or InvalidOperationException or InvalidDataException)
-            {
-                return Results.UnprocessableEntity();
-            }
-        }
 
         var (contentType, extension) = plan.Format == "explain-json"
             ? ("application/json", ".explain.json")
             : ("application/xml", ".sqlplan");
-        return Results.File(System.Text.Encoding.UTF8.GetBytes(plan.Document), contentType, plan.Hash.ToLowerInvariant() + extension);
+        return Results.File(System.Text.Encoding.UTF8.GetBytes(plan.Document), contentType,
+            plan.Hash.ToLowerInvariant() + extension);
+    }
+
+    private static IResult PlanGraph(JournalReader reader, string sha, bool storeSensitive)
+    {
+        if (!PlanHash().IsMatch(sha))
+            return BadRequest("Plan document SHA-256 must be 64 hexadecimal characters.");
+        if (!storeSensitive)
+            return PlansNotStored();
+
+        StoredPlan? plan;
+        try
+        {
+            plan = reader.Plan(sha.ToUpperInvariant());
+        }
+        catch (InvalidDataException)
+        {
+            return Results.UnprocessableEntity();
+        }
+
+        if (plan is null)
+            return Results.NotFound();
+
+        var result = BuildPlanGraph(plan);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(result, Json);
+        if (result.Graph is not null && payload.Length > MaximumPlanGraphResponseBytes)
+        {
+            result = new PlanGraphBuildResult(result.Engine, null,
+                new PlanGraphBuildError("graph_response_size_limit_exceeded", "The complete plan graph response exceeds the response size limit."));
+            payload = JsonSerializer.SerializeToUtf8Bytes(result, Json);
+        }
+
+        return Results.Json(result, Json,
+            statusCode: result.Error is null ? StatusCodes.Status200OK : StatusCodes.Status422UnprocessableEntity);
+    }
+
+    private static IResult PlanProperties(JournalReader reader, string sha, string nodeId, bool storeSensitive)
+    {
+        if (!PlanHash().IsMatch(sha))
+            return BadRequest("Plan document SHA-256 must be 64 hexadecimal characters.");
+        if (!storeSensitive)
+            return PlansNotStored();
+
+        StoredPlan? plan;
+        try
+        {
+            plan = reader.Plan(sha.ToUpperInvariant());
+        }
+        catch (InvalidDataException)
+        {
+            return Results.UnprocessableEntity();
+        }
+
+        if (plan is null)
+            return Results.NotFound();
+
+        var result = plan.Format == "showplan-xml"
+            ? PlanGraphBuilder.BuildProperties(plan.Document, nodeId)
+            : new PlanGraphPropertyResult(PlanEngine(plan.Format), nodeId, null,
+                new PlanGraphBuildError("unsupported_plan_format", "Operator properties are available only for SQL Server Showplan XML."));
+        return Results.Json(result, Json,
+            statusCode: result.Error is null ? StatusCodes.Status200OK : StatusCodes.Status422UnprocessableEntity);
+    }
+
+    private static IResult PlanSourceMap(JournalReader reader, long operationId, string? variant,
+        string? parameterSet, int? repetition, string? caseId, bool storeSensitive)
+    {
+        if (string.IsNullOrWhiteSpace(variant) || variant.Length > 100)
+            return BadRequest("variant is required and must be at most 100 characters.");
+        if (parameterSet?.Length > JournalReader.MaximumSearchLength || caseId?.Length > JournalReader.MaximumSearchLength)
+            return BadRequest($"parameterSet and caseId must be at most {JournalReader.MaximumSearchLength} characters.");
+        if (repetition is null or < 1)
+            return BadRequest("repetition must be a positive integer.");
+
+        var selection = reader.PlanSourceMap(operationId, variant, parameterSet, repetition.Value, caseId, storeSensitive);
+        if (selection is null)
+            return Results.NotFound();
+        if (selection.ErrorCode is not null)
+        {
+            var status = selection.ErrorCode == "case_required"
+                ? StatusCodes.Status400BadRequest
+                : StatusCodes.Status422UnprocessableEntity;
+            return Results.Json(new { error = new { code = selection.ErrorCode, message = selection.Error } }, Json, statusCode: status);
+        }
+        if (selection.State == "plans not stored")
+            return BoundedPlanSourceMap(new PlanSourceMapResponse(operationId, selection.State, selection.Engine,
+                variant, parameterSet, caseId, null, repetition, null, null, [], [], []), StatusCodes.Status200OK);
+
+        if (selection.ExecutedText is null)
+            return Results.Json(new { error = new { code = "executed_sql_unavailable", message = "The exact executed SQL text is unavailable in the sensitive journal." } },
+                Json, statusCode: StatusCodes.Status422UnprocessableEntity);
+
+        var links = new List<PlanSourceMapLink>();
+        var omitted = selection.Occurrences
+            .Where(occurrence => occurrence.Omitted || occurrence.DocumentSha256 is null || !occurrence.Stored)
+            .Select(occurrence => new PlanSourceMapOmission(occurrence.DocumentOrdinal, occurrence.StatementIndex,
+                occurrence.DocumentSha256, occurrence.MatchKind, occurrence.Omitted, occurrence.Stored))
+            .ToArray();
+        var errors = new List<PlanSourceMapError>();
+        var engine = selection.Engine;
+        int? algorithmVersion = SourceMapBuilder.CurrentAlgorithmVersion;
+
+        foreach (var group in selection.Occurrences.Where(occurrence => occurrence.DocumentSha256 is not null && occurrence.Stored)
+                     .GroupBy(occurrence => occurrence.DocumentOrdinal).OrderBy(group => group.Key))
+        {
+            var documentSha = group.First().DocumentSha256!;
+            StoredPlan? plan;
+            try
+            {
+                plan = reader.Plan(documentSha.ToUpperInvariant());
+            }
+            catch (InvalidDataException exception)
+            {
+                errors.Add(new PlanSourceMapError(group.Key, documentSha, "stored_plan_invalid", exception.Message));
+                continue;
+            }
+
+            if (plan is null)
+            {
+                errors.Add(new PlanSourceMapError(group.Key, documentSha, "stored_plan_missing", "The occurrence references a missing plan document."));
+                continue;
+            }
+
+            var graphResult = BuildPlanGraph(plan);
+            var graph = graphResult.Graph;
+            if (graph is null)
+            {
+                var error = graphResult.Error ?? new PlanGraphBuildError("plan_graph_unavailable", "A complete plan graph is unavailable.");
+                errors.Add(new PlanSourceMapError(group.Key, documentSha, error.Code, error.Message));
+                continue;
+            }
+
+            var sourceMap = SourceMapBuilder.Build(selection.ExecutedText, plan.Document, graph,
+                group.Select(occurrence => new SourceMapStatementSpan(occurrence.StatementIndex, occurrence.SpanStart,
+                    occurrence.SpanLength, occurrence.MatchKind)).ToArray());
+            engine = sourceMap.Engine;
+            algorithmVersion = sourceMap.AlgorithmVersion;
+            links.AddRange(sourceMap.Links.Select(link => new PlanSourceMapLink(documentSha, group.Key, link)));
+        }
+
+        var response = new PlanSourceMapResponse(operationId, selection.State, engine, selection.Variant,
+            selection.ParameterSet, selection.CaseId, selection.CaseLabel, selection.Repetition, selection.ExecutedText,
+            algorithmVersion, links, omitted, errors);
+        return BoundedPlanSourceMap(response, errors.Count == 0
+            ? StatusCodes.Status200OK
+            : StatusCodes.Status422UnprocessableEntity);
+    }
+
+    private static PlanGraphBuildResult BuildPlanGraph(StoredPlan plan) => plan.Format == "showplan-xml"
+        ? PlanGraphBuilder.Build(plan.Document)
+        : new PlanGraphBuildResult(PlanEngine(plan.Format), null,
+            new PlanGraphBuildError("unsupported_plan_format", "Plan graphs are available only for SQL Server Showplan XML."));
+
+    private static string PlanEngine(string format) => format == "explain-json" ? "postgres" : "unknown";
+
+    private static IResult PlansNotStored() => Results.Json(new
+    {
+        state = "plans not stored",
+        error = new { code = "plans_not_stored", message = "Enable journal.storeSensitive to store SQL, plan documents, and source-map occurrences." },
+    }, Json, statusCode: StatusCodes.Status409Conflict);
+
+    internal static IResult BoundedPlanManifest(OperationPlanManifest manifest,
+        int maximumBytes = MaximumPlanManifestResponseBytes) =>
+        BoundedJson(manifest, maximumBytes,
+            "plan_manifest_size_limit_exceeded", "The plan manifest exceeds the response size limit.");
+
+    internal static IResult BoundedPlanSourceMap(PlanSourceMapResponse response, int statusCode,
+        int maximumBytes = MaximumPlanSourceMapResponseBytes) =>
+        BoundedJson(response, maximumBytes,
+            "source_map_size_limit_exceeded", "The complete source-map response exceeds the response size limit.", statusCode);
+
+    private static IResult BoundedJson<T>(T value, int maximumBytes, string errorCode, string errorMessage, int statusCode = StatusCodes.Status200OK)
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(value, Json);
+        return payload.Length > maximumBytes
+            ? Results.Json(new { error = new { code = errorCode, message = errorMessage } }, Json, statusCode: StatusCodes.Status413PayloadTooLarge)
+            : Results.Json(value, Json, statusCode: statusCode);
     }
 
     private static IResult BadRequest(string message) => Results.Json(new { error = message }, Json, statusCode: StatusCodes.Status400BadRequest);

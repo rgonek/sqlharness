@@ -1,13 +1,13 @@
-# Plan 008: Udostępnij wersjonowany schemat odpowiedzi MCP
+# Plan 008: Expose a versioned MCP response schema
 
 Status: **TODO**
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
-Priorytet: P2; nakład: M; ryzyko zmiany: LOW.
-Pokrycie: **A3**. Zależności: **005, 007**.
+Date: 2026-09-29. Base: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priority: P2; effort: M; change risk: LOW.
+Coverage: **A3**. Dependencies: **005, 007**.
 
-## Kontekst i instrukcja wykonania
+## Context and execution instruction
 
-Czytaj cały plan. Pracuj w izolowanym worktree, zachowaj cudze zmiany. Zapis planu nie jest wdrożeniem. Po ukończeniu zaktualizuj plans/README.md wraz z dowodem; nie pushuj ani nie publikuj bez zlecenia.
+Read the whole plan. Work in an isolated worktree, preserve other people's changes. A plan record is not an implementation. On completion update plans/README.md together with the evidence; do not push or publish without an instruction.
 
 Drift check:
 ```powershell
@@ -15,18 +15,18 @@ git status --short
 git diff --stat 8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b..HEAD -- "src/SqlHarness.Mcp/McpResultAdapter.cs" "src/SqlHarness.Mcp/Tools/McpToolCatalog.cs" "tests/SqlHarness.Mcp.Tests/McpToolSchemaTests.cs" "tests/SqlHarness.Mcp.Tests/McpProtocolTests.cs" "tests/SqlHarness.Mcp.Tests/McpOutputTests.cs" "tests/SqlHarness.Mcp.Tests/McpTokenBudgetTests.cs"
 ```
 
-Zmiany poprzedników są oczekiwane: przeczytaj je i dopasuj plan przed kodowaniem. Niewyjaśniony rozjazd wymaga aktualizacji założeń, nie mechanicznego wklejania starego kodu.
+Predecessor changes are expected: read them and reconcile the plan before coding. Unexplained divergence requires updating the assumptions, not mechanically pasting old code.
 
-OutputSchema istnieje w adapterze, ale tools/list wszystkich 11 narzędzi zwracało brak outputSchema. Rejestracja McpServerTool.Create nie przypina schematu. Nie jest to dowód niezgodności protokołu, lecz brak odkrywalnego kontraktu.
+OutputSchema exists in the adapter, but tools/list of all 11 tools returned no outputSchema. Registering McpServerTool.Create does not attach the schema. This is not evidence of a protocol inconsistency, but a lack of a discoverable contract.
 
-Punkt odniesienia z kodu/komendy:
+Reference point from code/command:
 ```text
 public static JsonDocument OutputSchema { get; }
 ```
 
-.NET8/C#/xUnit. Dopasuj wzorce do testów wymienionych w zakresie. Core pozostaje wspólnym miejscem safety; adaptery nie tworzą własnego klasyfikatora. Stosuj istniejące fake reader/session/module i syntetyczny SQLHARNESS_HOME. Nie czytaj rzeczywistych sekretów ani artefaktów użytkownika.
+.NET8/C#/xUnit. Match the patterns to the tests listed in the scope. Core remains the shared place for safety; adapters do not create their own classifier. Use the existing fake reader/session/module and a synthetic SQLHARNESS_HOME. Do not read real secrets or user artifacts.
 
-## Zakres
+## Scope
 
 - `src/SqlHarness.Mcp/McpResultAdapter.cs`
 - `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs`
@@ -35,55 +35,55 @@ public static JsonDocument OutputSchema { get; }
 - `tests/SqlHarness.Mcp.Tests/McpOutputTests.cs`
 - `tests/SqlHarness.Mcp.Tests/McpTokenBudgetTests.cs`
 
-Dodatkowo: nowe pliki nazwane w krokach, dokumenty wynikowe plans/008-*.md oraz status w indeksie. Inne pliki wymagają jawnej korekty zakresu i uzasadnienia przed zmianą.
+Additionally: new files named in the steps, result documents plans/008-*.md and the status in the index. Other files require an explicit scope correction and justification before the change.
 
-Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push, globalne wyłączenie walidacji i niepowiązane refaktoryzacje. Zachowaj kody 0/2/3/4/5/6/7/8, legacy JSON i oba silniki. Pola addytywne tylko zgodnie z krokami.
+Out of scope: live DB, deploy, user profiles and passwords, installation, push, global disabling of validation and unrelated refactorizations. Preserve codes 0/2/3/4/5/6/7/8, legacy JSON and both engines. Additive fields only as specified in the steps.
 
-## Zadania
+## Tasks
 
 ### 008/T1
 
-- [ ] Sprawdź lokalne API zainstalowanego SDK2.2.0 i podłącz istniejący schemat envelope do każdego narzędzia; nie aktualizuj SDK przy okazji.
+- [ ] Check the local API of the installed SDK2.2.0 and wire the existing envelope schema to every tool; do not update the SDK along the way.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpProtocolTests|FullyQualifiedName~McpOutputTests|FullyQualifiedName~McpTokenBudgetTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpProtocolTests|FullyQualifiedName~McpOutputTests|FullyQualifiedName~McpTokenBudgetTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a check of the paths.
 
 ### 008/T2
 
-- [ ] Przetestuj rzeczywiste tools/list przez transport, a nie tylko statyczne pole. Każde narzędzie ma schemaVersion1, wymagane pola i zgodny schema dla structuredContent. Uwzględnij error, partial, watch7 i snapshot8.
+- [ ] Test the real tools/list through the transport, not only the static field. Each tool has schemaVersion1, required fields and a consistent schema for structuredContent. Cover error, partial, watch7 and snapshot8.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpProtocolTests|FullyQualifiedName~McpOutputTests|FullyQualifiedName~McpTokenBudgetTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpProtocolTests|FullyQualifiedName~McpOutputTests|FullyQualifiedName~McpTokenBudgetTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a check of the paths.
 
 ### 008/T3
 
-- [ ] Sprawdź cały limit 32768B katalogu i 16384B domyślnego CallToolResult. Jeśli powtarzanie schematu przekracza katalog, zmniejsz redundantne opisy/schema bez usuwania wymaganych semantyk; nie zwiększaj limitu po cichu.
+- [ ] Check the whole 32768B catalog limit and the 16384B default CallToolResult. If repeating the schema exceeds the catalog, reduce redundant descriptions/schema without removing required semantics; do not silently increase the limit.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpProtocolTests|FullyQualifiedName~McpOutputTests|FullyQualifiedName~McpTokenBudgetTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpProtocolTests|FullyQualifiedName~McpOutputTests|FullyQualifiedName~McpTokenBudgetTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a check of the paths.
 
 ### 008/T4
 
-- [ ] Zawężanie result per tool potraktuj jako dalszy krok wyłącznie gdy mieści się w budżecie i ma test zgodności; envelope z result free-form jest minimalnym zakresem tego planu.
+- [ ] Treat narrowing the result per tool as a further step only if it fits within the budget and has a conformance test; an envelope with a free-form result is the minimal scope of this plan.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpProtocolTests|FullyQualifiedName~McpOutputTests|FullyQualifiedName~McpTokenBudgetTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpProtocolTests|FullyQualifiedName~McpOutputTests|FullyQualifiedName~McpTokenBudgetTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a check of the paths.
 
-## Testy i zakończenie
+## Tests and completion
 
-11/11 tools publikuje outputSchema; serializowany katalog mieści się w limicie; controlled outcomes nie stają się isError.
+11/11 tools publish outputSchema; the serialized catalog fits within the limit; controlled outcomes do not become isError.
 
 - [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpProtocolTests|FullyQualifiedName~McpOutputTests|FullyQualifiedName~McpTokenBudgetTests' --verbosity minimal` → exit 0.
 - [ ] `dotnet build SqlHarness.sln --no-restore -warnaserror` → exit 0.
-- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; zapisz passed/failed/skipped.
-- [ ] Testy obejmują zachowanie właściwego adaptera/runnera, a nie tylko listę nazw lub stałą.
+- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; record passed/failed/skipped.
+- [ ] Tests cover the behavior of the proper adapter/runner, not just a list of names or a constant.
 - [ ] `git diff --check` → exit 0.
-- [ ] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [ ] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
-- [ ] Brak dowodu live/platformowego jest jawny.
+- [ ] `git status --short` shows only the author's own in-scope changes.
+- [ ] The index contains status, commit and evidence; local paths exist or are marked as new.
+- [ ] The absence of live/platform evidence is explicit.
 
-Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
+Audit baseline: 1895 Core/CLI passed; MCP 122 passed, 2 timeouts, 4 skipped. Plan005 diagnoses the timeouts. An earlier safety fix may be ready for review given a documented independent gate failure; do not then declare a full PASS.
 
-## Warunki zatrzymania i utrzymanie
+## Stop conditions and maintenance
 
-Jeśli SDK nie pozwala na schema przy obecnej rejestracji, udokumentuj sprawdzoną alternatywę przed przebudową hosta.
+If the SDK does not allow a schema with the current registration, document a verified alternative before rebuilding the host.
 
-Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
+If a step requires a real DB target, secrets or going beyond authorization, stop that step and record the gap. Complete the independent tasks. Do not mark the whole thing DONE without all the required results.
 
-Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
+The reviewer checks the safety of negative cases, compatibility and the truthfulness of the evidence. After a change to the parser/SDK/operations, return to these tests. Small commits of the fix/test/docs type, no push. The required characteristic tests must precede the refactoring.

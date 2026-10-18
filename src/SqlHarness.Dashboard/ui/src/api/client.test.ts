@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { stubFetch } from "@/test/render"
-import { ConflictError, FieldErrorsError, getJson, NotFoundError, putJson, UnauthorizedError, withQuery } from "./client"
+import { ConflictError, FieldErrorsError, getJson, HttpStatusError, NotFoundError, putJson, UnauthorizedError, withQuery } from "./client"
 
 describe("client", () => {
   test("withQuery skips empty values", () => {
@@ -21,6 +21,19 @@ describe("client", () => {
   test("returns parsed json", async () => {
     stubFetch({ "/api/stats": { workflowCosts: [] } })
     expect(await getJson("/api/stats")).toEqual({ workflowCosts: [] })
+  })
+
+  test("preserves bounded plan API status and error codes", async () => {
+    stubFetch({
+      "/api/plan-documents/abc/graph": () => new Response(JSON.stringify({ error: { code: "plans_not_stored", message: "Sensitive plan storage is disabled." } }), { status: 409 }),
+      "/api/plan-documents/def/graph": () => new Response(JSON.stringify({ error: { code: "graph_response_size_limit_exceeded", message: "The complete graph exceeds the response limit." } }), { status: 413 }),
+      "/api/plan-documents/ghi/graph": () => new Response(JSON.stringify({ error: { code: "invalid_plan_graph", message: "The stored graph is invalid." } }), { status: 422 }),
+    })
+    for (const [sha, status, code] of [["abc", 409, "plans_not_stored"], ["def", 413, "graph_response_size_limit_exceeded"], ["ghi", 422, "invalid_plan_graph"]] as const) {
+      const error = await getJson(`/api/plan-documents/${sha}/graph`).catch(value => value)
+      expect(error).toBeInstanceOf(HttpStatusError)
+      expect(error).toMatchObject({ status, code })
+    }
   })
 
   test("putJson sends the write header and JSON, and maps 400 and 409", async () => {

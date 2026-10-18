@@ -1,13 +1,13 @@
-# Plan 006: Ogranicz pamięć i czas porównywania wyników
+# Plan 006: Limit the memory and time of result comparison
 
 Status: **TODO**
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
-Priorytet: P1; nakład: L; ryzyko zmiany: HIGH.
-Pokrycie: **R2**. Zależności: **005**.
+Date: 2026-09-29. Base: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priority: P1; effort: L; change risk: HIGH.
+Coverage: **R2**. Dependencies: **005**.
 
-## Kontekst i instrukcja wykonania
+## Context and execution instructions
 
-Czytaj cały plan. Pracuj w izolowanym worktree, zachowaj cudze zmiany. Zapis planu nie jest wdrożeniem. Po ukończeniu zaktualizuj plans/README.md wraz z dowodem; nie pushuj ani nie publikuj bez zlecenia.
+Read the whole plan. Work in an isolated worktree, preserve other people's changes. Writing the plan is not implementation. On completion update plans/README.md along with the evidence; do not push or publish without an assignment.
 
 Drift check:
 ```powershell
@@ -15,18 +15,18 @@ git status --short
 git diff --stat 8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b..HEAD -- "src/SqlHarness.Core/ResultEquivalence.cs" "src/SqlHarness.Core/CompareCellRunner.cs" "src/SqlHarness.Core/BenchmarkCollector.cs" "src/SqlHarness.Core/Postgres/PostgresBenchmark.cs" "src/SqlHarness.Core/BenchmarkRunner.cs" "src/SqlHarness.Core/Capabilities.cs" "tests/SqlHarness.Tests/ResultEquivalenceTests.cs" "tests/SqlHarness.Tests/CompareTests.cs" "tests/SqlHarness.Mcp.Tests/McpCancellationTests.cs"
 ```
 
-Zmiany poprzedników są oczekiwane: przeczytaj je i dopasuj plan przed kodowaniem. Niewyjaśniony rozjazd wymaga aktualizacji założeń, nie mechanicznego wklejania starego kodu.
+Predecessor changes are expected: read them and align the plan before coding. An unexplained divergence requires updating the assumptions, not mechanically pasting old code.
 
-CompareCellRunner zachowuje wszystkie fingerprinty; ResultComparer robi iloczyn baseline×candidate bez tokenu. Limit 1M jest na przebieg, repeat do100. 200M fingerprintów i 10k par są dozwolonym górnym zakresem, nie zmierzonym obciążeniem.
+CompareCellRunner keeps all fingerprints; ResultComparer computes baseline×candidate without a token. The 1M limit is per run, repeat up to 100. 200M fingerprints and 10k pairs are the allowed upper range, not a measured load.
 
-Punkt odniesienia z kodu/komendy:
+Reference point from code/command:
 ```text
 foreach (var left in baseline)
 ```
 
-.NET8/C#/xUnit. Dopasuj wzorce do testów wymienionych w zakresie. Core pozostaje wspólnym miejscem safety; adaptery nie tworzą własnego klasyfikatora. Stosuj istniejące fake reader/session/module i syntetyczny SQLHARNESS_HOME. Nie czytaj rzeczywistych sekretów ani artefaktów użytkownika.
+.NET8/C#/xUnit. Match patterns to the tests listed in the scope. Core remains the shared safety locus; adapters do not create their own classifier. Use the existing fake reader/session/module and a synthetic SQLHARNESS_HOME. Do not read real secrets or user artifacts.
 
-## Zakres
+## Scope
 
 - `src/SqlHarness.Core/ResultEquivalence.cs`
 - `src/SqlHarness.Core/CompareCellRunner.cs`
@@ -38,61 +38,61 @@ foreach (var left in baseline)
 - `tests/SqlHarness.Tests/CompareTests.cs`
 - `tests/SqlHarness.Mcp.Tests/McpCancellationTests.cs`
 
-Dodatkowo: nowe pliki nazwane w krokach, dokumenty wynikowe plans/006-*.md oraz status w indeksie. Inne pliki wymagają jawnej korekty zakresu i uzasadnienia przed zmianą.
+Additionally: new files named in the steps, the output documents plans/006-*.md and the status in the index. Other files require an explicit scope correction and justification before any change.
 
-Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push, globalne wyłączenie walidacji i niepowiązane refaktoryzacje. Zachowaj kody 0/2/3/4/5/6/7/8, legacy JSON i oba silniki. Pola addytywne tylko zgodnie z krokami.
+Out of scope: live DB, deploy, user profiles and passwords, installation, push, globally disabling validation and unrelated refactorings. Preserve codes 0/2/3/4/5/6/7/8, legacy JSON and both engines. Additive fields only as described in the steps.
 
-## Zadania
+## Tasks
 
 ### 006/T1
 
-- [ ] Dodaj małe testy charakterystyczne wszystkich trybów: kolejność, duplikaty, różne schematy, puste wyniki, niestabilne powtórzenia, maksimum kierunkowych różnic dla wszystkich par. Zachowaj prostą implementację referencyjną wyłącznie w testach.
+- [ ] Add small characteristic tests for all modes: ordering, duplicates, different schemas, empty results, unstable repetitions, the maximum number of directional differences across all pairs. Keep a simple reference implementation only in the tests.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 006/T2
 
-- [ ] Zdefiniuj w plans/006-resource-contract.md jawny budżet całej operacji, sposób rozliczenia fingerprintów/histogramów i odmowę bez obcinania danych. Zachowaj limit per-run i nie mieszaj MaxRows prezentacji z equivalence. Uwzględnij matrix reset budżetu per cell oraz wspólny deadline.
+- [ ] Define in plans/006-resource-contract.md an explicit budget for the whole operation, how fingerprints/histograms are accounted for, and rejection without truncating data. Preserve the per-run limit and do not mix the presentation MaxRows with equivalence. Cover the matrix budget reset per cell and the shared deadline.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 006/T3
 
-- [ ] Przekaż CancellationToken do faz CPU i sprawdzaj go w ograniczonych odstępach pracy. Wprowadź zwartą reprezentację i cache histogramu per unikalny wynik; identyczne przebiegi mogą współdzielić reprezentację. Nie zmieniaj SHA/semantyki hash bez wersjonowania.
+- [ ] Pass the CancellationToken to the CPU phases and check it at bounded work intervals. Introduce a compact representation and a histogram cache per unique result; identical runs may share the representation. Do not change SHA/hash semantics without versioning.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 006/T4
 
-- [ ] Zweryfikuj nowy algorytm przeciw oracle na deterministycznych małych zbiorach; dodaj próby limitu przy małym wstrzykniętym budżecie i anulowania już rozpoczętego porównania. Zmierz alokacje na ograniczonym syntetycznym zestawie, bez prób 200M wierszy.
+- [ ] Verify the new algorithm against an oracle on deterministic small sets; add limit-boundary attempts with a small injected budget and cancellation of an already started comparison. Measure allocations on a bounded synthetic set, without attempting 200M rows.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 006/T5
 
-- [ ] Zachowaj artefakty ukończonych komórek matrix i kontrolowane błędy. Uzupełnij capabilities o rzeczywiście egzekwowany budżet.
+- [ ] Preserve the artifacts of completed matrix cells and controlled errors. Extend capabilities with the budget that is actually enforced.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
-## Testy i zakończenie
+## Tests and completion
 
-Oracle i nowy kod zgodne dla wszystkich trybów; budżet całkowity nieprzekraczany; anulowanie fazy CPU obserwowane; nigdy equivalent=true na obciętych danych.
+Oracle and new code agree for all modes; the total budget is never exceeded; cancellation of the CPU phase is observed; never equivalent=true on truncated data.
 
 - [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CompareTests|FullyQualifiedName~McpCancellationTests' --verbosity minimal` → exit 0.
 - [ ] `dotnet build SqlHarness.sln --no-restore -warnaserror` → exit 0.
-- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; zapisz passed/failed/skipped.
-- [ ] Testy obejmują zachowanie właściwego adaptera/runnera, a nie tylko listę nazw lub stałą.
+- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; record passed/failed/skipped.
+- [ ] Tests cover the behaviour of the correct adapter/runner, not just a list of names or a constant.
 - [ ] `git diff --check` → exit 0.
-- [ ] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [ ] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
-- [ ] Brak dowodu live/platformowego jest jawny.
+- [ ] `git status --short` shows only the author's changes within the scope.
+- [ ] The index contains status, commit and evidence; local paths exist or are marked as new.
+- [ ] The absence of live/platform evidence is explicit.
 
-Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
+Audit baseline: 1895 Core/CLI passed; MCP 122 passed, 2 timeouts, 4 skipped. Plan005 diagnoses the timeouts. An earlier safety fix may be ready for review given a documented independent gate failure; do not declare a full PASS then.
 
-## Warunki zatrzymania i utrzymanie
+## Stop conditions and maintenance
 
-Jeśli dokładnych maksymalnych liczników nie da się zachować proponowaną optymalizacją, zachowaj semantykę i ogranicz nakład limitem; nie zastępuj ich porównaniem tylko pierwszej pary.
+If the exact maximum counts cannot be preserved by the proposed optimization, preserve the semantics and bound the effort with a limit; do not replace them with a comparison of only the first pair.
 
-Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
+If a step requires a real DB target, secrets, or going beyond authorization, stop that step and record the absence. Complete the independent tasks. Do not mark the whole thing DONE without all required results.
 
-Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
+The reviewer checks negative-case safety, compatibility and the truthfulness of the evidence. After changing the parser/SDK/operation, return to these tests. Small commits of the fix/test/docs type, no push. Required characteristic tests must precede a refactoring.

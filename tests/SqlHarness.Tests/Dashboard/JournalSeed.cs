@@ -24,6 +24,9 @@ internal sealed class JournalSeed
     public static SessionIdentity Session(string key, string agent = "claude", int hostPid = 5151) => new(
         key, agent, "process-tree", JournalTransport.Cli, null, null, null, 4242, HostStarted.AddMinutes(-5), hostPid, HostStarted, "/work");
 
+    public static string PlanDocumentSha256 { get; } = PlanIdentity.DocumentSha256(Journal.PlanMetricsExtractorTests.ActualPlan);
+    public static string PlanShapeHash { get; } = PlanIdentity.Hash(Journal.PlanMetricsExtractorTests.ActualPlan);
+
     public JournalHandle Operation(
         SessionIdentity session, string operation = "query", string status = "succeeded", int exitCode = 0,
         string sql = "SELECT 1", long durationMs = 10, BenchmarkJournalRecord? benchmark = null, bool complete = true,
@@ -116,9 +119,12 @@ internal sealed class JournalSeed
                 new CompareDistribution(readsMedian, readsMedian, readsMedian), 4096, granted, used, 4, 12, 10, 1, true, true, 1,
                 [new JournalWait("PAGEIOLATCH_SH", 40, 7)], null,
                 [new JournalTableIo("Orders", readsMedian, 1, physical, 0, 0, 0, 0, 0, physical > 0 ? 1 : 0)],
-                [new JournalPlanLink(1, 0, new string('A', 64))]),
+                [new JournalPlanLink(1, 0, PlanDocumentSha256)])
+            {
+                PlanOccurrences = [new JournalPlanOccurrence(1, 0, 0, PlanDocumentSha256)],
+            },
         ],
-        [new JournalPlanDocument(new string('A', 64), "showplan-xml", Journal.PlanMetricsExtractorTests.ActualPlan)]);
+        [new JournalPlanDocument(PlanDocumentSha256, PlanShapeHash, "showplan-xml", Journal.PlanMetricsExtractorTests.ActualPlan)]);
 
     public static void Annotate(string databasePath, string sessionKey, string? title = null, string? note = null,
         bool starred = false, bool archived = false)

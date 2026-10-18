@@ -102,6 +102,25 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
+    public void Statement_metrics_hash_uses_the_paired_full_executed_span()
+    {
+        var sql = "SELECT N'" + new string('a', 4100) + "';";
+        var statementText = System.Security.SecurityElement.Escape(sql[..3999]);
+        var xml = $"<ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><BatchSequence><Batch><Statements><StmtSimple StatementText=\"{statementText}\"><QueryPlan /></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>";
+        var run = new CompareRunArtifact("baseline", 1, 10, 11, 1, new Dictionary<string, long>(), "h", [xml], 0)
+        {
+            ExecutedSql = sql,
+        };
+
+        var statement = Assert.Single(ArtifactStatementProjector.Project(ArtifactReader.CompareKind, [run]).Statements);
+        var journalStatement = Assert.Single(JournalBenchmarkBuilder.Build([run]).Statements);
+
+        Assert.Equal(PlanIdentity.StatementSha256(sql), statement.StatementHash);
+        Assert.NotEqual(PlanIdentity.StatementSha256(sql[..3999]), statement.StatementHash);
+        Assert.Equal(statement.StatementHash, journalStatement.StatementHash);
+    }
+
+    [Fact]
     public void Postgres_explain_json_is_readable_without_node_ids()
     {
         var json = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "seq-scan.explain.json"));

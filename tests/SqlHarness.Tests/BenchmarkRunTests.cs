@@ -30,6 +30,7 @@ public sealed class BenchmarkRunTests
         };
         var session = new IdleSession();
         var parameters = new[] { new SqlHarnessParameter("@id", SqlDbType.Int, 7, null) };
+        const string executedSql = "SELECT Value FROM dbo.Clients WHERE Id = @id";
         using var raw = new CanonicalResultAccumulator();
         using var cts = new CancellationTokenSource();
 
@@ -37,7 +38,7 @@ public sealed class BenchmarkRunTests
             dialect,
             session,
             raw,
-            sql: "SELECT Value FROM dbo.Clients WHERE Id = @id",
+            sql: executedSql,
             parameters: parameters,
             timeoutSeconds: 33,
             repetition: 4,
@@ -51,7 +52,7 @@ public sealed class BenchmarkRunTests
         var observed = dialect.Observed;
         Assert.NotNull(observed);
         Assert.Same(session, observed.Session);
-        Assert.Equal("SELECT Value FROM dbo.Clients WHERE Id = @id", observed.Sql);
+        Assert.Equal(executedSql, observed.Sql);
         Assert.Same(parameters, observed.Parameters);
         Assert.Equal(33, observed.TimeoutSeconds);
         Assert.Equal(4, observed.Repetition);
@@ -60,7 +61,7 @@ public sealed class BenchmarkRunTests
         Assert.True(observed.CaptureComparison);
         Assert.Equal(17, observed.ComparisonMaximumRows);
         Assert.Equal(cts.Token, observed.CancellationToken);
-        Assert.Equal(artifact with { ParameterSet = "small" }, run.Artifact);
+        Assert.Equal(artifact with { ParameterSet = "small", ExecutedSql = executedSql }, run.Artifact);
         Assert.Equal("small", run.Artifact.ParameterSet);
         Assert.Same(plans, run.Plans);
         Assert.Same(comparison, run.Comparison);
@@ -156,20 +157,28 @@ public sealed class BenchmarkRunTests
     [Fact]
     public async Task Null_parameter_set_does_not_change_serialized_run_json()
     {
+        const string executedSql = "SELECT Value FROM dbo.Clients";
         var plan = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "distiller-sample.sqlplan"));
         var artifact = Artifact(plan);
         var dialect = Dialect(artifact);
         using var raw = new CanonicalResultAccumulator();
 
-        var run = await Run(dialect, new IdleSession(), raw, parameterSet: null, captureComparison: false);
+        var run = await Run(
+            dialect, new IdleSession(), raw, sql: executedSql, parameterSet: null, captureComparison: false);
 
         Assert.Null(run.Artifact.ParameterSet);
-        Assert.Equal(artifact, run.Artifact);
+        Assert.Equal(artifact with { ExecutedSql = executedSql }, run.Artifact);
         Assert.False(dialect.Observed!.CaptureComparison);
-        Assert.Equal(JsonSerializer.Serialize(artifact, WebJson), JsonSerializer.Serialize(run.Artifact, WebJson));
-        Assert.Equal(JsonSerializer.Serialize(artifact), JsonSerializer.Serialize(run.Artifact));
-        Assert.DoesNotContain("parameterSet", JsonSerializer.Serialize(run.Artifact, WebJson), StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("ParameterSet", JsonSerializer.Serialize(run.Artifact), StringComparison.Ordinal);
+        var webJson = JsonSerializer.Serialize(run.Artifact, WebJson);
+        var defaultJson = JsonSerializer.Serialize(run.Artifact);
+        Assert.Equal(JsonSerializer.Serialize(artifact, WebJson), webJson);
+        Assert.Equal(JsonSerializer.Serialize(artifact), defaultJson);
+        Assert.DoesNotContain("executedSql", webJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ExecutedSql", defaultJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(executedSql, webJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(executedSql, defaultJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("parameterSet", webJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ParameterSet", defaultJson, StringComparison.Ordinal);
 
         using var temp = new TempDirectory();
         var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch);

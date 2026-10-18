@@ -1,142 +1,142 @@
-# 009/T4 — Projekt zaostrzonego profilu (assessment, nie wdrożenie)
+# 009/T4 — Stricter profile design (assessment, not implementation)
 
-**Status:** PROJEKT (nie wdrożone, nie decyzja — materiał do rozstrzygnięcia poza tym planem)
-**Data:** 2026-09-30
-**Baza:** `361280b`
-**Poprzednik:** T1–T3 planu 009 (granica statycznego safety); ten dokument ich nie zmienia.
-**Dowód live:** brak — dokument projektowy, bez live DB, bez nowych wywołań serwera.
+**Status:** DESIGN (not implemented, not a decision — material to be resolved outside this plan)
+**Date:** 2026-09-30
+**Base:** `361280b`
+**Predecessor:** T1–T3 of plan 009 (the static safety boundary); this document does not change them.
+**Live evidence:** none — a design document, no live DB, no new server calls.
 
-## Cel i zakres
+## Goal and scope
 
-Opcja zaostrzonego profilu dla silnika Postgres, obejmująca cztery obszary: (1) ograniczenia
-TEMP, (2) funkcje `SECURITY DEFINER`, (3) operatory, (4) efekty zewnętrzne. Dokument opisuje
-wyłącznie rozważane opcje wraz z powodami odrzucenia lub odłożenia. Nie zawiera kodu
-wdrożeniowego ani instrukcji włączania mechanizmów wykonawczych (transakcja `READ ONLY`,
-`SET ROLE` / przełączanie ról, `REVOKE` / zmiana uprawnień) — te mechanizmy występują tu tylko
-jako rozważane i odrzucone/odłożone opcje z uzasadnieniem.
+A stricter profile option for the Postgres engine, covering four areas: (1) TEMP
+restrictions, (2) `SECURITY DEFINER` functions, (3) operators, (4) external effects. The document describes
+only the considered options together with the reasons for rejection or deferral. It contains no
+implementation code nor instructions for enabling execution mechanisms (`READ ONLY` transaction,
+`SET ROLE` / role switching, `REVOKE` / permission changes) — those mechanisms appear here only
+as considered and rejected/deferred options with justification.
 
-Tło wiążące: [polityka bezpieczeństwa PostgreSQL](../docs/superpowers/specs/2026-09-26-postgres-safety-policy.md)
-— model zagrożeń, porównanie kontroli, macierz decyzji, sekcje „Wybrana polityka i granica
-zaufania", „Classify", „Sesja: Query i CompareSetup", „Setup i tabele tymczasowe".
+Binding background: [PostgreSQL safety policy](../docs/superpowers/specs/2026-09-26-postgres-safety-policy.md)
+— threat model, comparison of controls, decision matrix, sections "Chosen policy and trust
+boundary", "Classify", "Session: Query and CompareSetup", "Setup and temporary tables".
 
-## Założenia wspólne
+## Shared assumptions
 
-- Klasyfikator `PostgresSafetyClassifier.Classify` widzi tylko tekst batcha (AST SqlParserCS);
-  ciał funkcji, widoków, reguł, triggerów i ciał operatorów nie widzi.
-- Sesja Npgsql wykonuje sklasyfikowany tekst bez dokładanych komend (bez `BEGIN`,
+- The classifier `PostgresSafetyClassifier.Classify` sees only the batch text (AST SqlParserCS);
+  it does not see function bodies, views, rules, triggers or operator bodies.
+- The Npgsql session executes the classified text without follow-up commands (without `BEGIN`,
   `SET TRANSACTION`, `SET`, `SET ROLE`).
-- Uprawnienia konta połączenia są granicą zewnętrzną poza harnessem; harness nie czyta
-  `pg_roles` ani `pg_proc` i nie wykonuje `SET ROLE`, `SET SESSION AUTHORIZATION`, `GRANT`,
-  `REVOKE` (polityka, „Model zagrożeń").
-- Etykieta `read-only` znaczy „brak widocznej mutacji i brak pracy lokalnej sesji" — nie jest
-  gwarancją braku efektów ukrytych (polityka, „Wybrana polityka i granica zaufania").
+- The permissions of the connection account are an external boundary outside the harness; the harness
+  does not read `pg_roles` nor `pg_proc` and does not execute `SET ROLE`, `SET SESSION AUTHORIZATION`, `GRANT`,
+  `REVOKE` (policy, "Threat model").
+- The `read-only` label means "no visible mutation and no local session work" — it is not
+  a guarantee of the absence of hidden effects (policy, "Chosen policy and trust boundary").
 
-## 1. Ograniczenia TEMP
+## 1. TEMP restrictions
 
-Stan dzisiejszy (polityka, „Setup i tabele tymczasowe"): `CREATE TEMP` / `CREATE TEMPORARY`
-(w tym `CREATE TEMP TABLE AS SELECT` bez celu zapisu w źródle), DML wyłącznie do celów
-sesyjnie lokalnych, `CREATE INDEX` / `DROP` tych tabel oraz `DROP` indeksu tymczasowego —
-bez flag mutacji, w `Query` i w `CompareSetup`.
+Current state (policy, "Setup and temporary tables"): `CREATE TEMP` / `CREATE TEMPORARY`
+(including `CREATE TEMP TABLE AS SELECT` without a write target in the source), DML strictly to session-local
+targets, `CREATE INDEX` / `DROP` of those tables and `DROP` of a temporary index —
+without the mutation flag, in `Query` and in `CompareSetup`.
 
-Rozważane zaostrzenia (projekt, nie wdrożenie):
+Considered tightenings (design, not implementation):
 
-1. **Zakaz `SELECT INTO TEMP TABLE` w setupie** — dziś dozwolony jako niejednoznaczny zapis
-   tymczasowy. Zaostrzenie usunęłoby jedną ścieżkę tworzenia tabel poza `CREATE TEMP`.
-   Koszt: zmiana kontraktu setupu udokumentowanego dla agentów; odłożone — brak dowodu, że
-   ta jedna ścieżka wnosi ryzyko ponad pozostałe dozwolone zapisy TEMP.
-2. **Limit liczby / rozmiaru tabel TEMP na batch** — brak sygnału z audytu, że rozmiar pracy
-   lokalnej sesji jest wektorem; odłożone jako nieuzasadnione.
-3. **Wymuszenie kwalifikatora `pg_temp` przy każdym odwołaniu** — reguła nazwy już istnieje
-   (pierwszy identyfikator `pg_temp` / prefiks `pg_temp_` albo zbiór tabel batcha; polityka,
-   „Classify" pkt 4). Doprecyzowanie kwalifikacji nie domyka żadnego z trzech skutków
-   (trwały DML, efekty administracyjne, dostęp zewnętrzny); odłożone.
+1. **Ban `SELECT INTO TEMP TABLE` in setup** — allowed today as an ambiguous temporary
+   write. Tightening would remove one table-creation path outside `CREATE TEMP`.
+   Cost: a change to the setup contract documented for agents; deferred — no evidence that
+   this single path carries more risk than the remaining allowed TEMP writes.
+2. **Limit the number / size of TEMP tables per batch** — no signal from the audit that the size of
+   local session work is a vector; deferred as unjustified.
+3. **Enforce the `pg_temp` qualifier on every reference** — the name rule already exists
+   (first identifier `pg_temp` / `pg_temp_` prefix or a table set from the batch; policy,
+   "Classify" item 4). Clarifying the qualification does not close any of the three effects
+   (persistent DML, administrative effects, external access); deferred.
    (2026-10-01, superseded by plan 011 — see `plans/011-syntax-contract.md`, rule
    011-T4b-D7: the `pg_temp_` prefix described above is no longer proof of session
    locality for any statement; only an exact `pg_temp` qualifier or a name this
    session recorded from `CREATE TEMP` counts.)
 
-## 2. Funkcje SECURITY DEFINER
+## 2. SECURITY DEFINER functions
 
-Stan dzisiejszy (polityka, macierz decyzji): atrybut `SECURITY DEFINER` nie występuje w tekście
-wywołania, więc nie da się go wymusić z samego wywołania; `SELECT app.write_something()`
-pozostaje `Allowed`; jedyną kontrolą poza tekstem są uprawnienia konta, których harness nie
-zmienia i nie sprawdza. Tak samo funkcje `VOLATILE` wykonujące DML oraz funkcje schowane
-w widokach.
+Current state (policy, decision matrix): the `SECURITY DEFINER` attribute does not appear in the call
+text, so it cannot be enforced from the call alone; `SELECT app.write_something()`
+remains `Allowed`; the only control outside the text is the account permissions, which the harness neither
+changes nor checks. The same applies to `VOLATILE` functions performing DML and functions hidden
+in views.
 
-Rozważane opcje (projekt, nie wdrożenie):
+Considered options (design, not implementation):
 
-1. **Rozwiązanie przeciążeń po katalogu (zaufany wpis + odczyt `pg_proc`)** — dałoby widoczność
-   atrybutu `SECURITY DEFINER` i volatility wyłącznie dla wywołań obecnych w tekście; nadal nie
-   widziałoby funkcji schowanej w widoku ani regule. Wymaga zaufanego wpisu katalogu zależnego
-   od `search_path` oraz dodatkowych rund zapytań (polityka, „Porównanie kontroli": liczba
-   wywołań serwera dziś nie rośnie). Odrzucone w tej zmianie polityki z tego powodu; jako opcja
-   profilu zaostrzonego pozostaje odłożone — bez rozwinięcia widoków i operatorów byłoby kolejną
-   listą, nie granicą.
-2. **Przełączanie ról / odbieranie uprawnień właścicielowi (`SET ROLE`, `REVOKE`)** — opisane tu
-   wyłącznie jako rozważana i odrzucona opcja: harness celowo nie wykonuje `SET ROLE`,
-   `SET SESSION AUTHORIZATION`, `GRANT` ani `REVOKE` (polityka, „Model zagrożeń"); zmiana
-   uprawnień jest granicą zewnętrzną poza harnessem. Ten projekt nie zawiera instrukcji
-   włączania takich mechanizmów.
-3. **Lista nazw funkcji `SECURITY DEFINER` utrzymywana ręcznie** — bez rozwiązania przeciążeń
-   po typach argumentów kwalifikacja schematem w tekście nie jest tożsamością (polityka, „Model
-   zagrożeń"); lista udawałaby dowód. Odrzucone.
+1. **Resolving overloads via the catalog (a trusted entry + a `pg_proc` read)** — would give visibility
+   into the `SECURITY DEFINER` attribute and volatility only for calls present in the text; it still would not
+   see a function hidden in a view or a rule. It requires a trusted catalog entry dependent
+   on `search_path` and additional query round trips (policy, "Comparison of controls": the number
+   of server calls does not grow today). Rejected in that policy change for that reason; as a stricter
+   profile option it remains deferred — without view and operator expansion it would be another
+   list, not a boundary.
+2. **Role switching / revoking permissions from the owner (`SET ROLE`, `REVOKE`)** — described here
+   only as a considered and rejected option: the harness deliberately does not execute `SET ROLE`,
+   `SET SESSION AUTHORIZATION`, `GRANT` nor `REVOKE` (policy, "Threat model"); a permission
+   change is an external boundary outside the harness. This design contains no instructions
+   for enabling such mechanisms.
+3. **A manually maintained list of `SECURITY DEFINER` function names** — without resolving overloads
+   by argument types, schema qualification in the text is not identity (policy, "Threat
+   model"); the list would fake evidence. Rejected.
 
-## 3. Operatory
+## 3. Operators
 
-Stan dzisiejszy (polityka, „Model zagrożeń"): przeciążenia operatorów (`+` i inne są w AST
-węzłem operatora, nie wywołaniem funkcji); ciało operatora jest poza tekstem tak samo jak ciało
-funkcji.
+Current state (policy, "Threat model"): operator overloads (`+` and others are an operator node
+in the AST, not a function call); the operator body is outside the text just like a function
+body.
 
-Rozważane opcje (projekt, nie wdrożenie):
+Considered options (design, not implementation):
 
-1. **Rozwinięcie operatorów do funkcji bazowych po katalogu** — wymaga tego samego zaufanego
-   wpisu co pkt 2.1 (odczyt katalogu zależny od `search_path`, pełne rozwiązanie przeciążeń po
-   typach). Bez tego byłoby kolejną listą nazw, nie granicą. Odłożone z tego samego powodu co
-   rozwiązanie przeciążeń funkcji.
-2. **Zakaz wybranych operatorów po nazwie/symbolu w tekście** — symbol operatora nie świadczy
-   o efekcie (przeciążenie może dodać DML do dowolnego symbolu, a zakaz symbolu blokowałby też
-   czyste użycia); lista symboli nie domyka skutku trwałego DML. Odrzucone.
+1. **Expanding operators to base functions via the catalog** — requires the same trusted
+   catalog entry as item 2.1 (a `search_path`-dependent catalog read, full resolution of overloads
+   by types). Without it this would be another list of names, not a boundary. Deferred for the same
+   reason as the function-overload resolution.
+2. **Banning selected operators by name/symbol in the text** — the operator symbol does not attest
+   to an effect (an overload can add DML to any symbol, and a symbol ban would also block
+   purely benign uses); a list of symbols does not close the persistent-DML effect. Rejected.
 
-## 4. Efekty zewnętrzne
+## 4. External effects
 
-Stan dzisiejszy (polityka, macierz decyzji): filtry tekstu — dokładne `pg_sleep`,
+Current state (policy, decision matrix): text filters — exact `pg_sleep`,
 `pg_read_file`, `pg_ls_dir`, `lo_import`, `set_config`, `pg_cancel_backend`,
-`pg_terminate_backend`, `nextval` / `setval`; prefiksy `dblink`, `pg_read_`, `pg_ls_`, `lo_`,
-`pg_advisory_` / `pg_try_advisory_`. Filtr jest filtrem tekstu, nie dowodem efektu; mutacja
-zatwierdzona flagami nie zdejmuje filtra.
+`pg_terminate_backend`, `nextval` / `setval`; prefixes `dblink`, `pg_read_`, `pg_ls_`, `lo_`,
+`pg_advisory_` / `pg_try_advisory_`. The filter is a text filter, not proof of an effect; a mutation
+approved by flags does not lift the filter.
 
-Rozważane zaostrzenia (projekt, nie wdrożenie):
+Considered tightenings (design, not implementation):
 
-1. **Rozszerzenie prefiksów / dokładnych nazw** — każdy nowy wpis to kolejna nadmiarowa odmowa
-   filtra bez zmiany granicy zaufania (efekty schowane w funkcjach, widokach, operatorach
-   pozostają niewidoczne). Dopuszczalne tylko jako świadome nadmiarowe odmowy w stylu wpisu
-   `lo_` (audyt B4), nigdy jako dowód braku efektu. Odłożone — brak wskazanego wektora.
-2. **Blokowanie dostępu zewnętrznego na poziomie roli** (brak `pg_write_server_files`,
-   brak praw FDW/`dblink`) — granica zewnętrzna poza harnessem; ten projekt nie zawiera
-   instrukcji jej konfigurowania. Odnotowane jako warunek, nie część harnessu.
-3. **Transakcja `READ ONLY` jako zaostrzenie** — opisana tu wyłącznie jako rozważana
-   i odrzucona opcja: nie blokuje wierszy administracyjnych ani dostępu zewnętrznego
-   (`set_config`, `pg_cancel_backend`, `pg_terminate_backend`, blokady doradcze i zdalny SQL
-   nie są na liście komend zabronionych w transakcji read-only), a jednocześnie psuje kontrakt
-   tabel tymczasowych (`CREATE TEMP` jest `CREATE`, więc setup przestałby działać albo wymagałby
-   osobnych rund i innej transakcji dla DDL). Ten projekt nie zawiera kodu ani instrukcji
-   włączania transakcji read-only.
+1. **Extending the prefixes / exact names** — every new entry is another redundant filter
+   rejection without changing the trust boundary (effects hidden in functions, views, operators
+   remain invisible). Acceptable only as a deliberate redundant rejection in the style of the `lo_`
+   entry (audit B4), never as proof of the absence of an effect. Deferred — no vector indicated.
+2. **Blocking external access at the role level** (no `pg_write_server_files`,
+   no FDW/`dblink` rights) — an external boundary outside the harness; this design contains no
+   instructions for configuring it. Noted as a condition, not part of the harness.
+3. **`READ ONLY` transaction as a tightening** — described here only as a considered
+   and rejected option: it blocks neither administrative rows nor external access
+   (`set_config`, `pg_cancel_backend`, `pg_terminate_backend`, advisory locks and remote SQL
+   are not on the list of commands forbidden in a read-only transaction), and at the same time it breaks the
+   temporary table contract (`CREATE TEMP` is `CREATE`, so setup would stop working or would require
+   separate runs and a different transaction for DDL). This design contains no code nor instructions
+   for enabling a read-only transaction.
 
-## Co ten projekt świadomie nie robi
+## What this design deliberately does not do
 
-- Nie wdraża transakcji `READ ONLY` ani przełączania ról — powody odrzucenia: sekcja 4.3
-  (psuje `CREATE TEMP`, nie blokuje efektów administracyjnych/zewnętrznych) oraz sekcja 2.2
-  (role i uprawnienia są granicą zewnętrzną poza harnessem).
-- Nie dodaje odczytu katalogu (`pg_proc`, `pg_roles`), rozwinięcia widoków ani operatorów —
-  wymagałoby to zaufanego wpisu i dodatkowych rund; bez nich byłaby to kolejna lista, nie
-  granica (sekcje 2.1, 3.1).
-- Nie zmienia `ClassificationLabel`, kontraktu mutacji (`--allow-mutation` +
-  `--confirm-database`) ani zakresu sesji Npgsql.
-- Nie zmienia plików T1–T3 ani żadnego kodu i testu.
+- It does not implement a `READ ONLY` transaction nor role switching — reasons for rejection: section 4.3
+  (it breaks `CREATE TEMP`, it does not block administrative/external effects) and section 2.2
+  (roles and permissions are an external boundary outside the harness).
+- It does not add a catalog read (`pg_proc`, `pg_roles`), view expansion nor operator expansion —
+  that would require a trusted entry and additional round trips; without them it would be another list, not a
+  boundary (sections 2.1, 3.1).
+- It does not change `ClassificationLabel`, the mutation contract (`--allow-mutation` +
+  `--confirm-database`) nor the scope of the Npgsql session.
+- It does not change the T1–T3 files nor any code or test.
 
-## Warunek wdrożenia (poza tym planem)
+## Implementation condition (outside this plan)
 
-Każde przyszłe wdrożenie zaostrzeń z tego projektu wymaga osobnej decyzji oraz — dla pozycji
-katalogowych (2.1, 3.1) — zaufanego wpisu katalogu, rozwinięcia widoków/operatorów i akceptacji
-dodatkowych rund serwera; dla pozycji uprawnieniowych (2.2, 4.2) — przygotowania roli konta
-poza SQLHarness. Minimalne uprawnienia konta pozostają granicą zewnętrzną poza harnessem.
+Every future implementation of tightenings from this design requires a separate decision and — for the catalog
+items (2.1, 3.1) — a trusted catalog entry, view/operator expansion and acceptance
+of additional server round trips; for the permission items (2.2, 4.2) — preparation of the account
+role outside SQLHarness. Minimal account permissions remain an external boundary outside the harness.
