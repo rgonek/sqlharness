@@ -41,10 +41,29 @@
 ---
 
 ### Task 0: Drift check and renderer benchmark
-- [ ] Confirm 080 and 087 merged; drift check; `just verify` baseline; record base.
-- [ ] Build two throwaway prototypes outside the shipped bundle: React SVG + `d3-zoom` with an own right-to-left tree layout, and `@xyflow/react`. Inputs: a 95-node synthetic `PlanGraph` and generated 250/1000-node trees.
-- [ ] Measure compressed bundle increment (lazy chunk), first render, highlight of 20 external node ids, click latency, pan/zoom smoothness; check license of any icon set considered (vscode-mssql icons).
-- [ ] Record numbers and the choice in this plan (`## Renderer decision`); delete prototypes. Commit `docs(088): record renderer decision`.
+- [x] Confirm 080 and 087 merged; drift check; run `just verify` baseline; record base. Base: `272d5dbb5f721536f85355b925273507e22de67b`; 080 merge `42a1e365b14843e301e8db3922ca9204fb41fc85`; 087 merge `c4de0da03878be7d7ed230ba90a4e8d2e1b92c4c`. The targeted diff from `5261846` contains the expected 080 dashboard/journal and 087 measurement-fingerprint changes; `JournalSchema.CurrentVersion` is 16. The baseline gate failed in the MCP test stage; details are in the Task 0 report.
+- [x] Build two throwaway prototypes outside the shipped bundle: React SVG + `d3-zoom` with an own right-to-left tree layout, and `@xyflow/react`. Inputs: a 95-node synthetic `PlanGraph` and generated 250/1000-node trees.
+- [x] Measure compressed bundle increment (lazy chunk), first render, highlight of 20 external node ids, click latency, pan/zoom smoothness; check license of any icon set considered (vscode-mssql icons). Neither prototype uses an icon set.
+- [x] Record numbers and the choice below; delete prototypes. Commit `docs(088): record renderer decision`.
+
+## Renderer decision
+
+Choose `@xyflow/react` 12.12.0. At the expected 95-node scale, both candidates stayed close to 16.7 ms per animation frame for pan and wheel zoom, and React Flow's 169 ms median first render remained acceptable for a deferred viewer. In the 1000-node stress tree, React Flow kept pan at 16.7 ms median / 16.8 ms p95 with no dropped frames, while the SVG renderer reached 49.9 / 83.4 ms and dropped 8 frames per 600 ms sample. React Flow also kept wheel zoom to 33.3 / 33.5 ms versus 66.7 / 83.5 ms for SVG. The tradeoff is 43.82 KB more compressed lazy payload (60.26 KB versus 16.44 KB). The full benchmark and method are in [the Task 0 report](../.superpowers/sdd/088-plan-visualization/task-0-report.md).
+
+Three fresh-page samples per renderer and size; values below are medians across samples. Pan and zoom columns show median / p95 frame interval in ms and the median number of intervals over 25 ms per 600 ms synthetic interaction. Click is the median dispatch-to-handler time across 25 clicks per sample. First render is measured from React root render to the renderer's first layout effect.
+
+| Nodes | Renderer | First render | Highlight 20 ids | Click | Pan ms (median / p95; drops) | Wheel zoom ms (median / p95; drops) |
+|---:|---|---:|---:|---:|---|---|
+| 95 | React SVG + `d3-zoom` | 98.9 | 9.2 | 0.3 | 16.7 / 16.8; 1 | 16.7 / 16.8; 0 |
+| 95 | `@xyflow/react` | 168.8 | 10.7 | 0.3 | 16.7 / 16.8; 0 | 16.7 / 16.8; 0 |
+| 250 | React SVG + `d3-zoom` | 126.7 | 12.9 | 0.3 | 16.7 / 16.9; 1 | 16.7 / 33.4; 10 |
+| 250 | `@xyflow/react` | 220.0 | 13.1 | 0.3 | 16.7 / 16.8; 0 | 16.7 / 16.8; 0 |
+| 1000 | React SVG + `d3-zoom` | 178.3 | 40.2 | 0.4 | 49.9 / 83.4; 8 | 66.7 / 83.5; 8 |
+| 1000 | `@xyflow/react` | 384.0 | 43.0 | 0.4 | 16.7 / 16.8; 0 | 33.3 / 33.5; 13 |
+
+The Vite production lazy chunks, excluding the shared application entry, gzip to 16.44 KB for the D3 renderer and 57.70 KB JavaScript + 2.56 KB CSS (60.26 KB total) for React Flow. The 95-node first-render cost is about 70 ms higher with React Flow; this is the intentional cost for substantially steadier interaction as plans grow. The stress tree exceeds the largest observed 95-operator single-statement plan, but demonstrates that the renderer will tolerate larger combined or future graphs better.
+
+The prototypes use no icon set. The official [vscode-mssql repository license](https://github.com/microsoft/vscode-mssql/blob/main/LICENSE.txt) is MIT, and its [third-party notices](https://github.com/microsoft/vscode-mssql/blob/main/ThirdPartyNotices.txt) list additional licenses. No specific upstream icon asset was copied or evaluated for reuse.
 
 ### Task 1: Content-addressed plan documents and occurrences
 **Files:** `src/SqlHarness.Core/Journal/JournalSchema.cs` (replace `plans`/`operation_plans` with `plan_documents(sha256 PK, shape_hash, format, raw_size, gz)` and `plan_occurrences(metric_id, repetition, document_ordinal, statement_index, document_sha, …)`; `CurrentVersion` +1; `JournalContractTests` pin), `JournalBenchmarkBuilder.cs` (~`:115-125` document dedup by content), `BenchmarkJournalRecord.cs`, `ActivityJournal.cs` (~`:480-541` writes, gate, per-operation byte budget with `omitted` occurrences), `JournalRetention.cs` (~`:190` orphan cleanup), `src/SqlHarness.Core/PlanIdentity.cs` (shape hash kept as a named shape identity), `src/SqlHarness.Dashboard/JournalReader.cs` (`Plan` ~`:566`); tests in `tests/SqlHarness.Tests` journal suites.
