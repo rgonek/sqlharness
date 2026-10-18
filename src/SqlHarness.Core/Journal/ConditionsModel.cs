@@ -34,7 +34,28 @@ public sealed record ConditionsExecution(
 public sealed record ConditionsSetup(string Hash,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Text);
 
-public sealed record ConditionsParameter(string Name, string EffectiveType, JsonElement? Value);
+public sealed record ConditionsParameter(
+    string Name,
+    string EffectiveType,
+    JsonElement? Value,
+    string Kind = "scalar",
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? Count = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? Columns = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? ColumnTypes = null,
+    string? ContentHash = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    JsonElement? Rows = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    JsonElement? Values = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? SourceText = null)
+{
+    [JsonIgnore]
+    internal byte[]? ContentForFingerprint { get; init; }
+}
 
 public sealed record ConditionsCase(string Id, int Index, string Label, string? SetName,
     IReadOnlyList<ConditionsParameter> Varying, string Fingerprint)

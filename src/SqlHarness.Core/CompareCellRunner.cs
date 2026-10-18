@@ -180,6 +180,8 @@ internal sealed record CompareCellRequest(
 
     internal List<string> KnownSecrets { get; init; } = [];
     internal IReadOnlyList<SqlHarnessParameterInput> ParameterInputs { get; init; } = [];
+    internal int ConditionsCaseIndex { get; init; }
+    internal Action<int, IReadOnlyList<MaterializedParameterInfo>>? RecordMaterializedConditions { get; init; }
 }
 
 internal sealed record CompareCellResult(
@@ -228,6 +230,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             phase = CompareCellPhase.Sql;
 
             var materialized = await TableParameterMaterializer.MaterializeAsync(session, request.ParameterInputs, dialect, ct);
+            request.RecordMaterializedConditions?.Invoke(request.ConditionsCaseIndex, materialized.Details);
             var setupExpansion = string.IsNullOrWhiteSpace(request.SetupSql) ? null : materialized.Expand(request.SetupSql);
             var baselineExpansion = materialized.Expand(request.BaselineSql);
             var candidateExpansion = materialized.Expand(request.CandidateSql);

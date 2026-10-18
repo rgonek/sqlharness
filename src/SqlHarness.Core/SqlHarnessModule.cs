@@ -525,6 +525,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 KnownSecrets = knownSecrets,
                 OperationRef = compare.OperationRef,
                 ParameterInputs = prepared.ParameterInputs,
+                RecordMaterializedConditions = (caseIndex, details) => RecordConditions(compare, () =>
+                    ConditionsModelBuilder.WithMaterializedParameters(
+                        ConditionsModelBuilder.Build(compare, target, prepared.Dialect, prepared.FixedParameters,
+                            [new ConditionsCaseInput("0", null, [])], storeSensitive: true),
+                        caseIndex, details, storeSensitive: true,
+                        fixedParameterNames: prepared.ParameterInputs.Select(input => input.Name).ToHashSet(StringComparer.OrdinalIgnoreCase))),
             };
             _cellRunner.ComparisonMaximumRows = ComparisonMaximumRows;
 
@@ -685,6 +691,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
             _artifactWriter.CheckStorage();
 
+            var materializedCompareCases = new Dictionary<int, IReadOnlyList<MaterializedParameterInfo>>();
             var template = new CompareCellRequest(
                 target,
                 operation.SetupSql,
@@ -703,6 +710,19 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 KnownSecrets = knownSecrets,
                 OperationRef = operation.OperationRef,
                 ParameterInputs = prepared.ParameterInputs,
+                RecordMaterializedConditions = (caseIndex, details) =>
+                {
+                    materializedCompareCases[caseIndex] = details;
+                    var model = ConditionsModelBuilder.Build(operation, target, dialect, fixedParameters,
+                        sets.Select(set => new ConditionsCaseInput(
+                            set.Name,
+                            matrixInput is null ? set.Name : null,
+                            set.Parameters)).ToArray(), storeSensitive: true);
+                    foreach (var item in materializedCompareCases.OrderBy(item => item.Key))
+                        model = ConditionsModelBuilder.WithMaterializedParameters(model, item.Key, item.Value, storeSensitive: true,
+                            fixedParameterNames: prepared.ParameterInputs.Select(input => input.Name).ToHashSet(StringComparer.OrdinalIgnoreCase));
+                    RecordConditions(operation, () => model);
+                },
             };
             _matrixRunner.ComparisonMaximumRows = ComparisonMaximumRows;
             CompareMatrixResult result;
@@ -931,6 +951,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     })
                     .ToArray();
                 var fixedNames = new HashSet<string>(parameters.Select(parameter => parameter.Name), StringComparer.OrdinalIgnoreCase);
+                var materializedMeasureCases = new Dictionary<int, IReadOnlyList<MaterializedParameterInfo>>();
                 RecordConditions(measure, () => ConditionsModelBuilder.Build(
                     measure, target, dialect, parameters,
                     boundSets.Select(set => new ConditionsCaseInput(
@@ -965,7 +986,21 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     raw,
                     ct,
                     setupSafety,
-                    knownSecrets);
+                    knownSecrets,
+                    (caseIndex, details) =>
+                    {
+                        materializedMeasureCases[caseIndex] = details;
+                        var model = ConditionsModelBuilder.Build(measure, target, dialect, parameters,
+                            boundSets.Select(set => new ConditionsCaseInput(
+                                set.Name,
+                                measure.TypedMatrix is null ? set.Name : null,
+                                set.Parameters.Where(parameter => !fixedNames.Contains(parameter.Name)).ToArray())).ToArray(),
+                            storeSensitive: true);
+                        foreach (var item in materializedMeasureCases.OrderBy(item => item.Key))
+                            model = ConditionsModelBuilder.WithMaterializedParameters(model, item.Key, item.Value, storeSensitive: true,
+                                fixedParameterNames: parameterInputs.Select(input => input.Name).ToHashSet(StringComparer.OrdinalIgnoreCase));
+                        RecordConditions(measure, () => model);
+                    });
                 await using var multiSession = execution.FinalSession!;
                 rawFootprint = raw.Complete().Footprint;
                 var setReport = MeasureParameterSetReportProjector.Project(
@@ -1024,6 +1059,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             phase = OperationPhase.Sql;
 
             var materialized = await TableParameterMaterializer.MaterializeAsync(session, parameterInputs, dialect, ct);
+            RecordConditions(measure, () => ConditionsModelBuilder.WithMaterializedParameters(
+                ConditionsModelBuilder.Build(measure, target, dialect, parameters,
+                    [new ConditionsCaseInput("0", null, [])], storeSensitive: true),
+                0, materialized.Details, storeSensitive: true,
+                fixedParameterNames: parameterInputs.Select(input => input.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)));
             var setupExecution = string.IsNullOrWhiteSpace(measure.SetupSql) ? null : materialized.Expand(measure.SetupSql);
             var queryExecution = materialized.Expand(measure.QuerySql);
             var setupParameters = setupExecution is null ? materialized.Parameters : SqlParameterInputs.CombineClassificationParameters(materialized.Parameters, setupExecution.Parameters);

@@ -642,42 +642,75 @@ public sealed class ActivityJournal : IActivityJournal
 
     internal static ConditionsModel SealConditions(ConditionsModel model, byte[] salt)
     {
-        var setupHash = model.Setup is null ? string.Empty : Hmac(salt, ConditionsModelBuilder.SetupContentBytes(model));
-        var cases = model.Cases.Select(item => item with
+        ConditionsParameter SealParameter(ConditionsParameter parameter) =>
+            parameter.ContentForFingerprint is { } content
+                ? parameter with { ContentHash = Hmac(salt, content) }
+                : parameter;
+
+        var fixedParameters = model.Fixed.Select(SealParameter).ToArray();
+        var fixedForFingerprint = model.FixedForFingerprint.Select(SealParameter).ToArray();
+        var casesToSeal = model.Cases.Select(item => item with
         {
-            Fingerprint = Hmac(salt, ConditionsModelBuilder.CaseFingerprintPayload(model, setupHash, item)),
-            MeasurementFingerprint = Hmac(salt, ConditionsModelBuilder.CaseMeasurementFingerprintPayload(model, setupHash, item)),
+            Varying = item.Varying.Select(SealParameter).ToArray(),
+            VaryingForFingerprint = item.VaryingForFingerprint.Select(SealParameter).ToArray(),
         }).ToArray();
-        return model with
+        var fingerprintModel = model with
+        {
+            Fixed = fixedParameters,
+            FixedForFingerprint = fixedForFingerprint,
+            Cases = casesToSeal,
+        };
+        var setupHash = model.Setup is null ? string.Empty : Hmac(salt, ConditionsModelBuilder.SetupContentBytes(model));
+        var cases = fingerprintModel.Cases.Select(item => item with
+        {
+            Fingerprint = Hmac(salt, ConditionsModelBuilder.CaseFingerprintPayload(fingerprintModel, setupHash, item)),
+            MeasurementFingerprint = Hmac(salt, ConditionsModelBuilder.CaseMeasurementFingerprintPayload(fingerprintModel, setupHash, item)),
+        }).ToArray();
+        return fingerprintModel with
         {
             Setup = model.Setup is null ? null : model.Setup with { Hash = setupHash },
             Cases = cases,
-            Fingerprint = Hmac(salt, ConditionsModelBuilder.OperationFingerprintPayload(model, setupHash)),
-            MeasurementFingerprint = Hmac(salt, ConditionsModelBuilder.OperationMeasurementFingerprintPayload(model, setupHash)),
+            Fingerprint = Hmac(salt, ConditionsModelBuilder.OperationFingerprintPayload(fingerprintModel, setupHash)),
+            MeasurementFingerprint = Hmac(salt, ConditionsModelBuilder.OperationMeasurementFingerprintPayload(fingerprintModel, setupHash)),
         };
     }
 
     private static string Hmac(byte[] salt, byte[] bytes) => Convert.ToHexStringLower(HMACSHA256.HashData(salt, bytes));
 
-    private static ConditionsModel BoundConditions(ConditionsModel model, bool storeSensitive)
+    internal static ConditionsModel BoundConditions(ConditionsModel model, bool storeSensitive)
     {
         var conditionsCase = model.Cases.Select(item => item with
         {
-            Varying = item.Varying.Select(parameter => storeSensitive ? parameter : parameter with { Value = null }).ToArray(),
+            Varying = item.Varying.Select(parameter => storeSensitive ? parameter : parameter with
+            {
+                Value = null,
+                Rows = null,
+                Values = null,
+                SourceText = null,
+            }).ToArray(),
         }).ToArray();
         conditionsCase = conditionsCase.Select(item => item with
         {
-            Label = CaseLabel.Format(item, conditionsCase.Length, storeSensitive),
+            Label = CaseLabel.Format(item with
+            {
+                Varying = model.Fixed.Where(parameter => parameter.Kind is "tvp" or "list").Concat(item.Varying).ToArray(),
+            }, conditionsCase.Length, storeSensitive),
         }).ToArray();
         return model with
         {
             Setup = model.Setup is null ? null : model.Setup with { Text = storeSensitive ? model.Setup.Text : null },
-            Fixed = model.Fixed.Select(parameter => storeSensitive ? parameter : parameter with { Value = null }).ToArray(),
+            Fixed = model.Fixed.Select(parameter => storeSensitive ? parameter : parameter with
+            {
+                Value = null,
+                Rows = null,
+                Values = null,
+                SourceText = null,
+            }).ToArray(),
             Cases = conditionsCase,
         };
     }
 
-    private static ConditionsModel OmitOversizedConditions(ConditionsModel model)
+    internal static ConditionsModel OmitOversizedConditions(ConditionsModel model)
     {
         var omitted = model.Omitted.ToList();
         if (model.Setup?.Text is not null)
@@ -689,29 +722,47 @@ public sealed class ActivityJournal : IActivityJournal
         var candidates = model.Fixed.Select((parameter, index) => (IsFixed: true, Case: -1, Index: index, Parameter: parameter))
             .Concat(model.Cases.SelectMany((item, caseIndex) => item.Varying.Select((parameter, index) =>
                 (IsFixed: false, Case: caseIndex, Index: index, Parameter: parameter))))
-            .Where(item => item.Parameter.Value.HasValue)
-            .OrderByDescending(item => JsonSerializer.SerializeToUtf8Bytes(item.Parameter.Value, WaitJson).Length)
+            .SelectMany(item => new[]
+            {
+                (item.IsFixed, item.Case, item.Index, item.Parameter, Field: "value", Size: Size(item.Parameter.Value)),
+                (item.IsFixed, item.Case, item.Index, item.Parameter, Field: "rows", Size: Size(item.Parameter.Rows)),
+                (item.IsFixed, item.Case, item.Index, item.Parameter, Field: "values", Size: Size(item.Parameter.Values)),
+                (item.IsFixed, item.Case, item.Index, item.Parameter, Field: "sourceText", Size: item.Parameter.SourceText is null ? 0 : Encoding.UTF8.GetByteCount(item.Parameter.SourceText)),
+            })
+            .Where(item => item.Size > 0)
+            .OrderByDescending(item => item.Size)
             .ToArray();
         foreach (var candidate in candidates)
         {
             var path = candidate.IsFixed
-                ? $"fixed.{candidate.Parameter.Name}.value"
-                : $"cases.{model.Cases[candidate.Case].Id}.{candidate.Parameter.Name}.value";
+                ? $"fixed.{candidate.Parameter.Name}.{candidate.Field}"
+                : $"cases.{model.Cases[candidate.Case].Id}.{candidate.Parameter.Name}.{candidate.Field}";
+            ConditionsParameter Remove(ConditionsParameter parameter) => candidate.Field switch
+            {
+                "value" => parameter with { Value = null },
+                "rows" => parameter with { Rows = null },
+                "values" => parameter with { Values = null },
+                "sourceText" => parameter with { SourceText = null },
+                _ => parameter,
+            };
             if (candidate.IsFixed)
             {
                 var fixedParameters = model.Fixed.ToArray();
-                fixedParameters[candidate.Index] = fixedParameters[candidate.Index] with { Value = null };
+                fixedParameters[candidate.Index] = Remove(fixedParameters[candidate.Index]);
                 model = model with { Fixed = fixedParameters };
             }
             else
             {
                 var cases = model.Cases.ToArray();
                 var varying = cases[candidate.Case].Varying.ToArray();
-                varying[candidate.Index] = varying[candidate.Index] with { Value = null };
+                varying[candidate.Index] = Remove(varying[candidate.Index]);
                 var updatedCase = cases[candidate.Case] with { Varying = varying };
                 cases[candidate.Case] = updatedCase with
                 {
-                    Label = CaseLabel.Format(updatedCase, cases.Length, valuesStored: true),
+                    Label = CaseLabel.Format(updatedCase with
+                    {
+                        Varying = model.Fixed.Where(parameter => parameter.Kind is "tvp" or "list").Concat(varying).ToArray(),
+                    }, cases.Length, valuesStored: true),
                 };
                 model = model with { Cases = cases };
             }
@@ -722,6 +773,10 @@ public sealed class ActivityJournal : IActivityJournal
         }
 
         return model with { Omitted = omitted.ToArray() };
+
+        static int Size(JsonElement? value) => value is { } item && item.ValueKind != JsonValueKind.Undefined
+            ? JsonSerializer.SerializeToUtf8Bytes(item, WaitJson).Length
+            : 0;
     }
 
     private void Initialize()

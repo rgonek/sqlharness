@@ -7,6 +7,8 @@ internal static class SqlServerLiteral
     internal static string Format(ConditionsParameter parameter)
     {
         ArgumentNullException.ThrowIfNull(parameter);
+        if (parameter.Kind == "tvp")
+            return parameter.Name;
         if (parameter.Value is not { } value || value.ValueKind == JsonValueKind.Undefined)
             return "/* value not stored */";
         if (value.ValueKind == JsonValueKind.Null)

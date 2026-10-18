@@ -310,7 +310,8 @@ internal sealed class MeasureParameterSetRunner
         CanonicalResultAccumulator raw,
         CancellationToken ct,
         SqlSafetyDecision? setupSafety = null,
-        List<string>? knownSecrets = null)
+        List<string>? knownSecrets = null,
+        Action<int, IReadOnlyList<MaterializedParameterInfo>>? recordMaterializedConditions = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(operation);
@@ -337,6 +338,7 @@ internal sealed class MeasureParameterSetRunner
                 identity ??= session.Identity;
                 phase = "sql";
                 var materialized = await TableParameterMaterializer.MaterializeAsync(session, set.Inputs, _dialect, ct);
+                recordMaterializedConditions?.Invoke(index, materialized.Details);
                 var structuredParameters = materialized.Parameters.Where(parameter => parameter.Type == SqlDbType.Structured).ToArray();
                 var setupExpansion = string.IsNullOrWhiteSpace(operation.SetupSql) ? null : materialized.Expand(operation.SetupSql);
                 var queryExpansion = materialized.Expand(operation.QuerySql);

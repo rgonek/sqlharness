@@ -167,6 +167,83 @@ public sealed class SqlServerReproScriptWriterTests
     }
 
     [Fact]
+    public void Tvp_reproduction_declares_type_inserts_rows_and_uses_readonly_binding()
+    {
+        var rows = JsonDocument.Parse("[[\"11\"],[\"12\"]]").RootElement.Clone();
+        var parameter = new ConditionsParameter("@Ids", "dbo.IdList READONLY", null, "tvp", 2,
+            ["Id"], ["int"], "content-hash", Rows: rows);
+        var result = ReproScripts.Create(Model(parameter), "SELECT * FROM @Ids", "query", "0", ReproScriptForm.AsExecuted);
+
+        Assert.Equal(ReproCompleteness.Complete, result.Completeness);
+        Assert.Contains("DECLARE @Ids dbo.IdList;", result.Text);
+        Assert.Contains("INSERT INTO @Ids (Id) VALUES (11), (12);", result.Text);
+        Assert.Contains("N'@Ids dbo.IdList READONLY'", result.Text);
+        Assert.Contains(", @Ids = @Ids", result.Text);
+        Assert.Empty(ParseErrors(result.Text!));
+    }
+
+    [Fact]
+    public void Empty_tvp_still_has_a_declaration_and_readonly_parameter()
+    {
+        var parameter = new ConditionsParameter("@Ids", "dbo.IdList READONLY", null, "tvp", 0,
+            ["Id"], ["int"], "content-hash", Rows: JsonDocument.Parse("[]").RootElement.Clone());
+        var result = ReproScripts.Create(Model(parameter), "SELECT * FROM @Ids", "query", "0", ReproScriptForm.AsExecuted);
+
+        Assert.Contains("DECLARE @Ids dbo.IdList;", result.Text);
+        Assert.Contains("N'@Ids dbo.IdList READONLY'", result.Text);
+        Assert.Contains(", @Ids = @Ids", result.Text);
+        Assert.DoesNotContain("INSERT INTO @Ids", result.Text);
+    }
+
+    [Fact]
+    public void Tvp_row_inserts_are_split_into_batches_of_one_thousand()
+    {
+        var values = string.Join(",", Enumerable.Range(1, 1001).Select(value => "[\"" + value + "\"]"));
+        var rows = JsonDocument.Parse("[" + values + "]").RootElement.Clone();
+        var parameter = new ConditionsParameter("@Ids", "dbo.IdList READONLY", null, "tvp", 1001,
+            ["Id"], ["int"], "content-hash", Rows: rows);
+        var result = ReproScripts.Create(Model(parameter), "SELECT * FROM @Ids", "query", "0", ReproScriptForm.LocalVariables);
+
+        Assert.Equal(2, result.Text!.Split("INSERT INTO @Ids (Id) VALUES", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public void Empty_list_keeps_the_typed_empty_subquery_form()
+    {
+        var parameter = new ConditionsParameter("@Types", "list of int", null, "list", 0, [], ContentHash: "content-hash",
+            Values: JsonDocument.Parse("[]").RootElement.Clone());
+        var result = ReproScripts.Create(Model(parameter), "SELECT * FROM dbo.T WHERE Id IN @Types", "query", "0", ReproScriptForm.AsExecuted);
+
+        Assert.Contains("IN (SELECT @Types WHERE 1 = 0)", result.Text);
+        Assert.Contains("N'@Types int'", result.Text);
+        Assert.Contains("@Types = NULL", result.Text);
+    }
+
+    [Fact]
+    public void Rows_from_reproduction_requeries_and_warns_that_data_may_have_changed()
+    {
+        var parameter = new ConditionsParameter("@Ids", "dbo.IdList READONLY", null, "tvp", 500,
+            ["Id"], ColumnTypes: ["int"], ContentHash: "content-hash", SourceText: "SELECT Id FROM dbo.Source");
+        var result = ReproScripts.Create(Model(parameter), "SELECT * FROM @Ids", "query", "0", ReproScriptForm.LocalVariables);
+
+        Assert.Contains("INSERT INTO @Ids (Id) SELECT Id FROM dbo.Source", result.Text);
+        Assert.Contains("rows re-queried; data may have changed", result.Label);
+    }
+
+    [Fact]
+    public void List_reproduction_expands_the_values_into_sql_parameters()
+    {
+        var parameter = new ConditionsParameter("@Types", "list of int", null, "list", 3, [], ContentHash: "content-hash",
+            Values: JsonDocument.Parse("[1,2,3]").RootElement.Clone());
+        var result = ReproScripts.Create(Model(parameter), "SELECT * FROM dbo.T WHERE Id IN @Types", "query", "0", ReproScriptForm.AsExecuted);
+
+        Assert.Contains("WHERE Id IN (@Types1, @Types2, @Types3)", result.Text);
+        Assert.Contains("@Types1 int, @Types2 int, @Types3 int", result.Text);
+        Assert.Contains("@Types1 = 1", result.Text);
+        Assert.Contains("@Types3 = 3", result.Text);
+    }
+
+    [Fact]
     public void Without_stored_sql_script_is_unavailable()
     {
         var result = ReproScripts.Create(Model(), null, "query", "0", ReproScriptForm.AsExecuted);

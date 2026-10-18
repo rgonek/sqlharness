@@ -77,6 +77,29 @@ public sealed class OperationJournalDescriberTests
     }
 
     [Fact]
+    public void List_length_is_condition_not_version()
+    {
+        var shortList = new SqlHarnessMeasureOperation(Target, null, "SELECT * FROM dbo.T WHERE Id IN @Ids", [], 30, 5)
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null)
+            {
+                Kind = "list",
+                Values = Enumerable.Range(0, 10).Select(value => (string?)value.ToString()).ToArray(),
+            }],
+        };
+        var largeList = shortList with
+        {
+            TypedParameters = [shortList.TypedParameters![0] with
+            {
+                Values = Enumerable.Range(0, 2000).Select(value => (string?)value.ToString()).ToArray(),
+            }],
+        };
+
+        Assert.Equal(OperationJournalDescriber.DescribeStart(shortList).SqlHash,
+            OperationJournalDescriber.DescribeStart(largeList).SqlHash);
+    }
+
+    [Fact]
     public void Unsafe_direct_start_has_no_profile()
     {
         var direct = new SqlTargetRequest(null, new Dictionary<string, string>(), "srv", "db", "integrated", UnsafeDirect: true);

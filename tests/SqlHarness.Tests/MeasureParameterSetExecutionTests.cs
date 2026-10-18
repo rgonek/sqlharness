@@ -3,6 +3,7 @@ using System.Text.Json;
 using SqlHarness.Core;
 using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Targets;
+using SqlHarness.Tests.Journal;
 
 namespace SqlHarness.Tests;
 
@@ -93,6 +94,77 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(["A", "B", "C"], session.MeasuredSetNames);
         Assert.Equal([1, 1, 1], execution.Runs.Select(run => run.Artifact.Repetition));
         Assert.All(execution.Runs, run => Assert.Single(run.PlanHashes));
+    }
+
+    [Fact]
+    public async Task Materialized_conditions_are_recorded_once_after_connect_for_each_case()
+    {
+        var session = RecordingSession.Create();
+        var recordedCases = new List<int>();
+        var execution = await Runner(session).ExecuteAsync(
+            Operation(repeat: 1),
+            Prepared("A", "B"),
+            recordMaterializedConditions: (index, _) => recordedCases.Add(index));
+
+        Assert.Equal([0, 1], recordedCases);
+        Assert.Equal(2, execution.CompletedCases);
+    }
+
+    [Fact]
+    public async Task Named_set_conditions_record_resolved_type_and_rows_from_content_before_measurement()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig { StoreSensitive = false }, TextWriter.Null, TimeProvider.System);
+        var session = RecordingSession.Create(querySql: "SELECT * FROM @Ids");
+        var operation = Operation(repeat: 1, setupSql: null) with
+        {
+            QuerySql = "SELECT * FROM @Ids",
+        };
+        var sets = new[] { "A", "B" }.Select(name => new PreparedMeasureParameterSet(name, [], [], null)
+        {
+            Inputs = [new SqlHarnessParameterInput("Ids", "dbo.IdList", null)
+            {
+                Kind = "tvp",
+                SourceSql = name == "A" ? "SELECT Id FROM dbo.SourceA" : "SELECT Id FROM dbo.SourceB",
+            }],
+        }).ToArray();
+        var cases = sets.Select(set => new ConditionsCaseInput(set.Name, set.Name, [])).ToArray();
+        var target = TargetResolver.Resolve(Target(), Profiles());
+        var recorded = new Dictionary<int, IReadOnlyList<MaterializedParameterInfo>>();
+        JournalHandle? handle = null;
+        operation = operation with { RecordConditions = model => journal.RecordConditions(handle!, model) };
+        handle = journal.Begin(JournalTestData.Session(), OperationJournalDescriber.DescribeStart(operation));
+        Assert.NotNull(handle);
+        operation.RecordConditions?.Invoke(ConditionsModelBuilder.Build(operation, target,
+            SqlDialects.For(SqlEngine.SqlServer), [], cases, storeSensitive: true));
+        var runner = Runner(session);
+
+        await runner.ExecuteAsync(operation, sets, recordMaterializedConditions: (index, details) =>
+        {
+            Assert.Equal(index * 2, session.Commands.Count(command => command.Sql == operation.QuerySql));
+            var model = ConditionsModelBuilder.Build(operation, target, SqlDialects.For(SqlEngine.SqlServer), [], cases, true);
+            var enriched = ConditionsModelBuilder.WithMaterializedParameters(model, index, details, true);
+            recorded[index] = details;
+            foreach (var item in recorded.OrderBy(item => item.Key))
+                enriched = ConditionsModelBuilder.WithMaterializedParameters(enriched, item.Key, item.Value, true);
+            operation.RecordConditions?.Invoke(enriched);
+        });
+
+        var jsonText = (string)JournalDb.Rows(temp.DatabasePath, "SELECT conditions_json FROM operations").Single()["conditions_json"]!;
+        using var json = JsonDocument.Parse(jsonText);
+        var first = json.RootElement.GetProperty("cases")[0].GetProperty("varying")[0];
+        var second = json.RootElement.GetProperty("cases")[1].GetProperty("varying")[0];
+        Assert.Equal(2, recorded.Count);
+        Assert.Equal("dbo.IdList READONLY", first.GetProperty("effectiveType").GetString());
+        Assert.Equal("dbo.IdList READONLY", second.GetProperty("effectiveType").GetString());
+        Assert.Equal(1, first.GetProperty("count").GetInt32());
+        Assert.Equal("Id", first.GetProperty("columns")[0].GetString());
+        Assert.NotEqual(first.GetProperty("contentHash").GetString(), second.GetProperty("contentHash").GetString());
+        Assert.False(first.TryGetProperty("rows", out _));
+        Assert.False(first.TryGetProperty("sourceText", out _));
+        Assert.False(JournalDb.Contains(JournalDb.AllBytes(temp.DatabasePath), "SourceA"));
+        Assert.False(JournalDb.Contains(JournalDb.AllBytes(temp.DatabasePath), "SourceB"));
+        Assert.Equal(4, session.Commands.Count(command => command.Sql == operation.QuerySql));
     }
 
     [Fact]
@@ -688,7 +760,8 @@ public sealed class MeasureParameterSetExecutionTests
         public async Task<MeasureParameterSetExecution> ExecuteAsync(
             SqlHarnessMeasureOperation operation,
             IReadOnlyList<PreparedMeasureParameterSet> sets,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Action<int, IReadOnlyList<MaterializedParameterInfo>>? recordMaterializedConditions = null)
         {
             using var raw = new CanonicalResultAccumulator();
             session.UseSuppliedSession(sets.Count);
@@ -698,7 +771,8 @@ public sealed class MeasureParameterSetExecutionTests
                     operation,
                     sets,
                     raw,
-                    cancellationToken);
+                    cancellationToken,
+                    recordMaterializedConditions: recordMaterializedConditions);
         }
     }
 
@@ -901,6 +975,15 @@ public sealed class MeasureParameterSetExecutionTests
                 return Task.FromException<ISqlReader>(canceled);
             }
 
+            if (command.Sql.Contains("sys.table_types", StringComparison.Ordinal))
+                return Task.FromResult<ISqlReader>(FakeReader.Catalog());
+
+            if (command.Sql == "SELECT Id FROM dbo.SourceA")
+                return Task.FromResult<ISqlReader>(FakeReader.Source(11));
+
+            if (command.Sql == "SELECT Id FROM dbo.SourceB")
+                return Task.FromResult<ISqlReader>(FakeReader.Source(22));
+
             if (command.Sql.Contains("STATISTICS", StringComparison.Ordinal))
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
 
@@ -991,10 +1074,18 @@ public sealed class MeasureParameterSetExecutionTests
         public static FakeReader Empty() => new([]);
         public static FakeReader SessionState() => new(
             [new(["Options", "Isolation", "LockTimeout", "DateFirst", "DateFormat", "DeadlockPriority"], [[29560, 2, -1, 7, "mdy", 0]])]);
+        public static FakeReader Catalog() => new(
+            [new(["QualifiedName", "ColumnName", "TypeName", "Size", "Precision", "Scale", "Nullable"],
+                [["[dbo].[IdList]", "Id", "int", 4, 10, 0, false]])]);
+        public static FakeReader Source(int id) => new([new(["Id"], [[id]])]);
         public static FakeReader WithPlan(string[] names, object?[][] rows, string plan) =>
             new([new(names, rows), new(["Microsoft SQL Server 2005 XML Showplan"], [[plan]])]);
         public string GetName(int ordinal) => Current.Names[ordinal];
         public Type GetFieldType(int ordinal) => Current.Rows[0][ordinal]?.GetType() ?? typeof(object);
+        public string GetSqlTypeName(int ordinal) => Current.Names[ordinal] == "Id" ? "int" : GetFieldType(ordinal).Name;
+        public SqlReaderColumnMetadata GetColumnMetadata(int ordinal) => Current.Names[ordinal] == "Id"
+            ? new("int", 4, 10, 0)
+            : new(GetSqlTypeName(ordinal), null, null, null);
         public bool GetAllowNull(int ordinal) => false;
         public object GetValue(int ordinal) => Current.Rows[_row][ordinal] ?? DBNull.Value;
         public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(_results.Count > 0 && ++_row < Current.Rows.Length);

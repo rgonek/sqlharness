@@ -158,6 +158,107 @@ public sealed class ConditionsModelBuilderTests
         Assert.NotEmpty(sealedModel.Fingerprint);
     }
 
+    [Fact]
+    public void Materialized_table_and_list_conditions_store_typed_shape_and_journal_keyed_content_hash()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var operation = Measure();
+        var model = ConditionsModelBuilder.Build(operation, target, new SqlServerDialect(), [],
+            [new ConditionsCaseInput("0", null, [])], storeSensitive: true);
+        var details = new MaterializedParameterInfo[]
+        {
+            new("Ids", "tvp", "IdList", "dbo.IdList",
+                [new TableTypeColumn("Id", SqlDbType.Int, 4, 10, 0, false)], 2, null,
+                [["11"], ["12"]], []),
+            new("Types", "list", "int", null, [], 3, null, [], ["1", "2", "3"]),
+        };
+        var enriched = ConditionsModelBuilder.WithMaterializedParameters(model, 0, details, storeSensitive: true);
+        var salt = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+
+        Assert.Equal(2, enriched.Version);
+        Assert.Equal("dbo.IdList READONLY", enriched.Cases[0].Varying[0].EffectiveType);
+        Assert.Equal("list of int", enriched.Cases[0].Varying[1].EffectiveType);
+        Assert.Equal(2, enriched.Cases[0].Varying[0].Count);
+        Assert.Equal(["Id"], enriched.Cases[0].Varying[0].Columns);
+        Assert.Equal("[[\"11\"],[\"12\"]]", enriched.Cases[0].Varying[0].Rows!.Value.GetRawText());
+        Assert.Equal("[\"1\",\"2\",\"3\"]", enriched.Cases[0].Varying[1].Values!.Value.GetRawText());
+
+        var sealedA = ActivityJournal.SealConditions(enriched, salt);
+        var changedContent = ConditionsModelBuilder.WithMaterializedParameters(model, 0,
+            [details[0] with { Rows = [["99"], ["12"]] }, details[1]], storeSensitive: true);
+        var sealedChanged = ActivityJournal.SealConditions(changedContent, salt);
+        Assert.NotNull(sealedA.Cases[0].Varying[0].ContentHash);
+        Assert.NotEqual(sealedA.Cases[0].Varying[0].ContentHash, sealedChanged.Cases[0].Varying[0].ContentHash);
+        Assert.NotEqual(sealedA.Cases[0].Fingerprint, sealedChanged.Cases[0].Fingerprint);
+    }
+
+    [Fact]
+    public void Materialized_sensitive_content_and_source_text_are_omitted_when_storage_is_disabled()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var model = ConditionsModelBuilder.Build(Measure(), target, new SqlServerDialect(), [],
+            [new ConditionsCaseInput("0", null, [])], storeSensitive: false);
+        var details = new[]
+        {
+            new MaterializedParameterInfo("Ids", "tvp", "dbo.IdList", "dbo.IdList",
+                [new TableTypeColumn("Id", SqlDbType.Int, 4, 10, 0, false)], 1,
+                "SELECT SECRET_SOURCE", [["SECRET_ROW"]], []),
+        };
+        var enriched = ConditionsModelBuilder.WithMaterializedParameters(model, 0, details, storeSensitive: false);
+        var sealedModel = ActivityJournal.SealConditions(enriched, Enumerable.Range(0, 32).Select(value => (byte)value).ToArray());
+        var bounded = ActivityJournal.BoundConditions(sealedModel, storeSensitive: false);
+        var serialized = System.Text.Json.JsonSerializer.Serialize(bounded);
+
+        Assert.Null(bounded.Cases[0].Varying[0].Rows);
+        Assert.Null(bounded.Cases[0].Varying[0].Values);
+        Assert.Null(bounded.Cases[0].Varying[0].SourceText);
+        Assert.Equal(1, bounded.Cases[0].Varying[0].Count);
+        Assert.Equal("dbo.IdList READONLY", bounded.Cases[0].Varying[0].EffectiveType);
+        Assert.NotEmpty(bounded.Cases[0].Varying[0].ContentHash!);
+        Assert.Contains("ContentHash", typeof(ConditionsParameter).GetProperties().Select(property => property.Name));
+        Assert.DoesNotContain("SECRET_ROW", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("SECRET_SOURCE", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Fixed_materialized_content_changes_keyed_operation_fingerprint()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var model = ConditionsModelBuilder.Build(Measure(), target, new SqlServerDialect(), [],
+            [new ConditionsCaseInput("0", null, [])], storeSensitive: true);
+        var first = new MaterializedParameterInfo("Ids", "tvp", "dbo.IdList", "dbo.IdList",
+            [new TableTypeColumn("Id", SqlDbType.Int, 4, 10, 0, false)], 1, "SELECT Id FROM dbo.Source", [["11"]], []);
+        var second = first with { Rows = [["12"]] };
+        var fixedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Ids" };
+        var salt = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+
+        var firstModel = ConditionsModelBuilder.WithMaterializedParameters(model, 0, [first], true, fixedNames);
+        var secondModel = ConditionsModelBuilder.WithMaterializedParameters(model, 0, [second], true, fixedNames);
+
+        Assert.NotEqual(ActivityJournal.SealConditions(firstModel, salt).Fingerprint,
+            ActivityJournal.SealConditions(secondModel, salt).Fingerprint);
+    }
+
+    [Fact]
+    public void Oversized_materialized_rows_are_omitted_with_evidence()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var model = ConditionsModelBuilder.Build(Measure(), target, new SqlServerDialect(), [],
+            [new ConditionsCaseInput("0", null, [])], storeSensitive: true);
+        var details = new[]
+        {
+            new MaterializedParameterInfo("Ids", "tvp", "dbo.IdList", "dbo.IdList",
+                [new TableTypeColumn("Id", SqlDbType.NVarChar, -1, 0, 0, true)], 1,
+                "SELECT SECRET_SOURCE", [[new string('x', 1_100_000)]], []),
+        };
+        var enriched = ConditionsModelBuilder.WithMaterializedParameters(model, 0, details, storeSensitive: true);
+        var bounded = ActivityJournal.OmitOversizedConditions(enriched);
+
+        Assert.Null(bounded.Cases[0].Varying[0].Rows);
+        Assert.NotNull(bounded.Cases[0].Varying[0].ContentForFingerprint);
+        Assert.Contains("cases.0.@Ids.rows", bounded.Omitted);
+    }
+
     private static SqlHarnessMeasureOperation Measure() => new(
         new SqlTargetRequest("profile", new Dictionary<string, string>()), "SELECT 1", "SELECT @N", [], 30, 5);
 

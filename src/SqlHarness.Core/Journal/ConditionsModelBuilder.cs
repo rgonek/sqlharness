@@ -52,12 +52,70 @@ internal static class ConditionsModelBuilder
             return shell with { Label = CaseLabel.Format(shell, cases.Count, storeSensitive) };
         }).ToArray();
         var execution = new ConditionsExecution(kind, "per-case", "per-case", 1, repeat, timeout, comparisonMode, compareNullability);
-        return new ConditionsModel(1, dialect.Engine == SqlEngine.SqlServer ? "sqlserver" : "postgres", target.Server, target.Database,
+        return new ConditionsModel(2, dialect.Engine == SqlEngine.SqlServer ? "sqlserver" : "postgres", target.Server, target.Database,
             execution, setup is null ? null : new ConditionsSetup(string.Empty, storeSensitive ? setup : null), fixedValues, modelCases,
             string.Empty, [])
         {
             SetupTextForFingerprint = setup,
             FixedForFingerprint = fixedParameters.Select(parameter => ToCondition(parameter, true)).ToArray(),
+        };
+    }
+
+    internal static ConditionsModel WithMaterializedParameters(
+        ConditionsModel model,
+        int caseIndex,
+        IReadOnlyList<MaterializedParameterInfo> details,
+        bool storeSensitive,
+        IReadOnlySet<string>? fixedParameterNames = null)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(details);
+        if ((uint)caseIndex >= (uint)model.Cases.Count)
+            throw new ArgumentOutOfRangeException(nameof(caseIndex));
+
+        var cases = model.Cases.ToArray();
+        var conditionsCase = cases[caseIndex];
+        var parameters = conditionsCase.Varying.ToList();
+        var fixedParameters = model.Fixed.ToList();
+        foreach (var detail in details)
+        {
+            var prefix = detail.Name.StartsWith('@') ? detail.Name : "@" + detail.Name;
+            var rows = detail.Kind == "tvp" ? JsonSerializer.SerializeToElement(detail.Rows, JsonOptions) : (JsonElement?)null;
+            var values = detail.Kind == "list" ? JsonSerializer.SerializeToElement(detail.Values, JsonOptions) : (JsonElement?)null;
+            var content = JsonSerializer.SerializeToUtf8Bytes(new { detail.Kind, detail.Rows, detail.Values, detail.SourceText }, JsonOptions);
+            var parameter = new ConditionsParameter(
+                prefix,
+                detail.Kind == "tvp" ? detail.ResolvedType?.Replace("[", "", StringComparison.Ordinal).Replace("]", "", StringComparison.Ordinal) + " READONLY" : "list of " + detail.DeclaredType,
+                null,
+                detail.Kind,
+                detail.Count,
+                detail.Columns.Select(column => column.Name).ToArray(),
+                detail.Columns.Select(column => column.ParameterType).ToArray(),
+                null,
+                storeSensitive ? rows : null,
+                storeSensitive ? values : null,
+                storeSensitive ? detail.SourceText : null)
+            {
+                ContentForFingerprint = content,
+            };
+            var isFixed = fixedParameterNames?.Contains(detail.Name) == true || fixedParameterNames?.Contains(prefix) == true;
+            var target = isFixed ? fixedParameters : parameters;
+            var existingIndex = target.FindIndex(item => string.Equals(item.Name, prefix, StringComparison.OrdinalIgnoreCase));
+            if (existingIndex >= 0)
+                target[existingIndex] = parameter;
+            else
+                target.Add(parameter);
+        }
+
+        var updated = conditionsCase with { Varying = parameters, VaryingForFingerprint = parameters };
+        var labelCase = updated with { Varying = fixedParameters.Concat(parameters).ToArray() };
+        updated = updated with { Label = CaseLabel.Format(labelCase, model.Cases.Count, storeSensitive) };
+        cases[caseIndex] = updated;
+        return model with
+        {
+            Fixed = fixedParameters,
+            FixedForFingerprint = fixedParameters,
+            Cases = cases,
         };
     }
 

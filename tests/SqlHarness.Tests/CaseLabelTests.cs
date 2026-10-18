@@ -29,6 +29,27 @@ public sealed class CaseLabelTests
         Assert.Equal("Case 2 of 3", CaseLabel.Format(unnamed, 3, false));
     }
 
+    [Fact]
+    public void Formats_materialized_tvp_and_list_sizes_and_values()
+    {
+        var tvp = new ConditionsParameter("@Ids", "dbo.IdList READONLY", null, "tvp", 500,
+            ["Id"], ContentHash: "hash");
+        var shortList = new ConditionsParameter("@Types", "list of int", null, "list", 3, [], ContentHash: "hash",
+            Values: JsonDocument.Parse("[1,2,3]").RootElement.Clone());
+        var longList = shortList with
+        {
+            Count = 250,
+            Values = JsonDocument.Parse("[" + string.Join(",", Enumerable.Range(0, 250)) + "]").RootElement.Clone(),
+        };
+
+        Assert.Equal("@Ids = 500 rows (dbo.IdList)", CaseLabel.Format(
+            new ConditionsCase("0", 0, "", null, [tvp], ""), 1, true));
+        Assert.Equal("@Types IN (1, 2, 3)", CaseLabel.Format(
+            new ConditionsCase("0", 0, "", null, [shortList], ""), 1, true));
+        Assert.Equal("@Types IN (… 250 values)", CaseLabel.Format(
+            new ConditionsCase("0", 0, "", null, [longList], ""), 1, true));
+    }
+
     private static ConditionsParameter Parameter(string name, string type, string? value)
     {
         using var document = JsonDocument.Parse(value is null ? "null" : JsonSerializer.Serialize(value));
