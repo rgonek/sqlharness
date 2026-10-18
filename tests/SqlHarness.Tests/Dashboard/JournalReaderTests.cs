@@ -256,12 +256,14 @@ public sealed class JournalReaderTests
         using var home = new TempHome();
         var seed = new JournalSeed(home.DatabasePath);
         var compare = seed.Compare(JournalSeed.Session("cli:mixed-badge"), "orders", "whole", "h0", "h1");
+        var idOne = new ConditionsParameter("@id", "int", JsonDocument.Parse("1").RootElement.Clone());
+        var idTwo = new ConditionsParameter("@id", "int", JsonDocument.Parse("2").RootElement.Clone());
         var conditions = JournalSeed.ReproConditions() with
         {
             Cases =
             [
-                new ConditionsCase("0", 0, "@id = 1", null, [], "fingerprint-0"),
-                new ConditionsCase("1", 1, "@id = 2", null, [], "fingerprint-1"),
+                new ConditionsCase("0", 0, "@id = 1", null, [idOne], "fingerprint-0") { VaryingForFingerprint = [idOne] },
+                new ConditionsCase("1", 1, "@id = 2", null, [idTwo], "fingerprint-1") { VaryingForFingerprint = [idTwo] },
             ],
         };
         var metrics = new BenchmarkJournalRecord(

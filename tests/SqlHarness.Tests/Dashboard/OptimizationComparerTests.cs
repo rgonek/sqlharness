@@ -478,7 +478,8 @@ public sealed class OptimizationComparerTests
         new(id, "orders", "whole", "db", "sqlserver", "fingerprint", hash, null,
             $"2026-10-07T09:00:{id % 60:D2}Z", "succeeded", null, null, null,
             [new CompareCaseEvidence("0", "@CustomerId = 9001", null, null, null)],
-            [Metric("measure", "0", reads)]) { IsMeasure = true };
+            [Metric("measure", "0", reads)])
+        { IsMeasure = true };
 
     private static CompareMetricEvidence Metric(string variant, string caseId, long reads, string table) =>
         new(variant, caseId, $"@CustomerId = {9001 + int.Parse(caseId, System.Globalization.CultureInfo.InvariantCulture)}",

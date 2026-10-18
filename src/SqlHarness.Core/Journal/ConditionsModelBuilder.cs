@@ -69,7 +69,9 @@ internal static class ConditionsModelBuilder
     internal static byte[] OperationFingerprintPayload(ConditionsModel model, string setupHash) =>
         JsonSerializer.SerializeToUtf8Bytes(new
         {
-            model.Engine, model.Server, model.Database,
+            model.Engine,
+            model.Server,
+            model.Database,
             setup = new { hash = setupHash },
             @fixed = model.FixedForFingerprint,
             varying = model.Cases.Select(item => item.VaryingForFingerprint),
@@ -84,7 +86,9 @@ internal static class ConditionsModelBuilder
     internal static byte[] OperationMeasurementFingerprintPayload(ConditionsModel model, string setupHash) =>
         JsonSerializer.SerializeToUtf8Bytes(new
         {
-            model.Engine, model.Server, model.Database,
+            model.Engine,
+            model.Server,
+            model.Database,
             setup = new { hash = setupHash },
             @fixed = model.FixedForFingerprint,
             varying = model.Cases.Select(item => item.VaryingForFingerprint),
@@ -98,7 +102,9 @@ internal static class ConditionsModelBuilder
     internal static byte[] CaseMeasurementFingerprintPayload(ConditionsModel model, string setupHash, ConditionsCase conditionsCase) =>
         JsonSerializer.SerializeToUtf8Bytes(new
         {
-            model.Engine, model.Server, model.Database,
+            model.Engine,
+            model.Server,
+            model.Database,
             setup = new { hash = setupHash },
             @fixed = model.FixedForFingerprint,
             varying = conditionsCase.VaryingForFingerprint,
@@ -112,7 +118,9 @@ internal static class ConditionsModelBuilder
     private static byte[] FingerprintPayload(ConditionsModel model, string setupHash, IReadOnlyList<ConditionsParameter> varying) =>
         JsonSerializer.SerializeToUtf8Bytes(new
         {
-            model.Engine, model.Server, model.Database,
+            model.Engine,
+            model.Server,
+            model.Database,
             setup = new { hash = setupHash },
             @fixed = model.FixedForFingerprint,
             varying,

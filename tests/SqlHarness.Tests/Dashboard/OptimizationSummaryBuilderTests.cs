@@ -198,7 +198,8 @@ public sealed class OptimizationSummaryBuilderTests
         new(id, subject, scope, database, "sqlserver", fingerprint, hash, null,
             $"2026-10-07T09:00:{id % 60:D2}Z", "succeeded", null, null, null,
             [new CompareCaseEvidence("set-a", "set-a", "set-a", null, null)],
-            [new CompareMetricEvidence("measure", "set-a", "set-a", reads, reads, 1, [])]) { IsMeasure = true };
+            [new CompareMetricEvidence("measure", "set-a", "set-a", reads, reads, 1, [])])
+        { IsMeasure = true };
 
     private static CompareMetricEvidence Metric(string variant, long reads) => Metric(variant, "0", reads);
 
