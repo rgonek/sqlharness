@@ -23,13 +23,13 @@ export function SessionsPage() {
   const [agent, setAgent] = useState("all")
   const [view, setView] = useState<"active" | "archived">("active")
   const [search, setSearch] = useState("")
-  const [hasCompare, setHasCompare] = useState(false)
+  const [hasOptimization, setHasOptimization] = useState(false)
   const q = useDebounced(search.trim(), 300)
   const now = useNow(30_000)
   const agentKinds = useAgentKinds()
   const tabs = agentTabs((agentKinds.data ?? []).map(item => item.key))
   const selected = tabs.some(tab => tab.value === agent) ? agent : "all"
-  const base = { ...(selected === "all" ? {} : { agent: selected }), archived: view === "archived", q: q || undefined, hasCompare: hasCompare || undefined }
+  const base = { ...(selected === "all" ? {} : { agent: selected }), archived: view === "archived", q: q || undefined, hasCompare: hasOptimization || undefined }
   const pinned = useSessions({ ...base, starred: true })
   const sessions = useSessions({ ...base, starred: false })
   const failure = pinned.error ?? sessions.error
@@ -42,7 +42,7 @@ export function SessionsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Input type="search" aria-label="Search sessions" placeholder="Search title, note, directory, key"
           value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={hasCompare} onChange={e => setHasCompare(e.target.checked)} />Contains compare</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={hasOptimization} onChange={e => setHasOptimization(e.target.checked)} />Contains optimization</label>
         <Tabs value={view} onValueChange={v => setView(v as "active" | "archived")}>
           <TabsList>
             <TabsTrigger value="active">Active</TabsTrigger>

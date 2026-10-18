@@ -69,6 +69,82 @@ public sealed class ConditionsModelBuilderTests
     }
 
     [Fact]
+    public void Measurement_fingerprint_groups_compare_and_measure_without_changing_operation_fingerprint()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var parameters = new[] { Parameter("N", SqlDbType.Int, 7, null) };
+        var cases = new[] { new ConditionsCaseInput("0", null, []) };
+        var measure = ConditionsModelBuilder.Build(Measure(), target, new SqlServerDialect(), parameters, cases, true);
+        var compare = ConditionsModelBuilder.Build(new SqlHarnessCompareOperation(
+            new SqlTargetRequest("profile", new Dictionary<string, string>()), "SELECT 1",
+            "SELECT @N", "SELECT @N", ["N:int=7"], 30, 5, ResultComparisonMode.Ordered, true),
+            target, new SqlServerDialect(), parameters, cases, true);
+        var salt = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+
+        var sealedMeasure = ActivityJournal.SealConditions(measure, salt);
+        var sealedCompare = ActivityJournal.SealConditions(compare, salt);
+
+        Assert.NotEqual(sealedMeasure.Fingerprint, sealedCompare.Fingerprint);
+        Assert.Equal(sealedMeasure.MeasurementFingerprint, sealedCompare.MeasurementFingerprint);
+        Assert.Equal(sealedMeasure.Cases[0].MeasurementFingerprint, sealedCompare.Cases[0].MeasurementFingerprint);
+    }
+
+    [Fact]
+    public void Measurement_fingerprint_ignores_comparison_mode_but_tracks_values_and_salt()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var operation = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("profile", new Dictionary<string, string>()), null,
+            "SELECT @N", "SELECT @N", ["N:int=7"], 30, 5, ResultComparisonMode.Ordered, true);
+        var cases = new[] { new ConditionsCaseInput("0", null, [Parameter("N", SqlDbType.Int, 7, null)]) };
+        var ordered = ConditionsModelBuilder.Build(operation, target, new SqlServerDialect(), [], cases, true);
+        var multiset = ConditionsModelBuilder.Build(operation with { CompareResults = ResultComparisonMode.Multiset },
+            target, new SqlServerDialect(), [], cases, true);
+        var changedValue = ConditionsModelBuilder.Build(operation, target, new SqlServerDialect(),
+            [], [new ConditionsCaseInput("0", null, [Parameter("N", SqlDbType.Int, 8, null)])], true);
+        var saltA = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+        var saltB = Enumerable.Range(32, 32).Select(value => (byte)value).ToArray();
+
+        var orderedA = ActivityJournal.SealConditions(ordered, saltA);
+        Assert.Equal(orderedA.MeasurementFingerprint, ActivityJournal.SealConditions(multiset, saltA).MeasurementFingerprint);
+        Assert.NotEqual(orderedA.MeasurementFingerprint, ActivityJournal.SealConditions(changedValue, saltA).MeasurementFingerprint);
+        Assert.NotEqual(orderedA.Cases[0].MeasurementFingerprint,
+            ActivityJournal.SealConditions(changedValue, saltA).Cases[0].MeasurementFingerprint);
+        Assert.NotEqual(orderedA.MeasurementFingerprint, ActivityJournal.SealConditions(ordered, saltB).MeasurementFingerprint);
+        Assert.NotEqual(orderedA.Fingerprint, ActivityJournal.SealConditions(multiset, saltA).Fingerprint);
+    }
+
+    [Fact]
+    public void Measurement_fingerprint_ignores_compare_nullability()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var operation = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("profile", new Dictionary<string, string>()), null,
+            "SELECT @N", "SELECT @N", ["N:int=7"], 30, 5, ResultComparisonMode.Ordered, true);
+        var cases = new[] { new ConditionsCaseInput("0", null, [Parameter("N", SqlDbType.Int, 7, null)]) };
+        var compareNullability = ConditionsModelBuilder.Build(operation, target, new SqlServerDialect(), [], cases, true);
+        var ignoreNullability = ConditionsModelBuilder.Build(operation with { CompareNullability = false },
+            target, new SqlServerDialect(), [], cases, true);
+        var salt = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+
+        var includeNullability = ActivityJournal.SealConditions(compareNullability, salt);
+        var excludeNullability = ActivityJournal.SealConditions(ignoreNullability, salt);
+
+        Assert.Equal(includeNullability.MeasurementFingerprint, excludeNullability.MeasurementFingerprint);
+        Assert.Equal(includeNullability.Cases[0].MeasurementFingerprint, excludeNullability.Cases[0].MeasurementFingerprint);
+    }
+
+    [Fact]
+    public void Legacy_rows_fall_back_to_operation_fingerprint()
+    {
+        var model = new ConditionsModel(1, "sqlserver", "server", "database",
+            new ConditionsExecution("measure", "per-case", "per-case", 1, 1, 30, null, null), null,
+            [], [], "legacy-operation-fingerprint", []);
+
+        Assert.Equal("legacy-operation-fingerprint", model.EffectiveMeasurementFingerprint);
+    }
+
+    [Fact]
     public void Values_and_setup_text_are_absent_without_sensitive_storage()
     {
         var target = new ResolvedTarget("server", "database", null!, "integrated");

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **Drift check (run first):** plans 079 and 080 must be merged. `git diff --stat 6c37cd7..HEAD -- src/SqlHarness.Dashboard src/SqlHarness.Core/Journal`. Use 079's `FirstRetainedVersion` rule and 080's `CompareHistoryBuilder`/`OptimizationSummaryBuilder` names.
+> **Dependency:** follows plan 087 (measure observations in Optimization), in addition to plans 079 and 080. **Drift check (run first):** dependencies must be merged. `git diff --stat 6c37cd7..HEAD -- src/SqlHarness.Dashboard src/SqlHarness.Core/Journal`. Use 079's `FirstRetainedVersion` rule and 080's `CompareHistoryBuilder`/`OptimizationSummaryBuilder` names.
 
 **Goal:** When transcript matching is on, group operations into agent sessions (conversations) across MCP/CLI sessions, link Codex immediately and Claude near-live, and make the dashboard and Optimization section work per agent session.
 

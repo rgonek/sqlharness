@@ -35,7 +35,7 @@ internal static class OperationJournalDescriber
         };
         start = operation switch
         {
-            SqlHarnessMeasureOperation measure => start with { SetupSqlText = measure.SetupSql },
+            SqlHarnessMeasureOperation measure => start with { SetupSqlText = measure.SetupSql, Context = measure.Context },
             SqlHarnessCompareOperation compare => start with
             {
                 SetupSqlText = compare.SetupSql,

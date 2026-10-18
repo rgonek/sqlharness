@@ -185,12 +185,16 @@ public sealed class McpToolHandlers(
         int? maxOperationSeconds = null,
         [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
-        CancellationToken ct = default) =>
+        CancellationToken ct = default,
+        [Description("Optional optimization subject; provide together with scope.")]
+        string? subject = null,
+        [Description("Optional optimization scope; provide together with subject.")]
+        string? scope = null) =>
         RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", "subject", "scope"]);
             return await module.ExecuteAsync(
-                await McpOperationMapper.MapMeasureAsync(scope, query, setup, parameters, parameterSetFiles, repeat, timeout, token, dryRun, parameterSets, matrix),
+                await McpOperationMapper.MapMeasureAsync(this.scope, query, setup, parameters, parameterSetFiles, repeat, timeout, token, dryRun, parameterSets, matrix, subject, scope),
                 token);
         }, ct);
 
@@ -616,7 +620,7 @@ public static class McpToolCatalog
     public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
     public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
     public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
-    public const string MeasureDescription = "Measure one query across repeats. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence.";
+    public const string MeasureDescription = "Measure one query across repeats. For an optimization measurement, provide both optional subject and textual scope; this is independent of compare.requireContext. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence.";
     public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode: pass means no elapsed regression under policy, not improvement. Observed equivalence follows the selected ordering, duplicate and nullability rules; it is not domain equivalence. Dry-run reports validation: passed, execution: not-run, and setup/baseline/candidate classifications.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
     public const string ArtifactDescription = "Read an existing saved artifact offline. Use its returned continuation for matrix-cells, statements, operators, or plan pages; plan nodes report omittedChildCount and omittedSubtreeCount when clipped.";

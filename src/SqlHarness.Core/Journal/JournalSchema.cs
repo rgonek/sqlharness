@@ -5,11 +5,12 @@ namespace SqlHarness.Core;
 internal static class JournalSchema
 {
     internal const int FirstRetainedVersion = 14;
-    internal const int CurrentVersion = 15;
+    internal const int CurrentVersion = 16;
 
     internal static readonly IReadOnlyDictionary<int, string> Migrations = new Dictionary<int, string>
     {
-        [15] = "ALTER TABLE operations ADD COLUMN warnings_json TEXT NOT NULL DEFAULT '[]';",
+        [15] = "ALTER TABLE operations ADD COLUMN measurement_fingerprint TEXT;",
+        [16] = "ALTER TABLE operations ADD COLUMN warnings_json TEXT NOT NULL DEFAULT '[]';",
     };
 
     internal const string Current = """
@@ -86,6 +87,7 @@ internal static class JournalSchema
             setup_sql_text TEXT,
             conditions_json TEXT,
             conditions_fingerprint TEXT,
+            measurement_fingerprint TEXT,
             warnings_json TEXT NOT NULL DEFAULT '[]'
         );
         CREATE INDEX ix_operations_session ON operations(session_id, id);

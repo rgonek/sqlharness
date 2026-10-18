@@ -273,6 +273,10 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         [CommandOption("--query <PATH>")] public string? Query { get; set; }
         [Description("Setup once on the measured session; setup locals do not carry into measured SQL. Native temp syntax and parameterized-setup rules: capabilities <profile> --json.")]
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
+        [Description("Optional optimization subject; provide together with --scope.")]
+        [CommandOption("--subject <LABEL>")] public string? Subject { get; set; }
+        [Description("Optional optimization scope; provide together with --subject.")]
+        [CommandOption("--scope <LABEL>")] public string? Scope { get; set; }
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
@@ -294,11 +298,20 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         var setPaths = s.ParameterSets ?? [];
         if (setPaths.Length == 1)
             return Invalid("Exactly one --param-set is invalid. Use --param for one set.");
+        CompareContext? measureContext;
+        try
+        {
+            measureContext = CompareContext.Parse(s.Subject, s.Scope, required: false);
+        }
+        catch (ArgumentException exception)
+        {
+            return Invalid(exception.Message);
+        }
         try
         {
             var parameterSets = setPaths.Length == 0 ? null : await ReadParameterSetsAsync(setPaths, ct);
             return await Dispatch(
-                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets) { DryRun = s.DryRun },
+                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets) { DryRun = s.DryRun, Context = measureContext },
                 ResolveOutputMode(s.Json, s.JsonSummary, s.Output),
                 ct,
                 new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));

@@ -56,14 +56,20 @@ public sealed record CompareEvidence(
     bool? ResultsEquivalent,
     string? RegressionVerdict,
     IReadOnlyList<CompareCaseEvidence> Cases,
-    IReadOnlyList<CompareMetricEvidence> Metrics);
+    IReadOnlyList<CompareMetricEvidence> Metrics)
+{
+    public bool IsMeasure { get; init; }
+}
 
 public sealed record CompareCaseEvidence(
     string CaseId,
     string Label,
     string? SetName,
     bool? ResultsEquivalent,
-    string? RegressionVerdict);
+    string? RegressionVerdict)
+{
+    public string? MeasurementFingerprint { get; init; }
+}
 
 /// <summary>One baseline or candidate per-case metric row and its journaled per-table IO rows.</summary>
 public sealed record CompareMetricEvidence(
@@ -77,6 +83,7 @@ public sealed record CompareMetricEvidence(
 {
     public double? CpuMedianMs { get; init; }
     public PostgresBuffers? Postgres { get; init; }
+    public string? MeasurementFingerprint { get; init; }
 }
 
 public sealed record CompareTableIoEvidence(string Table, long LogicalReads, long? LobLogicalReads, long? Scans);
@@ -97,7 +104,11 @@ public sealed record OptimizationComparison(
     public PostgresBuffers? BuffersAfter { get; init; }
 }
 
-public sealed record OptimizationActionReference(long OperationId, string Side, IReadOnlyList<string> CaseIds);
+public sealed record OptimizationActionReference(long OperationId, string Side, IReadOnlyList<string> CaseIds)
+{
+    public IReadOnlyDictionary<string, string> CaseIdsByFingerprint { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+}
 
 public sealed record CaseOption(string Id, string Label, string Outcome);
 public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);

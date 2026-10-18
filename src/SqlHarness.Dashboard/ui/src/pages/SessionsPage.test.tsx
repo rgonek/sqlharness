@@ -85,13 +85,13 @@ test("archived view and search change the query", async () => {
   await waitFor(() => expect(calls).toContain("/api/sessions?archived=true&starred=false&q=BSI_1&limit=50"))
 })
 
-test("contains compare filters both starred and unstarred session queries", async () => {
+test("contains optimization filters both starred and unstarred session queries", async () => {
   const calls = stubFetch({
     "/api/agents": [],
     "/api/sessions": { items: [], nextCursor: null },
   })
   renderApp("/sessions")
-  await userEvent.click(await screen.findByRole("checkbox", { name: "Contains compare" }))
+  await userEvent.click(await screen.findByRole("checkbox", { name: "Contains optimization" }))
   await waitFor(() => {
     expect(calls).toContain("/api/sessions?archived=false&starred=true&hasCompare=true&limit=50")
     expect(calls).toContain("/api/sessions?archived=false&starred=false&hasCompare=true&limit=50")

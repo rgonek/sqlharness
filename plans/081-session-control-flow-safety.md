@@ -117,3 +117,7 @@
 - [x] **Step 3:** `just verify` passed at `d65cfac7b9c472b82daaca132e090709c57b8b87`; see [verification evidence](081-verification-evidence.md) for stage results and scope.
 - [x] **Step 4 (operator-authorized, optional):** Not performed; optional live UAT was not authorized. No live database calls were made.
 - [x] **Step 5:** Moved the implementation record from the queue to [history](history.md#plan-081-feature-branch-evidence) with evidence. Task 5 documentation commit: `90afb5c`; final evidence update is recorded separately.
+
+### Integration with Plan 087
+
+Plan 087 owns journal v15 (`measurement_fingerprint`); this plan's `warnings_json` is journal v16. Fresh journals include both columns, and journals retained from v14 migrate through v15 to v16. The standalone feature-branch gate above remains evidence for its tested v15 product revision; integrated verification is recorded separately after the controller gate.
