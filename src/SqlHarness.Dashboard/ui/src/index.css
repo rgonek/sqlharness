@@ -170,3 +170,7 @@
 .sql-block .hljs-operator {
   color: var(--sql-type);
 }
+.monaco-editor .plan-source-highlight {
+  background-color: color-mix(in oklab, var(--primary) 18%, transparent);
+  border-bottom: 1px solid var(--primary);
+}

@@ -34,6 +34,21 @@ export class NotFoundError extends Error {
   }
 }
 
+/** A non-authenticated API rejection, with stable status and optional server error code. */
+export class HttpStatusError extends Error {
+  readonly status: number
+  readonly code: string | null
+  readonly url: string
+
+  constructor(status: number, url: string, message: string, code: string | null = null) {
+    super(message)
+    this.name = "HttpStatusError"
+    this.status = status
+    this.code = code
+    this.url = url
+  }
+}
+
 export type QueryParams = Record<string, string | number | null | undefined>
 
 export function withQuery(path: string, params: QueryParams = {}): string {
@@ -50,7 +65,18 @@ export async function getJson<T>(path: string, params?: QueryParams): Promise<T>
   const response = await send(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
   if (response.status === 401) throw new UnauthorizedError()
   if (response.status === 404) throw new NotFoundError(url)
-  if (!response.ok) throw new Error(`Request failed with ${response.status}: ${url}`)
+  if (!response.ok) {
+    const body = await response.clone().json().catch(() => null) as unknown
+    const envelope = body && typeof body === "object" && "error" in body
+      ? (body as { error?: unknown }).error
+      : body
+    const detail = envelope && typeof envelope === "object" ? envelope as { code?: unknown; message?: unknown } : null
+    const code = typeof detail?.code === "string" ? detail.code : null
+    const message = typeof detail?.message === "string"
+      ? detail.message
+      : `Request failed with ${response.status}: ${url}`
+    throw new HttpStatusError(response.status, url, message, code)
+  }
   return (await response.json()) as T
 }
 

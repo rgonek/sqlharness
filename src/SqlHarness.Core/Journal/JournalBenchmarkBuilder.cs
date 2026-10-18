@@ -57,9 +57,11 @@ internal static class JournalBenchmarkBuilder
         foreach (var run in runs)
         {
             var ordinalOffset = 0;
-            foreach (var plan in run.PlanXmls)
+            var pairsByDocument = StatementSpanPairer.PairDocuments(run.ExecutedSql, run.PlanXmls);
+            for (var documentIndex = 0; documentIndex < run.PlanXmls.Count; documentIndex++)
             {
-                var statements = StatementMetricsExtractor.Extract(plan, out var omitted);
+                var statements = StatementMetricsExtractor.Extract(
+                    run.PlanXmls[documentIndex], run.ExecutedSql, pairsByDocument[documentIndex], out var omitted);
                 extracted.AddRange(statements.Select(statement => (run, statement with
                 {
                     StatementOrdinal = statement.StatementOrdinal + ordinalOffset,
@@ -114,14 +116,34 @@ internal static class JournalBenchmarkBuilder
 
         var planMetrics = runs.Select(run => PlanMetricsExtractor.Extract(run.PlanXmls)).ToArray();
         var links = new List<JournalPlanLink>();
+        var occurrences = new List<JournalPlanOccurrence>();
         foreach (var run in runs)
         {
+            var pairsByDocument = StatementSpanPairer.PairDocuments(run.ExecutedSql, run.PlanXmls);
             for (var ordinal = 0; ordinal < run.PlanXmls.Count; ordinal++)
             {
                 var document = run.PlanXmls[ordinal];
-                var hash = PlanIdentity.Hash(document);
-                links.Add(new JournalPlanLink(run.Repetition, ordinal, hash));
-                documents.TryAdd(hash, new JournalPlanDocument(hash, IsJson(document) ? "explain-json" : "showplan-xml", document));
+                var sha256 = PlanIdentity.DocumentSha256(document);
+                var shapeHash = PlanIdentity.Hash(document);
+                links.Add(new JournalPlanLink(run.Repetition, ordinal, sha256));
+                var pairs = pairsByDocument[ordinal];
+                var statementCount = StatementMetricsExtractor.CountStatements(document);
+                if (statementCount == 0)
+                    statementCount = 1;
+                for (var statementIndex = 0; statementIndex < statementCount; statementIndex++)
+                {
+                    var pair = statementIndex < pairs.Count ? pairs[statementIndex] : null;
+                    occurrences.Add(new JournalPlanOccurrence(run.Repetition, ordinal, statementIndex, sha256)
+                    {
+                        SpanStart = pair?.SpanStart,
+                        SpanLength = pair?.SpanLength,
+                        MatchKind = pair?.MatchKind ?? "unmatched",
+                        StatementId = pair?.StatementId,
+                        StatementCompId = pair?.StatementCompId,
+                    });
+                }
+                documents.TryAdd(sha256, new JournalPlanDocument(sha256, shapeHash,
+                    IsJson(document) ? "explain-json" : "showplan-xml", document));
             }
         }
 
@@ -161,7 +183,10 @@ internal static class JournalBenchmarkBuilder
                 MedianOf(postgres.Select(p => p.SharedDirtied)), MedianOf(postgres.Select(p => p.SharedWritten)),
                 MedianOf(postgres.Select(p => p.TempRead)), MedianOf(postgres.Select(p => p.TempWritten))),
             tableIoAvailable ? TableIo(runs) : [],
-            links);
+            links)
+        {
+            PlanOccurrences = occurrences,
+        };
     }
 
     private static IReadOnlyList<JournalTableIo> TableIo(CompareRunArtifact[] runs)

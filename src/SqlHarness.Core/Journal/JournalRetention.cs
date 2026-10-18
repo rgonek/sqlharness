@@ -182,12 +182,14 @@ public static class JournalRetention
         return deleted;
     }
 
-    /// <summary>Deletes unreferenced plans, then empty sessions, each in batches of at most <paramref name="batchSize"/> rows.</summary>
+    /// <summary>Deletes unreferenced plan documents, then empty sessions, each in batches of at most <paramref name="batchSize"/> rows.</summary>
     private static void DeleteOrphans(SqliteConnection connection, string? cutoff, int batchSize, Totals totals)
     {
         DeleteInBatches(connection, null, totals.CommittedPlans, batchSize, $"""
-            DELETE FROM plans WHERE rowid IN (
-                SELECT rowid FROM plans WHERE hash NOT IN (SELECT plan_hash FROM operation_plans) LIMIT {batchSize});
+            DELETE FROM plan_documents WHERE rowid IN (
+                SELECT rowid FROM plan_documents
+                WHERE sha256 NOT IN (SELECT document_sha FROM plan_occurrences WHERE document_sha IS NOT NULL)
+                LIMIT {batchSize});
             """);
         DeleteInBatches(connection, cutoff, totals.CommittedSessions, batchSize, $"""
             DELETE FROM sessions WHERE id IN (

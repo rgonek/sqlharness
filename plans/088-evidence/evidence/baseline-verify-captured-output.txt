@@ -1,0 +1,47 @@
+Plan 088 Task 0 baseline evidence recovered from the original functions.exec outputs in the 2026-10-18 Task 0 session.
+Worktree: D:\Dev\sqlharness\.worktrees\plan-088
+Base: 272d5dbb5f721536f85355b925273507e22de67b
+Command: just verify
+
+Captured stage output:
+==> build ok 3m22s
+==> ui-check ok 7m01s
+
+Captured core test log tail:
+Passed!  - Failed:     0, Passed:  4317, Skipped:    11, Total:  4328, Duration: 4 m 17 s - SqlHarness.Tests.dll (net10.0)
+==> test project: tests/SqlHarness.Tests/SqlHarness.Tests.csproj exit 0
+
+Captured MCP test log (full output as returned during the Task 0 session):
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+Test run for D:\Dev\sqlharness\.worktrees\plan-088\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:02.23]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [SKIP]
+[xUnit.net 00:00:02.24]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [SKIP]
+[xUnit.net 00:00:02.24]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [SKIP]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [1 ms]
+[xUnit.net 00:00:02.42]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [SKIP]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [1 ms]
+  Failed SqlHarness.Mcp.Tests.McpStderrLeakRegressionTests.Process_stderr_has_no_trace_debug_or_information_lines(revision: "2026-07-28") [6 s]
+  Error Message:
+   ModelContextProtocol.McpException : The server does not support the requested protocol version '2026-07-28'. Leave McpClientOptions.ProtocolVersion unset to allow automatic fallback to an older version. The server appears to require the initialize handshake.
+  Stack Trace:
+     at ModelContextProtocol.Client.McpClientImpl.ConnectAsync(CancellationToken cancellationToken)
+   at ModelContextProtocol.Client.McpClientImpl.ConnectAsync(CancellationToken cancellationToken)
+   at ModelContextProtocol.Client.McpClient.CreateAsync(IClientTransport clientTransport, McpClientOptions clientOptions, ILoggerFactory loggerFactory, CancellationToken cancellationToken)
+   at ModelContextProtocol.Client.McpClient.CreateAsync(IClientTransport clientTransport, McpClientOptions clientOptions, ILoggerFactory loggerFactory, CancellationToken cancellationToken)
+   at SqlHarness.Mcp.Tests.McpStdioProcessHarness.ConnectAsync(StdioChild child, Stream stdin, CancellationToken ct, String protocolVersion) in D:\Dev\sqlharness\.worktrees\plan-088\tests\SqlHarness.Mcp.Tests\McpStdioProcessTests.cs:line 346
+   at SqlHarness.Mcp.Tests.McpStderrLeakRegressionTests.Process_stderr_has_no_trace_debug_or_information_lines(String revision) in D:\Dev\sqlharness\.worktrees\plan-088\tests\SqlHarness.Mcp.Tests\McpStderrLeakRegressionTests.cs:line 242
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     1, Passed:   429, Skipped:     4, Total:   434, Duration: 4 m 27 s - SqlHarness.Mcp.Tests.dll (net10.0)
+[xUnit.net 00:02:20.46]     SqlHarness.Mcp.Tests.McpStderrLeakRegressionTests.Process_stderr_has_no_trace_debug_or_information_lines(revision: "2026-07-28") [FAIL]
+==> test project: tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj exit 1
+
+Captured final gate output:
+==> test FAILED (exit 1)
+verify: FAILED  stage=test  exit=1  12m26s
+error: recipe `verify` failed on line 12 with exit code 1
+
+This file preserves the captured outputs; it is not a fresh gate run and does not recreate missing complete build/UI/core logs. The shared D:\temp\sqlharness-gate-logs\verify files were later overwritten by another worktree's run.

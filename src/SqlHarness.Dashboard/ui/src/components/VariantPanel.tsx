@@ -1,44 +1,17 @@
-import { useState } from "react"
-import { useDistilledPlan } from "@/api/queries"
-import type { PlanLinkRow, VariantDetail } from "@/api/types"
-import { ErrorState } from "@/components/ErrorState"
+import type { VariantDetail } from "@/api/types"
 import { Kpi } from "@/components/Kpi"
-import { PlanTree } from "@/components/PlanTree"
+import { PlanWorkbench } from "@/components/plan/PlanWorkbench"
 import { Badge } from "@/components/ui/badge"
-import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { formatKb, formatNumber, shortHash } from "@/lib/format"
+import { formatKb, formatNumber } from "@/lib/format"
 import { tableIoDelta } from "@/lib/tableIoDelta"
 
 const spread = (value: { min: number; median: number; max: number } | null, unit = "") =>
   value ? `${formatNumber(value.median)}${unit}` : "—"
 const range = (value: { min: number; max: number } | null) => (value ? `${formatNumber(value.min)}–${formatNumber(value.max)}` : undefined)
 
-function StoredPlan({ link, engine }: { link: PlanLinkRow; engine: string | null }) {
-  const [open, setOpen] = useState(false)
-  const distilled = useDistilledPlan(link.hash, open)
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-sm">{shortHash(link.hash)}</span>
-        <a className={buttonVariants({ variant: "outline", size: "sm" })} href={`/api/plans/${link.hash}`} download>
-          Download plan
-        </a>
-        <Button variant="ghost" size="sm" onClick={() => setOpen(!open)}>
-          {open ? "Hide operators" : "Show operators"}
-        </Button>
-      </div>
-      {open && (distilled.error ? <ErrorState error={distilled.error} /> : distilled.isPending
-        ? <Skeleton className="h-24 w-full" />
-        : <PlanTree plan={distilled.data} engine={engine} />)}
-    </div>
-  )
-}
-
-export function VariantPanel({ variant, engine, compareMetrics = false }: { variant: VariantDetail; engine: string | null; compareMetrics?: boolean }) {
-  const plans = [...new Map(variant.plans.map(link => [link.hash, link])).values()]
+export function VariantPanel({ operationId, variant, engine, compareMetrics = false }: { operationId: number; variant: VariantDetail; engine: string | null; compareMetrics?: boolean }) {
   const sqlServer = !compareMetrics || engine?.toLowerCase() === "sqlserver" || engine?.toLowerCase() === "sql-server"
   const tableIoRows = tableIoDelta(variant.tableIo, []).rows.flatMap(row => row.baseline ? [row.baseline] : [])
   return (
@@ -134,24 +107,7 @@ export function VariantPanel({ variant, engine, compareMetrics = false }: { vari
           </CardContent>
         </Card>
       )}
-      {plans.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Plans</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {plans.map(link =>
-              link.stored ? (
-                <StoredPlan key={link.hash} link={link} engine={engine} />
-              ) : (
-                <div key={link.hash} className="text-sm text-muted-foreground">
-                  <span className="font-mono">{shortHash(link.hash)}</span> — plan not stored (journal.storeSensitive is off)
-                </div>
-              ),
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <PlanWorkbench operationId={operationId} variant={variant} engine={engine} />
     </div>
   )
 }

@@ -42,10 +42,25 @@ public sealed record JournalVariantMetrics(
 {
     public string CaseId { get; init; } = "0";
     public string CaseLabel { get; init; } = "Case 1 of 1";
+    public IReadOnlyList<JournalPlanOccurrence> PlanOccurrences { get; init; } = [];
 }
 
 /// <summary>Full plan text. Sensitive: the journal stores it only with journal.storeSensitive.</summary>
-public sealed record JournalPlanDocument(string Hash, string Format, string Document);
+public sealed record JournalPlanDocument(string Sha256, string ShapeHash, string Format, string Document);
+
+public sealed record JournalPlanOccurrence(
+    int Repetition,
+    int DocumentOrdinal,
+    int StatementIndex,
+    string? DocumentSha,
+    bool Omitted = false)
+{
+    public int? SpanStart { get; init; }
+    public int? SpanLength { get; init; }
+    public string MatchKind { get; init; } = "unmatched";
+    public int? StatementId { get; init; }
+    public int? StatementCompId { get; init; }
+}
 
 public sealed record JournalStatementMetrics(
     string Variant,

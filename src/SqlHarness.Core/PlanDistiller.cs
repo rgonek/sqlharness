@@ -54,7 +54,7 @@ internal sealed record PlanDistillerLimits(int MaximumCharacters, int MaximumEle
 public static class PlanDistiller
 {
     private const string ShowplanNamespace = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
-    private static readonly PlanDistillerLimits DefaultLimits = new(16 * 1024 * 1024, 100_000, 128);
+    internal static readonly PlanDistillerLimits DefaultLimits = new(16 * 1024 * 1024, 100_000, 128);
     private const int MaximumPredicateLength = 200;
     private const string InvalidPlanMessage = "The execution plan is not a valid SQL Server Showplan document.";
 
@@ -63,6 +63,28 @@ public static class PlanDistiller
     public static DistilledPlan Distill(string showplanXml) => Distill(showplanXml, DefaultLimits);
 
     internal static DistilledPlan Distill(string showplanXml, PlanDistillerLimits limits)
+    {
+        try
+        {
+            var document = LoadValidatedDocument(showplanXml, limits);
+            var statements = document
+                .Descendants(Showplan("StmtSimple"))
+                .Select(ParseStatement)
+                .ToArray();
+
+            return new DistilledPlan(statements);
+        }
+        catch (SqlHarnessSafetyException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is XmlException or InvalidOperationException or FormatException or OverflowException)
+        {
+            throw SafetyFailure();
+        }
+    }
+
+    internal static XDocument LoadValidatedDocument(string? showplanXml, PlanDistillerLimits limits)
     {
         if (showplanXml is null
             || limits.MaximumCharacters <= 0
@@ -85,13 +107,7 @@ public static class PlanDistiller
             using var reader = XmlReader.Create(stringReader, settings);
             var document = XDocument.Load(reader, LoadOptions.None);
             ValidateDocument(document, limits);
-
-            var statements = document
-                .Descendants(Showplan("StmtSimple"))
-                .Select(ParseStatement)
-                .ToArray();
-
-            return new DistilledPlan(statements);
+            return document;
         }
         catch (SqlHarnessSafetyException)
         {
