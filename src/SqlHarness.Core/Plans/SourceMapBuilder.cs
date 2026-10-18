@@ -205,7 +205,7 @@ public static class SourceMapBuilder
                     && !IdentifierEquals(reference.Table, objectName))
                 .ToArray();
 
-            var scopeId = ResolveModuleScope(node, graph, statementNodes, resolvedByNode, queryScopeIds);
+            var scopeId = ResolveSingleQueryScope(queryScopeIds);
             var moduleCandidates = scopeId is null
                 ? unresolvedModuleCandidates
                 : unresolvedModuleCandidates.Where(reference => reference.IncludesScope(scopeId.Value)).ToArray();
@@ -407,30 +407,8 @@ public static class SourceMapBuilder
         return distances;
     }
 
-    private static int? ResolveModuleScope(
-        PlanGraphNode node,
-        PlanGraph graph,
-        IReadOnlyList<PlanGraphNode> statementNodes,
-        IReadOnlyDictionary<string, SourceReference> resolvedByNode,
-        IReadOnlyList<int> queryScopeIds)
+    private static int? ResolveSingleQueryScope(IReadOnlyList<int> queryScopeIds)
     {
-        var distances = DistancesFrom(node.Id, graph.Edges);
-        var related = statementNodes
-            .Where(candidate => candidate.Id != node.Id
-                && resolvedByNode.ContainsKey(candidate.Id)
-                && distances.ContainsKey(candidate.Id))
-            .Select(candidate => (ScopeId: resolvedByNode[candidate.Id].ScopeId, Distance: distances[candidate.Id]))
-            .ToArray();
-        if (related.Length > 0)
-        {
-            var minimumDistance = related.Min(candidate => candidate.Distance);
-            var nearestScopes = related.Where(candidate => candidate.Distance == minimumDistance)
-                .Select(candidate => candidate.ScopeId)
-                .Distinct()
-                .ToArray();
-            return nearestScopes.Length == 1 ? nearestScopes[0] : null;
-        }
-
         var distinctScopes = queryScopeIds.Distinct().ToArray();
         return distinctScopes.Length == 1 ? distinctScopes[0] : null;
     }

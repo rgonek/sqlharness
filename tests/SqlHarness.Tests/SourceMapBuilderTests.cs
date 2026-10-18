@@ -239,7 +239,7 @@ public sealed class SourceMapBuilderTests
     }
 
     [Fact]
-    public void Unresolved_inner_scope_object_does_not_infer_from_outer_scope_module()
+    public void Unresolved_object_with_multiple_query_scopes_stays_ambiguous_even_with_inner_match()
     {
         const string sql = "SELECT (SELECT c.Id FROM dbo.Customer AS c) AS nestedId FROM dbo.OuterView AS outerRow;";
         var built = BuildGraph(sql, Join(
@@ -249,7 +249,26 @@ public sealed class SourceMapBuilderTests
         var unresolved = Node(built.Graph, "InternalEntity");
         var links = TableLinks(built.SourceMap).Where(link => link.NodeId == unresolved.Id).ToArray();
         Assert.DoesNotContain(links, link => link.State == "inferred");
-        Assert.Contains(links, link => link.State == "none" && link.SpanStart is null && link.SpanLength is null);
+        var candidate = Assert.Single(links);
+        Assert.Equal("ambiguous", candidate.State);
+        Assert.Equal("dbo.OuterView AS outerRow", SpanText(sql, candidate));
+    }
+
+    [Fact]
+    public void Outer_graph_neighbor_does_not_infer_nested_scope_module()
+    {
+        const string sql = "SELECT (SELECT innerRow.Id FROM dbo.InnerView AS innerRow) AS nestedId FROM dbo.Customer AS c JOIN dbo.OuterView AS outerRow ON c.Id = outerRow.Id;";
+        var built = BuildGraph(sql, Join(
+            Scan("Customer", "c"),
+            Scan("InternalEntity", "internal")));
+
+        var unresolved = Node(built.Graph, "InternalEntity");
+        var links = TableLinks(built.SourceMap).Where(link => link.NodeId == unresolved.Id).ToArray();
+        Assert.Equal(2, links.Length);
+        Assert.All(links, link => Assert.Equal("ambiguous", link.State));
+        Assert.DoesNotContain(links, link => link.State == "inferred");
+        Assert.Contains(links, link => SpanText(sql, link) == "dbo.InnerView AS innerRow");
+        Assert.Contains(links, link => SpanText(sql, link) == "dbo.OuterView AS outerRow");
     }
 
     [Fact]
