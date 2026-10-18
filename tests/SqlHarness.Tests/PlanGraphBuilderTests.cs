@@ -73,7 +73,7 @@ public sealed class PlanGraphBuilderTests
             PlanDistiller.DefaultLimits,
             MaximumNodes: 10,
             MaximumGraphBytes: 1024 * 1024,
-            MaximumPropertyTreeBytes: 2048);
+            MaximumPropertyResponseBytes: 2048);
         var result = PlanGraphBuilder.Build(fixture, limits);
         var graph = Assert.IsType<PlanGraph>(result.Graph);
         var properties = PlanGraphBuilder.BuildProperties(fixture, graph.Nodes[0].Id, limits);
@@ -87,7 +87,7 @@ public sealed class PlanGraphBuilderTests
         var custom = Assert.Single(Flatten(tree.Properties), property => property.Name == "FutureSpecificMetadata");
         Assert.Equal("renderer-neutral custom operator properties: Å 漢字 \"quoted\" & <escaped>",
             Assert.Single(custom.Attributes, attribute => attribute.Name == "Description").Value);
-        Assert.True(JsonSerializer.SerializeToUtf8Bytes(tree, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length <= 2048);
+        Assert.True(JsonSerializer.SerializeToUtf8Bytes(properties, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length <= 2048);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class PlanGraphBuilderTests
             new PlanDistillerLimits(MaximumCharacters: 100, MaximumElements: 100, MaximumDepth: 20),
             MaximumNodes: 10,
             MaximumGraphBytes: 1024,
-            MaximumPropertyTreeBytes: 512);
+            MaximumPropertyResponseBytes: 512);
 
         var result = PlanGraphBuilder.Build(Fixture("graph-properties.sqlplan"), limits);
 
@@ -113,7 +113,7 @@ public sealed class PlanGraphBuilderTests
             PlanDistiller.DefaultLimits,
             MaximumNodes: 10,
             MaximumGraphBytes: 1,
-            MaximumPropertyTreeBytes: 512);
+            MaximumPropertyResponseBytes: 512);
 
         var result = PlanGraphBuilder.Build(Fixture("graph-properties.sqlplan"), limits);
 
@@ -128,7 +128,7 @@ public sealed class PlanGraphBuilderTests
             PlanDistiller.DefaultLimits,
             MaximumNodes: 2,
             MaximumGraphBytes: 1024 * 1024,
-            MaximumPropertyTreeBytes: 512);
+            MaximumPropertyResponseBytes: 512);
 
         var result = PlanGraphBuilder.Build(Fixture("graph-properties.sqlplan"), limits);
 
@@ -136,6 +136,32 @@ public sealed class PlanGraphBuilderTests
         Assert.Equal("graph_node_limit_exceeded", result.Error?.Code);
     }
 
+    [Fact]
+    public void Property_response_budget_includes_the_result_envelope()
+    {
+        var fixture = Fixture("graph-properties.sqlplan");
+        var graph = Assert.IsType<PlanGraph>(PlanGraphBuilder.Build(fixture).Graph);
+        var nodeId = graph.Nodes[0].Id;
+        var roomyLimits = new PlanGraphBuilderLimits(
+            PlanDistiller.DefaultLimits,
+            MaximumNodes: 10,
+            MaximumGraphBytes: 1024 * 1024,
+            MaximumPropertyResponseBytes: 128 * 1024);
+        var completeResult = PlanGraphBuilder.BuildProperties(fixture, nodeId, roomyLimits);
+        var completeTree = Assert.IsType<PlanGraphPropertyTree>(completeResult.Tree);
+        var treeBytes = JsonSerializer.SerializeToUtf8Bytes(completeTree, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length;
+        var completeResponseBytes = JsonSerializer.SerializeToUtf8Bytes(completeResult, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length;
+
+        Assert.True(treeBytes < completeResponseBytes);
+        var boundaryLimits = roomyLimits with { MaximumPropertyResponseBytes = completeResponseBytes - 1 };
+        var boundedResult = PlanGraphBuilder.BuildProperties(fixture, nodeId, boundaryLimits);
+        var boundedTree = Assert.IsType<PlanGraphPropertyTree>(boundedResult.Tree);
+
+        Assert.Null(boundedResult.Error);
+        Assert.True(boundedTree.IsTruncated);
+        Assert.True(JsonSerializer.SerializeToUtf8Bytes(boundedTree, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length <= boundaryLimits.MaximumPropertyResponseBytes);
+        Assert.True(JsonSerializer.SerializeToUtf8Bytes(boundedResult, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length <= boundaryLimits.MaximumPropertyResponseBytes);
+    }
     private static string Fixture(string name) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Plans", name));
 

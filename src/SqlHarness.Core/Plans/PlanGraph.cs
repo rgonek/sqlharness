@@ -85,4 +85,4 @@ internal sealed record PlanGraphBuilderLimits(
     PlanDistillerLimits Document,
     int MaximumNodes,
     int MaximumGraphBytes,
-    int MaximumPropertyTreeBytes);
+    int MaximumPropertyResponseBytes);

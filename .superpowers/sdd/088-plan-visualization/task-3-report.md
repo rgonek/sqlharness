@@ -29,3 +29,14 @@ The property-budget test uses a 2,048-byte internal test ceiling to force trunca
 - Updated `plans/088-plan-visualization.md` and `plans/README.md` for Task 3 implementation and pending task review.
 
 Self-review found no known contract blocker. Large or verbose valid plans can produce an explicit graph-size error before renderer selection; predicates remain intact, and a property tree can be truncated independently. Verification here is focused to PlanGraphBuilder and PlanDistiller tests; the full `just verify` gate remains for Task 7. No live database was used and no schema version was changed.
+
+## Sol review correction: account for the full property response
+
+The first review identified that the original 128 KiB check measured only `PlanGraphPropertyTree`. The builder now measures the envelope overhead with the actual engine and node ID, subtracts it from the available tree budget, and performs an exact final UTF-8 serialization check on the complete `PlanGraphPropertyResult`. The test sets the ceiling to one byte below the complete result size: the tree itself fits, but the envelope does not. It verifies truncation and that both the tree and entire result fit. The existing multibyte/escaped property test now checks the entire result too.
+
+- RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~Property_response_budget_includes_the_result_envelope" --no-restore` — exit 1; Failed 1, Passed 0. `Assert.True(boundedTree.IsTruncated)` failed (`Expected: True; Actual: False`), demonstrating that the prior builder returned the full tree without accounting for the envelope.
+- GREEN: the same command after the fix — exit 0; Failed 0, Passed 1, Skipped 0, Total 1 (162 ms).
+- Focused regression: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~PlanGraphBuilderTests|FullyQualifiedName~PlanDistillerTests" --no-restore` — exit 0; Failed 0, Passed 40, Skipped 0, Total 40 (326 ms).
+- `git diff --check` — exit 0.
+
+Task 5 property API error propagation and Task 7 full verification remain pending as tracked by the plan; they are outside this correction.

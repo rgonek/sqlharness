@@ -146,15 +146,16 @@ public static class PlanGraphBuilder
                 relOp = children[childIndex];
             }
 
-            if (limits.MaximumPropertyTreeBytes <= 0)
-                return PropertyFailure(nodeId, "property_tree_size_limit_exceeded", "The property tree size limit is too small.");
+            if (limits.MaximumPropertyResponseBytes <= 0)
+                return PropertyFailure(nodeId, "property_tree_size_limit_exceeded", "The property response size limit is too small.");
 
-            var tree = BuildBoundedPropertyTree(relOp, limits.MaximumPropertyTreeBytes);
-            var bytes = JsonSerializer.SerializeToUtf8Bytes(tree, JsonOptions);
-            if (bytes.Length > limits.MaximumPropertyTreeBytes)
-                return PropertyFailure(nodeId, "property_tree_size_limit_exceeded", "The property tree exceeds the response size limit.");
+            var tree = BuildBoundedPropertyTree(relOp, nodeId, limits.MaximumPropertyResponseBytes);
+            var result = new PlanGraphPropertyResult(EngineName, nodeId, tree, null);
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(result, JsonOptions);
+            if (bytes.Length > limits.MaximumPropertyResponseBytes)
+                return PropertyFailure(nodeId, "property_tree_size_limit_exceeded", "The property response exceeds the response size limit.");
 
-            return new PlanGraphPropertyResult(EngineName, nodeId, tree, null);
+            return result;
         }
         catch (SqlHarnessSafetyException)
         {
@@ -166,7 +167,7 @@ public static class PlanGraphBuilder
         }
     }
 
-    private static PlanGraphPropertyTree BuildBoundedPropertyTree(XElement relOp, int maximumBytes)
+    private static PlanGraphPropertyTree BuildBoundedPropertyTree(XElement relOp, string nodeId, int maximumResponseBytes)
     {
         var entries = new List<(PlanGraphPropertyNode Node, int Depth)>();
         foreach (var child in relOp.Elements().Where(element => element.Name != Showplan + "RelOp"))
@@ -174,12 +175,18 @@ public static class PlanGraphBuilder
 
         var root = new MutablePropertyNode(PropertyNode(relOp));
         var emptyTree = new PlanGraphPropertyTree([], false, 0);
-        var usedBytes = JsonSerializer.SerializeToUtf8Bytes(emptyTree, JsonOptions).Length
+        var emptyTreeBytes = JsonSerializer.SerializeToUtf8Bytes(emptyTree, JsonOptions).Length;
+        var emptyResponseBytes = JsonSerializer.SerializeToUtf8Bytes(
+            new PlanGraphPropertyResult(EngineName, nodeId, emptyTree, null),
+            JsonOptions).Length;
+        var responseEnvelopeBytes = emptyResponseBytes - emptyTreeBytes;
+        var maximumTreeBytes = maximumResponseBytes - responseEnvelopeBytes;
+        var usedBytes = emptyTreeBytes
             + NodeSize(root.Freeze())
             + 16; // Reserve exact JSON field overhead for the final truncation flag and omitted count.
 
-        if (usedBytes > maximumBytes)
-            return MarkerOnlyPropertyTree(entries.Count, maximumBytes);
+        if (usedBytes > maximumTreeBytes)
+            return MarkerOnlyPropertyTree(entries.Count, maximumTreeBytes);
 
         var stack = new List<MutablePropertyNode> { root };
         var truncated = false;
@@ -197,7 +204,7 @@ public static class PlanGraphBuilder
             var marker = TruncationMarker(omittedIfStopped);
             var markerBytes = (root.Children.Count == 0 ? 0 : 1) + NodeSize(marker);
             var reserveMarker = index == entries.Count - 1 ? 0 : markerBytes;
-            if (usedBytes + candidateBytes + reserveMarker > maximumBytes)
+            if (usedBytes + candidateBytes + reserveMarker > maximumTreeBytes)
             {
                 truncated = true;
                 omitted = omittedIfStopped;
@@ -213,10 +220,10 @@ public static class PlanGraphBuilder
         }
 
         var tree = new PlanGraphPropertyTree([root.Freeze()], truncated, omitted);
-        if (JsonSerializer.SerializeToUtf8Bytes(tree, JsonOptions).Length <= maximumBytes)
+        if (JsonSerializer.SerializeToUtf8Bytes(tree, JsonOptions).Length <= maximumTreeBytes)
             return tree;
 
-        return MarkerOnlyPropertyTree(entries.Count, maximumBytes);
+        return MarkerOnlyPropertyTree(entries.Count, maximumTreeBytes);
 
         void Collect(XElement element, int depth)
         {
@@ -226,11 +233,11 @@ public static class PlanGraphBuilder
         }
     }
 
-    private static PlanGraphPropertyTree MarkerOnlyPropertyTree(int omittedCount, int maximumBytes)
+    private static PlanGraphPropertyTree MarkerOnlyPropertyTree(int omittedCount, int maximumTreeBytes)
     {
         var root = new PlanGraphPropertyNode("RelOp", [], [TruncationMarker(omittedCount)]);
         var tree = new PlanGraphPropertyTree([root], true, omittedCount);
-        if (JsonSerializer.SerializeToUtf8Bytes(tree, JsonOptions).Length <= maximumBytes)
+        if (JsonSerializer.SerializeToUtf8Bytes(tree, JsonOptions).Length <= maximumTreeBytes)
             return tree;
 
         return new PlanGraphPropertyTree([TruncationMarker(omittedCount)], true, omittedCount);
@@ -431,7 +438,7 @@ public static class PlanGraphBuilder
         PlanDistiller.DefaultLimits,
         MaximumNodes: 10_000,
         MaximumGraphBytes: 1024 * 1024,
-        MaximumPropertyTreeBytes: 128 * 1024);
+        MaximumPropertyResponseBytes: 128 * 1024);
 
     private sealed class MutablePropertyNode(PlanGraphPropertyNode value)
     {
