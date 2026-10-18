@@ -633,6 +633,14 @@ public sealed class DryRunCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Compare_dry_run_does_not_require_setup_only_parameters()
+    {
+        var run = await Compare(SqlServer, "SELECT 1;", "SELECT 1;", "SELECT @setupOnly;");
+
+        AssertAllowed(run, "compare");
+    }
+
+    [Fact]
     public async Task Compare_dry_run_reports_each_classification_without_execution()
     {
         var run = await Compare(SqlServer,

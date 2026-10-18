@@ -490,7 +490,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     prepared.ClassificationParameters,
                     new[]
                     {
-                        prepared.ClassificationSetupSql,
                         prepared.ClassificationBaselineSql,
                         prepared.ClassificationCandidateSql,
                     }.Where(sql => sql is not null).Select(sql => sql!).ToArray());
@@ -674,7 +673,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                         classificationSets[index],
                         new[]
                         {
-                            prepared.ClassificationSetupSql,
                             prepared.ClassificationBaselineSql,
                             prepared.ClassificationCandidateSql,
                         }.Where(sql => sql is not null).Select(sql => sql!).ToArray());
@@ -962,7 +960,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 if (measure.DryRun)
                 {
                     foreach (var classificationSet in classificationSets)
-                        MissingParameterCheck.RequireSupplied(target.Engine, classificationSet.Parameters, setupExpansion.Text, queryExpansion.Text);
+                        MissingParameterCheck.RequireSupplied(target.Engine, classificationSet.Parameters, queryExpansion.Text);
                     return DryRunOutcome(
                         "measure",
                         BenchmarkReports.ClassificationLabel(querySafety),
@@ -1041,7 +1039,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
             if (measure.DryRun)
             {
-                MissingParameterCheck.RequireSupplied(target.Engine, classificationParameters, setupExpansion.Text, queryExpansion.Text);
+                MissingParameterCheck.RequireSupplied(target.Engine, classificationParameters, queryExpansion.Text);
                 return DryRunOutcome(
                     "measure",
                     BenchmarkReports.ClassificationLabel(querySafety),
