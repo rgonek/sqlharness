@@ -1,13 +1,13 @@
-# Plan 002: Napraw zakres i normalizację ścieżek wejściowych
+# Plan 002: Fix the scope and path normalization of input paths
 
 Status: **TODO**
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
-Priorytet: P1; nakład: M; ryzyko zmiany: MED.
-Pokrycie: **S3, A1; badanie tożsamości pliku**. Zależności: **—**.
+Date: 2026-09-29. Base: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priority: P1; effort: M; change risk: MED.
+Coverage: **S3, A1; file identity assessment**. Dependencies: **—**.
 
-## Kontekst i instrukcja wykonania
+## Context and execution instructions
 
-Czytaj cały plan. Pracuj w izolowanym worktree, zachowaj cudze zmiany. Zapis planu nie jest wdrożeniem. Po ukończeniu zaktualizuj plans/README.md wraz z dowodem; nie pushuj ani nie publikuj bez zlecenia.
+Read the whole plan. Work in an isolated worktree, preserve other people's changes. Writing the plan is not implementation. On completion update plans/README.md along with the evidence; do not push or publish without an assignment.
 
 Drift check:
 ```powershell
@@ -15,67 +15,67 @@ git status --short
 git diff --stat 8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b..HEAD -- "src/SqlHarness.Mcp/McpInputReader.cs" "src/SqlHarness.Mcp/McpScope.cs" "tests/SqlHarness.Mcp.Tests/McpInputReaderTests.cs" "tests/SqlHarness.Mcp.Tests/McpStartupTests.cs"
 ```
 
-Zmiany poprzedników są oczekiwane: przeczytaj je i dopasuj plan przed kodowaniem. Niewyjaśniony rozjazd wymaga aktualizacji założeń, nie mechanicznego wklejania starego kodu.
+Predecessor changes are expected: read them and align the plan before coding. An unexplained divergence requires updating the assumptions, not mechanically pasting old code.
 
-McpInputReader.cs:235–240 stosuje OrdinalIgnoreCase na każdej platformie i dodaje separator bez sprawdzenia jego obecności. McpScope.cs:161 zachowuje końcowy separator. Windows próba odrzuciła legalny plik pod takim root; zagrożenie case-sensitive wynika z kodu, bez próby Linux.
+McpInputReader.cs:235–240 applies OrdinalIgnoreCase on every platform and appends a separator without checking its presence. McpScope.cs:161 keeps a trailing separator. The Windows trial rejected a legal file under such a root; the case-sensitivity hazard follows from the code, without a Linux trial.
 
-Punkt odniesienia z kodu/komendy:
+Reference point from code/command:
 ```text
 full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
 ```
 
-.NET8/C#/xUnit. Dopasuj wzorce do testów wymienionych w zakresie. Core pozostaje wspólnym miejscem safety; adaptery nie tworzą własnego klasyfikatora. Stosuj istniejące fake reader/session/module i syntetyczny SQLHARNESS_HOME. Nie czytaj rzeczywistych sekretów ani artefaktów użytkownika.
+.NET8/C#/xUnit. Match patterns to the tests listed in the scope. Core remains the shared safety locus; adapters do not create their own classifier. Use the existing fake reader/session/module and a synthetic SQLHARNESS_HOME. Do not read real secrets or user artifacts.
 
-## Zakres
+## Scope
 
 - `src/SqlHarness.Mcp/McpInputReader.cs`
 - `src/SqlHarness.Mcp/McpScope.cs`
 - `tests/SqlHarness.Mcp.Tests/McpInputReaderTests.cs`
 - `tests/SqlHarness.Mcp.Tests/McpStartupTests.cs`
 
-Dodatkowo: nowe pliki nazwane w krokach, dokumenty wynikowe plans/002-*.md oraz status w indeksie. Inne pliki wymagają jawnej korekty zakresu i uzasadnienia przed zmianą.
+Additionally: new files named in the steps, the output documents plans/002-*.md and the status in the index. Other files require an explicit scope correction and justification before any change.
 
-Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push, globalne wyłączenie walidacji i niepowiązane refaktoryzacje. Zachowaj kody 0/2/3/4/5/6/7/8, legacy JSON i oba silniki. Pola addytywne tylko zgodnie z krokami.
+Out of scope: live DB, deploy, user profiles and passwords, installation, push, globally disabling validation and unrelated refactorings. Preserve codes 0/2/3/4/5/6/7/8, legacy JSON and both engines. Additive fields only as described in the steps.
 
-## Zadania
+## Tasks
 
 ### 002/T1
 
-- [ ] Dodaj regresje root z/bez separatora, root systemu plików, podobny prefiks sąsiedniego katalogu, pusty zestaw roots, UNC/ADS, link pliku i link rodzica. Case-sensitive test utwórz na obsługującym to filesystemie; brak takiego środowiska zgłoś jako brak dowodu, nie zaliczenie testu.
+- [ ] Add regressions for a root with/without a separator, a filesystem root, a similar prefix of a sibling directory, an empty set of roots, UNC/ADS, a file link and a parent link. Create the case-sensitive test on a filesystem that supports it; report the lack of such an environment as missing evidence, not as a test pass.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpInputReaderTests|FullyQualifiedName~McpStartupTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpInputReaderTests|FullyQualifiedName~McpStartupTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 002/T2
 
-- [ ] Wydziel wspólną normalizację root i sprawdzenie przynależności. Zachowaj katalog główny; usuń wyłącznie nadmiarowy separator. Przyjmij konserwatywną semantykę case na systemach poza Windows; jawnie opisz ograniczenie katalogów Windows z indywidualną case sensitivity.
+- [ ] Extract the common root normalization and the containment check. Keep the root directory; remove only the redundant separator. Adopt conservative case semantics on non-Windows systems; explicitly describe the restriction of Windows directories with individual case sensitivity.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpInputReaderTests|FullyQualifiedName~McpStartupTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpInputReaderTests|FullyQualifiedName~McpStartupTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 002/T3
 
-- [ ] Zachowaj limit odczytanych bajtów i odmowę reparse/link. Przetestuj podmianę pliku. Zapisz w plans/002-file-identity-assessment.md, czy sprawdzenie length/mtime daje wyłącznie detekcję przypadkowej zmiany, czy potrzebne jest otwieranie względem uchwytu root. Nie reklamuj ochrony przed wyścigiem bez dowodu.
+- [ ] Preserve the limit on bytes read and the rejection of reparse/link. Test file substitution. Record in plans/002-file-identity-assessment.md whether a length/mtime check gives only accidental-change detection, or whether opening relative to a root handle is required. Do not claim protection against a race without evidence.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpInputReaderTests|FullyQualifiedName~McpStartupTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpInputReaderTests|FullyQualifiedName~McpStartupTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
-## Testy i zakończenie
+## Tests and completion
 
-Legalny plik działa dla obu zapisów root; katalog poza zakresem jest odrzucany; istniejące przypadki traversal/link nadal odrzucane. Dowód Linux oznaczony wykonany lub niewykonany.
+A legal file works for both root notations; a directory out of scope is rejected; the existing traversal/link cases are still rejected. Linux evidence marked as performed or not performed.
 
 - [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpInputReaderTests|FullyQualifiedName~McpStartupTests' --verbosity minimal` → exit 0.
 - [ ] `dotnet build SqlHarness.sln --no-restore -warnaserror` → exit 0.
-- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; zapisz passed/failed/skipped.
-- [ ] Testy obejmują zachowanie właściwego adaptera/runnera, a nie tylko listę nazw lub stałą.
+- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; record passed/failed/skipped.
+- [ ] Tests cover the behaviour of the correct adapter/runner, not just a list of names or a constant.
 - [ ] `git diff --check` → exit 0.
-- [ ] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [ ] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
-- [ ] Brak dowodu live/platformowego jest jawny.
+- [ ] `git status --short` shows only the author's changes within the scope.
+- [ ] The index contains status, commit and evidence; local paths exist or are marked as new.
+- [ ] The absence of live/platform evidence is explicit.
 
-Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
+Audit baseline: 1895 Core/CLI passed; MCP 122 passed, 2 timeouts, 4 skipped. Plan005 diagnoses the timeouts. An earlier safety fix may be ready for review given a documented independent gate failure; do not declare a full PASS then.
 
-## Warunki zatrzymania i utrzymanie
+## Stop conditions and maintenance
 
-Nie dopuszczać linków jako obejścia platformy. Jeśli pełna tożsamość wymaga API systemowego, oddziel projekt takiej ochrony od prostej naprawy normalizacji.
+Do not allow links as a platform bypass. If full identity requires a system API, separate the design of such protection from the simple normalization fix.
 
-Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
+If a step requires a real DB target, secrets, or going beyond authorization, stop that step and record the absence. Complete the independent tasks. Do not mark the whole thing DONE without all required results.
 
-Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
+The reviewer checks negative-case safety, compatibility and the truthfulness of the evidence. After changing the parser/SDK/operation, return to these tests. Small commits of the fix/test/docs type, no push. Required characteristic tests must precede a refactoring.

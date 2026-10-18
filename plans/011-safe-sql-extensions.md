@@ -1,13 +1,13 @@
-# Plan 011: Zaplanuj i dodaj wąskie rozszerzenia bezpiecznej składni
+# Plan 011: Plan and add narrow safe-syntax extensions
 
-Status: **DONE — kod i dokumentacja kompletne; NIE pełny PASS** (branch `feat/plan-011-safe-sql-extensions`; zakres `0fad2a8..` do commita niosącego końcową wersję dowodu włącznie — commit nie może podać własnego hasha, poprzedza go `d9b7479`, ostatni commit zmieniający kod lub testy to `9f07deb`). Projekt testów MCP (`SqlHarness.Mcp.Tests`) jest niestabilny (flaky) zarówno na czubku brancha, jak i na bazie `0fad2a8`; żaden commit tego brancha nie zmienia pliku projektu MCP. Ta bramka to niezależna awaria, której właścicielem jest plan 005. Dodatkowo w `SqlHarness.Tests` jeden test (`ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree`, nietknięty przez ten branch) zawiódł w 2 z 10 przebiegów fali końcowej. T5 ANALYZE: DESIGN COMPLETE, nie IMPLEMENTED. Dowód i dokładne liczby: [011-safe-sql-extensions-proof](011-safe-sql-extensions-proof.md).
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
-Priorytet: P2; nakład: L; ryzyko zmiany: HIGH.
-Pokrycie: **nadmiarowe blokady SET, table variables, PG TEMP TRUNCATE i ANALYZE**. Zależności: **007, 009**.
+Status: **DONE — code and documentation complete; NOT a full PASS** (branch `feat/plan-011-safe-sql-extensions`; scope `0fad2a8..` up to and including the commit carrying the final version of the evidence — the commit cannot state its own hash, it is preceded by `d9b7479`, the last commit changing code or tests is `9f07deb`). The MCP test project (`SqlHarness.Mcp.Tests`) is unstable (flaky) both at the tip of the branch and at base `0fad2a8`; no commit on this branch changes the MCP project file. This gate is an independent failure whose owner is plan 005. Additionally in `SqlHarness.Tests` one test (`ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree`, untouched by this branch) failed in 2 of 10 runs of the final wave. T5 ANALYZE: DESIGN COMPLETE, not IMPLEMENTED. Evidence and exact counts: [011-safe-sql-extensions-proof](011-safe-sql-extensions-proof.md).
+Date: 2026-09-29. Base: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priority: P2; effort: L; change risk: HIGH.
+Coverage: **over-blocking of SET, table variables, PG TEMP TRUNCATE and ANALYZE**. Dependencies: **007, 009**.
 
-## Kontekst i instrukcja wykonania
+## Context and execution instructions
 
-Czytaj cały plan. Pracuj w izolowanym worktree, zachowaj cudze zmiany. Zapis planu nie jest wdrożeniem. Po ukończeniu zaktualizuj plans/README.md wraz z dowodem; nie pushuj ani nie publikuj bez zlecenia.
+Read the whole plan. Work in an isolated worktree, preserve other people's changes. A plan document is not an implementation. On completion update plans/README.md together with the evidence; do not push or publish without an order.
 
 Drift check:
 ```powershell
@@ -15,18 +15,18 @@ git status --short
 git diff --stat 8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b..HEAD -- "src/SqlHarness.Core/SqlSafety.cs" "src/SqlHarness.Core/Postgres/PostgresSafetyClassifier.cs" "src/SqlHarness.Core/Postgres/PostgresDocument.cs" "src/SqlHarness.Core/SqlValidation.cs" "src/SqlHarness.Core/Capabilities.cs" "tests/SqlHarness.Tests/SqlSafetyTests.cs" "tests/SqlHarness.Tests/SqlParameterReferenceValidatorTests.cs" "tests/SqlHarness.Tests/Postgres/PostgresSafetyTests.cs" "AGENTS.md"
 ```
 
-Zmiany poprzedników są oczekiwane: przeczytaj je i dopasuj plan przed kodowaniem. Niewyjaśniony rozjazd wymaga aktualizacji założeń, nie mechanicznego wklejania starego kodu.
+Predecessor changes are expected: read them and align the plan before coding. An unexplained divergence requires updating the assumptions, not mechanically pasting old code.
 
-Offline: scalar DECLARE działa, SET zmiennej i table variable są unsupported. PG CREATE TEMP + TRUNCATE jest unsupported; ANALYZE daje parse_error. Zwykłe CTE SELECT działają. Table variable i ANALYZE to znane granice, nie przypadkowe regresje.
+Offline: scalar DECLARE works, setting a variable and a table variable are unsupported. PG CREATE TEMP + TRUNCATE is unsupported; ANALYZE gives parse_error. Ordinary CTE SELECTs work. Table variable and ANALYZE are known limits, not accidental regressions.
 
-Punkt odniesienia z kodu/komendy:
+Reference point from the code/command:
 ```text
 case DeclareVariableStatement declare:
 ```
 
-.NET8/C#/xUnit. Dopasuj wzorce do testów wymienionych w zakresie. Core pozostaje wspólnym miejscem safety; adaptery nie tworzą własnego klasyfikatora. Stosuj istniejące fake reader/session/module i syntetyczny SQLHARNESS_HOME. Nie czytaj rzeczywistych sekretów ani artefaktów użytkownika.
+.NET8/C#/xUnit. Match patterns to the tests listed in the scope. Core remains the shared place for safety; adapters do not create their own classifier. Use the existing fake reader/session/module and the synthetic SQLHARNESS_HOME. Do not read real secrets or user artifacts.
 
-## Zakres
+## Scope
 
 - `src/SqlHarness.Core/SqlSafety.cs`
 - `src/SqlHarness.Core/Postgres/PostgresSafetyClassifier.cs`
@@ -38,77 +38,77 @@ case DeclareVariableStatement declare:
 - `tests/SqlHarness.Tests/Postgres/PostgresSafetyTests.cs`
 - `AGENTS.md`
 
-Dodatkowo: nowe pliki nazwane w krokach, dokumenty wynikowe plans/011-*.md oraz status w indeksie. Inne pliki wymagają jawnej korekty zakresu i uzasadnienia przed zmianą.
+Additionally: new files named in the steps, resulting documents plans/011-*.md and the status in the index. Other files require an explicit scope correction and justification before the change.
 
-### Korekty zakresu (scope corrections)
+### Scope corrections
 
-Dopisane w końcowej fali poprawek (2026-10-01). Poniższe pliki leżą poza listą powyżej i zostały zmienione za zgodą kontrolera; żaden nowy plik źródłowy ani testowy nie powstał.
+Added in the final fix wave (2026-10-01). The files below lie outside the list above and were changed with the controller's consent; no new source or test file was created.
 
-- `README.md` — dwa fragmenty wymieniające instrukcje „session-only" opisywały stan sprzed planu 011. Pozostawienie ich byłoby nieprawdziwą dokumentacją dla użytkownika (T6 runda 1; fala końcowa: pisownia `pg_temp.<name>`, ograniczenie `search_path`, zmienna tablicowa z `--setup`).
-- `docs/superpowers/specs/2026-09-26-postgres-safety-policy.md`, `docs/superpowers/specs/2026-09-10-postgres-engine-design.md`, `docs/superpowers/plans/2026-09-10-postgres-engine.md`, `plans/009-strict-profile-assessment.md` — cztery starsze dokumenty nadal podawały prefiks `pg_temp_` jako dowód celu lokalnego dla sesji. Dwie specyfikacje poprawiono w miejscu z notą „zmienione planem 011", dwa historyczne plany dostały datowaną notę (T6).
-- `tests/SqlHarness.Tests/Fixtures/AgentWorkflow/byte-budgets.json` — dokładny pin bajtów, który czyta `AgentWorkflowTests`. Rośnie razem z tekstem capabilities: 5710 → 6219 → 6887 → 7100 bajtów UTF-8. Sufit 8192 nie został podniesiony. Sam plik `AgentWorkflowTests.cs` nie był zmieniany.
-- `tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs` — testy wiążące każde zdanie `sessionTempStatements` z werdyktem prawdziwego klasyfikatora (T6, fala końcowa).
-- `tests/SqlHarness.Tests/QueryTests.cs`, `tests/SqlHarness.Tests/MeasureTests.cs`, `tests/SqlHarness.Tests/CompareTests.cs`, `tests/SqlHarness.Tests/Postgres/PostgresQueryTests.cs`, `tests/SqlHarness.Tests/Postgres/PostgresBenchmarkTests.cs` — testy end-to-end przez `SqlHarnessModule` (fala końcowa, M1). Dopisane do istniejących klas, bo ich fake session/reader są prywatne dla klasy; nowa infrastruktura testowa nie powstała.
+- `README.md` — two passages mentioning the „session-only" instructions described the state from before plan 011. Leaving them would be false documentation for the user (T6 round 1; final wave: the `pg_temp.<name>` spelling, the `search_path` restriction, the table variable with `--setup`).
+- `docs/superpowers/specs/2026-09-26-postgres-safety-policy.md`, `docs/superpowers/specs/2026-09-10-postgres-engine-design.md`, `docs/superpowers/plans/2026-09-10-postgres-engine.md`, `plans/009-strict-profile-assessment.md` — four older documents still gave the prefix `pg_temp_` as evidence of a session-local target. Two specs were corrected in place with a note „changed by plan 011", two historical plans got a dated note (T6).
+- `tests/SqlHarness.Tests/Fixtures/AgentWorkflow/byte-budgets.json` — the exact byte pin read by `AgentWorkflowTests`. It grows together with the capabilities text: 5710 → 6219 → 6887 → 7100 UTF-8 bytes. The 8192 ceiling was not raised. The `AgentWorkflowTests.cs` file itself was not changed.
+- `tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs` — tests binding every sentence of `sessionTempStatements` to the verdict of the real classifier (T6, final wave).
+- `tests/SqlHarness.Tests/QueryTests.cs`, `tests/SqlHarness.Tests/MeasureTests.cs`, `tests/SqlHarness.Tests/CompareTests.cs`, `tests/SqlHarness.Tests/Postgres/PostgresQueryTests.cs`, `tests/SqlHarness.Tests/Postgres/PostgresBenchmarkTests.cs` — end-to-end tests through `SqlHarnessModule` (final wave, M1). Added to existing classes because their fake session/reader are private to the class; no new test infrastructure was created.
 
-Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push, globalne wyłączenie walidacji i niepowiązane refaktoryzacje. Zachowaj kody 0/2/3/4/5/6/7/8, legacy JSON i oba silniki. Pola addytywne tylko zgodnie z krokami.
+Out of scope: live DB, deploy, user profiles and passwords, installation, push, global disabling of validation and unrelated refactorings. Preserve exit codes 0/2/3/4/5/6/7/8, legacy JSON and both engines. Additive fields only as specified by the steps.
 
-## Zadania
+## Tasks
 
 ### 011/T1
 
-- [x] W plans/011-syntax-contract.md zapisz macierz dozwolonych AST i negatywnych przypadków przed zmianą classifiera. Dziel wdrożenie na niezależne podzadania; każde ma osobny test regresji.
+- [x] In plans/011-syntax-contract.md record the matrix of allowed ASTs and negative cases before changing the classifier. Split the implementation into independent subtasks; each has its own regression test.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
 ### 011/T2
 
-- [x] T-SQL SET: dopuść wyłącznie rozpoznane przypisanie do lokalnej zmiennej skalarnej, analizując RHS przez istniejące kontrole external/stateful/cross-db. Nie włączaj SET opcji sesji/transakcji.
+- [x] T-SQL SET: admit only a recognized assignment to a local scalar variable, analyzing the RHS through the existing external/stateful/cross-db checks. Do not enable SET of session/transaction options.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
 ### 011/T3
 
-- [x] T-SQL table variables: zaprojektuj identyfikację lokalnego celu dla DECLARE/SELECT/DML/OUTPUT, scope batcha i referencje parametrów. Dopiero pełna analiza celu może zezwalać na DML; nie traktuj dowolnego @name jako lokalnego.
+- [x] T-SQL table variables: design local-target identification for DECLARE/SELECT/DML/OUTPUT, batch scope and parameter references. Only a complete target analysis may allow DML; do not treat an arbitrary @name as local.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
 ### 011/T4
 
-- [x] PG TRUNCATE: dopuść tylko wszystkie cele udowodnione jako należące do bieżącej sesji; odrzuć persistent/mixed targets i CASCADE, rozstrzygnij RESTART IDENTITY w macierzy zamiast pozwalać domyślnie. Nie ufaj dowolnemu prefiksowi pg_temp_ jako dowodowi bieżącej sesji.
+- [x] PG TRUNCATE: admit only targets all proven to belong to the current session; reject persistent/mixed targets and CASCADE, settle RESTART IDENTITY in the matrix instead of allowing it by default. Do not trust an arbitrary pg_temp_ prefix as evidence of the current session.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
 ### 011/T5
 
-- [x] PG ANALYZE: najpierw sprawdź rzeczywisty AST parsera offline. Jeśli nadal brak obsługi, dostarcz plans/011-analyze-parser-spike.md z zakresem zmiany parsera i testami akceptacji; status tego podzadania DESIGN COMPLETE, nie IMPLEMENTED. Bez regex bypass i bez aktualizacji zależności bez oceny regresji.
+- [x] PG ANALYZE: first check the real offline AST of the parser. If support is still missing, deliver plans/011-analyze-parser-spike.md with the scope of the parser change and acceptance tests; the status of that subtask is DESIGN COMPLETE, not IMPLEMENTED. No regex bypass and no dependency update without a regression assessment.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
 ### 011/T6
 
-- [x] Zaktualizuj capabilities i AGENTS wyłącznie dla faktycznie obsługiwanych konstrukcji. Zachowaj odmowy dynamic SQL, persistent DDL, cross-database i efekty funkcji.
+- [x] Update capabilities and AGENTS only for actually supported constructs. Preserve the rejections of dynamic SQL, persistent DDL, cross-database access and function effects.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
-## Testy i zakończenie
+## Tests and completion
 
-Każde wdrożone rozszerzenie ma pozytywny i negatywny test; wszystkie dotychczasowe odmowy istotnych efektów pozostają. ANALYZE ma jawny wynik wdrożenie albo projekt zależności.
+Every implemented extension has a positive and a negative test; all existing rejections of significant effects remain. ANALYZE has an explicit outcome: implementation or a dependency design.
 
 - [x] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlSafetyTests|FullyQualifiedName~SqlParameterReferenceValidatorTests|FullyQualifiedName~PostgresSafetyTests' --verbosity minimal` → exit 0.
 - [x] `dotnet build SqlHarness.sln --no-restore -warnaserror` → exit 0.
-- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; zapisz passed/failed/skipped. **Niespełnione jako bramka — nie pełny PASS.** Na `7ceed54` przebieg dał exit 0 (SqlHarness.Tests 2712/0/0, SqlHarness.Mcp.Tests 193/0/4), na `d9b7479` exit 1 (SqlHarness.Tests 2711/1/0 — `ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree`; pięć powtórek projektu 2712/0/0). SqlHarness.Mcp.Tests zawodzi nieregularnie: na `8abaa15` 1 z 6 przebiegów kontrolera dał 192/1/4 (`McpStdioProcessTests.Inprocess_host_returns_zero_on_immediate_eof_without_stdout_bytes`), pozostałe 193/0/4; na bazie `0fad2a8` 1 z 5 przebiegów dał 192/1/4 (`McpSecretRedactionTests.Transport_failure_logs_generic_text_without_exception_content`). Oba przebiegi projektu MCP w fali końcowej dały 193/0/4, co nie dowodzi stabilności. Niezależna awaria gate, właściciel: plan 005. Liczby i źródła: dowód, sekcja „Test evidence".
-- [x] Testy obejmują zachowanie właściwego adaptera/runnera, a nie tylko listę nazw lub stałą. (Fala końcowa, M1: testy przez `SqlHarnessModule` dla `query`, `measure`, `compare` na obu silnikach; `watch`, `snapshot` i narzędzia MCP nie mają własnego testu nowych konstrukcji — używają tego samego klasyfikatora Core.)
+- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; record passed/failed/skipped. **Unmet as a gate — not a full PASS.** On `7ceed54` the run gave exit 0 (SqlHarness.Tests 2712/0/0, SqlHarness.Mcp.Tests 193/0/4), on `d9b7479` exit 1 (SqlHarness.Tests 2711/1/0 — `ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree`; five repetitions of the project gave 2712/0/0). SqlHarness.Mcp.Tests fails irregularly: on `8abaa15` 1 of 6 controller runs gave 192/1/4 (`McpStdioProcessTests.Inprocess_host_returns_zero_on_immediate_eof_without_stdout_bytes`), the others 193/0/4; at base `0fad2a8` 1 of 5 runs gave 192/1/4 (`McpSecretRedactionTests.Transport_failure_logs_generic_text_without_exception_content`). Both runs of the MCP project in the final wave gave 193/0/4, which does not prove stability. Independent gate failure, owner: plan 005. Counts and sources: evidence, section „Test evidence".
+- [x] Tests cover the behavior of the proper adapter/runner, not just a list of names or a constant. (Final wave, M1: tests through `SqlHarnessModule` for `query`, `measure`, `compare` on both engines; `watch`, `snapshot` and the MCP tools have no test of their own for the new constructs — they use the same Core classifier.)
 - [x] `git diff --check` → exit 0.
-- [x] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [x] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
-- [x] Brak dowodu live/platformowego jest jawny.
+- [x] `git status --short` shows only the author's changes within the scope.
+- [x] The index contains the status, commit and evidence; local paths exist or are marked as new.
+- [x] The absence of live/platform evidence is explicit.
 
-Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
+Audit baseline: 1895 Core/CLI passed; MCP 122 passed, 2 timeouts, 4 skipped. Plan005 diagnoses the timeouts. An earlier safety fix may be ready for review once the independent gate failure is documented; do not announce a full PASS then.
 
-## Warunki zatrzymania i utrzymanie
+## Stop conditions and maintenance
 
-Jeżeli parser nie reprezentuje efektów potrzebnych do rozstrzygnięcia, zachowaj odmowę i opisz zależność. Nie rozszerzaj allowlist tylko na podstawie słowa kluczowego.
+If the parser does not represent the effects needed to settle the question, keep the rejection and describe the dependency. Do not extend the allowlist on the basis of a keyword alone.
 
-Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
+If a step requires a real DB target, secrets or going beyond authorization, stop that step and record the gap. Finish the independent tasks. Do not mark the whole thing DONE without all required results.
 
-Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
+The reviewer checks the safety of the negative cases, compatibility and the truthfulness of the evidence. After a parser/SDK/operation change return to these tests. Small commits of the fix/test/docs type, no push. The required characteristic tests must precede the refactoring.

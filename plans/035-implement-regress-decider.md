@@ -37,7 +37,7 @@ Key facts from the implementation design, revised at `729d88f`:
 - Registration: next to `c.AddCommand<ArtifactCommand>("artifact")…` in `SqlHarnessCli.Create` (`src/SqlHarness.Cli/SqlHarnessCli.cs`). `RegressCommand` takes no `ISqlHarnessModule` and uses the same error pattern as `ArtifactCommand` (`ArtifactReadException.ExitCode`; outside I/O errors → 6).
 - `--policy` accepts exactly `v1`. Anything else does not call the decider.
 - Advertising (`Capabilities.cs`, AGENTS, README) happens **last**, only once the command exists. MCP exposure is explicitly not part of 013.
-- The design's `## Testy` section lists the decider test table; `## Granice dowodu i utrzymanie` lists what stays unproven offline (median truncation vs raw samples).
+- The design's `## Tests` section lists the decider test table; `## Evidence boundaries and maintenance` lists what stays unproven offline (median truncation vs raw samples).
 
 ## Commands you will need
 
@@ -69,25 +69,25 @@ Branch `feat/plan-035-regress`. Execute the complete plan after 046 in one deliv
 
 ### Phase B: `RegressionPolicy` and `RegressionDecider` (pure)
 
-Implement the revised contract gate order (gates 1–4, then zero/threshold decisions). Stable elapsed regression is sufficient for fail; reads/CPU are optional diagnostics. Preserve equivalence and spread gates. Use plan046 default equivalence: nullability-only differences must not cause default inconclusive; explicit strict comparison remains authoritative. Translate the design's test table (`## Testy`) into `RegressionDeciderTests.cs` as data-driven `[Theory]` rows, coverage for every table entry, and keep the row identifiers from the design in the test names or data, so a reviewer can map them. The decider must not perform I/O.
+Implement the revised contract gate order (gates 1–4, then zero/threshold decisions). Stable elapsed regression is sufficient for fail; reads/CPU are optional diagnostics. Preserve equivalence and spread gates. Use plan046 default equivalence: nullability-only differences must not cause default inconclusive; explicit strict comparison remains authoritative. Translate the design's test table (`## Tests`) into `RegressionDeciderTests.cs` as data-driven `[Theory]` rows, coverage for every table entry, and keep the row identifiers from the design in the test names or data, so a reviewer can map them. The decider must not perform I/O.
 
 **Verify**: `dotnet test tests/SqlHarness.Tests --no-build --filter "FullyQualifiedName~RegressionDeciderTests"`: every design row is present and passes. Every acceptance case is covered; one table row may expand to multiple meaningful cases. Include the latency-only, unavailable-cost, zero-boundary and legacy-proof cases. Do not assert a brittle equality between test count and Markdown row count.
 
 ### Phase C: `RegressCommand`
 
-Implement `regress <artifact-id> --policy v1 --json` with the legacy/error behavior from the design's `## Komenda i wynik`. CLI tests in `RegressCommandTests.cs`, following `tests/SqlHarness.Tests/Cli/ArtifactCommandTests.cs`.
+Implement `regress <artifact-id> --policy v1 --json` with the legacy/error behavior from the design's `## Command and result`. CLI tests in `RegressCommandTests.cs`, following `tests/SqlHarness.Tests/Cli/ArtifactCommandTests.cs`.
 
 **Verify**: focused tests and both platform gates pass.
 
 ### Phase D: Advertise
 
-Add `regress` to `Capabilities.cs`, the README command table, AGENTS.md and the skill (if plan 029 landed, `DocsSyncTests` enforces this). Add the CI gate example from the design's `## Przykład CI` to README.
+Add `regress` to `Capabilities.cs`, the README command table, AGENTS.md and the skill (if plan 029 landed, `DocsSyncTests` enforces this). Add the CI gate example from the design's `## CI example` to README.
 
 **Verify**: both platform gates pass. `dotnet run --project src/SqlHarness.Cli -- regress --help` shows the command.
 
 ## Test plan
 
-As specified in `plans/013-regression-implementation.md` `## Testy`, plus Phase A projection tests and default/strict nullability integration after plan046.
+As specified in `plans/013-regression-implementation.md` `## Tests`, plus Phase A projection tests and default/strict nullability integration after plan046.
 
 ## Done criteria
 

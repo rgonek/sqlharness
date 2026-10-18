@@ -17,7 +17,7 @@ Agents read two timing distributions and guess whether a candidate regressed. Pl
 
 At the end of `compare` every raw sample is in memory. Deciding there removes the run-count, spread, median-truncation and legacy problems, needs no new command, and puts the verdict into the output agents already read (`--json-summary`). An offline `regress` can be added later if a CI pipeline ever needs it; it would then read the stored verdict.
 
-## Decision rules (normative, carried over from `plans/013-regression-contract.md` "Kolejność decyzji")
+## Decision rules (normative, carried over from `plans/013-regression-contract.md` "Decision order")
 
 Evaluated per compare pair (each matrix cell is a pair). Output `verdict` is `pass`, `fail` or `inconclusive`, with `reasons` (stable codes).
 

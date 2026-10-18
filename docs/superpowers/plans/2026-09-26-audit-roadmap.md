@@ -1,110 +1,110 @@
-# SQLHarness — plan realizacji audytu 2026-09-26
+# SQLHarness — 2026-09-26 audit implementation plan
 
-**Status (2026-10-16):** plany 01–07 wykonane (szczegóły i commity w nagłówku każdego planu); 08 superseded by plan 073 (dashboard approval), tray deferred. Zapis planów nie oznacza wykonania napraw ani zgody na operacje na bazach.
+**Status (2026-10-16):** plans 01–07 completed (details and commits in the header of each plan); 08 superseded by plan 073 (dashboard approval), tray deferred. Recording plans does not mean performing the fixes or consenting to database operations.
 
-**Źródło:** [pełny audyt i archiwum prób offline](../specs/2026-09-26-project-audit.md), commit `5e655942f4f99f6c84ae47a86ac210c19434b541`.
+**Source:** [full audit and offline trial archive](../specs/2026-09-26-project-audit.md), commit `5e655942f4f99f6c84ae47a86ac210c19434b541`.
 
-## Kolejność i zależności
+## Order and dependencies
 
-| Plan | Zakres | Zależność |
+| Plan | Scope | Dependency |
 |---|---|---|
-| [01 — Bezpieczeństwo SQL](2026-09-26-audit-01-sql-safety.md) | cele DML, funkcje PG, redakcja, target w Core | pierwszy; szybkie naprawy niezależne od refaktoryzacji |
-| [02 — PostgreSQL](2026-09-26-audit-02-postgres-correctness.md) | parametry, TLS, tożsamość, metryki | zadania parametrów i metryk mogą poprzedzać 01; wspólne zmiany AST uzgodnić z 01 |
-| [03 — Interfejs dla agentów](2026-09-26-audit-03-agent-interface.md) | JSON, capabilities, validate, budżet odpowiedzi, gain | błędy po redakcji 01; validate po analizie 01/02 |
-| [04 — Zasoby i watch](2026-09-26-audit-04-runtime-bounds.md) | deadline, historia, wiadomości, pamięć, niestabilny test | kontrakt prezentacji z 03; deadline niezależny |
-| [05 — Architektura](2026-09-26-audit-05-architecture.md) | odpowiedzialności, wspólne mechanizmy, zbędne interfejsy | po naprawach 01/02 i ustaleniu kontraktów 03/04 |
-| [06 — Rozszerzenia](2026-09-26-audit-06-extensions.md) | bezpieczna składnia, artefakty, NDJSON, CI, pg_stat_statements | po właściwych fundamentach; część zadań kończy się specyfikacją |
-| [07 — MCP](2026-09-26-audit-07-mcp.md) | lokalny adapter stdio nad Core, niezmienny scope, narzędzia i budżety | **po zakończeniu 01–06**, zgodnie z decyzją użytkownika; wdrożony i udokumentowany w `docs/mcp.md` (T7) |
-| [08 — Windows tray i zgody](2026-09-26-audit-08-windows-approval-tray.md) | superseded by plan 073 (dashboard approval); tray deferred | status w nagłówku planu |
+| [01 — SQL safety](2026-09-26-audit-01-sql-safety.md) | DML targets, PG functions, redaction, target in Core | first; quick fixes independent of refactoring |
+| [02 — PostgreSQL](2026-09-26-audit-02-postgres-correctness.md) | parameters, TLS, identity, metrics | the parameter and metric tasks may precede 01; agree shared AST changes with 01 |
+| [03 — Agent interface](2026-09-26-audit-03-agent-interface.md) | JSON, capabilities, validate, response budget, gain | errors after 01 redaction; validate after 01/02 analysis |
+| [04 — Resources and watch](2026-09-26-audit-04-runtime-bounds.md) | deadline, history, messages, memory, unstable test | presentation contract from 03; deadline independent |
+| [05 — Architecture](2026-09-26-audit-05-architecture.md) | responsibilities, shared mechanisms, redundant interfaces | after the fixes of 01/02 and after settling the contracts of 03/04 |
+| [06 — Extensions](2026-09-26-audit-06-extensions.md) | safe syntax, artifacts, NDJSON, CI, pg_stat_statements | after the proper foundations; some tasks end with a specification |
+| [07 — MCP](2026-09-26-audit-07-mcp.md) | local stdio adapter over Core, immutable scope, tools and budgets | **after completion of 01–06**, per the user decision; implemented and documented in `docs/mcp.md` (T7) |
+| [08 — Windows tray and approvals](2026-09-26-audit-08-windows-approval-tray.md) | superseded by plan 073 (dashboard approval); tray deferred | status in the plan header |
 
-Nie wykonywać planów równocześnie w jednym katalogu: wspólne pliki to `SqlHarnessModule.cs`, `Contracts.cs`, `ISqlDialect.cs`, `Renderer.cs`. Każdy etap powinien kończyć się spójnym, testowalnym stanem. W razie zlecenia implementacji realizować małe zadania i osobne lokalne commity; push nie jest częścią tych planów. Plan 07 ma osobną [specyfikację MCP](../specs/2026-09-26-mcp-adapter-design.md) i nie rozpoczyna się przed zamknięciem poprzedników.
+Do not execute plans concurrently in one directory: the shared files are `SqlHarnessModule.cs`, `Contracts.cs`, `ISqlDialect.cs`, `Renderer.cs`. Each stage should end in a coherent, testable state. When instructed to implement, carry out small tasks and separate local commits; push is not part of these plans. Plan 07 has a separate [MCP specification](../specs/2026-09-26-mcp-adapter-design.md) and does not start before the predecessors are closed.
 
 ```mermaid
 flowchart TD
-    A[01 Bezpieczeństwo] --> C[03 Interfejs agenta]
+    A[01 Safety] --> C[03 Agent interface]
     B[02 PostgreSQL] --> C
-    C --> D[04 Zasoby i watch]
-    A --> E[05 Architektura]
+    C --> D[04 Resources and watch]
+    A --> E[05 Architecture]
     B --> E
     C --> E
     D --> E
-    E --> F[06 Rozszerzenia]
-    F --> G[07 MCP po wszystkich poprzednikach]
-    G --> H[08 Windows tray i jednorazowe zgody]
+    E --> F[06 Extensions]
+    F --> G[07 MCP after all predecessors]
+    G --> H[08 Windows tray and one-time approvals]
 ```
 
-Diagram przedstawia kolejność integracji całych planów. Niezależne zadania, np. naprawa deadline lub liczenia buforów, mogą być wykonane wcześniej zgodnie z tabelą zależności.
+The diagram shows the integration order of the whole plans. Independent tasks, e.g. fixing the deadline or buffer counting, may be performed earlier in accordance with the dependency table.
 
-## Docelowy podział odpowiedzialności
+## Target division of responsibilities
 
-| Obszar | Obecnie | Po realizacji |
+| Area | Currently | After implementation |
 |---|---|---|
-| Analiza SQL | classifier dialektu + parser referencji T-SQL + powtórna analiza benchmarku | jedna spójna analiza właściwego silnika, używana przez różne tryby |
-| Lifecycle | rozbudowana fasada i runnery odwołujące się do jej helperów | fasada dispatch, przygotowanie operacji, wykonanie rodzin komend, wspólna infrastruktura |
-| Odpowiedź | pełny raport/summary lub tekstowy błąd | stabilny wynik i błąd, projekcja z budżetem, szczegóły na żądanie |
-| Artefakty | powielone staging/publish/cleanup | osobne writery domenowe nad wspólną publikacją plików |
+| SQL analysis | dialect classifier + T-SQL reference parser + repeated benchmark analysis | one coherent analysis of the proper engine, used by the different modes |
+| Lifecycle | an extensive facade and runners referring to its helpers | dispatch facade, operation preparation, command family execution, shared infrastructure |
+| Response | full report/summary or a text error | stable result and error, budgeted projection, details on request |
+| Artifacts | duplicated staging/publish/cleanup | separate domain writers over shared file publication |
 
-## Wspólne zasady wykonania
+## Common execution rules
 
-- .NET 8, C#, xUnit; zachować oba silniki: SQL Server i PostgreSQL.
-- Jedno wywołanie ma jeden profil i zestaw zmiennych. Nie przełączać celu ani nie ponawiać mutacji automatycznie.
-- Trwały DML wymaga dokładnej zgody na batch i bazę oraz obu flag; trwały DDL, dynamiczny SQL i niekontrolowane źródła pozostają niedozwolone.
-- Nie wdrażać wyłączenia walidacji jako obejścia błędu parsera.
-- Próby parsera wykonywać offline. Testy live tylko na jawnie autoryzowanych jednorazowych bazach; nigdy domyślnie na profilu użytkownika.
-- Zachować session setup once, sesję na komórkę matrix, rotację param-set i osobny sidecar wyników PostgreSQL.
-- Wartości parametrów, SQL i plany pozostają lokalnie wrażliwe. Budżet prezentacji nie może obcinać danych używanych do equivalence.
-- Kody wyjścia 0/2/3/4/5/6/7/8 pozostają zgodne; nowe rozstrzygnięcia domenowe muszą mieć osobny jawny kontrakt.
-- Zmiany TLS i maszynowego formatu są ewolucją kontraktu. Nowe plany wskazują docelowy kierunek, ale zapisanie ich nie zmienia obecnego AGENTS.md ani historycznych specyfikacji.
+- .NET 8, C#, xUnit; preserve both engines: SQL Server and PostgreSQL.
+- One invocation has one profile and one variable set. Do not switch the target nor automatically repeat a mutation.
+- Persistent DML requires exact consent to the batch and the database as well as both flags; persistent DDL, dynamic SQL and uncontrolled sources remain disallowed.
+- Do not implement disabling validation as a workaround for a parser error.
+- Perform parser trials offline. Live tests only on explicitly authorized one-time databases; never by default on a user profile.
+- Preserve session setup once, one session per matrix cell, parameter-set rotation and a separate PostgreSQL results sidecar.
+- Parameter values, SQL and plans remain locally sensitive. The presentation budget must not truncate data used for equivalence.
+- Exit codes 0/2/3/4/5/6/7/8 remain compliant; new domain decisions must have a separate explicit contract.
+- TLS and machine-format changes are an evolution of the contract. New plans indicate the target direction, but recording them does not change the current AGENTS.md or historical specifications.
 
-## Pokrycie wszystkich ustaleń
+## Coverage of all findings
 
-| Ustalenie | Zadanie |
+| Finding | Task |
 |---|---|
 | S1 — OUTPUT INTO | 01/T1 |
-| S2 — alias #temp | 01/T1 |
-| S3 — efekty funkcji PG i ukryte źródła | 01/T3 |
-| S4 — niepełna analiza AST; brak dowodu luki serwerowej | 01/T3 i 02/T1 |
+| S2 — #temp alias | 01/T1 |
+| S3 — PG function effects and hidden sources | 01/T3 |
+| S4 — incomplete AST analysis; no evidence of a server-side gap | 01/T3 and 02/T1 |
 | S5 — TLS | 02/T2 |
-| S6 — wyciek błędnych wartości | 01/T2 |
-| B1 — parser parametrów PG | 02/T1 |
+| S6 — leakage of invalid values | 01/T2 |
+| B1 — PG parameter parser | 02/T1 |
 | B2 — DNS/IP | 02/T2 |
-| B3 — bufory, CPU i precyzja czasu | 02/T3 |
-| B4 — nadmiarowa blokada składni | 06/T1 |
-| B5 — watch deadline i historia | 04/T1–T2 |
-| A1 — błędy JSON | 03/T1 |
-| A2 — rozmiar summary i komórek | 03/T3, 04/T2–T3 |
-| A3 — help, capabilities, rozjazd binarki | 03/T2 |
-| A4 — gain i koszt całego zadania | 03/T4 |
-| Duplikacja reguł targetu | 01/T4 |
-| Szeroki dialekt, fasada, object Report, martwe człony | 05/T1–T2 |
-| Duplikacja writerów i mapowania wyjątków | 05/T2–T3 |
+| B3 — buffers, CPU and time precision | 02/T3 |
+| B4 — excessive syntax blocking | 06/T1 |
+| B5 — watch deadline and history | 04/T1–T2 |
+| A1 — JSON errors | 03/T1 |
+| A2 — summary and cell size | 03/T3, 04/T2–T3 |
+| A3 — help, capabilities, binary drift | 03/T2 |
+| A4 — gain and cost of the whole task | 03/T4 |
+| Duplication of target rules | 01/T4 |
+| Broad dialect, facade, object Report, dead members | 05/T1–T2 |
+| Duplication of writers and exception mapping | 05/T2–T3 |
 | validate offline | 03/T2 |
-| Selektywne artefakty | 06/T2 |
+| Selective artifacts | 06/T2 |
 | Watch NDJSON | 06/T3 |
-| Progi regresji CI | 06/T4 |
+| CI regression thresholds | 06/T4 |
 | pg_stat_statements | 06/T5 |
-| Timeout testu procesu | 04/T4 |
-| Dobre istniejące granice i zachowania | ograniczenia wszystkich planów, szczególnie 05 |
-| MCP z roadmapy README — dodany na prośbę użytkownika | 07/T1–T7, po zakończeniu 01–06 |
-| Tray i zgody na mutacje wyłącznie naszego MCP — dodane na prośbę użytkownika | Superseded by plan 073 (dashboard approval); tray deferred |
+| Process test timeout | 04/T4 |
+| Good existing boundaries and behaviors | the restrictions of all plans, especially 05 |
+| MCP from the README roadmap — added at the user's request | 07/T1–T7, after completion of 01–06 |
+| Tray and approvals for mutations of our MCP only — added at the user's request | Superseded by plan 073 (dashboard approval); tray deferred |
 
-## Stan dowodów i kryterium zamknięcia
+## State of evidence and closure criterion
 
-Audyt: 1404 testy przeszły, jeden timeout publikacji PID; powtórzenie tego testu osobno przeszło. NuGet nie zgłosił podatnych zależności w dniu audytu. Nie ma dowodu wykonania exploitów na serwerze. Wyniki nie zastępują weryfikacji przyszłej implementacji.
+Audit: 1404 tests passed, one PID publication timeout; rerunning that test alone passed. NuGet reported no vulnerable dependencies on the audit day. There is no evidence of executing exploits on a server. The results do not replace verification of future implementation.
 
-Każdy plan zawiera zadania z checkboxami, pliki i kryteria. Przy wykonaniu zapisać commit, uruchomione polecenia, faktyczne wyniki oraz niewykonane testy live. Nie zaznaczać zakończenia zadania wymagającego dowodu, którego nie uzyskano. Zadania projektowe 01/T3 i 06/T4–T5 mają jawny rezultat dokumentacyjny przed implementacją zależnych funkcji.
+Each plan contains tasks with checkboxes, files and criteria. When executing, record the commit, the commands run, the actual results and the live tests not performed. Do not mark as complete a task requiring evidence that has not been obtained. The design tasks 01/T3 and 06/T4–T5 have an explicit documentation result before implementing dependent features.
 
-Docelowy przebieg offline po zmianach kodu:
+Target offline run after code changes:
 
 ```powershell
 dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal
 dotnet list SqlHarness.sln package --vulnerable --include-transitive
 ```
 
-Przy samym zapisie tych dokumentów sprawdzić ścieżki, kompletność mapowania i diff; nie uruchamiać ponownie zestawu testów aplikacji.
+When merely recording these documents, check the paths, the completeness of the mapping and the diff; do not run the application test suite again.
 
-## Status specyfikacji 06/T4–T5 (dokumenty, nie wdrożenia)
+## Status of the 06/T4–T5 specifications (documents, not implementations)
 
-- 06/T4: `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` — kontrakt decyzji regresji (pass/fail/inconclusive), implementacja poza zakresem.
-- 06/T5: `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md` — kontrakt diagnostyki `pg_stat_statements` (PG14+, read-only, bez `CREATE EXTENSION`, bez obietnicy okna, snapshot/delta z unieważnieniem po resecie); SQL Server `qstop` bez zmian.
-- Obie specyfikacje nie zmieniają kodu, stubów, exit codes ani capabilities: mapowanie w capabilities dopiero po rzeczywistym wdrożeniu.
+- 06/T4: `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` — regression decision contract (pass/fail/inconclusive), implementation out of scope.
+- 06/T5: `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md` — `pg_stat_statements` diagnostics contract (PG14+, read-only, without `CREATE EXTENSION`, without a window promise, snapshot/delta with invalidation after a reset); SQL Server `qstop` unchanged.
+- Both specifications do not change code, stubs, exit codes nor capabilities: the mapping in capabilities only after actual implementation.
