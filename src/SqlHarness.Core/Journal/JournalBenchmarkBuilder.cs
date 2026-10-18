@@ -57,22 +57,15 @@ internal static class JournalBenchmarkBuilder
         foreach (var run in runs)
         {
             var ordinalOffset = 0;
-            foreach (var plan in run.PlanXmls)
+            var pairsByDocument = StatementSpanPairer.PairDocuments(run.ExecutedSql, run.PlanXmls);
+            for (var documentIndex = 0; documentIndex < run.PlanXmls.Count; documentIndex++)
             {
-                var statements = StatementMetricsExtractor.Extract(plan, out var omitted);
-                var pairs = StatementSpanPairer.Pair(run.ExecutedSql, plan);
-                extracted.AddRange(statements.Select(statement =>
+                var statements = StatementMetricsExtractor.Extract(
+                    run.PlanXmls[documentIndex], run.ExecutedSql, pairsByDocument[documentIndex], out var omitted);
+                extracted.AddRange(statements.Select(statement => (run, statement with
                 {
-                    var pair = statement.StatementOrdinal < pairs.Count ? pairs[statement.StatementOrdinal] : null;
-                    var hash = pair is { SpanStart: int start, SpanLength: int length } && run.ExecutedSql is { } sql
-                        ? PlanIdentity.StatementSha256(sql.Substring(start, length))
-                        : statement.StatementHash;
-                    return (run, statement with
-                    {
-                        StatementOrdinal = statement.StatementOrdinal + ordinalOffset,
-                        StatementHash = hash,
-                    });
-                }));
+                    StatementOrdinal = statement.StatementOrdinal + ordinalOffset,
+                })));
                 ordinalOffset += statements.Count + omitted;
             }
         }
@@ -126,13 +119,14 @@ internal static class JournalBenchmarkBuilder
         var occurrences = new List<JournalPlanOccurrence>();
         foreach (var run in runs)
         {
+            var pairsByDocument = StatementSpanPairer.PairDocuments(run.ExecutedSql, run.PlanXmls);
             for (var ordinal = 0; ordinal < run.PlanXmls.Count; ordinal++)
             {
                 var document = run.PlanXmls[ordinal];
                 var sha256 = PlanIdentity.DocumentSha256(document);
                 var shapeHash = PlanIdentity.Hash(document);
                 links.Add(new JournalPlanLink(run.Repetition, ordinal, sha256));
-                var pairs = StatementSpanPairer.Pair(run.ExecutedSql, document);
+                var pairs = pairsByDocument[ordinal];
                 var statementCount = StatementMetricsExtractor.CountStatements(document);
                 if (statementCount == 0)
                     statementCount = 1;

@@ -195,8 +195,34 @@ public sealed class ActivityJournalBenchmarkTests
         });
         Assert.Equal([5L, 6L], occurrences.Select(row => (long)row["statement_id"]!).ToArray());
         Assert.Equal([2L, 3L], occurrences.Select(row => (long)row["statement_comp_id"]!).ToArray());
+        Assert.Equal([16L, 26L], occurrences.Select(row => (long)row["span_start"]!).ToArray());
+        Assert.Equal([9L, 9L], occurrences.Select(row => (long)row["span_length"]!).ToArray());
         Assert.Equal(PlanIdentity.StatementSha256("SELECT 1;"), record.Statements[0].StatementHash);
         Assert.Equal(PlanIdentity.StatementSha256("SELECT 2;"), record.Statements[1].StatementHash);
+    }
+
+    [Fact]
+    public void Ordered_plan_documents_share_statement_pairing_across_the_execution()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, storeSensitive: true);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        const string first = "<ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><BatchSequence><Batch><Statements><StmtSimple StatementText=\"SELECT 1\" StatementId=\"1\" StatementCompId=\"1\"><QueryPlan /></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>";
+        const string second = "<ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><BatchSequence><Batch><Statements><StmtSimple StatementText=\"SELECT 1\" StatementId=\"2\" StatementCompId=\"2\"><QueryPlan /></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>";
+        const string executedSql = "SELECT 1; SELECT 1;";
+        var record = JournalBenchmarkBuilder.Build(
+            [new CompareRunArtifact("measure", 1, 10, 12, 5, new Dictionary<string, long>(), "h", [first, second], 1)
+                { ExecutedSql = executedSql }]);
+
+        journal.RecordBenchmark(handle, record);
+
+        var occurrences = JournalDb.Rows(temp.DatabasePath,
+            "SELECT document_ordinal, span_start, span_length, match_kind FROM plan_occurrences ORDER BY document_ordinal");
+        Assert.Equal(2, occurrences.Count);
+        Assert.Equal([0L, 1L], occurrences.Select(row => (long)row["document_ordinal"]!).ToArray());
+        Assert.Equal([0L, 10L], occurrences.Select(row => (long)row["span_start"]!).ToArray());
+        Assert.Equal([9L, 9L], occurrences.Select(row => (long)row["span_length"]!).ToArray());
+        Assert.All(occurrences, row => Assert.Equal("exact", row["match_kind"]));
     }
 
     [Fact]

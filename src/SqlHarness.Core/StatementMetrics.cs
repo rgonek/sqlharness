@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json.Serialization;
 using System.Xml;
 using System.Xml.Linq;
@@ -40,14 +38,23 @@ internal static class StatementMetricsExtractor
 
     private static readonly XNamespace Showplan = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
 
-    internal static IReadOnlyList<StatementMetrics> Extract(string document, out int omittedStatements)
+    internal static IReadOnlyList<StatementMetrics> Extract(string document, out int omittedStatements) =>
+        Extract(document, null, null, out omittedStatements);
+
+    internal static IReadOnlyList<StatementMetrics> Extract(
+        string document,
+        string? executedSql,
+        IReadOnlyList<StatementSpanPair>? pairs,
+        out int omittedStatements)
     {
         omittedStatements = 0;
         var statements = ReadStatements(document);
         if (statements.Length == 0)
             return [];
         omittedStatements = Math.Max(0, statements.Length - MaximumStatements);
-        return statements.Take(MaximumStatements).Select((statement, ordinal) => Parse(statement, ordinal)).ToArray();
+        return statements.Take(MaximumStatements).Select((statement, ordinal) => Parse(
+            statement, ordinal, executedSql,
+            pairs is not null && ordinal < pairs.Count ? pairs[ordinal] : null)).ToArray();
     }
 
     internal static int CountStatements(string document) => ReadStatements(document).Length;
@@ -79,10 +86,13 @@ internal static class StatementMetricsExtractor
         }
     }
 
-    private static StatementMetrics Parse(XElement statement, int ordinal)
+    private static StatementMetrics Parse(XElement statement, int ordinal, string? executedSql, StatementSpanPair? pair)
     {
         var queryPlan = statement.Element(Showplan + "QueryPlan");
         var text = Attribute(statement, "StatementText") ?? string.Empty;
+        var identityText = pair is { SpanStart: int start, SpanLength: int length } && executedSql is not null
+            ? executedSql.Substring(start, length)
+            : text;
         var walked = new List<StatementOperatorSummary>();
         var root = queryPlan?.Element(Showplan + "RelOp");
         if (root is not null)
@@ -100,7 +110,7 @@ internal static class StatementMetricsExtractor
 
         return new StatementMetrics(
             ordinal,
-            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant(),
+            PlanIdentity.StatementSha256(identityText),
             Long(queryPlan?.Element(Showplan + "QueryTimeStats"), "CpuTime"),
             Long(queryPlan?.Element(Showplan + "QueryTimeStats"), "ElapsedTime"),
             Int(queryPlan, "DegreeOfParallelism"),
@@ -201,9 +211,11 @@ internal static class ArtifactStatementProjector
         foreach (var run in runs)
         {
             var ordinalOffset = 0;
-            foreach (var plan in run.PlanXmls)
+            var pairsByDocument = StatementSpanPairer.PairDocuments(run.ExecutedSql, run.PlanXmls);
+            for (var documentIndex = 0; documentIndex < run.PlanXmls.Count; documentIndex++)
             {
-                var statements = StatementMetricsExtractor.Extract(plan, out var omitted);
+                var statements = StatementMetricsExtractor.Extract(
+                    run.PlanXmls[documentIndex], run.ExecutedSql, pairsByDocument[documentIndex], out var omitted);
                 omittedFromPlans += omitted;
                 extracted.AddRange(statements.Select(statement => (run, statement with
                 {

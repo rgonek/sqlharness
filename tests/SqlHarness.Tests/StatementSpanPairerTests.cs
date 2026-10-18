@@ -39,6 +39,79 @@ public sealed class StatementSpanPairerTests
     }
 
     [Fact]
+    public void Normalized_matching_preserves_token_boundaries()
+    {
+        var pair = Assert.Single(StatementSpanPairer.Pair("SELECT a FROM t;", Plan("SELECT aFROM t", 1, 1)));
+
+        Assert.Equal("unmatched", pair.MatchKind);
+        Assert.Null(pair.SpanStart);
+        Assert.Null(pair.SpanLength);
+    }
+
+    [Fact]
+    public void Repeated_normalized_candidates_are_ambiguous_without_an_ordering_anchor()
+    {
+        var pairs = StatementSpanPairer.Pair("SELECT   1; SELECT   1;", Plan("SELECT 1", 1, 1));
+
+        var pair = Assert.Single(pairs);
+        Assert.Equal("ambiguous", pair.MatchKind);
+        Assert.Null(pair.SpanStart);
+    }
+
+    [Fact]
+    public void Repeated_exact_candidates_are_ambiguous_without_an_ordering_anchor()
+    {
+        var pair = Assert.Single(StatementSpanPairer.Pair("SELECT 1; SELECT 1;", Plan("SELECT 1", 1, 1)));
+
+        Assert.Equal("ambiguous", pair.MatchKind);
+        Assert.Null(pair.SpanStart);
+    }
+
+    [Fact]
+    public void Repeated_psp_candidates_are_ambiguous_without_an_ordering_anchor()
+    {
+        var pairs = StatementSpanPairer.Pair("SELECT 1; SELECT 1;",
+            Plan("SELECT 1 option (PLAN PER VALUE(ObjectID = 1, QueryVariantID = 2))", 1, 1, dispatcher: true));
+
+        var pair = Assert.Single(pairs);
+        Assert.Equal("ambiguous", pair.MatchKind);
+        Assert.Null(pair.SpanStart);
+    }
+
+    [Fact]
+    public void A_later_unique_statement_anchors_an_earlier_repeated_candidate()
+    {
+        const string sql = "SELECT 1; SELECT 2; SELECT 1;";
+        var pairs = StatementSpanPairer.Pair(sql, Plans(
+            ("SELECT 1", 1, 1), ("SELECT 2", 2, 2), ("SELECT 1", 3, 3)));
+
+        Assert.Equal(["exact", "exact", "exact"], pairs.Select(pair => pair.MatchKind));
+        Assert.Equal([0, 10, 20], pairs.Select(pair => pair.SpanStart!.Value).ToArray());
+    }
+
+    [Fact]
+    public void Psp_marker_inside_a_line_comment_is_not_stripped_as_a_server_suffix()
+    {
+        var pair = Assert.Single(StatementSpanPairer.Pair(
+            "SELECT 1 --\n;",
+            Plan("SELECT 1 -- option (PLAN PER VALUE blah)", 1, 1)));
+
+        Assert.Equal("unmatched", pair.MatchKind);
+        Assert.Null(pair.SpanStart);
+    }
+
+    [Fact]
+    public void Psp_marker_inside_a_string_literal_does_not_change_the_match_kind()
+    {
+        const string sql = "SELECT CAST('option (PLAN PER VALUE x)' AS varchar(50));";
+        const string planText = "SELECT CAST( 'option (PLAN PER VALUE x)' AS varchar(50))";
+        var pair = Assert.Single(StatementSpanPairer.Pair(sql, Plan(planText, 1, 1)));
+
+        Assert.Equal("normalized", pair.MatchKind);
+        Assert.Equal(sql, sql.Substring(pair.SpanStart!.Value, pair.SpanLength!.Value));
+    }
+
+    [Fact]
     public void Truncated_statement_text_pairs_by_prefix()
     {
         var sql = "SELECT N'" + new string('a', 4100) + "';";
