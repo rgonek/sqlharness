@@ -116,9 +116,12 @@ internal sealed class JournalSeed
                 new CompareDistribution(readsMedian, readsMedian, readsMedian), 4096, granted, used, 4, 12, 10, 1, true, true, 1,
                 [new JournalWait("PAGEIOLATCH_SH", 40, 7)], null,
                 [new JournalTableIo("Orders", readsMedian, 1, physical, 0, 0, 0, 0, 0, physical > 0 ? 1 : 0)],
-                [new JournalPlanLink(1, 0, new string('A', 64))]),
+                [new JournalPlanLink(1, 0, new string('A', 64))])
+            {
+                PlanOccurrences = [new JournalPlanOccurrence(1, 0, 0, new string('A', 64))],
+            },
         ],
-        [new JournalPlanDocument(new string('A', 64), "showplan-xml", Journal.PlanMetricsExtractorTests.ActualPlan)]);
+        [new JournalPlanDocument(new string('A', 64), new string('B', 64), "showplan-xml", Journal.PlanMetricsExtractorTests.ActualPlan)]);
 
     public static void Annotate(string databasePath, string sessionKey, string? title = null, string? note = null,
         bool starred = false, bool archived = false)

@@ -78,8 +78,9 @@ public sealed class JournalRetentionTests
 
     private static BenchmarkJournalRecord Benchmark(string hash) => new(
         [new JournalVariantMetrics("measure", null, null, 1, null, null, null, null, null, null, null, null, null, 0, false, false, 0, [], null,
-            [new JournalTableIo("T", 1, null, null, null, null, null, null, null, 0)], [new JournalPlanLink(1, 0, hash)])],
-        [new JournalPlanDocument(hash, "showplan-xml", "<ShowPlanXML/>")]);
+            [new JournalTableIo("T", 1, null, null, null, null, null, null, null, 0)], [new JournalPlanLink(1, 0, hash)])
+            { PlanOccurrences = [new JournalPlanOccurrence(1, 0, 0, hash)] }],
+        [new JournalPlanDocument(hash, hash, "showplan-xml", "<ShowPlanXML/>")]);
 
     private static long Count(JournalTempDirectory temp, string table) =>
         (long)JournalDb.Rows(temp.DatabasePath, $"SELECT COUNT(*) AS n FROM {table}")[0]["n"]!;
@@ -112,8 +113,8 @@ public sealed class JournalRetentionTests
         Assert.Equal(1, Count(temp, "operations"));
         Assert.Equal(1, Count(temp, "operation_metrics"));
         Assert.Equal(1, Count(temp, "operation_table_io"));
-        Assert.Equal(1, Count(temp, "operation_plans"));
-        Assert.Equal(hashKept, JournalDb.Rows(temp.DatabasePath, "SELECT hash FROM plans").Single()["hash"]);
+        Assert.Equal(1, Count(temp, "plan_occurrences"));
+        Assert.Equal(hashKept, JournalDb.Rows(temp.DatabasePath, "SELECT sha256 FROM plan_documents").Single()["sha256"]);
         Assert.Equal("cli:new", JournalDb.Rows(temp.DatabasePath, "SELECT session_key FROM sessions").Single()["session_key"]);
     }
 
@@ -286,7 +287,7 @@ public sealed class JournalRetentionTests
             onBatchCommitted: () => writes++, batchSize: TestBatchSize);
 
         Assert.Equal((plans, plans, 1), (result.DeletedOperations, result.DeletedPlans, result.DeletedSessions));
-        Assert.Equal(0, Count(temp, "plans"));
+        Assert.Equal(0, Count(temp, "plan_documents"));
         // One write transaction per batch, per table: operations and plans need the
         // same number of batches, sessions need one. Deleting orphans unbatched would
         // commit three times, once per table, whatever the row count.

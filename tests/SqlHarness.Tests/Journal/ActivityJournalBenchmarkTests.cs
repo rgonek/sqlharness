@@ -69,9 +69,8 @@ public sealed class ActivityJournalBenchmarkTests
         Assert.Contains("PAGEIOLATCH_SH", (string)metric["waits_json"]!);
         var io = JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_table_io").Single();
         Assert.Equal(("Orders", 5L, 2L, 1L), ((string)io["table_name"]!, (long)io["logical_reads"]!, (long)io["physical_reads"]!, (long)io["cold_runs"]!));
-        var link = JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_plans").Single();
-        Assert.Equal(1L, link["repetition"]);
-        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT hash FROM plans"));
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM plan_occurrences"));
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT sha256 FROM plan_documents"));
     }
 
     [Fact]
@@ -117,14 +116,76 @@ public sealed class ActivityJournalBenchmarkTests
         journal.RecordBenchmark(first, Record());
         journal.RecordBenchmark(second, Record());
 
-        var plan = JournalDb.Rows(temp.DatabasePath, "SELECT * FROM plans").Single();
+        var plan = JournalDb.Rows(temp.DatabasePath, "SELECT * FROM plan_documents").Single();
         Assert.Equal("showplan-xml", plan["format"]);
         using var gzip = new GZipStream(new MemoryStream((byte[])plan["gz"]!), CompressionMode.Decompress);
         using var reader = new StreamReader(gzip);
         var text = reader.ReadToEnd();
         Assert.Equal(PlanMetricsExtractorTests.ActualPlan, text);
         Assert.Equal((long)System.Text.Encoding.UTF8.GetByteCount(text), plan["raw_size"]);
-        Assert.Equal(2, JournalDb.Rows(temp.DatabasePath, "SELECT metric_id FROM operation_plans").Count);
+        Assert.Equal(2, JournalDb.Rows(temp.DatabasePath, "SELECT metric_id FROM plan_occurrences").Count);
+    }
+
+    [Fact]
+    public void Repetitions_keep_their_own_documents()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, storeSensitive: true);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        const string first = "<ShowPlanXML><StmtSimple><QueryPlan QueryPlanHash=\"0xabc\"><RelOp><RunTimeInformation><RunTimeCountersPerThread ActualRows=\"3\"/></RunTimeInformation></RelOp></QueryPlan></StmtSimple></ShowPlanXML>";
+        const string second = "<ShowPlanXML><StmtSimple><QueryPlan QueryPlanHash=\"0xabc\"><RelOp><RunTimeInformation><RunTimeCountersPerThread ActualRows=\"7\"/></RunTimeInformation></RelOp></QueryPlan></StmtSimple></ShowPlanXML>";
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            new CompareRunArtifact("measure", 1, 10, 12, 5, new Dictionary<string, long>(), "h", [first], 1),
+            new CompareRunArtifact("measure", 2, 10, 12, 5, new Dictionary<string, long>(), "h", [second], 1),
+        ]);
+
+        journal.RecordBenchmark(handle, record);
+
+        var rows = JournalDb.Rows(temp.DatabasePath, """
+            SELECT o.repetition, d.gz FROM plan_occurrences o
+            JOIN plan_documents d ON d.sha256 = o.document_sha ORDER BY o.repetition;
+            """);
+        Assert.Equal(2, rows.Count);
+        Assert.Equal([1L, 2L], rows.Select(row => (long)row["repetition"]!).ToArray());
+        Assert.Equal([first, second], rows.Select(row =>
+        {
+            using var gzip = new GZipStream(new MemoryStream((byte[])row["gz"]!), CompressionMode.Decompress);
+            using var text = new StreamReader(gzip);
+            return text.ReadToEnd();
+        }).ToArray());
+    }
+
+    [Fact]
+    public void Plan_budget_records_omitted_occurrences_and_allows_later_small_documents()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig { StoreSensitive = true }, TextWriter.Null,
+            new FixedTimeProvider(JournalTestData.T0), maximumPlanDocumentBytesPerOperation: 4);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            new CompareRunArtifact("baseline", 1, 10, 12, 5, new Dictionary<string, long>(), "h",
+                ["💡x", "tiny"], 1),
+        ]);
+
+        journal.RecordBenchmark(handle, record);
+
+        var occurrences = JournalDb.Rows(temp.DatabasePath,
+            "SELECT document_ordinal, document_sha, omitted FROM plan_occurrences ORDER BY document_ordinal");
+        Assert.Equal(2, occurrences.Count);
+        Assert.Equal((0L, null, 1L), ((long)occurrences[0]["document_ordinal"]!, occurrences[0]["document_sha"], (long)occurrences[0]["omitted"]!));
+        Assert.Equal((1L, record.PlanDocuments.Single(document => document.Document == "tiny").Sha256, 0L),
+            ((long)occurrences[1]["document_ordinal"]!, occurrences[1]["document_sha"], (long)occurrences[1]["omitted"]!));
+        var span = JournalDb.Rows(temp.DatabasePath,
+            "SELECT span_start, span_length, match_kind, statement_id, statement_comp_id FROM plan_occurrences ORDER BY document_ordinal")[0];
+        Assert.Null(span["span_start"]);
+        Assert.Null(span["span_length"]);
+        Assert.Equal("unmatched", span["match_kind"]);
+        Assert.Null(span["statement_id"]);
+        Assert.Null(span["statement_comp_id"]);
+        Assert.Equal("tiny", JournalDb.Rows(temp.DatabasePath, "SELECT sha256 FROM plan_documents")
+            .Single()["sha256"] is string sha ? record.PlanDocuments.Single(document => document.Sha256 == sha).Document : null);
     }
 
     [Fact]

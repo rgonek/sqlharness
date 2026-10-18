@@ -24,6 +24,7 @@ public sealed class ActivityJournal : IActivityJournal
     private const int SqliteCorrupt = 11;
     private const int SqliteNotADatabase = 26;
     private const int MaximumConditionsBytes = 1024 * 1024;
+    internal const int MaximumPlanDocumentBytesPerOperation = 16 * 1024 * 1024;
     private const int MaximumPhaseEventDetailLength = 512;
     private const int MaximumPhaseEventInputLength = 4096;
     private const int MaximumPhaseEvents = OperationPhaseRecorder.MaximumEvents;
@@ -34,27 +35,30 @@ public sealed class ActivityJournal : IActivityJournal
     private readonly bool _storeSensitive;
     private readonly TextWriter _log;
     private readonly TimeProvider _time;
+    private readonly int _maximumPlanDocumentBytesPerOperation;
     private int _warned;
 
-    private ActivityJournal(string path, bool storeSensitive, TextWriter log, TimeProvider time)
+    private ActivityJournal(string path, bool storeSensitive, TextWriter log, TimeProvider time, int maximumPlanDocumentBytesPerOperation)
     {
         _path = path;
         _storeSensitive = storeSensitive;
         _log = log;
         _time = time;
+        _maximumPlanDocumentBytesPerOperation = maximumPlanDocumentBytesPerOperation;
     }
 
     public static IActivityJournal Open(JournalConfig config, TextWriter log) =>
         Open(SqlHarnessPaths.ActivityDatabase, config, log, TimeProvider.System);
 
-    internal static IActivityJournal Open(string path, JournalConfig config, TextWriter log, TimeProvider time)
+    internal static IActivityJournal Open(string path, JournalConfig config, TextWriter log, TimeProvider time,
+        int maximumPlanDocumentBytesPerOperation = MaximumPlanDocumentBytesPerOperation)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(log);
         if (!config.Enabled)
             return NullActivityJournal.Instance;
 
-        var journal = new ActivityJournal(path, config.StoreSensitive, log, time);
+        var journal = new ActivityJournal(path, config.StoreSensitive, log, time, maximumPlanDocumentBytesPerOperation);
         try
         {
             journal.Initialize();
@@ -476,6 +480,9 @@ public sealed class ActivityJournal : IActivityJournal
             var caseIdentities = ReadCaseIdentities(connection, transaction, handle.OperationId);
             var caseCount = Math.Max(1, record.Variants.Select(item => item.MatrixCell)
                 .Concat(record.Statements.Select(item => item.MatrixCell)).OfType<int>().DefaultIfEmpty(0).Max() + 1);
+            var admittedPlanDocuments = new Dictionary<string, JournalPlanDocument>(StringComparer.Ordinal);
+            var admittedPlanShas = new HashSet<string>(StringComparer.Ordinal);
+            var admittedPlanBytes = 0;
             for (var ordinal = 0; ordinal < record.Variants.Count; ordinal++)
             {
                 var variant = record.Variants[ordinal];
@@ -484,17 +491,40 @@ public sealed class ActivityJournal : IActivityJournal
                 var metricId = InsertMetric(connection, transaction, handle.OperationId, ordinal, variant);
                 foreach (var table in variant.TableIo)
                     InsertTableIo(connection, transaction, metricId, table);
-                foreach (var link in variant.PlanLinks)
+                if (_storeSensitive)
                 {
-                    using var insert = Command(connection, transaction, """
-                        INSERT OR IGNORE INTO operation_plans (metric_id, repetition, ordinal, plan_hash)
-                        VALUES ($metric, $repetition, $ordinal, $hash);
-                        """);
-                    insert.Parameters.AddWithValue("$metric", metricId);
-                    insert.Parameters.AddWithValue("$repetition", link.Repetition);
-                    insert.Parameters.AddWithValue("$ordinal", link.Ordinal);
-                    insert.Parameters.AddWithValue("$hash", link.Hash);
-                    insert.ExecuteNonQuery();
+                    foreach (var occurrence in variant.PlanOccurrences)
+                    {
+                        var document = occurrence.DocumentSha is null
+                            ? null
+                            : record.PlanDocuments.FirstOrDefault(item => item.Sha256 == occurrence.DocumentSha);
+                        var omitted = document is null;
+                        if (document is not null && !admittedPlanShas.Contains(document.Sha256))
+                        {
+                            var size = Encoding.UTF8.GetByteCount(document.Document);
+                            if (size > _maximumPlanDocumentBytesPerOperation - admittedPlanBytes)
+                                omitted = true;
+                            else
+                            {
+                                admittedPlanBytes += size;
+                                admittedPlanShas.Add(document.Sha256);
+                                admittedPlanDocuments.TryAdd(document.Sha256, document);
+                            }
+                        }
+
+                        using var insert = Command(connection, transaction, """
+                            INSERT OR IGNORE INTO plan_occurrences
+                                (metric_id, repetition, document_ordinal, statement_index, document_sha, omitted)
+                            VALUES ($metric, $repetition, $documentOrdinal, $statementIndex, $sha, $omitted);
+                            """);
+                        insert.Parameters.AddWithValue("$metric", metricId);
+                        insert.Parameters.AddWithValue("$repetition", occurrence.Repetition);
+                        insert.Parameters.AddWithValue("$documentOrdinal", occurrence.DocumentOrdinal);
+                        insert.Parameters.AddWithValue("$statementIndex", occurrence.StatementIndex);
+                        insert.Parameters.AddWithValue("$sha", !omitted && document is not null ? document.Sha256 : DBNull.Value);
+                        insert.Parameters.AddWithValue("$omitted", omitted ? 1 : 0);
+                        insert.ExecuteNonQuery();
+                    }
                 }
             }
 
@@ -526,18 +556,18 @@ public sealed class ActivityJournal : IActivityJournal
 
             if (_storeSensitive)
             {
-                foreach (var document in record.PlanDocuments)
+                foreach (var document in admittedPlanDocuments.Values)
                 {
                     var bytes = Encoding.UTF8.GetBytes(document.Document);
                     using var insert = Command(connection, transaction, """
-                        INSERT OR IGNORE INTO plans (hash, format, raw_size, gz, first_seen)
-                        VALUES ($hash, $format, $size, $gz, $now);
+                        INSERT OR IGNORE INTO plan_documents (sha256, shape_hash, format, raw_size, gz)
+                        VALUES ($sha256, $shapeHash, $format, $size, $gz);
                         """);
-                    insert.Parameters.AddWithValue("$hash", document.Hash);
+                    insert.Parameters.AddWithValue("$sha256", document.Sha256);
+                    insert.Parameters.AddWithValue("$shapeHash", document.ShapeHash);
                     insert.Parameters.AddWithValue("$format", document.Format);
                     insert.Parameters.AddWithValue("$size", bytes.LongLength);
                     insert.Parameters.AddWithValue("$gz", Gzip(bytes));
-                    insert.Parameters.AddWithValue("$now", now);
                     insert.ExecuteNonQuery();
                 }
             }

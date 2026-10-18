@@ -252,7 +252,48 @@ public sealed class JournalBenchmarkBuilderTests
         Assert.Single(variant.PlanLinks.Select(link => link.Hash).Distinct());
         var document = Assert.Single(record.PlanDocuments);
         Assert.Equal("showplan-xml", document.Format);
-        Assert.Equal(variant.PlanLinks[0].Hash, document.Hash);
+        Assert.Equal(variant.PlanLinks[0].Hash, document.Sha256);
+    }
+
+    [Fact]
+    public void Equal_shape_statements_do_not_collide()
+    {
+        const string first = "<ShowPlanXML><StmtSimple StatementText=\"SELECT 1\"><QueryPlan QueryPlanHash=\"0xabc\"/></StmtSimple></ShowPlanXML>";
+        const string second = "<ShowPlanXML><StmtSimple StatementText=\"SELECT 2\"><QueryPlan QueryPlanHash=\"0xabc\"/></StmtSimple></ShowPlanXML>";
+
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            Run("measure", 1, 1, 1, 1, plans: [first]),
+            Run("measure", 2, 1, 1, 1, plans: [second]),
+        ]);
+
+        Assert.Equal(2, record.PlanDocuments.Count);
+        Assert.Equal(2, record.Variants[0].PlanLinks.Select(link => link.Hash).Distinct().Count());
+        Assert.Single(record.PlanDocuments.Select(document => document.ShapeHash).Distinct());
+        Assert.Equal(
+            [Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(first))),
+             Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(second)))],
+            record.Variants[0].PlanLinks.Select(link => link.Hash).ToArray());
+        Assert.Equal([first, second], record.PlanDocuments.Select(document => document.Document).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public void Builder_keeps_repetition_specific_actual_plan_documents()
+    {
+        const string first = "<ShowPlanXML><StmtSimple StatementText=\"SELECT 1\"><QueryPlan QueryPlanHash=\"0xabc\"><RelOp NodeId=\"0\" PhysicalOp=\"Index Scan\"><RunTimeInformation><RunTimeCountersPerThread Thread=\"0\" ActualRows=\"3\"/></RunTimeInformation></RelOp></QueryPlan></StmtSimple></ShowPlanXML>";
+        const string second = "<ShowPlanXML><StmtSimple StatementText=\"SELECT 1\"><QueryPlan QueryPlanHash=\"0xabc\"><RelOp NodeId=\"0\" PhysicalOp=\"Index Scan\"><RunTimeInformation><RunTimeCountersPerThread Thread=\"0\" ActualRows=\"7\"/></RunTimeInformation></RelOp></QueryPlan></StmtSimple></ShowPlanXML>";
+
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            Run("measure", 1, 1, 1, 1, plans: [first]),
+            Run("measure", 2, 1, 1, 1, plans: [second]),
+        ]);
+
+        Assert.Equal(2, record.PlanDocuments.Count);
+        Assert.Equal(2, record.Variants[0].PlanLinks.Select(link => link.Hash).Distinct().Count());
+        Assert.Single(record.PlanDocuments.Select(document => document.ShapeHash).Distinct());
+        Assert.Contains(first, record.PlanDocuments.Select(document => document.Document));
+        Assert.Contains(second, record.PlanDocuments.Select(document => document.Document));
     }
 
     [Fact]

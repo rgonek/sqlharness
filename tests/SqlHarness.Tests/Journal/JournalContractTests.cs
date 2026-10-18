@@ -25,14 +25,14 @@ public sealed class JournalContractTests : IDisposable
     };
 
     [Fact]
-    public void Journal_v16_pins_fresh_schema_and_fingerprint_salt()
+    public void Journal_v17_pins_content_addressed_documents_and_occurrences()
     {
         var path = Path.Combine(_temp.Path, "data", "activity.db");
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(14, JournalSchema.FirstRetainedVersion);
-        Assert.Equal(16, JournalSchema.CurrentVersion);
+        Assert.Equal(17, JournalSchema.FirstRetainedVersion);
+        Assert.Equal(17, JournalSchema.CurrentVersion);
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         var operationColumns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operations')")
             .Select(row => (string)row["name"]!).ToArray();
@@ -44,13 +44,20 @@ public sealed class JournalContractTests : IDisposable
             .Select(row => (string)row["name"]!));
         Assert.Contains("case_label", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_statements')")
             .Select(row => (string)row["name"]!));
+        Assert.Contains("shape_hash", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_documents')").Select(row => (string)row["name"]!));
+        Assert.Contains("sha256", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_documents')").Select(row => (string)row["name"]!));
+        Assert.Contains("span_start", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_occurrences')").Select(row => (string)row["name"]!));
+        Assert.Contains("span_length", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_occurrences')").Select(row => (string)row["name"]!));
+        Assert.Contains("match_kind", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_occurrences')").Select(row => (string)row["name"]!));
+        Assert.Contains("statement_id", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_occurrences')").Select(row => (string)row["name"]!));
+        Assert.Contains("statement_comp_id", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_occurrences')").Select(row => (string)row["name"]!));
         var salt = Assert.IsType<byte[]>(JournalDb.Rows(path,
             "SELECT value FROM journal_meta WHERE key = 'fingerprint_salt'").Single()["value"]);
         Assert.Equal(32, salt.Length);
     }
 
     [Fact]
-    public void Journal_v14_migrates_through_v15_to_v16_with_both_additive_columns()
+    public void Journal_v16_is_archived_without_migrating_old_rows()
     {
         var path = Path.Combine(_temp.Path, "data", "activity.db");
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null, new FixedTimeProvider(JournalTestData.T0));
@@ -58,23 +65,20 @@ public sealed class JournalContractTests : IDisposable
         {
             connection.Open();
             using var downgrade = connection.CreateCommand();
-            downgrade.CommandText = "ALTER TABLE operations DROP COLUMN warnings_json; ALTER TABLE operations DROP COLUMN measurement_fingerprint; PRAGMA user_version = 14;";
+            downgrade.CommandText = "INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen) VALUES ('old', 'codex', 'cli', 'test', 1, 'now', 'now'); PRAGMA user_version = 16;";
             downgrade.ExecuteNonQuery();
         }
 
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null, new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(16, JournalSchema.CurrentVersion);
-        Assert.Equal(14, JournalSchema.FirstRetainedVersion);
-        Assert.Equal(16L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
-        Assert.Contains("warnings_json", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operations')")
-            .Select(row => (string)row["name"]!));
-        Assert.Contains("measurement_fingerprint", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operations')")
-            .Select(row => (string)row["name"]!));
+        Assert.Equal(17L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Empty(JournalDb.Rows(path, "SELECT id FROM sessions"));
+        var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "activity.db.v16-*.bak"));
+        Assert.Single(JournalDb.Rows(backup, "SELECT session_key FROM sessions WHERE session_key = 'old'"));
     }
 
     [Fact]
-    public void Journal_v15_migrates_operation_warnings_column()
+    public void Journal_v15_is_archived_without_migrating_old_rows()
     {
         var path = Path.Combine(_temp.Path, "data", "activity.db");
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
@@ -84,16 +88,15 @@ public sealed class JournalContractTests : IDisposable
         {
             connection.Open();
             using var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE operations DROP COLUMN warnings_json; PRAGMA user_version = 15;";
+            command.CommandText = "PRAGMA user_version = 15;";
             command.ExecuteNonQuery();
         }
 
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(16L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
-        Assert.Contains("warnings_json", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operations')")
-            .Select(row => (string)row["name"]!));
+        Assert.Equal(17L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "activity.db.v15-*.bak"));
     }
 
     [Theory]
@@ -167,7 +170,7 @@ public sealed class JournalContractTests : IDisposable
         var variants = JournalDb.Rows(databasePath, "SELECT variant FROM operation_metrics ORDER BY ordinal")
             .Select(row => (string)row["variant"]!).ToArray();
         Assert.Equal(command == "measure" ? ["measure"] : ["baseline", "candidate"], variants);
-        Assert.NotEmpty(JournalDb.Rows(databasePath, "SELECT plan_hash FROM operation_plans"));
+        Assert.NotEmpty(JournalDb.Rows(databasePath, "SELECT document_sha FROM plan_occurrences"));
     }
 
     private static async Task<(int Exit, string Output, Dictionary<string, string> Files)> RunBenchmark(

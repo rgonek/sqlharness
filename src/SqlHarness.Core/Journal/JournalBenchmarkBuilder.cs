@@ -114,14 +114,18 @@ internal static class JournalBenchmarkBuilder
 
         var planMetrics = runs.Select(run => PlanMetricsExtractor.Extract(run.PlanXmls)).ToArray();
         var links = new List<JournalPlanLink>();
+        var occurrences = new List<JournalPlanOccurrence>();
         foreach (var run in runs)
         {
             for (var ordinal = 0; ordinal < run.PlanXmls.Count; ordinal++)
             {
                 var document = run.PlanXmls[ordinal];
-                var hash = PlanIdentity.Hash(document);
-                links.Add(new JournalPlanLink(run.Repetition, ordinal, hash));
-                documents.TryAdd(hash, new JournalPlanDocument(hash, IsJson(document) ? "explain-json" : "showplan-xml", document));
+                var sha256 = PlanIdentity.DocumentSha256(document);
+                var shapeHash = PlanIdentity.Hash(document);
+                links.Add(new JournalPlanLink(run.Repetition, ordinal, sha256));
+                occurrences.Add(new JournalPlanOccurrence(run.Repetition, ordinal, 0, sha256));
+                documents.TryAdd(sha256, new JournalPlanDocument(sha256, shapeHash,
+                    IsJson(document) ? "explain-json" : "showplan-xml", document));
             }
         }
 
@@ -161,7 +165,10 @@ internal static class JournalBenchmarkBuilder
                 MedianOf(postgres.Select(p => p.SharedDirtied)), MedianOf(postgres.Select(p => p.SharedWritten)),
                 MedianOf(postgres.Select(p => p.TempRead)), MedianOf(postgres.Select(p => p.TempWritten))),
             tableIoAvailable ? TableIo(runs) : [],
-            links);
+            links)
+        {
+            PlanOccurrences = occurrences,
+        };
     }
 
     private static IReadOnlyList<JournalTableIo> TableIo(CompareRunArtifact[] runs)

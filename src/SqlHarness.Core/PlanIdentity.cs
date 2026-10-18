@@ -53,6 +53,12 @@ internal static class PlanIdentity
         return Sha256(text);
     }
 
+    internal static string DocumentSha256(string document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(document)));
+    }
+
     private static string HashShowplan(string text)
     {
         var settings = new XmlReaderSettings

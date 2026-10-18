@@ -4,8 +4,8 @@ namespace SqlHarness.Core;
 
 internal static class JournalSchema
 {
-    internal const int FirstRetainedVersion = 14;
-    internal const int CurrentVersion = 16;
+    internal const int FirstRetainedVersion = 17;
+    internal const int CurrentVersion = 17;
 
     internal static readonly IReadOnlyDictionary<int, string> Migrations = new Dictionary<int, string>
     {
@@ -127,20 +127,27 @@ internal static class JournalSchema
             cold_runs INTEGER NOT NULL,
             PRIMARY KEY (metric_id, table_name)
         );
-        CREATE TABLE operation_plans (
+        CREATE TABLE plan_occurrences (
             metric_id INTEGER NOT NULL REFERENCES operation_metrics(id) ON DELETE CASCADE,
             repetition INTEGER NOT NULL,
-            ordinal INTEGER NOT NULL,
-            plan_hash TEXT NOT NULL,
-            PRIMARY KEY (metric_id, repetition, ordinal)
+            document_ordinal INTEGER NOT NULL,
+            statement_index INTEGER NOT NULL,
+            document_sha TEXT,
+            omitted INTEGER NOT NULL DEFAULT 0,
+            span_start INTEGER,
+            span_length INTEGER,
+            match_kind TEXT NOT NULL DEFAULT 'unmatched',
+            statement_id INTEGER,
+            statement_comp_id INTEGER,
+            PRIMARY KEY (metric_id, repetition, document_ordinal, statement_index)
         );
-        CREATE INDEX ix_operation_plans_hash ON operation_plans(plan_hash);
-        CREATE TABLE plans (
-            hash TEXT PRIMARY KEY,
+        CREATE INDEX ix_plan_occurrences_document_sha ON plan_occurrences(document_sha);
+        CREATE TABLE plan_documents (
+            sha256 TEXT PRIMARY KEY,
+            shape_hash TEXT NOT NULL,
             format TEXT NOT NULL,
             raw_size INTEGER NOT NULL,
-            gz BLOB NOT NULL,
-            first_seen TEXT NOT NULL
+            gz BLOB NOT NULL
         );
         CREATE TABLE operation_statements (
             id INTEGER PRIMARY KEY,

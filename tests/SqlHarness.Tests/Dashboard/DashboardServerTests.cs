@@ -796,8 +796,9 @@ public sealed class DashboardServerTests
         {
             connection.Open();
             using var insert = connection.CreateCommand();
-            insert.CommandText = "INSERT INTO plans (hash, format, raw_size, gz, first_seen) VALUES ($h, 'showplan-xml', 3, x'00010203', '2026-10-07T09:00:00Z');";
+            insert.CommandText = "INSERT INTO plan_documents (sha256, shape_hash, format, raw_size, gz) VALUES ($h, $shape, 'showplan-xml', 3, x'00010203');";
             insert.Parameters.AddWithValue("$h", new string('C', 64));
+            insert.Parameters.AddWithValue("$shape", new string('D', 64));
             insert.ExecuteNonQuery();
         }
 

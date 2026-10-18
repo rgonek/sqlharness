@@ -679,7 +679,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         using var connection = OpenReadOnly();
         if (connection is null)
             return null;
-        return Query(connection, "SELECT hash, format, gz FROM plans WHERE hash = $hash;", [("$hash", hash)], reader =>
+        return Query(connection, "SELECT sha256, format, gz FROM plan_documents WHERE sha256 = $hash;", [("$hash", hash)], reader =>
         {
             using var gzip = new GZipStream(new MemoryStream((byte[])reader.GetValue(2)), CompressionMode.Decompress);
             using var text = new StreamReader(gzip, Encoding.UTF8);
@@ -1028,8 +1028,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     r.GetString(0), r.GetInt64(1), NullableLong(r, 2), NullableLong(r, 3), NullableLong(r, 4), NullableLong(r, 5),
                     NullableLong(r, 6), NullableLong(r, 7), NullableLong(r, 8), r.GetInt32(9)));
             var plans = Query(connection, """
-                SELECT p.repetition, p.ordinal, p.plan_hash, EXISTS (SELECT 1 FROM plans s WHERE s.hash = p.plan_hash)
-                FROM operation_plans p WHERE p.metric_id = $id ORDER BY p.repetition, p.ordinal;
+                SELECT p.repetition, p.document_ordinal, COALESCE(p.document_sha, ''),
+                    CASE WHEN p.omitted = 1 THEN 0 ELSE EXISTS (
+                        SELECT 1 FROM plan_documents s WHERE s.sha256 = p.document_sha) END
+                FROM plan_occurrences p WHERE p.metric_id = $id
+                ORDER BY p.repetition, p.document_ordinal, p.statement_index;
                 """, [("$id", metric.Id)], r => new PlanLinkRow(r.GetInt32(0), r.GetInt32(1), r.GetString(2), r.GetInt64(3) != 0));
             rows.Add(metric.Detail with { TableIo = tableIo, Plans = plans });
         }
