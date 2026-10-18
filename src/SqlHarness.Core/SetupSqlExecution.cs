@@ -61,9 +61,14 @@ internal static class SetupSqlExecution
             throw new SqlHarnessSafetyException("Setup SQL could not be parsed for execution.");
         }
 
+        var tableValuedParameterNames = parameters
+            .Where(parameter => parameter.Type == System.Data.SqlDbType.Structured)
+            .Select(parameter => parameter.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         // Setup references no supplied parameters: execute it without bindings so
         // it runs in root scope and any #temp tables survive.
-        if (!ReferencesParameter(script))
+        if (!ReferencesParameter(script, tableValuedParameterNames))
         {
             return [new SqlExecutionCommand(setupSql, [], timeoutSeconds)];
         }
@@ -71,7 +76,7 @@ internal static class SetupSqlExecution
         var commands = new List<SqlExecutionCommand>();
         foreach (var batch in script.Batches)
         {
-            var split = SplitBatch(batch, setupSql);
+            var split = SplitBatch(batch, setupSql, tableValuedParameterNames);
             if (split.PrefixStatements.Count > 0)
             {
                 commands.Add(new SqlExecutionCommand(
@@ -83,10 +88,12 @@ internal static class SetupSqlExecution
             if (split.RemainderStatements.Count > 0)
             {
                 var remainderSql = BuildSql(split.RemainderStatements, setupSql);
+                var referencedTableParameters = CollectTableValuedParameterReferences(remainderSql, tableValuedParameterNames);
                 var remainderParameters = parameters
                     .Where(parameter =>
                         SqlParameterReferences.Collect(SqlEngine.SqlServer, remainderSql)
-                            .Contains(parameter.Name, StringComparer.OrdinalIgnoreCase))
+                            .Contains(parameter.Name, StringComparer.OrdinalIgnoreCase)
+                        || referencedTableParameters.Contains(parameter.Name))
                     .ToArray();
                 commands.Add(new SqlExecutionCommand(remainderSql, remainderParameters, timeoutSeconds));
             }
@@ -141,13 +148,13 @@ internal static class SetupSqlExecution
             .ToArray();
     }
 
-    private static bool ReferencesParameter(TSqlScript script)
+    private static bool ReferencesParameter(TSqlScript script, IReadOnlySet<string> tableValuedParameterNames)
     {
         foreach (TSqlBatch batch in script.Batches)
         {
             foreach (var statement in batch.Statements)
             {
-                if (StatementReferencesParameter(statement, batch))
+                if (StatementReferencesParameter(statement, batch, tableValuedParameterNames))
                     return true;
             }
         }
@@ -155,13 +162,13 @@ internal static class SetupSqlExecution
         return false;
     }
 
-    private static BatchSplit SplitBatch(TSqlBatch batch, string originalSql)
+    private static BatchSplit SplitBatch(TSqlBatch batch, string originalSql, IReadOnlySet<string> tableValuedParameterNames)
     {
         var statements = batch.Statements;
         var firstParameterReferenceIndex = -1;
         for (var index = 0; index < statements.Count; index++)
         {
-            if (StatementReferencesParameter(statements[index], batch))
+            if (StatementReferencesParameter(statements[index], batch, tableValuedParameterNames))
             {
                 firstParameterReferenceIndex = index;
                 break;
@@ -245,7 +252,10 @@ internal static class SetupSqlExecution
         && name.BaseIdentifier.Value.StartsWith('#')
         && !name.BaseIdentifier.Value.StartsWith("##", StringComparison.Ordinal);
 
-    private static bool StatementReferencesParameter(TSqlStatement statement, TSqlBatch batch)
+    private static bool StatementReferencesParameter(
+        TSqlStatement statement,
+        TSqlBatch batch,
+        IReadOnlySet<string> tableValuedParameterNames)
     {
         var locals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var declaration in SqlServerControlFlowTraversal.Flatten(batch.Statements))
@@ -265,9 +275,25 @@ internal static class SetupSqlExecution
             }
         }
 
-        var visitor = new ParameterReferenceVisitor(locals);
+        var visitor = new ParameterReferenceVisitor(locals, tableValuedParameterNames);
         statement.Accept(visitor);
         return visitor.HasParameterReference;
+    }
+
+    private static IReadOnlySet<string> CollectTableValuedParameterReferences(
+        string sql,
+        IReadOnlySet<string> tableValuedParameterNames)
+    {
+        if (tableValuedParameterNames.Count == 0)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var document = SqlServerDocument.Parse(sql);
+        if (document.HasErrors)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var visitor = new TableValuedParameterReferenceVisitor(tableValuedParameterNames);
+        document.Fragment.Accept(visitor);
+        return visitor.References;
     }
 
     private static string BuildSql(IReadOnlyList<TSqlStatement> statements, string originalSql)
@@ -297,7 +323,9 @@ internal static class SetupSqlExecution
         public IReadOnlyList<TSqlStatement> RemainderStatements { get; } = remainderStatements;
     }
 
-    private sealed class ParameterReferenceVisitor(IReadOnlySet<string> locals) : TSqlFragmentVisitor
+    private sealed class ParameterReferenceVisitor(
+        IReadOnlySet<string> locals,
+        IReadOnlySet<string> tableValuedParameterNames) : TSqlFragmentVisitor
     {
         internal bool HasParameterReference { get; private set; }
 
@@ -309,6 +337,27 @@ internal static class SetupSqlExecution
                 HasParameterReference = true;
             }
 
+            base.ExplicitVisit(node);
+        }
+
+        public override void ExplicitVisit(VariableTableReference node)
+        {
+            if (node.Variable?.Name is { } name
+                && tableValuedParameterNames.Contains(name)
+                && !locals.Contains(name))
+                HasParameterReference = true;
+            base.ExplicitVisit(node);
+        }
+    }
+
+    private sealed class TableValuedParameterReferenceVisitor(IReadOnlySet<string> tableValuedParameterNames) : TSqlFragmentVisitor
+    {
+        internal HashSet<string> References { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public override void ExplicitVisit(VariableTableReference node)
+        {
+            if (node.Variable?.Name is { } name && tableValuedParameterNames.Contains(name))
+                References.Add(name);
             base.ExplicitVisit(node);
         }
     }

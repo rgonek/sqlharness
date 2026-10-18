@@ -1132,6 +1132,22 @@ public class SqlSafetyTests
         Assert.Equal(SqlRiskTier.ReadOnly, decision.Tier);
     }
 
+    [Fact]
+    public void TVP_parameter_is_allowed_as_a_source_when_populating_a_local_setup_table()
+    {
+        var decision = _classifier.Classify(
+            "CREATE TABLE #Ids (Id int); INSERT #Ids SELECT Id FROM @Ids;",
+            SqlUsage.CompareSetup,
+            "db",
+            allowMutation: false,
+            confirmDatabase: null,
+            tableValuedParameterNames: new HashSet<string>(["@Ids"], StringComparer.OrdinalIgnoreCase));
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.Equal(SqlRiskTier.Session, decision.Tier);
+    }
+
     [Theory]
     [InlineData("INSERT @Ids (Id) VALUES (1)")]
     [InlineData("UPDATE dbo.Clients SET Active = 0 OUTPUT inserted.Id INTO @Ids (Id)")]

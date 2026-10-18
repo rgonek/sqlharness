@@ -46,6 +46,26 @@ public class SetupSqlExecutionTests
         Assert.Equal("@x", Assert.Single(commands[1].Parameters).Name);
     }
 
+    [Fact]
+    public void Tvp_table_source_is_bound_in_the_parameterized_setup_remainder()
+    {
+        const string sql = "CREATE TABLE #t (Id int); INSERT #t SELECT Id FROM @Ids; UPDATE #t SET Id = Id WHERE EXISTS (SELECT 1 FROM @Ids);";
+        var ids = new SqlHarnessParameter("@Ids", System.Data.SqlDbType.Structured, DBNull.Value, null,
+            TableTypeName: "dbo.IdList");
+
+        var commands = SetupSqlExecution.PrepareCommands(sql, [ids], 30);
+
+        Assert.Equal(2, commands.Count);
+        Assert.Contains("CREATE TABLE #t", commands[0].Sql, StringComparison.Ordinal);
+        Assert.Empty(commands[0].Parameters);
+        Assert.Contains("INSERT #t SELECT Id FROM @Ids", commands[1].Sql, StringComparison.Ordinal);
+        Assert.Contains("UPDATE #t SET Id = Id", commands[1].Sql, StringComparison.Ordinal);
+        var parameter = Assert.Single(commands[1].Parameters);
+        Assert.Equal("@Ids", parameter.Name);
+        Assert.Equal(System.Data.SqlDbType.Structured, parameter.Type);
+        Assert.Equal("dbo.IdList", parameter.TableTypeName);
+    }
+
     [Theory]
     [InlineData("BEGIN TRAN; SELECT @x;")]
     [InlineData("RETURN; SELECT @x;")]

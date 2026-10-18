@@ -48,14 +48,16 @@ internal static partial class SqlServerReproScriptWriter
         builder.AppendLine("SET ARITHABORT OFF;");
         builder.AppendLine();
 
-        AppendTableParameters(builder, tableParameters);
-
         if (!string.IsNullOrWhiteSpace(conditions.Setup?.Text))
         {
             var setupSql = ListParameterExpander.Expand(conditions.Setup.Text, lists).Text;
             var setupCommands = SetupSqlExecution.PrepareCommands(setupSql, parameters.Select(ToBoundParameter).ToArray(), conditions.Execution.TimeoutSeconds);
             foreach (var command in setupCommands)
             {
+                var commandTableParameters = tableParameters
+                    .Where(parameter => command.Parameters.Any(bound => string.Equals(bound.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)))
+                    .ToArray();
+                AppendTableParameters(builder, commandTableParameters);
                 if (command.Parameters.Count == 0)
                 {
                     builder.AppendLine(command.Sql.TrimEnd());
@@ -75,6 +77,9 @@ internal static partial class SqlServerReproScriptWriter
             }
         }
 
+        // Setup commands end in GO, so their local table variables cannot be
+        // reused by the measured batch. Recreate the TVP data in its scope.
+        AppendTableParameters(builder, tableParameters);
         if (form == ReproScriptForm.LocalVariables)
             AppendLocalDeclarations(builder, parameters);
 

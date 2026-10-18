@@ -402,6 +402,42 @@ public sealed class SqlExecutionTests
         Assert.Equal(["open transaction rolled back"], warnings);
     }
 
+    [Fact]
+    public async Task Setup_with_tvp_source_passes_its_structured_binding_to_execution()
+    {
+        const string setup = "CREATE TABLE #t (Id int); INSERT #t SELECT Id FROM @Ids; UPDATE #t SET Id = Id WHERE EXISTS (SELECT 1 FROM @Ids);";
+        var tableParameter = new SqlHarnessParameter("@Ids", System.Data.SqlDbType.Structured, DBNull.Value, null,
+            TableTypeName: "dbo.IdList");
+        var safety = new SqlSafetyClassifier().Classify(
+            setup,
+            SqlUsage.CompareSetup,
+            "db",
+            allowMutation: false,
+            confirmDatabase: null,
+            tableValuedParameterNames: new HashSet<string>(["@Ids"], StringComparer.OrdinalIgnoreCase));
+        Assert.True(safety.Allowed, safety.RejectionDescription);
+        var session = new CleanupTrackingSession();
+
+        await SetupSqlExecution.ExecuteSetupAsync(
+            SqlEngine.SqlServer,
+            setup,
+            [tableParameter],
+            5,
+            session,
+            null,
+            CancellationToken.None,
+            safety);
+
+        Assert.Equal(2, session.Commands.Count);
+        Assert.Empty(session.Commands[0].Parameters);
+        Assert.Contains("INSERT #t SELECT Id FROM @Ids", session.Commands[1].Sql, StringComparison.Ordinal);
+        Assert.Contains("UPDATE #t SET Id = Id", session.Commands[1].Sql, StringComparison.Ordinal);
+        var bound = Assert.Single(session.Commands[1].Parameters);
+        Assert.Equal("@Ids", bound.Name);
+        Assert.Equal(System.Data.SqlDbType.Structured, bound.Type);
+        Assert.Equal("dbo.IdList", bound.TableTypeName);
+    }
+
     private static SqlClientSession CreateCleanupSession(
         Func<SqlExecutionCommand, CancellationToken, Task<ISqlReader>>? execute = null,
         Func<string, CancellationToken, Task<bool>>? cleanup = null,
@@ -420,10 +456,12 @@ public sealed class SqlExecutionTests
         public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
         public int ExecutedCommands { get; private set; }
         public int EndLogicalBatchCalls { get; private set; }
+        public List<SqlExecutionCommand> Commands { get; } = [];
 
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {
             ExecutedCommands++;
+            Commands.Add(command);
             return Task.FromResult<ISqlReader>(new CleanupEmptyReader());
         }
 

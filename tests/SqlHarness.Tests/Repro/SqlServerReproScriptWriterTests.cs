@@ -182,6 +182,32 @@ public sealed class SqlServerReproScriptWriterTests
         Assert.Empty(ParseErrors(result.Text!));
     }
 
+    [Theory]
+    [InlineData(ReproScriptForm.AsExecuted)]
+    [InlineData(ReproScriptForm.LocalVariables)]
+    public void Tvp_is_declared_in_setup_and_measured_batches_after_each_go(ReproScriptForm form)
+    {
+        var rows = JsonDocument.Parse("[[\"11\"],[\"12\"]]").RootElement.Clone();
+        var parameter = new ConditionsParameter("@Ids", "dbo.IdList READONLY", null, "tvp", 2,
+            ["Id"], ["int"], "content-hash", Rows: rows);
+        var model = Model(parameter) with
+        {
+            Setup = new ConditionsSetup("hash", "CREATE TABLE #Seen (Id int); INSERT #Seen (Id) SELECT Id FROM @Ids; UPDATE #Seen SET Id = Id WHERE EXISTS (SELECT 1 FROM @Ids);"),
+        };
+
+        var result = ReproScripts.Create(model, "SELECT Id FROM @Ids", "query", "0", form);
+        var batches = result.Text!.Split("GO", StringSplitOptions.None);
+
+        Assert.Equal(4, batches.Length);
+        Assert.Contains("CREATE TABLE #Seen (Id int);", batches[0]);
+        AssertTvpIsDeclaredBeforeUse(batches[1], "FROM @Ids");
+        AssertTvpIsDeclaredBeforeUse(batches[2], "FROM @Ids");
+        Assert.Contains("INSERT #Seen (Id) SELECT Id FROM @Ids", batches[1]);
+        Assert.Contains("UPDATE #Seen SET Id = Id WHERE EXISTS (SELECT 1 FROM @Ids)", batches[1]);
+        Assert.Contains("SELECT Id FROM @Ids", batches[2]);
+        Assert.Empty(ParseErrors(result.Text));
+    }
+
     [Fact]
     public void Empty_tvp_still_has_a_declaration_and_readonly_parameter()
     {
@@ -306,5 +332,15 @@ public sealed class SqlServerReproScriptWriterTests
         using var reader = new StringReader(sql);
         _ = parser.Parse(reader, out var errors);
         return errors.ToArray();
+    }
+
+    private static void AssertTvpIsDeclaredBeforeUse(string batch, string use)
+    {
+        var declaration = batch.IndexOf("DECLARE @Ids dbo.IdList;", StringComparison.Ordinal);
+        var population = batch.IndexOf("INSERT INTO @Ids (Id) VALUES (11), (12);", StringComparison.Ordinal);
+        var reference = batch.IndexOf(use, StringComparison.Ordinal);
+
+        Assert.True(declaration >= 0 && declaration < population, $"TVP must be declared and populated in each batch that uses it. Batch: {batch}");
+        Assert.True(population < reference, $"TVP population must precede its first use in the batch. Batch: {batch}");
     }
 }
