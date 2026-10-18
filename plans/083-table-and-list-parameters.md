@@ -24,7 +24,7 @@
 
 ## Status and dependencies
 
-- IN PROGRESS. Tasks 1–4 are implemented and approved; Task 5 documentation is implemented on the `plan-083` feature branch. Controller whole-branch review and final `just verify` plus operator-authorized live UAT remain pending. Do not treat this plan as complete or integrated. Planning base `3be878e`; depends on 077 (MCP schemas) and 079 (conditions, scripts); independent of 080–082.
+- IN PROGRESS. Tasks 1–5 are implemented on the `plan-083` feature branch, and both Important findings from the whole-branch review have been fixed. The final controller-owned `just verify` and operator-authorized live UAT remain pending. See [verification evidence](083-verification-evidence.md). Do not treat this plan as complete or integrated. Planning base `3be878e`; depends on 077 (MCP schemas) and 079 (conditions, scripts); independent of 080–082.
 - Priority P2; effort L; risk MEDIUM (binding fidelity; new execution step before setup).
 
 ## Global Constraints
