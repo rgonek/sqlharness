@@ -50,3 +50,34 @@ The implementation consumes Task 3's `MaterializedParameterInfo` details (`Name`
 ## Concerns
 
 No unresolved Task 4 concern identified. SQL Server script behavior is covered by unit tests; no live SQL Server execution was performed. The existing conditions size cap remains authoritative and oversized content is represented by omission metadata.
+
+## Fix round 1 — review findings
+
+Addressed all three Important findings from `task-4-review.md`:
+
+- Missing stored list values remain distinguishable from an explicitly stored empty list and mark reproduction `ValuesMissing` / `Incomplete — values not stored`.
+- Generated list parameters resolve their source by exact base name or a numeric suffix, preferring the longest matching source name. This preserves types for overlapping names such as `@Id` and `@Ids`.
+- Conditions size omission rebuilds all case labels after removing fields from fixed or varying parameters. A fixed list's label now falls back to its count when values are omitted, allowing the serialized conditions to remain within the existing limit.
+
+The three new regressions were run red first:
+
+```text
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter 'FullyQualifiedName~Omitted_list_values_are_not_reproduced_as_a_complete_empty_list|FullyQualifiedName~Overlapping_list_names_keep_each_expanded_parameters_source_type|FullyQualifiedName~Oversized_fixed_list_values_are_omitted_and_case_label_is_rebuilt_within_conditions_bound'
+Failed: 3, Passed: 0, Skipped: 0, Total: 3
+```
+
+After the fixes, the focused regressions passed:
+
+```text
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter 'FullyQualifiedName~Omitted_list_values_are_not_reproduced_as_a_complete_empty_list|FullyQualifiedName~Overlapping_list_names_keep_each_expanded_parameters_source_type|FullyQualifiedName~Oversized_fixed_list_values_are_omitted_and_case_label_is_rebuilt_within_conditions_bound'
+Passed!  - Failed: 0, Passed: 3, Skipped: 0, Total: 3
+```
+
+The serial covering group, including those regressions, passed:
+
+```text
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter 'FullyQualifiedName~ConditionsModelBuilderTests|FullyQualifiedName~CaseLabelTests|FullyQualifiedName~SqlServerReproScriptWriterTests|FullyQualifiedName~OperationJournalDescriberTests|FullyQualifiedName~JournalingBenchmarkTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~MeasureParameterSetExecutionTests'
+Passed!  - Failed: 0, Passed: 160, Skipped: 0, Total: 160
+```
+
+`git diff --check` passed. No live database or full verification gate was run; those remain controller-owned.

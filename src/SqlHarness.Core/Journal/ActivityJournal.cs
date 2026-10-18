@@ -756,16 +756,18 @@ public sealed class ActivityJournal : IActivityJournal
                 var cases = model.Cases.ToArray();
                 var varying = cases[candidate.Case].Varying.ToArray();
                 varying[candidate.Index] = Remove(varying[candidate.Index]);
-                var updatedCase = cases[candidate.Case] with { Varying = varying };
-                cases[candidate.Case] = updatedCase with
-                {
-                    Label = CaseLabel.Format(updatedCase with
-                    {
-                        Varying = model.Fixed.Where(parameter => parameter.Kind is "tvp" or "list").Concat(varying).ToArray(),
-                    }, cases.Length, valuesStored: true),
-                };
+                cases[candidate.Case] = cases[candidate.Case] with { Varying = varying };
                 model = model with { Cases = cases };
             }
+            var relabeledCases = model.Cases.Select(conditionsCase => conditionsCase with
+            {
+                Label = CaseLabel.Format(conditionsCase with
+                {
+                    Varying = model.Fixed.Where(parameter => parameter.Kind is "tvp" or "list")
+                        .Concat(conditionsCase.Varying).ToArray(),
+                }, model.Cases.Count, valuesStored: true),
+            }).ToArray();
+            model = model with { Cases = relabeledCases };
             omitted.Add(path);
             model = model with { Omitted = omitted.ToArray() };
             if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(model, WaitJson)) <= MaximumConditionsBytes)

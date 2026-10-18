@@ -259,6 +259,32 @@ public sealed class ConditionsModelBuilderTests
         Assert.Contains("cases.0.@Ids.rows", bounded.Omitted);
     }
 
+    [Fact]
+    public void Oversized_fixed_list_values_are_omitted_and_case_label_is_rebuilt_within_conditions_bound()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var model = ConditionsModelBuilder.Build(Measure(), target, new SqlServerDialect(), [],
+            [new ConditionsCaseInput("0", null, [])], storeSensitive: true);
+        var largeValue = new string('x', 400_000);
+        var details = new[]
+        {
+            new MaterializedParameterInfo("Types", "list", "nvarchar(max)", null, [], 3, null, [],
+                [largeValue, largeValue, largeValue]),
+        };
+        var fixedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Types" };
+        var enriched = ConditionsModelBuilder.WithMaterializedParameters(model, 0, details, true, fixedNames);
+        Assert.True(enriched.Cases[0].Label.Length > 1_000_000);
+
+        var bounded = ActivityJournal.OmitOversizedConditions(enriched);
+        var serialized = System.Text.Json.JsonSerializer.Serialize(bounded);
+
+        Assert.Null(bounded.Fixed[0].Values);
+        Assert.Contains("fixed.@Types.values", bounded.Omitted);
+        Assert.Equal("@Types IN (3 values)", bounded.Cases[0].Label);
+        Assert.DoesNotContain(largeValue, serialized, StringComparison.Ordinal);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(serialized) <= 1_048_576);
+    }
+
     private static SqlHarnessMeasureOperation Measure() => new(
         new SqlTargetRequest("profile", new Dictionary<string, string>()), "SELECT 1", "SELECT @N", [], 30, 5);
 

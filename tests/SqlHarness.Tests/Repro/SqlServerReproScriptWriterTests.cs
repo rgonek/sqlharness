@@ -220,6 +220,16 @@ public sealed class SqlServerReproScriptWriterTests
     }
 
     [Fact]
+    public void Omitted_list_values_are_not_reproduced_as_a_complete_empty_list()
+    {
+        var parameter = new ConditionsParameter("@Types", "list of int", null, "list", 3, [], ContentHash: "content-hash");
+        var result = ReproScripts.Create(Model(parameter), "SELECT * FROM dbo.T WHERE Id IN @Types", "query", "0", ReproScriptForm.AsExecuted);
+
+        Assert.Equal(ReproCompleteness.ValuesMissing, result.Completeness);
+        Assert.Equal("Incomplete — values not stored", result.Label);
+    }
+
+    [Fact]
     public void Rows_from_reproduction_requeries_and_warns_that_data_may_have_changed()
     {
         var parameter = new ConditionsParameter("@Ids", "dbo.IdList READONLY", null, "tvp", 500,
@@ -241,6 +251,20 @@ public sealed class SqlServerReproScriptWriterTests
         Assert.Contains("@Types1 int, @Types2 int, @Types3 int", result.Text);
         Assert.Contains("@Types1 = 1", result.Text);
         Assert.Contains("@Types3 = 3", result.Text);
+    }
+
+    [Fact]
+    public void Overlapping_list_names_keep_each_expanded_parameters_source_type()
+    {
+        var id = new ConditionsParameter("@Id", "list of int", null, "list", 1, [], ContentHash: "hash-id",
+            Values: JsonDocument.Parse("[7]").RootElement.Clone());
+        var ids = new ConditionsParameter("@Ids", "list of nvarchar(30)", null, "list", 1, [], ContentHash: "hash-ids",
+            Values: JsonDocument.Parse("[\"seven\"]").RootElement.Clone());
+        var result = ReproScripts.Create(Model(id, ids), "SELECT * FROM dbo.T WHERE Id IN @Id AND Name IN @Ids", "query", "0", ReproScriptForm.AsExecuted);
+
+        Assert.Contains("@Id1 int, @Ids1 nvarchar(30)", result.Text);
+        Assert.Contains("@Id1 = 7", result.Text);
+        Assert.Contains("@Ids1 = N'seven'", result.Text);
     }
 
     [Fact]

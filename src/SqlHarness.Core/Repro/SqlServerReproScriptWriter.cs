@@ -27,7 +27,7 @@ internal static partial class SqlServerReproScriptWriter
             : ListParameterExpander.Expand(conditions.Setup.Text, lists).Parameters;
         var parameters = ExpandConditionsParameters(originalParameters,
             setupListParameters.Concat(expandedSql.Parameters).DistinctBy(parameter => parameter.Name, StringComparer.OrdinalIgnoreCase).ToArray());
-        var missing = parameters.Any(IsMissingValue);
+        var missing = originalParameters.Any(IsMissingValue) || parameters.Any(IsMissingValue);
         var tableParameters = originalParameters.Where(parameter => parameter.Kind == "tvp").ToArray();
         var requery = tableParameters.Any(parameter => parameter.SourceText is not null);
         var label = missing ? ValuesMissingLabel : form switch
@@ -224,7 +224,7 @@ internal static partial class SqlServerReproScriptWriter
         var scalar = original.Where(parameter => parameter.Kind != "list").ToList();
         foreach (var parameter in expanded)
         {
-            var source = original.First(item => item.Kind == "list" && parameter.Name.StartsWith(item.Name, StringComparison.OrdinalIgnoreCase));
+            var source = FindListSource(original, parameter.Name);
             System.Text.Json.JsonElement? value = parameter.Value is DBNull
                 ? System.Text.Json.JsonSerializer.SerializeToElement<object?>(null)
                 : System.Text.Json.JsonSerializer.SerializeToElement(parameter.Value);
@@ -233,9 +233,28 @@ internal static partial class SqlServerReproScriptWriter
         return scalar.ToArray();
     }
 
+    private static ConditionsParameter FindListSource(IReadOnlyList<ConditionsParameter> original, string expandedName)
+    {
+        var normalizedExpandedName = SqlParameterNames.Normalize(expandedName);
+        var source = original
+            .Where(parameter => parameter.Kind == "list")
+            .Select(parameter => new
+            {
+                Parameter = parameter,
+                Name = SqlParameterNames.Normalize(parameter.Name),
+            })
+            .Where(item => string.Equals(normalizedExpandedName, item.Name, StringComparison.OrdinalIgnoreCase)
+                || normalizedExpandedName.StartsWith(item.Name, StringComparison.OrdinalIgnoreCase)
+                    && normalizedExpandedName[item.Name.Length..].All(char.IsDigit))
+            .OrderByDescending(item => item.Name.Length)
+            .FirstOrDefault();
+        return source?.Parameter ?? throw new InvalidOperationException($"Expanded list parameter '{expandedName}' has no source list.");
+    }
+
     private static bool IsMissingValue(ConditionsParameter parameter) => parameter.Kind switch
     {
         "tvp" => parameter.Rows is null && parameter.SourceText is null,
+        "list" => parameter.Values is null || parameter.Values.Value.ValueKind == System.Text.Json.JsonValueKind.Undefined,
         _ => parameter.Value is null || parameter.Value.Value.ValueKind == System.Text.Json.JsonValueKind.Undefined,
     };
 
