@@ -23,34 +23,29 @@ const links = [
   { to: "/settings", label: "Settings", exact: false },
 ] as const
 
+function SafetyNoticeFeed() {
+  const [notices, setNotices] = useState<SafetyNotice[]>([])
+  useEffect(() => subscribeSafetyNotices(item => {
+    setNotices(current => [item, ...current.filter(existing => existing.operationId !== item.operationId)].slice(0, 20))
+  }), [])
+  return <SafetyNoticeToast enabled notices={notices} />
+}
+
 export function AppLayout() {
   const pathname = useRouterState({ select: state => state.location.pathname })
   const { data: profiles } = useProfiles()
   const { data: settings } = useSettings()
-  const [safetyNotices, setSafetyNotices] = useState<SafetyNotice[]>([])
   const safetyNotificationsEnabled = settings?.settings.dashboard.safetyNotifications ?? false
   const mutationState = useSyncExternalStore(mutationStore.subscribe, mutationStore.getSnapshot, mutationStore.getSnapshot)
   useMutationEvents()
   useLiveFeed()
-  useEffect(() => {
-    if (!safetyNotificationsEnabled) {
-      setSafetyNotices([])
-      return
-    }
-    return subscribeSafetyNotices(item => {
-      setSafetyNotices(current => [
-        item,
-        ...current.filter(existing => existing.operationId !== item.operationId),
-      ].slice(0, 20))
-    })
-  }, [safetyNotificationsEnabled])
   const productionYoloProfiles = profiles?.profiles.filter(profile => profile.mutationMode?.toLowerCase() === "yolo" && profile.acknowledgeProductionYolo && /^(prod|production|staging)$/i.test(profile.environment ?? "")) ?? []
   return (
     <div className="min-h-screen">
       <ConnectionBanner />
       {productionYoloProfiles.map(profile => <div key={profile.name} role="alert" className="border-b border-destructive/40 bg-destructive/10 px-4 py-3 text-center font-semibold text-destructive">YOLO is on for production profile {profile.name}</div>)}
       <ApprovalToast />
-      <SafetyNoticeToast enabled={safetyNotificationsEnabled} notices={safetyNotices} />
+      {safetyNotificationsEnabled && <SafetyNoticeFeed />}
       <ApprovalDialog requestId={mutationState.openRequestId} />
       <header className="mx-auto flex max-w-7xl items-center gap-3 p-4">
         <Link to="/" aria-label="SQLHarness home" className="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">

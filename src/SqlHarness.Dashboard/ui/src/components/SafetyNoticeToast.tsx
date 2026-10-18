@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 
 export type SafetyNotice = { operationId: number; notices: string[] }
 
@@ -10,9 +10,7 @@ export function SafetyNoticeToast({ enabled, notices }: { enabled: boolean; noti
         <section key={item.operationId} className="rounded-xl border bg-card p-4 text-card-foreground shadow-lg" aria-label="Session safety notice">
           <div className="font-medium">SQL session safety notice</div>
           <ul className="mt-2 list-disc pl-5 text-sm">{item.notices.map(notice => <li key={notice}>{notice}</li>)}</ul>
-          <Button asChild className="mt-3" size="sm" variant="outline">
-            <a href={`/operations/${item.operationId}`}>View operation</a>
-          </Button>
+          <a className={`${buttonVariants({ size: "sm", variant: "outline" })} mt-3`} href={`/operations/${item.operationId}`}>View operation</a>
         </section>
       ))}
     </div>

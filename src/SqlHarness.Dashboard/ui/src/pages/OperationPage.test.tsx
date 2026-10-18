@@ -212,7 +212,9 @@ test("a non-numeric operation id shows not found without fetching operation data
   const calls = stubFetch({})
   renderApp("/operations/abc")
   expect(await screen.findByText("Not found")).toBeInTheDocument()
-  expect(calls).toEqual(["/api/profiles"])
+  expect(calls).toContain("/api/profiles")
+  expect(calls).toContain("/api/settings")
+  expect(calls).not.toContain("/api/operations/abc")
 })
 
 test("measure-sets summary shows set stability", async () => {

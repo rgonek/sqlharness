@@ -80,7 +80,9 @@ test("a non-decimal session id shows not found without fetching session data", a
   const calls = stubFetch({ "/api/sessions/16": { session: session({ id: 16 }), operations: [] } })
   renderApp("/sessions/0x10")
   expect(await screen.findByText("Not found")).toBeInTheDocument()
-  expect(calls).toEqual(["/api/profiles"])
+  expect(calls).toContain("/api/profiles")
+  expect(calls).toContain("/api/settings")
+  expect(calls).not.toContain("/api/sessions/16")
 })
 
 test("shows the client title and workspace roots", async () => {

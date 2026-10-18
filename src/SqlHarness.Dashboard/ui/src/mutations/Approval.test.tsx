@@ -7,13 +7,13 @@ class FakeEventSource {
   static readonly CONNECTING = 0
   static readonly OPEN = 1
   static readonly CLOSED = 2
-  static last: FakeEventSource | undefined
+  static instances: FakeEventSource[] = []
   listeners = new Map<string, ((event: MessageEvent<string>) => void)[]>()
   onopen: (() => void) | null = null
   onerror: (() => void) | null = null
   readyState = FakeEventSource.CONNECTING
   url: string
-  constructor(url: string) { this.url = url; FakeEventSource.last = this }
+  constructor(url: string) { this.url = url; FakeEventSource.instances.push(this) }
   addEventListener(type: string, listener: (event: MessageEvent<string>) => void) { this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]) }
   close() { this.readyState = FakeEventSource.CLOSED }
   open() { this.readyState = FakeEventSource.OPEN; this.onopen?.() }
@@ -28,13 +28,16 @@ const request = {
 const profiles = { status: "valid", message: null, profiles: [{ name: "prod-db", environment: "production", mutationMode: "yolo", acknowledgeProductionYolo: true }] }
 
 async function setup() {
+  FakeEventSource.instances = []
   globalThis.EventSource = FakeEventSource as unknown as typeof EventSource
   const play = vi.spyOn(sound, "playApprovalSound").mockResolvedValue(undefined)
   stubFetch({ "/api/profiles": profiles })
   renderApp("/")
   await screen.findByRole("main")
-  expect(FakeEventSource.last).toBeDefined()
-  return { play, source: () => FakeEventSource.last! }
+  const source = () => FakeEventSource.instances.find(item => item.url === "/api/mutations/events")!
+  expect(source()).toBeDefined()
+  expect(FakeEventSource.instances.map(item => item.url)).toContain("/api/live")
+  return { play, source }
 }
 
 test("live added event shows a safe toast and the default sound; snapshots and digest joins stay silent", async () => {

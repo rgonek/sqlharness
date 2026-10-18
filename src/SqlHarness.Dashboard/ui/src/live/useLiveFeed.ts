@@ -22,7 +22,7 @@ type SafetyNoticeEvent = { operationId: number; notices: string[] }
 const noticeListeners = new Set<(item: SafetyNoticeEvent) => void>()
 export function subscribeSafetyNotices(listener: (item: SafetyNoticeEvent) => void) {
   noticeListeners.add(listener)
-  return () => noticeListeners.delete(listener)
+  return () => { noticeListeners.delete(listener) }
 }
 
 const liveLists = [queryKeys.liveOperations, queryKeys.liveRunning, queryKeys.liveSessions]
