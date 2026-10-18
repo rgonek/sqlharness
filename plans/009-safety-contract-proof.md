@@ -1,18 +1,18 @@
 # 009-safety-contract-proof — final verification gates (closure)
 
 HEAD: `29b3102` (`test(009/final): pin no read-only claim in CLI watch help and capabilities entry`),
-main (praca bez worktree — decyzja w ledgerze: subagenty dziedziczą workspace root;
-cudze zmiany nietknięte, `git status` czysty poza zakresem).
-Gate runs: 2026-09-30, na main. Brak pusha (plan zabrania bez zlecenia).
+main (work without a worktree — decision in the ledger: subagents inherit the workspace root;
+other people's changes untouched, `git status` clean apart from the scope).
+Gate runs: 2026-09-30, on main. No push (the plan forbids it without an instruction).
 
 ## Goal
 
-Granica statycznego safety widoczna dla klientów: capabilities/validate niosą
-wersjonowane metadane (`analysisKind: static-visible-effects`,
+The static safety boundary visible to clients: capabilities/validate carry
+versioned metadata (`analysisKind: static-visible-effects`,
 `analysisContractVersion: 1`, `hiddenEffectsVerified: false`,
-`objectAndPermissionStatus: unknown`); opisy query/validate/inspect/watch mówią
-o statycznej kontroli widocznych efektów i roli DB przygotowanej poza
-harnessem; `ClassificationLabel` bez zmian znaczenia.
+`objectAndPermissionStatus: unknown`); the query/validate/inspect/watch
+descriptions state the static check of visible effects and the DB role prepared
+outside the harness; `ClassificationLabel` unchanged in meaning.
 
 ## Commits (0227180..HEAD, 11)
 
@@ -30,38 +30,38 @@ harnessem; `ClassificationLabel` bez zmian znaczenia.
 | 86c3b3e | final fix | fix(009/final): align CLI/capabilities watch wording with MCP static visible-effects check |
 | 29b3102 | final test | test(009/final): pin no read-only claim in CLI watch help and capabilities entry |
 
-Każde zadanie reviewed clean (spec ✅ + Approved; zero Critical/Important).
+Each task reviewed clean (spec ✅ + Approved; zero Critical/Important).
 Final whole-branch review: With fixes (1 Minor: CLI watch `read-only`) →
 fix wave → scoped re-review: ADDRESSED, no new breakage.
-Korekty zakresu z uzasadnieniem: `byte-budgets.json` (piny bajtów za większym
-JSON; budżety-górne bez zmian), pliki CLI `SqlHarnessCli.cs`/`ValidateCommand.cs`
-(opisy CLI query/validate muszą tam mieszkać — plan pominął je na liście).
+Scope corrections with justification: `byte-budgets.json` (byte pins for the larger
+JSON; upper budgets unchanged), the CLI files `SqlHarnessCli.cs`/`ValidateCommand.cs`
+(the CLI query/validate descriptions must live there — the plan omitted them from the list).
 
 ## Gates (2026-09-30, HEAD 29b3102)
 
-- Filtr planu
+- Plan filter
   `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~CapabilitiesCommandTests|FullyQualifiedName~ValidateCommandTests|FullyQualifiedName~McpToolSchemaTests'`:
   SqlHarness.Tests 73/73, SqlHarness.Mcp.Tests 33/33 → exit 0
-  (po final fix: 107 passed w filtrze planu + AgentWorkflow/Command).
+  (after the final fix: 107 passed in the plan filter + AgentWorkflow/Command).
 - `dotnet build SqlHarness.sln --no-restore -warnaserror`: 0 warnings, 0 errors.
-- Pełny suite bez Integration: Core 1997 passed / 0 failed / 0 skipped;
+- Full suite without Integration: Core 1997 passed / 0 failed / 0 skipped;
   MCP 181 passed / 0 failed / 4 skipped (pre-existing: 2 foreign-RID smoke + 2 live opt-in).
-- `git diff --check`: 0. `git status --short`: czysto (tylko commity z zakresu).
-- Red → green: T1 5 witness-faili, T2 1 fail, T3 1 fail — każdy na niezmienionym
-  kodzie przed implementacją; T4 krok dokumentacyjny (filtr zielony = brak regresji).
+- `git diff --check`: 0. `git status --short`: clean (only commits in scope).
+- Red → green: T1 5 witness failures, T2 1 fail, T3 1 fail — each on unchanged
+  code before the implementation; T4 a documentation step (green filter = no regression).
 
-## Dokumenty wynikowe
+## Result documents
 
-- `plans/009-strict-profile-assessment.md` — projekt zaostrzonego profilu
-  (TEMP, SECURITY DEFINER, operatory, efekty zewnętrzne); bez wdrożenia
-  READ ONLY i przełączania ról.
-- Ten dowód: `plans/009-safety-contract-proof.md`.
+- `plans/009-strict-profile-assessment.md` — the stricter profile design
+  (TEMP, SECURITY DEFINER, operators, external effects); without READ ONLY
+  implementation and role switching.
+- This evidence: `plans/009-safety-contract-proof.md`.
 
-## Braki i reszty (jawne)
+## Gaps and leftovers (explicit)
 
-- Brak live DB (plan zabrania; testy na fake/syntetycznym HOME; live testy skip).
-- Zaparkowane rulingiem (ledger): fraza `watch` / `bounded read-only query`
-  w `AGENTS.md` — realna, docs-only, ten sam overclaim co fala fix; brak drugiej
-  fali fix wg skill; kandydat na follow-up. Nic na niej nie buduje.
-- Deferred minors (non-blocking): normalizacja końcówek linii CRLF→LF przy
-  dotkniętych plikach; metodologia red-witness T3 (uczciwie raportowana).
+- No live DB (the plan forbids it; tests on fake/synthetic HOME; live tests skip).
+- Parked by a ruling (ledger): the phrase `watch` / `bounded read-only query`
+  in `AGENTS.md` — real, docs-only, the same overclaim as the fix wave; no second
+  fix wave per the skill; a follow-up candidate. Nothing is built on it.
+- Deferred minors (non-blocking): normalization of CRLF→LF line endings on
+  touched files; the T3 red-witness methodology (reported honestly).

@@ -1,86 +1,86 @@
 # Safe extensions and follow-up design Implementation Plan
 
-**Status (2026-10-08):** DONE — T1 b3b2d06/814267c/5b3ddd9/5ed9970/141f497/0d98173 (dalej `plans/011`), T2 845570c, T3 e268c38, T4 50ba1db/e363e3b (tylko specyfikacja; implementacja = `plans/035`), T5 be70c8f (tylko specyfikacja; implementacja = `plans/037`). Checkboxy poniżej nie były odhaczane w trakcie wykonania.
+**Status (2026-10-08):** DONE — T1 b3b2d06/814267c/5b3ddd9/5ed9970/141f497/0d98173 (further in `plans/011`), T2 845570c, T3 e268c38, T4 50ba1db/e363e3b (specification only; implementation = `plans/035`), T5 be70c8f (specification only; implementation = `plans/037`). The checkboxes below were not ticked during execution.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Zmniejszyć nadmiarowe blokady oraz przygotować funkcje skracające pracę agenta bez rozszerzania niejawnie uprawnień.
+**Goal:** Reduce excessive blocking and prepare features that shorten agent work without implicitly broadening permissions.
 
-**Architecture:** Wykorzystać poprawione granice bezpieczeństwa, odpowiedzi i zasobów. Wdrożenia T1–T3 mają konkretne kontrakty; T4–T5 najpierw dostarczają specyfikacje, ponieważ progi CI i pg_stat_statements wymagają odrębnych decyzji produktowych.
+**Architecture:** Use the corrected safety, response and resource boundaries. T1–T3 implementations have concrete contracts; T4–T5 deliver specifications first, because the CI thresholds and pg_stat_statements require separate product decisions.
 
 **Tech Stack:** .NET 8, ScriptDom, SqlParserCS, Spectre.Console.Cli, PostgreSQL, xUnit.
 
-**Spec:** [audyt B4 i propozycje funkcji](../specs/2026-09-26-project-audit.md), [roadmapa](2026-09-26-audit-roadmap.md).
+**Spec:** [audit B4 and feature proposals](../specs/2026-09-26-project-audit.md), [roadmap](2026-09-26-audit-roadmap.md).
 
 ## Global Constraints
 
-- T1 po 01 i 02/T1; T2 po 03/T1–T3 i 05/T3; T3 po 04/T1–T2; T4 po 02/T3.
-- Bez nowego unsafe bypass, trwałego DDL lub automatycznego tworzenia rozszerzeń PostgreSQL.
-- Nowa składnia jest wspierana tylko wtedy, gdy analiza obejmuje wszystkie efekty; parse failure pozostaje odmową.
-- Plany i tekst SQL nie stają się automatycznie publiczne przez komendę artefaktową.
-- Nie scalać semantyki Query Store z pg_stat_statements pod identycznym raportem bez opisania różnic.
+- T1 after 01 and 02/T1; T2 after 03/T1–T3 and 05/T3; T3 after 04/T1–T2; T4 after 02/T3.
+- No new unsafe bypass, persistent DDL or automatic creation of PostgreSQL extensions.
+- New syntax is supported only when the analysis covers all effects; parse failure remains a rejection.
+- Plans and SQL text do not become public automatically through the artifact command.
+- Do not merge Query Store semantics with pg_stat_statements under a single identical report without describing the differences.
 
 ## Review Focus
 
-- DECLARE initializer i EXPLAIN ANALYZE z efektami ubocznymi: T1.
-- ALTER/TRUNCATE celu innego niż prawdziwy temp: T1.
-- Path traversal, symlink i artefakt poufny: T2.
-- Zatrzymanie procesu w połowie strumienia NDJSON: T3.
-- Niestabilny wynik/metryka niedostępna oraz reset statystyk: T4–T5.
+- DECLARE initializer and EXPLAIN ANALYZE with side effects: T1.
+- ALTER/TRUNCATE of a target other than a real temp: T1.
+- Path traversal, symlink and confidential artifact: T2.
+- Process termination in the middle of the NDJSON stream: T3.
+- Unstable result/unavailable metric and statistics reset: T4–T5.
 
-## T1 — bezpieczne rozszerzenia składni
+## T1 — safe syntax extensions
 
-**Files:** `src/SqlHarness.Core/SqlSafety.cs`, `Postgres/PostgresSafetyClassifier.cs`, `Postgres/PostgresBenchmark.cs`; testy SqlSafetyTests, PostgresSafetyTests; `AGENTS.md`, `README.md`.
+**Files:** `src/SqlHarness.Core/SqlSafety.cs`, `Postgres/PostgresSafetyClassifier.cs`, `Postgres/PostgresBenchmark.cs`; tests SqlSafetyTests, PostgresSafetyTests; `AGENTS.md`, `README.md`.
 
-**Interfaces:** istniejące Classify i diagnostyka 03/T1; w spec zachować listę dokładnie wspieranych konstrukcji, bez globalnego „allow all DDL on temp”.
+**Interfaces:** existing Classify and diagnostics from 03/T1; in the spec keep a list of exactly supported constructs, without a global "allow all DDL on temp".
 
-- [ ] T-SQL: dopuścić DECLARE scalar i SELECT w query z analizą initializer; TRUNCATE wyłącznie jednoznacznej local #temp; ALTER TABLE #temp tylko ADD/DROP COLUMN i obsługiwane lokalne constraints. Każdy wariant ma test pozytywny i trwały/cross-database negatywny. Nie dopuścić EXEC/dynamic SQL przez deklarację.
-- [ ] PostgreSQL: rozważyć EXPLAIN bez ANALYZE nad bezpiecznym SELECT oraz SELECT INTO TEMP z jednoznaczną lokalnością. EXPLAIN ANALYZE wykonuje SQL — podlega pełnej analizie efektów i nie jest automatycznie odczytem.
-- [ ] ANALYZE tylko ustalonej tabeli sesyjnej: sprawdzić wsparcie parsera. Jeśli go brak, ocenić aktualizację biblioteki z pełną regresją; nie zastępować parsera regexem. Zapisać konkretny blocker, jeśli nie ma bezpiecznej ścieżki.
-- [ ] Obsługę funkcji użytkownika lo_ rozwiązać polityką tożsamości/efektów 01/T3; nie usuwać blokady prefiksowej bez zastępczej ochrony.
-- [ ] Uruchomić testy obu classifierów; autoryzowane testy live sprawdzają faktyczny temp oraz brak trwałych skutków. Wdrożone możliwości opisać w capabilities; lokalne commity per konstrukcja.
+- [ ] T-SQL: allow scalar DECLARE and SELECT in a query with initializer analysis; TRUNCATE only of an unambiguously local #temp; ALTER TABLE #temp only with ADD/DROP COLUMN and supported local constraints. Every variant has a positive test and a persistent/cross-database negative test. Do not allow EXEC/dynamic SQL through a declaration.
+- [ ] PostgreSQL: consider EXPLAIN without ANALYZE over a safe SELECT, and SELECT INTO TEMP with unambiguous locality. EXPLAIN ANALYZE executes SQL — it is subject to full effect analysis and is not automatically a read.
+- [ ] ANALYZE only of an established session table: check parser support. If it is missing, evaluate a library update with full regression; do not replace the parser with a regex. Record a concrete blocker if there is no safe path.
+- [ ] Resolve lo_ user-function handling with the identity/effect policy from 01/T3; do not remove the prefix block without a replacement protection.
+- [ ] Run the tests of both classifiers; authorized live tests check the real temp and the absence of persistent effects. Describe implemented capabilities in capabilities; local commits per construct.
 
-## T2 — selektywne czytanie istniejących artefaktów
+## T2 — selective reading of existing artifacts
 
-**Files:** nowe `src/SqlHarness.Core/ArtifactReader.cs`, `src/SqlHarness.Cli/Commands/ArtifactCommand.cs`, `tests/SqlHarness.Tests/ArtifactReaderTests.cs`, `tests/SqlHarness.Tests/Cli/ArtifactCommandTests.cs`; rejestracja CLI i capabilities.
+**Files:** new `src/SqlHarness.Core/ArtifactReader.cs`, `src/SqlHarness.Cli/Commands/ArtifactCommand.cs`, `tests/SqlHarness.Tests/ArtifactReaderTests.cs`, `tests/SqlHarness.Tests/Cli/ArtifactCommandTests.cs`; CLI registration and capabilities.
 
-**Interfaces:** planowana komenda `artifact <id> --section summary|metrics|operators --json` lub --output agent; identyfikator z manifestu, nie dowolna ścieżka. Nie dodawać w pierwszej wersji odczytu queries.jsonl, raw plan XML, snapshot cells ani source SQL.
+**Interfaces:** planned command `artifact <id> --section summary|metrics|operators --json` or --output agent; an identifier from the manifest, not an arbitrary path. Do not add reading of queries.jsonl, raw plan XML, snapshot cells or source SQL in the first version.
 
-- [ ] Zapisać wersjonowany manifest artefaktu i mapowanie do bezpiecznych sekcji. Zdefiniować błąd dla starego artefaktu bez manifestu; żadnego zgadywania poufności po rozszerzeniu.
-- [ ] Testy traversal, symlink/reparse point wychodzący z root, nieznany id/sekcja, uszkodzony manifest i zbyt duży plik. Odmowa bez ujawnienia zawartości i bez połączenia DB.
-- [ ] Zaimplementować limit odczytu i projekcję z budżetem 03/T3; operator po identyfikatorze może zostać wskazany bez wczytywania wszystkich run arrays do wyniku.
-- [ ] Test workflow compare→artifact: brak ponownego benchmarku i ta sama metryka co zapisany raport. Uruchomić nowe testy i writer tests; lokalny commit.
+- [ ] Write a versioned artifact manifest and a mapping to safe sections. Define an error for an old artifact without a manifest; no guessing of confidentiality after an extension.
+- [ ] Tests for traversal, a symlink/reparse point leaving the root, an unknown id/section, a damaged manifest and an oversized file. Rejection without disclosing content and without a DB connection.
+- [ ] Implement the read limit and the budgeted projection from 03/T3; an operator identified by identifier may be indicated without loading all run arrays into the result.
+- [ ] Test the compare→artifact workflow: no re-benchmark and the same metric as in the saved report. Run the new tests and writer tests; local commit.
 
-## T3 — opcjonalne zdarzenia watch
+## T3 — optional watch events
 
 **Files:** `src/SqlHarness.Core/WatchRunner.cs`, `Contracts.cs`; `src/SqlHarness.Cli/Commands/WatchCommand.cs`, `Commands/Renderer.cs`; `tests/SqlHarness.Tests/WatchTests.cs`, `Cli/AgentOutputTests.cs`.
 
-**Interfaces:** `watch --output ndjson` odrębny od agent/json/json-summary. Rekordy `started`, `changed`, `completed`, `failed`, każdy z schemaVersion, sequence i elapsed; stan danych podlega tej samej redakcji i budżetom.
+**Interfaces:** `watch --output ndjson` separate from agent/json/json-summary. Records `started`, `changed`, `completed`, `failed`, each with schemaVersion, sequence and elapsed; data state is subject to the same redaction and budgets.
 
-- [ ] Zdefiniować pojedynczy rekord końcowy i kolejność sequence. Nie generować changed dla niezmienionego wyniku. Puste przerwanie transportu nie może być interpretowane jako sukces.
-- [ ] Dodać testy flush po zdarzeniu, anulowania w połowie, błędu serializacji, deadline oraz wolnego odbiorcy. Nie akumulować pełnej historii przed emisją.
-- [ ] Zachować istniejący final JSON dla dotychczasowych flag; NDJSON jawnie ogłaszać w capabilities. Zliczanie gain uwzględnia cały strumień.
-- [ ] Uruchomić testy watch/CLI, lokalny commit.
+- [ ] Define a single terminal record and the sequence order. Do not generate changed for an unchanged result. An empty transport interruption must not be interpreted as success.
+- [ ] Add tests for flush after an event, mid-run cancellation, a serialization error, a deadline and a slow consumer. Do not accumulate the full history before emission.
+- [ ] Preserve the existing final JSON for the current flags; announce NDJSON explicitly in capabilities. Gain accounting covers the entire stream.
+- [ ] Run the watch/CLI tests, local commit.
 
-## T4 — specyfikacja progów regresji CI
+## T4 — specification of CI regression thresholds
 
-**Files:** nowy `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md`; przyszłe pliki implementacji wskazać w tej specyfikacji, nie tworzyć stubów.
+**Files:** new `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md`; point to future implementation files in that specification, do not create stubs.
 
-**Interfaces:** rezultat tego zadania to zatwierdzalna macierz decyzji, nie nowy nieuzgodniony kod wyjścia.
+**Interfaces:** the result of this task is an approvable decision matrix, not a new unagreed exit code.
 
-- [ ] Określić metryki, próg względny i minimalną różnicę bezwzględną, bazę zero, brak metryki CPU PG, próbę niestabilną i brak equivalence. Wynik domenowy pass/fail/inconclusive ma być odrębny od powodzenia SQL.
-- [ ] Zapisać tabelę syntetycznych przypadków i oczekiwanych decyzji, politykę szumu pomiarowego, liczby powtórzeń i wersjonowania progów.
-- [ ] Zaproponować integrację CI bez redefinicji exit 8; uzgodnić nowy tryb lub osobną komendę. Nie twierdzić o regresji, jeśli wynik technicznie nierównoważny albo pomiar niekompletny.
-- [ ] Zakończyć zadanie dokumentem z kryteriami i osobnym planem implementacji. Commit `docs: define benchmark regression decision contract`.
+- [ ] Define the metrics, relative threshold and minimum absolute difference, zero baseline, missing PG CPU metric, unstable trial and absence of equivalence. The domain pass/fail/inconclusive result must be separate from SQL success.
+- [ ] Write a table of synthetic cases and expected decisions, the measurement noise policy, repetition counts and threshold versioning.
+- [ ] Propose CI integration without redefining exit 8; agree on a new mode or a separate command. Do not claim a regression if the result is technically unequal or the measurement is incomplete.
+- [ ] Finish the task with a document containing criteria and a separate implementation plan. Commit `docs: define benchmark regression decision contract`.
 
-## T5 — specyfikacja pg_stat_statements
+## T5 — pg_stat_statements specification
 
-**Files:** nowy `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`; `docs/superpowers/plans/2026-09-26-audit-roadmap.md` aktualizacja statusu projektu podrzędnego.
+**Files:** new `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`; `docs/superpowers/plans/2026-09-26-audit-roadmap.md` status update of the subordinate project.
 
-**Interfaces:** tylko specyfikacja nowej read-only diagnostyki. SQL Server qstop zachowuje obecny kontrakt.
+**Interfaces:** specification only for the new read-only diagnostics. SQL Server qstop preserves its current contract.
 
-- [ ] Zbadać oficjalną dokumentację PostgreSQL 14+ dla dostępności extension, wersji kolumn, uprawnień, resetów, zakresu bazy i widoczności tekstu SQL. Brak rozszerzenia → jawna niedostępność, bez CREATE EXTENSION.
-- [ ] Ustalić ranking, identyfikację query, metryki, snapshot/delta i brak obietnicy okna 24h z samego kumulatywnego licznika. Reset/restart ma unieważniać nieporównywalną deltę.
-- [ ] Zapisać kontrakt poufności analogiczny do Query Store: stdout metryki/identyfikatory, SQL tylko w lokalnie wrażliwym artefakcie, brak publikacji bez review.
-- [ ] Dostarczyć fixtures dla braku extension/uprawnień, pustego wyniku, resetu i dwóch wersji serwera; przygotować oddzielny plan wdrożenia. Nie testować live bez autoryzowanego celu.
-- [ ] Commit dokumentacji i mapowanie w capabilities dopiero po rzeczywistym wdrożeniu.
+- [ ] Examine the official PostgreSQL 14+ documentation for extension availability, column versions, permissions, resets, database scope and SQL text visibility. Missing extension → explicit unavailability, without CREATE EXTENSION.
+- [ ] Establish ranking, query identification, metrics, snapshot/delta and the absence of a 24h window promise from a cumulative counter alone. A reset/restart must invalidate an incomparable delta.
+- [ ] Write a confidentiality contract analogous to Query Store: metrics/identifiers on stdout, SQL only in a locally sensitive artifact, no publication without review.
+- [ ] Deliver fixtures for a missing extension/permissions, an empty result, a reset and two server versions; prepare a separate implementation plan. Do not test live without an authorized target.
+- [ ] Commit the documentation and the mapping in capabilities only after actual implementation.

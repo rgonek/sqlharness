@@ -1,138 +1,138 @@
-# Polityka bezpieczeństwa PostgreSQL
+# PostgreSQL safety policy
 
-**Data:** 2026-09-26
-**Status:** obowiązująca dla klasyfikatora i sesji Npgsql
-**Dotyczy:** S3 i S4 w [audycie](2026-09-26-project-audit.md). Nie zmienia silnika SQL Server.
-**Parser:** SqlParserCS 0.6.5, dialekt `PostgreSqlDialect`.
+**Date:** 2026-09-26
+**Status:** binding for the classifier and the Npgsql session
+**Applies to:** S3 and S4 in the [audit](2026-09-26-project-audit.md). Does not change the SQL Server engine.
+**Parser:** SqlParserCS 0.6.5, dialect `PostgreSqlDialect`.
 
-Ten dokument jest źródłem zachowania `PostgresSafetyClassifier.Classify` oraz zakresu wykonania sesji dla `SqlUsage.Query` i `SqlUsage.CompareSetup`. Nie dodaje nowego interfejsu. Nie upoważnia do zdania „read-only gwarantowane”.
+This document is the source of the behavior of `PostgresSafetyClassifier.Classify` and of the session execution scope for `SqlUsage.Query` and `SqlUsage.CompareSetup`. It adds no new interface. It does not authorize the claim "read-only guaranteed".
 
-## Model zagrożeń
+## Threat model
 
-Aktor wysyłający SQL to agent z dostępem do CLI (albo bezpośrednie wywołanie Core). Tekst batcha, parametry i wybór profilu nie są dowodem braku efektów. Zgoda na trwały DML pozostaje jednorazowa i jawna: `--allow-mutation` oraz `--confirm-database` równe rozstrzygniętej nazwie bazy. Dotyczy tylko `Query`. Setup jej nie przyjmuje.
+The actor sending SQL is an agent with access to the CLI (or a direct call into Core). The batch text, the parameters and the profile choice are no evidence of the absence of effects. Consent for persistent DML remains one-off and explicit: `--allow-mutation` and `--confirm-database` equal to the resolved database name. It applies only to `Query`. Setup does not accept it.
 
-W bazie już istnieją obiekty, których ciał nie ma w przesłanym tekście:
+Objects already exist in the database whose bodies are not in the submitted text:
 
-- funkcje, w tym `VOLATILE` wykonujące DML i funkcje `SECURITY DEFINER`;
-- widoki, reguły i triggery;
-- przeciążenia operatorów (`+` i inne są w AST węzłem operatora, nie wywołaniem funkcji).
+- functions, including `VOLATILE` ones performing DML and `SECURITY DEFINER` functions;
+- views, rules and triggers;
+- operator overloads (`+` and others are an operator node in the AST, not a function call).
 
-Uprawnienia konta połączenia są osobną granicą. Harness nie czyta `pg_roles` ani `pg_proc` i nie wykonuje `SET ROLE`, `SET SESSION AUTHORIZATION`, `GRANT` ani `REVOKE`.
+The connection account's permissions are a separate boundary. The harness reads neither `pg_roles` nor `pg_proc` and executes no `SET ROLE`, `SET SESSION AUTHORIZATION`, `GRANT` or `REVOKE`.
 
-`search_path` i schemat bieżący rozstrzygają nazwy niekwalifikowane. Ta sama pisownia może wskazać inny obiekt po zmianie ścieżki. Kwalifikacja schematem w tekście też nie jest tożsamością, dopóki harness nie rozwiązuje przeciążenia po typach argumentów. Cytowanie i zwijanie wielkości liter zostają takie jak dziś: identyfikator bez cudzysłowu jest porównywany bez względu na wielkość liter, a klucz tabeli tymczasowej zwija niecytowaną nazwę do małych liter.
+`search_path` and the current schema resolve unqualified names. The same spelling may denote a different object after a path change. Schema qualification in the text is not an identity either, as long as the harness does not resolve overloads by argument types. Quoting and case folding stay as they are today: an unquoted identifier is compared case-insensitively, and a temporary table key folds an unquoted name to lower case.
 
-Trzy skutki nie są jednym zakazem:
+The three effects are not a single prohibition:
 
-| Skutek | Co miałoby być wykluczone | Co widzi sam tekst SQL |
+| Effect | What would have to be excluded | What the SQL text alone shows |
 | --- | --- | --- |
-| Brak trwałego DML | `INSERT` / `UPDATE` / `DELETE` / `MERGE` oraz modyfikujące CTE w trwałą tabelę, a także DML schowany w funkcji, widoku, regule albo triggerze | Tylko cele zapisu obecne w AST |
-| Brak efektów administracyjnych | zmiana konfiguracji sesji, anulowanie lub zabicie innego backendu, blokady doradcze, zmiana roli | Tylko wywołanie, którego końcowa nazwa jest na liście poniżej |
-| Brak dostępu zewnętrznego | `dblink`, FDW, odczyt katalogu lub pliku serwera, eksport large object | Tylko widoczna nazwa z istniejących prefiksów `dblink`, `pg_read_`, `pg_ls_`, `lo_` |
+| No persistent DML | `INSERT` / `UPDATE` / `DELETE` / `MERGE` and a modifying CTE into a persistent table, as well as DML hidden in a function, view, rule or trigger | Only the write targets present in the AST |
+| No administrative effects | changing session configuration, cancelling or killing another backend, advisory locks, changing the role | Only a call whose final name is on the list below |
+| No external access | `dblink`, FDW, reading a server catalog or file, large object export | Only a visible name from the existing prefixes `dblink`, `pg_read_`, `pg_ls_`, `lo_` |
 
-## Porównanie kontroli
+## Control comparison
 
-Żadna pojedyncza kontrola nie udźwignie wszystkich trzech skutków. Obietnica bezpieczeństwa nie opiera się na samej liście nazw ani na samej transakcji read-only. Harness nie zmienia ról ani uprawnień.
+No single control will bear all three effects. The safety promise rests neither on the list of names alone nor on a read-only transaction alone. The harness changes no roles and no permissions.
 
-| Kontrola | Trwały DML widoczny w tekście | Trwały DML w funkcji, widoku, regule, triggerze | Efekt administracyjny | Dostęp zewnętrzny | Setup `CREATE TEMP` | Zmiana uprawnień |
+| Control | Persistent DML visible in the text | Persistent DML in a function, view, rule, trigger | Administrative effect | External access | Setup `CREATE TEMP` | Permission change |
 | --- | --- | --- | --- | --- | --- | --- |
-| Pełne AST SqlParserCS | Tak, dla celów, które parser umieścił w drzewie. Gramatyka biblioteki jest szersza niż gramatyka serwera (S4). | Nie | Tylko gdy wywołanie jest widoczne i nazwa jest objęta filtrem | Tak samo | Nie psuje | Nie |
-| Zaufane funkcje po rozstrzygnięciu przeciążeń | Nie zastępuje analizy celów zapisu | Tylko dla wywołań w tekście, i tylko gdy wpis w katalogu jest prawdziwy. Właściciel może oznaczyć funkcję `IMMUTABLE`, a i tak wykonać DML. Nie widzi funkcji schowanej w widoku ani ciała operatora. Wymaga odczytu katalogu zależnego od `search_path` | Tylko przy pełnym i zaufanym katalogu | Tak samo | Wymaga dodatkowych zapytań | Nie, ale nie usuwa `SECURITY DEFINER` |
-| Minimalne uprawnienia konta | Tak, jeśli rola nie może pisać | Tak dla DML wykonanego jako ta rola; nie, gdy `SECURITY DEFINER` działa jako właściciel z prawem zapisu | Tylko gdy roli brakuje `pg_signal_backend`, superusera, `pg_write_server_files` i podobnych | Tak samo | Nie psuje, jeśli rola może tworzyć tabele tymczasowe | Harness miałby sam wykonać `SET ROLE` albo `REVOKE`. Tego nie robi |
-| Transakcja `READ ONLY` | Tak, także dla DML wewnątrz funkcji, bo dokumentacja PostgreSQL zabrania `INSERT` / `UPDATE` / `DELETE` / `MERGE` do tabeli, która nie jest tymczasowa | Tak dla nietymczasowego DML, również w `SECURITY DEFINER` (ograniczenie dotyczy komendy w transakcji, nie nazwy roli) | Nie. `set_config`, `pg_cancel_backend`, `pg_terminate_backend` i blokady doradcze nie są na liście komend zabronionych w transakcji read-only | Nie. Zdalny SQL i funkcje plikowe nie są tą listą | Psuje. Ta sama dokumentacja zabrania wszystkich `CREATE`, także `CREATE TEMP` | Nie |
+| Full SqlParserCS AST | Yes, for targets the parser placed in the tree. The library's grammar is broader than the server's grammar (S4). | No | Only when the call is visible and the name is covered by the filter | Same | Breaks nothing | No |
+| Trusted functions after overload resolution | Does not replace the analysis of write targets | Only for calls in the text, and only when the catalog entry is truthful. The owner may mark a function `IMMUTABLE` and still perform DML. It does not see a function hidden in a view nor an operator body. It requires a catalog read dependent on `search_path` | Only with a complete and trusted catalog | Same | Requires additional queries | No, but it does not remove `SECURITY DEFINER` |
+| Minimal account permissions | Yes, if the role cannot write | Yes for DML performed as that role; no when `SECURITY DEFINER` acts as an owner with write permission | Only when the role lacks `pg_signal_backend`, is not a superuser, lacks `pg_write_server_files` and the like | Same | Breaks nothing, if the role can create temporary tables | The harness would have to perform `SET ROLE` or `REVOKE` itself. It does not do that |
+| `READ ONLY` transaction | Yes, also for DML inside a function, because the PostgreSQL documentation forbids `INSERT` / `UPDATE` / `DELETE` / `MERGE` into a table that is not temporary | Yes for non-temporary DML, also in `SECURITY DEFINER` (the restriction concerns the command in the transaction, not the role name) | No. `set_config`, `pg_cancel_backend`, `pg_terminate_backend` and advisory locks are not on the list of commands forbidden in a read-only transaction | No. Remote SQL and file functions are not that list | Breaks. The same documentation forbids all `CREATE`, also `CREATE TEMP` | No |
 
-Źródła zachowania serwera, nie wynik testu na żywo w tej zmianie: [SET TRANSACTION](https://www.postgresql.org/docs/17/sql-set-transaction.html), [WITH](https://www.postgresql.org/docs/17/queries-with.html), [funkcje administracyjne](https://www.postgresql.org/docs/17/functions-admin.html).
+Sources of server behavior, not a live test result from this change: [SET TRANSACTION](https://www.postgresql.org/docs/17/sql-set-transaction.html), [WITH](https://www.postgresql.org/docs/17/queries-with.html), [administrative functions](https://www.postgresql.org/docs/17/functions-admin.html).
 
-## Macierz decyzji
+## Decision matrix
 
-Identyfikator funkcji to ostatni składnik nazwy, bez względu na schemat i cudzysłów, porównanie bez wielkości liter. Lista jest filtrem tekstu, nie dowodem efektu. Mutacja zatwierdzona flagami nie zdejmuje filtra.
+A function identifier is the last component of the name, regardless of schema and quoting, compared case-insensitively. The list is a text filter, not evidence of an effect. A mutation approved by flags does not lift the filter.
 
-| Pozycja | Dozwolony efekt | Egzekwowanie | Komunikat odmowy |
+| Item | Allowed effect | Enforcement | Rejection message |
 | --- | --- | --- | --- |
-| `set_config` | Żaden. Widoczne wywołanie nie może zmienić konfiguracji, w tym `search_path`, ani jako `Query`, ani jako `CompareSetup` | Odmowa po dokładnej nazwie końcowej, w każdym miejscu AST objętym przejściem z sekcji Classify | `UnsupportedStatement.` |
-| `pg_cancel_backend` | Żaden. Brak sygnału do innego backendu | Dokładna nazwa końcowa | `UnsupportedStatement.` |
-| `pg_terminate_backend` | Żaden. Brak zakończenia innego backendu | Dokładna nazwa końcowa | `UnsupportedStatement.` |
-| Blokady doradcze | Żaden. Brak `pg_advisory_lock`, `pg_advisory_xact_lock`, `pg_try_advisory_lock`, wariantów `unlock` oraz każdej innej widocznej nazwy zaczynającej się od `pg_advisory_` albo `pg_try_advisory_` | Prefiksy `pg_advisory_` i `pg_try_advisory_` na nazwie końcowej. Prefiks obejmuje też hipotetyczną funkcję bez efektu o takiej nazwie; to nadmiarowa odmowa filtra, nie dowód efektu | `UnsupportedStatement.` |
-| Funkcje sekwencji | `nextval` i `setval`: żaden (zmiana stanu sekwencji). `currval` i `lastval`: klasyfikator dopuszcza wywołanie. Ich efektem widocznym w dokumentacji jest odczyt stanu sesji, nie zapis sekwencji. To nie jest gwarancja braku skutków przy przesłonięciu nazwy | `nextval` i `setval` są na liście dokładnych nazw. `currval` i `lastval` nie są. Brak rozwiązania przeciążenia | Dla `nextval` i `setval`: `UnsupportedStatement.` Dla `currval` i `lastval`: brak odmowy |
-| Funkcja `VOLATILE` wykonująca DML | Żaden efekt nie jest dopuszczony jako „skutek uboczny SELECT”. Klasyfikator nie widzi ciała ani volatility. `SELECT app.write_something()` pozostaje `Allowed`, `HasMutation=false` | Brak listy nazw i brak transakcji read-only. Jedyna kontrola poza tekstem to uprawnienia konta, których harness nie zmienia i nie sprawdza | Brak odmowy. Decyzja `Allowed`. Etykieta raportu `read-only` nie jest gwarancją |
-| `SECURITY DEFINER` | Jak wyżej: atrybut nie występuje w tekście wywołania. Dozwolony efekt nie jest „żaden potwierdzony”; efekt właściciela pozostaje poza AST | Nie da się wymusić z samego wywołania. Harness nie robi `SET ROLE` i nie odbiera uprawnień właścicielowi | Brak odmowy. Decyzja `Allowed` |
-| Funkcja w widoku | Jak wyżej. `SELECT * FROM app.hidden_view` nie zawiera wywołania | Skan relacji nie jest rozwijany do definicji widoku | Brak odmowy. Decyzja `Allowed` |
-| Funkcja o nazwie `lo_` bez efektów | Żaden przez ten filtr. `lo_custom_readonly` jest odrzucane tak samo jak `lo_export` | Prefiks `lo_` na nazwie końcowej. Nazwa nie świadczy o braku efektu; zwężenie prefiksu bez granicy katalogu udawałoby taki dowód. To świadoma nadmiarowa odmowa (audyt B4), nie podatność | `UnsupportedStatement.` |
-| Wykonanie SQL z tekstu | Żaden. Argument tekstowy nie jest klasyfikowany, więc widoczne wywołanie może wykonać SQL, którego ten klasyfikator nie widzi | Odmowa po dokładnej nazwie końcowej: `query_to_xml`, `query_to_xmlschema`, `query_to_xml_and_xmlschema`, `cursor_to_xml`, `cursor_to_xmlschema`, `ts_stat` | `UnsupportedStatement.` |
-| Funkcje administracyjne i WAL | Żaden. Brak opóźnienia sesji, powiadomienia, odczytu metadanych pliku serwera, przeładowania konfiguracji, rotacji dziennika, przełączenia WAL, punktu przywracania, resetu statystyk, utworzenia lub usunięcia slotu replikacji, komunikatu logicznego i zmiany origin replikacji | Prefiksy `pg_sleep` (`pg_sleep`, `pg_sleep_for`, `pg_sleep_until`), `pg_stat_reset`, `pg_create_` (fizyczne i logiczne sloty replikacji oraz `pg_create_restore_point`) i `pg_replication_origin_` na nazwie końcowej. Dokładne nazwy końcowe, których te prefiksy nie obejmują: `pg_notify`, `pg_stat_file`, `pg_reload_conf`, `pg_rotate_logfile`, `pg_switch_wal`, `pg_drop_replication_slot`, `pg_logical_emit_message`. Prefiks obejmuje też hipotetyczną funkcję bez efektu o takiej nazwie; to nadmiarowa odmowa filtra, nie dowód efektu | `UnsupportedStatement.` |
+| `set_config` | None. A visible call must not change the configuration, including `search_path`, either as `Query` or as `CompareSetup` | Rejection on the exact final name, at every AST location covered by the traversal from the Classify section | `UnsupportedStatement.` |
+| `pg_cancel_backend` | None. No signal to another backend | Exact final name | `UnsupportedStatement.` |
+| `pg_terminate_backend` | None. No termination of another backend | Exact final name | `UnsupportedStatement.` |
+| Advisory locks | None. No `pg_advisory_lock`, `pg_advisory_xact_lock`, `pg_try_advisory_lock`, `unlock` variants, nor any other visible name beginning with `pg_advisory_` or `pg_try_advisory_` | The prefixes `pg_advisory_` and `pg_try_advisory_` on the final name. The prefix also covers a hypothetical effect-free function with such a name; that is an over-broad filter rejection, not evidence of an effect | `UnsupportedStatement.` |
+| Sequence functions | `nextval` and `setval`: none (sequence state change). `currval` and `lastval`: the classifier admits the call. Their effect, as visible in the documentation, is reading session state, not writing the sequence. That is not a guarantee of no effects under name shadowing | `nextval` and `setval` are on the exact-name list. `currval` and `lastval` are not. No overload resolution | For `nextval` and `setval`: `UnsupportedStatement.` For `currval` and `lastval`: no rejection |
+| `VOLATILE` function performing DML | No effect is admitted as a "side effect of SELECT". The classifier sees neither the body nor the volatility. `SELECT app.write_something()` stays `Allowed`, `HasMutation=false` | No list of names and no read-only transaction. The only control outside the text is the account permissions, which the harness neither changes nor checks | No rejection. Decision `Allowed`. The `read-only` report label is not a guarantee |
+| `SECURITY DEFINER` | As above: the attribute does not occur in the call text. The allowed effect is not "none confirmed"; the owner's effect remains outside the AST | It cannot be enforced from the call alone. The harness does not `SET ROLE` and does not take permissions away from the owner | No rejection. Decision `Allowed` |
+| Function inside a view | As above. `SELECT * FROM app.hidden_view` contains no call | The relation scan is not expanded to the view definition | No rejection. Decision `Allowed` |
+| Effect-free function named `lo_` | None through this filter. `lo_custom_readonly` is rejected just like `lo_export` | The `lo_` prefix on the final name. The name is no evidence of the absence of effects; narrowing the prefix without a catalog boundary would fake such proof. This is a deliberate over-broad rejection (audit B4), not a vulnerability | `UnsupportedStatement.` |
+| Executing SQL from text | None. The text argument is not classified, so a visible call may execute SQL that this classifier does not see | Rejection on the exact final name: `query_to_xml`, `query_to_xmlschema`, `query_to_xml_and_xmlschema`, `cursor_to_xml`, `cursor_to_xmlschema`, `ts_stat` | `UnsupportedStatement.` |
+| Administrative functions and WAL | None. No session delay, notification, reading server file metadata, configuration reload, log rotation, WAL switch, restore point, statistics reset, creation or removal of a replication slot, logical message and replication origin change | The prefixes `pg_sleep` (`pg_sleep`, `pg_sleep_for`, `pg_sleep_until`), `pg_stat_reset`, `pg_create_` (physical and logical replication slots and `pg_create_restore_point`) and `pg_replication_origin_` on the final name. Exact final names that these prefixes do not cover: `pg_notify`, `pg_stat_file`, `pg_reload_conf`, `pg_rotate_logfile`, `pg_switch_wal`, `pg_drop_replication_slot`, `pg_logical_emit_message`. The prefix also covers a hypothetical effect-free function with such a name; that is an over-broad filter rejection, not evidence of an effect | `UnsupportedStatement.` |
 
-Te same reguły nazw obejmują dotychczasowe pozycje, których ta zmiana nie luzuje: dokładne `pg_read_file`, `pg_ls_dir`, `lo_import`, `query_to_xml`, `query_to_xmlschema`, `query_to_xml_and_xmlschema`, `cursor_to_xml`, `cursor_to_xmlschema`, `ts_stat`, `pg_notify`, `pg_stat_file`, `pg_reload_conf`, `pg_rotate_logfile`, `pg_switch_wal`, `pg_drop_replication_slot`, `pg_logical_emit_message`; prefiksy `dblink`, `pg_read_`, `pg_ls_`, `pg_sleep`, `pg_stat_reset`, `pg_create_`, `pg_replication_origin_`. Dotyczą wyrażenia funkcyjnego, funkcji w `FROM` i funkcji tabelowej. Literał tekstowy `'set_config'` nie jest wywołaniem.
+The same name rules cover the existing items that this change does not relax: the exact `pg_read_file`, `pg_ls_dir`, `lo_import`, `query_to_xml`, `query_to_xmlschema`, `query_to_xml_and_xmlschema`, `cursor_to_xml`, `cursor_to_xmlschema`, `ts_stat`, `pg_notify`, `pg_stat_file`, `pg_reload_conf`, `pg_rotate_logfile`, `pg_switch_wal`, `pg_drop_replication_slot`, `pg_logical_emit_message`; the prefixes `dblink`, `pg_read_`, `pg_ls_`, `pg_sleep`, `pg_stat_reset`, `pg_create_`, `pg_replication_origin_`. They concern a function expression, a function in `FROM` and a table function. The text literal `'set_config'` is not a call.
 
-Komunikat odmowy nie zawiera tekstu SQL ani argumentów. `RejectionDescription` przy pustym `Detail` to `"{Reason}."`.
+The rejection message contains no SQL text and no arguments. `RejectionDescription` with an empty `Detail` is `"{Reason}."`.
 
-## Wybrana polityka i granica zaufania
+## Chosen policy and trust boundary
 
-Polityka nazywa się **efekty widoczne w tekście, sesja bez dokładanych komend**.
+The policy is called **effects visible in the text, session without exact commands**.
 
-Granica jest rozstrzygnięta i dlatego zdanie „read-only gwarantowane” jest fałszywe:
+The boundary is settled, and therefore the claim "read-only guaranteed" is false:
 
-1. **Egzekwowane.** Przed połączeniem klasyfikator odrzuca błąd parsowania, każde niedozwolone wywołanie z macierzy oraz każdy cel zapisu umieszczony w AST. Trwały cel w `Query` wymaga dotychczasowego kontraktu mutacji. `CompareSetup` nie przyjmuje trwałego zapisu. Trwały DDL pozostaje `UnsupportedStatement` i flagi mutacji go nie odblokowują.
-2. **Egzekwowane jako brak ingerencji.** Sesja Npgsql wykonuje już sklasyfikowany tekst bez opakowania. Nie ustawia transakcji read-only, `search_path`, roli ani uprawnień.
-3. **Poza harnessem.** Skutki funkcji, widoków, operatorów, reguł, triggerów i `search_path` ogranicza wyłącznie rola konta przygotowana poza SQLHarness. Tej roli ta zmiana nie tworzy i nie sprawdza. Brak tej zewnętrznej granicy jest powodem, dla którego punkt 1 i 2 nie składają się w gwarancję read-only.
+1. **Enforced.** Before connecting, the classifier rejects a parse error, every disallowed call from the matrix, and every write target placed in the AST. A persistent target in `Query` requires the existing mutation contract. `CompareSetup` does not accept a persistent write. Persistent DDL remains `UnsupportedStatement` and the mutation flags do not unlock it.
+2. **Enforced as non-interference.** The Npgsql session executes the already classified text without a wrapper. It sets no read-only transaction, `search_path`, role nor permissions.
+3. **Outside the harness.** The effects of functions, views, operators, rules, triggers and `search_path` are constrained solely by the account role prepared outside SQLHarness. This change neither creates nor checks that role. The absence of that external boundary is the reason why points 1 and 2 do not add up to a read-only guarantee.
 
-Etykieta JSON z `ClassificationLabel` zostaje bez zmiany znaczenia i bez zmiany tekstu: `mutation`, `session-local` albo `read-only`. Słowo `read-only` znaczy „brak widocznej mutacji i brak pracy lokalnej sesji”. Nie znaczy braku efektów ukrytych. Tej etykiety ten dokument nie przerabia, bo jest wspólna dla obu silników.
+The JSON label from `ClassificationLabel` stays unchanged in meaning and in text: `mutation`, `session-local` or `read-only`. The word `read-only` means "no visible mutation and no session-local work". It does not mean the absence of hidden effects. This document does not rework that label, because it is shared by both engines.
 
-Transakcja read-only nie wchodzi do implementacji. Sama nie blokuje wierszy administracyjnych ani dostępu zewnętrznego, a `CREATE TEMP` jest `CREATE`, więc setup przestałby spełniać kontrakt tabel tymczasowych albo wymagałby osobnych rund i innej transakcji dla DDL. To zwiększyłoby liczbę wywołań i nadal nie domknęłoby granicy zaufania.
+A read-only transaction does not enter the implementation. On its own it blocks neither the administrative rows nor external access, and `CREATE TEMP` is a `CREATE`, so setup would stop meeting the temporary tables contract or would require separate runs and a different transaction for the DDL. That would increase the number of calls and would still not close the trust boundary.
 
-Rozwiązanie przeciążeń po katalogu nie wchodzi do tej zmiany. Bez zaufanego wpisu i bez rozwinięcia widoków oraz operatorów byłoby kolejną listą, nie granicą.
+Overload resolution via the catalog does not enter this change. Without a trusted entry and without expanding views and operators it would be just another list, not a boundary.
 
 ## Classify
 
 `Classify(sql, usage, database, allowMutation, confirmDatabase, sessionTempTables)`:
 
-1. Parsuje cały batch. Wyjątek parsera daje `ParseError`. Pusty batch daje `UnsupportedStatement`. Inne użycie niż `Query` i `CompareSetup` daje `UnsupportedStatement`.
-2. Przechodzi każde zdanie. Przejście biblioteki nie wchodzi w `TableFactor.Derived`, w zapytanie `CREATE TABLE AS`, w filtr `DELETE`, w element `CREATE TABLE` ani w wyrażenia `CREATE INDEX`. Element `CREATE TABLE` nie jest `IElement`, więc sam `Visit` nie widzi wartości domyślnej kolumny, wyrażenia `GENERATED`, `CHECK` kolumny i tabeli, list `WITH` / `OPTIONS` / `TBLPROPERTIES` (wartość `SqlOption` jest wyrażeniem), `ORDER BY` ani innych wyrażeń tego elementu. Predykat `WHERE`, wyrażenie klucza i lista `WITH` indeksu też zostają poza tym przejściem. Klasyfikator wchodzi w te miejsca sam, tym samym filtrem nazw, rekurencyjnie, oraz w miejsca, które biblioteka już odwiedza (lista `SELECT`, CTE, źródło `INSERT`, `IN` i skalarny podselekt, gdy biblioteka je odwiedza). Widoczne wywołanie w `CREATE TEMP` odrzuca cały batch, także gdy dalej jest `INSERT … DEFAULT VALUES`.
-3. Widoczne wywołanie z macierzy odrzuca cały batch jako `UnsupportedStatement`, także przy `allowMutation=true` i także w `CompareSetup`.
-4. Potem klasyfikuje zdania po kolei. Cele zapisu każdego zdania ocenia wobec tabel tymczasowych znanych przed tym zdaniem, a nazwę `TEMP` zadeklarowaną przez to zdanie dopisuje do zbioru dopiero po tej ocenie, żeby późniejsze zdanie widziało tabelę z wcześniejszego `CREATE TEMP`, przez co zapis w CTE tego samego zdania nie widzi relacji, którą to zdanie tworzy.
+1. Parses the whole batch. A parser exception yields `ParseError`. An empty batch yields `UnsupportedStatement`. Any use other than `Query` and `CompareSetup` yields `UnsupportedStatement`.
+2. Traverses every statement. The library's traversal does not enter `TableFactor.Derived`, the `CREATE TABLE AS` query, the `DELETE` filter, the `CREATE TABLE` element, nor `CREATE INDEX` expressions. The `CREATE TABLE` element is not an `IElement`, so `Visit` itself sees neither the column default value, nor the `GENERATED` expression, nor the column and table `CHECK`, nor the `WITH` / `OPTIONS` / `TBLPROPERTIES` lists (a `SqlOption` value is an expression), nor `ORDER BY` nor the element's other expressions. The `WHERE` predicate, the key expression and the index's `WITH` list also stay outside that traversal. The classifier enters those locations itself, with the same name filter, recursively, as well as the locations the library already visits (the `SELECT` list, CTEs, the `INSERT` source, `IN` and scalar subqueries, when the library visits them). A visible call in `CREATE TEMP` rejects the whole batch, also when `INSERT … DEFAULT VALUES` follows.
+3. A visible call from the matrix rejects the whole batch as `UnsupportedStatement`, also with `allowMutation=true` and also in `CompareSetup`.
+4. Then it classifies the statements one by one. It evaluates the write targets of each statement against the temporary tables known before that statement, and adds the `TEMP` name declared by that statement to the set only after that evaluation, so that a later statement sees the table from the earlier `CREATE TEMP`, whereby a write in a CTE of the same statement does not see the relation that this statement creates.
 
-Cel zapisu to cel `INSERT`, `UPDATE`, `DELETE` albo `MERGE` znaleziony w zdaniu, w CTE, w źródle `INSERT` i w podzapytaniu, do którego klasyfikator wchodzi. Cel bez rozwiązywalnej nazwy relacji daje `UnsupportedStatement`. `SELECT INTO` daje `SelectIntoNotAllowed` w `Query` (także ze zgodą na mutację) i `NonTemporaryWrite` w `CompareSetup`.
+A write target is an `INSERT`, `UPDATE`, `DELETE` or `MERGE` target found in a statement, in a CTE, in an `INSERT` source and in a subquery the classifier enters. A target without a resolvable relation name yields `UnsupportedStatement`. `SELECT INTO` yields `SelectIntoNotAllowed` in `Query` (also with mutation consent) and `NonTemporaryWrite` in `CompareSetup`.
 
-Gdy wszystkie znalezione cele są sesyjnie lokalne, zdanie jest pracą lokalną. Gdy choć jeden nie jest, zdanie jest mutacją, nawet jeśli równocześnie tworzy tabelę tymczasową. Brak celów w `SELECT` bez `INTO` to odczyt tekstowy (`Allowed`, bez mutacji i bez pracy lokalnej).
+When all found targets are session-local, the statement is local work. When at least one is not, the statement is a mutation, even if it simultaneously creates a temporary table. No targets in a `SELECT` without `INTO` is a text read (`Allowed`, no mutation and no local work).
 
-Cel jest sesyjnie lokalny, gdy nazwa jest jednym identyfikatorem obecnym w zbiorze tabel tymczasowych tej sesji i tego batcha, albo gdy ma dokładnie dwa człony i pierwszy to dokładnie `pg_temp` (alias serwera na schemat tymczasowy bieżącej sesji). **Zmienione planem 011** (2026-10-01, `plans/011-syntax-contract.md`, reguła 011-T4b-D7; zdanie powyżej jest regułą obowiązującą, wcześniej dowodem był też prefiks): prefiks `pg_temp_` — w nazwie schematu (`pg_temp_<N>`) albo w nazwie relacji — nie jest już dowodem dla żadnego zdania.
+A target is session-local when the name is a single identifier present in the set of temporary tables of this session and this batch, or when it has exactly two parts and the first is exactly `pg_temp` (the server alias for the temporary schema of the current session). **Changed by plan 011** (2026-10-01, `plans/011-syntax-contract.md`, rule 011-T4b-D7; the sentence above is the binding rule, previously the prefix was also evidence): the prefix `pg_temp_` — in the schema name (`pg_temp_<N>`) or in the relation name — is no longer evidence for any statement.
 
-`Query` przy mutacji: brak `allowMutation` daje `MutationNotAllowed`; brak `confirmDatabase` daje `DatabaseConfirmationRequired`; inna nazwa bazy, porównanie porządkowe, daje `DatabaseConfirmationMismatch`; zgodna para flag daje `Allowed` z `HasMutation=true`. Praca lokalna ustawia `HasSessionLocalWork` i zwraca zbiór nazw tymczasowych.
+`Query` under mutation: no `allowMutation` yields `MutationNotAllowed`; no `confirmDatabase` yields `DatabaseConfirmationRequired`; a different database name, compared ordinally, yields `DatabaseConfirmationMismatch`; a matching pair of flags yields `Allowed` with `HasMutation=true`. Local work sets `HasSessionLocalWork` and returns the set of temporary names.
 
-`CompareSetup` ignoruje flagi mutacji. Odczyt tekstowy i praca wyłącznie tymczasowa są dozwolone. Mutacja, `SELECT INTO` i nietymczasowy zapis dają `NonTemporaryWrite`. Trwały DDL i nieznane zdanie dają `UnsupportedStatement`.
+`CompareSetup` ignores the mutation flags. A text read and exclusively temporary work are permitted. A mutation, `SELECT INTO` and a non-temporary write yield `NonTemporaryWrite`. Persistent DDL and an unknown statement yield `UnsupportedStatement`.
 
-## Sesja: Query i CompareSetup
+## Session: Query and CompareSetup
 
-Oba użycia mają ten sam zakres wykonania:
+Both uses have the same execution scope:
 
-- `NpgsqlSession` ustawia `CommandText` na SQL przekazany w `SqlExecutionCommand`, `CommandType=Text` i istniejący timeout. Nie dopisuje `BEGIN`, `SET TRANSACTION`, `SET`, `SET ROLE` ani innego prefiksu.
-- Łańcuch połączenia nie ustawia `default_transaction_read_only`, `search_path`, `Options` zmieniających rolę ani trybu transakcji.
-- Po `Open` nadal jest tylko dotychczasowe zapytanie tożsamości. Polityka nie dodaje rundy.
-- `Query` wysyła jeden sklasyfikowany batch. `CompareSetup` wysyła jeden sklasyfikowany batch setupu na tym samym połączeniu, które potem służy powtórzeniom. Obiekt tymczasowy z setupu pozostaje widoczny.
-- `measure` i `compare` dalej owijają mierzone zdanie w `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` i, gdy porównują wiersze, wykonują niemierzony sidecar. To istniejące wywołania silnika, nie nowe wywołania tej polityki.
+- `NpgsqlSession` sets `CommandText` to the SQL passed in `SqlExecutionCommand`, `CommandType=Text` and the existing timeout. It appends no `BEGIN`, `SET TRANSACTION`, `SET`, `SET ROLE` nor any other prefix.
+- The connection string sets no `default_transaction_read_only`, `search_path`, role-changing `Options` nor transaction mode.
+- After `Open` there is still only the existing identity query. The policy adds no round trip.
+- `Query` sends one classified batch. `CompareSetup` sends one classified setup batch over the same connection that is later used for the repetitions. The temporary object from setup stays visible.
+- `measure` and `compare` still wrap the measured statement in `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` and, when they compare rows, execute an unmeasured sidecar. Those are existing engine calls, not new calls introduced by this policy.
 
-Liczba wywołań serwera nie rośnie. Klasyfikacja jest lokalna.
+The number of server calls does not grow. The classification is local.
 
-## Setup i tabele tymczasowe
+## Setup and temporary tables
 
-Bez flag mutacji nadal wolno, w `Query` i w `CompareSetup`:
+Without mutation flags, still permitted in `Query` and in `CompareSetup`:
 
-- `CREATE TEMP` / `CREATE TEMPORARY`, także `CREATE TEMP TABLE AS SELECT` bez celu zapisu w zapytaniu źródłowym;
-- `INSERT` / `UPDATE` / `DELETE` / `MERGE` oraz modyfikujące CTE, których każdy cel jest sesyjnie lokalny;
-- `CREATE INDEX` i `DROP` tych tabel oraz `DROP` indeksu oznaczonego jako tymczasowy.
+- `CREATE TEMP` / `CREATE TEMPORARY`, also `CREATE TEMP TABLE AS SELECT` without a write target in the source query;
+- `INSERT` / `UPDATE` / `DELETE` / `MERGE` and modifying CTEs whose every target is session-local;
+- `CREATE INDEX` and `DROP` of those tables, and `DROP` of an index marked as temporary.
 
-`UNLOGGED` i `CREATE TABLE` bez `TEMP` pozostają trwałym DDL. **Zmienione planem 011** (2026-10-01, 011-T4b-D7; poniższe jest regułą obowiązującą): zapis do `pg_temp_fake` już NIE jest traktowany jak lokalny — kwalifikator `pg_temp_<N>` przestał być dowodem; lokalny pozostaje tylko dokładny alias `pg_temp` albo nazwa dowiedziona przez `CREATE TEMP` w tej sesji.
+`UNLOGGED` and `CREATE TABLE` without `TEMP` remain persistent DDL. **Changed by plan 011** (2026-10-01, 011-T4b-D7; the following is the binding rule): a write to `pg_temp_fake` is NO LONGER treated as local — the `pg_temp_<N>` qualifier stopped being evidence; only the exact `pg_temp` alias, or a name proven by `CREATE TEMP` in this session, remains local.
 
-Batch tymczasowy, który dodatkowo zawiera widoczny trwały cel zapisu, nie jest „tylko lokalny”. W setupie jest `NonTemporaryWrite`. W `Query` wymaga kontraktu mutacji.
+A temporary batch that additionally contains a visible persistent write target is not "local only". In setup it is `NonTemporaryWrite`. In `Query` it requires the mutation contract.
 
-## S4 — pokrycie AST, nie exploit
+## S4 — AST coverage, not an exploit
 
-PostgreSQL pozwala na modyfikujące CTE tylko w `WITH` dołączonym do zdania najwyższego poziomu (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`). `WITH` stoi przed tym zdaniem. Przykład z dokumentacji przenosi wiersze przez `WITH deleted AS (DELETE …) INSERT INTO …`, a nie przez `INSERT … WITH …`.
+PostgreSQL allows a modifying CTE only in a `WITH` attached to a top-level statement (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`). The `WITH` stands before that statement. The example from the documentation moves rows through `WITH deleted AS (DELETE …) INSERT INTO …`, not through `INSERT … WITH …`.
 
-Następujące kształty SqlParserCS przyjmuje, a ten dokument nie nazywa ich obejściem serwera:
+SqlParserCS accepts the following shapes, and this document does not call them server bypasses:
 
-- `INSERT INTO x WITH changed AS (INSERT INTO public.items …) SELECT …` — biblioteka widzi oba cele. Serwerowa gramatyka nie umieszcza `WITH` między `INSERT` a źródłem. Klasyfikator i tak odrzuca trwały cel.
-- `CREATE TEMP TABLE x AS WITH changed AS (INSERT INTO public.items …) SELECT …` — biblioteka widzi `INSERT` w zapytaniu `AS`. `CREATE TABLE AS` nie jest zdaniem, do którego dokumentacja dołącza modyfikujące `WITH`. Klasyfikator i tak traktuje `public.items` jako mutację.
-- `CREATE TEMP TABLE x AS WITH changed AS (DELETE FROM public.items …) SELECT …` — biblioteka zwraca błąd parsowania. Decyzja `ParseError` jest odmową składni biblioteki, nie dowodem wykonania na serwerze.
+- `INSERT INTO x WITH changed AS (INSERT INTO public.items …) SELECT …` — the library sees both targets. The server grammar does not place `WITH` between `INSERT` and the source. The classifier rejects the persistent target anyway.
+- `CREATE TEMP TABLE x AS WITH changed AS (INSERT INTO public.items …) SELECT …` — the library sees the `INSERT` in the `AS` query. `CREATE TABLE AS` is not a statement to which the documentation attaches a modifying `WITH`. The classifier treats `public.items` as a mutation anyway.
+- `CREATE TEMP TABLE x AS WITH changed AS (DELETE FROM public.items …) SELECT …` — the library returns a parse error. The `ParseError` decision is a rejection of the library's syntax, not evidence of execution on the server.
 
-Kształt zgodny z dokumentacją serwera, `WITH changed AS (INSERT INTO public.items …) SELECT …` albo `WITH changed AS (…) INSERT INTO …`, pozostaje zwykłą mutacją, gdy cel nie jest sesyjnie lokalny. Odmowa tego kształtu była prawdziwa już przed tą polityką i nie jest „potwierdzonym exploitem S4”.
+A shape conforming to the server documentation, `WITH changed AS (INSERT INTO public.items …) SELECT …` or `WITH changed AS (…) INSERT INTO …`, remains an ordinary mutation when the target is not session-local. Rejecting that shape was already correct before this policy and is not a "confirmed S4 exploit".
 
-Testy offline mają nazywać pierwsze dwa kształty składnią przyjętą przez bibliotekę i nie twierdzić, że serwer je wykonał. Testów funkcji i tabel tymczasowych na bazie ta zmiana nie wykonuje. Nie wolno dopisywać syntetycznego wyniku takiego przebiegu.
+The offline tests must call the first two shapes syntax accepted by the library and must not claim the server executed them. This change performs no tests of functions and temporary tables against a database. Appending a synthetic result for such a run is forbidden.

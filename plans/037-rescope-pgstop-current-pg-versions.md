@@ -1,62 +1,62 @@
-# Plan 037: Potwierdź kształty pgstop i przygotuj fixture możliwości runtime
+# Plan 037: Confirm the pgstop shapes and prepare a runtime capability fixture
 
 > **REJECTED 2026-10-11** — `pgstop` will not be built. `query` can already read `pg_stat_statements`; a ranked example query in the agent docs (plan 029) covers the need. Kept for history; do not execute.
 
-> Wykonawca: przeczytaj kontrakt i implementation plan 014. Ten plan tworzy dokumentację i fixture specyfikujące przyszłe testy; nie wdraża pgstop. Drift sprawdź przez `git diff --stat 729d88f..HEAD -- plans/014-pg-statements-contract.md plans/014-pg-statements-implementation.md docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md docs/superpowers/specs/2026-09-10-postgres-engine-design.md`. Przeanalizuj zmiany i dostosuj wskazówki. Zatrzymaj tylko krok z rzeczywistą nierozwiązaną sprzecznością zachowania.
+> Implementer: read the 014 contract and implementation plan. This plan produces documentation and fixtures that specify future tests; it does not implement pgstop. Check drift with `git diff --stat 729d88f..HEAD -- plans/014-pg-statements-contract.md plans/014-pg-statements-implementation.md docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md docs/superpowers/specs/2026-09-10-postgres-engine-design.md`. Analyze the changes and adapt the guidance. Stop only on a step with a genuine unresolved behavioral conflict.
 
 ## Status
 
 - **Priority**: P2
 - **Effort**: S–M
 - **Risk**: LOW
-- **Status**: PLANNED; aktualizacja projektu 2026-10-11 nie oznacza wykonania badań PG17/18.
-- **Depends on**: kontrakt 014; plan 036 daje środowisko live proof, nie listę wersji wymaganych do dopuszczenia runtime.
+- **Status**: PLANNED; the 2026-10-11 project update does not mean PG17/18 research was performed.
+- **Depends on**: contract 014; plan 036 provides a live-proof environment, not the list of versions required to admit runtime.
 - **Category**: direction/tests
 - **Planned at**: `729d88f`, 2026-10-11
 
-## Problem i wynik
+## Problem and outcome
 
-Wcześniejszy projekt dopuszczał jedynie dokładne pary PG14+1.9 i PG15/16+1.10. To utrwalało ręczną listę numerów jako blokadę poprawnej diagnostyki. Kontrakt 014 teraz wymaga runtime probe nazw/typów i jawnej projekcji, więc nieznana wersja z kompatybilnym kształtem jest obsługiwana. Ten plan potwierdza wymagane minimum, opcjonalne pola oraz fixture PG17/18 na źródłach pierwotnych. Numery wersji służą pokryciu testów; nie wyłączają poprawnego kształtu.
+The earlier design admitted only the exact pairs PG14+1.9 and PG15/16+1.10. That entrenched a manual list of numbers as a block on correct diagnostics. Contract 014 now requires a runtime probe of names/types and an explicit projection, so an unknown version with a compatible shape is supported. This plan confirms the required minimum, the optional fields and the PG17/18 fixture from primary sources. Version numbers serve test coverage; they do not exclude a correct shape.
 
-## Stan i zakres
+## State and scope
 
-`plans/014-pg-statements-contract.md` ma historyczną macierz PG14/15/16 oraz nowy normatywny krok 6 runtime probe. `plans/014-pg-statements-implementation.md` wymaga fixture F14/F15/F17/F18/F-new/F-missing/F-type/F-optional/F-schema. Nie ma jeszcze product code PgStatementTop. `scripts/setup-local-postgres.ps1` używa postgres:16. Nie zmieniaj setupu w tym zadaniu dokumentacyjnym.
+`plans/014-pg-statements-contract.md` has a historical PG14/15/16 matrix plus the new normative step 6 runtime probe. `plans/014-pg-statements-implementation.md` requires fixtures F14/F15/F17/F18/F-new/F-missing/F-type/F-optional/F-schema. There is no PgStatementTop product code yet. `scripts/setup-local-postgres.ps1` uses postgres:16. Do not change the setup in this documentation task.
 
-W zakresie: obydwa dokumenty 014, `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, jedna adnotacja decyzji w `docs/superpowers/specs/2026-09-10-postgres-engine-design.md`, indeks. Poza zakresem: kod pgstop, skrypty DB, delta, reset, instalacja extension, zmiany GUC, profile i hasła użytkownika. Pracuj w izolowanym worktree, commity docs(037), bez push.
+In scope: both 014 documents, `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, one decision annotation in `docs/superpowers/specs/2026-09-10-postgres-engine-design.md`, the index. Out of scope: pgstop code, DB scripts, delta, reset, extension installation, GUC changes, profiles and user passwords. Work in an isolated worktree, commit as docs(037), no push.
 
-## Kroki
+## Steps
 
-### 1. Źródła PG17/18
+### 1. PG17/18 sources
 
-Otwórz oficjalne strony `https://www.postgresql.org/docs/17/pgstatstatements.html` i `https://www.postgresql.org/docs/18/pgstatstatements.html` oraz katalogi systemowe opisujące namespace, kolumny/typy i własność obiektów rozszerzenia. Uzupełnij macierz 014 o PG17/18; każda faktograficzna komórka ma źródło/wersję strony albo UNPROVEN z warunkiem. Rozdziel extversion od server_version. Nie zgaduj nazw ani semantyki czasów I/O.
+Open the official pages `https://www.postgresql.org/docs/17/pgstatstatements.html` and `https://www.postgresql.org/docs/18/pgstatstatements.html`, plus the system catalogs describing the namespace, columns/types and ownership of the extension objects. Extend the 014 matrix with PG17/18; every factual cell has a source/page version or UNPROVEN with a condition. Separate extversion from server_version. Do not guess names or the semantics of I/O timings.
 
-**Weryfikacja:** `git diff --check` → exit 0; każda nowa komórka ma URL albo jawne UNPROVEN.
+**Verification:** `git diff --check` → exit 0; every new cell has a URL or an explicit UNPROVEN.
 
-### 2. Descriptor możliwości i jawne query
+### 2. Capability descriptor and explicit query
 
-Potwierdź wymagane typy kroku 6 kontraktu i katalogowy sposób identyfikacji obiektu należącego do rozszerzenia. Opisz jawny SQL probe i jawne projekcje w implementation plan; namespace cytowany helperem, nazwy metryk z wewnętrznej listy, brak search_path/SELECT *. Kolumny opcjonalne nie są warunkiem sukcesu. Zmianę nazwy I/O odwzoruj wyłącznie po źródłowym potwierdzeniu semantyki; gdy znaczenie się różni, pozostaw unavailable albo zaprojektuj osobne pole z uzasadnieniem. Nie sumuj odmiennych zakresów I/O jako tej samej metryki.
+Confirm the types required by step 6 of the contract and the catalog way of identifying the object that belongs to the extension. Describe the explicit SQL probe and the explicit projections in the implementation plan; namespace quoted with a helper, metric names from the internal list, no search_path/SELECT *. Optional columns are not a success condition. Map an I/O name change only after source confirmation of the semantics; when the meaning differs, keep unavailable or design a separate field with justification. Do not sum different I/O scopes as the same metric.
 
-**Weryfikacja:** `git diff --check` → exit 0; wszystkie projekcje mają jawne kolumny, żaden zapis nie odrzuca wyłącznie nieznanej pary wersji.
+**Verification:** `git diff --check` → exit 0; all projections have explicit columns, and no entry rejects solely an unknown version pair.
 
-### 3. Fixture i live proof
+### 3. Fixture and live proof
 
-W tabeli implementation plan opisz fixture kształtów PG14/15/16/17/18, nieznanych wersji z kompatybilnym minimum, braku/zmiany typu wymaganej kolumny, opcjonalnego pola unavailable, extra kolumn, namespace z cudzysłowem i fałszywego obiektu na search_path. Oczekiwane: zgodne minimum → ranking; niezgodne minimum → exit 5 przed query rankingowym; opcjonalne brak → null/unavailable z przyczyną. Wersja sama nie tworzy innej ścieżki. Fixture nie jest live proof.
+In the implementation plan table describe fixtures for the PG14/15/16/17/18 shapes, unknown versions with a compatible minimum, a missing/changed type of a required column, an optional unavailable field, extra columns, a quoted namespace and a false object on search_path. Expected: matching minimum → ranking; mismatched minimum → exit 5 before the ranking query; optional missing → null/unavailable with a reason. The version alone creates no other path. A fixture is not a live proof.
 
-Zapisz sposób użycia izolowanej ścieżki 036 dla PG17 i PG18 z pg_stat_statements. Przy wykonaniu live wymagany osobny ograniczony cel/autoryzacja zgodnie z kontraktem; nie wybieraj profilu użytkownika. Brak środowiska jednej wersji zostaw jako nieprzeprowadzony dowód; nie przywracaj przez to runtime allowlisty. Live sprawdza faktycznie obecne typy, discovery/quoting, prosty ranking i ograniczoną rolę. Reset/delta nie są zadaniem v1.
+Record how to use the isolated 036 environment for PG17 and PG18 with pg_stat_statements. A live run requires a separate restricted target/authorization per the contract; do not pick a user profile. Leave a missing environment for one version as evidence not gathered; do not restore a runtime allowlist because of it. Live checks the actually present types, discovery/quoting, a simple ranking and a restricted role. Reset/delta are not part of v1.
 
-**Weryfikacja:** `git diff --check` → exit 0; wszystkie wyżej wymienione klasy mają wejście/oczekiwany wynik, status live jest jawny.
+**Verification:** `git diff --check` → exit 0; all the classes listed above have an input/expected result, and the live status is explicit.
 
-### 4. Uzgodnij specyfikacje
+### 4. Reconcile the specifications
 
-Zastąp w szkicu postgres-statement-diagnostics normatywne delta/allowlist wymagania skumulowanym v1 i runtime probe według 014. Future delta pozostaje odłożona; bez funkcji która zawsze daje unknown/incomparable. W engine-design przy non-goal pg_stat_statements dodaj adnotację: adopted as plan 014, feature still PLANNED. Zaktualizuj indeks z dowodem projektu, bez twierdzenia o wdrożeniu.
+In the postgres-statement-diagnostics draft, replace the normative delta/allowlist requirements with the cumulative v1 and the runtime probe per 014. Future delta remains deferred; no function that always yields unknown/incomparable. In engine-design, next to the pg_stat_statements non-goal add an annotation: adopted as plan 014, feature still PLANNED. Update the index with the project evidence, without a claim of implementation.
 
-**Weryfikacja:** `git diff --check` → exit 0; `Test-Path` każdej cytowanej lokalnej ścieżki → True; `git diff --stat` mieści się w zakresie. Testy aplikacji nie są potrzebne dla dokumentów.
+**Verification:** `git diff --check` → exit 0; `Test-Path` of every cited local path → True; `git diff --stat` stays within scope. Application tests are not needed for documents.
 
-## Done i STOP
+## Done and STOP
 
-- [ ] PG17/18 mają źródłowe komórki lub oznaczone brakujące dowody.
-- [ ] Descriptor/probe, wymagane/optional typy i bezpieczne kwalifikowanie obiektu są wykonalne i zgodne z kontraktem 014.
-- [ ] Fixture obejmują nieznaną kompatybilną wersję oraz błędny wymagany shape; numer wersji nie stanowi bramy.
-- [ ] Specyfikacje i indeks uzgodnione, diff check exit 0; brak kodu i uruchomień na DB.
+- [ ] PG17/18 have source-backed cells or marked missing evidence.
+- [ ] The descriptor/probe, required/optional types and safe object qualification are implementable and consistent with contract 014.
+- [ ] The fixtures cover an unknown compatible version and a wrong required shape; the version number is not a gate.
+- [ ] Specifications and index reconciled, diff check exit 0; no code and no DB runs.
 
-Gdy źródło jest niedostępne, zapisz konkretny brak i wykonaj niezależne zadania; bez zmyślonych faktów. Zatrzymaj zależny krok, jeżeli źródła obalają semantykę wymaganej metryki albo bezpieczną identyfikację obiektu i nie da się dopasować tego w zakresie kontraktu. Każdy nowy major może dodać coverage; nie potrzebuje osobnego dokumentacyjnego odblokowania runtime. Reviewer sprawdza znaczenie aliasów I/O i rozdzielenie nieznanego numeru od niezgodnego kształtu.
+When a source is unavailable, record the specific gap and perform the independent tasks; no invented facts. Stop a dependent step if the sources refute the semantics of a required metric or the safe identification of the object and this cannot be reconciled within the contract scope. Each new major may add coverage; it does not need a separate documentation-driven runtime unlocking. The reviewer checks the meaning of I/O aliases and the separation of an unknown number from a mismatched shape.

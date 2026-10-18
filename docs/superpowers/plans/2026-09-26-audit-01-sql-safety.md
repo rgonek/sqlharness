@@ -1,75 +1,75 @@
 # SQL safety audit remediation Implementation Plan
 
-**Status (2026-10-08):** DONE — T1 f75a25d/07bbb0f/0cfd7a4, T2 c900888, T3 044c0c7/bcb9e69/222ca22/bba0a9d, T4 4e31382. Checkboxy poniżej nie były odhaczane w trakcie wykonania.
+**Status (2026-10-08):** DONE — T1 f75a25d/07bbb0f/0cfd7a4, T2 c900888, T3 044c0c7/bcb9e69/222ca22/bba0a9d, T4 4e31382. The checkboxes below were not ticked off during implementation.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Uszczelnić rozpoznawanie trwałych zapisów, redakcję wejścia i kontrolę celu; ustalić wykonalną politykę funkcji PostgreSQL.
+**Goal:** Harden the detection of persistent writes, input redaction and target control; settle a workable policy for PostgreSQL functions.
 
-**Architecture:** Naprawić istniejącą granicę bezpieczeństwa przed większą refaktoryzacją. Core jest autorytetem dla celu i dopuszczalnych efektów SQL; CLI tylko przekazuje żądanie.
+**Architecture:** Fix the existing safety boundary before a larger refactoring. Core is the authority for the target and the permitted SQL effects; the CLI only forwards the request.
 
 **Tech Stack:** .NET 8, ScriptDom, SqlParserCS, Npgsql, xUnit.
 
-**Spec:** [audyt S1–S4, S6 i duplikacja targetu](../specs/2026-09-26-project-audit.md), [zasady programu](2026-09-26-audit-roadmap.md).
+**Spec:** [audit S1–S4, S6 and target duplication](../specs/2026-09-26-project-audit.md), [program rules](2026-09-26-audit-roadmap.md).
 
 ## Global Constraints
 
-- Obowiązują wspólne zasady roadmapy; oba silniki pozostają wspierane.
-- Bez niejawnej zgody na mutacje, trwałego DDL i dowolnego wykonywania funkcji uznanego za read-only wyłącznie po kształcie SELECT.
-- S4 jest luką pokrycia AST do sprawdzenia, nie potwierdzoną podatnością serwera.
-- Naprawy OUTPUT i redakcji nie czekają na przebudowę całego modułu.
+- The shared roadmap rules apply; both engines remain supported.
+- No implicit consent for mutations, persistent DDL, or arbitrary execution of a function considered read-only solely on the basis of its SELECT shape.
+- S4 is an AST coverage gap to investigate, not a confirmed server vulnerability.
+- The OUTPUT and redaction fixes do not wait for a rebuild of the whole module.
 
 ## Review Focus
 
-- Alias o nazwie #temp wskazujący trwałą tabelę: T1.
-- Drugi cel zapisu w OUTPUT i różne bazy: T1.
-- Błędna wartość z InnerException, częściowo poprawna lista parametrów: T2.
-- Funkcja ukryta w widoku, operatorze lub źródle tabelowym: T3.
-- Bezpośrednie wywołanie API Core omijające walidację CLI: T4.
+- An alias named #temp pointing at a persistent table: T1.
+- A second write target in OUTPUT and cross-database targets: T1.
+- An invalid value from InnerException with a partially correct parameter list: T2.
+- A function hidden in a view, an operator or a table source: T3.
+- A direct call to the Core API bypassing CLI validation: T4.
 
-## T1 — wszystkie cele zapisu SQL Server
+## T1 — all SQL Server write targets
 
 **Files:** `src/SqlHarness.Core/SqlSafety.cs`; `tests/SqlHarness.Tests/SqlSafetyTests.cs`, `QueryTests.cs`, `MeasureTests.cs`, `CompareTests.cs`.
 
-**Interfaces:** zachować `SqlSafetyClassifier.Classify(...) -> SqlSafetyDecision`; `HasMutation` ma opisywać cały batch, a `HasSessionLocalWork` rzeczywiste obiekty, nie nazwy aliasów.
+**Interfaces:** keep `SqlSafetyClassifier.Classify(...) -> SqlSafetyDecision`; `HasMutation` must describe the entire batch, and `HasSessionLocalWork` the actual objects, not alias names.
 
-- [ ] Dodać testy: `TempInsertWithPersistentOutputRequiresApproval`, `HashAliasOfPersistentTableRequiresApproval`, `AliasOfActualTempRemainsLocal`. Sprawdzić UPDATE i DELETE, quoted alias, alias niejednoznaczny oraz INSERT/UPDATE/DELETE/MERGE z OUTPUT INTO.
-- [ ] Uruchomić `dotnet test --filter 'FullyQualifiedName~SqlSafetyTests'`; nowe przypadki trwałego zapisu mają ujawnić obecny błąd.
-- [ ] Rozwiązywać cel względem FROM/aliasów i zbierać wszystkie cele zapisu. Niejednoznaczny cel odrzucać. Trwały OUTPUT wymaga zgody w query; w setup/measure/compare pozostaje niedozwolony. Cross-database pozostaje niedozwolone także ze zgodą.
-- [ ] Sprawdzić pełną ścieżkę modułu: odmowa przed ConnectAsync, brak artefaktu sukcesu, poprawny exit 2. Zgoda i dokładna nazwa bazy dopuszczają tylko kontrakt dozwolonego DML.
-- [ ] Uruchomić testy SqlSafetyTests, QueryTests, MeasureTests, CompareTests; zapisać wyniki i lokalny commit `fix: classify all SQL Server write targets`.
+- [ ] Add tests: `TempInsertWithPersistentOutputRequiresApproval`, `HashAliasOfPersistentTableRequiresApproval`, `AliasOfActualTempRemainsLocal`. Check UPDATE and DELETE, a quoted alias, an ambiguous alias, and INSERT/UPDATE/DELETE/MERGE with OUTPUT INTO.
+- [ ] Run `dotnet test --filter 'FullyQualifiedName~SqlSafetyTests'`; the new persistent write cases must expose the current bug.
+- [ ] Resolve the target against FROM/aliases and collect all write targets. Reject an ambiguous target. Persistent OUTPUT requires consent in query; in setup/measure/compare it stays disallowed. Cross-database stays disallowed even with consent.
+- [ ] Check the full module path: rejection before ConnectAsync, no success artifact, correct exit 2. Consent and an exact database name admit only the allowed DML contract.
+- [ ] Run the SqlSafetyTests, QueryTests, MeasureTests and CompareTests; record the results and make a local commit `fix: classify all SQL Server write targets`.
 
-## T2 — redakcja przed parsowaniem
+## T2 — redaction before parsing
 
 **Files:** `src/SqlHarness.Core/SqlSafety.cs`, `SecretRedactor.cs`, `SqlHarnessModule.cs`, `MeasureParameterSets.cs`; `tests/SqlHarness.Tests/SecretRedactorTests.cs`, `SqlParameterParserTests.cs`, `QueryTests.cs`, `WatchTests.cs`, `SnapshotTests.cs`, `CompareTests.cs`, `MeasureTests.cs`.
 
-**Interfaces:** zachować `SecretRedactor.Redact(Exception, IReadOnlyList<string>) -> string`; bezpieczny błąd walidacji nie może odziedziczyć wartości z wyjątku wewnętrznego.
+**Interfaces:** keep `SecretRedactor.Redact(Exception, IReadOnlyList<string>) -> string`; a safe validation error must not inherit a value from the inner exception.
 
-- [ ] Dodać testy z `n:int=private-audit-value`: wynik błędu żadnej z pięciu komend nie zawiera wartości ani pełnej deklaracji; nazwa parametru i oczekiwany typ pozostają użyteczne.
-- [ ] Rozszerzyć przypadki o decimal, datę, GUID, Base64, Unicode, wartości nakładające się i błąd drugiego parametru po poprawnym pierwszym. Nie używać rzeczywistych sekretów.
-- [ ] Oddzielić wyjątki diagnostyczne od komunikatów publicznych i zebrać wartości do redakcji przed konwersją; ujednolicić zwykłe parametry, matrix i param-set. Nie publikować inner exception jako tekstu użytkownika.
-- [ ] Uruchomić wymienione klasy testów filtrem `FullyQualifiedName~...`; sprawdzić stdout i zapisane raporty/artefakty błędów.
-- [ ] Zapisać wynik oraz lokalny commit `fix: redact invalid parameter values before parsing`.
+- [ ] Add tests with `n:int=private-audit-value`: the error result of none of the five commands contains the value or the full declaration; the parameter name and expected type remain usable.
+- [ ] Extend the cases with decimal, date, GUID, Base64, Unicode, overlapping values and an error on the second parameter after a correct first one. Do not use real secrets.
+- [ ] Separate diagnostic exceptions from public messages and gather the values for redaction before conversion; unify plain parameters, matrix and param-set. Do not publish the inner exception as user-facing text.
+- [ ] Run the listed test classes with the `FullyQualifiedName~...` filter; check stdout and the stored error reports/artifacts.
+- [ ] Record the result and make a local commit `fix: redact invalid parameter values before parsing`.
 
-## T3 — model zagrożeń i polityka PostgreSQL
+## T3 — threat model and PostgreSQL policy
 
-**Files:** `docs/superpowers/specs/2026-09-26-postgres-safety-policy.md` (nowy); `src/SqlHarness.Core/Postgres/PostgresSafetyClassifier.cs`, `NpgsqlSessionFactory.cs`; `tests/SqlHarness.Tests/Postgres/PostgresSafetyTests.cs`; nowy `tests/SqlHarness.Tests/Integration/PostgresSafetyIntegrationTests.cs` po ustaleniu polityki.
+**Files:** `docs/superpowers/specs/2026-09-26-postgres-safety-policy.md` (nowy); `src/SqlHarness.Core/Postgres/PostgresSafetyClassifier.cs`, `NpgsqlSessionFactory.cs`; `tests/SqlHarness.Tests/Postgres/PostgresSafetyTests.cs`; new `tests/SqlHarness.Tests/Integration/PostgresSafetyIntegrationTests.cs` once the policy is settled.
 
-**Interfaces:** najpierw specyfikacja polityki; nie dodawać pustych interfejsów. Spec ma określić zachowanie Classify i zakres dozwolonego wykonania sesji dla Query oraz CompareSetup.
+**Interfaces:** policy specification first; do not add empty interfaces. The spec must define the Classify behavior and the scope of permitted session execution for Query and CompareSetup.
 
-- [ ] Zapisać threat model: agent z dostępem do CLI, istniejące funkcje/widoki/operator overloads, uprawnienia konta, search_path i rozwiązywanie nazw. Rozdzielić brak trwałego DML, brak efektów administracyjnych i brak dostępu zewnętrznego.
-- [ ] Zdefiniować macierz: set_config, pg_cancel_backend, pg_terminate_backend, advisory locks, sequence functions, funkcja VOLATILE wykonująca DML, SECURITY DEFINER, funkcja w widoku i funkcja o nazwie lo_ bez efektów. Każda pozycja ma jawny dozwolony efekt, sposób egzekwowania i komunikat odmowy.
-- [ ] Porównać pełną analizę AST, zaufane funkcje po rozstrzygnięciu przeciążeń, minimalne uprawnienia i transakcje read-only. Nie opierać obietnicy bezpieczeństwa na samej denyliście ani na samej transakcji. Nie zmieniać ról/uprawnień bazy automatycznie.
-- [ ] Dodać offline testy rekursji AST z CTE, INSERT source i CTAS; odróżnić składnię akceptowaną tylko przez bibliotekę od poprawnej serwerowo. Nie oznaczać S4 jako exploitu bez poprawnego serwerowo przykładu.
-- [ ] Uzupełnić spec o wybraną politykę, kompatybilność setup/temp i wpływ na liczbę wywołań. Dopiero wtedy rozpisać/wykonać implementację; brak rozstrzygniętej granicy zaufania blokuje deklarację „read-only gwarantowane”.
-- [ ] Na autoryzowanej jednorazowej bazie wykonać testy funkcji i temp, w tym brak skutku dla odrzuconego przypadku. Zachować wyłącznie syntetyczne dowody. Lokalny commit specyfikacji oddzielić od commitu wdrożenia polityki.
+- [ ] Record the threat model: an agent with CLI access, existing functions/views/operator overloads, account permissions, search_path and name resolution. Separate the absence of persistent DML, the absence of administrative effects and the absence of external access.
+- [ ] Define a matrix: set_config, pg_cancel_backend, pg_terminate_backend, advisory locks, sequence functions, a VOLATILE function performing DML, SECURITY DEFINER, a function in a view and a function named lo_ without effects. Each entry has an explicit allowed effect, an enforcement mechanism and a rejection message.
+- [ ] Compare full AST analysis, trusted functions after overload resolution, minimal privileges and read-only transactions. Do not base the safety promise on the denylist alone nor on the transaction alone. Do not change database roles/permissions automatically.
+- [ ] Add offline tests of AST recursion with CTE, INSERT source and CTAS; distinguish syntax accepted only by the library from syntax that is valid server-side. Do not label S4 as an exploit without a server-valid example.
+- [ ] Complete the spec with the chosen policy, setup/temp compatibility and the effect on call counts. Only then spell out/implement the implementation; an unresolved trust boundary blocks the declaration "read-only guaranteed".
+- [ ] On an authorized one-off database run the function and temp tests, including no effect for a rejected case. Keep only synthetic evidence. Separate the local specification commit from the policy implementation commit.
 
-## T4 — identyczne zasady targetu w Core i CLI
+## T4 — identical target rules in Core and CLI
 
 **Files:** `src/SqlHarness.Core/Targets/TargetResolver.cs`, `Contracts.cs`; `src/SqlHarness.Cli/Commands/SqlHarnessCommands.cs`; `tests/SqlHarness.Tests/Targets/TargetResolverTests.cs`, `Cli/CommandTests.cs`.
 
-**Interfaces:** `TargetResolver.Resolve(SqlTargetRequest, IReadOnlyDictionary<string, TargetProfile>) -> ResolvedTarget` pozostaje źródłem prawdy.
+**Interfaces:** `TargetResolver.Resolve(SqlTargetRequest, IReadOnlyDictionary<string, TargetProfile>) -> ResolvedTarget` remains the source of truth.
 
-- [ ] Dodać test Core: profil + Engine kończy się safety rejection, także dla nieznanego silnika; bez połączenia. Pokryć profil + direct auth, direct + vars i brak pełnego celu.
-- [ ] Uwzględnić Engine w wykrywaniu opcji direct. Nie ignorować przekazanej wartości. CLI może walidować format, ale nie ustanawia innych zasad bezpieczeństwa.
-- [ ] Uruchomić TargetResolverTests i Cli.CommandTests; uzupełnić AGENTS.md/README tylko o faktycznie wdrożone zachowanie, zapisać lokalny commit.
+- [ ] Add a Core test: profile + Engine ends in a safety rejection, also for an unknown engine; without a connection. Cover profile + direct auth, direct + vars and an incomplete target.
+- [ ] Take Engine into account when detecting the direct option. Do not ignore the passed value. The CLI may validate the format, but must not establish other safety rules.
+- [ ] Run TargetResolverTests and Cli.CommandTests; update AGENTS.md/README only with actually implemented behavior, and record a local commit.

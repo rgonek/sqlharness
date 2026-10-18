@@ -1,16 +1,16 @@
-# Kolejka planów SQLHarness
+# SQLHarness plan queue
 
-Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zgodą na implementację, publikację ani live DB. Każdy zlecony plan wykonujemy w całości; pierwszeństwo mają prace ogólne i SQL Server przed wyłącznie PostgreSQL.
+Read the selected plan and its spec before executing. A queue entry is not approval for implementation, publication or a live DB. We execute each assigned plan in full; general work and SQL Server take priority over PostgreSQL-only work.
 
-## W wykonaniu
+## In progress
 
-| Plan | Zakres | Zależności | Status |
+| Plan | Scope | Dependencies | Status |
 |---|---|---|---|
-| [086](086-windows-gate-speedup.md) | Skrócenie bramki Windows: restore wbudowany w build, `ui-check` równolegle z buildem, równoległe projekty testowe, szybsze seedowanie journalu w testach czytających, diagnozowalny flaky housekeeping, usunięcie testu atrybutów xunit | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
+| [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 
-## Oczekujące
+## Pending
 
-| Plan | Zakres | Zależności | Status |
+| Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [036](036-live-database-ci-lane.md) | Direction: opt-in CI lane against throwaway PG/SQL Server containers | 016 (028 for pins) | TODO |
 | [077](077-agent-sql-optimization-evidence.md) | Lean MCP JSON and actionable SQL optimization evidence; portable real-MCP fixture requests and paired agent trials verify the complete workflow | 055–061/065–067/076 DONE; coordinate 063/073 | IN PROGRESS — implementation merged locally into main (`4bd57e4`); actual-agent acceptance unverified (nine provider HTTP 402 errors) |
@@ -23,8 +23,8 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 
 Plans 063, 070, 071, 072, 073, 074, 076, 079, 080, 081, and 087 are DONE; see their evidence in [history](history.md). Plan 081 is locally integrated into `main` at `e88c7fd`; its integrated gate passed on the exact product tree before commit, and all task, security, whole-branch, and integration reviews are approved ([evidence](081-verification-evidence.md)). Plan 071 uses Monaco behind a provider-neutral SQL editor contract, with direct Monaco API lifecycle management for the diff widget. Plan 080's scoped re-review approved all findings, and local integration completed at `42a1e365` with the verified product unchanged; the redundant gate was stopped at the owner's request. Coordinate work that changes shared MCP, journal, and dashboard contracts through the selected plan.
 
-## Historia
+## History
 
-Dowody zakończonych planów, dawne kolejki, odrzucone propozycje i decyzje z audytów są w [historii](history.md). Czytaj ją przy badaniu wcześniejszych decyzji lub dowodów, nie przed każdym zadaniem.
+Evidence from completed plans, former queues, rejected proposals and audit decisions are in the [history](history.md). Read it when investigating earlier decisions or evidence, not before every task.
 
-Gdy plan zostanie zakończony, uaktualnij jego status, przenieś wpis z kolejki do historii i zachowaj odsyłacz do dowodów.
+When a plan is completed, update its status, move the entry from the queue to the history and keep the link to the evidence.

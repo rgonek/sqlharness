@@ -1,44 +1,44 @@
-# Pomiar zainstalowanego CLI i buildu repo
+# Measurement of the installed CLI and the repository build
 
-Status: ten plik jest diagnozą 015/T1–T3. Instalacji nie wykonano. Kodu nie zmieniano.
+Status: this file is the 015/T1–T3 diagnosis. No installation was performed. No code was changed.
 
 ## 015/T1
 
-Pomiar jest z 2026-10-02 na this Windows host. Baza planu, nazwana w `plans/015-installation-alignment.md`, to `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`. Ten commit jest w repozytorium. `git merge-base --is-ancestor` względem zmierzonego HEAD zakończył się kodem 0, więc baza jest przodkiem, nie tym HEAD. `git rev-parse HEAD` przed tym dokumentem zwrócił `ece0d7fcaef90325d20865db639c12b47bc2de4e`. `git status --short` był wtedy pusty. To nie jest pomiar na bazie z 2026-09-29.
+The measurement is from 2026-10-02 on this Windows host. The plan's base, named in `plans/015-installation-alignment.md`, is `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`. That commit is in the repository. `git merge-base --is-ancestor` relative to the measured HEAD exited with code 0, so the base is an ancestor, not that HEAD. `git rev-parse HEAD` before this document returned `ece0d7fcaef90325d20865db639c12b47bc2de4e`. `git status --short` was empty at that time. This is not a measurement on the base from 2026-09-29.
 
-Nie czytano `targets.json`, profili, haseł, connection stringów ani wartości zmiennych środowiska. Nie uruchamiano `dotnet test`. Nie publikowano, nie kopiowano i nie zastępowano binarki. Nie dopisano komend, stubów ani capabilities. Ten krok nie zapisuje procedury aktualizacji.
+No `targets.json`, profiles, passwords, connection strings or environment variable values were read. `dotnet test` was not run. Nothing was published, copied or used to replace the binary. No commands, stubs or capabilities were added. This step does not record an update procedure.
 
-### Polecenia
+### Commands
 
-| Polecenie | Kod | Stdout | Stderr |
+| Command | Code | Stdout | Stderr |
 |---|---|---|---|
-| `Get-Command sqlharness -All` | brak kodu procesu; cmdlet nie zgłosił wyjątku | jeden obiekt | brak strumienia |
+| `Get-Command sqlharness -All` | no process code; the cmdlet reported no exception | one object | no stream |
 | `sqlharness --help` | 0 | 376 B | 0 B |
 | `sqlharness --version` | 0 | 7 B | 0 B |
 | `dotnet run --project src/SqlHarness.Cli -- --help` | 0 | 1971 B | 0 B |
 | `dotnet run --project src/SqlHarness.Cli -- capabilities --json` | 0 | 6956 B | 0 B |
 
-Dwa wywołania `sqlharness` szły przez `cmd.exe /d /c` w sesji tego hosta. To samo `--help` i to samo `--version` na ścieżce z `Get-Command` dały ten sam kod 0 i ten sam SHA-256 stdout. Stderr też miał 0 B. Katalog roboczy `dotnet run` to `D:\Dev\sqlharness\.worktrees\plan-015-installation-alignment`. W żadnym z dwóch strumieni `dotnet run` nie było logu MSBuild. Stdout helpa repo zaczyna się od `USAGE:`. Stdout capabilities zaczyna się od `{`.
+The two `sqlharness` invocations went through `cmd.exe /d /c` in this host's session. The same `--help` and the same `--version` on the path from `Get-Command` gave the same code 0 and the same stdout SHA-256. Stderr was also 0 B. The `dotnet run` working directory is `D:\Dev\sqlharness\.worktrees\plan-015-installation-alignment`. Neither of the two `dotnet run` streams contained an MSBuild log. The repository help stdout begins with `USAGE:`. The capabilities stdout begins with `{`.
 
 ### Get-Command
 
-Jeden wynik. `CommandType` = `Application`. `Name` = `sqlharness.exe`. `Source` i `Path` = `C:\Users\rgone\.local\bin\sqlharness.exe`. `Definition` jest tą samą ścieżką. `Version` obiektu polecenia = `1.0.0.0`. Nie było drugiej aplikacji, funkcji ani aliasu.
+One result. `CommandType` = `Application`. `Name` = `sqlharness.exe`. `Source` and `Path` = `C:\Users\rgone\.local\bin\sqlharness.exe`. `Definition` is the same path. The command object's `Version` = `1.0.0.0`. There was no second application, function or alias.
 
-`1.0.0.0` jest właściwością obiektu `Get-Command`. Nie jest tekstem stdout `--version`.
+`1.0.0.0` is a property of the `Get-Command` object. It is not the `--version` stdout text.
 
-### Zainstalowane --version
+### Installed --version
 
-Stdout ma 7 bajtów: znaki `1.0.0` i końcówka CRLF. SHA-256 `4ca8bbd3c595ee306226c6996b32b8d47a900217c55a7ed0cfc868ee444f34f1`. Tekst wersji:
+Stdout has 7 bytes: the characters `1.0.0` and a CRLF terminator. SHA-256 `4ca8bbd3c595ee306226c6996b32b8d47a900217c55a7ed0cfc868ee444f34f1`. The version text:
 
 ```text
 1.0.0
 ```
 
-Help tej binarki reklamuje `-v, --version`. Uruchomione `--version` nie wypisało helpa. Wypisało `1.0.0`.
+The help of that binary advertises `-v, --version`. The `--version` run did not print help. It printed `1.0.0`.
 
-### Zainstalowane --help
+### Installed --help
 
-Stdout ma 376 bajtów, końcówki CRLF, SHA-256 `da240f1cf6099b26b7736c648b440497379501f8d99a5f143ae4461eccb5512c`. Linie komend są dopełnione spacjami i nie mają opisów. W bloku każda linia stdout jest między `|`. Spacje przed zamykającym `|` należą do stdout. Znak `|` do stdout nie należy. Plik kończy się CRLF po linii `snapshot`; osobnej pustej linii za nią nie ma.
+Stdout has 376 bytes, CRLF terminators, SHA-256 `da240f1cf6099b26b7736c648b440497379501f8d99a5f143ae4461eccb5512c`. The command lines are space-padded and have no descriptions. In the block, each stdout line is between `|`. The spaces before the closing `|` belong to stdout. The `|` character itself does not belong to stdout. The file ends with CRLF after the `snapshot` line; there is no separate blank line after it.
 
 ```text
 |USAGE:|
@@ -62,9 +62,9 @@ Stdout ma 376 bajtów, końcówki CRLF, SHA-256 `da240f1cf6099b26b7736c648b44049
 |    snapshot     |
 ```
 
-### Help buildu repo
+### Help of the repository build
 
-Stdout ma 1971 bajtów, końcówki CRLF, SHA-256 `77522d1729b33fc99bb9f58d6f4df1e2c3f3088de1588d957b59dd33e1ab8a1c`. Linie komend i kontynuacje opisów mają po 80 kolumn, łącznie ze spacjami dopełnienia. Blok `USAGE` i `OPTIONS` nie jest dopełniony do 80. Opisy są na tej samej linii co nazwa albo na kontynuacji wciętej dalej niż cztery spacje. Ta sama konwencja `|` co wyżej. Plik kończy się CRLF po linii `mcp`.
+Stdout has 1971 bytes, CRLF terminators, SHA-256 `77522d1729b33fc99bb9f58d6f4df1e2c3f3088de1588d957b59dd33e1ab8a1c`. The command lines and the description continuations are 80 columns wide, including the padding spaces. The `USAGE` and `OPTIONS` block is not padded to 80. The descriptions are on the same line as the name, or on a continuation indented deeper than four spaces. The same `|` convention as above. The file ends with CRLF after the `mcp` line.
 
 ```text
 |USAGE:|
@@ -99,54 +99,54 @@ Stdout ma 1971 bajtów, końcówki CRLF, SHA-256 `77522d1729b33fc99bb9f58d6f4df1
 |    mcp             Model Context Protocol adapter                              |
 ```
 
-Pierwsze 184 bajty obu helpów są równe. Wspólny prefix obejmuje `USAGE`, `OPTIONS`, nagłówek `COMMANDS:` oraz początek linii `query`: cztery spacje, nazwę `query` i osiem spacji, którymi kończy się linia w helpie zainstalowanym. Dalej zainstalowany stdout ma CRLF. Stdout repo zostaje w tej samej linii i dopisuje opis.
+The first 184 bytes of both helps are identical. The common prefix covers `USAGE`, `OPTIONS`, the `COMMANDS:` header and the start of the `query` line: four spaces, the name `query` and the eight spaces that end that line in the installed help. After that, the installed stdout has CRLF. The repository stdout stays on the same line and appends the description.
 
-### Nazwy w helpie
+### Names in the help
 
-Nazwa komendy to pierwszy token linii pod `COMMANDS:`, której wcięcie ma dokładnie cztery spacje. Kontynuacja opisu jest wcięta głębiej i nie jest osobną komendą.
+A command name is the first token of a line under `COMMANDS:` whose indentation is exactly four spaces. A description continuation is indented deeper and is not a separate command.
 
-| Nazwa | Help zainstalowany | Help repo |
+| Name | Installed help | Repository help |
 |---|---|---|
-| query | tak | tak |
-| measure | tak | tak |
-| compare | tak | tak |
-| gain | tak | tak |
-| plan | tak | tak |
-| artifact | nie | tak |
-| schema | tak | tak |
-| ping | tak | tak |
-| counts | tak | tak |
-| space | tak | tak |
-| watch | tak | tak |
-| snapshot | tak | tak |
-| qstop | nie | tak |
-| indexes | nie | tak |
-| capabilities | nie | tak |
-| doctor | nie | tak |
-| validate | nie | tak |
-| mcp | nie | tak |
+| query | yes | yes |
+| measure | yes | yes |
+| compare | yes | yes |
+| gain | yes | yes |
+| plan | yes | yes |
+| artifact | no | yes |
+| schema | yes | yes |
+| ping | yes | yes |
+| counts | yes | yes |
+| space | yes | yes |
+| watch | yes | yes |
+| snapshot | yes | yes |
+| qstop | no | yes |
+| indexes | no | yes |
+| capabilities | no | yes |
+| doctor | no | yes |
+| validate | no | yes |
+| mcp | no | yes |
 
-W obu: `query`, `measure`, `compare`, `gain`, `plan`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`. Tylko w helpie zainstalowanym: żadna. Tylko w helpie repo: `artifact`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate`, `mcp`.
+In both: `query`, `measure`, `compare`, `gain`, `plan`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`. Only in the installed help: none. Only in the repository help: `artifact`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate`, `mcp`.
 
-`capabilities` jest w helpie repo i nie ma jej w helpie zainstalowanym. `validate` tak samo. `mcp` tak samo. Help repo nie wymienia `serve` na tej stronie.
+`capabilities` is in the repository help and is absent from the installed help. `validate` likewise. `mcp` likewise. The repository help does not list `serve` on this page.
 
-Kolejność zainstalowana: `query`, `measure`, `compare`, `gain`, `plan`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`. Kolejność repo: `query`, `measure`, `compare`, `gain`, `plan`, `artifact`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate`, `mcp`.
+Installed order: `query`, `measure`, `compare`, `gain`, `plan`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`. Repository order: `query`, `measure`, `compare`, `gain`, `plan`, `artifact`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate`, `mcp`.
 
-Opcje `-h, --help` i `-v, --version` są w obu helpach. Poza wspólnym prefixem help zainstalowany nie niesie opisów komend. Help repo je niesie.
+The options `-h, --help` and `-v, --version` are in both helps. Outside the common prefix, the installed help carries no command descriptions. The repository help does carry them.
 
 ### capabilities --json
 
-Pola szczytowe: `version` = `1.0.0`, `buildId` = `1.0.0+ece0d7fcaef90325d20865db639c12b47bc2de4e`, `contractVersion` = `1`, oraz `commands`, `engines`, `limits`, `outputModes`, `safetyAnalysis`. W pliku stdout znak `+` jest zapisany jako `\u002B`. Po odczycie JSON sufiks `buildId` jest równy zmierzonemu HEAD.
+Top-level fields: `version` = `1.0.0`, `buildId` = `1.0.0+ece0d7fcaef90325d20865db639c12b47bc2de4e`, `contractVersion` = `1`, plus `commands`, `engines`, `limits`, `outputModes`, `safetyAnalysis`. In the stdout file the `+` character is written as `\u002B`. After reading the JSON, the `buildId` suffix equals the measured HEAD.
 
-Nazwy w `commands`, w tej kolejności: `capabilities`, `doctor`, `validate`, `query`, `measure`, `compare`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`, `qstop`, `indexes`, `plan`, `gain`, `artifact`.
+The names in `commands`, in this order: `capabilities`, `doctor`, `validate`, `query`, `measure`, `compare`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`, `qstop`, `indexes`, `plan`, `gain`, `artifact`.
 
-Silniki: `sqlserver` (`supportsQstop` true, `supportsIndexes` true) i `postgres` (oba false). `outputModes`: `text`, `json`, `json-summary`, `agent`. `safetyAnalysis.analysisKind` = `static-visible-effects`, `analysisContractVersion` = `1`, `hiddenEffectsVerified` = false, `objectAndPermissionStatus` = `unknown`.
+Engines: `sqlserver` (`supportsQstop` true, `supportsIndexes` true) and `postgres` (both false). `outputModes`: `text`, `json`, `json-summary`, `agent`. `safetyAnalysis.analysisKind` = `static-visible-effects`, `analysisContractVersion` = `1`, `hiddenEffectsVerified` = false, `objectAndPermissionStatus` = `unknown`.
 
-Zbiór nazw helpa repo i zbiór `commands` różnią się jedną pozycją. `mcp` jest w helpie repo i nie występuje w tym JSON, także jako podciąg. Żadna nazwa z `commands` nie jest pominięta w helpie repo. `serve` nie występuje w tym JSON.
+The set of repository help names and the `commands` set differ by one item. `mcp` is in the repository help and does not occur in this JSON, also as a substring. No name from `commands` is omitted from the repository help. `serve` does not occur in this JSON.
 
-Tekst `version` równa się tekstowi zainstalowanego `--version` (`1.0.0`). To nie jest tożsamość binarki. Ciała helpów mają inny SHA-256 i inną listę nazw. `buildId` dokleja pełny SHA tego HEAD do tego samego `1.0.0`.
+The `version` text equals the installed `--version` text (`1.0.0`). That is not the identity of the binary. The help bodies have a different SHA-256 and a different name list. `buildId` appends the full SHA of that HEAD to that same `1.0.0`.
 
-To ciało nie zawiera `C:\Users`, `targets.json`, `.sqlharness`, `password`, `Server=`, `User Id` ani `connectionString`. Słowa `profile` i `connection` stoją tylko w opisach komend kontraktu. Ciało jest wklejone w całości. SHA-256 tego stdout to `84dbc47dcd5a4e122ea06117b3946316a242141ba8e4e7545e0e21f34809bef7`, 6956 B, CRLF, końcówka po `}`.
+This body does not contain `C:\Users`, `targets.json`, `.sqlharness`, `password`, `Server=`, `User Id` nor `connectionString`. The words `profile` and `connection` appear only in the descriptions of the contract's commands. The body is pasted in full. The SHA-256 of that stdout is `84dbc47dcd5a4e122ea06117b3946316a242141ba8e4e7545e0e21f34809bef7`, 6956 B, CRLF, terminator after `}`.
 
 ```json
 {
@@ -390,75 +390,75 @@ To ciało nie zawiera `C:\Users`, `targets.json`, `.sqlharness`, `password`, `Se
 }
 ```
 
-### Kontekst historyczny
+### Historical context
 
-To nie jest ten pomiar. Audyt z 2026-09-28 w `plans/2026-09-28-project-audit.md` mówi o helpie pod ścieżką z `Get-Command` i o braku `capabilities`, `validate` oraz `mcp`. Specyfikacja audytu z 2026-09-26 w `docs/superpowers/specs/2026-09-26-project-audit.md` mówi o krótszej liście niż ówczesny HEAD, w tym o braku `qstop` i `indexes`. Bieżącym faktem jest transkrypt powyżej, na HEAD `ece0d7fcaef90325d20865db639c12b47bc2de4e`, nie na `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+This is not that measurement. The audit from 2026-09-28 in `plans/2026-09-28-project-audit.md` talks about the help under the path from `Get-Command` and about the absence of `capabilities`, `validate` and `mcp`. The audit spec from 2026-09-26 in `docs/superpowers/specs/2026-09-26-project-audit.md` talks about a shorter list than the then-current HEAD, including the absence of `qstop` and `indexes`. The current fact is the transcript above, at HEAD `ece0d7fcaef90325d20865db639c12b47bc2de4e`, not at `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 
-Na tym pomiarze rozjazd powierzchni helpa jest. Zainstalowany zestaw nazw jest podzbiorem helpa repo, nie zestawem rozłącznym. Pochodzenie pliku, jego hash i data nie są w tym kroku.
+In this measurement the divergence is on the help surface. The installed name set is a subset of the repository help, not a disjoint set. The provenance of the file, its hash and the date are not in this step.
 
 ### UNPROVEN
 
-- Tekst `dotnet run --project src/SqlHarness.Cli -- --version`. Warunek: uruchomić to polecenie i zapisać stdout. Help repo reklamuje `-v, --version`. To nie jest ten tekst. Tego polecenia nie uruchamiano.
-- Czy zainstalowana binarka przyjmuje `capabilities`, `validate`, `mcp`, `doctor`, `artifact`, `qstop` albo `indexes`. Brak nazwy w `--help` nie jest kodem odmowy. Warunek: uruchomić każdą z tych nazw na ścieżce z `Get-Command` i zapisać kod oraz oba strumienie. Tego nie uruchamiano.
-- Czy `sqlharness -v` wypisuje to samo `1.0.0` co `--version`. Warunek: uruchomić `sqlharness -v` na tej ścieżce. Uruchomiono tylko `--version`.
-- Czy help `mcp` w buildzie repo wymienia `serve`. Warunek: `dotnet run --project src/SqlHarness.Cli -- mcp --help`. Na stronie głównej helpa jest `mcp`, nie ma `serve`.
-- Hash pliku, czas pliku i zasób wersji PE poza właściwością `Version` z `Get-Command`. Warunek: odczyt metadanych tego pliku bez jego zastąpienia. `1.0.0.0` jest tylko tą właściwością.
-- Czy pusty stderr `dotnet run` oznacza brak przebudowy. Warunek: log MSBuild z tego samego polecenia. W przechwyconych strumieniach go nie było.
+- The text of `dotnet run --project src/SqlHarness.Cli -- --version`. Condition: run that command and record stdout. The repository help advertises `-v, --version`. That is not this text. That command was not run.
+- Whether the installed binary accepts `capabilities`, `validate`, `mcp`, `doctor`, `artifact`, `qstop` or `indexes`. The absence of a name in `--help` is not a rejection code. Condition: run each of these names on the path from `Get-Command` and record the code and both streams. They were not run.
+- Whether `sqlharness -v` prints the same `1.0.0` as `--version`. Condition: run `sqlharness -v` on that path. Only `--version` was run.
+- Whether the `mcp` help in the repository build lists `serve`. Condition: `dotnet run --project src/SqlHarness.Cli -- mcp --help`. On the main help page there is `mcp` and no `serve`.
+- The file hash, the file times and the PE version resource apart from the `Version` property from `Get-Command`. Condition: read the metadata of that file without replacing it. `1.0.0.0` is only that property.
+- Whether an empty `dotnet run` stderr means there was no rebuild. Condition: an MSBuild log from the same command. It was not in the captured streams.
 
 ## 015/T2
 
-Odczyt jest z 2026-10-02T19:41:48.1799751+02:00 na this Windows host. Rozjazd z `## 015/T1` nie zniknął. Oznaczenia RESOLVED EXTERNALLY nie ma. Nie było reinstalacji. Nie publikowano, nie kopiowano, nie przenoszono i nie zastępowano binarki. Nie pisano konfiguracji użytkownika. Nie czytano `targets.json`, profili, haseł, connection stringów ani wartości zmiennych środowiska. Nie uruchamiano `dotnet test`, `dotnet run`, `--help` ani `--version`. Pliku nie uruchamiano. Ten krok nie zapisuje procedury aktualizacji.
+The read is from 2026-10-02T19:41:48.1799751+02:00 on this Windows host. The divergence from `## 015/T1` did not disappear. There is no RESOLVED EXTERNALLY marking. There was no reinstallation. Nothing was published, copied, moved or used to replace the binary. No user configuration was written. No `targets.json`, profiles, passwords, connection strings or environment variable values were read. Neither `dotnet test`, `dotnet run`, `--help` nor `--version` was run. The file was not run. This step does not record an update procedure.
 
 ### Get-Command
 
-`Get-Command sqlharness -All` zwraca jeden obiekt. Wyjątku nie było. `CommandType` = `Application`. `Name` = `sqlharness.exe`. `Source`, `Path` i `Definition` = `C:\Users\rgone\.local\bin\sqlharness.exe`. `Version` obiektu polecenia = `1.0.0.0`. Nie było drugiej aplikacji, funkcji ani aliasu. Ścieżka i ta właściwość `Version` są te same co w `## 015/T1`.
+`Get-Command sqlharness -All` returns one object. There was no exception. `CommandType` = `Application`. `Name` = `sqlharness.exe`. `Source`, `Path` and `Definition` = `C:\Users\rgone\.local\bin\sqlharness.exe`. The command object's `Version` = `1.0.0.0`. There was no second application, function or alias. The path and that `Version` property are the same as in `## 015/T1`.
 
-Ta ścieżka jest jedyną binarką tego kroku. Atrybuty to `Archive`. `LinkType` jest null, `Target` jest null. W tym odczycie plik nie jest linkiem. Hash, czasy i zasób wersji dotyczą tego pliku.
+That path is the only binary of this step. The attributes are `Archive`. `LinkType` is null, `Target` is null. In this read the file is not a link. The hash, the times and the version resource concern that file.
 
-### Plik
+### File
 
-| Pole | Wartość |
+| Field | Value |
 |---|---|
-| Ścieżka | `C:\Users\rgone\.local\bin\sqlharness.exe` |
-| Długość | 95604247 B |
+| Path | `C:\Users\rgone\.local\bin\sqlharness.exe` |
+| Length | 95604247 B |
 | SHA-256 | `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` |
-| Utworzenie | 2026-07-19T22:30:24.3089416+02:00 |
-| Ostatni zapis | 2026-09-23T10:58:00.4821692+02:00 |
+| Created | 2026-07-19T22:30:24.3089416+02:00 |
+| Last write | 2026-09-23T10:58:00.4821692+02:00 |
 
-`Get-FileHash -Algorithm SHA256` zwrócił `BB702504D05ACC124F0C50030818D61EC4790BF33EB3B35DFE0B651983BE5C2F`. Osobny skrót SHA-256 ze strumienia tych samych bajtów dał te same cyfry. W tabeli są małymi literami, jak hashe stdout w `## 015/T1`. Długość strumienia jest równa długości pliku, 95604247 B. Po odczycie długość i czas ostatniego zapisu były te same.
+`Get-FileHash -Algorithm SHA256` returned `BB702504D05ACC124F0C50030818D61EC4790BF33EB3B35DFE0B651983BE5C2F`. A separate SHA-256 digest of the stream of those same bytes gave the same digits. In the table they are lowercase, like the stdout hashes in `## 015/T1`. The stream length equals the file length, 95604247 B. After the read, the length and the last write time were the same.
 
-Strefa zaobserwowana to Windows `Central European Standard Time`. Ma czas letni. Nazwa letnia to `Central European Daylight Time`. Bazowy offset strefy to `+01:00`. Napis strefy w Windows pokazuje ten bazowy offset. Na obu znacznikach i w chwili odczytu czas letni obowiązywał, więc ich offset to `+02:00`, nie `+01:00`. `Kind` lokalnego czasu utworzenia i ostatniego zapisu to `Local`. Ten sam moment utworzenia w UTC to 2026-07-19T20:30:24.3089416Z. Ten sam moment ostatniego zapisu w UTC to 2026-09-23T08:58:00.4821692Z.
+The observed time zone is Windows `Central European Standard Time`. It has daylight saving time. The daylight name is `Central European Daylight Time`. The zone's base offset is `+01:00`. The Windows zone string shows that base offset. At both timestamps and at the moment of the read daylight saving time was in force, so their offset is `+02:00`, not `+01:00`. The `Kind` of the local creation and last-write times is `Local`. The same creation moment in UTC is 2026-07-19T20:30:24.3089416Z. The same last-write moment in UTC is 2026-09-23T08:58:00.4821692Z.
 
-### Zasób wersji
+### Version resource
 
-Odczyt `FileVersionInfo` bez uruchamiania pliku. Cztery pola są obecne i niepuste. Żadnego nie brakuje.
+A `FileVersionInfo` read without running the file. Four fields are present and non-empty. None is missing.
 
-| Pole | Wartość |
+| Field | Value |
 |---|---|
 | FileVersion | `1.0.0.0` |
 | ProductVersion | `1.0.0+3d2c41892d15d563c22dba9c917c71aa31cb66ff` |
 | OriginalFilename | `sqlharness.dll` |
 | FileDescription | `sqlharness` |
 
-`FileVersion` jest równe właściwości `Version` z `Get-Command`. Nie jest tekstem stdout `--version` z `## 015/T1`. Tamten stdout to znaki `1.0.0`. `ProductVersion` jest innym, dłuższym napisem. Nie jest równe `buildId` z `capabilities --json` w `## 015/T1` (`1.0.0+ece0d7fcaef90325d20865db639c12b47bc2de4e`). Sufiks po `+` nie jest SHA-256 tego pliku.
+`FileVersion` equals the `Version` property from `Get-Command`. It is not the `--version` stdout text from `## 015/T1`. That stdout is the characters `1.0.0`. `ProductVersion` is a different, longer string. It does not equal the `buildId` from `capabilities --json` in `## 015/T1` (`1.0.0+ece0d7fcaef90325d20865db639c12b47bc2de4e`). The suffix after `+` is not the SHA-256 of that file.
 
-Te 40 znaków hex jest pełnym id obiektu w tym repozytorium. `git cat-file -t` zwrócił `commit`. `git merge-base --is-ancestor` względem HEAD `d2a07291ffc6b51f40792635c681d9fc47f7552e` zakończył się kodem 0, więc ten commit jest przodkiem, nie tym HEAD. Data committera, `git log -1 --format=%cI`, to 2026-09-11T11:28:10+02:00. Temat to `Merge branch 'feat/postgres-engine'`. Czas utworzenia pliku jest wcześniejszy niż ta data committera. Czas ostatniego zapisu pliku jest późniejszy. To trzy czasy, nie log publikacji.
+Those 40 hex characters are the full id of an object in this repository. `git cat-file -t` returned `commit`. `git merge-base --is-ancestor` relative to HEAD `d2a07291ffc6b51f40792635c681d9fc47f7552e` exited with code 0, so that commit is an ancestor, not that HEAD. The committer date, `git log -1 --format=%cI`, is 2026-09-11T11:28:10+02:00. The subject is `Merge branch 'feat/postgres-engine'`. The file creation time is earlier than that committer date. The file last-write time is later. Those are three times, not a publication log.
 
-`OriginalFilename` kończy się na `.dll`. Plik z `Get-Command` kończy się na `.exe`. To wartość zasobu. Nie jest metodą publikacji.
+`OriginalFilename` ends with `.dll`. The file from `Get-Command` ends with `.exe`. That is a resource value. It is not a publication method.
 
 ### Authenticode
 
-`Get-AuthenticodeSignature`: `Status` = `NotSigned`, `SignatureType` = `None`, `IsOSBinary` = false. Certyfikat podpisującego jest null. Podpisu nie ma, więc nie ma nazwy podpisującego. Brak podpisu nie jest wydaniem GitHub i nie jest lokalnym `dotnet publish`.
+`Get-AuthenticodeSignature`: `Status` = `NotSigned`, `SignatureType` = `None`, `IsOSBinary` = false. The signing certificate is null. There is no signature, so there is no signer name. The absence of a signature is not a GitHub release and is not a local `dotnet publish`.
 
-### Pochodzenie
+### Provenance
 
-Pochodzenie poza ścieżką, długością, SHA-256, dwoma czasami pliku, czterema polami zasobu wersji i brakiem podpisu jest UNPROVEN. Warunek, który by je wykazał: suma kontrolna wydania albo log publikacji równe SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Takiego dopasowania ten krok nie ma. Nie wymyślono źródła.
+The provenance apart from the path, the length, the SHA-256, the two file times, the four version resource fields and the absence of a signature is UNPROVEN. The condition that would establish it: a release checksum or a publication log equal to the SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. This step has no such match. No source was invented.
 
-Przed tym dopiskiem tekst worktree nie zawierał tego SHA-256 ani pełnego id `3d2c41892d15d563c22dba9c917c71aa31cb66ff`. Obiekt gita istnieje osobno od tego tekstu. To nie jest przegląd katalogów poza tym worktree i nie jest sumą wydania.
+Before this entry, the worktree text contained neither that SHA-256 nor the full id `3d2c41892d15d563c22dba9c917c71aa31cb66ff`. The git object exists separately from that text. This is not a catalog review outside that worktree and is not a release checksum.
 
-### Lista komend
+### Command list
 
-Lista dostępnych komend jest listą z helpa zainstalowanego, wyjętą w `## 015/T1` pod `Nazwy w helpie`. Kolejność jest kolejnością z tamtej tabeli, nie sortowaniem. Helpa nie uruchamiano ponownie. To nie jest nowe wykonanie każdej nazwy.
+The list of available commands is the list from the installed help, taken in `## 015/T1` under `Names in the help`. The order is the order from that table, not a sorting. The help was not run again. This is not a new execution of each name.
 
 - `query`
 - `measure`
@@ -472,125 +472,125 @@ Lista dostępnych komend jest listą z helpa zainstalowanego, wyjętą w `## 015
 - `watch`
 - `snapshot`
 
-Strona repo jest w `## 015/T1`, w tej samej tabeli. Tamta tabela: tylko w helpie zainstalowanym żadna nazwa; tylko w helpie repo `artifact`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate`, `mcp`. `capabilities`, `validate` i `mcp` nie są na liście powyżej. Rozjazd zostaje.
+The repository page is in `## 015/T1`, in the same table. That table: only in the installed help no name; only in the repository help `artifact`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate`, `mcp`. `capabilities`, `validate` and `mcp` are not on the list above. The divergence remains.
 
-Różnica `mcp` między helpem repo a `capabilities --json` zostaje w `## 015/T1`. Ten krok jej nie zmienia. Warunek z `## 015/T1`, czy brak nazwy w helpie jest kodem odmowy, też zostaje tam. Tych nazw nie uruchamiano.
+The `mcp` difference between the repository help and `capabilities --json` remains in `## 015/T1`. This step does not change it. The condition from `## 015/T1`, whether the absence of a name in the help is a rejection code, also remains there. These names were not run.
 
 ### UNPROVEN
 
-- Pochodzenie pliku poza polami zapisanymi wyżej. Warunek: suma kontrolna wydania albo log publikacji równe SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Brak podpisu, `OriginalFilename` = `sqlharness.dll` i sufiks `ProductVersion` tego warunku nie spełniają. Tego dopasowania nie ma w tym kroku.
-- Czy bajty zahashowane w tym kroku są bajtami procesu, który wypisał help i `--version` w `## 015/T1`. Warunek: hash pliku zdjęty przy tamtym pomiarze. T1 zapisał ścieżkę i hash stdout, nie hash pliku. W tym kroku pliku nie zastępowano. To nie dowodzi ani wymiany bajtów, ani ich tożsamości.
-- Czy commit `3d2c41892d15d563c22dba9c917c71aa31cb66ff` wytworzył te bajty. Warunek jest ten sam co dla pochodzenia: dopasowanie hasha pliku. Sam napis w zasobie wersji i bycie przodkiem HEAD tego nie robią.
+- The provenance of the file apart from the fields recorded above. Condition: a release checksum or a publication log equal to the SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. The absence of a signature, `OriginalFilename` = `sqlharness.dll` and the `ProductVersion` suffix do not satisfy that condition. That match is not present in this step.
+- Whether the bytes hashed in this step are the bytes of the process that printed the help and `--version` in `## 015/T1`. Condition: the file hash taken at that measurement. T1 recorded the path and the stdout hash, not the file hash. In this step the file was not replaced. This proves neither a replacement of the bytes nor their identity.
+- Whether commit `3d2c41892d15d563c22dba9c917c71aa31cb66ff` produced those bytes. The condition is the same as for the provenance: a file hash match. The string in the version resource and being an ancestor of HEAD do not do that.
 
 ## 015/T3
 
-Zapis jest z 2026-10-02 na this Windows host. Rozjazd z `## 015/T1` i `## 015/T2` zostaje. Oznaczenia RESOLVED EXTERNALLY nie ma. Ten krok zapisuje procedurę aktualizacji i jej nie uruchamia. Nie pobierano archiwum wydania ani pliku `SHA256SUMS`. Nie kopiowano, nie przenoszono i nie zastępowano `C:\Users\rgone\.local\bin\sqlharness.exe`. Kopii `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a` nie utworzono. Katalogu staging nie utworzono. Nie pisano konfiguracji użytkownika. Nie czytano `targets.json`, profili, haseł, connection stringów ani wartości zmiennych środowiska. Nie uruchamiano `dotnet test`. Nie zmieniano kodu produktu. Ta procedura nie jest lokalnym `dotnet publish` i nie jest kopią wyniku publish na `.local\bin`. Ten plan takiego publish nie autoryzuje.
+The record is from 2026-10-02 on this Windows host. The divergence from `## 015/T1` and `## 015/T2` remains. There is no RESOLVED EXTERNALLY marking. This step records the update procedure and does not run it. No release archive or `SHA256SUMS` file was downloaded. `C:\Users\rgone\.local\bin\sqlharness.exe` was not copied, moved or replaced. The copy `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a` was not created. The staging directory was not created. No user configuration was written. No `targets.json`, profiles, passwords, connection strings or environment variable values were read. `dotnet test` was not run. No product code was changed. This procedure is not a local `dotnet publish` and is not a copy of a publish result into `.local\bin`. This plan does not authorize such a publish.
 
-### Decyzje
+### Decisions
 
-- Rozjazd zostaje. Help zainstalowany, zapisany w `## 015/T1`, ma `query`, `measure`, `compare`, `gain`, `plan`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`. Nie ma `capabilities`, `validate` ani `mcp`. Help repo z tamtego pomiaru ma także `artifact`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate` i `mcp`.
-- Nie oznaczono RESOLVED EXTERNALLY. `## 015/T2` też tego nie oznaczył.
-- Procedura jest zapisana poniżej. Instalacji nie wykonano. Zapis planu nie zastępuje pliku PATH.
-- Wybór tagu zostaje `v0.3.1`. Nie zamyka rozjazdu. Oczekuje się, że krok 5 odrzuci asset zbudowany z tego tagu. Zamknięcie rozjazdu wymaga buildu nowszego niż każdy opublikowany tag z tabeli. Ten plan takiego buildu nie autoryzuje. Odczyt gita jest przy wyborze tagu.
-- Pochodzenie pliku zostaje UNPROVEN, na warunku z `## 015/T2`. Zapytanie o metadane wydań nie dało sumy kontrolnej równej SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`.
-- Oba napisy `--version` to `1.0.0`, jeden z binarki PATH i jeden z pola `version` w `capabilities --json`. Ten napis nie pokazuje rozjazdu. Rozjazd jest w zestawie nazw helpa.
-- Różnica `mcp` jest zapisana w `## 015/T1`: help repo wymienia `mcp`, a `capabilities --json` z tego samego pomiaru nie ma tej nazwy w `commands` ani jako podciągu. Zostaje tak, jak jest zapisane. Jest poza zakresem tego kroku. Kodu produktu nie zmieniano.
+- The divergence remains. The installed help, recorded in `## 015/T1`, has `query`, `measure`, `compare`, `gain`, `plan`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`. It has no `capabilities`, `validate` nor `mcp`. The repository help from that measurement also has `artifact`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate` and `mcp`.
+- RESOLVED EXTERNALLY was not marked. `## 015/T2` did not mark it either.
+- The procedure is recorded below. No installation was performed. Writing the plan does not replace the PATH file.
+- The tag choice stays `v0.3.1`. It does not close the divergence. Step 5 is expected to reject an asset built from that tag. Closing the divergence requires a build newer than every published tag in the table. This plan does not authorize such a build. The git read is at the tag choice.
+- The provenance of the file stays UNPROVEN, on the condition from `## 015/T2`. The release metadata query did not yield a checksum equal to the SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`.
+- Both `--version` strings are `1.0.0`, one from the PATH binary and one from the `version` field in `capabilities --json`. That string does not show the divergence. The divergence is in the help name set.
+- The `mcp` difference is recorded in `## 015/T1`: the repository help lists `mcp`, while `capabilities --json` from the same measurement has that name neither in `commands` nor as a substring. It stays as recorded. It is out of scope for this step. No product code was changed.
 
-### Granice
+### Boundaries
 
-Brak live DB. Brak profilu i sekretu. Tylko this Windows host. Żadna inna platforma. Brak zmiany kodu produktu.
+No live DB. No profile and no secret. Only this Windows host. No other platform. No product code change.
 
-### Zakres przyszłych plików
+### Scope of future files
 
-W repozytorium żadnych. Ścieżka kopii `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a` leży poza repozytorium i nie została utworzona. Katalog staging `C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging` też leży poza repozytorium i nie został utworzony.
+None in the repository. The copy path `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a` lies outside the repository and was not created. The staging directory `C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging` also lies outside the repository and was not created.
 
-### Zapytanie o wydania
+### Release query
 
-Odczyt był tylko do odczytu. Pobrano nazwy, daty publikacji i flagi draft oraz prerelease. Nie pobrano bajtów assetów. Tokenu nie wypisywano. Zapytanie nie padło.
+The read was read-only. The names, publication dates and the draft and prerelease flags were retrieved. No asset bytes were downloaded. No token was printed. The query did not fail.
 
-`gh release list --repo rgonek/sqlharness --limit 20` zwrócił cztery pozycje i oznaczył `v0.3.1` jako Latest. Potem `gh release view` dla `v0.3.1`, `v0.3.0`, `v0.2.0` i `v0.1.0`, z polami tagu, daty publikacji, draft, prerelease i nazw assetów. Dla `v0.3.1` odczytano też rozmiar i typ treści; do tej tabeli wchodzą tylko flagi obecności dwóch plików kontraktu. Rozmiaru zipa nie zestawiano z długością pliku PATH.
+`gh release list --repo rgonek/sqlharness --limit 20` returned four items and marked `v0.3.1` as Latest. Then `gh release view` for `v0.3.1`, `v0.3.0`, `v0.2.0` and `v0.1.0`, with the tag, publication date, draft, prerelease and asset name fields. For `v0.3.1` the size and content type were also read; only the presence flags of the two contract files enter this table. The zip size was not compared with the PATH file length.
 
-| Tag | Publikacja | Draft | Prerelease | `sqlharness-win-x64.zip` | `SHA256SUMS` |
+| Tag | Publication | Draft | Prerelease | `sqlharness-win-x64.zip` | `SHA256SUMS` |
 |---|---|---|---|---|---|
-| `v0.3.1` | 2026-08-04T13:30:57Z | nie | nie | tak | tak |
-| `v0.3.0` | 2026-08-03T18:39:26Z | nie | nie | tak | tak |
-| `v0.2.0` | 2026-08-03T07:41:50Z | nie | nie | tak | tak |
-| `v0.1.0` | 2026-07-18T15:12:22Z | nie | nie | tak | tak |
+| `v0.3.1` | 2026-08-04T13:30:57Z | no | no | yes | yes |
+| `v0.3.0` | 2026-08-03T18:39:26Z | no | no | yes | yes |
+| `v0.2.0` | 2026-08-03T07:41:50Z | no | no | yes | yes |
+| `v0.1.0` | 2026-07-18T15:12:22Z | no | no | yes | yes |
 
-Przy każdym z tych czterech tagów lista assetów ma też `sqlharness-linux-x64.tar.gz` i `sqlharness-osx-arm64.tar.gz`. Ta procedura ich nie używa. To nie jest dowód z innej platformy.
+For each of those four tags the asset list also has `sqlharness-linux-x64.tar.gz` and `sqlharness-osx-arm64.tar.gz`. This procedure does not use them. That is not evidence from another platform.
 
-Lista tagów nie jest tekstem `--help`. Stdout kroku 5 nie został zapisany. Oczekiwanie z gita jest przy wyborze tagu: krok 5 ma odrzucić asset zbudowany z `v0.3.1`. Żaden tag z tabeli nie zamyka rozjazdu, jeśli jego asset jest zbudowany z tego tagu.
+The tag list is not `--help` text. Step 5's stdout was not recorded. The expectation from git is at the tag choice: step 5 is to reject an asset built from `v0.3.1`. No tag in the table closes the divergence if its asset is built from that tag.
 
-Data ostatniego zapisu pliku PATH z `## 015/T2` to 2026-09-23T08:58:00.4821692Z. Najnowsza publikacja z tabeli jest wcześniejsza. To nie jest log publikacji i nie utożsamia pliku z tagiem. Pochodzenie zostaje UNPROVEN.
+The last write time of the PATH file from `## 015/T2` is 2026-09-23T08:58:00.4821692Z. The newest publication in the table is earlier. That is not a publication log and does not identify the file with a tag. The provenance stays UNPROVEN.
 
-Kontrakt dystrybucji jest w README, w sekcji `Install a release binary`: archiwum `sqlharness-win-x64.zip`, plik `SHA256SUMS` i weryfikacja przed rozpakowaniem. Przykład w tej sekcji wstawia `v0.1.0` z komentarzem, że tag trzeba zastąpić wybranym. Ten przykład nie jest wyborem tej diagnozy. Procedura poniżej wybiera `v0.3.1`, bo ten odczyt wskazuje go jako najnowszy opublikowany tag, który ma oba pliki kontraktu. Ten wybór nie dowodzi helpa.
+The distribution contract is in the README, in the `Install a release binary` section: the `sqlharness-win-x64.zip` archive, the `SHA256SUMS` file and verification before unpacking. The example in that section inserts `v0.1.0` with a comment that the tag must be replaced with the chosen one. That example is not the choice of this diagnosis. The procedure below selects `v0.3.1`, because this read points to it as the newest published tag that has both contract files. That choice does not prove the help.
 
-Każdy tag z tabeli jest wcześniejszy niż commity, które dodały `capabilities`, `validate` i `mcp`. To jest odczyt gita z tego worktree. Nie było nowego zapytania o wydanie i nie wymyślono publikacji. Data publikacji `v0.3.1` z tabeli, `2026-08-04T13:30:57Z`, nie jest datą committera tego tagu.
+Every tag in the table is earlier than the commits that added `capabilities`, `validate` and `mcp`. That is a git read from this worktree. There was no new release query and no publication was invented. The publication date of `v0.3.1` from the table, `2026-08-04T13:30:57Z`, is not that tag's committer date.
 
-`git rev-parse v0.3.1` zwraca obiekt tagu `aec21ca362ae1c1b04f769e5b3a25ea1769b77a9`. `git cat-file -t v0.3.1` zwrócił `tag`. `git rev-parse "v0.3.1^{commit}"` zwraca commit `1f5707897b57f24c69380c542928407fc97693a2`. Data committera, `git log -1 --format=%cI v0.3.1`, to `2026-08-04T15:28:51+02:00`. Temat to `fix: include SqlClient Azure authentication`.
+`git rev-parse v0.3.1` returns the tag object `aec21ca362ae1c1b04f769e5b3a25ea1769b77a9`. `git cat-file -t v0.3.1` returned `tag`. `git rev-parse "v0.3.1^{commit}"` returns the commit `1f5707897b57f24c69380c542928407fc97693a2`. The committer date, `git log -1 --format=%cI v0.3.1`, is `2026-08-04T15:28:51+02:00`. The subject is `fix: include SqlClient Azure authentication`.
 
-`c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` dodał `capabilities` i `validate`. Data committera to `2026-09-26T19:18:08+02:00`. Temat to `feat: add offline capabilities and validation commands`. `git merge-base --is-ancestor c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea v0.3.1` zakończył się kodem 1, więc ten commit nie jest przodkiem `v0.3.1`. `git merge-base --is-ancestor v0.3.1 c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` zakończył się kodem 0, więc `v0.3.1` jest przodkiem tego commita.
+`c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` added `capabilities` and `validate`. The committer date is `2026-09-26T19:18:08+02:00`. The subject is `feat: add offline capabilities and validation commands`. `git merge-base --is-ancestor c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea v0.3.1` exited with code 1, so that commit is not an ancestor of `v0.3.1`. `git merge-base --is-ancestor v0.3.1 c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` exited with code 0, so `v0.3.1` is an ancestor of that commit.
 
-`f2d988aa88a0d120facbde3b3dc8ef380a199512` dodał `mcp`. Data committera to `2026-09-28T14:35:34+02:00`. Temat to `feat: host a profile-scoped MCP server over stdio`. `git merge-base --is-ancestor f2d988aa88a0d120facbde3b3dc8ef380a199512 v0.3.1` zakończył się kodem 1. `git merge-base --is-ancestor v0.3.1 f2d988aa88a0d120facbde3b3dc8ef380a199512` zakończył się kodem 0.
+`f2d988aa88a0d120facbde3b3dc8ef380a199512` added `mcp`. The committer date is `2026-09-28T14:35:34+02:00`. The subject is `feat: host a profile-scoped MCP server over stdio`. `git merge-base --is-ancestor f2d988aa88a0d120facbde3b3dc8ef380a199512 v0.3.1` exited with code 1. `git merge-base --is-ancestor v0.3.1 f2d988aa88a0d120facbde3b3dc8ef380a199512` exited with code 0.
 
-`v0.3.0` wskazuje commit `f607e5f5d68aa1d6d946fe28d9a3df4a65b23f1b`, committer `2026-08-03T20:23:29+02:00`, temat `docs: define complete select syntax contract`. `v0.2.0` wskazuje commit `af71450ebac48c72cd579ac848b007f424e39b68`, committer `2026-07-30T12:30:29+02:00`, temat `fix: polish watch/snapshot gain success and stop edges`. `v0.1.0` wskazuje commit `14c58c0f19761f977910a55ad4ac168d8a4dd9a3`, committer `2026-07-18T17:06:55+02:00`, temat `Merge branch 'feature/sqlharness-extraction' — release job repository context`. Dla `v0.3.0`, `v0.2.0` i `v0.1.0` oba `git merge-base --is-ancestor` od `c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` i od `f2d988aa88a0d120facbde3b3dc8ef380a199512` zakończyły się kodem 1, a oba w drugą stronę kodem 0.
+`v0.3.0` points at the commit `f607e5f5d68aa1d6d946fe28d9a3df4a65b23f1b`, committer `2026-08-03T20:23:29+02:00`, subject `docs: define complete select syntax contract`. `v0.2.0` points at the commit `af71450ebac48c72cd579ac848b007f424e39b68`, committer `2026-07-30T12:30:29+02:00`, subject `fix: polish watch/snapshot gain success and stop edges`. `v0.1.0` points at the commit `14c58c0f19761f977910a55ad4ac168d8a4dd9a3`, committer `2026-07-18T17:06:55+02:00`, subject `Merge branch 'feature/sqlharness-extraction' — release job repository context`. For `v0.3.0`, `v0.2.0` and `v0.1.0` both `git merge-base --is-ancestor` runs, from `c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` and from `f2d988aa88a0d120facbde3b3dc8ef380a199512`, exited with code 1, and both in the other direction with code 0.
 
-Oczekuje się, że krok 5 odrzuci asset zbudowany z `v0.3.1`. Tego kroku nie uruchomiono i archiwum nie pobrano. Zamknięcie rozjazdu wymaga buildu nowszego niż każdy opublikowany tag z tabeli. Ten plan takiego buildu nie autoryzuje.
+Step 5 is expected to reject an asset built from `v0.3.1`. That step was not run and the archive was not downloaded. Closing the divergence requires a build newer than every published tag in the table. This plan does not authorize such a build.
 
-### Ścieżki
+### Paths
 
-Przykład README rozpakowuje do `$HOME\bin\sqlharness` i dopisuje ten katalog do `PATH`. `Get-Command sqlharness -All` w `## 015/T1` i `## 015/T2` zwrócił `C:\Users\rgone\.local\bin\sqlharness.exe`. To są różne ścieżki. Samo zastąpienie celu z przykładu README zostawiłoby tę binarkę PATH na miejscu. Ta procedura nie rozpakowuje do `$HOME\bin\sqlharness` i nie dopisuje tego katalogu do `PATH`. Cel podmiany w kroku 6, jeśli późniejsze zadanie do niego dojdzie, to plik z `Get-Command`, nie katalog z przykładu.
+The README example unpacks to `$HOME\bin\sqlharness` and appends that directory to `PATH`. `Get-Command sqlharness -All` in `## 015/T1` and `## 015/T2` returned `C:\Users\rgone\.local\bin\sqlharness.exe`. These are different paths. Merely replacing the target from the README example would leave that PATH binary in place. This procedure does not unpack to `$HOME\bin\sqlharness` and does not append that directory to `PATH`. The replacement target in step 6, if a later task gets to it, is the file from `Get-Command`, not the directory from the example.
 
-Katalog staging to `C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging`. Nie jest worktree `D:\Dev\sqlharness\.worktrees\plan-015-installation-alignment` i nie jest katalogiem binarki PATH `C:\Users\rgone\.local\bin`.
+The staging directory is `C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging`. It is not the worktree `D:\Dev\sqlharness\.worktrees\plan-015-installation-alignment` and it is not the PATH binary's directory `C:\Users\rgone\.local\bin`.
 
-### Procedura
+### Procedure
 
-Polecenia poniżej są dla późniejszego zadania. Ten krok ich nie uruchomił. Zapis nie zastępuje pliku PATH. Bloki idą po kolei. Pierwszy wyjątek zatrzymuje resztę. Kroki 3–5 mogą zatrzymać się już po kroku 2: plik PATH jest wtedy nadal oryginałem, a kopia, której SHA-256 jest `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`, już leży. Tej zgodnej kopii ta procedura nie usuwa. Jeśli hash kopii z kroku 2 nie jest tym SHA-256, krok 2 usuwa tę złą kopię i dopiero wtedy rzuca. Zła kopia nie zostaje, więc następny uporządkowany przebieg nie staje na zakazie nadpisania istniejącej nazwy.
+The commands below are for a later task. This step did not run them. This record does not replace the PATH file. The blocks run in order. The first exception stops the rest. Steps 3–5 can stop already after step 2: the PATH file is then still the original, and the copy whose SHA-256 is `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` is already in place. This procedure does not delete that matching copy. If the hash of the copy from step 2 is not that SHA-256, step 2 deletes that bad copy and only then throws. The bad copy is not left behind, so the next orderly run does not stop at the prohibition on overwriting an existing name.
 
-Tag procedury to `v0.3.1`. Nie podmieniaj go na `v0.1.0` z przykładu README tylko dlatego, że przykład tak jest napisany. Ten tag, jak każdy tag z tabeli, jest wcześniejszy niż commity `capabilities`, `validate` i `mcp`. Oczekuje się, że krok 5 odrzuci asset zbudowany z `v0.3.1`. Szczegół gita jest przy wyborze tagu.
+The procedure's tag is `v0.3.1`. Do not swap it for `v0.1.0` from the README example just because the example is written that way. That tag, like every tag in the table, is earlier than the `capabilities`, `validate` and `mcp` commits. Step 5 is expected to reject an asset built from `v0.3.1`. The git detail is at the tag choice.
 
-1. Zatrzymaj się, chyba że `Get-Command sqlharness -All` nadal zwraca dokładnie jeden obiekt i ten obiekt jest aplikacją `C:\Users\rgone\.local\bin\sqlharness.exe`, a SHA-256 tego pliku nadal jest `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`.
+1. Stop, unless `Get-Command sqlharness -All` still returns exactly one object and that object is the application `C:\Users\rgone\.local\bin\sqlharness.exe`, and the SHA-256 of that file is still `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`.
 
 ```powershell
 $path = "C:\Users\rgone\.local\bin\sqlharness.exe"
 $expectedInstalled = "bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f"
 $cmd = @(Get-Command sqlharness -All)
 if ($cmd.Count -ne 1) {
-  throw "Stop: Get-Command sqlharness -All nie zwraca dokładnie jednego obiektu."
+  throw "Stop: Get-Command sqlharness -All does not return exactly one object."
 }
 $one = $cmd[0]
 if ([string]$one.CommandType -cne "Application" -or $one.Name -cne "sqlharness.exe" -or $one.Path -cne $path -or $one.Source -cne $path -or $one.Definition -cne $path) {
-  throw "Stop: wynik nie jest dokładnie $path."
+  throw "Stop: the result is not exactly $path."
 }
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
 if ($hash -cne $expectedInstalled) {
-  throw "Stop: SHA-256 pliku PATH nie jest $expectedInstalled. Pliku nie ruszaj."
+  throw "Stop: the SHA-256 of the PATH file is not $expectedInstalled. Do not touch the file."
 }
 ```
 
-2. Skopiuj ten plik do `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a`. Jeśli ta nazwa już istnieje, zatrzymaj się. Nie nadpisuj jej. Po kopiowaniu porównaj SHA-256 kopii z `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Przy różnicy usuń tę złą kopię i zatrzymaj się. Pliku PATH nie zastępuj. Usunięcie dotyczy tylko kopii o złym hashu. Zgodnej kopii nie usuwaj.
+2. Copy that file to `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a`. If that name already exists, stop. Do not overwrite it. After copying, compare the copy's SHA-256 with `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. On a mismatch, delete that bad copy and stop. Do not replace the PATH file. The deletion concerns only the copy with the wrong hash. Do not delete a matching copy.
 
 ```powershell
 $path = "C:\Users\rgone\.local\bin\sqlharness.exe"
 $expectedInstalled = "bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f"
 $backup = "C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a"
 if (Test-Path -LiteralPath $backup) {
-  throw "Stop: kopia już istnieje. Nie nadpisuj jej."
+  throw "Stop: the copy already exists. Do not overwrite it."
 }
 Copy-Item -LiteralPath $path -Destination $backup
 $backupHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $backup).Hash.ToLowerInvariant()
 if ($backupHash -cne $expectedInstalled) {
   Remove-Item -LiteralPath $backup
   if (Test-Path -LiteralPath $backup) {
-    throw "Stop: kopia nie ma SHA-256 $expectedInstalled i nie dała się usunąć. Pliku PATH nie zastępuj. Nie nadpisuj tej kopii."
+    throw "Stop: the copy does not have SHA-256 $expectedInstalled and could not be removed. Do not replace the PATH file. Do not overwrite this copy."
   }
-  throw "Stop: kopia nie miała SHA-256 $expectedInstalled. Złą kopię usunięto. Pliku PATH nie zastępuj."
+  throw "Stop: the copy did not have SHA-256 $expectedInstalled. The bad copy was removed. Do not replace the PATH file."
 }
 ```
 
-3. Pobierz `sqlharness-win-x64.zip` i `SHA256SUMS` tagu `v0.3.1` do katalogu staging. Zweryfikuj zip porównaniem z README wobec `SHA256SUMS`. Przy niezgodzie zatrzymaj się i zostaw plik PATH nietknięty. Ten krok nie rozpakowuje archiwum.
+3. Download `sqlharness-win-x64.zip` and `SHA256SUMS` of the `v0.3.1` tag into the staging directory. Verify the zip with the README comparison against `SHA256SUMS`. On a mismatch, stop and leave the PATH file untouched. This step does not unpack the archive.
 
-Porównanie z README, sekcja `Install a release binary`, to te dwie linie, uruchomione w katalogu staging: pierwsza bierze pierwszy niepusty token linii `SHA256SUMS`, która zawiera `sqlharness-win-x64.zip`; druga porównuje go, po `ToLowerInvariant`, z `Get-FileHash` tego zipa algorytmem SHA256 i przy różnicy rzuca `Checksum mismatch.` Ten wyjątek też zostawia plik PATH nietknięty. Kopia z kroku 2 zostaje.
+The README comparison, section `Install a release binary`, is those two lines, run in the staging directory: the first takes the first non-empty token of the `SHA256SUMS` line that contains `sqlharness-win-x64.zip`; the second compares it, after `ToLowerInvariant`, with the `Get-FileHash` of that zip using the SHA256 algorithm and on a mismatch throws `Checksum mismatch.` That exception also leaves the PATH file untouched. The copy from step 2 stays.
 
 ```powershell
 $version = "v0.3.1"
@@ -604,13 +604,13 @@ $stagingPrefix = $stagingFull.TrimEnd('\') + '\'
 $worktreePrefix = $worktreeFull.TrimEnd('\') + '\'
 $pathPrefix = $pathDirFull.TrimEnd('\') + '\'
 if ($stagingPrefix.StartsWith($worktreePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-  throw "Stop: staging leży w worktree."
+  throw "Stop: staging lies in the worktree."
 }
 if ($stagingPrefix.StartsWith($pathPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-  throw "Stop: staging leży w katalogu binarki PATH."
+  throw "Stop: staging lies in the PATH binary directory."
 }
 if (Test-Path -LiteralPath $staging) {
-  throw "Stop: katalog staging już istnieje. Nie mieszaj pobrania z istniejącą zawartością."
+  throw "Stop: the staging directory already exists. Do not mix the download with existing content."
 }
 New-Item -ItemType Directory -Path $staging | Out-Null
 $base = "https://github.com/rgonek/sqlharness/releases/download/$version"
@@ -620,7 +620,7 @@ Push-Location -LiteralPath $staging
 try {
   $sumHits = @(Select-String 'sqlharness-win-x64.zip' SHA256SUMS)
   if ($sumHits.Count -ne 1) {
-    throw "Stop: SHA256SUMS nie wskazuje dokładnie jednej linii sqlharness-win-x64.zip. Plik PATH zostaje nietknięty."
+    throw "Stop: SHA256SUMS does not point to exactly one sqlharness-win-x64.zip line. The PATH file stays untouched."
   }
   $expected = (Select-String 'sqlharness-win-x64.zip' SHA256SUMS).Line.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)[0]
   if ((Get-FileHash sqlharness-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected.ToLowerInvariant()) { throw "Checksum mismatch." }
@@ -630,9 +630,9 @@ finally {
 }
 ```
 
-4. Rozpakuj do katalogu wewnątrz stagingu, nie na plik PATH. Zapisz SHA-256 wyjętego `sqlharness.exe`. Ten dokument nie ma oczekiwanego hasha tego pliku. Nie porównuj go z `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` jakby to był hash docelowy. Inna wartość nie jest błędem tego kroku. Taka sama wartość też nie jest błędem tego kroku i nie jest dowodem, że plik PATH już jest tym wydaniem.
+4. Unpack into a directory inside the staging area, not onto the PATH file. Record the SHA-256 of the extracted `sqlharness.exe`. That document has no expected hash for that file. Do not compare it with `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` as if that were the target hash. A different value is not an error of this step. The same value is also not an error of this step and is not proof that the PATH file already is that release.
 
-Układ zipa nie jest w tym dokumencie. Jeśli `sqlharness.exe` nie leży bezpośrednio w katalogu rozpakowania, zatrzymaj się. Nie szukaj innego pliku. Plik PATH zostaje.
+The zip layout is not in this document. If `sqlharness.exe` does not lie directly in the extraction directory, stop. Do not look for another file. The PATH file stays.
 
 ```powershell
 $path = "C:\Users\rgone\.local\bin\sqlharness.exe"
@@ -640,32 +640,32 @@ $pathDir = "C:\Users\rgone\.local\bin"
 $staging = "C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging"
 $extract = Join-Path $staging "extract"
 if (-not $extract.StartsWith($staging + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
-  throw "Stop: rozpakowanie nie leży w stagingu."
+  throw "Stop: the unpacked output does not lie in staging."
 }
 if ($extract -eq $pathDir -or $extract -eq $path) {
   throw "Stop: rozpakowanie wskazuje plik PATH albo jego katalog."
 }
 if (Test-Path -LiteralPath $extract) {
-  throw "Stop: katalog rozpakowania już istnieje."
+  throw "Stop: the unpack directory already exists."
 }
 Expand-Archive -LiteralPath (Join-Path $staging "sqlharness-win-x64.zip") -DestinationPath $extract
 $stagedExe = Join-Path $extract "sqlharness.exe"
 if (-not (Test-Path -LiteralPath $stagedExe)) {
-  throw "Stop: sqlharness.exe nie leży bezpośrednio w katalogu rozpakowania. Nie szukaj innego pliku. Plik PATH zostaje."
+  throw "Stop: sqlharness.exe does not lie directly in the unpack directory. Do not look for another file. The PATH file stays."
 }
 $stagedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $stagedExe).Hash.ToLowerInvariant()
 Write-Output $stagedHash
 ```
 
-Wypisany SHA-256 zapisz w notatce zadania, które wykonuje instalację. Nie wpisuj go wstecz do tego dokumentu jako wartości oczekiwanej.
+Record the printed SHA-256 in the note of the task that performs the installation. Do not write it back into this document as the expected value.
 
-5. Uruchom `--help` na pliku ze stagingu, nie przez nazwę `sqlharness` z PATH. Idź dalej tylko wtedy, gdy ten help wymienia `capabilities`, `validate` i `mcp`. Nazwa komendy to pierwszy token linii pod `COMMANDS:`, której wcięcie ma dokładnie cztery spacje, tak jak w `## 015/T1`. Porównanie tokenu jest wrażliwe na wielkość liter. Dopóki tego przebiegu nie ma, to, czy wydanie GitHub zamyka ten rozjazd, jest UNPROVEN. Lista tagów nie dowodzi tekstu helpa.
+5. Run `--help` on the staged file, not through the `sqlharness` name from PATH. Continue only if that help lists `capabilities`, `validate` and `mcp`. A command name is the first token of a line under `COMMANDS:` whose indentation is exactly four spaces, as in `## 015/T1`. The token comparison is case-sensitive. As long as that run has not happened, whether the GitHub release closes this divergence is UNPROVEN. The tag list does not prove the help text.
 
 ```powershell
 $stagedExe = "C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging\extract\sqlharness.exe"
 $helpText = & $stagedExe --help
 if ($LASTEXITCODE -ne 0 -or $null -eq $helpText) {
-  throw "Stop: --help pliku ze stagingu nie zakończył się kodem 0 albo nie dał stdout. Plik PATH zostaje."
+  throw "Stop: --help of the file from staging did not exit with code 0 or produced no stdout. The PATH file stays."
 }
 $names = New-Object System.Collections.Generic.List[string]
 $inCommands = $false
@@ -684,14 +684,14 @@ foreach ($line in @($helpText -split '\r?\n')) {
 }
 foreach ($required in @("capabilities", "validate", "mcp")) {
   if (-not $names.Contains($required)) {
-    throw "Stop: help pliku ze stagingu nie wymienia $required. Plik PATH zostaje. Kopia z kroku 2 zostaje."
+    throw "Stop: the help of the file from staging does not list $required. The PATH file stays. The copy from step 2 stays."
   }
 }
 ```
 
-6. Dopiero wtedy zastąp `C:\Users\rgone\.local\bin\sqlharness.exe` plikiem ze stagingu. Przed `-Force` zarówno SHA-256 kopii z kroku 2, jak i SHA-256 bieżącego pliku PATH, muszą być `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Inaczej zatrzymaj się i nie wołaj `-Force`. Kopia z kroku 2 zostaje. Nie usuwaj jej. Nie dopisuj `$HOME\bin\sqlharness` do `PATH`. Ten plan kroku 6 nie wykonuje.
+6. Only then replace `C:\Users\rgone\.local\bin\sqlharness.exe` with the staged file. Before `-Force`, both the SHA-256 of the copy from step 2 and the SHA-256 of the current PATH file must be `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Otherwise stop and do not call `-Force`. The copy from step 2 stays. Do not delete it. Do not append `$HOME\bin\sqlharness` to `PATH`. This plan does not perform step 6.
 
-Hash po podmianie porównaj z hashem pliku ze stagingu, czyli z plikiem, który właśnie kopiujesz. Nie porównuj go z `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` jakby to był hash docelowy. Jeśli hash po podmianie nie jest hashem pliku ze stagingu, skopiuj kopię z kroku 2 z powrotem na plik PATH, potem porównaj SHA-256 pliku PATH z tym samym znanym hashem i zatrzymaj się. Kopii z kroku 2 nie usuwaj. Jeśli kopiowanie zgłosi błąd, zatrzymaj się.
+Compare the hash after the replacement with the hash of the staged file, that is with the file you are copying right now. Do not compare it with `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` as if that were the target hash. If the hash after the replacement is not the hash of the staged file, copy the backup from step 2 back onto the PATH file, then compare the PATH file's SHA-256 with that same known hash and stop. Do not delete the copy from step 2. If the copy reports an error, stop.
 
 ```powershell
 $path = "C:\Users\rgone\.local\bin\sqlharness.exe"
@@ -699,15 +699,15 @@ $backup = "C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a"
 $stagedExe = "C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging\extract\sqlharness.exe"
 $expectedInstalled = "bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f"
 if (-not (Test-Path -LiteralPath $backup)) {
-  throw "Stop: brak kopii z kroku 2. Pliku PATH nie zastępuj."
+  throw "Stop: the copy from step 2 is missing. Do not replace the PATH file."
 }
 if (-not (Test-Path -LiteralPath $stagedExe)) {
-  throw "Stop: brak pliku ze stagingu. Pliku PATH nie zastępuj."
+  throw "Stop: the file from staging is missing. Do not replace the PATH file."
 }
 $backupHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $backup).Hash.ToLowerInvariant()
 $pathHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
 if ($backupHash -cne $expectedInstalled -or $pathHash -cne $expectedInstalled) {
-  throw "Stop: SHA-256 kopii albo bieżącego pliku PATH nie jest $expectedInstalled. Nie wołaj -Force. Pliku PATH nie zastępuj."
+  throw "Stop: the SHA-256 of the copy or of the current PATH file is not $expectedInstalled. Do not call -Force. Do not replace the PATH file."
 }
 $stagedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $stagedExe).Hash.ToLowerInvariant()
 Copy-Item -LiteralPath $stagedExe -Destination $path -Force
@@ -716,41 +716,41 @@ if ($replaced -cne $stagedHash) {
   Copy-Item -LiteralPath $backup -Destination $path -Force
   $restored = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
   if ($restored -cne $expectedInstalled) {
-    throw "Stop: hash po podmianie nie jest hashem pliku ze stagingu, a przywrócenie kopii nie wróciło SHA-256 $expectedInstalled. Kopii z kroku 2 nie usuwaj."
+    throw "Stop: the hash after the swap is not the hash of the file from staging, and restoring the copy did not bring back SHA-256 $expectedInstalled. Do not delete the copy from step 2."
   }
-  throw "Stop: hash pliku PATH po kopii nie jest hashem pliku ze stagingu. Kopię z kroku 2 skopiowano z powrotem na plik PATH. Tej kopii nie usuwaj."
+  throw "Stop: the hash of the PATH file after the copy is not the hash of the file from staging. The copy from step 2 was copied back onto the PATH file. Do not delete this copy."
 }
 ```
 
-### Tabela testów
+### Test table
 
-Jedna pozycja na polecenie, które ta diagnoza naprawdę uruchomiła. Polecenia z procedury powyżej nie są wierszami, bo ten krok ich nie uruchomił.
+One row for each command that this diagnosis actually ran. The commands from the procedure above are not rows, because this step did not run them.
 
-| Polecenie | Wynik | Gdzie zapisane |
+| Command | Outcome | Where recorded |
 |---|---|---|
-| `Get-Command sqlharness -All` | jeden obiekt `Application`; `Source`, `Path` i `Definition` = `C:\Users\rgone\.local\bin\sqlharness.exe`; T2 to samo | `## 015/T1`, `## 015/T2` |
-| `sqlharness --help` | kod 0; 376 B; nazwy bez `capabilities`, `validate`, `mcp` | `## 015/T1` |
-| `sqlharness --version` | kod 0; tekst `1.0.0` | `## 015/T1` |
-| `dotnet run --project src/SqlHarness.Cli -- --help` | kod 0; 1971 B; jest `capabilities`, `validate`, `mcp` | `## 015/T1` |
-| `dotnet run --project src/SqlHarness.Cli -- capabilities --json` | kod 0; 6956 B; `mcp` nie występuje w tym JSON | `## 015/T1` |
-| `Get-FileHash -Algorithm SHA256` pliku PATH | `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`; długość 95604247 B | `## 015/T2` |
+| `Get-Command sqlharness -All` | one `Application` object; `Source`, `Path` and `Definition` = `C:\Users\rgone\.local\bin\sqlharness.exe`; T2 the same | `## 015/T1`, `## 015/T2` |
+| `sqlharness --help` | code 0; 376 B; names without `capabilities`, `validate`, `mcp` | `## 015/T1` |
+| `sqlharness --version` | code 0; text `1.0.0` | `## 015/T1` |
+| `dotnet run --project src/SqlHarness.Cli -- --help` | code 0; 1971 B; has `capabilities`, `validate`, `mcp` | `## 015/T1` |
+| `dotnet run --project src/SqlHarness.Cli -- capabilities --json` | code 0; 6956 B; `mcp` does not occur in this JSON | `## 015/T1` |
+| `Get-FileHash -Algorithm SHA256` of the PATH file | `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`; length 95604247 B | `## 015/T2` |
 | `FileVersionInfo.GetVersionInfo` | `FileVersion` `1.0.0.0`; `ProductVersion` `1.0.0+3d2c41892d15d563c22dba9c917c71aa31cb66ff`; `OriginalFilename` `sqlharness.dll`; `FileDescription` `sqlharness` | `## 015/T2` |
-| `Get-AuthenticodeSignature` | `Status` `NotSigned`; certyfikat podpisującego null | `## 015/T2` |
-| `gh release list --repo rgonek/sqlharness --limit 20` i `gh release view` czterech tagów | kod 0; cztery opublikowane tagi; przy każdym `sqlharness-win-x64.zip` i `SHA256SUMS` | ta sekcja, `Zapytanie o wydania` |
-| `git rev-parse`, `git cat-file -t`, `git log -1 --format=%cI` i `git merge-base --is-ancestor` dla tagów z tabeli oraz `c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` i `f2d988aa88a0d120facbde3b3dc8ef380a199512` | kody przy wyborze tagu; oba commity funkcji nie są przodkami żadnego z czterech tagów (kod 1); każdy tag jest przodkiem obu (kod 0) | przy wyborze tagu |
-| `git diff --check` | exit 0; brak wyjścia | ten wiersz dla dopisku `## 015/T3`; przebiegi T1 i T2 też exit 0, w raportach zadań poza gitem |
-| `git diff --check` dla dopisku guarda | exit 0; brak wyjścia | ten wiersz |
-| `dotnet test` | nie uruchomiono; plan zabrania testów aplikacji przy samym zapisie dokumentów | ten wiersz |
+| `Get-AuthenticodeSignature` | `Status` `NotSigned`; signing certificate null | `## 015/T2` |
+| `gh release list --repo rgonek/sqlharness --limit 20` and `gh release view` of four tags | code 0; four published tags; each with `sqlharness-win-x64.zip` and `SHA256SUMS` | this section, `Release query` |
+| `git rev-parse`, `git cat-file -t`, `git log -1 --format=%cI` and `git merge-base --is-ancestor` for the tags in the table and for `c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` and `f2d988aa88a0d120facbde3b3dc8ef380a199512` | codes at the tag choice; both feature commits are not ancestors of any of the four tags (code 1); each tag is an ancestor of both (code 0) | at the tag choice |
+| `git diff --check` | exit 0; no output | this row for the `## 015/T3` entry; the T1 and T2 runs are also exit 0, in the task reports outside git |
+| `git diff --check` for the guard entry | exit 0; no output | this row |
+| `dotnet test` | not run; the plan forbids application tests when only writing documents | this row |
 
 ### UNPROVEN
 
-- Tekst `--help` wydania, czyli stdout kroku 5. Warunek: wykonać krok 5 i zapisać stdout. Tego przebiegu nie było, więc tego tekstu tu nie ma. Oczekiwanie z gita, zapisane przy wyborze tagu, nie jest tym stdoutem: krok 5 ma odrzucić asset zbudowany z `v0.3.1`. Zamknięcie rozjazdu wymaga buildu nowszego niż każdy opublikowany tag z tabeli. Ten plan takiego buildu nie autoryzuje.
-- Czy hash któregokolwiek assetu wydania jest równy buildowi tego worktree. Warunek: zahashować wyjęty `sqlharness.exe` i build z tego worktree, potem porównać te dwa hashe. Tego dokumentu nie ma takiej pary. SHA-256 pliku PATH nie jest oczekiwanym hashem wyjętego pliku i nie jest tą parą.
-- Ciało `SHA256SUMS` i bajty zipa. Warunek: pobrać te pliki w kroku 3 i zapisać sumę oraz wynik porównania. To zapytanie wzięło nazwy assetów, daty i flagi. Sumy nie czytało.
-- Pochodzenie pliku PATH poza polami z `## 015/T2`. Warunek zostaje ten z `## 015/T2`: suma kontrolna wydania albo log publikacji równe SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. To zapytanie tego warunku nie spełnia.
-- Dowolna platforma inna niż this Windows host. Warunek: powtórzyć diagnozę na tej platformie. Nie robiono tego. Nazwy archiwów linux i osx nie są tym dowodem.
-- Live DB. Warunek: pomiar na żywej bazie. Nie robiono tego. Ta diagnoza go nie wymaga i go nie zastępuje.
+- The `--help` text of the release, that is step 5's stdout. Condition: perform step 5 and record stdout. That run has not happened, so that text is not here. The expectation from git, recorded at the tag choice, is not that stdout: step 5 is to reject an asset built from `v0.3.1`. Closing the divergence requires a build newer than every published tag in the table. This plan does not authorize such a build.
+- Whether the hash of any release asset equals a build of this worktree. Condition: hash the extracted `sqlharness.exe` and the build from this worktree, then compare those two hashes. This document has no such pair. The PATH file's SHA-256 is not the expected hash of the extracted file and is not that pair.
+- The `SHA256SUMS` body and the zip bytes. Condition: download those files in step 3 and record the checksum and the comparison result. That query took the asset names, dates and flags. It did not read the checksums.
+- The provenance of the PATH file apart from the fields from `## 015/T2`. The condition stays the one from `## 015/T2`: a release checksum or a publication log equal to the SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. That query does not satisfy this condition.
+- Any platform other than this Windows host. Condition: repeat the diagnosis on that platform. That was not done. The linux and osx archive names are not that evidence.
+- Live DB. Condition: a measurement on a live database. That was not done. This diagnosis does not require it and does not replace it.
 
-### Brak dowodu live i brak dowodu z innej platformy
+### No live evidence and no evidence from another platform
 
-Ten krok nie łączył się z bazą danych. Nie ma dowodu live. Nie uruchamiano diagnozy na Linuksie, macOS ani na innym hoście. Nazwy `sqlharness-linux-x64.tar.gz` i `sqlharness-osx-arm64.tar.gz` z metadanych wydań nie są dowodem z innej platformy, bo tych archiwów nie pobierano i ich nie uruchamiano. Brak dowodu live i brak dowodu z innej platformy jest brakiem, nie wynikiem pozytywnym.
+This step did not connect to a database. There is no live evidence. The diagnosis was not run on Linux, macOS or another host. The names `sqlharness-linux-x64.tar.gz` and `sqlharness-osx-arm64.tar.gz` from the release metadata are not evidence from another platform, because those archives were not downloaded and were not run. The absence of live evidence and the absence of evidence from another platform is a gap, not a positive result.

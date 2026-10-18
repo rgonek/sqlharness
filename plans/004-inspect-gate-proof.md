@@ -1,48 +1,48 @@
-# Plan 004 — dowód: inspect pod wspólną blokadą operacji DB (R1)
+# Plan 004 — evidence: inspect under the shared DB-operation gate (R1)
 
 Branch: `fix/plan-004-mcp-inspect-gate` (worktree `.worktrees/plan-004-mcp-inspect-gate`,
-start `8349fa7`). Bez merge/push — czeka na decyzję, jak 001/002.
+start `8349fa7`). No merge/push — waiting for a decision, like 001/002.
 
-Commity: `ff5d0b6` T1 testy RED, `32f0cc2` T2 fix gate GREEN,
-`9735b1a` T3 testy release, `bc5758c` T3 docs.
+Commits: `ff5d0b6` T1 RED tests, `32f0cc2` T2 gate fix GREEN,
+`9735b1a` T3 release tests, `bc5758c` T3 docs.
 
-## Zmiana (5 plików, +249/−11)
+## Change (5 files, +249/−11)
 
-- `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs` — `InspectAsync` przez
-  `RunDbAsync("sqlharness_inspect", ctx, null, null, …)`; mapowanie
-  (`MapInspect` + `ThrowIfUnknown`) i timeouty per kind (ping 5, inne 30)
-  nietknięte; sygnatura bez zmian, liczba tools 11.
+- `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs` — `InspectAsync` via
+  `RunDbAsync("sqlharness_inspect", ctx, null, null, …)`; mapping
+  (`MapInspect` + `ThrowIfUnknown`) and timeouts per kind (ping 5, others 30)
+  untouched; signature unchanged, tool count 11.
 - `src/SqlHarness.Mcp/McpExecutionGate.cs` — `DbTools += "sqlharness_inspect"`;
-  `IsDbTool` obejmuje dokładnie sześć narzędzi DB.
-- `tests/.../McpLifecycleTests.cs` — blokady: query↔inspect, inspect↔query+inspect,
-  capabilities/validate dostępne, klasyfikacja six, release po odmowie
-  mapowania / błędzie Core / host-shutdown.
-- `tests/.../McpCancellationTests.cs` — rename midflight-cancel na inspect
+  `IsDbTool` covers exactly six DB tools.
+- `tests/.../McpLifecycleTests.cs` — blockages: query↔inspect, inspect↔query+inspect,
+  capabilities/validate available, six-classification, release after rejection
+  of mapping / a Core error / host-shutdown.
+- `tests/.../McpCancellationTests.cs` — rename midflight-cancel to inspect
   (superset: `CancelObserved` + `TryEnterDb` + next-inspect), deadline 1 s.
-- `docs/mcp.md` — inspect w gate-liście, safe-local bez inspect (3 zdania).
+- `docs/mcp.md` — inspect in the gate list, safe-local without inspect (3 sentences).
 
-## Dowody (kontroler, worktree, 2026-09-29)
+## Evidence (controller, worktree, 2026-09-29)
 
-- Fokus `McpLifecycleTests|McpCancellationTests`: 28 passed, 0 failed.
+- Focus `McpLifecycleTests|McpCancellationTests`: 28 passed, 0 failed.
 - `dotnet build --no-restore -warnaserror`: 0 warn, 0 error.
-- Pełny `--filter 'FullyQualifiedName!~Integration'`: Core 1915/0/0,
+- Full `--filter 'FullyQualifiedName!~Integration'`: Core 1915/0/0,
   MCP 154 passed, 0 failed, 4 skipped (2 foreign-RID + 2 live opt-in).
-- `git diff --check`: 0. Dyskryminujący dowód regresji: T1 RED 3/24 na starym
-  kodzie (inspect odpowiadał success zamiast BUSY) → T2 GREEN 24/24 bez edycji testów.
-- Final review całej gałęzi: Ready to merge, 0 Critical/Important.
+- `git diff --check`: 0. Discriminating regression evidence: T1 RED 3/24 on the old
+  code (inspect answered success instead of BUSY) → T2 GREEN 24/24 without test edits.
+- Final review of the whole branch: Ready to merge, 0 Critical/Important.
 
-## Rulingi i odroczenia (ledger `.superpowers/sdd/004-mcp-inspect-gate/`, usunięty po review)
+## Rulings and deferrals (ledger `.superpowers/sdd/004-mcp-inspect-gate/`, removed after review)
 
-1. Preflight czysty — start T1 (brak konfliktów z planem ani driftu 003).
-2. T3 Important (brak RED-phase dla testów release) zaparkowany bez rundy fix:
-   asercje release przechodzą na starym kodzie pusto (bez gate nie ma slotu
-   do wycieku), więc RED-run nie dyskryminuje; final review potwierdził.
-3. Odroczone minory (żaden nie blokuje merge): holder-assertion bez `Text()`,
-   prefiksy `local*`, fraza `discovery` w `McpExecutionGate.cs:71`,
-   EOF tylko via hostShutdown, wording raportu budget-vs-timeout.
+1. Preflight clean — start of T1 (no conflicts with the plan and no 003 drift).
+2. T3 Important (no RED phase for the release tests) parked without a fix round:
+   the release assertions pass vacuously on the old code (without a gate there is no slot
+   to leak), so a RED run does not discriminate; the final review confirmed.
+3. Deferred minor items (none block the merge): holder-assertion without `Text()`,
+   the `local*` prefixes, the `discovery` phrase in `McpExecutionGate.cs:71`,
+   EOF only via hostShutdown, report wording budget-vs-timeout.
 
-## Braki
+## Gaps
 
-Brak live DB (jawny; live testy skip). Flake
-`Progress_fires_only_for_a_client_token…` pre-existing — w tych runach zielony
-(fokus 28/28, pełny 154/0/4); baseline diagnozuje plan 005.
+No live DB (explicit; live tests skip). Flake
+`Progress_fires_only_for_a_client_token…` pre-existing — green in these runs
+(focus 28/28, full 154/0/4); the baseline diagnoses it in plan 005.

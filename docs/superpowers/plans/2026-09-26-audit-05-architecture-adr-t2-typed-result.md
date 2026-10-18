@@ -1,6 +1,6 @@
 # ADR T2: typed operation result stays internal, `object? Report` stays public
 
-**Status (2026-10-08):** ACCEPTED (decyzja obowiązuje). Follow-upy poniżej świadomie odroczone, bez planu.
+**Status (2026-10-08):** ACCEPTED (the decision is binding). The follow-ups below are deliberately deferred, without a plan.
 
 Date: 2026-09-28. Scope: plan 05 task T2, checkbox 4.
 

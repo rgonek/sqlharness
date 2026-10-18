@@ -1,161 +1,161 @@
-# Kontrakt pg_stat_statements — macierz źródeł
+# pg_stat_statements contract — source matrix
 
 > **REJECTED 2026-10-11** — `pgstop` will not be built. `query` can already read `pg_stat_statements`; a ranked example query in the agent docs (plan 029) covers the need. Kept for history; do not execute.
 
-Status: projekt skumulowanego rankingu v1; macierz źródeł (T1), sekwencja połączenia i runtime probe (T2), osobny kontrakt od qstop (T3). Korekta 2026-10-11 przy `729d88f`; delta odłożona (T4). Funkcja nadal PLANNED.
+Status: design of the v1 cumulative ranking; source matrix (T1), connection sequence and runtime probe (T2), separate contract borrowed from qstop (T3). Correction 2026-10-11 at `729d88f`; delta deferred (T4). The function remains PLANNED.
 
-## Macierz źródeł
+## Source matrix
 
-Ta macierz sprawdza oficjalne strony PostgreSQL 14, 15 i 16 oraz dwa odwołania lokalne. Nie opisuje sekwencji odczytu, rankingu, delty ani planu kodu. Nie dodaje komend, stubów ani capabilities. Nie uruchamiano live DB ani `dotnet test`.
+This matrix checks the official PostgreSQL 14, 15 and 16 pages plus two local references. It does not describe the read sequence, the ranking, the delta or the code plan. It adds no commands, stubs or capabilities. No live DB and no `dotnet test` were run.
 
-Wersja serwera nie jest wersją rozszerzenia `pg_stat_statements`. Strona modułu opisuje kształt dostarczany z daną wersją główną serwera. Zainstalowana wersja jest osobnym polem katalogu. Zmienia ją `ALTER EXTENSION … UPDATE`, nie sam upgrade serwera.
+The server version is not the version of the `pg_stat_statements` extension. The module page describes the shape shipped with a given server major version. The installed version is a separate catalog field. `ALTER EXTENSION … UPDATE` changes it, not a server upgrade by itself.
 
-Stopki otwartych stron modułu: PostgreSQL 14.24, sekcja F.30; PostgreSQL 15.19, sekcja F.32; PostgreSQL 16.15, sekcja F.32. Liczby `1.9` i `1.10` nie stoją na tych stronach HTML. Pochodzą z pliku kontrolnego tagu.
+Footers of the opened module pages: PostgreSQL 14.24, section F.30; PostgreSQL 15.19, section F.32; PostgreSQL 16.15, section F.32. The numbers `1.9` and `1.10` do not appear on those HTML pages. They come from the control file of the tag.
 
-Specyfikacja `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md` jest hipotezą. Porównane są jej sekcje 3, 6 i 7. Status wiersza: fakt ze źródła, rozjazd ze specyfikacją albo `UNPROVEN` z warunkiem dowodu.
+The specification `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md` is a hypothesis. Its sections 3, 6 and 7 were compared. Row status: fact from the source, divergence from the specification, or `UNPROVEN` with an evidence condition.
 
-### Wersja rozszerzenia, nie wersja serwera
+### Extension version, not server version
 
-| Wiersz | PG14 | PG15 | PG16 | Status |
+| Row | PG14 | PG15 | PG16 | Status |
 |---|---|---|---|---|
-| Liczba na stronie modułu | Strona F.30 nie podaje `default_version` ani numeru rozszerzenia. | Strona F.32 nie podaje tej liczby. | Strona F.32 nie podaje tej liczby. | fakt |
-| `default_version` w pliku kontrolnym | Tagi `REL_14_0` i `REL_14_24`: `default_version = '1.9'`. | Tagi `REL_15_0` i `REL_15_19`: `default_version = '1.10'`. | Tagi `REL_16_0` i `REL_16_15`: `default_version = '1.10'`. | fakt; plik `contrib/pg_stat_statements/pg_stat_statements.control` na mirrorze `postgres/postgres`. To nie jest numer serwera. |
-| Wydania pośrednie między tagiem `.0` a stopką | Nie otwarto `REL_14_1` … `REL_14_23`. | Nie otwarto `REL_15_1` … `REL_15_18`. | Nie otwarto `REL_16_1` … `REL_16_14`. | `UNPROVEN`. Warunek: odczyt `default_version` w każdym tagu pośrednim. Oba otwarte końce tej wersji głównej są zgodne, ale środek serii nie był otwarty. |
-| Skąd bierze się wersja przy `CREATE EXTENSION` | Parametr `version`: „The default version is whatever is specified in the extension's control file.” | To samo zdanie. | To samo zdanie. | fakt. Pominięty `VERSION` nie oznacza numeru serwera. |
-| `ALTER EXTENSION … UPDATE` | Synopsis: `ALTER EXTENSION name UPDATE [ TO new_version ]`. Forma `UPDATE` aktualizuje zainstalowaną wersję skryptem aktualizacji. Bez `new_version` komenda „attempts to update to whatever is shown as the default version in the extension's control file.” | To samo. | To samo. Sekcja 38.17.4 dodatkowo: `ALTER EXTENSION UPDATE` „track which version of the extension is actually installed in a given database.” | fakt. To osobna komenda SQL, nie upgrade serwera. Zdanie o śledzeniu zainstalowanej wersji otwarto wprost dla PG16; PG14 i PG15 mają tę samą formę `UPDATE` na stronie `ALTER EXTENSION`. |
-| Upgrade serwera a rozszerzenie | `pg_upgrade`, krok „Install extension shared object files”: „Do not load the schema definitions, e.g., `CREATE EXTENSION` pgcrypto, because these will be duplicated from the old cluster. If extension updates are available, `pg_upgrade` will report this and create a script that can be run later to update them.” | To samo zdanie. | To samo zdanie. | fakt. Strona nie nazywa treści tego skryptu jako `ALTER EXTENSION pg_stat_statements UPDATE`. Mówi, że aktualizacja rozszerzenia jest późniejszym skryptem, a definicje pochodzą ze starego klastra. |
-| Katalog wersji | `pg_extension.extversion` `text`: „Version name for the extension” (52.22). `pg_available_extensions.default_version`: „Name of default version, or NULL if none is specified.” `installed_version`: „Currently installed version of the extension, or NULL if not installed” (52.65). | Te same kolumny. `pg_extension` to 53.22, widok to 54.2. | Te same kolumny. `pg_extension` to 53.22, widok to 54.2. | fakt. `installed_version` i `extversion` nie są `server_version`. |
-| Zasięg instalacji | Widoki i funkcje „are not available globally but can be enabled for a specific database with `CREATE EXTENSION pg_stat_statements`.” | To samo zdanie. | To samo zdanie. | fakt |
+| Number on the module page | Page F.30 gives neither `default_version` nor an extension number. | Page F.32 does not give that number. | Page F.32 does not give that number. | fact |
+| `default_version` in the control file | Tags `REL_14_0` and `REL_14_24`: `default_version = '1.9'`. | Tags `REL_15_0` and `REL_15_19`: `default_version = '1.10'`. | Tags `REL_16_0` and `REL_16_15`: `default_version = '1.10'`. | fact; the `contrib/pg_stat_statements/pg_stat_statements.control` file on the `postgres/postgres` mirror. This is not a server number. |
+| Intermediate releases between the `.0` tag and the footer | `REL_14_1` … `REL_14_23` were not opened. | `REL_15_1` … `REL_15_18` were not opened. | `REL_16_1` … `REL_16_14` were not opened. | `UNPROVEN`. Condition: read `default_version` in every intermediate tag. Both opened ends of this major version agree, but the middle of the series was not opened. |
+| Where the version comes from at `CREATE EXTENSION` | The `version` parameter: „The default version is whatever is specified in the extension's control file.” | Same sentence. | Same sentence. | fact. An omitted `VERSION` does not mean a server number. |
+| `ALTER EXTENSION … UPDATE` | Synopsis: `ALTER EXTENSION name UPDATE [ TO new_version ]`. The `UPDATE` form updates the installed version with an update script. Without `new_version` the command „attempts to update to whatever is shown as the default version in the extension's control file.” | Same. | Same. Section 38.17.4 adds: `ALTER EXTENSION UPDATE` „track which version of the extension is actually installed in a given database.” | fact. This is a separate SQL command, not a server upgrade. The sentence about tracking the installed version was opened directly for PG16; PG14 and PG15 have the same `UPDATE` form on the `ALTER EXTENSION` page. |
+| Server upgrade versus extension | `pg_upgrade`, step „Install extension shared object files”: „Do not load the schema definitions, e.g., `CREATE EXTENSION` pgcrypto, because these will be duplicated from the old cluster. If extension updates are available, `pg_upgrade` will report this and create a script that can be run later to update them.” | Same sentence. | Same sentence. | fact. The page does not name the content of that script as `ALTER EXTENSION pg_stat_statements UPDATE`. It says that the extension update is a later script and that the definitions come from the old cluster. |
+| Version catalog | `pg_extension.extversion` `text`: „Version name for the extension” (52.22). `pg_available_extensions.default_version`: „Name of default version, or NULL if none is specified.” `installed_version`: „Currently installed version of the extension, or NULL if not installed” (52.65). | The same columns. `pg_extension` is 53.22, the view is 54.2. | The same columns. `pg_extension` is 53.22, the view is 54.2. | fact. `installed_version` and `extversion` are not `server_version`. |
+| Installation scope | The views and functions „are not available globally but can be enabled for a specific database with `CREATE EXTENSION pg_stat_statements`.” | Same sentence. | Same sentence. | fact |
 
-### Kolumny `pg_stat_statements`
+### `pg_stat_statements` columns
 
-Widok ma jeden wiersz na każdą różną kombinację database ID, user ID, query ID i tego, czy polecenie jest top-level, aż do limitu modułu. To zdanie jest w F.30.1, F.32.1 (PG15) i F.32.1 (PG16).
+The view has one row for each distinct combination of database ID, user ID, query ID and whether the command is top-level, up to the module limit. That sentence is in F.30.1, F.32.1 (PG15) and F.32.1 (PG16).
 
-`toplevel` i czasy planów są już w tabeli PG14. Otwarte strony nie mówią, że doszły między PG14 a PG16. Między tymi tabelami dochodzą kolumny I/O `temp_blk_read_time` i `temp_blk_write_time` oraz osiem kolumn `jit_*`.
+`toplevel` and the plan times are already in the PG14 table. The opened pages do not say that they arrived between PG14 and PG16. Between those tables the I/O columns `temp_blk_read_time` and `temp_blk_write_time` and eight `jit_*` columns are added.
 
-| Kolumna | Typ | PG14 F.21 | PG15 F.20 | PG16 F.22 | Status |
+| Column | Type | PG14 F.21 | PG15 F.20 | PG16 F.22 | Status |
 |---|---|---|---|---|---|
-| `userid` | `oid` | tak | tak | tak | fakt |
-| `dbid` | `oid` | tak | tak | tak | fakt |
-| `toplevel` | `bool` | tak | tak | tak | fakt. Opis: true, gdy zapytanie wykonano jako top-level; zawsze true, gdy `pg_stat_statements.track` jest `top`. Spec §3 zalicza kolumnę do podzbioru PG14. Zgodne co do obecności. |
-| `queryid` | `bigint` | tak | tak | tak | fakt. „Hash code to identify identical normalized queries.” |
-| `query` | `text` | tak | tak | tak | fakt. Linia tabeli nie mówi „nullable”. Proza mówi o null osobno, w wierszach widoczności. Spec §3 zapisuje `(nullable)`. To jest zgodne z prozą o odrzuceniu tekstów, nie z linią typu. |
-| `plans` | `bigint` | tak | tak | tak | fakt. Liczba planowań, gdy `pg_stat_statements.track_planning` jest włączone, inaczej zero. |
-| `total_plan_time` | `double precision` | tak | tak | tak | fakt. Milisekundy; zero, gdy `track_planning` wyłączone. |
-| `min_plan_time` | `double precision` | tak | tak | tak | fakt. Ten sam warunek zera. |
-| `max_plan_time` | `double precision` | tak | tak | tak | fakt. Ten sam warunek zera. |
-| `mean_plan_time` | `double precision` | tak | tak | tak | fakt. Ten sam warunek zera. |
-| `stddev_plan_time` | `double precision` | tak | tak | tak | fakt. Ten sam warunek zera. |
-| `calls` | `bigint` | tak | tak | tak | fakt |
-| `total_exec_time` | `double precision` | tak | tak | tak | fakt |
-| `min_exec_time` | `double precision` | tak | tak | tak | fakt |
-| `max_exec_time` | `double precision` | tak | tak | tak | fakt |
-| `mean_exec_time` | `double precision` | tak | tak | tak | fakt |
-| `stddev_exec_time` | `double precision` | tak | tak | tak | fakt |
-| `rows` | `bigint` | tak | tak | tak | fakt |
-| `shared_blks_hit` | `bigint` | tak | tak | tak | fakt |
-| `shared_blks_read` | `bigint` | tak | tak | tak | fakt |
-| `shared_blks_dirtied` | `bigint` | tak | tak | tak | fakt |
-| `shared_blks_written` | `bigint` | tak | tak | tak | fakt |
-| `local_blks_hit` | `bigint` | tak | tak | tak | fakt |
-| `local_blks_read` | `bigint` | tak | tak | tak | fakt |
-| `local_blks_dirtied` | `bigint` | tak | tak | tak | fakt |
-| `local_blks_written` | `bigint` | tak | tak | tak | fakt |
-| `temp_blks_read` | `bigint` | tak | tak | tak | fakt |
-| `temp_blks_written` | `bigint` | tak | tak | tak | fakt |
-| `blk_read_time` | `double precision` | tak | tak | tak | fakt, ze zmianą opisu. PG14: „reading blocks”. PG15 i PG16: „reading data file blocks”. Zero, gdy `track_io_timing` wyłączone. |
-| `blk_write_time` | `double precision` | tak | tak | tak | fakt, ze zmianą opisu. PG14: „writing blocks”. PG15 i PG16: „writing data file blocks”. Zero, gdy `track_io_timing` wyłączone. |
-| `temp_blk_read_time` | `double precision` | brak | tak | tak | fakt. Czas czytania bloków plików tymczasowych, w milisekundach; zero, gdy `track_io_timing` wyłączone. Spec §3 nie wymienia tej kolumny. Rozjazd: między PG14 a PG15 doszła kolumna I/O, której sekcja 3 nie ma. |
-| `temp_blk_write_time` | `double precision` | brak | tak | tak | fakt. Ten sam rozjazd co wyżej, dla zapisu bloków tymczasowych. |
-| `wal_records` | `bigint` | tak | tak | tak | fakt |
-| `wal_fpi` | `bigint` | tak | tak | tak | fakt |
-| `wal_bytes` | `numeric` | tak | tak | tak | fakt |
-| `jit_functions` | `bigint` | brak | tak | tak | fakt. Spec §3: PG15 dodaje osiem `jit_*`, w tym tę. Zgodne. |
-| `jit_generation_time` | `double precision` | brak | tak | tak | fakt. Zgodne ze spec §3. |
-| `jit_inlining_count` | `bigint` | brak | tak | tak | fakt. Zgodne ze spec §3. |
-| `jit_inlining_time` | `double precision` | brak | tak | tak | fakt. Zgodne ze spec §3. |
-| `jit_optimization_count` | `bigint` | brak | tak | tak | fakt. Zgodne ze spec §3. |
-| `jit_optimization_time` | `double precision` | brak | tak | tak | fakt. Zgodne ze spec §3. |
-| `jit_emission_count` | `bigint` | brak | tak | tak | fakt. Zgodne ze spec §3. |
-| `jit_emission_time` | `double precision` | brak | tak | tak | fakt. Zgodne ze spec §3. |
+| `userid` | `oid` | yes | yes | yes | fact |
+| `dbid` | `oid` | yes | yes | yes | fact |
+| `toplevel` | `bool` | yes | yes | yes | fact. Description: true when the query was executed as top-level; always true when `pg_stat_statements.track` is `top`. Spec §3 includes the column in the PG14 subset. Agrees on presence. |
+| `queryid` | `bigint` | yes | yes | yes | fact. „Hash code to identify identical normalized queries.” |
+| `query` | `text` | yes | yes | yes | fact. The table row does not say „nullable”. The prose talks about null separately, in the visibility rows. Spec §3 writes `(nullable)`. This agrees with the prose about discarding texts, not with the type row. |
+| `plans` | `bigint` | yes | yes | yes | fact. Number of plannings when `pg_stat_statements.track_planning` is enabled, otherwise zero. |
+| `total_plan_time` | `double precision` | yes | yes | yes | fact. Milliseconds; zero when `track_planning` is disabled. |
+| `min_plan_time` | `double precision` | yes | yes | yes | fact. Same zero condition. |
+| `max_plan_time` | `double precision` | yes | yes | yes | fact. Same zero condition. |
+| `mean_plan_time` | `double precision` | yes | yes | yes | fact. Same zero condition. |
+| `stddev_plan_time` | `double precision` | yes | yes | yes | fact. Same zero condition. |
+| `calls` | `bigint` | yes | yes | yes | fact |
+| `total_exec_time` | `double precision` | yes | yes | yes | fact |
+| `min_exec_time` | `double precision` | yes | yes | yes | fact |
+| `max_exec_time` | `double precision` | yes | yes | yes | fact |
+| `mean_exec_time` | `double precision` | yes | yes | yes | fact |
+| `stddev_exec_time` | `double precision` | yes | yes | yes | fact |
+| `rows` | `bigint` | yes | yes | yes | fact |
+| `shared_blks_hit` | `bigint` | yes | yes | yes | fact |
+| `shared_blks_read` | `bigint` | yes | yes | yes | fact |
+| `shared_blks_dirtied` | `bigint` | yes | yes | yes | fact |
+| `shared_blks_written` | `bigint` | yes | yes | yes | fact |
+| `local_blks_hit` | `bigint` | yes | yes | yes | fact |
+| `local_blks_read` | `bigint` | yes | yes | yes | fact |
+| `local_blks_dirtied` | `bigint` | yes | yes | yes | fact |
+| `local_blks_written` | `bigint` | yes | yes | yes | fact |
+| `temp_blks_read` | `bigint` | yes | yes | yes | fact |
+| `temp_blks_written` | `bigint` | yes | yes | yes | fact |
+| `blk_read_time` | `double precision` | yes | yes | yes | fact, with a description change. PG14: „reading blocks”. PG15 and PG16: „reading data file blocks”. Zero when `track_io_timing` is disabled. |
+| `blk_write_time` | `double precision` | yes | yes | yes | fact, with a description change. PG14: „writing blocks”. PG15 and PG16: „writing data file blocks”. Zero when `track_io_timing` is disabled. |
+| `temp_blk_read_time` | `double precision` | absent | yes | yes | fact. Time of reading temporary-file blocks, in milliseconds; zero when `track_io_timing` is disabled. Spec §3 does not list this column. Divergence: an I/O column appeared between PG14 and PG15 that section 3 lacks. |
+| `temp_blk_write_time` | `double precision` | absent | yes | yes | fact. The same divergence as above, for writing temporary blocks. |
+| `wal_records` | `bigint` | yes | yes | yes | fact |
+| `wal_fpi` | `bigint` | yes | yes | yes | fact |
+| `wal_bytes` | `numeric` | yes | yes | yes | fact |
+| `jit_functions` | `bigint` | absent | yes | yes | fact. Spec §3: PG15 adds eight `jit_*`, including this one. Agrees. |
+| `jit_generation_time` | `double precision` | absent | yes | yes | fact. Agrees with spec §3. |
+| `jit_inlining_count` | `bigint` | absent | yes | yes | fact. Agrees with spec §3. |
+| `jit_inlining_time` | `double precision` | absent | yes | yes | fact. Agrees with spec §3. |
+| `jit_optimization_count` | `bigint` | absent | yes | yes | fact. Agrees with spec §3. |
+| `jit_optimization_time` | `double precision` | absent | yes | yes | fact. Agrees with spec §3. |
+| `jit_emission_count` | `bigint` | absent | yes | yes | fact. Agrees with spec §3. |
+| `jit_emission_time` | `double precision` | absent | yes | yes | fact. Agrees with spec §3. |
 
-Na otwartych stronach PG15 i PG16 nie ma kolumny `jit_*` poza tą ósemką. Strona PG14 nie ma żadnej kolumny `jit_*`.
+On the opened PG15 and PG16 pages there is no `jit_*` column besides that set of eight. The PG14 page has no `jit_*` column at all.
 
-### Kolumny `pg_stat_statements_info`
+### `pg_stat_statements_info` columns
 
-Widok ma jeden wiersz. To zdanie jest w F.30.2, F.32.2 (PG15) i F.32.2 (PG16).
+The view has one row. That sentence is in F.30.2, F.32.2 (PG15) and F.32.2 (PG16).
 
-| Kolumna | Typ | PG14 F.22 | PG15 F.21 | PG16 F.23 | Status |
+| Column | Type | PG14 F.22 | PG15 F.21 | PG16 F.23 | Status |
 |---|---|---|---|---|---|
-| `dealloc` | `bigint` | tak | tak | tak | fakt. „Total number of times `pg_stat_statements` entries about the least-executed statements were deallocated because more distinct statements than `pg_stat_statements.max` were observed.” Spec §3 wymienia tę kolumnę na 14+. Zgodne co do obecności. |
-| `stats_reset` | `timestamp with time zone` | tak | tak | tak | fakt. „Time at which all statistics in the `pg_stat_statements` view were last reset.” Spec §3 wymienia `stats_reset timestamptz` na 14+. Zgodne co do obecności i typu. |
+| `dealloc` | `bigint` | yes | yes | yes | fact. „Total number of times `pg_stat_statements` entries about the least-executed statements were deallocated because more distinct statements than `pg_stat_statements.max` were observed.” Spec §3 lists this column on 14+. Agrees on presence. |
+| `stats_reset` | `timestamp with time zone` | yes | yes | yes | fact. „Time at which all statistics in the `pg_stat_statements` view were last reset.” Spec §3 lists `stats_reset timestamptz` on 14+. Agrees on presence and type. |
 
-### GUC przy tych kolumnach
+### GUCs for these columns
 
-| Wiersz | PG14 | PG15 | PG16 | Status |
+| Row | PG14 | PG15 | PG16 | Status |
 |---|---|---|---|---|
-| `pg_stat_statements.track` | `top`, `all` albo `none`. Domyślnie `top`. | To samo. | To samo. | fakt. Spec §3: domyślnie `top`. Zgodne. |
-| `pg_stat_statements.track_planning` | Domyślnie `off`. Czasy planów i `plans` są wtedy zero. | To samo. | To samo. | fakt. Spec §3: czasy planów są 0, chyba że GUC jest włączony. Zgodne. |
-| `pg_stat_statements.track_utility` | Domyślnie `on`. Utility to wszystko poza `SELECT`, `INSERT`, `UPDATE` i `DELETE`. | Domyślnie `on`. Lista wyłączeń dodaje `MERGE`. | Domyślnie `on`. Lista wyłączeń dodaje `MERGE`. | fakt. Spec §3 w nawiasie podaje utility jako nie-`SELECT`/`INSERT`/`UPDATE`/`DELETE`, bez `MERGE`. Zgodne z PG14. Rozjazd dla PG15 i PG16. |
-| Sklejanie utility | „Utility commands … are compared strictly on the basis of their textual query strings.” Plannable: `SELECT`, `INSERT`, `UPDATE` i `DELETE`. | To samo zdanie o tekście utility. Plannable dodaje `MERGE`. | „Plannable queries … and utility commands are combined” według wewnętrznego hasha. Zdania o ścisłym porównaniu tekstu utility na tej stronie nie ma. | fakt różnicy stron. Spec §3, §6 i §7 tego nie rozstrzygają. Ta macierz nie projektuje tożsamości wpisu. |
-| `track_io_timing` | `blk_read_time` i `blk_write_time` są zero, gdy wyłączone. | To samo, oraz `temp_blk_read_time` i `temp_blk_write_time`. | To samo co PG15. | fakt. Spec §3 mówi o zerze dla `blk_read_time` / `blk_write_time`. Zgodne. O kolumnach `temp_blk_*_time` spec milczy; rozjazd jak w tabeli kolumn. |
+| `pg_stat_statements.track` | `top`, `all` or `none`. Default `top`. | Same. | Same. | fact. Spec §3: default `top`. Agrees. |
+| `pg_stat_statements.track_planning` | Default `off`. Plan times and `plans` are then zero. | Same. | Same. | fact. Spec §3: plan times are 0 unless the GUC is enabled. Agrees. |
+| `pg_stat_statements.track_utility` | Default `on`. Utility is everything except `SELECT`, `INSERT`, `UPDATE` and `DELETE`. | Default `on`. The exclusion list adds `MERGE`. | Default `on`. The exclusion list adds `MERGE`. | fact. Spec §3 gives in parentheses utility as non-`SELECT`/`INSERT`/`UPDATE`/`DELETE`, without `MERGE`. Agrees with PG14. Divergence for PG15 and PG16. |
+| Utility normalization | „Utility commands … are compared strictly on the basis of their textual query strings.” Plannable: `SELECT`, `INSERT`, `UPDATE` and `DELETE`. | Same sentence about the utility text. Plannable adds `MERGE`. | „Plannable queries … and utility commands are combined” by internal hash. That page has no sentence about strict comparison of the utility text. | fact of the page difference. Spec §3, §6 and §7 do not settle this. This matrix does not design entry identity. |
+| `track_io_timing` | `blk_read_time` and `blk_write_time` are zero when disabled. | Same, plus `temp_blk_read_time` and `temp_blk_write_time`. | Same as PG15. | fact. Spec §3 talks about zero for `blk_read_time` / `blk_write_time`. Agrees. The spec is silent about the `temp_blk_*_time` columns; divergence as in the column table. |
 
-### Widoczność `queryid` i `query`
+### `queryid` and `query` visibility
 
-| Wiersz | PG14 | PG15 | PG16 | Status |
+| Row | PG14 | PG15 | PG16 | Status |
 |---|---|---|---|---|
-| Kto widzi tekst i `queryid` cudzych zapytań | „only superusers and members of the `pg_read_all_stats` role are allowed to see the SQL text and `queryid` of queries executed by other users.” | „only superusers and roles with privileges of the `pg_read_all_stats` role are allowed to see the SQL text and `queryid` of queries executed by other users.” | To samo zdanie co PG15. | fakt. Spec §6 mówi „membership”. PG14 mówi „members of the `pg_read_all_stats` role”. PG15 i PG16 mówią „roles with privileges of”. Rozjazd sformułowania jest na PG15 i PG16. Te strony nie definiują różnicy zwrotów. |
-| Czy inni widzą statystyki | „Other users can see the statistics, however, if the view has been installed in their database.” | To samo zdanie. | To samo zdanie. | fakt. Spec §6: niesuperuser widzi statystyki wierszy, a tekst i `queryid` tylko swoich zapytań. Zdanie źródła potwierdza, że statystyki są widoczne. Nie mówi „all rows” tymi słowami. |
-| Wartość ukryta: null albo brak wiersza | Strona nie mówi, czy ukryte `query` i `queryid` są NULL, czy wiersz znika. | Strona tego nie mówi. | Strona tego nie mówi. | `UNPROVEN`. Warunek: odczyt widoku jako rola bez uprawnień `pg_read_all_stats`, dla wiersza innego użytkownika, na jawnym celu; wynik ma pokazać, czy `queryid` i `query` są NULL, czy wiersza nie ma. Tego odczytu nie wykonano. |
-| Null `query` z `showtext` | Funkcja `pg_stat_statements(showtext boolean)`. `showtext := false` pomija tekst: argument `OUT` odpowiadający kolumnie `query` zwraca null. | To samo. | To samo. | fakt. To nie jest reguła uprawnień. To zdanie nie wymienia `queryid`. |
-| Null `query` po odrzuceniu tekstów | Teksty reprezentatywne leżą w pliku dyskowym i nie zużywają shared memory. Gdy plik urośnie nadmiernie, moduł może odrzucić teksty: istniejące wpisy pokazują null w `query`, a statystyki przy `queryid` zostają. | To samo. | To samo, plus osobne zdanie niżej. | fakt. Spec §3 nazywa `query` nullable. Zgodne z tym zdaniem. |
-| Stałe w tekście przy dealloc | Tego akapitu nie ma. | Tego akapitu nie ma. | „Queries on which normalization can be applied may be observed with constant values in `pg_stat_statements`, especially when there is a high rate of entry deallocations.” Rada: zwiększyć `pg_stat_statements.max`. | fakt tylko PG16. |
+| Who sees the text and `queryid` of other users' queries | „only superusers and members of the `pg_read_all_stats` role are allowed to see the SQL text and `queryid` of queries executed by other users.” | „only superusers and roles with privileges of the `pg_read_all_stats` role are allowed to see the SQL text and `queryid` of queries executed by other users.” | Same sentence as PG15. | fact. Spec §6 says „membership”. PG14 says „members of the `pg_read_all_stats` role”. PG15 and PG16 say „roles with privileges of”. The wording divergence is on PG15 and PG16. These pages do not define a difference between the wordings. |
+| Whether others see statistics | „Other users can see the statistics, however, if the view has been installed in their database.” | Same sentence. | Same sentence. | fact. Spec §6: a non-superuser sees row statistics, and the text and `queryid` only of their own queries. The source sentence confirms that statistics are visible. It does not say „all rows” in those words. |
+| Hidden value: null or no row | The page does not say whether hidden `query` and `queryid` are NULL or the row disappears. | The page does not say. | The page does not say. | `UNPROVEN`. Condition: read the view as a role without `pg_read_all_stats` permissions, for another user's row, on an explicit target; the result must show whether `queryid` and `query` are NULL or the row is absent. That read was not performed. |
+| Null `query` with `showtext` | Function `pg_stat_statements(showtext boolean)`. `showtext := false` skips the text: the `OUT` argument corresponding to the `query` column returns null. | Same. | Same. | fact. This is not a permissions rule. That sentence does not mention `queryid`. |
+| Null `query` after texts are discarded | Representative texts lie in a disk file and do not consume shared memory. When the file grows excessively, the module may discard texts: existing entries show null in `query`, while the statistics at `queryid` remain. | Same. | Same, plus a separate sentence below. | fact. Spec §3 calls `query` nullable. Agrees with that sentence. |
+| Constants in the text on dealloc | That paragraph is not there. | That paragraph is not there. | „Queries on which normalization can be applied may be observed with constant values in `pg_stat_statements`, especially when there is a high rate of entry deallocations.” Advice: raise `pg_stat_statements.max`. | fact for PG16 only. |
 
 ### `pg_stat_statements_reset`
 
-Sygnatura na F.30.3, F.32.3 (PG15) i F.32.3 (PG16) jest jedna: `pg_stat_statements_reset(userid Oid, dbid Oid, queryid bigint) returns void`.
+The signature in F.30.3, F.32.3 (PG15) and F.32.3 (PG16) is one: `pg_stat_statements_reset(userid Oid, dbid Oid, queryid bigint) returns void`.
 
-Zdanie funkcji, to samo na trzech stronach: odrzuca statystyki `pg_stat_statements` odpowiadające podanym `userid`, `dbid` i `queryid`. Parametr pominięty dostaje domyślne `0`(invalid); resetowane są statystyki pasujące do pozostałych parametrów. Brak parametrów albo wszystkie parametry `0`(invalid) odrzuca wszystkie statystyki. „If all statistics in the `pg_stat_statements` view are discarded, it will also reset the statistics in the `pg_stat_statements_info` view.” Domyślnie tylko superuser; innym można nadać `GRANT`.
+The function sentence, the same on all three pages: it discards the `pg_stat_statements` statistics matching the given `userid`, `dbid` and `queryid`. An omitted parameter gets the default `0`(invalid); statistics matching the remaining parameters are reset. No parameters, or all parameters `0`(invalid), discards all statistics. „If all statistics in the `pg_stat_statements` view are discarded, it will also reset the statistics in the `pg_stat_statements_info` view.” By default superuser only; others can be granted it with `GRANT`.
 
-Przykład w F.30.5, F.32.5 (PG15) i F.32.5 (PG16) woła `pg_stat_statements_reset()`, `pg_stat_statements_reset(0,0,s.queryid)` oraz `pg_stat_statements_reset(0,0,0)`. Przykład nie czyta `pg_stat_statements_info`.
+The example in F.30.5, F.32.5 (PG15) and F.32.5 (PG16) calls `pg_stat_statements_reset()`, `pg_stat_statements_reset(0,0,s.queryid)` and `pg_stat_statements_reset(0,0,0)`. The example does not read `pg_stat_statements_info`.
 
-| Wiersz | Co mówi źródło | Status |
+| Row | What the source says | Status |
 |---|---|---|
-| Reset całości | Brak parametrów albo wszystkie `0` odrzuca wszystkie statystyki widoku i resetuje statystyki widoku `pg_stat_statements_info`. | fakt. Strona nie rozdziela w tym zdaniu `stats_reset` i `dealloc`. |
-| Skutek resetu całości dla `stats_reset` osobno i dla `dealloc` osobno | `stats_reset` jest opisane jako czas ostatniego resetu wszystkich statystyk widoku. `dealloc` jest opisane jako licznik wyrzuceń z powodu `pg_stat_statements.max`, nie jako skutek resetu. Zdanie funkcji mówi tylko, że statystyki widoku info są resetowane, gdy odrzucono wszystkie statystyki. | `UNPROVEN`, czy pełny reset ustawia `stats_reset`, zeruje `dealloc`, czy robi oba. Warunek: odczyt obu kolumn `pg_stat_statements_info` przed i po `pg_stat_statements_reset()` bez argumentów na jawnym celu. Tego odczytu nie wykonano. |
-| Reset bazy | Reguła parametrów: podane `dbid` przy pozostałych `0` resetuje statystyki pasujące do tego `dbid`. Strona nie ma osobnej sygnatury „reset bazy”. | fakt co do reguły parametrów. |
-| Skutek resetu bazy dla `stats_reset` i `dealloc` | Zdanie o resecie widoku info jest warunkowe: tylko gdy odrzucone są wszystkie statystyki widoku. Reset jednej bazy tego warunku sam nie wypowiada. | `UNPROVEN`. Warunek: odczyt `pg_stat_statements_info` przed i po `pg_stat_statements_reset` z `dbid` jednej bazy i zerami dla `userid` oraz `queryid`, na jawnym celu, przy statystykach także w innej bazie. Tego odczytu nie wykonano. |
-| Reset jednego `queryid` | Wywołanie z `queryid` odrzuca statystyki odpowiadające podanym parametrom. Przykład `pg_stat_statements_reset(0,0,s.queryid)` zostawia na liście inne zapytania z ich poprzednimi `calls`. | fakt: reset jednego `queryid` nie jest opisany jako odrzucenie wszystkich statystyk widoku. Przykład nie pokazuje `stats_reset` ani `dealloc`. |
-| Skutek resetu jednego `queryid` dla `stats_reset` i `dealloc` | Strona nie mówi, że taki reset aktualizuje `stats_reset`, zeruje `dealloc` albo rusza tylko liczniki wpisu. Warunek „if all statistics … are discarded” nie jest wprost zastosowany do jednego `queryid`. | `UNPROVEN`. Warunek dowodu: odczyt `pg_stat_statements_info` przed i po `pg_stat_statements_reset` z konkretnym `queryid` na jawnym celu. Tego odczytu nie wykonano. |
-| Spec §7 a reset selektywny | Spec §7 zalicza do zmiany `stats_reset` ręczny `pg_stat_statements_reset`, „full or selective”. | rozjazd. Otwarte strony nie mówią, że reset selektywny zmienia `stats_reset`. Komórka skutku zostaje `UNPROVEN`, nie faktem specyfikacji. |
+| Reset of everything | No parameters, or all `0`, discards all statistics of the view and resets the statistics of the `pg_stat_statements_info` view. | fact. The page does not separate `stats_reset` and `dealloc` in that sentence. |
+| Effect of a full reset on `stats_reset` separately and on `dealloc` separately | `stats_reset` is described as the time of the last reset of all statistics of the view. `dealloc` is described as a counter of evictions caused by `pg_stat_statements.max`, not as an effect of a reset. The function sentence says only that the statistics of the info view are reset when all statistics have been discarded. | `UNPROVEN` whether a full reset sets `stats_reset`, zeroes `dealloc`, or does both. Condition: read both `pg_stat_statements_info` columns before and after `pg_stat_statements_reset()` with no arguments on an explicit target. That read was not performed. |
+| Reset of one database | The parameter rule: a given `dbid` with the others `0` resets statistics matching that `dbid`. The page has no separate „reset of database” signature. | fact as to the parameter rule. |
+| Effect of a database reset on `stats_reset` and `dealloc` | The sentence about the info view reset is conditional: only when all statistics of the view have been discarded. Resetting one database does not by itself state that condition. | `UNPROVEN`. Condition: read `pg_stat_statements_info` before and after `pg_stat_statements_reset` with the `dbid` of one database and zeros for `userid` and `queryid`, on an explicit target, with statistics present in another database too. That read was not performed. |
+| Reset of a single `queryid` | A call with `queryid` discards statistics matching the given parameters. The example `pg_stat_statements_reset(0,0,s.queryid)` leaves the other queries on the list with their previous `calls`. | fact: resetting a single `queryid` is not described as discarding all statistics of the view. The example shows neither `stats_reset` nor `dealloc`. |
+| Effect of a single-`queryid` reset on `stats_reset` and `dealloc` | The page does not say that such a reset updates `stats_reset`, zeroes `dealloc`, or only moves the entry counters. The condition „if all statistics … are discarded” is not applied verbatim to a single `queryid`. | `UNPROVEN`. Evidence condition: read `pg_stat_statements_info` before and after `pg_stat_statements_reset` with a specific `queryid` on an explicit target. That read was not performed. |
+| Spec §7 versus selective reset | Spec §7 counts a manual `pg_stat_statements_reset`, „full or selective”, among the things that change `stats_reset`. | divergence. The opened pages do not say that a selective reset changes `stats_reset`. The effect cell stays `UNPROVEN`, not a specification fact. |
 
-### `dealloc` i `pg_stat_statements.max`
+### `dealloc` and `pg_stat_statements.max`
 
-| Wiersz | PG14 | PG15 | PG16 | Status |
+| Row | PG14 | PG15 | PG16 | Status |
 |---|---|---|---|---|
-| Znaczenie `max` | „the maximum number of statements tracked by the module (i.e., the maximum number of rows in the `pg_stat_statements` view).” Domyślnie 5000. Tylko przy starcie serwera. | To samo. | To samo. | fakt. Spec §3: domyślnie 5000, tylko przy starcie. Zgodne. |
-| Wyrzucenie wpisu | „If more distinct statements than that are observed, information about the least-executed statements is discarded.” Liczbę takich odrzuceń widać w `pg_stat_statements_info`. | To samo. | To samo. | fakt. To jest znaczenie `dealloc` z tabeli info. Spec §3 mówi, że przepełnienie wyrzuca najmniej wykonywane wpisy i zwiększa `info.dealloc`. Zgodne z tym opisem. |
-| Skutek delty po wyrzuceniu | Strona nie mówi o delcie per wpis ani o częściowej delcie. | Strona nie mówi. | Strona nie mówi. Dodaje tylko, że przy częstym dealloc tekst może zachować stałe. | fakt źródła kończy się na wyrzuceniu i liczniku. Spec §7 dopowiada, że delty per wpis po eksmisji są „silently partial”. Tego skutku strona nie opisuje. Ta macierz nie projektuje delty. |
-| `pg_stat_statements.save` | Czy zapisać statystyki przez wyłączenie serwera. `off`: nie zapisuje przy wyłączeniu i nie wczytuje przy starcie. Domyślnie `on`. | To samo. | To samo. | fakt. Spec §7: domyślnie `on`, `off` gubi statystyki przy wyłączeniu. Zgodne. Bez reguły delty. |
+| Meaning of `max` | „the maximum number of statements tracked by the module (i.e., the maximum number of rows in the `pg_stat_statements` view).” Default 5000. Server startup only. | Same. | Same. | fact. Spec §3: default 5000, startup only. Agrees. |
+| Eviction of an entry | „If more distinct statements than that are observed, information about the least-executed statements is discarded.” The number of such discards is visible in `pg_stat_statements_info`. | Same. | Same. | fact. That is the meaning of `dealloc` from the info table. Spec §3 says that overflow evicts the least-executed entries and increments `info.dealloc`. Agrees with that description. |
+| Effect of the delta after an eviction | The page does not talk about a per-entry delta or a partial delta. | The page does not say. | The page does not say. It only adds that on frequent dealloc the text may retain constants. | the source fact ends at eviction and the counter. Spec §7 guesses that per-entry deltas after eviction are „silently partial”. The page does not describe that effect. This matrix does not design the delta. |
+| `pg_stat_statements.save` | Whether to save statistics across a server shutdown. `off`: does not save on shutdown and does not load on startup. Default `on`. | Same. | Same. | fact. Spec §7: default `on`, `off` loses statistics on shutdown. Agrees. No delta rule. |
 
-### Odwołania lokalne
+### Local references
 
-| Odwołanie | Co otwarto | Status |
+| Reference | What was opened | Status |
 |---|---|---|
-| `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md` §3 | Podzbiór kolumn PG14, `toplevel` i `pg_stat_statements_info` na 14+, osiem `jit_*` od PG15, zera przy wyłączonym `track_planning` i `track_io_timing`, `track` domyślnie `top`, `track_utility` bez `MERGE`, `max` 5000. | hipoteza. Zgodna z tabelami tam, gdzie wiersze wyżej mówią „zgodne”. Rozjazd: brak `temp_blk_read_time` i `temp_blk_write_time`; `track_utility` bez `MERGE` na PG15 i PG16. |
-| Ta sama specyfikacja §6 | Niesuperuser widzi statystyki, a tekst i `queryid` cudzych zapytań wymagają superusera albo membership `pg_read_all_stats`. | hipoteza. Widoczność statystyk jest zgodna ze zdaniem „Other users can see the statistics”. Membership jest zgodne ze sformułowaniem PG14 i rozjeżdża się ze sformułowaniem PG15 i PG16. Wartość ukryta (null albo brak wiersza) nie jest w §6 rozstrzygnięta i na stronach jest `UNPROVEN`. |
-| Ta sama specyfikacja §7 | Każda zmiana `stats_reset`, także selektywny `pg_stat_statements_reset`, psuje ciągłość. Wzrost `dealloc` to eksmisja pod `pg_stat_statements.max`. | hipoteza. Opis `dealloc` i `max` jest zgodny ze stroną. Zdanie, że reset selektywny zmienia `stats_reset`, nie jest zdaniem otwartych stron. Rozjazd; skutek zostaje `UNPROVEN`. |
-| `src/SqlHarness.Mcp/McpOperationMapper.cs` | `BuildCapabilities`: `pg` jest prawdziwe, gdy `engine` to `"postgres"`. Dokument capabilities dostaje `QueryStoreAvailable: !pg`. | fakt kodu, punkt odniesienia. Na Postgresie flaga Query Store jest fałszywa. To nie jest odczyt `pg_stat_statements` i nie jest nową capability. |
+| `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md` §3 | The PG14 column subset, `toplevel` and `pg_stat_statements_info` on 14+, eight `jit_*` from PG15, zeros with `track_planning` and `track_io_timing` disabled, `track` default `top`, `track_utility` without `MERGE`, `max` 5000. | hypothesis. Agrees with the tables where the rows above say „agrees”. Divergence: no `temp_blk_read_time` and `temp_blk_write_time`; `track_utility` without `MERGE` on PG15 and PG16. |
+| The same specification §6 | A non-superuser sees statistics, and the text and `queryid` of other users' queries require superuser or `pg_read_all_stats` membership. | hypothesis. Statistics visibility agrees with the sentence „Other users can see the statistics”. Membership agrees with the PG14 wording and diverges from the PG15 and PG16 wording. The hidden value (null or no row) is not settled in §6 and is `UNPROVEN` on the pages. |
+| The same specification §7 | Every change of `stats_reset`, including a selective `pg_stat_statements_reset`, breaks continuity. A rise of `dealloc` is eviction under `pg_stat_statements.max`. | hypothesis. The description of `dealloc` and `max` agrees with the page. The sentence that a selective reset changes `stats_reset` is not a sentence of the opened pages. Divergence; the effect stays `UNPROVEN`. |
+| `src/SqlHarness.Mcp/McpOperationMapper.cs` | `BuildCapabilities`: `pg` is true when `engine` is `"postgres"`. The capabilities document gets `QueryStoreAvailable: !pg`. | code fact, reference point. On Postgres the Query Store flag is false. This is not a `pg_stat_statements` read and not a new capability. |
 
-### URL-e otwarte
+### Opened URLs
 
-Strony modułu:
+Module pages:
 
 - https://www.postgresql.org/docs/14/pgstatstatements.html
 - https://www.postgresql.org/docs/15/pgstatstatements.html
 - https://www.postgresql.org/docs/16/pgstatstatements.html
 
-Wersja rozszerzenia i upgrade:
+Extension version and upgrade:
 
 - https://www.postgresql.org/docs/14/sql-createextension.html
 - https://www.postgresql.org/docs/15/sql-createextension.html
@@ -174,7 +174,7 @@ Wersja rozszerzenia i upgrade:
 - https://www.postgresql.org/docs/15/view-pg-available-extensions.html
 - https://www.postgresql.org/docs/16/view-pg-available-extensions.html
 
-Plik kontrolny, tagi odpowiadające `.0` i stopce dokumentacji:
+Control file, tags corresponding to `.0` and to the documentation footer:
 
 - https://raw.githubusercontent.com/postgres/postgres/REL_14_0/contrib/pg_stat_statements/pg_stat_statements.control
 - https://raw.githubusercontent.com/postgres/postgres/REL_14_24/contrib/pg_stat_statements/pg_stat_statements.control
@@ -183,39 +183,39 @@ Plik kontrolny, tagi odpowiadające `.0` i stopce dokumentacji:
 - https://raw.githubusercontent.com/postgres/postgres/REL_16_0/contrib/pg_stat_statements/pg_stat_statements.control
 - https://raw.githubusercontent.com/postgres/postgres/REL_16_15/contrib/pg_stat_statements/pg_stat_statements.control
 
-Odwołania lokalne:
+Local references:
 
 - `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`
 - `src/SqlHarness.Mcp/McpOperationMapper.cs`
 
-## Sekwencja połączenia
+## Connection sequence
 
-Ta sekcja jest krokiem T2. Macierzy nie przepisuje. Nie dodaje komend, stubów ani capabilities. Nie projektuje rankingu, delty ani listy plików. Nie uruchamiano live DB ani `dotnet test`.
+This section is step T2. It does not repeat the matrix. It adds no commands, stubs or capabilities. It does not design the ranking, the delta or the file list. No live DB and no `dotnet test` were run.
 
-Kolejność jest jedna: resolve, auth, identity, wersja serwera, wersja rozszerzenia, potem SQL zależny od kolumn. Wyjścia ustala istniejący `OperationFailureMapper.Map`. Numery są w `SqlHarnessExitCode`. Adapter nie dostaje własnego klasyfikatora. `QueryStoreAvailable: !pg` w `src/SqlHarness.Mcp/McpOperationMapper.cs` zostaje. Ta sekwencja nie jest nową capability.
+The order is single: resolve, auth, identity, server version, extension version, then column-dependent SQL. Outputs are determined by the existing `OperationFailureMapper.Map`. The numbers are in `SqlHarnessExitCode`. The adapter does not get its own classifier. `QueryStoreAvailable: !pg` in `src/SqlHarness.Mcp/McpOperationMapper.cs` stays. This sequence is not a new capability.
 
-1. **Resolve.** `TargetResolver.Resolve` w `src/SqlHarness.Core/Targets/TargetResolver.cs` buduje `ResolvedTarget` z profilu albo ze ścieżki `--unsafe-direct`. `TargetProfile` w `src/SqlHarness.Core/Targets/TargetProfile.cs` nie ma pola wersji serwera. `ResolvedTarget` też jej nie niesie: ma `Server`, `Database`, `Auth`, `Mode`, `Engine` i `Transport`. Silnik bierze `SqlEngineNames.Parse`. Pominięty `engine` zostaje `SqlEngine.SqlServer` i od kroku auth nie wchodzi w tę sekwencję. Postgres wymaga `AuthStrategy.Sql`. Inna strategia, nieznany profil, złe `--var` i zły transport są `SqlHarnessSafetyException` przed otwarciem połączenia. Mapper daje exit `2` (`SqlHarnessExitCode.Safety`). Podłogi PostgreSQL 14 nie da się sprawdzić na profilu, bo wersji tam nie ma.
+1. **Resolve.** `TargetResolver.Resolve` in `src/SqlHarness.Core/Targets/TargetResolver.cs` builds `ResolvedTarget` from the profile or from the `--unsafe-direct` path. `TargetProfile` in `src/SqlHarness.Core/Targets/TargetProfile.cs` has no server version field. `ResolvedTarget` does not carry one either: it has `Server`, `Database`, `Auth`, `Mode`, `Engine` and `Transport`. The engine comes from `SqlEngineNames.Parse`. An omitted `engine` stays `SqlEngine.SqlServer` and from the auth step onward does not enter this sequence. Postgres requires `AuthStrategy.Sql`. Another strategy, an unknown profile, a bad `--var` and a bad transport are `SqlHarnessSafetyException` before the connection is opened. The mapper yields exit `2` (`SqlHarnessExitCode.Safety`). The PostgreSQL 14 floor cannot be checked on the profile, because there is no version there.
 
-2. **Auth.** `EngineSessionFactory` kieruje `SqlEngine.Postgres` do `NpgsqlSessionFactory.ConnectAsync`. W `ConnectAsync` najpierw działa `PostgresConnectionString.Build`. Brak użytkownika albo pusta lub nieobecna zmienna hasła to `SqlHarnessSafetyException` przed `NpgsqlConnection.OpenAsync`. Mapper daje exit `2`, nie exit `3`, także gdy wołający ustawił już `OperationPhase.Authentication`. Komunikat może nazwać zmienną. Nie zawiera wartości hasła. Samo `OpenAsync` jest uwierzytelnieniem. `NpgsqlException` w fazie `Authentication` mapuje się na exit `3` (`SqlHarnessExitCode.Authentication`). To jest przed potwierdzeniem tożsamości i przed odczytem rozszerzenia. Po nieudanym `OpenAsync` sesja nie wraca do wołającego.
+2. **Auth.** `EngineSessionFactory` routes `SqlEngine.Postgres` to `NpgsqlSessionFactory.ConnectAsync`. In `ConnectAsync`, `PostgresConnectionString.Build` runs first. A missing user or an empty or absent password variable is `SqlHarnessSafetyException` before `NpgsqlConnection.OpenAsync`. The mapper yields exit `2`, not exit `3`, also when the caller already set `OperationPhase.Authentication`. The message may name the variable. It does not contain the password value. `OpenAsync` itself is the authentication. An `NpgsqlException` in the `Authentication` phase maps to exit `3` (`SqlHarnessExitCode.Authentication`). That is before identity confirmation and before the extension read. After a failed `OpenAsync` the session does not return to the caller.
 
-3. **Identity.** Po udanym otwarciu, nadal wewnątrz `ConnectAsync`, `ReadIdentityAsync` wykonuje `PostgresPing.IdentitySql`: `current_database()` i `COALESCE(inet_server_addr()::text, 'localhost')`. To nie jest `server_version` i nie jest wersja rozszerzenia. Komentarz w `NpgsqlSessionFactory` zostawia `inet_server_addr()` na raporcie. O tym, czy cel się zgadza, decyduje ustanowione połączenie w `PostgresEndpointIdentity.Matches`. Fałsz kończy się `SqlTargetMismatchException` z `src/SqlHarness.Core/SqlExecution.cs`. Mapper daje exit `4` (`SqlHarnessExitCode.TargetMismatch`) niezależnie od fazy. `ConnectAsync` w `catch` zamyka sesję przez `DisposeAsync` i rzuca dalej. Exit `3` i exit `4` są oba przed próbą rozszerzenia. `NpgsqlException` zapytania tożsamości, dopóki faza wołającego to nadal `Authentication`, zostaje exit `3`. To samo dotyczy braku wiersza tożsamości: `ReadIdentityAsync` rzuca wtedy `InvalidOperationException`, a gałąź mappera dla fazy `Authentication` też daje exit `3`. Nie jest to exit `4` ani exit `5`.
+3. **Identity.** After a successful open, still inside `ConnectAsync`, `ReadIdentityAsync` runs `PostgresPing.IdentitySql`: `current_database()` and `COALESCE(inet_server_addr()::text, 'localhost')`. That is not `server_version` and not the extension version. The comment in `NpgsqlSessionFactory` leaves `inet_server_addr()` on the report. Whether the target matches is decided by the established connection in `PostgresEndpointIdentity.Matches`. False ends with `SqlTargetMismatchException` from `src/SqlHarness.Core/SqlExecution.cs`. The mapper yields exit `4` (`SqlHarnessExitCode.TargetMismatch`) regardless of the phase. `ConnectAsync` closes the session in `catch` via `DisposeAsync` and rethrows. Exit `3` and exit `4` are both before the extension attempt. An `NpgsqlException` of the identity query, as long as the caller's phase is still `Authentication`, stays exit `3`. The same applies to a missing identity row: `ReadIdentityAsync` then throws `InvalidOperationException`, and the mapper branch for the `Authentication` phase also yields exit `3`. That is not exit `4` nor exit `5`.
 
-4. **Wersja serwera.** Po zwróceniu sesji przez `ConnectAsync` faza to `OperationPhase.Sql`. `SELECT current_setting('server_version_num')` zwraca tekst parsowany niezmiennie kulturowo; niepoprawny odczyt jest exit `5`. Zachowujemy zakres PG14+: liczba poniżej `140000` jest exit `2`, a sesja zostaje zamknięta przez `await using`. Numer serwera służy kontekstowi i zakresowi PG14+, nie wyborowi dokładnej listy dozwolonych par wersji.
+4. **Server version.** After the session is returned by `ConnectAsync` the phase is `OperationPhase.Sql`. `SELECT current_setting('server_version_num')` returns text parsed culture-invariantly; an invalid read is exit `5`. We keep the PG14+ scope: a number below `140000` is exit `2`, and the session is closed by `await using`. The server number serves context and the PG14+ scope, not the choice of the exact list of allowed version pairs.
 
-5. **Rozszerzenie.** Odczytaj zainstalowane `pg_stat_statements`, jego wersję i namespace z katalogu w rozstrzygniętej bazie. Brak instalacji jest exit `5`, nigdy pustym sukcesem. Nie wywołuj `CREATE EXTENSION`, `ALTER EXTENSION` ani resetu. Znajdź widok należący do tego rozszerzenia; nie ufaj obiektowi o tej samej nazwie znalezionemu przez `search_path`. Namespace cytuj jako identyfikator przez istniejący helper PostgreSQL (podwojenie cudzysłowów); kolumny wybieraj wyłącznie z wewnętrznej listy. Wersję rozszerzenia raportuj jako kontekst diagnostyczny. Nieznany numer nie jest odmową.
+5. **Extension.** Read the installed `pg_stat_statements`, its version and namespace from the catalog in the resolved database. No installation is exit `5`, never an empty success. Do not call `CREATE EXTENSION`, `ALTER EXTENSION` or a reset. Find the view belonging to that extension; do not trust an object of the same name found through `search_path`. Quote the namespace as an identifier through the existing PostgreSQL helper (doubling the quotes); select columns only from the internal list. Report the extension version as diagnostic context. An unknown number is not a rejection.
 
-6. **Runtime probe kształtu.** Po identity i potwierdzeniu instalacji odczytaj nazwy i typy kolumn należącego do rozszerzenia widoku z katalogów. Wymagane: `userid`/`dbid` (`oid`), `toplevel` (`bool`), `queryid` (`bigint`, wartość może być NULL), `query` (`text`, wartość może być NULL), `calls`/`rows`/`shared_blks_hit`/`shared_blks_read` (`bigint`), `total_exec_time`/`max_exec_time` (`double precision`). Brak lub niezgodny typ wymaganej kolumny to exit `5` z przyczyną incompatible shape; brak uprawnień lub niepoprawny odczyt także exit `5`. Nie zwracaj wtedy artefaktu sukcesu. Dodatkowe kolumny ignoruj. SQL wybiera jawne nazwy, nigdy `SELECT *`; nie wysyłaj odwołania do niepotwierdzonej kolumny. PG14/15/16/17/18 oraz nieznane wersje z kompatybilnym kształtem przechodzą tę samą kontrolę.
+6. **Runtime shape probe.** After identity and confirmation of the installation, read the column names and types of the extension's view from the catalogs. Required: `userid`/`dbid` (`oid`), `toplevel` (`bool`), `queryid` (`bigint`, the value may be NULL), `query` (`text`, the value may be NULL), `calls`/`rows`/`shared_blks_hit`/`shared_blks_read` (`bigint`), `total_exec_time`/`max_exec_time` (`double precision`). A missing required column or a mismatched type is exit `5` with the reason incompatible shape; missing permissions or an invalid read are also exit `5`. Do not return a success artifact then. Ignore extra columns. The SQL selects explicit names, never `SELECT *`; do not send a reference to an unconfirmed column. PG14/15/16/17/18 and unknown versions with a compatible shape pass the same check.
 
-Kolumny metryk poza minimum są opcjonalne: plan times (`double precision`), local/temp counters (`bigint`), `wal_bytes` (`numeric`), czasy I/O (`double precision`). Brak lub nieobsługiwany typ daje `null`/unavailable z opisem przyczyny, nigdy 0. Sumy opcjonalne są dostępne tylko przy poprawnych danych wszystkich agregowanych wierszy; niepełnej sumy nie przedstawiaj jako pełnej. Obsługa aliasów nowych nazw I/O wymaga potwierdzenia ich semantyki w oficjalnej dokumentacji (plan 037). Bez tego pozostają unavailable. `pg_stat_statements_info`, jego `dealloc`/`stats_reset` i GUC są kontekstem opcjonalnym: brak obiektu/kolumn albo uprawnień daje niedostępny kontekst z przyczyną, a nie odmowę dostępnego rankingu. Innych błędów wykonania/transportu nie połykaj. Executor potwierdza SQL katalogów, własność obiektu i typy na źródłach pierwotnych oraz fixture; źródłowa macierz poniżej opisuje testowane przykłady, nie allowlistę runtime.
+Metric columns beyond the minimum are optional: plan times (`double precision`), local/temp counters (`bigint`), `wal_bytes` (`numeric`), I/O times (`double precision`). A missing or unsupported type yields `null`/unavailable with a reason description, never 0. Optional sums are available only when the data of all aggregated rows is valid; do not present an incomplete sum as complete. Supporting aliases of new I/O names requires confirmation of their semantics in the official documentation (plan 037). Without that they remain unavailable. `pg_stat_statements_info`, its `dealloc`/`stats_reset` and the GUCs are optional context: a missing object/column or missing permissions yield unavailable context with a reason, not a rejection of the available ranking. Do not swallow other execution/transport errors. The executor confirms catalog SQL, object ownership and types on primary sources and fixtures; the source matrix below describes the tested examples, not a runtime allowlist.
 
-Specyfikacja §9 kładzie brak rozszerzenia i brak uprawnień na ten sam exit `5`. Ta sekcja ten numer zachowuje i rozdziela przyczyny. Czytelny widok z zerem wierszy nie jest żadną z tych dwóch przyczyn. Specyfikacja §9 nazywa taki czytelny pusty wynik exit `0`. Ta sekcja tego raportu nie projektuje. Exit `6`, `7` i `8` ta sekwencja nie rusza. Nowego kodu wyjścia nie ma.
+Specification §9 puts a missing extension and missing permissions under the same exit `5`. This section keeps that number and separates the reasons. A readable view with zero rows is neither of those two reasons. Specification §9 calls such a readable empty result exit `0`. This section of the report does not design that. This sequence does not touch exit `6`, `7` and `8`. There is no new exit code.
 
-Źródła odczytu wersji serwera, otwarte w tym kroku:
+Sources of the server version read, opened in this step:
 
-- https://www.postgresql.org/docs/14/runtime-config-preset.html (`server_version` jest `string`, `server_version_num` jest `integer`)
-- https://www.postgresql.org/docs/14/libpq-status.html (`PQserverVersion`: major razy `10000` plus minor; wersja 11.0 to `110000`)
+- https://www.postgresql.org/docs/14/runtime-config-preset.html (`server_version` is `string`, `server_version_num` is `integer`)
+- https://www.postgresql.org/docs/14/libpq-status.html (`PQserverVersion`: major times `10000` plus minor; version 11.0 is `110000`)
 
-Odwołania lokalne tego kroku:
+Local references of this step:
 
 - `src/SqlHarness.Core/Targets/TargetResolver.cs`
 - `src/SqlHarness.Core/Targets/TargetProfile.cs`
@@ -230,78 +230,78 @@ Odwołania lokalne tego kroku:
 - `src/SqlHarness.Core/Contracts.cs`
 - `src/SqlHarness.Core/SqlHarnessModule.cs`
 - `src/SqlHarness.Mcp/McpOperationMapper.cs`
-- `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, sekcje 2 i 9, jako hipoteza tam, gdzie kroki 5 i 6 jej nie obalają
+- `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, sections 2 and 9, as a hypothesis where steps 5 and 6 do not refute it
 
-## Osobny kontrakt od qstop
+## Separate contract borrowed from qstop
 
-Ta sekcja jest krokiem T3. Macierzy i sekwencji nie przepisuje. Nie dodaje komend, stubów ani capabilities. Nie projektuje delty ani listy plików. Nie uruchamiano live DB ani `dotnet test`.
+This section is step T3. It does not repeat the matrix and the sequence. It adds no commands, stubs or capabilities. It does not design the delta or the file list. No live DB and no `dotnet test` were run.
 
-`qstop` zostaje kontraktem SQL Server. W `ExecuteQueryStoreTopAsync` silnik `SqlEngine.Postgres` dostaje `InvalidOperationException` z tekstem „Query Store is available only on SQL Server.” Faza jest już `Sql`, więc mapper daje exit `5` (`SqlHarnessExitCode.SqlExecution`). `QueryStoreAvailable: !pg` w `src/SqlHarness.Mcp/McpOperationMapper.cs` zostaje. Ten kontrakt nie jest zmianą `qstop` i nie jest nową capability.
+`qstop` remains a SQL Server contract. In `ExecuteQueryStoreTopAsync` the `SqlEngine.Postgres` engine gets an `InvalidOperationException` with the text „Query Store is available only on SQL Server.” The phase is already `Sql`, so the mapper yields exit `5` (`SqlHarnessExitCode.SqlExecution`). `QueryStoreAvailable: !pg` in `src/SqlHarness.Mcp/McpOperationMapper.cs` stays. This contract is not a change to `qstop` and not a new capability.
 
-### Czego ten kontrakt nie bierze z `qstop`
+### What this contract does not take from `qstop`
 
-| Z `qstop` | Źródło w kodzie | Ten kontrakt |
+| From `qstop` | Source in the code | This contract |
 |---|---|---|
-| `--window`, `windowMinutes` (1..44640 minut, domyślnie `24h`) | `QueryStoreTopCommand.Settings`, `QueryStoreWindowParser`, predykat `DATEADD` w `QueryStoreTopQuery.Sql` | Nie ma `--window`. Liczniki są skumulowane. Brak `--window` jest granicą kontraktu. |
-| `lastExecutionAt` | `MAX(rs.last_execution_time)`; pole `QueryStoreTopItemReport.LastExecutionAt` | Nie ma pola recency. W macierzy kolumn widoku nie ma czasu na wpis. |
-| `totalCpuMilliseconds`, `averageCpuMilliseconds`, `maximumCpuMilliseconds` | Drugi klucz `ORDER BY` i pola raportu | Nie ma metryki CPU. Kontrakt nie wstawia zera, żeby kształt wyglądał jak `qstop`. `CpuTimeMs` równe 0 na `measure` i `compare` nie jest polem tego raportu. |
-| `queryHash` | Kolumna Query Store i pole linii `queries.jsonl` | Widok nie ma tej kolumny. Kontrakt jej nie dorabia z tekstu. |
-| `querySqlText` | Trzecie pole linii; `RequiredText` odrzuca null | Linia niesie `query`. Null w `query` nie jest błędem odczytu. |
-| `totalLogicalReads`, `averageLogicalReads`, `maximumLogicalReads`, `objectName`, `planCount` | Pola `QueryStoreTopItemReport` | Nie wchodzą. Odczyty tutaj to liczniki bloków widoku, nie strony logical reads. |
+| `--window`, `windowMinutes` (1..44640 minutes, default `24h`) | `QueryStoreTopCommand.Settings`, `QueryStoreWindowParser`, the `DATEADD` predicate in `QueryStoreTopQuery.Sql` | There is no `--window`. The counters are cumulative. The absence of `--window` is a contract boundary. |
+| `lastExecutionAt` | `MAX(rs.last_execution_time)`; the field `QueryStoreTopItemReport.LastExecutionAt` | There is no recency field. The column matrix has no per-entry time. |
+| `totalCpuMilliseconds`, `averageCpuMilliseconds`, `maximumCpuMilliseconds` | Second `ORDER BY` key and report fields | There is no CPU metric. The contract does not insert a zero to make the shape look like `qstop`. `CpuTimeMs` equal to 0 on `measure` and `compare` is not a field of this report. |
+| `queryHash` | Query Store column and field of a `queries.jsonl` line | The view has no such column. The contract does not synthesize it from the text. |
+| `querySqlText` | Third field of the line; `RequiredText` rejects null | The line carries `query`. A null in `query` is not a read error. |
+| `totalLogicalReads`, `averageLogicalReads`, `maximumLogicalReads`, `objectName`, `planCount` | Fields of `QueryStoreTopItemReport` | Not included. The reads here are view block counters, not logical reads. |
 
-Porządek `qstop` to `total_duration_milliseconds` DESC, `total_cpu_milliseconds` DESC, `execution_count` DESC, `query_id` ASC. Ten kontrakt tego porządku nie używa. Rekord `SqlHarnessQueryStoreTopReport` nie jest rekordem tego kontraktu: nie ma tu `windowMinutes`.
+The `qstop` order is `total_duration_milliseconds` DESC, `total_cpu_milliseconds` DESC, `execution_count` DESC, `query_id` ASC. This contract does not use that order. The `SqlHarnessQueryStoreTopReport` record is not this contract's record: there is no `windowMinutes` here.
 
-Nazwy JSON linii `qstop` to `queryId`, `queryHash`, `querySqlText` (`QueryTextArtifact` przy `JsonSerializerDefaults.Web`; test `QueryStoreArtifactWriterTests` sprawdza tę trójkę). Z tej trójki ten kontrakt zostawia pisownię `queryId`. Tekst linii nazywa się `query`, nie `querySqlText`.
+The JSON names of the `qstop` line are `queryId`, `queryHash`, `querySqlText` (`QueryTextArtifact` under `JsonSerializerDefaults.Web`; the test `QueryStoreArtifactWriterTests` checks that trio). Of that trio this contract keeps the spelling `queryId`. The line text is named `query`, not `querySqlText`.
 
-### Filtr bieżącej bazy
+### Current-database filter
 
-Strony modułu: gdy `pg_stat_statements` jest aktywne, śledzi statystyki we wszystkich bazach serwera. Kolumna `dbid` to „OID of database in which the statement was executed” i odwołuje się do `pg_database.oid`. Sam widok nie jest filtrem bieżącej bazy.
+Module pages: when `pg_stat_statements` is active it tracks statistics across all databases of the server. The `dbid` column is „OID of database in which the statement was executed” and refers to `pg_database.oid`. The view itself is not a current-database filter.
 
-Filtr tego kontraktu jest po stronie serwera, przed agregacją. Zostają wiersze, których `dbid` jest OID bazy tego połączenia. OID jest wierszem `pg_database`, którego `datname` jest `current_database()` tej sesji. Porównanie jest OID do OID. Klient nie podstawia nazwy. Nie ma argumentu użytkownika z nazwą bazy: ani flagi, ani osobnego `--var`, ani nazwy z profilu wstawionej jako predykat. Tożsamość sesji została sprawdzona w sekwencji. Ten filtr nie jest drugim sprawdzeniem endpointu.
+This contract's filter is on the server side, before aggregation. Rows stay when their `dbid` is the OID of this connection's database. The OID is a row of `pg_database` whose `datname` is `current_database()` of that session. The comparison is OID to OID. The client does not substitute a name. There is no user argument with a database name: neither a flag, nor a separate `--var`, nor a name from the profile inserted as a predicate. The session identity has already been verified in the sequence. This filter is not a second endpoint check.
 
-Wiersz z innym `dbid` nie jest pozycją i nie dodaje się do pozycji o tym samym numerze `queryid`. Strony mówią, że kolizja hasha nie scala zapytań należących do różnych baz w jeden wpis widoku. Ten kontrakt i tak nie sumuje baz.
+A row with a different `dbid` is not a position and is not added to the position with the same `queryid` number. The pages say that a hash collision does not merge queries belonging to different databases into one view entry. This contract does not sum databases anyway.
 
-### Znany `queryid`
+### Known `queryid`
 
-Wpis widoku, z macierzy, to jedna kombinacja database ID, user ID, query ID i tego, czy polecenie jest top-level. Pozycja tego kontraktu nie jest wpisem. Pozycja jest jednym znanym `queryid` w bazie filtra.
+The view entry, from the matrix, is one combination of database ID, user ID, query ID and whether the command is top-level. A position of this contract is not an entry. A position is one known `queryid` in the filter database.
 
-Znany `queryid` to nie-null `bigint` zwrócony w wierszu po filtrze. Pole raportu nazywa się `queryId`: pisownia specyfikacji §5 i JSON `qstop`. Wartość jest tą liczbą, ze znakiem. Nie ma wartości bezwzględnej i nie ma drugiego identyfikatora.
+A known `queryid` is a non-null `bigint` returned in a row after the filter. The report field is named `queryId`: the spelling of specification §5 and of `qstop` JSON. The value is that number, with sign. There is no absolute value and no second identifier.
 
-`queryid` nie jest kluczem między serwerami. Strony: hash z drzewa po analizie składni; drop i odtworzenie tabeli rozdziela wpisy; wynik zależy od architektury; nie jest stabilny między wersjami głównymi; replika logiczna nie zachowuje użyteczności `queryid` do sumowania kosztów. Pozycja jest kluczem w tym serwerze, w tej wersji głównej i w tej bazie połączenia. To nie jest delta i nie jest porównaniem między serwerami.
+`queryid` is not a key across servers. The pages: a hash from the parse-analysis tree; dropping and recreating a table separates entries; the result depends on the architecture; it is not stable across major versions; logical replication does not preserve the usefulness of `queryid` for summing costs. A position is a key on this server, in this major version and in this connection's database. That is not a delta and not a comparison between servers.
 
-### Ukryty albo null `queryid`
+### Hidden or null `queryid`
 
-Ukrycie zostaje `UNPROVEN`, wierszem macierzy „Wartość ukryta: null albo brak wiersza”. Strona nie mówi, czy `query` i `queryid` cudzego zapytania są NULL, czy wiersz znika. PG14: „only superusers and members of the `pg_read_all_stats` role”. PG15 i PG16: „only superusers and roles with privileges of the `pg_read_all_stats` role”. Inni użytkownicy widzą statystyki, jeśli widok jest zainstalowany w ich bazie. Warunek dowodu zostaje ten z macierzy. Tego odczytu nie wykonano. Ta sekcja nie dodaje pola, które wymagałoby rozstrzygnięcia kształtu.
+Hiding remains `UNPROVEN`, by the matrix row „Hidden value: null or no row”. The page does not say whether `query` and `queryid` of another user's query are NULL or the row disappears. PG14: „only superusers and members of the `pg_read_all_stats` role”. PG15 and PG16: „only superusers and roles with privileges of the `pg_read_all_stats` role”. Other users see statistics if the view is installed in their database. The evidence condition stays the one from the matrix. That read was not performed. This section adds no field that would require settling the shape.
 
-Reprezentacja bez wymyślonego identyfikatora:
+Representation without an invented identifier:
 
-- Brak wiersza nie jest pozycją.
-- NULL w `queryid` nie jest znanym kluczem. `QueryStoreTopQuery.RequiredInt64` nie zamienia null na `long`. Null nie staje się `QueryId`. Tutaj NULL też nie staje się pozycją.
-- Wiersze bez znanego `queryid` nie są scalane. Nie łączy ich wspólny null, tekst `query`, `userid`, `toplevel`, numer wiersza ani `queryHash`. Tekst nie jest kluczem.
-- Liczba `0` w `pg_stat_statements_reset` znaczy parametr invalid. Nie jest identyfikatorem nieznanych wierszy. Nie-null `queryid` równe `0`, gdyby widok je zwrócił, byłoby znaną wartością `bigint`, nie wspólną pozycją ukrytych.
-- Takie wiersze nie wchodzą do porządku, nie zajmują miejsca w `--top` i nie dostają linii `queries.jsonl`. Nieznane id nie tworzą jednej pozycji ani jednej pary agregacji. Delta jest poza tą sekcją.
+- A missing row is not a position.
+- A NULL in `queryid` is not a known key. `QueryStoreTopQuery.RequiredInt64` does not turn null into `long`. Null does not become `QueryId`. Here NULL likewise does not become a position.
+- Rows without a known `queryid` are not merged. They are not joined by a shared null, the `query` text, `userid`, `toplevel`, a row number or `queryHash`. The text is not a key.
+- The number `0` in `pg_stat_statements_reset` means an invalid parameter. It is not an identifier of unknown rows. A non-null `queryid` equal to `0`, if the view returned it, would be a known `bigint` value, not a shared position of hidden ones.
+- Such rows do not enter the order, do not take a place in `--top` and do not get a `queries.jsonl` line. Unknown ids do not form one position nor one aggregation pair. The delta is outside this section.
 
-Widoczność statystyk w widoku nie tworzy pozycji bez znanego `queryid`. Raport nie jest zrzutem każdego wiersza widoku.
+Visibility of statistics in the view does not create a position without a known `queryid`. The report is not a dump of every view row.
 
-`qstop` przy null `query_id` przerywa cały odczyt (`InvalidOperationException`). Ten kontrakt tego rzutu nie kopiuje. Macierz zostawia kształt ukrycia jako `UNPROVEN` i mówi, że statystyki mogą być widoczne. Exit `5` na cały odczyt uznałby ten kształt za błąd. Odczyt, który doszedł do rankingu i nie dał żadnego znanego `queryid`, jest pustą listą pozycji.
+`qstop` aborts the entire read on a null `query_id` (`InvalidOperationException`). This contract does not copy that throw. The matrix leaves the hidden shape as `UNPROVEN` and says statistics may be visible. Exit `5` for the entire read would treat that shape as an error. A read that reached the ranking and produced no known `queryid` is an empty position list.
 
-Pusta lista pozycji po udanym odczycie to exit `0` (`SqlHarnessExitCode.Success`). Nie jest brakiem rozszerzenia i nie jest brakiem uprawnień. Te dwa zostają exit `5` w sekwencji, zanim ranking wystartuje. Pusta lista nie twierdzi, że widok nie miał wierszy. Twierdzi, że w bazie filtra nie było pozycji o znanym `queryid`. Specyfikacja §8 i §9 nazywa czytelny brak wierszy exit `0`. Ta sekcja zostawia ten numer także dla listy bez znanego `queryid`.
+An empty position list after a successful read is exit `0` (`SqlHarnessExitCode.Success`). It is not a missing extension and not missing permissions. Those two stay exit `5` in the sequence, before the ranking starts. An empty list does not claim that the view had no rows. It claims that the filter database had no position with a known `queryid`. Specification §8 and §9 call a readable absence of rows exit `0`. This section keeps that number also for a list without a known `queryid`.
 
-Ścieżka sukcesu `ExecuteQueryStoreTopAsync` zapisuje artefakt po `ReadAsync` i nie ma osobnej gałęzi dla zera metryk. Pusta lista `qstop` też jest exit `0` z artefaktem. Ten kontrakt robi to samo dla pustej listy pozycji: artefakt jest, `queries.jsonl` nie ma linii.
+The success path of `ExecuteQueryStoreTopAsync` writes the artifact after `ReadAsync` and has no separate branch for zero metrics. An empty `qstop` list is also exit `0` with an artifact. This contract does the same for an empty position list: the artifact exists, `queries.jsonl` has no lines.
 
-### Agregacja
+### Aggregation
 
-Agregacja dotyczy tylko wierszy o tym samym znanym `queryid` po filtrze bazy. `userid` i `toplevel` nie rozcinają pozycji. Kilka wierszy widoku o tym samym `queryid` staje się jedną pozycją. Powtórzenie `queryid` przed agregacją nie jest błędem. `qstop` rzuca przy zduplikowanym `query_id` w zbiorze metryk (`RequireMatchingTexts`), bo jego SQL już zgrupował plany. Tutaj ziarno widoku jest drobniejsze niż pozycja, więc ten rzut nie obowiązuje. Po agregacji jest jedna pozycja na jeden znany `queryid`. Pozycja nie liczy własnego hasha. Bierze `queryid` z widoku.
+Aggregation concerns only rows with the same known `queryid` after the database filter. `userid` and `toplevel` do not split a position. Several view rows with the same `queryid` become one position. A repeated `queryid` before aggregation is not an error. `qstop` throws on a duplicated `query_id` in the metrics set (`RequireMatchingTexts`), because its SQL already grouped the plans. Here the view grain is finer than the position, so that throw does not apply. After aggregation there is one position per known `queryid`. A position does not compute its own hash. It takes `queryid` from the view.
 
-Formuły są kontraktem agregacji po runtime probe. Kolumny wymagane muszą być poprawne; opcjonalne dają dostępne sumy albo null/unavailable według kroku 6. `total_exec_time` jest w milisekundach. Dzielenia przez 1000 z SQL `qstop` nie ma.
+The formulas are the aggregation contract after the runtime probe. Required columns must be valid; optional ones yield available sums or null/unavailable per step 6. `total_exec_time` is in milliseconds. There is no division by 1000 as in the `qstop` SQL.
 
 - `executionCount` = `SUM(calls)`
 - `totalDurationMs` = `SUM(total_exec_time)`
 - `maximumDurationMs` = `MAX(max_exec_time)`
-- `averageDurationMs` = `totalDurationMs / SUM(calls)`, tylko gdy `SUM(calls)` nie jest 0
+- `averageDurationMs` = `totalDurationMs / SUM(calls)`, only when `SUM(calls)` is not 0
 - `totalPlanMs` = `SUM(total_plan_time)`
 - `maximumPlanMs` = `MAX(max_plan_time)`
-- `averagePlanMs` = `totalPlanMs / SUM(calls)`, tylko gdy `SUM(calls)` nie jest 0
+- `averagePlanMs` = `totalPlanMs / SUM(calls)`, only when `SUM(calls)` is not 0
 - `rowsReturned` = `SUM(rows)`
 - `sharedBlocksHit` = `SUM(shared_blks_hit)`
 - `sharedBlocksRead` = `SUM(shared_blks_read)`
@@ -312,57 +312,57 @@ Formuły są kontraktem agregacji po runtime probe. Kolumny wymagane muszą być
 - `walBytes` = `SUM(wal_bytes)`
 - `blockReadMs` = `SUM(blk_read_time)`
 - `blockWriteMs` = `SUM(blk_write_time)`
-- `toplevelOnly` jest true wtedy i tylko wtedy, gdy każdy wiersz tej pozycji ma `toplevel` true
+- `toplevelOnly` is true if and only if every row of this position has `toplevel` true
 
-`tempBlocksRead` i `tempBlocksWritten` są licznikami `temp_blks_read` i `temp_blks_written`. Nie są czasami `temp_blk_read_time` i `temp_blk_write_time`.
+`tempBlocksRead` and `tempBlocksWritten` are the counters `temp_blks_read` and `temp_blks_written`. They are not the times `temp_blk_read_time` and `temp_blk_write_time`.
 
-`mean_exec_time`, `mean_plan_time`, `min_*` i `stddev_*` nie są polami pozycji. Średnia wiersza nie jest średnią pozycji. Specyfikacja §4 mówi też ogólnie o sumie liczników odczytu, zapisu, buforów i WAL. Lista pól jest węższa i jest listą ze specyfikacji §5. Kolumny spoza tej listy nie dostają pól. W szczególności nie dostają ich `shared_blks_dirtied`, `shared_blks_written`, `local_blks_hit`, `local_blks_dirtied`, `wal_records` i `wal_fpi`.
+`mean_exec_time`, `mean_plan_time`, `min_*` and `stddev_*` are not position fields. A row mean is not a position mean. Specification §4 also talks in general terms about the sum of read, write, buffer and WAL counters. The field list is narrower and is the list from specification §5. Columns outside that list get no fields. In particular they do not get them for `shared_blks_dirtied`, `shared_blks_written`, `local_blks_hit`, `local_blks_dirtied`, `wal_records` and `wal_fpi`.
 
-Specyfikacja dzieli przez `SUM(calls)` i nie podaje wyniku dla zera. Strona mówi, że `plans` i `calls` nie zawsze się zgadzają, bo statystyki planu i wykonania aktualizują się osobno. Przy `SUM(calls) = 0` kontrakt nie podstawia 0, null ani `mean_*`. Pól `averageDurationMs` i `averagePlanMs` w tej pozycji nie ma. Gdy calls są niezerowe, lecz opcjonalny total_plan_time jest niedostępny, averagePlanMs również pozostaje niedostępne według kroku 6. To nie jest exit `5`. Klucz rankingu i tak jest sumą `total_exec_time`, nie średnią.
+The specification divides by `SUM(calls)` and gives no result for zero. The page says that `plans` and `calls` do not always agree, because plan and execution statistics update separately. At `SUM(calls) = 0` the contract substitutes neither 0, nor null, nor `mean_*`. There are no `averageDurationMs` and `averagePlanMs` fields in that position. When calls are non-zero but the optional total_plan_time is unavailable, averagePlanMs also remains unavailable per step 6. That is not exit `5`. The ranking key is still the sum of `total_exec_time`, not the mean.
 
-Tekst linii jest kolumną `query`, verbatim, bez obcięcia. Null, gdy serwer zwrócił null, zostaje null. Macierz: po odrzuceniu tekstów `query` jest null, a statystyki przy `queryid` zostają. To nie jest błąd. Null z `pg_stat_statements(showtext := false)` jest osobnym faktem macierzy i nie jest tekstem linii. Odczyt z `showtext := false` nie jest źródłem `queries.jsonl`.
+The line text is the `query` column, verbatim, without truncation. A null, when the server returned null, stays null. Matrix: after texts are discarded `query` is null and the statistics at `queryid` remain. That is not an error. A null from `pg_stat_statements(showtext := false)` is a separate matrix fact and is not the line text. A read with `showtext := false` is not a source of `queries.jsonl`.
 
-Gdy każdy wiersz pozycji ma `query` null, linia ma null. Gdy każdy wiersz ma ten sam nie-null tekst, linia ma ten tekst. Porównanie tekstu jest równością tej treści, nie kolejnością wierszy. Gdy wartości się różnią, w tym gdy obok tekstu jest null, wybór „pierwszego” wiersza zależałby od skanu. Tego wyboru nie ma. Strona wiąże resztę tekstu z pierwszym zapytaniem, które miało dany `queryid` przy tym wpisie, nie z pozycją złożoną z kilku `userid` albo z obu `toplevel`. Który tekst należy do takiej pozycji, jest `UNPROVEN`. Warunek: odczyt `query` dla jednego znanego `queryid` przy dwóch `userid` albo przy obu wartościach `toplevel`, na jawnym celu. Tego odczytu nie wykonano. Do tego czasu linia zachowuje `queryId` równe temu znanemu `queryid`, ze znakiem (`bigint`), i ustawia tylko `query` na null. Nie zawiera żadnego z tych tekstów. Ten null nie jest twierdzeniem, że serwer zwrócił null.
+When every row of a position has `query` null, the line has null. When every row has the same non-null text, the line has that text. The text comparison is an equality of that content, not an order of rows. When the values differ, including when a null sits next to a text, choosing the „first” row would depend on the scan. That choice does not exist. The page binds the rest of the text to the first query that had the given `queryid` at that entry, not to a position composed of several `userid` or of both `toplevel` values. Which text belongs to such a position is `UNPROVEN`. Condition: read `query` for one known `queryid` with two `userid` or with both `toplevel` values, on an explicit target. That read was not performed. Until then the line keeps `queryId` equal to that known `queryid`, with sign (`bigint`), and sets only `query` to null. It does not contain any of those texts. That null is not a claim that the server returned null.
 
 ### Ranking
 
-Ranking następuje po udanym runtime probe z kroku 6. Dokładna para numerów serwera i rozszerzenia nie jest bramą. Brak kompatybilnego kształtu jest exit `5`.
+The ranking follows a successful runtime probe from step 6. The exact pair of server and extension numbers is not a gate. A missing compatible shape is exit `5`.
 
-Klucze rankingu używają wyłącznie wymaganych kolumn minimum potwierdzonych runtime. Dodatkowe kolumny I/O i jit nie stają się nowymi kluczami rankingu ani polami stdout.
+The ranking keys use only the required minimum columns confirmed at runtime. Extra I/O and jit columns do not become new ranking keys nor stdout fields.
 
-Porządek jest porządkiem pozycji po agregacji, nie porządkiem wierszy widoku. Klucze, hipoteza specyfikacji §4, dają pełny porządek:
+The order is the order of positions after aggregation, not the order of view rows. The keys, a hypothesis from specification §4, give a total order:
 
-1. `SUM(total_exec_time)` malejąco
-2. `SUM(calls)` malejąco
-3. `SUM(shared_blks_hit) + SUM(shared_blks_read)` malejąco
-4. `queryid` rosnąco
+1. `SUM(total_exec_time)` descending
+2. `SUM(calls)` descending
+3. `SUM(shared_blks_hit) + SUM(shared_blks_read)` descending
+4. `queryid` ascending
 
-Każda pozycja ma jeden znany `queryid`, więc czwarty klucz rozstrzyga remis wcześniejszych. Dwie pozycje nie mają równych czterech kluczy. Kolejność wierszy, `userid` i tekst nie są kluczami. Remis nie zależy od kolejności wierszy.
+Each position has one known `queryid`, so the fourth key settles a tie among the earlier ones. Two positions do not have four equal keys. Row order, `userid` and the text are not keys. A tie does not depend on row order.
 
-Zostaje co najwyżej `--top` pierwszych pozycji tego porządku. Zakres to 1..500, ten sam co `OperationLimits.IsTop` (`TopMin` 1, `TopMax` 500) i sprawdzenie w `ExecuteQueryStoreTopAsync`. Ta sekcja nie przenosi domyślnego `20` z `QueryStoreTopCommand.Settings`. Nie stawia `--window` obok `--top`. `--top` w tej sekcji jest cięciem listy, nie nową capability i nie nową komendą.
+At most the first `--top` positions of that order remain. The scope is 1..500, the same as `OperationLimits.IsTop` (`TopMin` 1, `TopMax` 500) and the check in `ExecuteQueryStoreTopAsync`. This section does not carry over the `20` default from `QueryStoreTopCommand.Settings`. It does not put `--window` next to `--top`. `--top` in this section is a list cut, not a new capability and not a new command.
 
-Liczniki pozycji są wartościami widoku po agregacji. Kontrakt nic od nich nie odejmuje. Nie nadaje im czasu trwania. Skutek resetu selektywnego dla `stats_reset` zostaje `UNPROVEN` z macierzy. Ta sekcja nie projektuje delty.
+Position counters are view values after aggregation. The contract subtracts nothing from them. It does not turn them into durations. The effect of a selective reset on `stats_reset` stays `UNPROVEN` from the matrix. This section does not design the delta.
 
-### Stdout i `queries.jsonl`
+### Stdout and `queries.jsonl`
 
-Stdout pozycji ma metryki i `queryId`. Nie ma pola `query`, tekstu SQL, `queryHash`, CPU, recency ani `windowMinutes`. Nazwy są pisownią specyfikacji §5: `queryId`, `toplevelOnly`, `executionCount`, `totalDurationMs`, `averageDurationMs`, `maximumDurationMs`, `totalPlanMs`, `averagePlanMs`, `maximumPlanMs`, `rowsReturned`, `sharedBlocksHit`, `sharedBlocksRead`, `localBlocksRead`, `localBlocksWritten`, `tempBlocksRead`, `tempBlocksWritten`, `walBytes`, `blockReadMs`, `blockWriteMs`. Specyfikacja zapisuje część z nich skrótem ze slashem (`sharedBlocksHit/Read`, `localBlocksRead/Written`, `tempBlocksRead/Written`, `blockReadMs/blockWriteMs`, `totalPlanMs / averagePlanMs / maximumPlanMs`). Rozwinięcie jest tą listą, nie nowym polem. Średnia czasu wykonania znika przy `SUM(calls) = 0`; średnia planowania również przy niedostępnej opcjonalnej sumie. Pozostałe metryki opcjonalne są null/unavailable z przyczyną według kroku 6.
+Position stdout has metrics and `queryId`. There is no `query` field, no SQL text, no `queryHash`, no CPU, no recency and no `windowMinutes`. The names are the spelling of specification §5: `queryId`, `toplevelOnly`, `executionCount`, `totalDurationMs`, `averageDurationMs`, `maximumDurationMs`, `totalPlanMs`, `averagePlanMs`, `maximumPlanMs`, `rowsReturned`, `sharedBlocksHit`, `sharedBlocksRead`, `localBlocksRead`, `localBlocksWritten`, `tempBlocksRead`, `tempBlocksWritten`, `walBytes`, `blockReadMs`, `blockWriteMs`. The specification abbreviates some of them with a slash (`sharedBlocksHit/Read`, `localBlocksRead/Written`, `tempBlocksRead/Written`, `blockReadMs/blockWriteMs`, `totalPlanMs / averagePlanMs / maximumPlanMs`). The expansion is that list, not a new field. Execution-time mean disappears at `SUM(calls) = 0`; the planning mean also at an unavailable optional sum. The remaining optional metrics are null/unavailable with a reason per step 6.
 
-Kontekst raportu, nie pozycja:
+Report context, not a position:
 
-- `server_version_num` już odczytany w sekwencji. To nie jest napis `server_version` i nie jest `installed_version`. Specyfikacja §5 mówi „server version string”. Ta sekcja zwęża to do liczby, którą sekwencja już ma. `installed_version` jest osobnym kontekstem, nie bramą dopuszczonych par wersji.
-- `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, w pisowni GUC. Wartość, gdy dostępna, jest tą z serwera. Brak kontekstu jest unavailable według kroku 6; nie ma skróconego aliasu.
-- `track_io_timing`, w tej pisowni, obok `blockReadMs` i `blockWriteMs`. Odczyt jest tylko `current_setting('track_io_timing')`. Wartość jest tą z serwera. To nie jest zmiana GUC, nie jest kluczem rankingu i nie jest tekstem SQL na stdout. Macierz: `blk_read_time` i `blk_write_time` są zero, gdy ten GUC jest wyłączony. Ta wartość odróżnia „nieśledzone” od „szybkiego”.
-- `dealloc` i `stats_reset`, w pisowni kolumn widoku info. `stats_reset` nie jest `lastExecutionAt` i nie jest etykietą „ostatnie 24h”.
+- `server_version_num` already read in the sequence. That is not the `server_version` string and not `installed_version`. Specification §5 says „server version string”. This section narrows that to the number the sequence already has. `installed_version` is separate context, not a gate of allowed version pairs.
+- `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, in GUC spelling. The value, when available, is the one from the server. Missing context is unavailable per step 6; there is no abbreviated alias.
+- `track_io_timing`, in that spelling, next to `blockReadMs` and `blockWriteMs`. The read is only `current_setting('track_io_timing')`. The value is the one from the server. That is not a GUC change, not a ranking key and not SQL text on stdout. Matrix: `blk_read_time` and `blk_write_time` are zero when that GUC is disabled. This value distinguishes „not tracked” from „fast”.
+- `dealloc` and `stats_reset`, in the column spelling of the info view. `stats_reset` is not `lastExecutionAt` and not a „last 24h” label.
 
-Kontekst czytaj po runtime probe według zasad opcjonalności kroku 6. Nie jest warunkiem ciągłości ani podstawą obliczania delty. Odczyty nie wołają `pg_stat_statements_reset`.
+Read context after the runtime probe per the optionality rules of step 6. It is not a continuity condition nor a basis for delta computation. These reads do not call `pg_stat_statements_reset`.
 
-`artifactDirectory` jest nazwą JSON pola `ArtifactDirectory` z raportu `qstop`: katalog artefaktu, bez tekstu SQL w nazwie pliku. Układ katalogu i nazwy typów należą do planu plików, nie tutaj. Raport nie przyjmuje nazwy bazy jako argumentu rankingu.
+`artifactDirectory` is the JSON name of the `ArtifactDirectory` field from the `qstop` report: the artifact directory, without SQL text in the file name. The directory layout and the type names belong to the file plan, not here. The report does not take a database name as a ranking argument.
 
-Tekst SQL jest tylko w lokalnym `queries.jsonl`. Jedna linia na pozycję, która weszła do wyniku. Linia ma tylko `queryId` i `query`. Stdout, stderr, treść błędu i nazwy plików tekstu nie zawierają. Linia jest lokalnie wrażliwa tak jak `queries.jsonl` przy `qstop`: bez wklejania i bez publikacji bez przeglądu. Nie wchodzi do gain. Specyfikacja §6 stawia tę samą granicę.
+SQL text is only in the local `queries.jsonl`. One line per position that entered the result. The line has only `queryId` and `query`. Stdout, stderr, the error body and text file names do not contain it. The line is locally sensitive just like `queries.jsonl` in `qstop`: no pasting and no publishing without review. It does not enter a gain. Specification §6 draws the same boundary.
 
-Niepowodzenie zapisu artefaktu jest exit `6` (`SqlHarnessExitCode.LocalStorage`). W `ExecuteQueryStoreTopAsync` faza `Artifact` mapuje wyjątek na ten numer, a wynik nie niesie raportu. Ten kontrakt zostawia to samo: exit `6` bez raportu.
+Artifact write failure is exit `6` (`SqlHarnessExitCode.LocalStorage`). In `ExecuteQueryStoreTopAsync` the `Artifact` phase maps the exception to that number, and the result carries no report. This contract leaves that as is: exit `6` without a report.
 
-### Odwołania tego kroku
+### References of this step
 
 - `src/SqlHarness.Core/QueryStoreTop.cs`
 - `src/SqlHarness.Core/QueryStoreArtifacts.cs`
@@ -371,14 +371,14 @@ Niepowodzenie zapisu artefaktu jest exit `6` (`SqlHarnessExitCode.LocalStorage`)
 - `src/SqlHarness.Core/OperationLimits.cs`
 - `src/SqlHarness.Cli/Commands/QueryStoreTopCommand.cs`
 - `src/SqlHarness.Mcp/McpOperationMapper.cs`
-- `tests/SqlHarness.Tests/QueryStoreArtifactWriterTests.cs` (nazwy pól linii `qstop`)
-- `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, sekcje 4, 5, 6 i 8, jako hipoteza porządku i pól stdout tam, gdzie ta sekcja ich nie zwęża
-- strony modułu z macierzy, otwarte ponownie dla filtra `dbid`, tekstu reprezentatywnego i granic `queryid`: https://www.postgresql.org/docs/14/pgstatstatements.html , https://www.postgresql.org/docs/15/pgstatstatements.html , https://www.postgresql.org/docs/16/pgstatstatements.html
+- `tests/SqlHarness.Tests/QueryStoreArtifactWriterTests.cs` (`qstop` line field names)
+- `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, sections 4, 5, 6 and 8, as a hypothesis about the order and the stdout fields where this section does not narrow them
+- module pages from the matrix, reopened for the `dbid` filter, representative text and `queryid` boundaries: https://www.postgresql.org/docs/14/pgstatstatements.html , https://www.postgresql.org/docs/15/pgstatstatements.html , https://www.postgresql.org/docs/16/pgstatstatements.html
 
-## Delta — odłożona
+## Delta — deferred
 
-V1 zwraca skumulowany ranking jednego odczytu. Nie zawiera `Compare`, statusów `unknown`/`incomparable`, magazynu migawek ani pól w pamięci istniejących wyłącznie dla delty. Nie odczytuje `pg_stat_statements.save` ani czasu startu serwera dla przyszłego porównania. Wcześniejszy projekt, który nigdy nie odejmował liczników, został usunięty z zakresu implementacji.
+V1 returns the cumulative ranking of a single read. It does not contain `Compare`, `unknown`/`incomparable` statuses, a snapshot store or in-memory fields existing only for the delta. It does not read `pg_stat_statements.save` nor the server start time for future comparison. An earlier design, which never subtracted counters, was removed from the implementation scope.
 
-Ewentualny późniejszy plan może zaprojektować obserwowaną różnicę liczników na tym samym celu/bazie i kompatybilnej tożsamości wpisu. Musi określić okres obserwacji, reset/eviction/restart, brakujące wpisy, spadki liczników i możliwość niewykrytego resetu selektywnego. Różnica nie będzie dowodem pełnej ciągłości. Wykryta utrata ciągłości unieważni porównanie; równość globalnych znaczników sama nie dowodzi ciągłości wpisu. Nie jest to zadanie v1 ani obietnica nowej funkcji.
+A possible later plan may design the observed difference of counters on the same target/database and compatible entry identity. It must define the observation period, reset/eviction/restart, missing entries, counter drops and the possibility of an undetected selective reset. The difference will not be evidence of full continuity. Detected loss of continuity voids the comparison; equality of global markers alone does not prove entry continuity. This is not a v1 task nor a promise of a new feature.
 
-Macierz źródeł zachowuje historyczne pytania UNPROVEN dotyczące resetów; nie są bramą dla skumulowanego rankingu i nie wymagają wykonania resetu na bazie użytkownika.
+The source matrix keeps historical UNPROVEN questions about resets; they are not a gate for the cumulative ranking and do not require performing a reset on a user database.

@@ -1,13 +1,13 @@
-# Plan 012: Zastąp tekstowy most MCP typowanym modelem parametrów
+# Plan 012: Replace the textual MCP bridge with a typed parameter model
 
-Status: **DONE** (branch `feat/plan-012-typed-matrix`, `3d56a81..da73e14`; dowód: [012-typed-matrix-proof](012-typed-matrix-proof.md); merge/push czeka na decyzję)
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
-Priorytet: P2; nakład: L; ryzyko zmiany: MED.
-Pokrycie: **matrix z przecinkami/pustą wartością; funkcja typowanych wejść**. Zależności: **007, 009**.
+Status: **DONE** (branch `feat/plan-012-typed-matrix`, `3d56a81..da73e14`; evidence: [012-typed-matrix-proof](012-typed-matrix-proof.md); merge/push awaits the decision)
+Date: 2026-09-29. Base: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priority: P2; effort: L; change risk: MED.
+Coverage: **matrix with commas/empty values; typed-input function**. Dependencies: **007, 009**.
 
-## Kontekst i instrukcja wykonania
+## Context and execution instructions
 
-Czytaj cały plan. Pracuj w izolowanym worktree, zachowaj cudze zmiany. Zapis planu nie jest wdrożeniem. Po ukończeniu zaktualizuj plans/README.md wraz z dowodem; nie pushuj ani nie publikuj bez zlecenia.
+Read the whole plan. Work in an isolated worktree, preserve other people's changes. A plan document is not an implementation. On completion update plans/README.md together with the evidence; do not push or publish without an order.
 
 Drift check:
 ```powershell
@@ -15,18 +15,18 @@ git status --short
 git diff --stat 8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b..HEAD -- "src/SqlHarness.Core/Contracts.cs" "src/SqlHarness.Core/SqlParameterMatrix.cs" "src/SqlHarness.Core/SqlSafety.cs" "src/SqlHarness.Core/Postgres/PostgresParameters.cs" "src/SqlHarness.Core/CompareMatrixRunner.cs" "src/SqlHarness.Mcp/McpOperationMapper.cs" "src/SqlHarness.Mcp/Tools/McpToolArguments.cs" "tests/SqlHarness.Tests/SqlParameterMatrixTests.cs" "tests/SqlHarness.Tests/CompareMatrixTests.cs" "tests/SqlHarness.Mcp.Tests/McpMappingTests.cs" "tests/SqlHarness.Mcp.Tests/McpSecretRedactionTests.cs"
 ```
 
-Zmiany poprzedników są oczekiwane: przeczytaj je i dopasuj plan przed kodowaniem. Niewyjaśniony rozjazd wymaga aktualizacji założeń, nie mechanicznego wklejania starego kodu.
+Predecessor changes are expected: read them and align the plan before coding. An unexplained divergence requires updating the assumptions, not mechanically pasting old code.
 
-MCP ma JSON array Values, ale FormatMatrix składa go z powrotem do name:type=v1,v2 i odrzuca przecinki oraz puste stringi. Parametry także wracają do deklaracji tekstowych. To zadeklarowana ograniczona reprezentacja, nie luka bezpieczeństwa.
+MCP has the JSON array Values, but FormatMatrix reassembles it into name:type=v1,v2 and rejects commas and empty strings. Parameters also fall back to textual declarations. That is a declared limited representation, not a safety gap.
 
-Punkt odniesienia z kodu/komendy:
+Reference point from the code/command:
 ```text
 return $"{matrix.Name}:{matrix.Type}={string.Join(",", matrix.Values)}";
 ```
 
-.NET8/C#/xUnit. Dopasuj wzorce do testów wymienionych w zakresie. Core pozostaje wspólnym miejscem safety; adaptery nie tworzą własnego klasyfikatora. Stosuj istniejące fake reader/session/module i syntetyczny SQLHARNESS_HOME. Nie czytaj rzeczywistych sekretów ani artefaktów użytkownika.
+.NET8/C#/xUnit. Match patterns to the tests listed in the scope. Core remains the shared place for safety; adapters do not create their own classifier. Use the existing fake reader/session/module and the synthetic SQLHARNESS_HOME. Do not read real secrets or user artifacts.
 
-## Zakres
+## Scope
 
 - `src/SqlHarness.Core/Contracts.cs`
 - `src/SqlHarness.Core/SqlParameterMatrix.cs`
@@ -40,55 +40,55 @@ return $"{matrix.Name}:{matrix.Type}={string.Join(",", matrix.Values)}";
 - `tests/SqlHarness.Mcp.Tests/McpMappingTests.cs`
 - `tests/SqlHarness.Mcp.Tests/McpSecretRedactionTests.cs`
 
-Dodatkowo: nowe pliki nazwane w krokach, dokumenty wynikowe plans/012-*.md oraz status w indeksie. Inne pliki wymagają jawnej korekty zakresu i uzasadnienia przed zmianą.
+Additionally: new files named in the steps, resulting documents plans/012-*.md and the status in the index. Other files require an explicit scope correction and justification before the change.
 
-Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push, globalne wyłączenie walidacji i niepowiązane refaktoryzacje. Zachowaj kody 0/2/3/4/5/6/7/8, legacy JSON i oba silniki. Pola addytywne tylko zgodnie z krokami.
+Out of scope: live DB, deploy, user profiles and passwords, installation, push, global disabling of validation and unrelated refactorings. Preserve exit codes 0/2/3/4/5/6/7/8, legacy JSON and both engines. Additive fields only as specified by the steps.
 
-## Zadania
+## Tasks
 
 ### 012/T1
 
-- [x] Dodaj addytywny model Core dla nazwy, typu i wartości z jawnym null. CLI parser deklaracji ma produkować ten model; zachowaj istniejące publiczne konstruktory przez adapter kompatybilności.
+- [x] Add an additive Core model for name, type and value with explicit null. The CLI declaration parser must produce this model; preserve the existing public constructors through a compatibility adapter.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
 ### 012/T2
 
-- [x] Przenieś współdzieloną walidację typu i wiązania do jednego toru; MCP przekazuje strukturę bez join/split. Zdefiniuj puste stringi jako wartości tekstowe, null jako null, a przecinek jako znak wartości; nadal jedna dimensja i co najmniej dwa elementy.
+- [x] Move the shared type validation and binding into a single path; MCP passes the structure without join/split. Define empty strings as text values, null as null, and the comma as a value character; still one dimension and at least two elements.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
 ### 012/T3
 
-- [x] Testuj przecinki, równość, dwukropek, Unicode, pusty string, null, decimal(p,s), błędną liczbę, duplikaty nazw i oba silniki. Legacy CLI zachowuje dotychczasowe znaczenie przecinka; nowa reprezentacja CLI wymaga osobnego jawnego argumentu/pliku, bez cichej zmiany parsera.
+- [x] Test commas, equality, colon, Unicode, empty string, null, decimal(p,s), an incorrect count, duplicate names and both engines. The legacy CLI keeps the current meaning of the comma; the new CLI representation requires a separate explicit argument/file, without a silent parser change.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
 ### 012/T4
 
-- [x] Zachowaj nową sesję/setup per cell, kolejność, first-failure i dotychczasowy kontrakt poufności matrix versus param-set. Test redakcji obejmuje nowe błędy typowane. Nie kopiuj param-set wartości/ścieżek do raportu.
+- [x] Preserve the new per-cell session/setup, the order, first-failure and the existing confidentiality contract of matrix versus param-set. The redaction test covers the new typed errors. Do not copy param-set values/paths into the report.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 after the change. For the regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and a path check.
 
-## Testy i zakończenie
+## Tests and completion
 
-MCP obsługuje legalne wartości tekstowe z przecinkami i puste stringi bez zmiany legacy CLI; ten sam binder i te same odmowy typów dla obu ścieżek.
+MCP handles legitimate text values containing commas and empty strings without changing the legacy CLI; the same binder and the same type rejections for both paths.
 
 - [x] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 (SqlHarness.Tests 134/0/0, SqlHarness.Mcp.Tests 73/0/0).
 - [x] `dotnet build SqlHarness.sln --no-restore -warnaserror` → exit 0 (0 Warning(s), 0 Error(s)).
 - [x] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; SqlHarness.Tests 2808/0/0, SqlHarness.Mcp.Tests 212/0/4 skipped (2 live opt-in + 2 foreign-RID smoke).
-- [x] Testy obejmują zachowanie właściwego adaptera/runnera, a nie tylko listę nazw lub stałą (zob. dowód T4: `CompareMatrixRunner`/`McpResultAdapter` przez tymczasową mutację + odwrócenie).
+- [x] Tests cover the behavior of the proper adapter/runner, not just a list of names or a constant (see the T4 evidence: `CompareMatrixRunner`/`McpResultAdapter` through temporary mutation + reversal).
 - [x] `git diff --check` → exit 0.
-- [x] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [x] Indeks (`plans/README.md`) zawiera status, commit i dowód; lokalne ścieżki istnieją.
-- [x] Brak dowodu live/platformowego jest jawny — zob. [012-typed-matrix-proof](012-typed-matrix-proof.md), sekcja "Brak dowodu live-DB / platformowego".
+- [x] `git status --short` shows only the author's changes within the scope.
+- [x] The index (`plans/README.md`) contains the status, commit and evidence; local paths exist.
+- [x] The absence of live/platform evidence is explicit — see [012-typed-matrix-proof](012-typed-matrix-proof.md), section "No live-DB / platform evidence".
 
-Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
+Audit baseline: 1895 Core/CLI passed; MCP 122 passed, 2 timeouts, 4 skipped. Plan005 diagnoses the timeouts. An earlier safety fix may be ready for review once the independent gate failure is documented; do not announce a full PASS then.
 
-## Warunki zatrzymania i utrzymanie
+## Stop conditions and maintenance
 
-Nie koduj wartości przez własne escaping CSV i nie dodawaj drugiego binder'a MCP.
+Do not encode values through your own CSV escaping and do not add a second MCP binder.
 
-Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
+If a step requires a real DB target, secrets or going beyond authorization, stop that step and record the gap. Finish the independent tasks. Do not mark the whole thing DONE without all required results.
 
-Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
+The reviewer checks the safety of the negative cases, compatibility and the truthfulness of the evidence. After a parser/SDK/operation change return to these tests. Small commits of the fix/test/docs type, no push. The required characteristic tests must precede the refactoring.

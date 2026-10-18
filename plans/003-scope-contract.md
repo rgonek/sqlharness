@@ -1,166 +1,166 @@
-# 003/T1 — Model zakresu MCP dla artefaktów (kontrakt)
+# 003/T1 — MCP scope model for artifacts (contract)
 
-Status: **kontrakt (docs-only, T1)**. Krok wyłącznie dokumentacyjny: zero zmian kodu
-produkcyjnego i testów. Wdrożenie (T2–T5) musi zrealizować dokładnie ten model.
+Status: **contract (docs-only, T1)**. Documentation-only step: zero production-code
+and test changes. Implementation (T2–T5) must realize exactly this model.
 
-## 1. Definicja zakresu (co jest tożsamością właściciela)
+## 1. Scope definition (what constitutes owner identity)
 
-Zakres MCP = krotka zamrożona w `McpScope` w momencie startu procesu:
+MCP scope = a tuple frozen in `McpScope` at process start:
 
-- `TargetRequest`: `Profile` (nazwa profilu) + `Vars` (kanoniczny zestaw zmiennych,
-  słownik `StringComparer.OrdinalIgnoreCase`, odrzuca puste klucze i wartości null;
-  `src/SqlHarness.Mcp/McpScope.cs`, `SqlTargetRequest` w `src/SqlHarness.Core/Contracts.cs`).
+- `TargetRequest`: `Profile` (profile name) + `Vars` (canonical var set,
+  a `StringComparer.OrdinalIgnoreCase` dictionary, rejects empty keys and null values;
+  `src/SqlHarness.Mcp/McpScope.cs`, `SqlTargetRequest` in `src/SqlHarness.Core/Contracts.cs`).
 - `ResolvedTarget`: `Server`, `Database`, `Auth`, `Mode`, `Engine`
-  (`SqlEngine.SqlServer` domyślnie), `Transport` (`PostgresTransport` dla Postgres);
+  (`SqlEngine.SqlServer` by default), `Transport` (`PostgresTransport` for Postgres);
   `src/SqlHarness.Core/Targets/TargetResolver.cs`.
-- Kanoniczny zestaw zmiennych = znormalizowana postać `Vars` z `TargetRequest`
-  (klucze case-insensitive, kolejność sortowana przy serializacji do metadanych;
-  porównanie właściciela po parach klucz=wartość, nie po kolejności argumentów CLI).
+- Canonical var set = the normalized form of `Vars` from `TargetRequest`
+  (case-insensitive keys, order sorted when serialized into metadata;
+  owner comparison by key=value pairs, not by CLI argument order).
 
-Właściciel artefaktu = ta krotka w postaci danych:
+Artifact owner = that tuple in data form:
 
 ```text
 owner = { profile, vars-kanoniczne, engine, server, database }
 ```
 
-Bez haseł i sekretów: `Auth`/`AuthSpec` (użytkownik, strategia, `passwordEnvVar`)
-oraz wartości zmiennych środowiskowych NIGDY nie trafiają do metadanych właściciela
-ani do raportów. Sekrety zostają w środowisku procesu i magazynie profili operatora
+Without passwords and secrets: `Auth`/`AuthSpec` (user, strategy, `passwordEnvVar`) and
+environment variable values NEVER reach the owner metadata nor the reports. Secrets stay
+in the process environment and in the operator's profile store
 (`docs/mcp.md`: "Connection secrets stay in the process environment...").
-Nazwa zmiennej środowiskowej z hasłem może być częścią `AuthSpec`, sama wartość — nigdy.
+The name of the environment variable holding the password may be part of `AuthSpec`, the value itself — never.
 
-Czego NIE wolno używać jako autoryzacji (warunek stopu planu):
+What must NOT be used as authorization (plan stop condition):
 
-- sama nazwa bazy (`Database` bez `Server` + `Engine` + profilu/vars),
-- sama nazwa katalogu artefaktu (id to nieprzezroczysty segment katalogu, nie prawo dostępu),
-- tekst SQL ani nazwa pliku raportu.
+- the database name alone (`Database` without `Server` + `Engine` + profile/vars),
+- the artifact directory name alone (the id is an opaque directory segment, not an access right),
+- the SQL text or the report file name.
 
-## 2. Gdzie właściciel jest zapisywany (wybrany wariant)
+## 2. Where the owner is written (chosen variant)
 
-Wybrany wariant (verbatim z zadania): **wersjonowane metadane właściciela tworzone
-przez zaufaną ścieżkę zapisu; brak właściciela oznacza odmowę MCP.**
+Chosen variant (verbatim from the task): **versioned owner metadata created
+through a trusted write path; a missing owner means MCP rejection.**
 
-Konkretnie, ugruntowane w dzisiejszym kodzie:
+Concretely, grounded in today's code:
 
 - `ArtifactManifest` v1 (`src/SqlHarness.Core/ArtifactReader.cs`):
-  `CurrentManifestVersion = 1`, pola `ManifestVersion`, `ArtifactKind`, `ReportFile`,
-  `Sections`. Rodzaje: `compare`, `measure`, `measure-set` (`CompareKind`,
-  `MeasureKind`, `MeasureSetKind`). Sekcje: `summary`, `metrics`, `operators`
-  (`SummarySection`, `MetricsSection`, `OperatorsSection`). Pisarz:
+  `CurrentManifestVersion = 1`, fields `ManifestVersion`, `ArtifactKind`, `ReportFile`,
+  `Sections`. Kinds: `compare`, `measure`, `measure-set` (`CompareKind`,
+  `MeasureKind`, `MeasureSetKind`). Sections: `summary`, `metrics`, `operators`
+  (`SummarySection`, `MetricsSection`, `OperatorsSection`). Writer:
   `ArtifactManifest.ForReport` + `ArtifactDirectoryPublisher` (`src/SqlHarness.Core/Artifacts.cs`).
 - `SnapshotDocument` v1 (`src/SqlHarness.Core/SnapshotStore.cs`):
   `Version`, `CreatedAt`, `ResultSets`, `ResultHash`, `CurrentVersion = 1`.
-  Pisarz: `SnapshotDocument.Create` via `SnapshotRunner` (`src/SqlHarness.Core/SnapshotRunner.cs`).
+  Writer: `SnapshotDocument.Create` via `SnapshotRunner` (`src/SqlHarness.Core/SnapshotRunner.cs`).
 
-Kontrakt T3/T4 (do wdrożenia, nie w tym kroku):
+T3/T4 contract (to be implemented, not in this step):
 
-- Pola właściciela są **ściśle addytywne**: istniejące pola manifestu/dokumentu snapshotu
-  zostają bez zmian; dochodzi wersjonowane pole właściciela (np. podniesienie
-  `ManifestVersion`/`Version` przy zachowaniu wstecznego odczytu v1 przez CLI).
-- Zaufana ścieżka zapisu = istniejący pisarz Core (`ArtifactDirectoryPublisher`,
-  `SnapshotStore.Save`): to on, nie adapter MCP ani CLI, wpisuje metadane właściciela
-  z kontekstu operacji, który otrzymał z zamrożonego scope.
-- Enforcement właściciela jako **opt-in per wywołanie** (ruling kontrolera, wiążący):
-  parametr `owner` w Core reader/mapper (`ArtifactReader.ReadSection`,
-  `McpOperationMapper.ReadArtifactSection`); MCP przekazuje owner ze frozen scope,
-  CLI nie przekazuje i zachowuje pracę po nazwie. Core pozostaje wspólnym miejscem
-  safety bez gałęzi per-adapter.
-- **Brak właściciela = odmowa MCP**: artefakt legacy (katalog bez manifestu lub
-  manifest v1 bez pola właściciela, snapshot v1 bez targetu) jest czytelny dla CLI
-  (dotychczasowa świadoma praca po nazwie, offline reader bez zmian), ale MCP odmawia
-  przed zwróceniem danych — bezpieczny błąd bez treści, `isError=true`.
-  MCP nie może sam nadać sobie prawa do starego artefaktu na podstawie jego nazwy
-  (zakaz samonadawania, test T2).
-- Granica integralności: **lokalny pisarz z uprawnieniami procesu jest poza granicą
-  integralności** — manifest jest metadanymi do egzekwowania zakresu w ramach jednego
-  zaufanego hosta, nie dowodem kryptograficznym. Nie obiecujemy odporności na
-  fałszowanie manifestu przez lokalnego pisarza (ręczna edycja `manifest.json` /
-  `report.json` pod `SqlHarnessPaths.CompareDir` lub pliku snapshotu). Kontrakt
-  gwarantuje tylko: bez właściciela zgodnego ze scope MCP odmawia; z niezgodnym
-  właścicielem MCP odmawia; zgodny właściciel + zgodne sekcje = projekcja
-  `summary`/`metrics`/`operators` bez raw SQL, planów, `queries.jsonl` i komórek.
+- Owner fields are **strictly additive**: existing manifest/snapshot document
+  fields stay unchanged; a versioned owner field is added (e.g. bumping
+  `ManifestVersion`/`Version` while preserving backward reading of v1 by CLI).
+- Trusted write path = the existing Core writer (`ArtifactDirectoryPublisher`,
+  `SnapshotStore.Save`): it is the Core writer, not the MCP or CLI adapter, that
+  writes the owner metadata from the operation context it received from the frozen scope.
+- Owner enforcement as **opt-in per call** (controller ruling, binding):
+  an `owner` parameter in the Core reader/mapper (`ArtifactReader.ReadSection`,
+  `McpOperationMapper.ReadArtifactSection`); MCP passes the owner from the frozen scope,
+  CLI does not pass one and keeps name-based behaviour. Core remains the shared
+  safety locus without per-adapter branches.
+- **Missing owner = MCP rejection**: a legacy artifact (a directory without a manifest or
+  a v1 manifest without an owner field, a v1 snapshot without a target) is readable by CLI
+  (the existing deliberate name-based behaviour, offline reader unchanged), but MCP refuses
+  before returning any data — a safe error without content, `isError=true`.
+  MCP must not grant itself a right to an old artifact on the basis of its name
+  (self-granting prohibited, T2 test).
+- Integrity boundary: **a local writer with process permissions is outside the integrity
+  boundary** — the manifest is metadata for enforcing scope within a single
+  trusted host, not cryptographic proof. We do not promise resistance
+  to manifest forgery by a local writer (manual editing of `manifest.json` /
+  `report.json` under `SqlHarnessPaths.CompareDir` or of a snapshot file). The contract
+  guarantees only: without an owner matching the MCP scope it refuses; with a mismatching
+  owner MCP refuses; a matching owner + matching sections = a projection
+  of `summary`/`metrics`/`operators` without raw SQL, plans, `queries.jsonl` and cells.
 
-## 3. Trwałość po restarcie
+## 3. Persistence across restart
 
-- `McpScope` jest niemutowalny i zamrożony na proces: profil odczytany raz,
-  target zresolvedowany raz, brak przeładowania (`McpScope.Create`, `docs/mcp.md`
-  "Scope lifetime"). Nowy profil/vars/target wymaga restartu procesu.
-- Właściciel artefaktu jest **trwały**: zapisany w manifeście/dokumencie snapshotu
-  obok artefaktu, więc własny artefakt działa po restarcie — nowy proces z tym samym
-  profilem + kanonicznymi vars + resolved `engine`/`server`/`database` spełnia
-  porównanie właściciela bez żadnego stanu w pamięci serwera.
-- Porównanie po restarcie odbywa się wyłącznie na danych z metadanych (profil, vars,
-  engine, server, database); hasła nigdy nie są odtwarzane z artefaktu.
-- Legacy (brak pola właściciela) po restarcie zachowuje się identycznie jak przed:
-  CLI czyta, MCP odmawia. Nie migrujemy ani nie nadpisujemy automatycznie
-  istniejących plików (T4).
+- `McpScope` is immutable and frozen for the process: the profile is read once,
+  the target is resolved once, no reload (`McpScope.Create`, `docs/mcp.md`
+  "Scope lifetime"). A new profile/vars/target requires a process restart.
+- The artifact owner is **persistent**: written into the manifest/snapshot document
+  next to the artifact, so an own artifact works after restart — a new process with the same
+  profile + canonical vars + resolved `engine`/`server`/`database` satisfies
+  the owner comparison without any server-side in-memory state.
+- The post-restart comparison relies solely on metadata data (profile, vars,
+  engine, server, database); passwords are never recovered from an artifact.
+- Legacy (missing owner field) after restart behaves exactly as before:
+  CLI reads, MCP refuses. We do not migrate nor automatically overwrite
+  existing files (T4).
 
-## 4. Właściciel dla matrix i param-set
+## 4. Owner for matrix and param-set
 
-- `compare --matrix`: jeden wymiar, co najmniej dwie typowane wartości, kolejność
-  użytkownika, **nowe połączenie i jeden setup per wartość**, pierwszy błąd zatrzymuje
-  run, ukończone komórki zostają (`CompareCellRunner`: `ResolvedTarget Target` per
-  komórka). Właściciel: każda komórka dziedziczy właściciela zakresu wywołania
-  (ten sam profil/vars/engine/server/database; różni się tylko wartością macierzy,
-  która jest parametrem wykonania, nie częścią tożsamości scope). Read MCP całej
-  macierzy wymaga właściciela zakresu; partial (`status: partial`) nie poszerza dostępu.
-- `measure --param-set`: **jedna sesja, jeden setup** (setup wiąże pierwszy zestaw),
-  pliki `.sqljson` strict (`name` + `parameters` tylko, ≤64 KiB, bez BOM/komentarzy),
-  rotacja pomiarów `r modulo setCount`. Właściciel: jeden właściciel zakresu dla
-  całego artefaktu `measure-set`; poszczególne sety (`name`, hash wartości, typy)
-  są danymi wewnątrz, nie osobnymi właścicielami. Stabilność per-set nie jest
-  twierdzeniem o równoważności cross-set.
-- Oba tryby: parametry/wartości macierzy nigdy nie trafiają do metadanych właściciela
-  ani do raportów (`Values are never copied into reports`); owner to scope, nie dane.
+- `compare --matrix`: one dimension, at least two typed values, the user's order,
+  **a new connection and one setup per value**, the first error stops the
+  run, completed cells remain (`CompareCellRunner`: `ResolvedTarget Target` per
+  cell). Owner: each cell inherits the owner of the invocation scope
+  (the same profile/vars/engine/server/database; only the matrix value differs,
+  and that is an execution parameter, not part of the scope identity). MCP reading of the whole
+  matrix requires the scope owner; partial (`status: partial`) does not widen access.
+- `measure --param-set`: **one session, one setup** (setup binds the first set),
+  strict `.sqljson` files (`name` + `parameters` only, ≤64 KiB, without BOM/comments),
+  rotation of measurements `r modulo setCount`. Owner: one scope owner for the
+  whole `measure-set` artifact; the individual sets (`name`, value hash, types)
+  are internal data, not separate owners. Per-set stability is not
+  a cross-set equivalence claim.
+- Both modes: matrix parameters/values never reach the owner metadata
+  nor the reports (`Values are never copied into reports`); owner is scope, not data.
 
-## 5. Kontrakt odczytu (co czyta, co odmawia)
+## 5. Read contract (what reads, what refuses)
 
-Dzisiejszy defekt (punkt odniesienia, verbatim):
+Today's defect (reference point, verbatim):
 
 ```text
 return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section);
 ```
 
-`ReadArtifactSection(scope, id, section)` przyjmuje scope, ale go nie sprawdza —
-czyta globalny `CompareDir`. Docelowo (T3): sprawdzenie właściciela **przed projekcją
-raportu**, w Core, na ścieżce `ArtifactReader.ReadSection(root, artifactId, section)`
-z opt-in `owner`. Limity zostają: id = pojedyncza nazwa katalogu związana manifestem
-(≤128 znaków, wzorzec, brak traversalu/linków), manifest ≤64 KiB (`MaxManifestBytes`),
-raport ≤16 MiB (`MaxReportBytes`), tylko sekcje z mapowania manifestu, błędy bez treści
+`ReadArtifactSection(scope, id, section)` accepts a scope but does not check it —
+it reads the global `CompareDir`. Target state (T3): an owner check **before the report
+projection**, in Core, on the `ArtifactReader.ReadSection(root, artifactId, section)`
+path with an opt-in `owner`. Limits remain: id = a single directory name tied to a manifest
+(≤128 characters, pattern, no traversal/links), manifest ≤64 KiB (`MaxManifestBytes`),
+report ≤16 MiB (`MaxReportBytes`), only sections from the manifest mapping, errors without content
 (`ArtifactReadException`, exit `Safety`/`LocalStorage`).
 
-Snapshoty (T4): osobno capture/diff. MCP wymaga właściciela i odmawia obcego zakresu;
-CLI zachowuje pracę po nazwie. `--diff` nigdy nie drukuje wartości komórek
-(tylko lokalizacje/rodzaje); exit `8` przy różnicach, `7` dla watch-timeout — oba
-zachowane.
+Snapshots (T4): capture/diff separately. MCP requires an owner and rejects a foreign scope;
+CLI keeps name-based behaviour. `--diff` never prints cell values
+(only locations/kinds); exit `8` on differences, `7` for watch-timeout — both
+preserved.
 
-## 6. Globalne wiążące ograniczenia (niezmienne w tym planie)
+## 6. Global binding restrictions (immutable in this plan)
 
-- Kody exit `0/2/3/4/5/6/7/8` zachowane; legacy JSON zachowany; oba silniki
-  (`sqlserver`/`postgres`, `SqlEngine`) zachowane.
-- Pola tylko addytywne (manifest, snapshot, raporty, envelope MCP).
-- Core wspólnym miejscem safety; adaptery (MCP/CLI) nie tworzą własnego klasyfikatora.
-- Testy: istniejące wzorce fake reader/session/module i syntetyczny
-  `SQLHARNESS_HOME`; syntetyczne raporty, nie artefakty użytkownika.
-- Nie czytać rzeczywistych sekretów ani artefaktów użytkownika; `.sqlplan`,
-  `queries.jsonl`, snapshoty i parametry runtime są lokalnie wrażliwe.
+- Exit codes `0/2/3/4/5/6/7/8` preserved; legacy JSON preserved; both engines
+  (`sqlserver`/`postgres`, `SqlEngine`) preserved.
+- Fields only additive (manifest, snapshot, reports, MCP envelope).
+- Core the shared safety locus; adapters (MCP/CLI) do not create their own classifier.
+- Tests: existing fake reader/session/module patterns and a synthetic
+  `SQLHARNESS_HOME`; synthetic reports, not user artifacts.
+- Do not read real secrets or user artifacts; `.sqlplan`,
+  `queries.jsonl`, snapshots and runtime parameters are locally sensitive.
 
-## 7. Mapa źródeł (worktree, baza 637a59b)
+## 7. Source map (worktree, base 637a59b)
 
 - `src/SqlHarness.Mcp/McpScope.cs` — frozen scope: `TargetRequest`, `ResolvedTarget`, vars.
-- `src/SqlHarness.Core/ArtifactReader.cs` — `ArtifactManifest` v1, `ReadSection`, limity.
-- `src/SqlHarness.Core/SnapshotStore.cs` + `SnapshotRunner.cs` — `SnapshotDocument` v1, zapis/odczyt.
-- `src/SqlHarness.Core/Artifacts.cs`, `Contracts.cs` — `ArtifactDirectoryPublisher`, raporty,
+- `src/SqlHarness.Core/ArtifactReader.cs` — `ArtifactManifest` v1, `ReadSection`, limits.
+- `src/SqlHarness.Core/SnapshotStore.cs` + `SnapshotRunner.cs` — `SnapshotDocument` v1, write/read.
+- `src/SqlHarness.Core/Artifacts.cs`, `Contracts.cs` — `ArtifactDirectoryPublisher`, reports,
   `SqlTargetRequest`, `SqlHarnessExitCode`.
 - `src/SqlHarness.Core/Targets/TargetResolver.cs` — `ResolvedTarget` (Server/Database/Auth/Mode/Engine/Transport).
 - `src/SqlHarness.Mcp/McpOperationMapper.cs` (`ReadArtifactSection`),
-  `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs` — dzisiejsza ścieżka bez sprawdzenia.
-- `docs/mcp.md` (Scope lifetime, Artifacts), `AGENTS.md` (silnik, exit codes).
-- Matrix: `CompareCellRunner.cs`; param-set: strict `.sqljson`, jedna sesja.
+  `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs` — today's path without a check.
+- `docs/mcp.md` (Scope lifetime, Artifacts), `AGENTS.md` (engine, exit codes).
+- Matrix: `CompareCellRunner.cs`; param-set: strict `.sqljson`, one session.
 
-## 8. Kryteria akceptacji T1
+## 8. T1 acceptance criteria
 
-- [x] `plans/003-scope-contract.md` istnieje i zawiera model z §1–§7.
-- [x] `git diff --check` → exit 0; jedyna zmiana to nowy `plans/003-scope-contract.md`.
-- [ ] Regresja kodowa (T2): stary kod nie przechodzi nowych testów obcego zakresu/legacy
-      — poza zakresem T1, do wykonania w T2.
+- [x] `plans/003-scope-contract.md` exists and contains the model from §1–§7.
+- [x] `git diff --check` → exit 0; the only change is the new `plans/003-scope-contract.md`.
+- [ ] Code regression (T2): the old code does not pass the new foreign-scope/legacy tests
+      — out of T1 scope, to be performed in T2.

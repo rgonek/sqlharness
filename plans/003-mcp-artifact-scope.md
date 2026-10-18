@@ -1,13 +1,13 @@
-# Plan 003: Powiąż dostęp do artefaktów z zakresem MCP
+# Plan 003: Tie artifact access to the MCP scope
 
 Status: **TODO**
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
-Priorytet: P1; nakład: L; ryzyko zmiany: HIGH.
-Pokrycie: **S2; przestrzeń nazw snapshotów**. Zależności: **001, 002**.
+Date: 2026-09-29. Base: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priority: P1; effort: L; change risk: HIGH.
+Coverage: **S2; snapshot namespace**. Dependencies: **001, 002**.
 
-## Kontekst i instrukcja wykonania
+## Context and execution instructions
 
-Czytaj cały plan. Pracuj w izolowanym worktree, zachowaj cudze zmiany. Zapis planu nie jest wdrożeniem. Po ukończeniu zaktualizuj plans/README.md wraz z dowodem; nie pushuj ani nie publikuj bez zlecenia.
+Read the whole plan. Work in an isolated worktree, preserve other people's changes. Writing the plan is not implementation. On completion update plans/README.md along with the evidence; do not push or publish without an assignment.
 
 Drift check:
 ```powershell
@@ -15,18 +15,18 @@ git status --short
 git diff --stat 8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b..HEAD -- "src/SqlHarness.Mcp/McpScope.cs" "src/SqlHarness.Mcp/McpOperationMapper.cs" "src/SqlHarness.Mcp/Tools/McpToolCatalog.cs" "src/SqlHarness.Core/ArtifactReader.cs" "src/SqlHarness.Core/Artifacts.cs" "src/SqlHarness.Core/Contracts.cs" "src/SqlHarness.Core/SqlHarnessModule.cs" "src/SqlHarness.Core/SnapshotStore.cs" "src/SqlHarness.Core/SnapshotRunner.cs" "tests/SqlHarness.Mcp.Tests/McpScopeTests.cs" "tests/SqlHarness.Mcp.Tests/McpMappingTests.cs" "tests/SqlHarness.Tests/ArtifactReaderTests.cs" "tests/SqlHarness.Tests/SnapshotStoreTests.cs"
 ```
 
-Zmiany poprzedników są oczekiwane: przeczytaj je i dopasuj plan przed kodowaniem. Niewyjaśniony rozjazd wymaga aktualizacji założeń, nie mechanicznego wklejania starego kodu.
+Predecessor changes are expected: read them and align the plan before coding. An unexplained divergence requires updating the assumptions, not mechanically pasting old code.
 
-ReadArtifactSection przyjmuje scope, ale czyta globalny CompareDir bez sprawdzenia właściciela. Syntetyczny raport innej bazy został zwrócony z isError=false. Manifest nie ma tożsamości zakresu; SnapshotDocument także nie zapisuje targetu.
+ReadArtifactSection accepts a scope, but reads the global CompareDir without checking the owner. A synthetic report from another database was returned with isError=false. The manifest has no scope identity; SnapshotDocument does not record the target either.
 
-Punkt odniesienia z kodu/komendy:
+Reference point from code/command:
 ```text
 return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section);
 ```
 
-.NET8/C#/xUnit. Dopasuj wzorce do testów wymienionych w zakresie. Core pozostaje wspólnym miejscem safety; adaptery nie tworzą własnego klasyfikatora. Stosuj istniejące fake reader/session/module i syntetyczny SQLHARNESS_HOME. Nie czytaj rzeczywistych sekretów ani artefaktów użytkownika.
+.NET8/C#/xUnit. Match patterns to the tests listed in the scope. Core remains the shared safety locus; adapters do not create their own classifier. Use the existing fake reader/session/module and a synthetic SQLHARNESS_HOME. Do not read real secrets or user artifacts.
 
-## Zakres
+## Scope
 
 - `src/SqlHarness.Mcp/McpScope.cs`
 - `src/SqlHarness.Mcp/McpOperationMapper.cs`
@@ -42,61 +42,61 @@ return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty
 - `tests/SqlHarness.Tests/ArtifactReaderTests.cs`
 - `tests/SqlHarness.Tests/SnapshotStoreTests.cs`
 
-Dodatkowo: nowe pliki nazwane w krokach, dokumenty wynikowe plans/003-*.md oraz status w indeksie. Inne pliki wymagają jawnej korekty zakresu i uzasadnienia przed zmianą.
+Additionally: new files named in the steps, the output documents plans/003-*.md and the status in the index. Other files require an explicit scope correction and justification before any change.
 
-Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push, globalne wyłączenie walidacji i niepowiązane refaktoryzacje. Zachowaj kody 0/2/3/4/5/6/7/8, legacy JSON i oba silniki. Pola addytywne tylko zgodnie z krokami.
+Out of scope: live DB, deploy, user profiles and passwords, installation, push, globally disabling validation and unrelated refactorings. Preserve codes 0/2/3/4/5/6/7/8, legacy JSON and both engines. Additive fields only as described in the steps.
 
-## Zadania
+## Tasks
 
 ### 003/T1
 
-- [ ] Najpierw zapisz w plans/003-scope-contract.md model zakresu: profil + kanoniczny zestaw zmiennych + resolved engine/server/database, bez haseł. Ustal trwałość po restarcie i właściciela dla matrix/param-set. Wybrany wariant: wersjonowane metadane właściciela tworzone przez zaufaną ścieżkę zapisu; brak właściciela oznacza odmowę MCP. Lokalny pisarz z uprawnieniami procesu jest poza granicą integralności — nie obiecuj odporności na fałszowanie manifestu.
+- [ ] First write the scope model in plans/003-scope-contract.md: profile + canonical var set + resolved engine/server/database, without passwords. Establish persistence across restart and the owner for matrix/param-set. Chosen variant: versioned owner metadata created through a trusted write path; a missing owner means MCP rejection. A local writer with process permissions is outside the integrity boundary — do not promise resistance to manifest forgery.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 003/T2
 
-- [ ] Dodaj testy własnego i obcego zakresu, tej samej nazwy DB na innym serwerze, innych vars/profilu oraz braku owner w starym artefakcie. Zachowaj istniejący offline CLI reader; MCP nie może sam nadać sobie prawa do starego artefaktu na podstawie jego nazwy.
+- [ ] Add tests for an own and a foreign scope, the same database name on a different server, other vars/profile, and a missing owner in an old artifact. Preserve the existing offline CLI reader; MCP must not grant itself a right to an old artifact on the basis of its name.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 003/T3
 
-- [ ] Przenieś kontekst właściciela z frozen scope przez operację do publikacji i readera. Sprawdź właściciela przed projekcją raportu. Zachowaj summary/metrics/operators, brak raw SQL i wartości, atomic publish, budżety i bezpieczne błędy.
+- [ ] Move the owner context from the frozen scope through the operation to the publisher and the reader. Check the owner before projecting the report. Preserve summary/metrics/operators, the absence of raw SQL and values, atomic publish, budgets and safe errors.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 003/T4
 
-- [ ] Zdefiniuj osobno snapshot capture/diff: MCP wymaga właściciela i odmowy obcego zakresu, CLI zachowuje dotychczasową świadomą pracę po nazwie. Nie migruj ani nie nadpisuj automatycznie istniejących plików. Testuj brak overwrite i brak ujawnienia komórek.
+- [ ] Define snapshot capture/diff separately: MCP requires an owner and rejects a foreign scope, CLI keeps the current name-based, scope-aware behaviour. Do not migrate or automatically overwrite existing files. Test the absence of overwrite and the absence of cell disclosure.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 003/T5
 
-- [ ] Uzupełnij docs/mcp.md i specyfikację MCP o faktyczny model zakresu i kompatybilność legacy; dopisz te dwa pliki do listy scope w trakcie wdrożenia.
+- [ ] Update docs/mcp.md and the MCP specification with the actual scope model and legacy compatibility; add those two files to the scope list during implementation.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
-## Testy i zakończenie
+## Tests and completion
 
-Obcy zakres i legacy bez właściciela odrzucone przed zwróceniem danych; własny artefakt działa po restarcie według kontraktu; legacy CLI działa; snapshot nie ujawnia komórek.
+A foreign scope and legacy artifacts without an owner are rejected before any data is returned; an own artifact works after restart according to the contract; legacy CLI works; a snapshot does not disclose cells.
 
 - [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~SnapshotStoreTests' --verbosity minimal` → exit 0.
 - [ ] `dotnet build SqlHarness.sln --no-restore -warnaserror` → exit 0.
-- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; zapisz passed/failed/skipped.
-- [ ] Testy obejmują zachowanie właściwego adaptera/runnera, a nie tylko listę nazw lub stałą.
+- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; record passed/failed/skipped.
+- [ ] Tests cover the behaviour of the correct adapter/runner, not just a list of names or a constant.
 - [ ] `git diff --check` → exit 0.
-- [ ] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [ ] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
-- [ ] Brak dowodu live/platformowego jest jawny.
+- [ ] `git status --short` shows only the author's changes within the scope.
+- [ ] The index contains status, commit and evidence; local paths exist or are marked as new.
+- [ ] The absence of live/platform evidence is explicit.
 
-Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
+Audit baseline: 1895 Core/CLI passed; MCP 122 passed, 2 timeouts, 4 skipped. Plan005 diagnoses the timeouts. An earlier safety fix may be ready for review given a documented independent gate failure; do not declare a full PASS then.
 
-## Warunki zatrzymania i utrzymanie
+## Stop conditions and maintenance
 
-Nie używać samej nazwy DB ani nazwy folderu jako autoryzacji. Jeżeli threading kontekstu wymaga innego runnera, uzupełnij scope planu i uzasadnienie przed zmianą; nie pomijaj matrix/param-set.
+Do not use the database name or the folder name alone as authorization. If context threading requires a different runner, update the plan scope and the justification before the change; do not skip matrix/param-set.
 
-Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
+If a step requires a real DB target, secrets, or going beyond authorization, stop that step and record the absence. Complete the independent tasks. Do not mark the whole thing DONE without all required results.
 
-Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
+The reviewer checks negative-case safety, compatibility and the truthfulness of the evidence. After changing the parser/SDK/operation, return to these tests. Small commits of the fix/test/docs type, no push. Required characteristic tests must precede a refactoring.

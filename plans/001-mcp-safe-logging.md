@@ -1,13 +1,13 @@
-# Plan 001: Zamknij wyciek SQL i parametrów przez stderr
+# Plan 001: Close the SQL and parameter leak through stderr
 
 Status: **TODO**
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
-Priorytet: P1; nakład: S; ryzyko zmiany: LOW.
-Pokrycie: **S1**. Zależności: **—**.
+Date: 2026-09-29. Base: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priority: P1; effort: S; change risk: LOW.
+Coverage: **S1**. Dependencies: **—**.
 
-## Kontekst i instrukcja wykonania
+## Context and execution instructions
 
-Czytaj cały plan. Pracuj w izolowanym worktree, zachowaj cudze zmiany. Zapis planu nie jest wdrożeniem. Po ukończeniu zaktualizuj plans/README.md wraz z dowodem; nie pushuj ani nie publikuj bez zlecenia.
+Read the whole plan. Work in an isolated worktree, preserve other people's changes. Writing the plan is not implementation. On completion update plans/README.md along with the evidence; do not push or publish without an assignment.
 
 Drift check:
 ```powershell
@@ -15,66 +15,66 @@ git status --short
 git diff --stat 8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b..HEAD -- "src/SqlHarness.Mcp/McpHost.cs" "tests/SqlHarness.Mcp.Tests/McpSecretRedactionTests.cs" "tests/SqlHarness.Mcp.Tests/McpStdioProcessTests.cs"
 ```
 
-Zmiany poprzedników są oczekiwane: przeczytaj je i dopasuj plan przed kodowaniem. Niewyjaśniony rozjazd wymaga aktualizacji założeń, nie mechanicznego wklejania starego kodu.
+Predecessor changes are expected: read them and align the plan before coding. An unexplained divergence requires updating the assumptions, not mechanically pasting old code.
 
-McpHost.cs:131,143 włącza wszystkie poziomy logowania i przekazuje formatter SDK do stderr. Próba procesu z syntetycznym SQL i parametrem wykazała obecność obu wartości w stderr, także przy odrzuceniu argumentów.
+McpHost.cs:131,143 enables all logging levels and passes the SDK formatter to stderr. A process trial with synthetic SQL and a parameter showed both values present in stderr, also when arguments were rejected.
 
-Punkt odniesienia z kodu/komendy:
+Reference point from code/command:
 ```text
 public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
 ```
 
-.NET8/C#/xUnit. Dopasuj wzorce do testów wymienionych w zakresie. Core pozostaje wspólnym miejscem safety; adaptery nie tworzą własnego klasyfikatora. Stosuj istniejące fake reader/session/module i syntetyczny SQLHARNESS_HOME. Nie czytaj rzeczywistych sekretów ani artefaktów użytkownika.
+.NET8/C#/xUnit. Match patterns to the tests listed in the scope. Core remains the shared safety locus; adapters do not create their own classifier. Use the existing fake reader/session/module and a synthetic SQLHARNESS_HOME. Do not read real secrets or user artifacts.
 
-## Zakres
+## Scope
 
 - `src/SqlHarness.Mcp/McpHost.cs`
 - `tests/SqlHarness.Mcp.Tests/McpSecretRedactionTests.cs`
 - `tests/SqlHarness.Mcp.Tests/McpStdioProcessTests.cs`
 
-Dodatkowo: nowe pliki nazwane w krokach, dokumenty wynikowe plans/001-*.md oraz status w indeksie. Inne pliki wymagają jawnej korekty zakresu i uzasadnienia przed zmianą.
+Additionally: new files named in the steps, the output documents plans/001-*.md and the status in the index. Other files require an explicit scope correction and justification before any change.
 
-Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push, globalne wyłączenie walidacji i niepowiązane refaktoryzacje. Zachowaj kody 0/2/3/4/5/6/7/8, legacy JSON i oba silniki. Pola addytywne tylko zgodnie z krokami.
+Out of scope: live DB, deploy, user profiles and passwords, installation, push, globally disabling validation and unrelated refactorings. Preserve codes 0/2/3/4/5/6/7/8, legacy JSON and both engines. Additive fields only as described in the steps.
 
-## Zadania
+## Tasks
 
 ### 001/T1
 
-- [ ] Dodaj procesowe testy regresji na wzór McpStdioProcessTests: handshake, poprawny validate, odrzucone argumenty i błędny frame. Użyj różnych sztucznych znaczników w SQL, parametrze, ścieżce i treści wyjątku. Sprawdzaj stdout i stderr; nie uruchamiaj DB.
+- [ ] Add process-level regression tests modelled on McpStdioProcessTests: handshake, valid validate, rejected arguments and a malformed frame. Use different artificial markers in the SQL, the parameter, the path and the exception text. Check stdout and stderr; do not start a DB.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpSecretRedactionTests|FullyQualifiedName~McpStdioProcessTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpSecretRedactionTests|FullyQualifiedName~McpStdioProcessTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 001/T2
 
-- [ ] Zastąp dowolne formatowanie logów SDK stałymi komunikatami lub jawną listą bezpiecznych zdarzeń. Nie wywołuj formattera ani ToString na nieznanym stanie/wyjątku. Ograniczenie poziomu logowania samo w sobie nie jest zabezpieczeniem.
+- [ ] Replace arbitrary SDK log formatting with constant messages or an explicit list of safe events. Do not invoke the formatter or ToString on an unknown state/exception. Limiting the log level by itself is not a protection.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpSecretRedactionTests|FullyQualifiedName~McpStdioProcessTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpSecretRedactionTests|FullyQualifiedName~McpStdioProcessTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
 ### 001/T3
 
-- [ ] Zachowaj stdout wyłącznie dla ramek MCP, bezpieczne komunikaty startu i zakończenia oraz diagnostykę kategorii błędu. Sprawdź normalne EOF i anulowanie.
+- [ ] Keep stdout exclusively for MCP frames, safe start and completion messages, and error-category diagnostics. Check normal EOF and cancellation.
 
-**Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpSecretRedactionTests|FullyQualifiedName~McpStdioProcessTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
+**Verification:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpSecretRedactionTests|FullyQualifiedName~McpStdioProcessTests' --verbosity minimal` → exit 0 after the change. For a regression test, first confirm the expected failure of the old code. Documentation-only step: `git diff --check` and checking the paths.
 
-## Testy i zakończenie
+## Tests and completion
 
-Test procesu nie znajduje żadnego syntetycznego znacznika na stderr; odpowiedź validate pozostaje poprawną ramką. Błędy startu pozostają zwięzłe.
+The process test finds no synthetic marker on stderr; the validate response stays a valid frame. Startup errors stay concise.
 
 - [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~McpSecretRedactionTests|FullyQualifiedName~McpStdioProcessTests' --verbosity minimal` → exit 0.
 - [ ] `dotnet build SqlHarness.sln --no-restore -warnaserror` → exit 0.
-- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; zapisz passed/failed/skipped.
-- [ ] Testy obejmują zachowanie właściwego adaptera/runnera, a nie tylko listę nazw lub stałą.
+- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; record passed/failed/skipped.
+- [ ] Tests cover the behaviour of the correct adapter/runner, not just a list of names or a constant.
 - [ ] `git diff --check` → exit 0.
-- [ ] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [ ] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
-- [ ] Brak dowodu live/platformowego jest jawny.
+- [ ] `git status --short` shows only the author's changes within the scope.
+- [ ] The index contains status, commit and evidence; local paths exist or are marked as new.
+- [ ] The absence of live/platform evidence is explicit.
 
-Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
+Audit baseline: 1895 Core/CLI passed; MCP 122 passed, 2 timeouts, 4 skipped. Plan005 diagnoses the timeouts. An earlier safety fix may be ready for review given a documented independent gate failure; do not declare a full PASS then.
 
-## Warunki zatrzymania i utrzymanie
+## Stop conditions and maintenance
 
-Nie dodawać regexowej redakcji całych payloadów jako podstawowej ochrony. Nie zmieniać klasyfikatora SQL ani poziomu poufności wyniku query.
+Do not add regex redaction of whole payloads as the primary protection. Do not change the SQL classifier or the confidentiality level of the query result.
 
-Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
+If a step requires a real DB target, secrets, or going beyond authorization, stop that step and record the absence. Complete the independent tasks. Do not mark the whole thing DONE without all required results.
 
-Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
+The reviewer checks negative-case safety, compatibility and the truthfulness of the evidence. After changing the parser/SDK/operation, return to these tests. Small commits of the fix/test/docs type, no push. Required characteristic tests must precede a refactoring.

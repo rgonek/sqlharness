@@ -1,183 +1,183 @@
-# Kontrakt regresji — mapa pól, kolejność decyzji i niezmienniki
+# Regression contract — field map, decision order and invariants
 
 > **2026-10-11:** the decision thresholds here are reused by [051](051-compare-regression-verdict.md). Everything about reading saved artifacts offline (run-count inference, legacy producer proof, `regress` command) is superseded.
 
-Status: PLANNED; kontrakt zrewidowany 2026-10-11 na HEAD 729d88f. Funkcja nie jest wdrożona.
+Status: PLANNED; contract revised 2026-10-11 on HEAD 729d88f. The function is not implemented.
 
-Historyczny HEAD mapowania (stan przed wdrożeniem, nie bieżący HEAD): `39451fcabc7c3eac184e0370bdef7196c7e1e683`. To nie jest baza audytu planu (`8aa01f8`).
+Historical mapping HEAD (state before implementation, not the current HEAD): `39451fcabc7c3eac184e0370bdef7196c7e1e683`. This is not the plan's audit base (`8aa01f8`).
 
-Kolejność decyzji jest w sekcji „Kolejność decyzji”. Zastępuje pierwsze dopasowanie z sekcji 4 specyfikacji. Mapy pól poniżej nie zmienia.
+The decision order is in the "Decision order" section. It replaces first-match from section 4 of the specification. The field maps below do not change.
 
-Sekcja „Niezmienniki” zachowuje granice offline i dowodu. Kolejność decyzji zawiera poprawkę niewydanej polityki czasu i kosztów.
+The "Invariants" section preserves the offline and evidence boundaries. The decision order includes the correction of the unreleased time and cost policy.
 
-Ten plik zachowuje historyczną mapę siedmiu faktów z podanego wyżej SHA, zapisuje kolejność reguł i spisuje niezmienniki, których ta kolejność nie zmienia. Nie jest planem implementacji. Nie dodaje komend, stubów ani capabilities. Sekcja 2 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` tylko nazywa wejścia, których polityka chce użyć. Kolejność reguł z sekcji 4 tej specyfikacji nie jest tu przenoszona: jest zastąpiona.
+This file preserves the historical map of the seven facts from the SHA given above, records the rule order and enumerates the invariants that this order does not change. It is not an implementation plan. It adds no commands, stubs or capabilities. Section 2 of `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` only names the inputs the policy wants to use. The rule order from section 4 of that specification is not carried over here: it is replaced.
 
-Nazwy z planu: CompareReport to `SqlHarnessCompareReport`, MetricReport to `BenchmarkMetricReport`. Nazwy typów i składowych są w pisowni źródła.
+Names from the plan: CompareReport to `SqlHarnessCompareReport`, MetricReport to `BenchmarkMetricReport`. Type and member names are in source spelling.
 
-## Odczyt offline
+## Offline read
 
-`ArtifactReader.ReadSection` (`src/SqlHarness.Core/ArtifactReader.cs`) czyta wyłącznie `manifest.json` i `report.json`. Nie otwiera `runs.jsonl`, planów ani SQL. Rodzaje manifestu v1 to `compare`, `measure` i `measure-set`. `SqlHarnessCompareMatrixReport` nie jest rodzajem artefaktu; komórka macierzy niesie osobny `SqlHarnessCompareReport` zapisany przez `CompareCellRunner`.
+`ArtifactReader.ReadSection` (`src/SqlHarness.Core/ArtifactReader.cs`) reads only `manifest.json` and `report.json`. It does not open `runs.jsonl`, plans or SQL. The v1 manifest kinds are `compare`, `measure` and `measure-set`. `SqlHarnessCompareMatrixReport` is not an artifact kind; a matrix cell carries a separate `SqlHarnessCompareReport` written by `CompareCellRunner`.
 
-Sekcja `summary` zwraca wynik `BenchmarkSummaryProjector.Project` (`src/SqlHarness.Core/BenchmarkSummary.cs`): dla compare `CompareBenchmarkSummary`, dla measure `MeasureBenchmarkSummary`, dla measure-set `MeasureSetBenchmarkSummary`. Sekcja `metrics` zwraca `ArtifactMetricsSection`. Sekcja `operators` nie niesie żadnego z siedmiu faktów.
+The `summary` section returns the result of `BenchmarkSummaryProjector.Project` (`src/SqlHarness.Core/BenchmarkSummary.cs`): for compare `CompareBenchmarkSummary`, for measure `MeasureBenchmarkSummary`, for measure-set `MeasureSetBenchmarkSummary`. The `metrics` section returns `ArtifactMetricsSection`. The `operators` section carries none of the seven facts.
 
-`CompareArtifactWriter` (`src/SqlHarness.Core/Artifacts.cs`) serializuje cały raport do `report.json` opcjami `ArtifactDirectoryPublisher.JsonOptions` (`JsonSerializerDefaults.Web`: camelCase). Enum bez konwertera zapisuje się jako liczba. `runs.jsonl` niesie `RunMetadata`: wariant, numer powtórzenia, trzy liczby `long` oraz `ResultHash`. Nie niesie `BenchmarkRunMetrics` ani `BenchmarkMetricReport`.
+`CompareArtifactWriter` (`src/SqlHarness.Core/Artifacts.cs`) serializes the whole report into `report.json` with the `ArtifactDirectoryPublisher.JsonOptions` options (`JsonSerializerDefaults.Web`: camelCase). An enum without a converter is written as a number. `runs.jsonl` carries `RunMetadata`: variant, repetition number, three `long` numbers and `ResultHash`. It carries neither `BenchmarkRunMetrics` nor `BenchmarkMetricReport`.
 
-`present` znaczy, że zapisany artefakt ma tę składową. `unknown` znaczy, że jej nie ma. Zero, pusta lista, null składowej sąsiedniej i tekst specyfikacji nie są tą składową. Nie czytałem artefaktów z `~/.sqlharness` ani innych plików użytkownika. Ścieżka zapisu poniżej jest ścieżką kodu, nie przeglądem dysku.
+`present` means that the saved artifact has that member. `unknown` means that it does not. Zero, an empty list, a null neighbouring member and specification text are not that member. I did not read artifacts from `~/.sqlharness` nor other user files. The save path below is a code path, not a disk inspection.
 
-## Mapa
+## Map
 
-| Fakt | Składowa | `report.json` | summary | metrics | Status |
+| Fact | Member | `report.json` | summary | metrics | Status |
 |---|---|---|---|---|---|
-| Liczba przebiegów | `SqlHarnessCompareReport.MeasuredRunCount` | tak | nie | nie | `present` w pliku raportu; odczyt selektywny nie wystawia |
-| Spread | brak | nie | nie | nie | `unknown` |
-| Dostępność czasu | `BenchmarkMetricReport.ElapsedTimeAvailability` | gdy `MetricReport` nie jest null | ta sama kopia | ta sama kopia | `present` albo `unknown`, jak niżej |
-| Dostępność CPU | `BenchmarkMetricReport.CpuTimeAvailability` | gdy `MetricReport` nie jest null | ta sama kopia | ta sama kopia | `present` albo `unknown`, jak niżej |
-| Dostępność logical reads | `BenchmarkMetricReport.LogicalReadsAvailability` | gdy `MetricReport` nie jest null | ta sama kopia | ta sama kopia | `present` albo `unknown`, jak niżej |
-| Equivalence pary compare | `SqlHarnessCompareReport.Equivalence` (`ResultEquivalenceReport`) | tak | tak | tak, tylko compare | `present` |
-| Stabilność pary compare | brak | nie | nie | nie | `unknown` |
+| Run count | `SqlHarnessCompareReport.MeasuredRunCount` | yes | no | no | `present` in the report file; the selective read does not expose it |
+| Spread | none | no | no | no | `unknown` |
+| Time availability | `BenchmarkMetricReport.ElapsedTimeAvailability` | when `MetricReport` is not null | the same copy | the same copy | `present` or `unknown`, as below |
+| CPU availability | `BenchmarkMetricReport.CpuTimeAvailability` | when `MetricReport` is not null | the same copy | the same copy | `present` or `unknown`, as below |
+| Logical reads availability | `BenchmarkMetricReport.LogicalReadsAvailability` | when `MetricReport` is not null | the same copy | the same copy | `present` or `unknown`, as below |
+| Compare pair equivalence | `SqlHarnessCompareReport.Equivalence` (`ResultEquivalenceReport`) | yes | yes | yes, compare only | `present` |
+| Compare pair stability | none | no | no | no | `unknown` |
 
-### Liczba przebiegów
+### Run count
 
-Nośnik pary compare to `SqlHarnessCompareReport.MeasuredRunCount` (`src/SqlHarness.Core/Artifacts.cs`). Bieżący `CompareCellRunner.RunAsync` (`src/SqlHarness.Core/CompareCellRunner.cs`) wstawia tam `runs.Count`. Lista `runs` zbiera baseline i candidate dla powtórzeń od 1 do `request.Repeat`. Wywołanie z numerem 0 jest rozgrzewką i do tej listy nie wchodzi. `Repetitions` dostaje `request.Repeat`. Typ nie wiąże tych dwóch liczb. `MeasuredRunCount` nie jest liczbą przebiegów jednego wariantu: w tej ścieżce lista zawiera oba warianty.
+The carrier of a compare pair is `SqlHarnessCompareReport.MeasuredRunCount` (`src/SqlHarness.Core/Artifacts.cs`). The current `CompareCellRunner.RunAsync` (`src/SqlHarness.Core/CompareCellRunner.cs`) inserts `runs.Count` there. The `runs` list collects baseline and candidate for repetitions from 1 to `request.Repeat`. The call with number 0 is a warm-up and does not enter this list. `Repetitions` gets `request.Repeat`. The type does not link these two numbers. `MeasuredRunCount` is not the run count of a single variant: on this path the list contains both variants.
 
-`CompareBenchmarkSummary` kopiuje `Repetitions` i nie ma `MeasuredRunCount`. `ArtifactMetricsSection` oraz `ArtifactNamedMetrics` nie mają żadnej z tych liczb. `CompareDistribution` (`Min`, `Median`, `Max`) też nie ma licznika próbek. Próbki, z których dałoby się policzyć przebiegi wariantu, leżą w `runs.jsonl`, a `ArtifactReader` tego pliku nie czyta.
+`CompareBenchmarkSummary` copies `Repetitions` and has no `MeasuredRunCount`. `ArtifactMetricsSection` and `ArtifactNamedMetrics` have neither of these numbers. `CompareDistribution` (`Min`, `Median`, `Max`) has no sample counter either. The samples from which a variant's runs could be counted lie in `runs.jsonl`, and `ArtifactReader` does not read that file.
 
-Osobnej składowej „liczba przebiegów wariantu” nie ma. Status tej liczby: `unknown`. `Repetitions` bez rozpoznanej wersji producenta i dowodu niezmiennika nie jest jej zamiennikiem. Warunkową inferencję legacy definiuje brama 1; obecny manifest nie identyfikuje wersji producenta.
+There is no separate "variant run count" member. The status of that number is: `unknown`. `Repetitions` without a recognized producer version and invariant evidence is not its substitute. The conditional legacy inference is defined by gate 1; the current manifest does not identify the producer version.
 
-Measure: `SqlHarnessMeasureReport.MeasuredRunCount` jest `runs.Count` po pętli 1..`Repeat` (`src/SqlHarness.Core/SqlHarnessModule.cs`). Summary kopiuje tylko `Repetitions`. Measure-set: `SqlHarnessMeasureSetReport.MeasuredRunCount` jest `repeat * sets.Count`, a `MeasureParameterSetReport.Repetitions` jest `repeat` (`src/SqlHarness.Core/MeasureParameterSets.cs`). `MeasureSetBenchmarkSummary` nie ma `Repeat` ani `MeasuredRunCount`. Potwierdzenie projekcji: test `Measure_set_json_summary_projects_medians_labels_and_capped_operators_without_values_or_plans` oczekuje braku właściwości `measuredRunCount` i `repeat` w JSON summary.
+Measure: `SqlHarnessMeasureReport.MeasuredRunCount` is `runs.Count` after the 1..`Repeat` loop (`src/SqlHarness.Core/SqlHarnessModule.cs`). The summary copies only `Repetitions`. Measure-set: `SqlHarnessMeasureSetReport.MeasuredRunCount` is `repeat * sets.Count`, and `MeasureParameterSetReport.Repetitions` is `repeat` (`src/SqlHarness.Core/MeasureParameterSets.cs`). `MeasureSetBenchmarkSummary` has neither `Repeat` nor `MeasuredRunCount`. Confirmation of the projection: test `Measure_set_json_summary_projects_medians_labels_and_capped_operators_without_values_or_plans` expects the absence of the `measuredRunCount` and `repeat` properties in the JSON summary.
 
 ### Spread
 
-W `src/SqlHarness.Core` nie ma typu ani składowej spread. Status: `unknown`.
+In `src/SqlHarness.Core` there is no spread type or member. Status: `unknown`.
 
-Brak zapisanego spreadu nie blokuje oceny: brama 4 jawnie wylicza rozrzut czasu z zapisanych rozkładów; nie odtwarza surowych próbek:
+The absence of a saved spread does not block evaluation: gate 4 explicitly enumerates the time dispersion from the saved distributions; it does not reconstruct the raw samples:
 
-- `CompareDistribution.Min`, `Median`, `Max` na `CpuTimeMilliseconds`, `ElapsedTimeMilliseconds` i `LogicalReads` wariantu. Summary kopiuje je do `BenchmarkVariantSummary`, metrics do `ArtifactNamedMetrics`.
-- `Distribution.From` (`src/SqlHarness.Core/Diagnostics.cs`) zapisuje medianę jako `long`. Przy parzystej liczbie próbek obcina średnią dwóch środkowych do liczby całkowitej. Ułamkowej mediany w `CompareDistribution` nie ma.
-- `runs.jsonl` ma próbki `long` per przebieg. Reader selektywny ich nie zwraca.
+- `CompareDistribution.Min`, `Median`, `Max` on the variant's `CpuTimeMilliseconds`, `ElapsedTimeMilliseconds` and `LogicalReads`. The summary copies them into `BenchmarkVariantSummary`, metrics into `ArtifactNamedMetrics`.
+- `Distribution.From` (`src/SqlHarness.Core/Diagnostics.cs`) writes the median as `long`. With an even number of samples it truncates the average of the two middle ones to an integer. There is no fractional median in `CompareDistribution`.
+- `runs.jsonl` has `long` samples per run. The selective reader does not return them.
 
-### Dostępność czasu, CPU i logical reads
+### Time, CPU and logical reads availability
 
-Wspólny nośnik to `BenchmarkMetricReport` (`src/SqlHarness.Core/Artifacts.cs`):
+The common carrier is `BenchmarkMetricReport` (`src/SqlHarness.Core/Artifacts.cs`):
 
 - `ElapsedTimeAvailability`
 - `CpuTimeAvailability`
 - `LogicalReadsAvailability`
 
-Łańcuchy źródłowe to `BenchmarkMetricReport.Measured` (`"measured"`) i `BenchmarkMetricReport.Unavailable` (`"unavailable"`). Zero w `CompareDistribution` nie jest żadnym z tych łańcuchów. Na PostgreSQL `CpuTimeMilliseconds` równe 0 nie jest dowodem, że CPU zmierzono.
+The source strings are `BenchmarkMetricReport.Measured` (`"measured"`) and `BenchmarkMetricReport.Unavailable` (`"unavailable"`). Zero in `CompareDistribution` is neither of these strings. On PostgreSQL `CpuTimeMilliseconds` equal to 0 is not evidence that CPU was measured.
 
-`CompareVariantReport.MetricReport` jest `BenchmarkMetricReport?` i ma `JsonIgnore` przy null. `BenchmarkReports.CreateVariantReport` (`src/SqlHarness.Core/BenchmarkRunner.cs`) ustawia je z `BenchmarkMetricReport.FromArtifacts`. `BenchmarkSummaryProjector.ProjectVariant` kopiuje obiekt do `BenchmarkVariantSummary.MetricReport`. `ArtifactReader.Of` kopiuje go do `ArtifactNamedMetrics.MetricReport`. `HasMissingMembers` nie wymaga `MetricReport`: raport bez tej właściwości przechodzi odczyt, a kopia zostaje null. Fixture `ArtifactReaderTests.CompareReport` tak właśnie zapisuje wariant i sekcje czyta.
+`CompareVariantReport.MetricReport` is `BenchmarkMetricReport?` and has `JsonIgnore` when null. `BenchmarkReports.CreateVariantReport` (`src/SqlHarness.Core/BenchmarkRunner.cs`) sets it from `BenchmarkMetricReport.FromArtifacts`. `BenchmarkSummaryProjector.ProjectVariant` copies the object into `BenchmarkVariantSummary.MetricReport`. `ArtifactReader.Of` copies it into `ArtifactNamedMetrics.MetricReport`. `HasMissingMembers` does not require `MetricReport`: a report without that property passes the read, and the copy stays null. The `ArtifactReaderTests.CompareReport` fixture writes the variant exactly that way and reads the sections.
 
-Gdy `MetricReport` jest null, wszystkie trzy fakty dostępności są `unknown`. UNPROVEN, dopóki wariant w `report.json` nie ma niepustego `metricReport`, a sekcja summary albo metrics nie zachowa odpowiedniego `*Availability`.
+When `MetricReport` is null, all three availability facts are `unknown`. UNPROVEN until the variant in `report.json` has a non-null `metricReport`, and the summary or metrics section preserves the corresponding `*Availability`.
 
-Gdy `MetricReport` nie jest null, fakt jest `present` i oba odczyty zachowują ten sam obiekt. Pochodzenie łańcucha, które kod faktycznie zapisuje:
+When `MetricReport` is not null, the fact is `present` and both reads preserve the same object. The origin of the string that the code actually writes:
 
-- SQL Server, zwykły przebieg. `SqlServerDialect.TruncatedMetricsOrNull` (`src/SqlHarness.Core/Dialect/SqlServerDialect.cs`) zwraca null, gdy `omittedMessageCount <= 0`. Jeśli każdy przebieg ma `CompareRunArtifact.Metrics` null, `FromWholeMilliseconds` zapisuje wszystkie trzy łańcuchy jako `measured`. To jest zapisany łańcuch, nie odczyt zera. Samych `BenchmarkRunMetrics` w `runs.jsonl` nie ma.
-- SQL Server, obcięte komunikaty (`omittedMessageCount > 0`). Ten sam helper zapisuje wszystkie trzy jako `unavailable`. `FromRunMetrics` daje `unavailable`, gdy dowolny przebieg ma dany łańcuch `unavailable`.
-- PostgreSQL, `PostgresBenchmark.ParseStats` (`src/SqlHarness.Core/Postgres/PostgresBenchmark.cs`). `CpuTimeAvailability` jest zawsze `unavailable`. Zwracane `CpuTimeMs` to 0. Tekst `BenchmarkMetricText.PostgresCpuUnavailable` mówi wprost, że to zero nie jest zmierzonym zerem; tekst trafia do `Warnings`, ale faktem dostępności jest łańcuch, nie ostrzeżenie. Czas jest `measured` tylko wtedy, gdy plan ma i `Planning Time`, i `Execution Time`; inaczej `unavailable`, a całe milisekundy są 0. `LogicalReadsAvailability` jest `measured` tylko wtedy, gdy liczniki buforów korzenia planu są obecne; inaczej `unavailable`, a `logicalReads` 0 nie jest zmierzonym zerem (`BenchmarkMetricText.PostgresBuffersMissing`).
+- SQL Server, ordinary run. `SqlServerDialect.TruncatedMetricsOrNull` (`src/SqlHarness.Core/Dialect/SqlServerDialect.cs`) returns null when `omittedMessageCount <= 0`. If every run has a null `CompareRunArtifact.Metrics`, `FromWholeMilliseconds` writes all three strings as `measured`. This is a written string, not a read of zero. `BenchmarkRunMetrics` themselves are not in `runs.jsonl`.
+- SQL Server, truncated messages (`omittedMessageCount > 0`). The same helper writes all three as `unavailable`. `FromRunMetrics` yields `unavailable` when any run has the given string `unavailable`.
+- PostgreSQL, `PostgresBenchmark.ParseStats` (`src/SqlHarness.Core/Postgres/PostgresBenchmark.cs`). `CpuTimeAvailability` is always `unavailable`. The returned `CpuTimeMs` is 0. The text `BenchmarkMetricText.PostgresCpuUnavailable` states plainly that this zero is not a measured zero; the text goes to `Warnings`, but the availability fact is the string, not a warning. Time is `measured` only when the plan has both `Planning Time` and `Execution Time`; otherwise `unavailable`, and the whole milliseconds are 0. `LogicalReadsAvailability` is `measured` only when the root buffer counters of the plan are present; otherwise `unavailable`, and `logicalReads` 0 is not a measured zero (`BenchmarkMetricText.PostgresBuffersMissing`).
 
-Sąsiednie składowe, które nie są dostępnością: `ElapsedTimeMillisecondsExact`, `ElapsedWholeMillisecondsAreExact`, `PlanningTimeMilliseconds`, `ExecutionTimeMilliseconds`, `LogicalReadsSource`. Dodatni czas poniżej jednej milisekundy może dać `CompareDistribution` równe 0 przy `ElapsedTimeAvailability` = `measured` i `ElapsedWholeMillisecondsAreExact` = false. `SqlHarnessTargetIdentityReport.Engine` jest na raporcie i w summary (`Target`) i przy null jest pomijane w JSON. Brak `Engine` nie rozstrzyga dostępności CPU.
+Neighbouring members that are not availability: `ElapsedTimeMillisecondsExact`, `ElapsedWholeMillisecondsAreExact`, `PlanningTimeMilliseconds`, `ExecutionTimeMilliseconds`, `LogicalReadsSource`. A positive time below one millisecond can yield `CompareDistribution` equal to 0 with `ElapsedTimeAvailability` = `measured` and `ElapsedWholeMillisecondsAreExact` = false. `SqlHarnessTargetIdentityReport.Engine` is on the report and in the summary (`Target`) and is omitted from JSON when null. The absence of `Engine` does not decide CPU availability.
 
-Measure-set ma drugi, inny nośnik: `MeasureCrossSetSummary.CpuTimeAvailability`, `ElapsedTimeAvailability`, `LogicalReadsAvailability`. Inicjalizator każdej z nich to `measured`. `Summarize` uznaje brak `MetricReport` (`?.`) za „nie unavailable”, a przy unavailable wstawia zera placeholdera i komentarz, że te zera nie są rankingiem. Summary measure-set kopiuje cały `CrossSetSummary`. Metrics kopiuje `MetricReport` zestawu, nie ten krzyżowy obiekt. To nie jest nośnik pary compare.
+Measure-set has a second, different carrier: `MeasureCrossSetSummary.CpuTimeAvailability`, `ElapsedTimeAvailability`, `LogicalReadsAvailability`. The initializer of each of them is `measured`. `Summarize` treats a missing `MetricReport` (`?.`) as "not unavailable", and on unavailable inserts placeholder zeros and a comment that these zeros are not a ranking. The measure-set summary copies the whole `CrossSetSummary`. Metrics copies the set's `MetricReport`, not that cross object. This is not the carrier of a compare pair.
 
 ### Equivalence
 
-Nośnik pary compare:
+Carrier of the compare pair:
 
 - `SqlHarnessCompareReport.ResultsEquivalent` (`bool?`)
-- `SqlHarnessCompareReport.Equivalence` typu `ResultEquivalenceReport` (`src/SqlHarness.Core/ResultEquivalence.cs`): `Mode` (`ResultComparisonMode`: `Ordered`, `Multiset`, `Set`, `Off`), `Equivalent`, `DifferingPositions`, `BaselineOnlyCount`, `CandidateOnlyCount`
+- `SqlHarnessCompareReport.Equivalence` of type `ResultEquivalenceReport` (`src/SqlHarness.Core/ResultEquivalence.cs`): `Mode` (`ResultComparisonMode`: `Ordered`, `Multiset`, `Set`, `Off`), `Equivalent`, `DifferingPositions`, `BaselineOnlyCount`, `CandidateOnlyCount`
 
-`CompareCellRunner` przed zapisem wstawia wynik `ResultComparer.Compare` do `Equivalence`, a `equivalence.Equivalent` do `ResultsEquivalent`. Tryb `Off` zwraca `Equivalent` i trzy liczniki jako null. W JSON `Mode` jest liczbą.
+`CompareCellRunner` inserts the result of `ResultComparer.Compare` into `Equivalence` and `equivalence.Equivalent` into `ResultsEquivalent` before writing. The `Off` mode returns `Equivalent` and the three counters as null. In JSON `Mode` is a number.
 
-Summary compare kopiuje cały `Equivalence` i nie ma osobnego `ResultsEquivalent`. Metrics compare wstawia `report.Equivalence` do `ArtifactMetricsSection.Equivalence`. Metrics measure i measure-set zostawiają null; test `MeasureAndMeasureSet_AllSectionsRead` to sprawdza. Summary measure nie zawiera właściwości `equivalence` (test `BenchmarkSummaryTests`).
+The compare summary copies the whole `Equivalence` and has no separate `ResultsEquivalent`. Compare metrics inserts `report.Equivalence` into `ArtifactMetricsSection.Equivalence`. Measure and measure-set metrics leave null; test `MeasureAndMeasureSet_AllSectionsRead` checks this. The measure summary contains no `equivalence` property (test `BenchmarkSummaryTests`).
 
-Inicjalizator `Equivalence`, gdy kod go nie nadpisze, to `Ordered`, `Equivalent` skopiowane z `ResultsEquivalent` i trzy liczniki 0. Test `Compare_report_json_projects_results_equivalent_and_equivalence_for_ordered_default` serializuje właśnie te zera. `HasMissingMembers` odrzuca null, więc brak właściwości w JSON nie jest odmową odczytu: zostaje inicjalizator. Zero licznika nie dowodzi, że `ResultComparer` policzył brak różnic, ani że właściwość była w pliku.
+The initializer of `Equivalence`, when the code does not overwrite it, is `Ordered`, `Equivalent` copied from `ResultsEquivalent` and three counters 0. Test `Compare_report_json_projects_results_equivalent_and_equivalence_for_ordered_default` serializes exactly those zeros. `HasMissingMembers` rejects null, so the absence of a property in JSON is not a read rejection: the initializer stays. A zero counter does not prove that `ResultComparer` counted no differences, nor that the property was in the file.
 
-Status pary compare: `present`. Obiekt jest na raporcie i w obu sekcjach.
+Status of the compare pair: `present`. The object is on the report and in both sections.
 
-UNPROVEN dla pochodzenia zer: dowodem jest właściwość `equivalence` zapisana przez `CompareCellRunner` po `ResultComparer.Compare`. Odczyt selektywny nie odróżnia inicjalizatora od zapisanego `Ordered` z zerami. Artefaktów z dysku nie otwierałem.
+UNPROVEN for the origin of the zeros: the evidence is the `equivalence` property written by `CompareCellRunner` after `ResultComparer.Compare`. The selective read does not distinguish the initializer from a written `Ordered` with zeros. I did not open artifacts from disk.
 
-Measure i measure-set nie mają `Equivalence`. Status equivalence dla tych rodzajów: `unknown`. UNPROVEN, dopóki taki raport nie zapisze `ResultEquivalenceReport`, a sekcja summary albo metrics jej nie wystawi. `ResultsStable` nie jest tym faktem.
+Measure and measure-set have no `Equivalence`. The equivalence status for these kinds is: `unknown`. UNPROVEN until such a report writes a `ResultEquivalenceReport` and the summary or metrics section exposes it. `ResultsStable` is not this fact.
 
-### Stabilność
+### Stability
 
-`SqlHarnessCompareReport` i `CompareBenchmarkSummary` nie mają `ResultsStable` ani innej składowej werdyktu stabilności. Status stabilności pary compare: `unknown`.
+`SqlHarnessCompareReport` and `CompareBenchmarkSummary` have neither `ResultsStable` nor any other stability verdict member. The status of compare pair stability: `unknown`.
 
-Brak tej składowej nie blokuje bramy 4, która wylicza rozrzut czasu. Equivalence na bramie 3 sprawdza osobno zgodność wyników.
+The absence of that member does not block gate 4, which enumerates the time dispersion. Equivalence at gate 3 separately checks the conformity of results.
 
-Measure ma inny fakt, o innej nazwie i innym znaczeniu. `SqlHarnessMeasureReport.ResultsStable` jest ustawiane jako równość jednego `ResultHash` na zmierzonych przebiegach (`SqlHarnessModule`). Summary wystawia `MeasureBenchmarkSummary.ResultsStable`. Metrics tej składowej nie ma.
+Measure has a different fact, with a different name and a different meaning. `SqlHarnessMeasureReport.ResultsStable` is set as the equality of a single `ResultHash` across measured runs (`SqlHarnessModule`). The summary exposes `MeasureBenchmarkSummary.ResultsStable`. Metrics has no such member.
 
-Measure-set: `MeasureParameterSetReport.ResultsStable` jest tą samą równością `ResultHash` wewnątrz zestawu (`MeasureParameterSetReportProjector.ProjectSet`). Gdy skróty się różnią, zapisany `ResultHash` zestawu jest null. Summary kopiuje `MeasureParameterSetSummary.ResultsStable` i nie kopiuje `ResultHash`. Metrics `ResultsStable` nie kopiuje. `runs.jsonl` ma `ResultHash` per przebieg; reader selektywny go nie zwraca.
+Measure-set: `MeasureParameterSetReport.ResultsStable` is the same `ResultHash` equality inside the set (`MeasureParameterSetReportProjector.ProjectSet`). When the digests differ, the set's saved `ResultHash` is null. The summary copies `MeasureParameterSetSummary.ResultsStable` and does not copy `ResultHash`. Metrics does not copy `ResultsStable`. `runs.jsonl` has `ResultHash` per run; the selective reader does not return it.
 
-Żadna z tych składowych measure nie jest werdyktem stabilności pary compare i nie jest spreadem czasu.
+None of these measure members is a compare pair stability verdict and none is a time spread.
 
-## Kolejność decyzji
+## Decision order
 
-Ocena działa offline dla jednej pary compare. Werdykt oznacza wynik kontroli regresji czasu, nie poprawę wszystkich kosztów. Reguły tej sekcji zastępują sprzeczne reguły starszej specyfikacji, w tym obowiązkową korroborację.
+Evaluation works offline for a single compare pair. The verdict means the outcome of the time regression check, not an improvement of all costs. The rules of this section replace the conflicting rules of the older specification, including the mandatory corroboration.
 
-Zmiana 2026-10-11 (HEAD 729d88f): stabilne 100 ms → 1000 ms przy stałych reads i CPU musi dawać `fail`. Koszty są diagnostyką; ich brak albo poprawa nie unieważnia pomiaru czasu. Progi pozostają bez zmian.
+Change of 2026-10-11 (HEAD 729d88f): a stable 100 ms → 1000 ms at constant reads and CPU must yield `fail`. Costs are diagnostics; their absence or improvement does not invalidate the time measurement. The thresholds remain unchanged.
 
-### Brama 1. Kompletność i liczba przebiegów
+### Gate 1. Completeness and run count
 
-- Czytelny measure, measure-set albo wejście rollupu: `inconclusive`. Komórka macierzy zapisana jako compare jest zwykłą parą. Nie dodawać nowego rodzaju manifestu dla rollupu; obecny reader go odrzuca.
-- Compare bez summary lub metrics: `inconclusive`.
-- Preferuj zapisane `MeasuredRunCount` per wariant. Oba muszą wynosić co najmniej 5; rozgrzewka nie wchodzi. Obecne 0 to liczba, nie brak.
-- Legacy: wyprowadzenie licznika wolno stosować tylko dla rozpoznanej wersji producenta i schematu, których udokumentowany i przetestowany niezmiennik udanego zapisu gwarantuje dokładnie `Repetitions` przebiegów na każdym wariancie oraz łączny `MeasuredRunCount = 2 * Repetitions`. Sprawdź dodatnią liczbę całkowitą, zgodność pól i minimum 5.
-- Sam manifestVersion 1, parzysta liczba lub obecność Repetitions nie identyfikują producenta. Dzisiejszy manifest nie niesie wersji producenta; obecnie brak dowodu dla ogólnej inferencji starych artefaktów. Bez rozpoznania albo przy sprzecznych licznikach: `inconclusive`, bez automatycznego `/ 2`.
-- Źródło liczby w wyniku: `recorded`, `inferred-known-producer` (z identyfikatorem producenta i niezmiennikiem) albo `unknown`. Nie nadpisuj artefaktu wywnioskowanymi danymi.
+- A readable measure, measure-set or rollup input: `inconclusive`. A matrix cell written as compare is an ordinary pair. Do not add a new manifest kind for rollup; the current reader rejects it.
+- Compare without summary or metrics: `inconclusive`.
+- Prefer the saved `MeasuredRunCount` per variant. Both must be at least 5; the warm-up does not count. A current 0 is a number, not an absence.
+- Legacy: deriving the counter may be applied only for a recognized producer version and schema whose documented and tested invariant of a successful write guarantees exactly `Repetitions` runs on each variant and a total `MeasuredRunCount = 2 * Repetitions`. Check a positive integer, field consistency and a minimum of 5.
+- manifestVersion 1 alone, an even number, or the presence of Repetitions do not identify the producer. Today's manifest does not carry a producer version; there is currently no evidence for a general inference of old artifacts. Without recognition, or on conflicting counters: `inconclusive`, without an automatic `/ 2`.
+- Source of the number in the result: `recorded`, `inferred-known-producer` (with the producer identifier and the invariant) or `unknown`. Do not overwrite the artifact with inferred data.
 
-Nieznany id, brak manifestu i nieczytelny raport pozostają błędami ArtifactReader bez werdyktu.
+An unknown id, a missing manifest and an unreadable report remain ArtifactReader errors without a verdict.
 
-### Brama 2. Dostępność czasu
+### Gate 2. Time availability
 
-Na obu wariantach wymagane są MetricReport i dokładny token `ElapsedTimeAvailability = measured` (porównanie porządkowe). Brak, null, unavailable, pusty lub obcy token daje `inconclusive`. Zero nie dowodzi dostępności.
+`MetricReport` and the exact token `ElapsedTimeAvailability = measured` (ordinal comparison) are required on both variants. Missing, null, unavailable, empty or a foreign token yields `inconclusive`. Zero does not prove availability.
 
-Reads i CPU nie są wymagane. Diagnostyka danej metryki jest dostępna tylko gdy oba warianty mają jej token measured. Inaczej ma wynik `unavailable`. Na Engine = postgres CPU zawsze jest unavailable, nawet dla syntetycznego tokenu measured. Brak Engine nie oznacza postgres; nie zgaduj z zera.
+Reads and CPU are not required. The diagnostics of a given metric are available only when both variants have its measured token. Otherwise its outcome is `unavailable`. With Engine = postgres CPU is always unavailable, even for a synthetic measured token. A missing Engine does not mean postgres; do not guess from zero.
 
-### Brama 3. Equivalence
+### Gate 3. Equivalence
 
-Off, brak Equivalence, null Equivalent lub niezdefiniowany enum trybu: `inconclusive`. Equivalent false przy Ordered, Multiset lub Set: `inconclusive`, nigdy wydajnościowy fail. Dalej przechodzi tylko true przy jednym z tych trzech trybów. Liczniki różnic nie zastępują wyniku equivalence. Reader nadal odrzuca nieczytelny obiekt bez werdyktu.
+Off, missing Equivalence, null Equivalent or an undefined mode enum: `inconclusive`. Equivalent false with Ordered, Multiset or Set: `inconclusive`, never a performance fail. Only true with one of those three modes passes on. The difference counters do not replace the equivalence outcome. The reader still rejects an unreadable object without a verdict.
 
-### Brama 4. Stabilność czasu
+### Gate 4. Time stability
 
-Dla obu wariantów wymagaj nieujemnych `Min <= Median <= Max`. Niepoprawny rozkład: inconclusive. Dla Median > 0 licz `((decimal)Max - Min) / Median`; wynik > 0.25 daje inconclusive, równo 0.25 przechodzi. Trójka 0,0,0 przechodzi jako brak obserwowanego rozrzutu całych milisekund. Mediana 0 z Max > 0 daje inconclusive. Nie czytaj runs.jsonl ani nie nazywaj rozrzutu czasu stabilnością wartości wyników.
+For both variants require non-negative `Min <= Median <= Max`. Invalid distribution: inconclusive. For Median > 0 count `((decimal)Max - Min) / Median`; a result > 0.25 gives inconclusive, exactly 0.25 passes. The triple 0,0,0 passes as no observed dispersion of whole milliseconds. A median of 0 with Max > 0 gives inconclusive. Do not read runs.jsonl and do not call the time dispersion the stability of the result values.
 
-### Po bramach: zera i progi
+### After the gates: zeros and thresholds
 
-Czas jest oceniany na zapisanej medianie całych milisekund; pola exact nie zastępują jej po cichu.
+Time is evaluated on the saved median of whole milliseconds; the exact fields do not silently replace it.
 
-| Baseline / candidate | Wynik |
+| Baseline / candidate | Outcome |
 |---|---|
 | 0 / 0 | pass |
-| 0 / dodatnie <= 5 ms | pass — zachowana podłoga dla kwantyzacji krótkich pomiarów |
-| 0 / > 5 ms | fail na podstawie progu absolutnego; zmiana względna niezdefiniowana (null) |
-| baseline > 0 / candidate >= 0 | fail wtedy i tylko wtedy, gdy candidate >= baseline * 1.10 ORAZ candidate - baseline >= 5 ms; inaczej pass |
+| 0 / positive <= 5 ms | pass — the floor is preserved for the quantization of short measurements |
+| 0 / > 5 ms | fail on the basis of the absolute threshold; the relative change is undefined (null) |
+| baseline > 0 / candidate >= 0 | fail if and only if candidate >= baseline * 1.10 AND candidate - baseline >= 5 ms; otherwise pass |
 
-0 → 5 ms jest jawnym wyjątkiem od dodatniego-baseline progu >= 5; 0 → 6 ms daje fail. Zera nie omijają bram 1–4. Ujemne lub niespójne rozkłady są odrzucone wcześniej.
+0 → 5 ms is an explicit exception to the positive-baseline threshold >= 5; 0 → 6 ms gives fail. Zeros do not bypass gates 1–4. Negative or inconsistent distributions are rejected earlier.
 
-### Diagnostyka kosztów
+### Cost diagnostics
 
-Raportuj `metricOutcomes.elapsed`, `.logicalReads`, `.cpu` jako `regressed`, `not-regressed`, `unavailable` lub `inconclusive`, z medianami, różnicą absolutną i względną (null przy baseline 0). Elapsed odzwierciedla werdykt; przy bramie niepewności jest inconclusive, a przy niedostępnym czasie unavailable. Werdykt pochodzi wyłącznie z czasu po bramach.
+Report `metricOutcomes.elapsed`, `.logicalReads`, `.cpu` as `regressed`, `not-regressed`, `unavailable` or `inconclusive`, with medians, absolute and relative delta (null when baseline is 0). Elapsed reflects the verdict; at a gate of uncertainty it is inconclusive, and with unavailable time it is unavailable. The verdict comes exclusively from the time after the gates.
 
-- Reads przy baseline > 0: oba progi candidate >= baseline * 1.10 i różnica >= 100.
-- CPU przy baseline > 0: oba progi candidate >= baseline * 1.15 i różnica >= 5 ms.
-- Dostępny koszt z baseline 0: 0/0 to not-regressed; dodatnia candidate to regressed przy różnicy >= podłoga metryki, inaczej not-regressed; procent null.
-- Ujemny lub niespójny rozkład kosztu: tylko jego diagnostyka inconclusive; nie blokuje czasu.
-- Rosnące koszty bez regresji czasu nie dają fail, lecz są widoczne jako regressed. Operatory i missingIndexes nie zmieniają werdyktu.
-- Używaj decimal przed odejmowaniem i mnożeniem, bez przepełnienia long.
+- Reads with baseline > 0: both thresholds candidate >= baseline * 1.10 and delta >= 100.
+- CPU with baseline > 0: both thresholds candidate >= baseline * 1.15 and delta >= 5 ms.
+- An available cost with baseline 0: 0/0 is not-regressed; a positive candidate is regressed with delta >= the metric floor, otherwise not-regressed; percentage null.
+- Negative or inconsistent cost distribution: only its diagnostics are inconclusive; it does not block time.
+- Growing costs without time regression do not give fail, but are visible as regressed. Operators and missingIndexes do not change the verdict.
+- Use decimal before subtracting and multiplying, without overflowing long.
 
-## Niezmienniki
+## Invariants
 
-- Offline, bez celu DB, połączenia, rebenchmarku, SQL, planów i runs.jsonl.
-- Minimum 5 zmierzonych przebiegów na wariant, equivalence przed progami, spread czasu >25% daje inconclusive.
-- Dostępność jest tokenem; CPU PostgreSQL pozostaje niedostępne.
-- Dla dodatniego baseline oba progi stosuje się razem. Wyjątki baseline zero są określone powyżej.
-- Udana ocena daje exit 0 także przy fail/inconclusive; CI bramkuje po verdict. Błąd argumentu/odczytu nie niesie verdict.
-- Exit 8 pozostaje snapshot --diff.
-- regressionPolicyVersion = 1: to korekta niewydanej funkcji PLANNED.
+- Offline, without a DB target, connection, re-benchmark, SQL, plans and runs.jsonl.
+- Minimum of 5 measured runs per variant, equivalence before the thresholds, time spread >25% gives inconclusive.
+- Availability is a token; PostgreSQL CPU remains unavailable.
+- For a positive baseline both thresholds apply together. The zero-baseline exceptions are defined above.
+- A successful evaluation gives exit 0 also on fail/inconclusive; CI gates on the verdict. An argument/read error does not carry a verdict.
+- Exit 8 remains snapshot --diff.
+- regressionPolicyVersion = 1: this is a correction of the unreleased PLANNED function.
 
-Pełna macierz akceptacyjna jest w plans/013-regression-implementation.md.
+The full acceptance matrix is in plans/013-regression-implementation.md.
 
-## Integracja z polityką equivalence (plan 046)
+## Integration with the equivalence policy (plan 046)
 
-Przed implementacją decidera wdroż plan046. Default Equivalent ocenia dane i nie uznaje samej zmiany allowNull za mismatch. Jawne --compare-nullability / compareNullability przełącza rygorystyczną politykę; jej wynik Equivalent nadal jest bramą3. Decider używa zapisanego wyniku wybranej polityki, nie przelicza danych ani nie omija rzeczywistego mismatch. Test integracji: identyczne dane i inne allowNull przy domyślnej polityce przechodzą bramę3; przy strict dają inconclusive. Starszy zapisany mismatch pozostaje inconclusive, bez reinterpretacji nieznanych danych.
+Before implementing the decider, implement plan046. The default Equivalent evaluates the data and does not treat the allowNull change alone as a mismatch. The explicit --compare-nullability / compareNullability switches to the strict policy; its Equivalent result is still gate3. The decider uses the saved result of the selected policy, does not recompute the data and does not bypass a real mismatch. Integration test: identical data and a different allowNull pass gate3 under the default policy; under strict they give inconclusive. An older saved mismatch remains inconclusive, without reinterpretation of unknown data.
