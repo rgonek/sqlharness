@@ -116,6 +116,7 @@ public static class SourceMapBuilder
                 statementNodes,
                 graph,
                 collector.TableReferences,
+                collector.QueryScopeIds,
                 pairState,
                 links);
             ResolveScalarUdfCalls(
@@ -136,6 +137,7 @@ public static class SourceMapBuilder
         IReadOnlyList<PlanGraphNode> statementNodes,
         PlanGraph graph,
         IReadOnlyList<SourceReference> references,
+        IReadOnlyList<int> queryScopeIds,
         string statementState,
         List<SourceLink> links)
     {
@@ -146,7 +148,7 @@ public static class SourceMapBuilder
 
         foreach (var node in statementNodes.Where(node => node.Object is not null && !IsKeyLookupWithMinusOne(node)))
         {
-            var match = MatchObject(node, references, node.TableReferenceId);
+            var match = MatchObject(node, references, node.TableReferenceId, statementNodes);
             if (match.Candidates.Count == 0)
             {
                 if (HasObjectName(node.Object))
@@ -159,7 +161,7 @@ public static class SourceMapBuilder
 
         foreach (var node in statementNodes.Where(IsKeyLookupWithMinusOne))
         {
-            var objectMatches = MatchObject(node, references, tableReferenceId: null);
+            var objectMatches = MatchObject(node, references, tableReferenceId: null, statementNodes);
             if (objectMatches.Candidates.Count == 0)
             {
                 if (HasObjectName(node.Object))
@@ -180,7 +182,7 @@ public static class SourceMapBuilder
                 continue;
             }
 
-            var byAlias = MatchObject(node, references, tableReferenceId: null, aliasOnly: true);
+            var byAlias = MatchObject(node, references, tableReferenceId: null, statementNodes, aliasOnly: true);
             if (byAlias.Candidates.Count > 0)
             {
                 AddReferenceMatches(node, byAlias, statementState, linkedReferenceIds, directlyMatchedSpans, resolvedByNode, links);
@@ -197,16 +199,21 @@ public static class SourceMapBuilder
         foreach (var node in unresolved)
         {
             var objectName = node.Object?.Table;
-            var moduleCandidates = references
-                .Where(reference => !directlyMatchedSpans.Contains((reference.Start, reference.Length))
+            var unresolvedModuleCandidates = references
+                .Where(reference => !SurfaceSpans(reference).Any(span => directlyMatchedSpans.Contains((span.Start, span.Length)))
                     && reference.IsPotentialModule
                     && !IdentifierEquals(reference.Table, objectName))
                 .ToArray();
 
-            if (moduleCandidates.Length == 1)
+            var scopeId = ResolveModuleScope(node, graph, statementNodes, resolvedByNode, queryScopeIds);
+            var moduleCandidates = scopeId is null
+                ? unresolvedModuleCandidates
+                : unresolvedModuleCandidates.Where(reference => reference.IncludesScope(scopeId.Value)).ToArray();
+
+            if (scopeId is not null && moduleCandidates.Length == 1)
             {
                 var candidate = moduleCandidates[0];
-                AddLink(node.Id, candidate, "inferred", "plan object is absent from executed SQL; inferred via the single unresolved module reference in this statement",
+                AddLink(node.Id, candidate, "inferred", "plan object is absent from executed SQL; inferred via the single unresolved module reference " + candidate.QualifiedName + " in query scope " + scopeId.Value.ToString(CultureInfo.InvariantCulture),
                     statementState, links);
                 linkedReferenceIds.Add(candidate.InstanceId);
                 continue;
@@ -216,23 +223,50 @@ public static class SourceMapBuilder
             {
                 foreach (var candidate in moduleCandidates)
                 {
-                    AddLink(node.Id, candidate, "ambiguous", "plan object is absent from executed SQL and multiple unresolved module references remain in this statement",
+                    AddLink(node.Id, candidate, "ambiguous", scopeId is null
+                            ? "plan object is absent from executed SQL and its query scope cannot be established"
+                            : "plan object is absent from executed SQL and multiple unresolved module references remain in its query scope",
                         statementState, links);
                     linkedReferenceIds.Add(candidate.InstanceId);
                 }
+                continue;
             }
+
+            if (scopeId is null && unresolvedModuleCandidates.Length > 0)
+            {
+                foreach (var candidate in unresolvedModuleCandidates)
+                {
+                    AddLink(node.Id, candidate, "ambiguous", "plan object is absent from executed SQL and its query scope cannot be established",
+                        statementState, links);
+                    linkedReferenceIds.Add(candidate.InstanceId);
+                }
+                continue;
+            }
+
+            if (scopeId is not null && unresolvedModuleCandidates.Length > 0)
+            {
+                links.Add(new SourceLink(node.Id, null, null, "table_reference", "none",
+                    "no unresolved module reference exists in the plan object's query scope"));
+                continue;
+            }
+
+            links.Add(new SourceLink(node.Id, null, null, "table_reference", "none",
+                "no source reference or module candidate can be established for this plan object"));
         }
 
-        foreach (var referenceGroup in references.GroupBy(reference => (reference.Start, reference.Length)))
+        var linkedSpans = references.Where(reference => linkedReferenceIds.Contains(reference.InstanceId))
+            .SelectMany(SurfaceSpans)
+            .Select(span => (span.Start, span.Length))
+            .ToHashSet();
+        foreach (var sourceSpan in references.SelectMany(SurfaceSpans).Distinct())
         {
-            if (referenceGroup.Any(reference => linkedReferenceIds.Contains(reference.InstanceId)))
+            if (linkedSpans.Contains((sourceSpan.Start, sourceSpan.Length)))
                 continue;
 
-            var reference = referenceGroup.First();
             links.Add(new SourceLink(
                 NodeId: null,
-                reference.Start,
-                reference.Length,
+                sourceSpan.Start,
+                sourceSpan.Length,
                 Kind: "table_reference",
                 State: "none",
                 Rule: "no matching plan object survives for this table reference"));
@@ -243,6 +277,7 @@ public static class SourceMapBuilder
         PlanGraphNode node,
         IReadOnlyList<SourceReference> references,
         int? tableReferenceId,
+        IReadOnlyList<PlanGraphNode> statementNodes,
         bool aliasOnly = false)
     {
         if (node.Object is not { } planObject || !HasObjectName(planObject))
@@ -256,7 +291,12 @@ public static class SourceMapBuilder
             return ReferenceMatch.None;
 
         if (candidates.Length == 1)
+        {
+            if (tableReferenceId is > 0 && HasLaterPlanInstanceOfSameObject(node, statementNodes))
+                return ReferenceMatch.None;
+
             return ReferenceMatch.Exact(candidates[0], ObjectMatchRule(node, candidates[0]));
+        }
 
         if (tableReferenceId is > 0 && tableReferenceId <= candidates.Length)
         {
@@ -267,7 +307,7 @@ public static class SourceMapBuilder
                 + " selected the matching table instance" + cte);
         }
 
-        var aliasCandidates = planObject.Alias is null
+        var aliasCandidates = tableReferenceId is > 0 || planObject.Alias is null
             ? []
             : candidates.Where(reference => IdentifierEquals(reference.Alias, planObject.Alias)).ToArray();
         if (aliasCandidates.Length == 1)
@@ -281,6 +321,20 @@ public static class SourceMapBuilder
         return ReferenceMatch.Ambiguous(ambiguous,
             "table name matches multiple source references and no unique TableReferenceId or alias settles the match");
     }
+
+    private static bool HasLaterPlanInstanceOfSameObject(PlanGraphNode node, IReadOnlyList<PlanGraphNode> statementNodes) =>
+        node.TableReferenceId is > 0
+        && statementNodes.Any(candidate => candidate.Id != node.Id
+            && candidate.TableReferenceId is int otherId
+            && otherId > node.TableReferenceId.Value
+            && candidate.Object is { } candidateObject
+            && node.Object is { } nodeObject
+            && SameBasePlanObject(nodeObject, candidateObject));
+
+    private static bool SameBasePlanObject(PlanGraphObject left, PlanGraphObject right) =>
+        IdentifierEquals(left.Table, right.Table)
+        && (left.Schema is null || right.Schema is null || IdentifierEquals(left.Schema, right.Schema))
+        && (left.Database is null || right.Database is null || IdentifierEquals(left.Database, right.Database));
 
     private static ReferenceMatch FindNearestResolvedSeek(
         PlanGraphNode lookup,
@@ -353,6 +407,34 @@ public static class SourceMapBuilder
         return distances;
     }
 
+    private static int? ResolveModuleScope(
+        PlanGraphNode node,
+        PlanGraph graph,
+        IReadOnlyList<PlanGraphNode> statementNodes,
+        IReadOnlyDictionary<string, SourceReference> resolvedByNode,
+        IReadOnlyList<int> queryScopeIds)
+    {
+        var distances = DistancesFrom(node.Id, graph.Edges);
+        var related = statementNodes
+            .Where(candidate => candidate.Id != node.Id
+                && resolvedByNode.ContainsKey(candidate.Id)
+                && distances.ContainsKey(candidate.Id))
+            .Select(candidate => (ScopeId: resolvedByNode[candidate.Id].ScopeId, Distance: distances[candidate.Id]))
+            .ToArray();
+        if (related.Length > 0)
+        {
+            var minimumDistance = related.Min(candidate => candidate.Distance);
+            var nearestScopes = related.Where(candidate => candidate.Distance == minimumDistance)
+                .Select(candidate => candidate.ScopeId)
+                .Distinct()
+                .ToArray();
+            return nearestScopes.Length == 1 ? nearestScopes[0] : null;
+        }
+
+        var distinctScopes = queryScopeIds.Distinct().ToArray();
+        return distinctScopes.Length == 1 ? distinctScopes[0] : null;
+    }
+
     private static void AddReferenceMatches(
         PlanGraphNode node,
         ReferenceMatch match,
@@ -367,7 +449,7 @@ public static class SourceMapBuilder
         {
             AddLink(node.Id, candidate, state, match.Rule, statementState, links);
             linkedReferenceIds.Add(candidate.InstanceId);
-            directlyMatchedSpans.Add((candidate.Start, candidate.Length));
+            directlyMatchedSpans.UnionWith(SurfaceSpans(candidate));
         }
         if (match.IsExact && match.Candidates.Count == 1)
             resolvedByNode[node.Id] = match.Candidates[0];
@@ -531,14 +613,26 @@ public static class SourceMapBuilder
         string matchState,
         string rule,
         string statementState,
-        List<SourceLink> links) =>
-        links.Add(new SourceLink(
-            nodeId,
-            reference.Start,
-            reference.Length,
-            Kind: "table_reference",
-            State: matchState == "ambiguous" ? "ambiguous" : CombineConfidence(matchState, statementState),
-            Rule: rule));
+        List<SourceLink> links)
+    {
+        foreach (var span in SurfaceSpans(reference).Distinct())
+        {
+            links.Add(new SourceLink(
+                nodeId,
+                span.Start,
+                span.Length,
+                Kind: "table_reference",
+                State: matchState == "ambiguous" ? "ambiguous" : CombineConfidence(matchState, statementState),
+                Rule: rule));
+        }
+    }
+
+    private static IEnumerable<(int Start, int Length)> SurfaceSpans(SourceReference reference)
+    {
+        yield return (reference.Start, reference.Length);
+        foreach (var invocation in reference.CteInvocations)
+            yield return (invocation.Start, invocation.Length);
+    }
 
     private static void AddStatementLinks(
         IReadOnlyList<PlanGraphNode> nodes,
@@ -609,11 +703,16 @@ public static class SourceMapBuilder
         string? Table,
         string? Alias,
         bool IsFunction,
-        IReadOnlyList<string> CtePath)
+        IReadOnlyList<string> CtePath,
+        int ScopeId,
+        IReadOnlyList<CteInvocationSpan> CteInvocations)
     {
         internal bool IsPotentialModule => IsFunction || !string.IsNullOrWhiteSpace(Table);
         internal string QualifiedName => string.Join('.', new[] { Database, Schema, Table }.Where(value => !string.IsNullOrEmpty(value)));
+        internal bool IncludesScope(int scopeId) => ScopeId == scopeId || CteInvocations.Any(invocation => invocation.ScopeId == scopeId);
     }
+
+    private sealed record CteInvocationSpan(int Start, int Length, int ScopeId);
 
     private sealed record ScalarFunctionCall(int Start, int Length, FunctionName Name);
 
@@ -655,10 +754,14 @@ public static class SourceMapBuilder
         private CteEnvironment _ctes = new(null);
         private readonly HashSet<CommonTableExpression> _expandingCtes = new(ReferenceEqualityComparer.Instance);
         private readonly List<string> _ctePath = [];
+        private readonly List<CteInvocationSpan> _cteInvocations = [];
         private int _nextReferenceId;
+        private int _nextQueryScopeId = 1;
+        private int _currentScopeId;
 
         internal List<SourceReference> TableReferences { get; } = [];
         internal List<ScalarFunctionCall> ScalarCalls { get; } = [];
+        internal List<int> QueryScopeIds { get; } = [];
 
         public override void ExplicitVisit(SelectStatement node)
         {
@@ -667,17 +770,29 @@ public static class SourceMapBuilder
 
         public override void ExplicitVisit(QuerySpecification node)
         {
-            node.TopRowFilter?.Accept(this);
-            foreach (var selectElement in node.SelectElements)
-                selectElement.Accept(this);
-            node.FromClause?.Accept(this);
-            node.WhereClause?.Accept(this);
-            node.GroupByClause?.Accept(this);
-            node.HavingClause?.Accept(this);
-            node.WindowClause?.Accept(this);
-            node.OrderByClause?.Accept(this);
-            node.OffsetClause?.Accept(this);
-            node.ForClause?.Accept(this);
+            var previousScopeId = _currentScopeId;
+            _currentScopeId = _nextQueryScopeId++;
+            QueryScopeIds.Add(_currentScopeId);
+            try
+            {
+                // Showplan TableReferenceId follows expanded FROM order. Visit
+                // FROM before subqueries nested in SELECT expressions.
+                node.FromClause?.Accept(this);
+                node.TopRowFilter?.Accept(this);
+                foreach (var selectElement in node.SelectElements)
+                    selectElement.Accept(this);
+                node.WhereClause?.Accept(this);
+                node.GroupByClause?.Accept(this);
+                node.HavingClause?.Accept(this);
+                node.WindowClause?.Accept(this);
+                node.OrderByClause?.Accept(this);
+                node.OffsetClause?.Accept(this);
+                node.ForClause?.Accept(this);
+            }
+            finally
+            {
+                _currentScopeId = previousScopeId;
+            }
         }
 
         public override void ExplicitVisit(NamedTableReference node)
@@ -685,7 +800,7 @@ public static class SourceMapBuilder
             var name = node.SchemaObject;
             if (name.Identifiers.Count == 1 && _ctes.TryGet(name.BaseIdentifier.Value, out var cte))
             {
-                ExpandCte(cte);
+                ExpandCte(cte, new CteInvocationSpan(node.StartOffset, node.FragmentLength, _currentScopeId));
                 return;
             }
 
@@ -721,23 +836,29 @@ public static class SourceMapBuilder
                 name.BaseIdentifier?.Value,
                 alias,
                 isFunction,
-                _ctePath.ToArray()));
+                _ctePath.ToArray(),
+                _currentScopeId,
+                _cteInvocations.ToArray()));
+            if (!QueryScopeIds.Contains(_currentScopeId))
+                QueryScopeIds.Add(_currentScopeId);
             _nextReferenceId++;
         }
 
-        private void ExpandCte(CommonTableExpression cte)
+        private void ExpandCte(CommonTableExpression cte, CteInvocationSpan invocation)
         {
             if (!_expandingCtes.Add(cte))
                 return;
 
             var name = cte.ExpressionName.Value;
             _ctePath.Add(name);
+            _cteInvocations.Add(invocation);
             try
             {
                 WithCteScope(cte.WithCtesAndXmlNamespaces, () => cte.QueryExpression.Accept(this));
             }
             finally
             {
+                _cteInvocations.RemoveAt(_cteInvocations.Count - 1);
                 _ctePath.RemoveAt(_ctePath.Count - 1);
                 _expandingCtes.Remove(cte);
             }

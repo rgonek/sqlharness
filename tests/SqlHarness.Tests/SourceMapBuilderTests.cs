@@ -16,12 +16,34 @@ public sealed class SourceMapBuilderTests
             Scan("ProjectionStatus", "s", 1),
             Scan("ProjectionStatus", "s", 2)));
 
-        var links = TableLinks(built.SourceMap);
-        Assert.Collection(links, _ => { }, _ => { });
-        Assert.All(links, link => Assert.Equal("exact", link.State));
-        Assert.All(links, link => Assert.Equal("dbo.ProjectionStatus AS s", SpanText(sql, link)));
-        Assert.Contains(links, link => link.Rule.Contains("TableReferenceId 1", StringComparison.Ordinal));
-        Assert.Contains(links, link => link.Rule.Contains("TableReferenceId 2", StringComparison.Ordinal));
+        var first = NodeWithTableReferenceId(built.Graph, 1);
+        var second = NodeWithTableReferenceId(built.Graph, 2);
+        var firstLinks = TableLinks(built.SourceMap).Where(link => link.NodeId == first.Id).ToArray();
+        var secondLinks = TableLinks(built.SourceMap).Where(link => link.NodeId == second.Id).ToArray();
+
+        Assert.Equal(2, firstLinks.Length);
+        Assert.Contains(firstLinks, link => SpanText(sql, link) == "dbo.ProjectionStatus AS s");
+        Assert.Contains(firstLinks, link => SpanText(sql, link) == "StatusRows AS a");
+        Assert.Equal(2, secondLinks.Length);
+        Assert.Contains(secondLinks, link => SpanText(sql, link) == "dbo.ProjectionStatus AS s");
+        Assert.Contains(secondLinks, link => SpanText(sql, link) == "StatusRows AS b");
+        Assert.All(firstLinks.Concat(secondLinks), link => Assert.Equal("exact", link.State));
+        Assert.Contains(firstLinks, link => link.Rule.Contains("TableReferenceId 1", StringComparison.Ordinal));
+        Assert.Contains(secondLinks, link => link.Rule.Contains("TableReferenceId 2", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Table_reference_id_counts_outer_from_before_select_list_subquery()
+    {
+        const string sql = "SELECT (SELECT MAX(p.Id) FROM dbo.Person AS p) AS nestedId FROM dbo.Person AS p;";
+        var built = BuildGraph(sql, Join(
+            Scan("Person", "p", 1),
+            Scan("Person", "p", 2)));
+
+        var outer = Assert.Single(TableLinks(built.SourceMap), link => link.NodeId == NodeWithTableReferenceId(built.Graph, 1).Id);
+        var nested = Assert.Single(TableLinks(built.SourceMap), link => link.NodeId == NodeWithTableReferenceId(built.Graph, 2).Id);
+        Assert.Equal(sql.LastIndexOf("dbo.Person AS p", StringComparison.Ordinal), outer.SpanStart);
+        Assert.Equal(sql.IndexOf("dbo.Person AS p", StringComparison.Ordinal), nested.SpanStart);
     }
 
     [Fact]
@@ -64,6 +86,46 @@ public sealed class SourceMapBuilderTests
         Assert.Equal("inferred", link.State);
         Assert.Equal("dbo.CustomerInformationView AS CI", SpanText(sql, link));
         Assert.Contains("module", link.Rule, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void View_internal_partner_and_outer_partner_map_to_distinct_spans_by_table_reference_id()
+    {
+        const string sql = "SELECT P.Id, v.Id FROM dbo.PartnerView AS v JOIN dbo.Partners AS P ON P.Id = v.Id;";
+        var built = BuildGraph(sql, Join(
+            Scan("Partners", "P", 1),
+            Scan("Partners", "P", 2)));
+
+        var viewNode = NodeWithTableReferenceId(built.Graph, 1);
+        var outerNode = NodeWithTableReferenceId(built.Graph, 2);
+        var viewLink = Assert.Single(TableLinks(built.SourceMap), link => link.NodeId == viewNode.Id);
+        var outerLink = Assert.Single(TableLinks(built.SourceMap), link => link.NodeId == outerNode.Id);
+
+        Assert.Equal("inferred", viewLink.State);
+        Assert.Equal("dbo.PartnerView AS v", SpanText(sql, viewLink));
+        Assert.Equal("exact", outerLink.State);
+        Assert.Equal("dbo.Partners AS P", SpanText(sql, outerLink));
+        Assert.NotEqual(viewLink.SpanStart, outerLink.SpanStart);
+    }
+
+    [Fact]
+    public void Inline_tvf_internal_alias_collision_does_not_capture_outer_apply_table()
+    {
+        const string sql = "SELECT CI.Id, rows.Id FROM (VALUES (1)) AS seed(Id) CROSS APPLY dbo.GetRows(seed.Id) AS rows JOIN dbo.Customer AS CI ON CI.Id = seed.Id;";
+        var built = BuildGraph(sql, Join(
+            Scan("Customer", "CI", 1),
+            Scan("Customer", "CI", 2)));
+
+        var tvfNode = NodeWithTableReferenceId(built.Graph, 1);
+        var applyTableNode = NodeWithTableReferenceId(built.Graph, 2);
+        var tvfLink = Assert.Single(TableLinks(built.SourceMap), link => link.NodeId == tvfNode.Id);
+        var applyTableLink = Assert.Single(TableLinks(built.SourceMap), link => link.NodeId == applyTableNode.Id);
+
+        Assert.Equal("inferred", tvfLink.State);
+        Assert.Equal("dbo.GetRows(seed.Id) AS rows", SpanText(sql, tvfLink));
+        Assert.Equal("exact", applyTableLink.State);
+        Assert.Equal("dbo.Customer AS CI", SpanText(sql, applyTableLink));
+        Assert.NotEqual(tvfLink.SpanStart, applyTableLink.SpanStart);
     }
 
     [Fact]
@@ -163,6 +225,34 @@ public sealed class SourceMapBuilderTests
     }
 
     [Fact]
+    public void Unresolved_module_across_query_scopes_stays_ambiguous_without_scope_evidence()
+    {
+        const string sql = "SELECT (SELECT innerRow.Id FROM dbo.InnerView AS innerRow) AS nestedId FROM dbo.OuterView AS outerRow;";
+        var built = BuildGraph(sql, Scan("InternalEntity", "internal"));
+
+        var links = TableLinks(built.SourceMap).Where(link => link.NodeId == Node(built.Graph, "InternalEntity").Id).ToArray();
+        Assert.Equal(2, links.Length);
+        Assert.All(links, link => Assert.Equal("ambiguous", link.State));
+        Assert.DoesNotContain(links, link => link.State == "inferred");
+        Assert.Contains(links, link => SpanText(sql, link) == "dbo.InnerView AS innerRow");
+        Assert.Contains(links, link => SpanText(sql, link) == "dbo.OuterView AS outerRow");
+    }
+
+    [Fact]
+    public void Unresolved_inner_scope_object_does_not_infer_from_outer_scope_module()
+    {
+        const string sql = "SELECT (SELECT c.Id FROM dbo.Customer AS c) AS nestedId FROM dbo.OuterView AS outerRow;";
+        var built = BuildGraph(sql, Join(
+            Scan("Customer", "c"),
+            Scan("InternalEntity", "internal")));
+
+        var unresolved = Node(built.Graph, "InternalEntity");
+        var links = TableLinks(built.SourceMap).Where(link => link.NodeId == unresolved.Id).ToArray();
+        Assert.DoesNotContain(links, link => link.State == "inferred");
+        Assert.Contains(links, link => link.State == "none" && link.SpanStart is null && link.SpanLength is null);
+    }
+
+    [Fact]
     public void Apply_function_links_to_its_call_site()
     {
         const string sql = "SELECT r.Id FROM dbo.Customer AS c CROSS APPLY dbo.GetRows(c.Id) AS r;";
@@ -206,6 +296,9 @@ public sealed class SourceMapBuilderTests
 
     private static PlanGraphNode Node(PlanGraph graph, string table) =>
         Assert.Single(graph.Nodes, node => node.Object?.Table == table);
+
+    private static PlanGraphNode NodeWithTableReferenceId(PlanGraph graph, int tableReferenceId) =>
+        Assert.Single(graph.Nodes, node => node.TableReferenceId == tableReferenceId);
 
     private static string SpanText(string sql, SourceLink link)
     {
