@@ -8,7 +8,7 @@ Plan: [083 — table-valued and list parameters](083-table-and-list-parameters.m
 
 The whole-branch review identified two Important findings. Both product and evidence hygiene are addressed in this wave. The reproduction writer now redeclares and repopulates TVPs inside each generated setup command batch that binds them, then again before the measured batch after setup `GO` separators. Setup command preparation now recognizes table-valued parameters used as table sources (`FROM @Ids`) and includes their structured binding. The source setup SQL retains its existing command splitting and parameter-free temp-table prefix behavior. A fake-session test verifies the parameterized setup command reaches execution with `SqlDbType.Structured` and the resolved type name; safety coverage verifies the TVP is accepted only as a source while populating a local setup table.
 
-The five plan-083 task report files are removed from the Git index with `git rm --cached`; their physical copies are preserved in the local SDD workspace. No other plan scratch file is changed. The controller gate on `e15137a` failed as recorded below; corrective product commit `35b8d4a` passes its focused regressions. The controller will integrate the current feature with `main` and run the final gate on the integrated product tree. The operator explicitly waived Linux verification. Live SQL Server/SSMS UAT remains pending; no live database was used. Plan 083 remains in progress and is not complete.
+The five plan-083 task report files were removed from the Git index with `git rm --cached`; their physical copies remain in the local SDD workspace. The controller merged `main` at `66f47c3` into the feature branch and verified product tree `6c843243a3fc6ae69c08916d7191a51c5e8ecc4e`. Integration commit `348ce019dd0d3c3a59e56c38652d7d423e42c39f` has the same tree. The final Windows gate passed on that tree. A final scoped Sol re-review remains pending before the authorized feature-to-main fast-forward; no main fast-forward has occurred. The operator explicitly waived Linux verification. Live SQL Server/SSMS UAT remains pending; no live database was used. Plan 083 remains in progress.
 
 ## SDD rulings preserved from progress.md
 
@@ -19,6 +19,7 @@ Ruling: No live DB UAT without exact operator authorization; report pending sepa
 Ruling: Retain validated string Kind from approved Task 1, superseding the earlier enum preference — explicit model task text uses string and existing JSON transport is string-based; supported values are centrally validated — cost if wrong: future public enum migration and mapper changes.
 Ruling: Use 10 vs 5000 TVP rows for large-case coverage and list lengths below 2100 for list version-identity regression — required 2100 command parameter ceiling makes a 5000-value Dapper list impossible — cost if wrong: narrower large-list acceptance example; larger lists remain explicitly rejected.
 Ruling: Extend final TVP scope fix to SetupSqlExecution table-source parameter recognition — setup FROM @Tvp was not bound, so script-only declarations would leave accepted runtime setup broken — cost if wrong: shared setup regression; covered by focused command preparation/execution tests and final gate.
+Ruling: Apply required just fix only to changed C# files after format gate failure despite general no-auto-formatting constraint — repository verification explicitly requires this correction on failure — cost if wrong: whitespace-only integration diff; inspect no semantic changes.
 
 ## Controller gate failure and corrective fix
 
@@ -43,7 +44,15 @@ dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -p:IsTestProj
 Passed 51, Failed 0, Skipped 0.
 ```
 
-`git diff --check` passed. The final gate on `35b8d4a` and the integrated product tree is pending. Linux verification was explicitly waived by the operator; live SQL Server/SSMS UAT remains pending.
+`git diff --check` passed. The `e15137a` gate failure was corrected by `35b8d4a`; the final integrated gate and intermediate integration failures are recorded below. Linux verification was explicitly waived by the operator; live SQL Server/SSMS UAT remains pending.
+
+## Integrated verification and intermediate gate outcomes
+
+The first integrated gate on staged tree `5f7cd156` passed build, UI, and tests (Core 4,454 passed / 11 skipped; MCP 435 passed / 4 skipped) but failed the format stage. Per `docs/agents/verification.md`, `just fix` formatted 34 changed C# files. It changed 19 files: 18 final-newline corrections and one required blank line in `PlanGraphBuilderTests.cs`. The resulting diff was whitespace-only (`git diff --ignore-all-space --ignore-blank-lines --exit-code` passed); no product behavior changed.
+
+The next integrated gate on tree `6c843243a3fc6ae69c08916d7191a51c5e8ecc4e` built successfully but its UI stage failed only because `SessionVersionDiff.test.tsx`'s `formatting expansion cannot bypass the combined diff size limit` exceeded its 20-second timeout during the 310.74-second full UI run. That run evaluated 214 modules 2,223 times (94.39 seconds of tracked import time). The same test file then passed 7/7 in isolation; an exact isolated run passed 1/1 (6 skipped), with no code or timeout changes. The previous integrated UI stage on the same semantic UI tree had also passed.
+
+The final `just verify -LogDirectory D:/temp/sqlharness-plan083-348ce01` completed successfully: `verify: OK stages=5 14m56s`. It ran on product tree `6c843243a3fc6ae69c08916d7191a51c5e8ecc4e`; integration commit `348ce019dd0d3c3a59e56c38652d7d423e42c39f` preserves that exact tree. UI passed 301/301; Core passed 4,454 with 11 skipped; MCP passed 435 with 4 skipped; build and formatting passed; `ui-install` was skipped because the lockfile was unchanged. Non-empty logs are archived at `D:/temp/sqlharness-plan083-348ce01` (the format log is naturally empty; the console records the pass). Linux remains waived, and no live SQL Server/SSMS UAT was performed.
 
 ## Archived task reports
 
