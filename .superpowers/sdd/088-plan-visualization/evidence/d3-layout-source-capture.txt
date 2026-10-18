@@ -1,0 +1,6 @@
+React SVG prototype source excerpt captured from the Task 0 tool output after reading the prototype file:
+
+const byId=new Map(graph.nodes.map(n=>[n.id,n]));
+const coords=n=>({x:graph.width-90-n.depth*220,y:n.y+40});
+
+The root has depth 0 and therefore x = graph.width - 90. Every child level subtracts 220 px from x, so descendants are placed to the left. The prototype files were subsequently removed as required by Task 0.
