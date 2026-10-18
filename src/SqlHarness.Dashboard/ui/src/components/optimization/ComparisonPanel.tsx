@@ -22,6 +22,8 @@ function basisLabel(comparison: OptimizationComparison): string {
 
 function actionCase(action: OptimizationActionReference | null | undefined, selectedCase: string): string | null {
   if (!action?.caseIds.length) return null
+  const mappedCaseId = action.caseIdsByFingerprint?.[selectedCase]
+  if (mappedCaseId) return mappedCaseId
   return action.caseIds.includes(selectedCase) ? selectedCase : action.caseIds[0]
 }
 
@@ -33,8 +35,8 @@ function VersionAction({ label, action, selectedCase, sessionId, sessionSearch }
   return <section className="space-y-1" aria-label={`${label} actions`}>
     <h3 className="text-sm font-medium">{label} · {action.side}</h3>
     <div className="flex flex-wrap items-center gap-2">
-      <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">Plans for {label}</Link>
-      <ReproScriptButtons operationId={action.operationId} side={action.side} caseId={caseId} />
+      <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">{action.side === "measure" ? `Measure for ${label}` : `Plans for ${label}`}</Link>
+      <ReproScriptButtons operationId={action.operationId} side={action.side === "measure" ? "query" : action.side} caseId={caseId} />
     </div>
   </section>
 }

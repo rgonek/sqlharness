@@ -17,6 +17,8 @@ public sealed record ConditionsModel(
 {
     internal string? SetupTextForFingerprint { get; init; }
     internal IReadOnlyList<ConditionsParameter> FixedForFingerprint { get; init; } = [];
+    public string? MeasurementFingerprint { get; init; }
+    internal string EffectiveMeasurementFingerprint => MeasurementFingerprint ?? Fingerprint;
 }
 
 public sealed record ConditionsExecution(
@@ -38,4 +40,6 @@ public sealed record ConditionsCase(string Id, int Index, string Label, string? 
     IReadOnlyList<ConditionsParameter> Varying, string Fingerprint)
 {
     internal IReadOnlyList<ConditionsParameter> VaryingForFingerprint { get; init; } = [];
+    public string? MeasurementFingerprint { get; init; }
+    internal string EffectiveMeasurementFingerprint => MeasurementFingerprint ?? Fingerprint;
 }

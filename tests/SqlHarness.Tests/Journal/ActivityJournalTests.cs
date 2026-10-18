@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Data;
+using System.Diagnostics;
 using System.Runtime.Versioning;
 
 using Microsoft.Data.Sqlite;
@@ -327,17 +327,20 @@ public sealed class ActivityJournalTests
         secondJournal.RecordConditions(secondHandle, model);
 
         var firstRow = JournalDb.Rows(first.DatabasePath,
-            "SELECT conditions_json, conditions_fingerprint FROM operations").Single();
+            "SELECT conditions_json, conditions_fingerprint, measurement_fingerprint FROM operations").Single();
         var secondFingerprint = (string)JournalDb.Rows(second.DatabasePath,
-            "SELECT conditions_fingerprint FROM operations").Single()["conditions_fingerprint"]!;
+            "SELECT measurement_fingerprint FROM operations").Single()["measurement_fingerprint"]!;
         var json = (string)firstRow["conditions_json"]!;
         Assert.False(JournalDb.Contains(JournalDb.AllBytes(first.DatabasePath), "SQLH_VALUE_PRIVATE"));
         Assert.False(JournalDb.Contains(JournalDb.AllBytes(first.DatabasePath), "SQLH_SETUP_PRIVATE"));
         Assert.NotEmpty((string)firstRow["conditions_fingerprint"]!);
-        Assert.NotEqual(firstRow["conditions_fingerprint"], secondFingerprint);
+        Assert.NotEmpty((string)firstRow["measurement_fingerprint"]!);
+        Assert.NotEqual(firstRow["measurement_fingerprint"], secondFingerprint);
         using var document = System.Text.Json.JsonDocument.Parse(json);
         Assert.Equal(firstRow["conditions_fingerprint"], document.RootElement.GetProperty("fingerprint").GetString());
+        Assert.Equal(firstRow["measurement_fingerprint"], document.RootElement.GetProperty("measurementFingerprint").GetString());
         Assert.NotEmpty(document.RootElement.GetProperty("setup").GetProperty("hash").GetString()!);
+        Assert.NotEmpty(document.RootElement.GetProperty("cases")[0].GetProperty("measurementFingerprint").GetString()!);
     }
 
     [Fact]

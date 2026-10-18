@@ -642,6 +642,73 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
+    public async Task Measure_mapping_accepts_optional_context_even_when_compare_context_is_required()
+    {
+        var scope = Scope();
+        var operation = await McpOperationMapper.MapMeasureAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            null,
+            null,
+            null,
+            5,
+            null,
+            CancellationToken.None,
+            subject: "orders-report",
+            optimizationScope: "whole");
+
+        Assert.Equal(new CompareContext("orders-report", "whole"), operation.Context);
+
+        var withoutContext = await McpOperationMapper.MapMeasureAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            null,
+            null,
+            null,
+            5,
+            null,
+            CancellationToken.None);
+
+        Assert.Null(withoutContext.Context);
+    }
+
+    [Fact]
+    public async Task Measure_handler_forwards_context_even_when_compare_context_is_required()
+    {
+        var scope = Scope();
+        var recording = new RecordingModule();
+        var handlers = new McpToolHandlers(scope, recording, compareConfig: new CompareConfig { RequireContext = true });
+
+        var result = await handlers.MeasureAsync(
+            null!,
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            subject: "orders-report",
+            scope: "whole");
+
+        Assert.False(result.IsError == true, TextOf(result));
+        var operation = Assert.IsType<SqlHarnessMeasureOperation>(Assert.Single(recording.Operations));
+        Assert.Equal(new CompareContext("orders-report", "whole"), operation.Context);
+    }
+
+    [Fact]
+    public async Task Measure_mapping_rejects_invalid_context_labels()
+    {
+        var exception = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapMeasureAsync(
+            Scope(),
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            null,
+            null,
+            null,
+            5,
+            null,
+            CancellationToken.None,
+            subject: "Orders Report",
+            optimizationScope: "whole"));
+
+        Assert.Contains("Compare context labels", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Measure_matrix_dry_run_uses_core_resolution_for_typed_nulls_and_indexes()
     {
         var scope = Scope();

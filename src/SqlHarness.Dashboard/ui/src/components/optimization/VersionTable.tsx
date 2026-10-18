@@ -12,7 +12,7 @@ export function VersionTable({ subject, sessionId, sessionSearch, versions, sele
 }) {
   return <div className="overflow-x-auto">
     <table className="w-full text-sm" aria-label={`${subject} versions`}>
-      <thead><tr className="border-b text-left"><th className="py-2 pr-3">Version</th><th className="px-3 py-2">Logical reads (sum)</th><th className="px-3 py-2">Scans</th><th className="px-3 py-2">Elapsed median (ms)</th><th className="px-3 py-2">Outcome</th><th className="px-3 py-2">Measured in</th><th className="px-3 py-2">A</th><th className="px-3 py-2">B</th></tr></thead>
+      <thead><tr className="border-b text-left"><th className="py-2 pr-3">Version</th><th className="px-3 py-2">Logical reads (sum)</th><th className="px-3 py-2">Scans</th><th className="px-3 py-2">Elapsed median (ms)</th><th className="px-3 py-2">Outcome</th><th className="px-3 py-2">Observed in</th><th className="px-3 py-2">A</th><th className="px-3 py-2">B</th></tr></thead>
       <tbody>{versions.map(version => <tr key={`${version.version}:${version.hash}`} className="border-b">
         <th scope="row" className="py-2 pr-3 text-left font-medium">{version.version}</th>
         <td className="px-3 py-2">{metric(version.logicalReadsSum)}</td><td className="px-3 py-2">{metric(version.scansSum)}</td>

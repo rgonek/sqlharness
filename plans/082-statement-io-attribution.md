@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **Drift check (run first):** plans 079, 080 and 081 must be merged. `git diff --stat 760f7d6..HEAD -- src/SqlHarness.Core/StatementMetrics.cs src/SqlHarness.Core/Journal src/SqlHarness.Core/Dialect/SqlServerDialect.cs src/SqlHarness.Dashboard`. Use the merged names of 079's journal tables/stream IO and 080's `OptimizationComparer`/`ComparisonPanel`.
+> **Dependency:** follows plan 087 (measure observations in Optimization), in addition to plans 079, 080 and 081. **Drift check (run first):** dependencies must be merged. `git diff --stat 760f7d6..HEAD -- src/SqlHarness.Core/StatementMetrics.cs src/SqlHarness.Core/Journal src/SqlHarness.Core/Dialect/SqlServerDialect.cs src/SqlHarness.Dashboard`. Use the merged names of 079's journal tables/stream IO and 080's `OptimizationComparer`/`ComparisonPanel`.
 
 **Goal:** Attribute logical reads and scans to statements and objects from actual plans, reconcile them with STATISTICS IO, recognize shared statements, and let the dashboard focus comparisons and verdicts on changed statements while the whole-batch total stays visible.
 

@@ -274,6 +274,7 @@ public sealed record SqlHarnessMeasureOperation(
     /// <summary>Typed one-parameter matrix, resolved by Core into indexed measure sets.</summary>
     public SqlHarnessParameterMatrixInput? TypedMatrix { get; init; }
     public bool DryRun { get; init; }
+    public CompareContext? Context { get; init; }
 }
 
 /// <summary>

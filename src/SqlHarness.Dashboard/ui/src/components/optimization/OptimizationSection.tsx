@@ -23,7 +23,7 @@ export function OptimizationSection({ sessionId }: { sessionId: number }) {
 
   const section = query.data
   return <section aria-labelledby="optimization-heading" className="space-y-4">
-    <div><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><p className="text-sm text-muted-foreground">Compare retained SQL versions within their conditions and scope.</p></div>
+    <div><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><p className="text-sm text-muted-foreground">Compare retained SQL versions and review measurements within their conditions and scope.</p></div>
     {section.subjects.map(subject => <SubjectCard key={subjectKey(subject)} sessionId={sessionId} subject={subject} />)}
     {!!section.unassigned.length && <details className="rounded-lg border p-3">
       <summary className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</summary>

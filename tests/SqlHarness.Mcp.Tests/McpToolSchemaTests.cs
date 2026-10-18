@@ -391,6 +391,10 @@ public sealed class McpToolSchemaTests : IDisposable
         }
         Assert.Contains("subject", Required(requestSchemas["sqlharness_compare"]));
         Assert.Contains("scope", Required(requestSchemas["sqlharness_compare"]));
+        Assert.True(Properties(requestSchemas["sqlharness_measure"]).TryGetProperty("subject", out _));
+        Assert.True(Properties(requestSchemas["sqlharness_measure"]).TryGetProperty("scope", out _));
+        Assert.DoesNotContain("subject", Required(requestSchemas["sqlharness_measure"]));
+        Assert.DoesNotContain("scope", Required(requestSchemas["sqlharness_measure"]));
         Assert.Equal("string", Properties(requestSchemas["sqlharness_compare"]).GetProperty("subject").GetProperty("type").GetString());
         Assert.Equal("string", Properties(requestSchemas["sqlharness_compare"]).GetProperty("scope").GetProperty("type").GetString());
         foreach (var tool in new[] { "sqlharness_capabilities", "sqlharness_plan" })
@@ -415,6 +419,10 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.False(Properties(fixedSchemas["sqlharness_capabilities"]).TryGetProperty("maxCellChars", out _));
         Assert.Contains("subject", Required(fixedSchemas["sqlharness_compare"]));
         Assert.Contains("scope", Required(fixedSchemas["sqlharness_compare"]));
+        Assert.True(Properties(fixedSchemas["sqlharness_measure"]).TryGetProperty("subject", out _));
+        Assert.True(Properties(fixedSchemas["sqlharness_measure"]).TryGetProperty("scope", out _));
+        Assert.DoesNotContain("subject", Required(fixedSchemas["sqlharness_measure"]));
+        Assert.DoesNotContain("scope", Required(fixedSchemas["sqlharness_measure"]));
     }
 
     [Fact]
@@ -899,7 +907,7 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("validation: passed", query, StringComparison.Ordinal);
             Assert.Contains("execution: not-run", query, StringComparison.Ordinal);
             Assert.Equal(
-                "Measure one query across repeats. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence.",
+                "Measure one query across repeats. For an optimization measurement, provide both optional subject and textual scope; this is independent of compare.requireContext. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence.",
                 measure);
             Assert.Contains("pass means no elapsed regression", compare, StringComparison.Ordinal);
             Assert.Contains("not improvement", compare, StringComparison.Ordinal);
@@ -955,6 +963,8 @@ public sealed class McpToolSchemaTests : IDisposable
 
         var measure = schemas["sqlharness_measure"];
         Assert.Equal(["query"], Required(measure));
+        Assert.True(Properties(measure).TryGetProperty("subject", out _));
+        Assert.True(Properties(measure).TryGetProperty("scope", out _));
         foreach (var tool in new[] { measure, schemas["sqlharness_compare"] })
         {
             var properties = Properties(tool);

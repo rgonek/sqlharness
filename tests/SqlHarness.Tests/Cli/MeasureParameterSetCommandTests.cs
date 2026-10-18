@@ -50,6 +50,47 @@ public sealed class MeasureParameterSetCommandTests
     }
 
     [Fact]
+    public async Task Measure_accepts_subject_and_scope_without_compare_context_policy()
+    {
+        var module = new FakeModule();
+        var exit = await SqlHarnessCli.Create(module, new StringWriter(), compareConfig: new CompareConfig { RequireContext = true }).RunAsync([
+            "measure", "dev", "--query", QueryFile, "--subject", "orders-report", "--scope", "whole"
+        ]);
+
+        Assert.Equal(0, exit);
+        var operation = Assert.IsType<SqlHarnessMeasureOperation>(Assert.Single(module.Operations));
+        Assert.Equal(new CompareContext("orders-report", "whole"), operation.Context);
+    }
+
+    [Fact]
+    public async Task Measure_context_is_optional_when_compare_context_is_required()
+    {
+        var module = new FakeModule();
+        var exit = await SqlHarnessCli.Create(module, new StringWriter(), compareConfig: new CompareConfig { RequireContext = true }).RunAsync([
+            "measure", "dev", "--query", QueryFile
+        ]);
+
+        Assert.Equal(0, exit);
+        var operation = Assert.IsType<SqlHarnessMeasureOperation>(Assert.Single(module.Operations));
+        Assert.Null(operation.Context);
+    }
+
+    [Fact]
+    public async Task Measure_rejects_invalid_context_labels_before_dispatch()
+    {
+        var module = new FakeModule();
+        var output = new StringWriter();
+
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync([
+            "measure", "dev", "--query", QueryFile, "--subject", "Orders Report", "--scope", "whole"
+        ]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        Assert.Empty(module.Operations);
+        Assert.Contains("Compare context labels", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Measure_keeps_fixed_params_and_does_not_print_set_text()
     {
         using var first = TempJson("""{"name":"small","parameters":["id:int=111111","asOf:date=2026-06-30"]}""");

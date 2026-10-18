@@ -54,6 +54,93 @@ public sealed class OptimizationComparerTests
     }
 
     [Fact]
+    public void Common_compare_beats_newer_measure_observations()
+    {
+        var compare = Evidence(214, "h0", "h1", (1000, 800));
+        var evidence = new[] { compare, MeasureEvidence(215, "h0", 500), MeasureEvidence(216, "h1", 300) };
+        var group = Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build(evidence).Subjects).Groups);
+
+        var result = OptimizationComparer.Compare(group, evidence, "v0", "v1", "all", "sum");
+
+        Assert.Equal(PairBasis.MeasuredTogether, result.Basis);
+        Assert.Equal(214, result.OperationId);
+        Assert.Equal(1000, Assert.Single(result.Tables).ReadsBefore);
+        Assert.Equal(800, Assert.Single(result.Tables).ReadsAfter);
+    }
+
+    [Fact]
+    public void Cases_pair_by_measurement_fingerprint_when_case_ids_differ()
+    {
+        var compare = Evidence(214, "h0", "h1", (1000, 800)) with
+        {
+            Cases = [new CompareCaseEvidence("matrix-0", "Tenant A", null, true, null) { MeasurementFingerprint = "case-fp-a" }],
+            Metrics = [new CompareMetricEvidence("baseline", "matrix-0", "Tenant A", 1000, 1000, 1, []) { MeasurementFingerprint = "case-fp-a" },
+                new CompareMetricEvidence("candidate", "matrix-0", "Tenant A", 800, 800, 1, []) { MeasurementFingerprint = "case-fp-a" }],
+        };
+        var measure = MeasureEvidence(215, "h2", 700) with
+        {
+            Cases = [new CompareCaseEvidence("set-tenant-a", "Tenant A", "Tenant A", null, null) { MeasurementFingerprint = "case-fp-a" }],
+            Metrics = [new CompareMetricEvidence("measure", "set-tenant-a", "Tenant A", 700, 700, 1, []) { MeasurementFingerprint = "case-fp-a" }],
+        };
+        var evidence = new[] { compare, measure };
+        var group = Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build(evidence).Subjects).Groups);
+
+        var result = OptimizationComparer.Compare(group, evidence, "v0", "v2", "all", "sum");
+
+        Assert.Equal(PairBasis.DifferentRunsSameConditions, result.Basis);
+        Assert.Equal("case-fp-a", Assert.Single(result.Cases).Id);
+        Assert.Equal("Tenant A", Assert.Single(result.Cases).Label);
+        AssertAction(result.BeforeAction, 214, "baseline", "matrix-0");
+        AssertAction(result.AfterAction, 215, "measure", "set-tenant-a");
+        Assert.Equal("matrix-0", result.BeforeAction?.CaseIdsByFingerprint["case-fp-a"]);
+        Assert.Equal("set-tenant-a", result.AfterAction?.CaseIdsByFingerprint["case-fp-a"]);
+    }
+
+    [Fact]
+    public void Measure_pairs_use_logical_read_outcomes_and_mixed_case_warning()
+    {
+        var before = MeasureEvidence(215, "h0", 0) with
+        {
+            Cases = [new CompareCaseEvidence("a", "Tenant A", null, null, null) { MeasurementFingerprint = "case-a" },
+                new CompareCaseEvidence("b", "Tenant B", null, null, null) { MeasurementFingerprint = "case-b" }],
+            Metrics = [new CompareMetricEvidence("measure", "a", "Tenant A", 1000, 10, 1, []) { MeasurementFingerprint = "case-a" },
+                new CompareMetricEvidence("measure", "b", "Tenant B", 1000, 10, 1, []) { MeasurementFingerprint = "case-b" }],
+        };
+        var after = MeasureEvidence(216, "h1", 0) with
+        {
+            Cases = [new CompareCaseEvidence("set-a", "Tenant A", "A", null, null) { MeasurementFingerprint = "case-a" },
+                new CompareCaseEvidence("set-b", "Tenant B", "B", null, null) { MeasurementFingerprint = "case-b" }],
+            Metrics = [new CompareMetricEvidence("measure", "set-a", "Tenant A", 800, 8, 1, []) { MeasurementFingerprint = "case-a" },
+                new CompareMetricEvidence("measure", "set-b", "Tenant B", 1200, 12, 1, []) { MeasurementFingerprint = "case-b" }],
+        };
+        var evidence = new[] { before, after };
+        var group = Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build(evidence).Subjects).Groups);
+
+        var result = OptimizationComparer.Compare(group, evidence, "v0", "v1", "all", "sum");
+
+        Assert.Equal("better", result.Cases[0].Outcome);
+        Assert.Equal("worse", result.Cases[1].Outcome);
+        Assert.Equal((1, 1, "Tenant B"), (result.Mixed?.Better, result.Mixed?.Worse, result.Mixed?.WorstCaseLabel));
+        Assert.Equal("results not compared", result.EquivalenceLabel);
+    }
+
+    [Fact]
+    public void Measure_pairs_with_different_conditions_are_not_compared()
+    {
+        var before = MeasureEvidence(215, "h0", 100);
+        var after = MeasureEvidence(216, "h1", 50) with { Fingerprint = "other-fingerprint" };
+        var evidence = new[] { before, after };
+        var group = Group("h0", "h1") with { Subject = "orders", Database = "db" };
+
+        var result = OptimizationComparer.Compare(group, evidence, "v0", "v1", "all", "sum");
+
+        Assert.Equal(PairBasis.ConditionsDiffer, result.Basis);
+        Assert.Equal("conditions differ", result.EquivalenceLabel);
+        Assert.Empty(result.Tables);
+        Assert.Null(result.Elapsed.BeforeMs);
+    }
+
+    [Fact]
     public void Conditions_differ_returns_no_numbers()
     {
         var group = Group("h1");
@@ -386,6 +473,13 @@ public sealed class OptimizationComparerTests
 
     private static CompareMetricEvidence Metric(string variant, string caseId, long reads) =>
         Metric(variant, caseId, reads, "Orders");
+
+    private static CompareEvidence MeasureEvidence(long id, string hash, long reads) =>
+        new(id, "orders", "whole", "db", "sqlserver", "fingerprint", hash, null,
+            $"2026-10-07T09:00:{id % 60:D2}Z", "succeeded", null, null, null,
+            [new CompareCaseEvidence("0", "@CustomerId = 9001", null, null, null)],
+            [Metric("measure", "0", reads)])
+        { IsMeasure = true };
 
     private static CompareMetricEvidence Metric(string variant, string caseId, long reads, string table) =>
         new(variant, caseId, $"@CustomerId = {9001 + int.Parse(caseId, System.Globalization.CultureInfo.InvariantCulture)}",

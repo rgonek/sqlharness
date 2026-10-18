@@ -40,7 +40,7 @@ public static class OptimizationComparer
         var groupCompares = scopeCompares.Where(compare => compare.Subject == subject
                 && string.Equals(compare.Database ?? string.Empty, database, StringComparison.Ordinal))
             .ToArray();
-        var direct = groupCompares.Where(compare => Connects(compare, hashA, hashB))
+        var direct = groupCompares.Where(compare => !compare.IsMeasure && Connects(compare, hashA, hashB))
             .LastOrDefault();
 
         var path = EquivalentPath(groupCompares, hashA, hashB);
@@ -65,9 +65,9 @@ public static class OptimizationComparer
             return Empty(a, b, PairBasis.ConditionsDiffer, "conditions differ", selectedCase, aggregate);
 
         var totalCaseIds = groupCompares.SelectMany(compare => compare.Cases)
-            .Select(item => item.CaseId).Distinct(StringComparer.Ordinal).ToArray();
+            .Select(CaseKey).Distinct(StringComparer.Ordinal).ToArray();
         var caseLabels = groupCompares.SelectMany(compare => compare.Cases)
-            .GroupBy(item => item.CaseId, StringComparer.Ordinal)
+            .GroupBy(CaseKey, StringComparer.Ordinal)
             .ToDictionary(grouping => grouping.Key,
                 grouping => grouping.Select(item => item.Label).LastOrDefault(label => !string.IsNullOrWhiteSpace(label)) ?? grouping.Key,
                 StringComparer.Ordinal);
@@ -80,7 +80,7 @@ public static class OptimizationComparer
             .ThenBy(id => id, StringComparer.Ordinal)
             .ToArray();
         var differingCases = direct?.Cases.Where(item => item.ResultsEquivalent == false)
-            .Select(item => item.CaseId).ToHashSet(StringComparer.Ordinal) ?? [];
+            .Select(CaseKey).ToHashSet(StringComparer.Ordinal) ?? [];
         var caseOptions = commonIds.Select(id => new CaseOption(id, caseLabels.GetValueOrDefault(id, id),
             differingCases.Contains(id) ? "results differ"
                 : before.Metrics[id].LogicalReadsMedian is { } readsBefore && after.Metrics[id].LogicalReadsMedian is { } readsAfter
@@ -119,10 +119,20 @@ public static class OptimizationComparer
             BuffersAfter = buffersAfter,
         };
 
-        static OptimizationActionReference Action(VersionSnapshot snapshot) =>
-            new(snapshot.OperationId, snapshot.Variant, snapshot.Metrics.Keys.Order(StringComparer.Ordinal).ToArray());
+        static OptimizationActionReference Action(VersionSnapshot snapshot)
+        {
+            var caseIdsByFingerprint = snapshot.Metrics.ToDictionary(pair => pair.Key,
+                pair => pair.Value.CaseId, StringComparer.Ordinal);
+            return new OptimizationActionReference(snapshot.OperationId, snapshot.Variant,
+                caseIdsByFingerprint.Values.Order(StringComparer.Ordinal).ToArray())
+            {
+                CaseIdsByFingerprint = caseIdsByFingerprint,
+            };
+        }
 
     }
+
+    private static string CaseKey(CompareCaseEvidence evidence) => evidence.MeasurementFingerprint ?? evidence.CaseId;
 
     private static OptimizationComparison Empty(string a, string b, PairBasis basis, string equivalence,
         string selectedCase, string aggregate) =>
@@ -218,7 +228,8 @@ public static class OptimizationComparer
     {
         foreach (var compare in compares.Reverse())
         {
-            var variant = compare.BaselineHash == hash ? "baseline"
+            var variant = compare.IsMeasure && compare.BaselineHash == hash ? "measure"
+                : compare.BaselineHash == hash ? "baseline"
                 : compare.CandidateHash == hash ? "candidate" : null;
             if (variant is not null)
                 return Snapshot(compare, variant);
@@ -228,8 +239,9 @@ public static class OptimizationComparer
 
     private static VersionSnapshot Snapshot(CompareEvidence compare, string variant)
     {
+        var cases = compare.Cases.ToDictionary(item => item.CaseId, CaseKey, StringComparer.Ordinal);
         var metrics = compare.Metrics.Where(metric => metric.Variant.Equals(variant, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(metric => metric.CaseId, StringComparer.Ordinal)
+            .GroupBy(metric => cases.GetValueOrDefault(metric.CaseId, metric.MeasurementFingerprint ?? metric.CaseId), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
         return new VersionSnapshot(compare.Engine, compare.OperationId, variant, metrics);
     }

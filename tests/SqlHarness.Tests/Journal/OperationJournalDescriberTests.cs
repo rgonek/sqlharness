@@ -62,6 +62,21 @@ public sealed class OperationJournalDescriberTests
     }
 
     [Fact]
+    public void Measure_start_carries_optional_context_and_query_hash()
+    {
+        var operation = new SqlHarnessMeasureOperation(Target, null, "SELECT 1", [], 30, 5)
+        {
+            Context = new CompareContext("orders-report", "whole"),
+        };
+
+        var start = OperationJournalDescriber.DescribeStart(operation);
+
+        Assert.Equal("measure", start.Operation);
+        Assert.Equal(OperationJournalDescriber.SqlHash("SELECT 1"), start.SqlHash);
+        Assert.Equal(new CompareContext("orders-report", "whole"), start.Context);
+    }
+
+    [Fact]
     public void Unsafe_direct_start_has_no_profile()
     {
         var direct = new SqlTargetRequest(null, new Dictionary<string, string>(), "srv", "db", "integrated", UnsafeDirect: true);
