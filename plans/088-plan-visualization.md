@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- IN PROGRESS — Tasks 0–2 complete on `plan-088`; final gate pending. Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
+- IN PROGRESS — Tasks 0–3 implemented on `plan-088`; Task 2 review fixes await re-review and Task 3 awaits task review. Final gate pending. Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
 - Priority P2; effort L; risk MEDIUM (undocumented `TableReferenceId`, Showplan schema drift).
 
 ## Global Constraints
@@ -78,8 +78,8 @@ The prototypes use no icon set. The official [vscode-mssql repository license](h
 
 ### Task 3: PlanGraph builder
 **Files:** new `src/SqlHarness.Core/Plans/PlanGraph.cs`, `PlanGraphBuilder.cs` (Showplan → nodes with own `Object`, predicates, defined values, estimated/actual rows and executions, per-thread counters summed, warnings, `TableReferenceId`; edges with rows and estimated size; property tree served separately), using the existing `PlanDistiller` safety settings and limits; tests with synthetic Showplan fixtures under `tests/SqlHarness.Tests/Fixtures/Plans/`.
-- [ ] Failing tests: own-object extraction ignores descendant RelOps; Key Lookup TRI `-1`; parallel per-thread counters summed; unknown operator rendered generically with properties; size bound truncates the property tree with an explicit marker, never the node list silently; over-limit document → explicit error state.
-- [ ] FAIL → implement → PASS. Commit `feat(088): build plan graphs`.
+- [x] Failing tests: own-object extraction ignores descendant RelOps; Key Lookup TRI `-1`; parallel per-thread counters summed; unknown operator rendered generically with properties; predicates remain uncut; property-tree UTF-8 size bound adds an explicit truncation marker while preserving the complete node list; node, graph-response, and document limits return explicit errors.
+- [x] FAIL → implement → PASS. Focused RED/GREEN evidence and contract/limit decisions are in the [Task 3 report](../.superpowers/sdd/088-plan-visualization/task-3-report.md). Commit `feat(088): build plan graphs`.
 
 ### Task 4: Source map (statement and table-reference links)
 **Files:** new `src/SqlHarness.Core/Plans/SourceMapBuilder.cs` (ScriptDom scopes: statements, CTE definitions expanded per reference, derived tables, APPLY, subqueries, DML target; `NamedTableReference` instances numbered in expanded FROM order; module references = views and functions in FROM), `SourceLink` (node id ↔ span, kind `statement|table_reference`, state `exact|inferred|ambiguous|none`, rule text).

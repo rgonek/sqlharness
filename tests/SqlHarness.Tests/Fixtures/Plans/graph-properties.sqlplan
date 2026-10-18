@@ -1,0 +1,37 @@
+<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+  <BatchSequence>
+    <Batch>
+      <Statements>
+        <StmtSimple StatementId="4" StatementCompId="2" StatementText="SELECT p.Column FROM dbo.Parent AS p">
+          <QueryPlan>
+            <RelOp NodeId="0" PhysicalOp="FuturePlanOperator" LogicalOp="FutureJoin" EstimateRows="4" AvgRowSize="16" EstimatedTotalSubtreeCost="3.5">
+              <FutureJoin>
+                <FutureSpecificMetadata Code="42" Description="renderer-neutral custom operator properties: Å 漢字 &quot;quoted&quot; &amp; &lt;escaped&gt;" />
+                <Predicate><ScalarOperator ScalarString="p.Column = 'keep this readable'" /></Predicate>
+                <DefinedValues>
+                  <DefinedValue>
+                    <ColumnReference Database="[db]" Schema="[dbo]" Table="[Parent]" Column="[Column]" Alias="[p]" />
+                    <ScalarOperator ScalarString="[p].[Column]" />
+                  </DefinedValue>
+                </DefinedValues>
+                <RunTimeInformation>
+                  <RunTimeCountersPerThread Thread="0" ActualRows="3" ActualExecutions="1" />
+                  <RunTimeCountersPerThread Thread="1" ActualRows="5" ActualExecutions="2" />
+                </RunTimeInformation>
+                <Warnings><PlanAffectingConvert ConvertIssue="Cardinality Estimate" /></Warnings>
+                <RelOp NodeId="1" PhysicalOp="Key Lookup" LogicalOp="Lookup" EstimateRows="2" AvgRowSize="8" EstimatedTotalSubtreeCost="2.1">
+                  <Lookup><Object Database="[db]" Schema="[dbo]" Table="[Parent]" Index="[PK_Parent]" Alias="[p]" TableReferenceId="-1" /></Lookup>
+                  <RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="6" ActualExecutions="2" /></RunTimeInformation>
+                </RelOp>
+                <RelOp NodeId="2" PhysicalOp="Index Scan" EstimateRows="1" AvgRowSize="4" EstimatedTotalSubtreeCost="1">
+                  <IndexScan><Object Database="[db]" Schema="[dbo]" Table="[Child]" Index="[IX_Child]" Alias="[c]" TableReferenceId="8" /></IndexScan>
+                </RelOp>
+                <Object Database="[db]" Schema="[dbo]" Table="[Parent]" Index="[IX_Parent]" Alias="[p]" TableReferenceId="7" />
+              </FutureJoin>
+            </RelOp>
+          </QueryPlan>
+        </StmtSimple>
+      </Statements>
+    </Batch>
+  </BatchSequence>
+</ShowPlanXML>
