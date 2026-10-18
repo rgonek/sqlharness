@@ -60,6 +60,61 @@ public class SqlHarnessQueryTests
     }
 
     [Fact]
+    public async Task Query_dry_run_classifies_list_using_one_typed_representative()
+    {
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+        var outcome = await Module(session).ExecuteAsync(Query("SELECT * FROM dbo.Items WHERE Id IN @Ids") with
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null)
+            {
+                Kind = "list",
+                Values = ["1", "2", "3"],
+            }],
+            DryRun = true,
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        var parameter = Assert.Single(report.Parameters);
+        Assert.Equal("@Ids1", parameter.Name);
+        Assert.Equal("int", parameter.Type);
+    }
+
+    [Fact]
+    public async Task Query_dry_run_rejects_generated_list_name_that_collides_with_scalar_binding()
+    {
+        var outcome = await Module(FakeSqlSession.WithIdentity("test-server", "testdb-a"))
+            .ExecuteAsync(Query("SELECT * FROM dbo.Items WHERE Id IN @Ids AND ParentId = @Ids1") with
+            {
+                TypedParameters =
+                [
+                    new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["1"] },
+                    new SqlHarnessParameterInput("Ids1", "int", "7"),
+                ],
+                DryRun = true,
+            });
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("collides with another supplied SQL parameter", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Query_dry_run_keeps_an_inline_empty_list_empty()
+    {
+        var outcome = await Module(FakeSqlSession.WithIdentity("test-server", "testdb-a"))
+            .ExecuteAsync(Query("SELECT * FROM dbo.Items WHERE Id IN @Ids") with
+            {
+                TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = [] }],
+                DryRun = true,
+            });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var parameter = Assert.Single(Assert.IsType<SqlHarnessDryRunReport>(outcome.Report).Parameters);
+        Assert.Equal("@Ids", parameter.Name);
+        Assert.Equal("int", parameter.Type);
+    }
+
+    [Fact]
     public async Task Query_dry_run_preserves_bad_caller_parameter_detail_without_authenticating()
     {
         var azure = new FakeAzureCli(Token);

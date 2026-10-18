@@ -102,6 +102,27 @@ public class SqlHarnessMeasureTests
     }
 
     [Fact]
+    public async Task Measure_dry_run_classifies_lists_after_representative_expansion()
+    {
+        var session = FakeMeasureSession.Create();
+        var outcome = await Module(session).ExecuteAsync(Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null)
+            {
+                Kind = "list",
+                Values = ["1", "2"],
+            }],
+            DryRun = true,
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("@Ids1", Assert.Single(report.Parameters).Name);
+    }
+
+    [Fact]
     public async Task Measure_parameter_set_dry_run_binds_every_set_without_connecting_or_preflighting_artifacts()
     {
         var session = FakeMeasureSession.Create();

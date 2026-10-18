@@ -78,9 +78,9 @@
 **Interfaces:**
 - Produces: `static ExpandedSql ListParameterExpander.Expand(string sql, IReadOnlyList<ListValues> lists)` with `sealed record ExpandedSql(string Text, IReadOnlyList<SqlHarnessParameter> Parameters)`; `sealed record ListValues(string Name, string Type, IReadOnlyList<string?> Values)`.
 
-- [ ] **Step 1: Failing tests:** `IN @Ids` with [1,2,3] → `IN (@Ids1, @Ids2, @Ids3)` and three typed params; `IN (@Ids)` same; `IN@Ids` (no space) expands; repeated `IN @Ids` twice in text both expand with shared params; name prefix collision (`@Ids` vs `@IdsOther`) not touched; `Empty_list_uses_dapper_empty_form`; occurrences inside string literals and comments untouched (ScriptDom token-based); expansion over 2,100 parameters → error naming the list.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement on ScriptDom tokens. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(083): expand Dapper list parameters`.
+- [x] **Step 1: Failing tests:** `IN @Ids` with [1,2,3] → `IN (@Ids1, @Ids2, @Ids3)` and three typed params; `IN (@Ids)` same; `IN@Ids` (no space) expands; repeated `IN @Ids` twice in text both expand with shared params; name prefix collision (`@Ids` vs `@IdsOther`) not touched; `Empty_list_uses_dapper_empty_form`; occurrences inside string literals and comments untouched (ScriptDom token-based); expansion over 2,100 parameters → error naming the list. Representative dry-run classification is covered for query, measure, compare, watch, and snapshot.
+- [x] **Step 2:** → FAIL. **Step 3:** Implement on ScriptDom tokens. **Step 4:** → PASS.
+- [x] **Step 5:** Commit `feat(083): expand Dapper list parameters`.
 
 ### Task 3: TVP resolution, sources and binding (SQL Server)
 

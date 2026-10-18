@@ -14,6 +14,29 @@ namespace SqlHarness.Tests;
 public class SqlHarnessCompareTests
 {
     [Fact]
+    public async Task Compare_dry_run_classifies_lists_after_representative_expansion()
+    {
+        var operation = Compare(1) with
+        {
+            SetupSql = null,
+            BaselineSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids AND Category = @Category",
+            CandidateSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids AND Category = @Category",
+            TypedParameters =
+            [
+                new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["1", "2"] },
+                new SqlHarnessParameterInput("Category", "int", "4"),
+            ],
+            DryRun = true,
+        };
+
+        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal(["@Category", "@Ids1"], report.Parameters.Select(parameter => parameter.Name));
+    }
+
+    [Fact]
     public async Task Compare_report_includes_setup_and_variant_isolation_notices()
     {
         var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(1) with

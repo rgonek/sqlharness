@@ -20,6 +20,11 @@ internal sealed record PreparedCompareFamily(
     internal SqlSafetyDecision? SetupSafety { get; init; }
     internal SqlRiskTier Tier { get; init; }
     internal IReadOnlyList<string> SafetyNotices { get; init; } = [];
+    internal IReadOnlyList<SqlHarnessParameter> ClassificationParameters { get; init; } = FixedParameters;
+    internal string? ClassificationSetupSql { get; init; }
+    internal required string ClassificationBaselineSql { get; init; }
+    internal required string ClassificationCandidateSql { get; init; }
+    internal bool HasNonScalarParameters { get; init; }
 }
 
 internal static class CompareOperationPreparer
@@ -61,26 +66,36 @@ internal static class CompareOperationPreparer
         OperationSecrets.AddCredentials(knownSecrets, target);
         var dialect = SqlDialects.For(target.Engine);
 
+        var resolvedParameterInputs = SqlParameterInputs.Resolve(parameterInputs, typedParameters).ToArray();
+        SqlParameterInputs.ValidateSourceSql(dialect, target.Database, resolvedParameterInputs, NoSessionTemps);
+        var tableValuedNames = ParameterSetResolver.ValidateInputs(resolvedParameterInputs, target.Engine);
+        var scalarParameters = dialect.BindParameters(
+            resolvedParameterInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
+        var baselineExpansion = SqlParameterInputs.ExpandListsForClassification(baselineSql, resolvedParameterInputs);
+        var candidateExpansion = SqlParameterInputs.ExpandListsForClassification(candidateSql, resolvedParameterInputs);
+        var setupExpansion = string.IsNullOrWhiteSpace(setupSql)
+            ? new ExpandedSql(setupSql ?? string.Empty, [])
+            : SqlParameterInputs.ExpandListsForClassification(setupSql, resolvedParameterInputs);
+        var classificationParameters = SqlParameterInputs.CombineClassificationParameters(scalarParameters, baselineExpansion.Parameters);
+
         SqlSafetyDecision? setupSafety = null;
         IReadOnlySet<string> setupTemps = NoSessionTemps;
         if (!string.IsNullOrWhiteSpace(setupSql))
         {
             setupSafety = dialect.Classify(
-                setupSql, SqlUsage.CompareSetup, target.Database, false, null, NoSessionTemps);
+                setupExpansion.Text, SqlUsage.CompareSetup, target.Database, false, null, NoSessionTemps, tableValuedNames);
             EnsureSafe(setupSafety, "setup");
             setupTemps = setupSafety.SessionTempTables;
         }
 
         var baselineSafety = dialect.Classify(
-            baselineSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            baselineExpansion.Text, SqlUsage.Query, target.Database, false, null, setupTemps, tableValuedNames);
         EnsureSafe(baselineSafety, "baseline");
         var candidateSafety = dialect.Classify(
-            candidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            candidateExpansion.Text, SqlUsage.Query, target.Database, false, null, setupTemps, tableValuedNames);
         EnsureSafe(candidateSafety, "candidate");
 
-        var resolvedParameterInputs = SqlParameterInputs.Resolve(parameterInputs, typedParameters).ToArray();
-        ParameterSetResolver.RequireScalarExecution(resolvedParameterInputs, target.Engine);
-        var parameters = dialect.BindParameters(resolvedParameterInputs);
+        var parameters = scalarParameters;
 
         return new PreparedCompareFamily(
             target,
@@ -100,6 +115,11 @@ internal static class CompareOperationPreparer
             Tier = SqlRiskTiers.Max(
                 setupSafety?.Tier ?? SqlRiskTier.ReadOnly,
                 SqlRiskTiers.Max(baselineSafety.Tier, candidateSafety.Tier)),
+            ClassificationParameters = classificationParameters,
+            ClassificationSetupSql = string.IsNullOrWhiteSpace(setupSql) ? setupSql : setupExpansion.Text,
+            ClassificationBaselineSql = baselineExpansion.Text,
+            ClassificationCandidateSql = candidateExpansion.Text,
+            HasNonScalarParameters = resolvedParameterInputs.Any(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar),
         };
     }
 
@@ -114,10 +134,15 @@ internal static class CompareOperationPreparer
         ArgumentNullException.ThrowIfNull(variants);
         foreach (var variant in variants)
         {
+            var validationParameters = prepared.HasNonScalarParameters
+                ? SqlParameterInputs.CombineClassificationParameters(
+                    variant,
+                    prepared.ClassificationParameters.Where(parameter => !prepared.FixedParameters.Any(scalar => scalar.Name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase))).ToArray())
+                : variant;
             if (prepared.Dialect.Engine == SqlEngine.SqlServer)
-                SqlSetupVariableReferenceValidator.Validate(setupSql, variant, baselineSql, candidateSql);
-            prepared.Dialect.ValidateParameterReferences(variant, setupSql, baselineSql, candidateSql);
-            SetupSqlExecution.Validate(prepared.Dialect.Engine, setupSql, variant);
+                SqlSetupVariableReferenceValidator.Validate(prepared.ClassificationSetupSql, validationParameters, prepared.ClassificationBaselineSql, prepared.ClassificationCandidateSql);
+            prepared.Dialect.ValidateParameterReferences(validationParameters, prepared.ClassificationSetupSql, prepared.ClassificationBaselineSql, prepared.ClassificationCandidateSql);
+            SetupSqlExecution.Validate(prepared.Dialect.Engine, prepared.ClassificationSetupSql, validationParameters);
         }
 
         prepared.Dialect.ValidateMeasuredBatch(baselineSql);

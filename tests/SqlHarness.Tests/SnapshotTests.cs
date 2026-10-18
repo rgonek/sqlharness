@@ -16,6 +16,26 @@ public class SnapshotTests
     private const string Name = "before-import";
 
     [Fact]
+    public async Task Snapshot_classifies_list_after_representative_expansion_before_execution_guard()
+    {
+        var session = FakeSession.WithRows(1);
+        var operation = Snapshot(sql: "SELECT Id FROM dbo.Items WHERE Id IN @Ids") with
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null)
+            {
+                Kind = "list",
+                Values = ["1", "2"],
+            }],
+        };
+
+        var outcome = await Module(session, new FakeSnapshotStore()).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("Table-valued and list parameter execution is not available in this operation yet.", outcome.SafeError);
+        Assert.Equal(0, session.ConnectCount);
+    }
+
+    [Fact]
     public async Task Snapshot_report_includes_isolation_level_safety_notice()
     {
         var outcome = await Module(

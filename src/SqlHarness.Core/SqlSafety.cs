@@ -77,6 +77,46 @@ internal static class SqlParameterInputs
             ParameterKind.List when input.SourceSql is not null => $"List parameter '@{input.Name}': list length not known offline.",
             _ => null,
         }).Where(note => note is not null).Select(note => note!).ToArray();
+
+    internal static ExpandedSql ExpandListsForClassification(string sql, IReadOnlyList<SqlHarnessParameterInput> inputs)
+    {
+        var lists = inputs
+            .Where(input => ParameterKindParser.Parse(input) == ParameterKind.List)
+            .Select(input => new ListValues(
+                input.Name,
+                input.Type!,
+                input.Values is null ? [null] : input.Values.Count == 0 ? [] : [input.Values[0]]))
+            .ToArray();
+        return ListParameterExpander.Expand(sql, lists);
+    }
+
+    internal static void ValidateSourceSql(
+        ISqlDialect dialect,
+        string? database,
+        IReadOnlyList<SqlHarnessParameterInput> inputs,
+        IReadOnlySet<string> sessionTempTables)
+    {
+        foreach (var input in inputs.Where(input => input.SourceSql is not null))
+        {
+            var sourceSql = input.SourceSql!;
+            if (System.Text.Encoding.UTF8.GetByteCount(sourceSql) > 1024 * 1024)
+                throw new SqlHarnessSafetyException($"SQL source for parameter '@{input.Name}' exceeds the 1 MiB limit.");
+            var sourceSafety = dialect.Classify(sourceSql, SqlUsage.Query, database, false, null, sessionTempTables);
+            if (!sourceSafety.Allowed)
+                throw new SqlHarnessSafetyException($"SQL source for parameter '@{input.Name}' was rejected: {sourceSafety.RejectionDescription}");
+        }
+    }
+
+    internal static IReadOnlyList<SqlHarnessParameter> CombineClassificationParameters(
+        IReadOnlyList<SqlHarnessParameter> scalarParameters,
+        IReadOnlyList<SqlHarnessParameter> listParameters)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var parameter in scalarParameters.Concat(listParameters))
+            if (!names.Add(parameter.Name))
+                throw new SqlHarnessSafetyException($"List expansion parameter '{parameter.Name}' collides with another supplied SQL parameter.");
+        return scalarParameters.Concat(listParameters).ToArray();
+    }
 }
 
 internal enum SqlUsage

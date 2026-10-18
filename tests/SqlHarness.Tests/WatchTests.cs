@@ -15,6 +15,26 @@ public class WatchTests
     private const string Token = "eyJsynthetic.access-never-emit.signature";
 
     [Fact]
+    public async Task Watch_classifies_list_after_representative_expansion_before_execution_guard()
+    {
+        var session = FakeSession.WithScalarPolls(1);
+        var operation = Watch(sql: "SELECT Id FROM dbo.Items WHERE Id IN @Ids", untilUnchanged: 1) with
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null)
+            {
+                Kind = "list",
+                Values = ["1", "2"],
+            }],
+        };
+
+        var outcome = await Module(session, new FakeWatchClock()).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("Table-valued and list parameter execution is not available in this operation yet.", outcome.SafeError);
+        Assert.Equal(0, session.ConnectCount);
+    }
+
+    [Fact]
     public async Task Watch_report_includes_isolation_level_safety_notice()
     {
         var outcome = await Module(
