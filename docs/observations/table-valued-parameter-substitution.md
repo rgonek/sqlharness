@@ -1,7 +1,10 @@
-# Observation: application table-valued parameters have no direct benchmark form
+# Observation: application table-valued parameters have a direct benchmark form
 
-Status: collecting observations, not approved for implementation. Recorded 2026-10-15
-against repository HEAD `4f1e5a1`. No implementation plan is requested.
+Status: addressed by plan 083 implementation on the `plan-083` feature branch. Recorded 2026-10-15
+against repository HEAD `4f1e5a1`; implementation evidence is tracked in
+[plan 083](../../plans/083-table-and-list-parameters.md) and its Task 5 report. Final controller
+gate, whole-branch review, and operator UAT remain pending; live SQL Server behavior is not yet
+verified.
 
 ## Observed workflow
 
@@ -33,12 +36,17 @@ Classification: ux gap (works as designed; the application's input form cannot b
 Confidence: high for the rejection and missing binding; the size of any measurement distortion
 from the substitution is not established.
 
-## Existing coverage
+## Resolution
 
-No plan or observation covers table-valued parameter binding. The workaround (inline table
-variable plus comment-tagged recompile) is recorded as evidence, not proposed as a fix.
+Plan 083 adds catalog-resolved SQL Server TVP binding and Dapper-style list parameters to the
+read-only query and benchmark paths, with journaling, labels, and reproduction scripts. The inline
+table-variable workaround is no longer needed to represent those application inputs. The original
+workflow evidence and its uncertainty about measurement distortion remain useful historical context.
 
-## Questions for later synthesis
+The feature branch has focused implementation coverage. No live database or SSMS reproduction was
+performed as part of this documentation task; those checks remain in Plan 083 UAT.
+
+## Historical questions for later product research
 
 - How often do investigated statements take table-valued or list parameters?
 - Would a typed row-set parameter (declared column types plus bounded JSON rows, bound as a

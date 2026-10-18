@@ -297,6 +297,12 @@ Parameter-set measurements use the observed server plan-cache state; SQLHarness 
 
 The CLI `--param-set` file grammar and `compare --matrix` text grammar are unchanged. MCP's `parameterSets`, `parameterSetFiles`, and `matrix` inputs use the same validation for both tools; matrix values remain typed strings or JSON null, so commas, empty text and typed NULL stay distinct.
 
+SQL Server query, measure, compare, watch, and snapshot also accept application-shaped table-valued (`kind: "tvp"`) and list (`kind: "list"`) parameters. A TVP supplies exactly one of `rows` or `rowsFrom`, with a catalog-resolved table type; a list supplies exactly one of `values` or `valuesFrom`, with a scalar element type. Sources may be inline or a read-only SQL query. `rowsFrom` and `valuesFrom` are safety-classified, then run once per case after connecting and before setup; compare reuses that materialized data for baseline and candidate. PostgreSQL does not support these kinds.
+
+Lists expand like Dapper for `IN @Ids` and `IN (@Ids)`. An empty list becomes an always-empty predicate, while an empty TVP binds zero rows. The combined per-case limits are 8 TVP/list parameters, 100,000 rows or values, and 32 MiB of materialized input; each expanded command may contain at most 2,100 parameters. Capabilities reports these limits. Use CLI `--params-json` or MCP parameter objects to pass these inputs; do not fill inline table variables in the measured batch to imitate application parameters. `mutation` rejects TVP/list parameters.
+
+Dry runs classify a representative list expansion and cannot check a TVP's catalog shape or a query-sourced list's length offline. Journal conditions record resolved type, count, ordered columns where applicable, and a keyed content fingerprint; raw rows, values, and source SQL are stored only when `journal.storeSensitive` is enabled. SQL Server dashboard reproduction scripts can rebuild stored TVPs and lists; a `rowsFrom` script reruns its query, so its data may have changed. Operation version identity uses the original, unexpanded SQL.
+
 `--json-summary` for a multi-set measure is a bounded projection: the server plan-cache warning, the sequential order rule, each set name, parameter type metadata, the value hash, per-set stability, median elapsed/CPU/reads, cross-set labels, and the artifact directory. It omits parameter values, plan XML, and full run arrays. Noteworthy operators, when included, stay capped at ten.
 
 ## Result equivalence and compact output
@@ -451,6 +457,8 @@ Postgres: use native `CREATE TEMP TABLE` / `TEMPORARY` (no `#temp` translation),
 Use exactly one query source (`--file` or stdin) and bound `--param` values. Parameter names accept an optional single leading `@` and reports print the canonical `@Name`. Unsized `nvarchar`/`varchar` values bind with size 4000 when the value is at most 4000 characters (including NULL), and as `max` when longer, matching Dapper so a benchmark compiles the plan the application compiles.
 
 Fixed-width `nchar`/`char` have no `max`: they use size 4000 through 4000 characters (including NULL); `char` values of 4001 to 8000 characters use their actual length, and values beyond the type limit are rejected (`nchar` over 4000, `char` over 8000). Explicit sizes are unchanged. Parsed syntax inside a top-level `SELECT` is accepted without a fragment allowlist; independent safety checks still reject cross-database access, external or stateful sources, dynamic SQL, and writes outside the approved local-`#temp` or mutation contracts.
+
+For SQL Server TVPs, `rowsFrom`/`valuesFrom` source queries must pass the same read-only classifier as other read-only SQL. They are materialized once per case before setup, outside measured runs. The classifier permits a declared TVP as a read-only table source and continues to reject DML or `OUTPUT INTO` targeting it. PostgreSQL rejects both non-scalar parameter kinds, and `mutation` rejects them with `table-valued and list parameters are not supported by mutation`.
 
 ### Dry run
 

@@ -24,7 +24,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `3be878e`. Depends on 077 (MCP schemas) and 079 (conditions, scripts). Independent of 080–082.
+- IN PROGRESS. Tasks 1–4 are implemented and approved; Task 5 documentation is implemented on the `plan-083` feature branch. Controller whole-branch review and final `just verify` plus operator-authorized live UAT remain pending. Do not treat this plan as complete or integrated. Planning base `3be878e`; depends on 077 (MCP schemas) and 079 (conditions, scripts); independent of 080–082.
 - Priority P2; effort L; risk MEDIUM (binding fidelity; new execution step before setup).
 
 ## Global Constraints
@@ -108,7 +108,7 @@
 
 ### Task 5: Documentation, observation closure, verification
 
-- [ ] **Step 1:** README parameters section and safety contract (rowsFrom classification, mutation rejection), `docs/mcp.md`, tool descriptions, capabilities; mark `docs/observations/table-valued-parameter-substitution.md` as addressed by 083; `skills/sqlharness/SKILL.md` guidance to pass TVPs/lists as parameters instead of in-batch fills.
-- [ ] **Step 2:** `just verify` → exit 0; record revision/result.
-- [ ] **Step 3 (operator-authorized):** UAT compare with a TVP from `rowsFrom` (500 ids) and an empty TVP case, plus a list matrix; confirm binding, labels, scripts run in SSMS; record without business data.
-- [ ] **Step 4:** Queue → history; commit `docs(083): record plan 083 evidence`.
+- [x] **Step 1:** README parameters section and safety contract (rowsFrom classification, mutation rejection), `docs/mcp.md`, tool descriptions and capabilities; mark `docs/observations/table-valued-parameter-substitution.md` as addressed by 083; `skills/sqlharness/SKILL.md` guidance to pass TVPs/lists as parameters instead of in-batch fills. Capabilities already exposed all four configured limits, so its interface shape required no change.
+- [ ] **Step 2 (controller-owned):** `just verify` → exit 0; record tested revision/result after whole-branch review.
+- [ ] **Step 3 (operator-authorized):** UAT compare with a TVP from `rowsFrom` (500 ids) and an empty TVP case, plus a list matrix; confirm binding, labels, scripts run in SSMS; record without business data. No live UAT is authorized by this task.
+- [ ] **Step 4:** Record the Task 5 evidence with commit `docs(083): record plan 083 evidence`. Keep Plan 083 in the in-progress queue until controller review, gate, and UAT are complete; move it to history only at final completion.

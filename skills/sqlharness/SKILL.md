@@ -14,7 +14,7 @@ Keep the requested profile and variables; request-scoped MCP's allowlist permits
 sqlharness capabilities <profile> --json
 ```
 
-Execute once the target and required inputs are resolved, using parameters and query shapes that match the application.
+Execute once the target and required inputs are resolved, using parameters and query shapes that match the application. Pass application TVPs and lists as typed parameters instead of filling inline table variables in the measured batch; check capabilities and tool schemas for supported kinds and limits.
 
 ## Read evidence
 

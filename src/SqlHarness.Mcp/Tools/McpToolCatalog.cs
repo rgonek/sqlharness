@@ -616,7 +616,7 @@ public static class McpToolCatalog
     /// <summary>Common setup text; each catalog appends its engine's setup guidance.</summary>
     private const string SetupParameterName = "setup";
     public const string SetupDescription = "Once per measured session; setup locals do not carry into measured SQL.";
-    public const string ParametersDescription = "Scalar values: culture-invariant text or JSON null. SQL Server also accepts kind tvp with rows/rowsFrom and kind list with values/valuesFrom in read-only query, measure, compare, watch, and snapshot operations; limits are in capabilities. Mutation rejects non-scalar inputs.";
+    public const string ParametersDescription = "Scalar values: culture-invariant text or JSON null. SQL Server also accepts kind tvp with exactly one of rows/rowsFrom and kind list with exactly one of values/valuesFrom in read-only query, measure, compare, watch, and snapshot operations. Source SQL must pass read-only classification; capabilities reports limits. Mutation rejects non-scalar inputs.";
     public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; entries may be scalar strings or typed objects. SQL Server TVP/list entries are accepted by read-only measure and compare operations; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
     public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
     public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
