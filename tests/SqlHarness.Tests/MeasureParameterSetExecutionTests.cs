@@ -369,19 +369,42 @@ public sealed class MeasureParameterSetExecutionTests
         var result = await runner.ExecuteAsync(operation, Prepared("A", "B"));
 
         Assert.Equal(4, result.Runs.Count);
-        var captures = session.Commands.Where(command => command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal)).ToArray();
-        var restores = session.Commands.Where(command => command.Sql.StartsWith("SET NOCOUNT", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(2, captures.Length);
-        Assert.Equal(6, restores.Length); // one warmup and two repetitions per set
-        var commands = session.Commands.ToArray();
-        var setupIndexes = commands.Select((command, index) => (command, index))
-            .Where(item => item.command.Sql.StartsWith("INSERT #ids", StringComparison.Ordinal))
-            .Select(item => item.index).ToArray();
-        var captureIndexes = commands.Select((command, index) => (command, index))
-            .Where(item => item.command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal))
-            .Select(item => item.index).ToArray();
-        Assert.Equal(2, setupIndexes.Length);
-        Assert.All(Enumerable.Range(0, 2), index => Assert.True(captureIndexes[index] > setupIndexes[index]));
+        Assert.Equal(
+            [11, 11, 11, 22, 22, 22],
+            runner.Dialect.Calls.Select(call => Assert.IsType<int>(call.Parameters.Single().Value)));
+        Assert.Equal([0, 1, 2, 0, 1, 2], runner.Dialect.Calls.Select(call => call.Repetition));
+
+        static string CommandEvent(SqlExecutionCommand command)
+        {
+            if (command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal)) return "capture";
+            if (command.Sql.StartsWith("SET NOCOUNT", StringComparison.Ordinal)) return "restore";
+            if (command.Sql.StartsWith("SET STATISTICS IO ON", StringComparison.Ordinal)) return "begin-run";
+            if (command.Sql.StartsWith("SET STATISTICS XML OFF", StringComparison.Ordinal)) return "end-run";
+            if (command.Sql.StartsWith("CREATE TABLE #ids", StringComparison.Ordinal)) return "create-temp";
+            if (command.Sql.StartsWith("INSERT #ids", StringComparison.Ordinal))
+                return $"setup-{Assert.IsType<int>(command.Parameters.Single().Value)}";
+            if (command.Sql == QuerySql)
+                return $"query-{Assert.IsType<int>(command.Parameters.Single().Value)}";
+            return $"unexpected:{command.Sql}";
+        }
+
+        static IEnumerable<string> CaseEvents(int id)
+        {
+            yield return "create-temp";
+            yield return $"setup-{id}";
+            yield return "capture";
+            for (var repetition = 0; repetition <= 2; repetition++)
+            {
+                yield return "begin-run";
+                yield return $"query-{id}";
+                yield return "end-run";
+                yield return "restore";
+            }
+        }
+
+        Assert.Equal(
+            CaseEvents(11).Concat(CaseEvents(22)),
+            session.Commands.Select(CommandEvent));
     }
 
     [Fact]
