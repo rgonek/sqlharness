@@ -919,6 +919,51 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Plan_source_map_selects_case_repetition_and_document_without_other_case_links()
+    {
+        using var home = new TempHome();
+        await SetStoreSensitiveAsync(home, true);
+        const string sql = "SELECT * FROM dbo.Parent AS p;";
+        var caseAFirst = PlanDocument(PlanXml(actualRows: 1));
+        var caseASecond = PlanDocument(PlanXml(actualRows: 2));
+        var caseBFirst = PlanDocument(PlanXml(actualRows: 3));
+        var caseBSecond = PlanDocument(PlanXml(actualRows: 5));
+        var benchmark = new BenchmarkJournalRecord(
+        [
+            Metric("measure", "set-a", "case-a", "Case A", [
+                Occurrence(1, 0, caseAFirst.Sha256, sql),
+                Occurrence(2, 0, caseASecond.Sha256, sql),
+            ]),
+            Metric("measure", "set-a", "case-b", "Case B", [
+                Occurrence(1, 0, caseBFirst.Sha256, sql),
+                Occurrence(2, 1, caseBSecond.Sha256, sql),
+            ]),
+        ], [caseAFirst, caseASecond, caseBFirst, caseBSecond]);
+        var handle = new JournalSeed(home.DatabasePath, storeSensitive: true)
+            .Operation(JournalSeed.Session("cli:source-map-selectors"), operation: "measure", sql: sql, benchmark: benchmark);
+
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync($"/api/operations/{handle.OperationId}/source-map?variant=measure&parameterSet=set-a&repetition=2&caseId=case-b");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = result.RootElement;
+        Assert.Equal("case-b", root.GetProperty("caseId").GetString());
+        Assert.Equal("Case B", root.GetProperty("caseLabel").GetString());
+        Assert.Equal(2, root.GetProperty("repetition").GetInt32());
+        Assert.Equal(sql, root.GetProperty("executedText").GetString());
+
+        var links = root.GetProperty("links").EnumerateArray().ToArray();
+        Assert.NotEmpty(links);
+        Assert.Equal(new string?[] { caseBSecond.Sha256 }, links.Select(link => link.GetProperty("documentSha256").GetString()).Distinct().ToArray());
+        Assert.All(links, link => Assert.Equal(1, link.GetProperty("documentOrdinal").GetInt32()));
+        var tableLink = Assert.Single(links, link => link.GetProperty("link").GetProperty("kind").GetString() == "table_reference");
+        Assert.Equal("0:0", tableLink.GetProperty("link").GetProperty("nodeId").GetString());
+        Assert.Equal("exact", tableLink.GetProperty("link").GetProperty("state").GetString());
+    }
+
+    [Fact]
     public async Task Source_map_response_limit_returns_explicit_payload_too_large()
     {
         var response = new PlanSourceMapResponse(1, "stored", "sqlserver", "baseline", null,

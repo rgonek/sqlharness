@@ -178,9 +178,12 @@ export function PlanWorkbench({ operationId, variant, engine }: { operationId: n
     setSelectedNodeKey(null)
     setRevealSpan(null)
     if (!selection) return
-    const match = links.filter(item => overlaps(item.link, selection)).sort((left, right) => left.statementIndex - right.statementIndex)[0]
+    const candidateLinks = documentSelection === "all"
+      ? links
+      : links.filter(item => documentKey(item) === documentSelection)
+    const match = candidateLinks.filter(item => overlaps(item.link, selection)).sort((left, right) => left.statementIndex - right.statementIndex)[0]
     if (match) setSelectedStatementIndex(match.statementIndex)
-  }, [links])
+  }, [documentSelection, links])
 
   if (manifest.isPending) return <section aria-label="Plans" className="rounded-lg border p-3"><p role="status">Loading plan documents…</p></section>
   if (manifest.error) return <PlanErrorState error={manifest.error} onRetry={() => void manifest.refetch()} />
@@ -256,6 +259,7 @@ export function PlanWorkbench({ operationId, variant, engine }: { operationId: n
     {sourceMapOmissions.filter(omission => omission.omitted || !omission.stored).map(omission => <p key={`source-omitted:${omission.documentOrdinal}:${omission.statementIndex}`} className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">Document {omission.documentOrdinal + 1}, statement {omission.statementIndex + 1}: source links are unavailable because the plan was omitted or not stored.</p>)}
     {sourceMapErrors.map(error => <div key={`${error.documentOrdinal}:${error.code}`} className="rounded border border-amber-600/50 p-2 text-sm" role="status">Document {error.documentOrdinal + 1}: {error.code} — {error.message}</div>)}
     {isUnmatched && unmatchedOccurrences.map(occurrence => <p key={`unmatched:${occurrence.documentOrdinal}:${occurrence.statementIndex}`} className="rounded border border-border bg-muted/50 p-2 text-sm">Document {occurrence.documentOrdinal + 1}, statement {occurrence.statementIndex + 1}: unmatched SQL statement.</p>)}
+    {sqlSelection && documentSelection !== "all" && sqlMatchedLinks.length === 0 && <p role="status" className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source link matches this SQL selection in the selected plan document.</p>}
     {!isUnmatched && !isOmitted && source && visibleStatementLinks.length === 0 && <p className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source links were produced for the selected statement and document.</p>}
 
     {source && <div className="grid gap-3 xl:grid-cols-2">

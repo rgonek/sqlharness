@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- IMPLEMENTED — Tasks 0–7 are complete on `plan-088`; the final Windows branch gate passed. Task reviews for Tasks 0–6 are approved; Task 7 review and the Sol low whole-branch review remain pending. See [verification evidence](088-verification-evidence.md). Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
+- IMPLEMENTED — Tasks 0–7 and the final-review fix wave are complete on `plan-088`; the final Windows branch gate passed. Task reviews, including Task 7, are approved. Sol low's final scoped re-review of the fix wave is pending. See [verification evidence](088-verification-evidence.md). Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
 - Priority P2; effort L; risk MEDIUM (undocumented `TableReferenceId`, Showplan schema drift).
 
 ## Global Constraints
@@ -105,6 +105,14 @@ The prototypes use no icon set. The official [vscode-mssql repository license](h
 - [x] Update the plan index/history and retain permanent evidence in [plans/088-verification-evidence.md](088-verification-evidence.md).
 - [x] Run the final Windows `just verify` gate; exact result and boundaries are recorded in the evidence file.
 - [x] Commit `docs(088): record plan 088 evidence`.
+
+### Final review fix wave (base `f65dd68`)
+- [x] Restrict SQL-selection statement candidates to the selected plan document; preserve the current statement and report no matching link when the filtered document has none. Multi-document interaction regression covers overlapping spans and a reused node ID with different statement ownership. UI RED/GREEN evidence is in [final-fix evidence](088-verification-evidence.md#final-review-fix-wave).
+- [x] Add source-map endpoint coverage selecting the second case, repetition 2, and document ordinal 1; assert exact executed SQL and links scoped to that document.
+- [x] Clarify capture-time and current `journal.storeSensitive` gates in README, including that disabling the current gate hides previously retained data without deleting it.
+- [x] Defer `SourceMapBuilder` decomposition to the future inference-extension plan; no broad refactor was needed for this fix wave.
+- [x] Run the final Windows `just verify` gate after the final product changes; results are in [verification evidence](088-verification-evidence.md#final-review-fix-wave).
+- [ ] Sol low scoped re-review of the final-review fixes is pending before integration.
 
 ## Follow-up (separate plan)
 

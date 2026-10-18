@@ -201,6 +201,72 @@ test("uses occurrence identity and keeps graph selection linked to the exact bat
   expect(screen.getByRole("textbox", { name: "Executed SQL" })).toHaveValue("SELECT id FROM dbo.OldOrders;")
 })
 
+test("scopes SQL selection to the filtered document when links overlap across reused node IDs", async () => {
+  const otherStatement = "SELECT id FROM dbo.Customers;"
+  const multiDocumentMap = {
+    ...sourceMap,
+    links: [
+      { documentSha256: documentA, documentOrdinal: 0, link: { nodeId: "shared-node", spanStart: 5, spanLength: 10, kind: "table_reference", state: "exact", rule: "document A statement 1" } },
+      { documentSha256: documentA, documentOrdinal: 0, link: { nodeId: "a-other", spanStart: 30, spanLength: 10, kind: "table_reference", state: "exact", rule: "document A only" } },
+      { documentSha256: documentB, documentOrdinal: 1, link: { nodeId: "shared-node", spanStart: 5, spanLength: 10, kind: "table_reference", state: "exact", rule: "document B statement 2" } },
+    ],
+  }
+  const node = (id: string, statementIndex: number, table: string) => ({
+    id, statementIndex, showplanNodeId: null, physicalOperator: "Index Scan", logicalOperator: null,
+    object: { database: "db", schema: "dbo", table, index: null, alias: null }, tableReferenceId: null,
+    predicates: [], definedValues: [], estimatedRows: 1, actualRows: 1, executions: 1, costFraction: 1, warnings: [],
+  })
+  const graphResponse = (statements: { index: number; statementId: number; statementCompId: number; rootNodeId: string }[], nodes: ReturnType<typeof node>[]) => ({
+    engine: "sqlserver", error: null,
+    graph: { engine: "sqlserver", statements, nodes, edges: [] },
+  })
+
+  stubFetch({
+    "/api/operations/10/plans": {
+      operationId: 10,
+      state: "stored",
+      occurrences: [
+        occurrence({ documentOrdinal: 0, statementIndex: 0, documentSha256: documentA }),
+        occurrence({ documentOrdinal: 1, statementIndex: 0, documentSha256: documentB }),
+        occurrence({ documentOrdinal: 1, statementIndex: 1, spanStart: batchSql.indexOf(otherStatement), spanLength: otherStatement.length, documentSha256: documentB }),
+      ],
+    },
+    "/api/operations/10/source-map": multiDocumentMap,
+    [`/api/plan-documents/${documentA}/graph`]: graphResponse(
+      [{ index: 0, statementId: 1, statementCompId: 1, rootNodeId: "shared-node" }],
+      [node("shared-node", 0, "Parent"), node("a-other", 0, "Archive")],
+    ),
+    [`/api/plan-documents/${documentB}/graph`]: graphResponse(
+      [
+        { index: 0, statementId: 1, statementCompId: 1, rootNodeId: "b-first" },
+        { index: 1, statementId: 2, statementCompId: 2, rootNodeId: "shared-node" },
+      ],
+      [node("b-first", 0, "Customers"), node("shared-node", 1, "Orders")],
+    ),
+  })
+
+  renderVariantPanel()
+
+  await screen.findByRole("textbox", { name: "Executed SQL" })
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Statement" }), "1")
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Plan document" }), `${documentB}:1`)
+
+  const sqlEditor = screen.getByRole("textbox", { name: "Executed SQL" }) as HTMLTextAreaElement
+  sqlEditor.setSelectionRange(5, 15)
+  fireEvent.select(sqlEditor)
+
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "Statement" })).toHaveValue("1"))
+  await waitFor(() => expect(screen.getByTestId("monaco-contract")).toHaveAttribute("data-highlighted-spans", JSON.stringify([{ start: 5, length: 10 }])))
+  expect(screen.getByTestId("plan-flow")).toHaveAttribute("data-highlighted-keys", `${documentB}:1:shared-node`)
+
+  sqlEditor.setSelectionRange(30, 40)
+  fireEvent.select(sqlEditor)
+
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "Statement" })).toHaveValue("1"))
+  expect(await screen.findByRole("status")).toHaveTextContent("No operator source link matches this SQL selection in the selected plan document.")
+  expect(screen.getByTestId("monaco-contract")).toHaveAttribute("data-highlighted-spans", "[]")
+})
+
 test("labels plans not stored and unmatched occurrences without rendering an empty graph", async () => {
   stubFetch({
     "/api/operations/10/plans": { operationId: 10, state: "plans not stored", occurrences: [] },

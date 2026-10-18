@@ -4,7 +4,7 @@ Snapshot of the previous index, archived on 2026-10-14. Status and queue notes b
 
 ## Plan 088 implementation archived — 2026-10-18
 
-Plan [088](088-plan-visualization.md) is implemented on feature branch `plan-088`. The Windows branch gate passed on `a737e6d` plus the two unused `PlanTree` deletions; exact results and task reviews are in [verification evidence](088-verification-evidence.md). Task 7 review and the requested Sol low whole-branch review remain pending, so this records branch implementation rather than final plan approval or integration. No merge or push is recorded.
+Plan [088](088-plan-visualization.md) is implemented on feature branch `plan-088`. The original Windows branch gate passed on `a737e6d` plus the two unused `PlanTree` deletions; the final-review fix wave and its Windows gate are recorded in [verification evidence](088-verification-evidence.md). Task reviews, including Task 7, are approved; the Sol low scoped re-review of the final fixes remains pending. This records branch implementation rather than integration. No merge or push is recorded.
 
 ## Plan 081 completion locally integrated
 
