@@ -44,9 +44,9 @@ internal static partial class ParameterSetResolver
             }
 
             if (engine != SqlEngine.SqlServer)
-                throw new SqlHarnessSafetyException("Table-valued and list parameters are SQL Server only.");
+                throw new SqlHarnessSafetyException("table-valued and list parameters are SQL Server only");
             if (mutation)
-                throw new SqlHarnessSafetyException("Table-valued and list parameters are not supported by mutation.");
+                throw new SqlHarnessSafetyException("table-valued and list parameters are not supported by mutation");
             nonScalarCount++;
             if (nonScalarCount > MaximumNonScalarParameters)
                 throw new SqlHarnessSafetyException($"SQL parameter '@{input.Name}' exceeds the limit of {MaximumNonScalarParameters} table-valued and list parameters.");
@@ -85,10 +85,9 @@ internal static partial class ParameterSetResolver
                     throw new SqlHarnessSafetyException($"List SQL parameter '@{input.Name}' cannot include rows or rowsFrom.");
                 if (input.Values is { } values)
                 {
-                    if (values.Count == 0)
-                        throw new SqlHarnessSafetyException($"List SQL parameter '@{input.Name}' requires at least one value.");
                     rowsAndValues += values.Count;
-                    commandParameterCount += values.Count - 1;
+                    if (values.Count > 0)
+                        commandParameterCount += values.Count - 1;
                     foreach (var value in values)
                         AddMaterializedValue(input.Name, value, ref materializedBytes);
                 }
@@ -105,7 +104,7 @@ internal static partial class ParameterSetResolver
         }
 
         if (mutation && inputs.Any(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar))
-            throw new SqlHarnessSafetyException("Table-valued and list parameters are not supported by mutation.");
+            throw new SqlHarnessSafetyException("table-valued and list parameters are not supported by mutation");
         return tableValuedNames;
     }
 

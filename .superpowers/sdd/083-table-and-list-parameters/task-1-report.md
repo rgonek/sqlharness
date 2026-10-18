@@ -34,3 +34,31 @@ One concurrent Core/MCP build pair contended on `SqlHarness.Cli/obj/Debug/net10.
 Non-scalar execution is intentionally guarded until Task 2+ materializes and binds it. `ParameterSetResolver.RequireScalarExecution` provides the shared guard; it is used in query execution, measure fixed parameters, compare preparation (`CompareCellRunner`), typed measure parameter sets (`ParameterSetResolver.Resolve`), watch, and snapshot paths. Query dry-run is the current path that accepts non-scalar inputs for offline classification and notes. Replace these guards with materialization on every accepting path during subsequent tasks; they are not the final Plan 083 behavior.
 
 No full `just verify` was run because the controller requested focused tests and will run the full gate after all plan tasks. No live database was used and no mutation approval was supplied.
+
+## Review fix round 1
+
+Addressed all three Important findings from `task-1-review.md`:
+
+- Both fixed `--params-json` parsing and typed parameter-set parsing reject `valuesFrom` on a TVP and `rowsFrom` on a list before source SQL is collapsed to `SourceSql`. CLI and file-reader regressions cover both cross-kind forms.
+- Empty inline lists now pass offline validation; they remain represented as `Kind = "list", Values = []` for Task 2's required typed-empty expansion.
+- Core and MCP errors now exactly match the specified lowercase strings: `table-valued and list parameters are not supported by mutation` and `table-valued and list parameters are SQL Server only`.
+
+Serial verification:
+
+- `git diff --check` — passed.
+- `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter FullyQualifiedName~ParameterSetFileReaderTests` — Passed 73, Failed 0.
+- `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter FullyQualifiedName~Query_params_json` — Passed 3, Failed 0.
+- `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter FullyQualifiedName~MeasureParameterSetValidationTests` — Passed 51, Failed 0.
+- `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -p:IsTestProject=true --no-restore --filter FullyQualifiedName~Parameter_mapping` — Passed 4, Failed 0.
+
+## Review fix round 1 — final serial verification
+
+Final runs after the empty-list parameter-count boundary was tightened:
+
+- `git diff --check` — passed.
+- `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter FullyQualifiedName~ParameterSetFileReaderTests` — Passed 73, Failed 0. Covers fixed and set-file parser rejection for both mismatched source fields.
+- `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter FullyQualifiedName~Query_params_json` — Passed 3, Failed 0. Covers CLI `--params-json` round-trip and both cross-kind source rejections.
+- `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter FullyQualifiedName~MeasureParameterSetValidationTests` — Passed 52, Failed 0. Covers valid empty inline lists, their typed-null final-parameter accounting, and exact Core mutation/PostgreSQL text.
+- `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -p:IsTestProject=true --no-restore --filter FullyQualifiedName~Parameter_mapping` — Passed 4, Failed 0. Covers both cross-kind MCP source rejections, empty-list mapping, and exact mutation text.
+
+All four test commands ran sequentially to avoid build-output contention.

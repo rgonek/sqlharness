@@ -99,6 +99,50 @@ public sealed class MeasureParameterSetValidationTests
     }
 
     [Fact]
+    public void Empty_inline_list_is_valid_and_preserves_zero_materialized_values()
+    {
+        var input = new SqlHarnessParameterInput("Ids", "int", null)
+        {
+            Kind = "list",
+            Values = [],
+        };
+
+        var exception = Record.Exception(() => ParameterSetResolver.ValidateInputs([input], SqlEngine.SqlServer));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void Empty_inline_list_counts_its_typed_null_expansion_parameter()
+    {
+        var inputs = Enumerable.Range(0, 2_100)
+            .Select(index => new SqlHarnessParameterInput($"p{index}", "int", "1"))
+            .Append(new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = [] })
+            .ToArray();
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs(inputs, SqlEngine.SqlServer));
+
+        Assert.Contains("@Ids", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("2100", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Table_and_list_inputs_are_rejected_for_mutation_with_the_contract_message()
+    {
+        var input = new SqlHarnessParameterInput("Ids", "dbo.IdList", null)
+        {
+            Kind = "tvp",
+            Rows = [["1"]],
+        };
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs([input], SqlEngine.SqlServer, mutation: true));
+
+        Assert.Equal("table-valued and list parameters are not supported by mutation", exception.Message);
+    }
+
+    [Fact]
     public void Non_scalar_input_cannot_fall_through_to_scalar_execution()
     {
         var input = new SqlHarnessParameterInput("Ids", "int", null)
@@ -125,7 +169,7 @@ public sealed class MeasureParameterSetValidationTests
         var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
             ParameterSetResolver.ValidateInputs([input], SqlEngine.Postgres));
 
-        Assert.Equal("Table-valued and list parameters are SQL Server only.", exception.Message);
+        Assert.Equal("table-valued and list parameters are SQL Server only", exception.Message);
     }
 
     [Fact]

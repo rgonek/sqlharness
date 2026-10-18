@@ -309,7 +309,7 @@ public static partial class McpOperationMapper
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionKey);
         if (parameters?.Any(parameter => parameter is not null && parameter.Kind is "tvp" or "list") == true)
-            throw new McpMappingException("Table-valued and list parameters are not supported by mutation.");
+            throw new McpMappingException("table-valued and list parameters are not supported by mutation");
         var sqlText = await McpInputReader.ReadSqlAsync(sql, file, scope, ct);
         return new SqlHarnessMutationOperation(
             scope.TargetRequest,

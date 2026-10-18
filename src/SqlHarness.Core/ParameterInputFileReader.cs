@@ -106,6 +106,10 @@ public static class ParameterInputFileReader
             }
             if (rowsFrom is not null && valuesFrom is not null)
                 throw new ParameterSetFileException($"Fixed parameter file '{path}' parameter '{name}' has multiple source SQL fields.");
+            if (kind == "tvp" && valuesFrom is not null)
+                throw new ParameterSetFileException($"Fixed parameter file '{path}' table-valued parameter '{name}' cannot use valuesFrom.");
+            if (kind == "list" && rowsFrom is not null)
+                throw new ParameterSetFileException($"Fixed parameter file '{path}' list parameter '{name}' cannot use rowsFrom.");
 
             output.Add(new SqlHarnessParameterInput(name, type, value)
             {

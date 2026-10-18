@@ -1231,6 +1231,35 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
+    public void Parameter_mapping_rejects_source_fields_from_the_other_kind_and_accepts_empty_list()
+    {
+        Assert.Throws<McpMappingException>(() => McpOperationMapper.MapParameters(
+        [
+            new McpParameterArgument
+            {
+                Name = "Ids",
+                Type = "dbo.IdList",
+                Kind = "tvp",
+                ValuesFrom = "SELECT Id FROM dbo.Source",
+            },
+        ]));
+        Assert.Throws<McpMappingException>(() => McpOperationMapper.MapParameters(
+        [
+            new McpParameterArgument
+            {
+                Name = "Ids",
+                Type = "int",
+                Kind = "list",
+                RowsFrom = "SELECT Id FROM dbo.Source",
+            },
+        ]));
+
+        var emptyList = Assert.Single(McpOperationMapper.MapParameters(
+        [new McpParameterArgument { Name = "Ids", Type = "int", Kind = "list", Values = [] }]));
+        Assert.Empty(emptyList.Values!);
+    }
+
+    [Fact]
     public async Task Mutation_mapping_rejects_table_and_list_parameters_with_the_contract_message()
     {
         var exception = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapMutationAsync(
@@ -1244,7 +1273,7 @@ public sealed class McpMappingTests : IDisposable
             "session",
             CancellationToken.None));
 
-        Assert.Equal("Table-valued and list parameters are not supported by mutation.", exception.Message);
+        Assert.Equal("table-valued and list parameters are not supported by mutation", exception.Message);
     }
 
     [Fact]

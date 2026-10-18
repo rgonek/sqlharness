@@ -66,6 +66,25 @@ public sealed class ParameterSetFileReaderTests
     }
 
     [Fact]
+    public void Fixed_and_parameter_set_files_reject_source_fields_from_the_other_kind()
+    {
+        var mismatchedEntries = new[]
+        {
+            "{\"name\":\"Ids\",\"type\":\"dbo.IdList\",\"kind\":\"tvp\",\"valuesFrom\":\"SELECT Id FROM dbo.Source\"}",
+            "{\"name\":\"Ids\",\"type\":\"int\",\"kind\":\"list\",\"rowsFrom\":\"SELECT Id FROM dbo.Source\"}",
+        };
+
+        foreach (var entry in mismatchedEntries)
+        {
+            var fixedFile = Encoding.UTF8.GetBytes("{\"parameters\":[" + entry + "]}");
+            var parameterSetFile = Encoding.UTF8.GetBytes("{\"name\":\"small\",\"parameters\":[" + entry + "]}");
+
+            Assert.Throws<ParameterSetFileException>(() => ParameterInputFileReader.Parse(fixedFile));
+            Assert.Throws<ParameterSetFileException>(() => ParameterSetFileReader.Parse(parameterSetFile));
+        }
+    }
+
+    [Fact]
     public async Task ReadAsync_accepts_parameters_before_name_and_trailing_whitespace()
     {
         using var file = TempJson("""  {"parameters":["id:int=1","asOf:date=2026-06-30"],"name":"large-customer"}  """ + "\n\t");

@@ -344,6 +344,25 @@ public sealed class DryRunCommandTests : IDisposable
         AssertOffline();
     }
 
+    [Theory]
+    [InlineData("tvp", "valuesFrom", "table-valued parameter")]
+    [InlineData("list", "rowsFrom", "list parameter")]
+    public async Task Query_params_json_rejects_source_fields_for_the_other_kind(string kind, string sourceField, string expectedKind)
+    {
+        var parameterPath = Path.Combine(_directory, $"cross-kind-{kind}.sqljson");
+        await File.WriteAllTextAsync(parameterPath,
+            $"{{\"parameters\":[{{\"name\":\"Ids\",\"type\":\"int\",\"kind\":\"{kind}\",\"{sourceField}\":\"SELECT Id FROM dbo.Source\"}}]}}");
+        var output = new StringWriter();
+        var module = new SqlHarnessModule(_factory, Profiles);
+
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(
+            ["query", SqlServer, "--file", Sql("SELECT 1"), "--dry-run", "--json", "--params-json", parameterPath]);
+
+        Assert.Equal(2, exit);
+        Assert.Contains(expectedKind, output.ToString(), StringComparison.Ordinal);
+        AssertOffline();
+    }
+
     [Fact]
     public async Task Query_dry_run_rejects_TVP_without_exactly_one_source()
     {
