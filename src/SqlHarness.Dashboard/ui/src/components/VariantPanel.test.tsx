@@ -14,7 +14,9 @@ vi.mock("@xyflow/react", async () => {
   return {
     Background: () => null,
     Controls: () => null,
+    Handle: () => null,
     MarkerType: { ArrowClosed: "arrowclosed" },
+    Position: { Left: "left", Right: "right" },
     ReactFlowProvider: ({ children }: { children: React.ReactNode }) => React.createElement("div", null, children),
     ReactFlow: ({ nodes, nodeTypes }: { nodes: { id: string; type?: string; data: unknown; position: { x: number; y: number } }[]; nodeTypes: Record<string, React.ComponentType<any>> }) => React.createElement("div", { "data-testid": "plan-flow", "data-highlighted-keys": nodes.filter(node => (node.data as { highlighted?: boolean }).highlighted).map(node => node.id).join("|") }, ...nodes.map(node => {
       const Node = nodeTypes[node.type ?? "operator"]
@@ -213,7 +215,7 @@ test("labels plans not stored and unmatched occurrences without rendering an emp
     "/api/operations/10/source-map": { ...sourceMap, links: [], executedText: batchSql },
   })
   renderVariantPanel(fixtureVariant({ variant: "measure", parameterSet: "set-a", caseId: "case-a", caseLabel: "Gold customers", plans: [{ repetition: 2, ordinal: 0, hash: shapeHash, stored: true }] }))
-  expect(await screen.findByText("Unmatched SQL statement" )).toBeInTheDocument()
+  expect(await screen.findByText("Document 1, statement 1: unmatched SQL statement.")).toBeInTheDocument()
   expect(screen.queryByRole("region", { name: "Graphical execution plan" })).toBeNull()
 })
 

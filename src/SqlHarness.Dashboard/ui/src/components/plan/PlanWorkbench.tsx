@@ -6,15 +6,16 @@ import type { VariantDetail } from "@/api/types"
 import type { SqlSourceSelection, SqlSourceSpan } from "@/lib/sqlDiff"
 import { PlanErrorState } from "./PlanErrorState"
 import type { PlanGraphDocument, PlanGraphLink, PlanGraphSelection } from "./PlanGraphView"
+import { planNodeKey, resolvePlanSourceLinks, type PlanGraphDocumentData, type ResolvedPlanSourceLink } from "./planSourceLinks"
 import { PlanPropertiesPanel } from "./PlanPropertiesPanel"
 import { PlanSourceView } from "./PlanSourceView"
 import { PlanStatementSwitcher } from "./PlanStatementSwitcher"
 
 const LazyPlanGraphView = lazy(() => import("./PlanGraphView").then(module => ({ default: module.PlanGraphView })))
 
-type SourceLinkRow = PlanGraphLink & { key: string }
+type SourceLinkRow = ResolvedPlanSourceLink
 type DocumentChoice = { documentSha256: string; documentOrdinal: number }
-const documentKey = (document: DocumentChoice) => `${document.documentSha256}:${document.documentOrdinal}`
+const documentKey = (document: { documentSha256: string | null; documentOrdinal: number }) => `${document.documentSha256}:${document.documentOrdinal}`
 
 function uniqueOccurrences(occurrences: PlanOccurrenceManifest[]): PlanOccurrenceManifest[] {
   const seen = new Set<string>()
@@ -34,18 +35,6 @@ function uniqueDocuments(occurrences: PlanOccurrenceManifest[]): DocumentChoice[
     documents.set(key, { documentSha256: occurrence.documentSha256, documentOrdinal: occurrence.documentOrdinal })
   }
   return [...documents.values()].sort((left, right) => left.documentOrdinal - right.documentOrdinal)
-}
-
-function nodeKey(documentSha256: string, documentOrdinal: number, nodeId: string): string {
-  return `${documentSha256}:${documentOrdinal}:${nodeId}`
-}
-
-function statementIndexOf(graphNodeId: string | null): number | null {
-  if (!graphNodeId) return null
-  const separator = graphNodeId.indexOf(":")
-  if (separator <= 0) return null
-  const index = Number(graphNodeId.slice(0, separator))
-  return Number.isInteger(index) && index >= 0 ? index : null
 }
 
 function statementGraph(graph: PlanGraph, statementIndex: number | null): PlanGraph {
@@ -111,42 +100,42 @@ export function PlanWorkbench({ operationId, variant, engine }: { operationId: n
   const visibleDocuments = documentSelection === "all"
     ? statementDocuments
     : statementDocuments.filter(option => documentKey(option) === documentSelection)
-  const graphQueries = useQueries({
-    queries: visibleDocuments.map(document => ({
+  const allGraphQueries = useQueries({
+    queries: documentOptions.map(document => ({
       queryKey: queryKeys.planGraph(document.documentSha256),
       queryFn: () => fetchPlanGraph(document.documentSha256),
       staleTime: Infinity,
     })),
   })
-  const graphDocuments = useMemo(() => visibleDocuments.flatMap((document, index) => {
-    const result = graphQueries[index]?.data
-    return result?.graph ? [{ ...document, graph: statementGraph(result.graph, statementIndex) } satisfies PlanGraphDocument] : []
-  }), [graphQueries, statementIndex, visibleDocuments])
+  const graphQueryEntries = documentOptions.map((document, index) => ({ document, query: allGraphQueries[index] }))
+  const visibleGraphEntries = visibleDocuments.flatMap(document => {
+    const entry = graphQueryEntries.find(item => documentKey(item.document) === documentKey(document))
+    return entry ? [entry] : []
+  })
+  const graphDocumentsForLinks: PlanGraphDocumentData[] = graphQueryEntries.flatMap(({ document, query }) =>
+    query?.data?.graph ? [{ ...document, graph: query.data.graph }] : [])
+  const graphDocuments = visibleGraphEntries.flatMap(({ document, query }) =>
+    query?.data?.graph ? [{ ...document, graph: statementGraph(query.data.graph, statementIndex) } satisfies PlanGraphDocument] : [])
+  const graphQueries = visibleGraphEntries.map(entry => entry.query).filter(query => query !== undefined)
   const graphError = graphQueries.find(query => query.isError)?.error
     ?? graphQueries.map(query => query.data?.error).find(error => error !== null && error !== undefined)
     ?? graphQueries.map(query => query.data?.graph === null ? new Error("The plan graph response did not include a graph.") : null).find(Boolean)
   const isGraphLoading = graphQueries.some(query => query.isPending)
+  const isGraphMetadataLoading = allGraphQueries.some(query => query.isPending)
 
-  const links: SourceLinkRow[] = useMemo(() => (sourceMap.data?.links ?? []).flatMap(item => {
-    const documentId = `${item.documentSha256}:${item.documentOrdinal}`
-    const candidates = occurrences.filter(occurrence => occurrence.documentSha256 === item.documentSha256 && occurrence.documentOrdinal === item.documentOrdinal)
-    const linkStatementIndex = statementIndexOf(item.link.nodeId)
-    const occurrence = linkStatementIndex === null
-      ? candidates.length === 1 ? candidates[0] : null
-      : candidates.find(candidate => candidate.statementIndex === linkStatementIndex)
-    if (!occurrence) return []
-    const key = item.link.nodeId
-      ? nodeKey(item.documentSha256, item.documentOrdinal, item.link.nodeId)
-      : `${documentId}:none:${item.link.spanStart ?? "null"}:${item.link.spanLength ?? "null"}`
-    return [{ ...item, statementIndex: occurrence.statementIndex, key }]
-  }), [occurrences, sourceMap.data?.links])
-  const activeStatementLinks = links.filter(item => item.statementIndex === statementIndex)
+  const links: SourceLinkRow[] = useMemo(() => resolvePlanSourceLinks(
+    occurrences,
+    sourceMap.data?.links ?? [],
+    graphDocumentsForLinks,
+  ), [graphDocumentsForLinks, occurrences, sourceMap.data?.links])
+  const visibleStatementLinks = links.filter(item => item.statementIndex === statementIndex
+    && (documentSelection === "all" || documentKey(item) === documentSelection))
   const selectedNodeLinks = selectedNodeKey ? links.filter(item => item.key === selectedNodeKey) : []
-  const sqlMatchedLinks = sqlSelection ? links.filter(item => overlaps(item.link, sqlSelection)) : []
+  const sqlMatchedLinks = sqlSelection ? visibleStatementLinks.filter(item => overlaps(item.link, sqlSelection)) : []
   const highlightedNodeKeys = sqlSelection
     ? [...new Set(sqlMatchedLinks.flatMap(item => item.link.nodeId ? [item.key] : []))]
     : selectedNodeKey ? [selectedNodeKey] : []
-  const linksToDecorate = sqlSelection ? sqlMatchedLinks : selectedNodeLinks.length ? selectedNodeLinks : activeStatementLinks
+  const linksToDecorate = sqlSelection ? sqlMatchedLinks : selectedNodeLinks.length ? selectedNodeLinks : visibleStatementLinks
   const highlightedSpans = useMemo(() => {
     const seen = new Set<string>()
     return linksToDecorate.flatMap(item => {
@@ -163,7 +152,7 @@ export function PlanWorkbench({ operationId, variant, engine }: { operationId: n
     const map = new Map<string, PlanGraphSelection>()
     for (const document of graphDocuments) {
       for (const node of document.graph.nodes) {
-        const key = nodeKey(document.documentSha256, document.documentOrdinal, node.id)
+        const key = planNodeKey(document.documentSha256, document.documentOrdinal, node.id)
         map.set(key, { key, documentSha256: document.documentSha256, documentOrdinal: document.documentOrdinal, node })
       }
     }
@@ -202,13 +191,23 @@ export function PlanWorkbench({ operationId, variant, engine }: { operationId: n
   if (sourceMap.data?.state === "plans not stored") return <section aria-label="Plans" className="rounded-lg border p-3"><h3 className="font-medium">Plans not stored</h3><p className="text-sm text-muted-foreground">Enable journal.storeSensitive to retain executed SQL, plan documents, and source links for this operation.</p></section>
 
   const source = sourceMap.data
-  const selectedOccurrence = occurrences.find(item => item.statementIndex === statementIndex)
-  const isUnmatched = selectedOccurrence?.matchKind === "unmatched" && !activeStatementLinks.some(item => item.link.state !== "none")
-  const isOmitted = selectedOccurrence?.omitted === true || selectedOccurrence?.stored === false
+  const visibleOccurrences = occurrences.filter(occurrence => occurrence.statementIndex === statementIndex
+    && (documentSelection === "all" || (occurrence.documentSha256 !== null && documentKey(occurrence) === documentSelection)))
+  const unmatchedOccurrences = visibleOccurrences.filter(occurrence => occurrence.matchKind === "unmatched"
+    && !visibleStatementLinks.some(item => item.documentSha256 === occurrence.documentSha256
+      && item.documentOrdinal === occurrence.documentOrdinal && item.statementIndex === occurrence.statementIndex
+      && item.link.state !== "none"))
+  const omittedOccurrences = visibleOccurrences.filter(occurrence => occurrence.omitted || !occurrence.stored)
+  const isUnmatched = !isGraphMetadataLoading && unmatchedOccurrences.length > 0
+  const isOmitted = omittedOccurrences.length > 0
   const selectedDocument = documentSelection === "all" ? null : documentOptions.find(item => documentKey(item) === documentSelection) ?? null
-  const sourceLinks = source?.links ?? []
-  const sourceMapErrors = source?.errors ?? []
-  const sourceMapOmissions = source?.omittedDocuments ?? []
+  const sourceMapErrors = (source?.errors ?? []).filter(error => visibleOccurrences.some(occurrence =>
+    occurrence.documentOrdinal === error.documentOrdinal
+    && (error.documentSha256 === null || occurrence.documentSha256 === error.documentSha256)))
+  const sourceMapOmissions = (source?.omittedDocuments ?? []).filter(omission => visibleOccurrences.some(occurrence =>
+    occurrence.documentOrdinal === omission.documentOrdinal
+    && occurrence.statementIndex === omission.statementIndex
+    && (omission.documentSha256 === null || occurrence.documentSha256 === omission.documentSha256)))
   const graphLinkItems: PlanGraphLink[] = links.map(item => ({
     documentSha256: item.documentSha256,
     documentOrdinal: item.documentOrdinal,
@@ -253,11 +252,11 @@ export function PlanWorkbench({ operationId, variant, engine }: { operationId: n
     </div>
 
     {sourceMap.isPending && <p role="status" className="text-sm text-muted-foreground">Loading source links for repetition {repetition}…</p>}
-    {isOmitted && <p className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">This plan occurrence was omitted by the operation plan budget.</p>}
-    {sourceMapOmissions.length > 0 && <p className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">{sourceMapOmissions.length} plan occurrence(s) were omitted or not stored.</p>}
+    {omittedOccurrences.map(occurrence => <p key={`omitted:${occurrence.documentOrdinal}:${occurrence.statementIndex}`} className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">Document {occurrence.documentOrdinal + 1}, statement {occurrence.statementIndex + 1}: this plan occurrence was omitted or not stored.</p>)}
+    {sourceMapOmissions.filter(omission => omission.omitted || !omission.stored).map(omission => <p key={`source-omitted:${omission.documentOrdinal}:${omission.statementIndex}`} className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">Document {omission.documentOrdinal + 1}, statement {omission.statementIndex + 1}: source links are unavailable because the plan was omitted or not stored.</p>)}
     {sourceMapErrors.map(error => <div key={`${error.documentOrdinal}:${error.code}`} className="rounded border border-amber-600/50 p-2 text-sm" role="status">Document {error.documentOrdinal + 1}: {error.code} — {error.message}</div>)}
-    {isUnmatched && <p className="rounded border border-border bg-muted/50 p-2 text-sm">Unmatched SQL statement</p>}
-    {!isUnmatched && !isOmitted && source && sourceLinks.length === 0 && <p className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source links were produced for this statement.</p>}
+    {isUnmatched && unmatchedOccurrences.map(occurrence => <p key={`unmatched:${occurrence.documentOrdinal}:${occurrence.statementIndex}`} className="rounded border border-border bg-muted/50 p-2 text-sm">Document {occurrence.documentOrdinal + 1}, statement {occurrence.statementIndex + 1}: unmatched SQL statement.</p>)}
+    {!isUnmatched && !isOmitted && source && visibleStatementLinks.length === 0 && <p className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source links were produced for the selected statement and document.</p>}
 
     {source && <div className="grid gap-3 xl:grid-cols-2">
       <PlanSourceView executedText={source.executedText} engine={source.engine ?? engine} highlightedSpans={highlightedSpans} revealSpan={revealSpan} onSelectionChange={handleSqlSelection} />

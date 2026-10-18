@@ -1,13 +1,11 @@
-import { Background, Controls, MarkerType, ReactFlow, ReactFlowProvider, useReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react"
+import { Background, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, useReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react"
 import { useEffect, useMemo, useState } from "react"
 import "@xyflow/react/dist/style.css"
 import type { PlanGraph, PlanGraphNode, SourceMapLink } from "@/api/types"
 import { formatNumber, formatPercent } from "@/lib/format"
+import { layoutPlanDocuments, PLAN_NODE_WIDTH } from "./planGraphLayout"
 
-const NODE_WIDTH = 250
-const HORIZONTAL_GAP = 92
-const ROW_HEIGHT = 154
-const TREE_GAP = 72
+const NODE_WIDTH = PLAN_NODE_WIDTH
 
 export type PlanGraphDocument = { documentSha256: string; documentOrdinal: number; graph: PlanGraph }
 export type PlanGraphSelection = { key: string; documentSha256: string; documentOrdinal: number; node: PlanGraphNode }
@@ -58,7 +56,9 @@ function NodeCard({ data }: NodeProps<FlowNode>) {
   const node = selection.node
   const title = rules.length ? rules.join("\n") : `No source-map rule for ${name}`
   return (
-    <article className={`min-w-[230px] max-w-[250px] rounded-lg ${confidenceClass(confidence)} ${highlighted ? "ring-4 ring-primary/50" : ""} ${selected ? "outline outline-2 outline-primary" : ""}`} data-confidence={confidence}>
+    <article className={`min-w-[230px] max-w-[250px] rounded-lg ${confidenceClass(confidence)} ${highlighted ? "ring-4 ring-primary/50" : ""} ${selected ? "outline outline-2 outline-primary" : ""}`} data-confidence={confidence} style={{ pointerEvents: "auto" }}>
+      <Handle type="source" position={Position.Left} isConnectable={false} aria-hidden style={{ width: 1, height: 1, opacity: 0, border: 0, pointerEvents: "none" }} />
+      <Handle type="target" position={Position.Right} isConnectable={false} aria-hidden style={{ width: 1, height: 1, opacity: 0, border: 0, pointerEvents: "none" }} />
       <button
         type="button"
         className="block w-full rounded-t-md px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -109,73 +109,6 @@ function nodeKey(document: PlanGraphDocument, nodeId: string): string {
 function edgeWidth(rows: number | null): number {
   if (rows === null || !Number.isFinite(rows) || rows <= 0) return 1.5
   return Math.min(8, 1.5 + Math.log10(rows + 1))
-}
-
-function visibleTreeLayout(document: PlanGraphDocument, collapsed: Set<string>) {
-  const graph = document.graph
-  const graphNodes = new Map(graph.nodes.map(node => [node.id, node]))
-  const children = new Map<string, string[]>()
-  const parents = new Set<string>()
-  for (const edge of graph.edges) {
-    if (!graphNodes.has(edge.source) || !graphNodes.has(edge.target)) continue
-    children.set(edge.source, [...(children.get(edge.source) ?? []), edge.target])
-    parents.add(edge.target)
-  }
-  const roots = graph.statements.map(statement => statement.rootNodeId).filter(id => graphNodes.has(id))
-  const rootIds = roots.length ? roots : graph.nodes.filter(node => !parents.has(node.id)).map(node => node.id)
-  const heightCache = new Map<string, number>()
-  const depthCache = new Map<string, number>()
-  const getChildren = (id: string) => collapsed.has(nodeKey(document, id)) ? [] : children.get(id) ?? []
-  const height = (id: string, visited = new Set<string>()): number => {
-    if (heightCache.has(id)) return heightCache.get(id)!
-    if (visited.has(id)) return 1
-    const nextVisited = new Set(visited).add(id)
-    const value = getChildren(id).reduce((sum, child) => sum + height(child, nextVisited), 0) || 1
-    heightCache.set(id, value)
-    return value
-  }
-  const maxDepth = (id: string, visited = new Set<string>()): number => {
-    if (depthCache.has(id)) return depthCache.get(id)!
-    if (visited.has(id)) return 0
-    const nextVisited = new Set(visited).add(id)
-    const value = getChildren(id).reduce((maximum, child) => Math.max(maximum, 1 + maxDepth(child, nextVisited)), 0)
-    depthCache.set(id, value)
-    return value
-  }
-
-  const positions = new Map<string, { x: number; y: number }>()
-  let row = 0
-  const place = (id: string, depth: number, startRow: number, deepest: number, visited = new Set<string>()): number => {
-    if (visited.has(id)) return (startRow + 0.5) * ROW_HEIGHT
-    const nextVisited = new Set(visited).add(id)
-    const nextChildren = getChildren(id)
-    let y: number
-    if (nextChildren.length === 0) y = (startRow + 0.5) * ROW_HEIGHT
-    else {
-      let childRow = startRow
-      const childYs = nextChildren.map(child => {
-        const childY = place(child, depth + 1, childRow, deepest, nextVisited)
-        childRow += height(child, nextVisited)
-        return childY
-      })
-      y = childYs.reduce((sum, value) => sum + value, 0) / childYs.length
-    }
-    positions.set(nodeKey(document, id), { x: (deepest - depth) * (NODE_WIDTH + HORIZONTAL_GAP), y })
-    return y
-  }
-  for (const root of rootIds) {
-    place(root, 0, row, maxDepth(root), new Set())
-    row += height(root) + Math.max(0.5, TREE_GAP / ROW_HEIGHT)
-  }
-
-  const visible = new Set(positions.keys())
-  const flowNodes = graph.nodes.flatMap(node => {
-    const key = nodeKey(document, node.id)
-    const position = positions.get(key)
-    return position ? [{ node, key, position, children: children.get(node.id) ?? [] }] : []
-  })
-  const flowEdges = graph.edges.filter(edge => visible.has(nodeKey(document, edge.source)) && visible.has(nodeKey(document, edge.target)))
-  return { flowNodes, flowEdges }
 }
 
 function FlowCanvas({
@@ -229,14 +162,13 @@ export function PlanGraphView({
     const allNodes: FlowNode[] = []
     const allEdges: FlowEdge[] = []
     const selectable = new Map<string, PlanGraphSelection>()
-    for (const document of documents) {
-      const layout = visibleTreeLayout(document, collapsed)
+    for (const { document, flowNodes, flowEdges } of layoutPlanDocuments(documents, collapsed)) {
       const linksByNode = new Map<string, PlanGraphLink[]>()
       for (const link of links) {
         if (link.documentSha256 !== document.documentSha256 || link.documentOrdinal !== document.documentOrdinal || !link.link.nodeId) continue
         linksByNode.set(link.link.nodeId, [...(linksByNode.get(link.link.nodeId) ?? []), link])
       }
-      for (const item of layout.flowNodes) {
+      for (const item of flowNodes) {
         const key = item.key
         const selection = { key, documentSha256: document.documentSha256, documentOrdinal: document.documentOrdinal, node: item.node }
         selectable.set(key, selection)
@@ -269,7 +201,7 @@ export function PlanGraphView({
           selectable: false,
         })
       }
-      for (const edge of layout.flowEdges) {
+      for (const edge of flowEdges) {
         const rows = edge.actualRows ?? edge.estimatedRows
         allEdges.push({
           id: `${nodeKey(document, edge.source)}→${nodeKey(document, edge.target)}`,
