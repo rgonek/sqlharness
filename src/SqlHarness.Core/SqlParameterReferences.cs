@@ -13,8 +13,16 @@ namespace SqlHarness.Core;
 internal static class MissingParameterCheck
 {
     internal static void RequireSupplied(SqlEngine engine, IReadOnlyList<SqlHarnessParameter> supplied, params string[] measuredBatches)
+        => RequireSupplied(engine, supplied, new HashSet<string>(StringComparer.OrdinalIgnoreCase), measuredBatches);
+
+    internal static void RequireSupplied(
+        SqlEngine engine,
+        IReadOnlyList<SqlHarnessParameter> supplied,
+        IReadOnlySet<string> additionalNames,
+        params string[] measuredBatches)
     {
         var names = supplied.Select(parameter => parameter.Name.TrimStart('@', ':')).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        names.UnionWith(additionalNames.Select(name => name.TrimStart('@', ':')));
         var missing = measuredBatches
             .SelectMany(batch => SqlParameterReferences.Collect(engine, batch))
             .Select(name => name.TrimStart('@', ':'))

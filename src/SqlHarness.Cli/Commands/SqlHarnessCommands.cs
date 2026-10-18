@@ -74,6 +74,24 @@ public abstract class TargetSettings : CommandSettings
     }
 }
 
+internal static class ParameterInputCliReader
+{
+    internal static Task<IReadOnlyList<SqlHarnessParameterInput>?> ReadAsync(
+        string? path,
+        IReadOnlyList<string> declarations,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return Task.FromResult<IReadOnlyList<SqlHarnessParameterInput>?>(null);
+        if (declarations.Count > 0)
+            throw new ParameterSetFileException("Use either --param or --params-json, not both.");
+        return ReadFileAsync(path, cancellationToken);
+
+        static async Task<IReadOnlyList<SqlHarnessParameterInput>?> ReadFileAsync(string file, CancellationToken ct) =>
+            await ParameterInputFileReader.ReadAsync(file, ct);
+    }
+}
+
 /// <summary>SQL input larger than <see cref="SqlInputReader.MaxSqlInputUtf8Bytes"/> UTF-8 bytes.</summary>
 public sealed class SqlInputTooLargeException(string message) : Exception(message);
 
@@ -241,6 +259,9 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
+        [Description("Read fixed typed parameters from a bounded .sqljson file; exclusive with --param.")]
+        [CommandOption("--params-json <PATH>")]
+        public string? ParametersJson { get; set; }
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
         [Description("Presentation-only row cap (0..500). The server still computes the full result; canonical hashes and equivalence cover all rows.")]
         [CommandOption("--max-rows <COUNT>")][DefaultValue(50)] public int MaxRows { get; set; } = 50;
@@ -258,9 +279,11 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         try
         {
             var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
-            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, false, null) { DryRun = settings.DryRun }, ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
+            var typedParameters = await ParameterInputCliReader.ReadAsync(settings.ParametersJson, settings.Parameters, ct);
+            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, false, null) { TypedParameters = typedParameters, DryRun = settings.DryRun }, ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
+        catch (ParameterSetFileException exception) { return Invalid(exception.Message); }
         catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
     }
@@ -280,7 +303,10 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
-        [Description("2..32 named JSON sets with matching declared types; only name and parameters (64 KiB; BOM/comments/trailing commas accepted). Fixed --param names must not overlap. Each set runs on its own session with setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Report per-set stability, not cross-set equivalence.")]
+        [Description("Read fixed typed parameters from a bounded .sqljson file; exclusive with --param.")]
+        [CommandOption("--params-json <PATH>")]
+        public string? ParametersJson { get; set; }
+        [Description("2..32 named JSON sets with matching declared types; only name and parameters (64 KiB; BOM/comments/trailing commas accepted). Entries may be scalar strings or typed objects; table/list execution is not available yet. Fixed --param names must not overlap. Each set runs on its own session with setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Report per-set stability, not cross-set equivalence.")]
         [CommandOption("--param-set <PATH>")]
         public string[] ParameterSets { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
@@ -309,9 +335,10 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         }
         try
         {
+            var typedParameters = await ParameterInputCliReader.ReadAsync(s.ParametersJson, s.Parameters, ct);
             var parameterSets = setPaths.Length == 0 ? null : await ReadParameterSetsAsync(setPaths, ct);
             return await Dispatch(
-                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets) { DryRun = s.DryRun, Context = measureContext },
+                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = measureContext },
                 ResolveOutputMode(s.Json, s.JsonSummary, s.Output),
                 ct,
                 new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
@@ -359,6 +386,9 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
+        [Description("Read fixed typed parameters from a bounded .sqljson file; exclusive with --param.")]
+        [CommandOption("--params-json <PATH>")]
+        public string? ParametersJson { get; set; }
         [Description("One typed parameter: 2..32 distinct, comma-separated nonempty values in supplied order; no overlap with fixed --param. A fresh session/setup per value. First failure stops the run; completed cell artifacts remain.")]
         [CommandOption("--matrix <NAME:TYPE=VALUES>")]
         public string[] Matrix { get; set; } = [];
@@ -398,15 +428,17 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         }
         try
         {
+            var typedParameters = await ParameterInputCliReader.ReadAsync(s.ParametersJson, s.Parameters, ct);
             var setup = await Read(s.Setup, ct);
             var baseline = (await Read(s.Baseline, ct))!;
             var candidate = (await Read(s.Candidate, ct))!;
             SqlHarnessOperation operation = matrix.Length == 1
-                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults, s.CompareNullability) { DryRun = s.DryRun, Context = compareContext }
-                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults, s.CompareNullability) { DryRun = s.DryRun, Context = compareContext };
+                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults, s.CompareNullability) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = compareContext }
+                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults, s.CompareNullability) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = compareContext };
             return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary, s.Output), ct, new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
+        catch (ParameterSetFileException exception) { return Invalid(exception.Message); }
         catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
     }

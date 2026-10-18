@@ -181,13 +181,28 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var target = query.ResolvedTarget ?? TargetResolver.Resolve(query.Target, _loadProfiles());
             OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
+            var parameterInputs = SqlParameterInputs.Resolve(query.Parameters, query.TypedParameters).ToArray();
+            var tableValuedParameterNames = ParameterSetResolver.ValidateInputs(
+                parameterInputs,
+                target.Engine,
+                mutation: query.UsageOverride == SqlUsage.Mutation);
+            foreach (var parameterInput in parameterInputs.Where(input => input.SourceSql is not null))
+            {
+                if (System.Text.Encoding.UTF8.GetByteCount(parameterInput.SourceSql!) > 1024 * 1024)
+                    throw new SqlHarnessSafetyException($"SQL source for parameter '@{parameterInput.Name}' exceeds the 1 MiB limit.");
+                var sourceSafety = dialect.Classify(
+                    parameterInput.SourceSql!, SqlUsage.Query, target.Database, false, null, NoSessionTemps);
+                if (!sourceSafety.Allowed)
+                    throw new SqlHarnessSafetyException($"SQL source for parameter '@{parameterInput.Name}' was rejected: {sourceSafety.RejectionDescription}");
+            }
             var safety = dialect.Classify(
                 query.Sql,
                 query.UsageOverride ?? SqlUsage.Query,
                 target.Database,
                 query.AllowMutation,
                 query.ConfirmDatabase,
-                NoSessionTemps);
+                NoSessionTemps,
+                tableValuedParameterNames);
             if (!safety.Allowed)
             {
                 var message = $"SQL safety rejection: {safety.RejectionDescription}";
@@ -195,15 +210,26 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     message += "\nPersistent changes use `sqlharness mutation`.";
                 throw new SqlHarnessSafetyException(message);
             }
-            var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(query.Parameters, query.TypedParameters));
+            var parameters = dialect.BindParameters(
+                parameterInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
             dialect.ValidateParameterReferences(parameters, query.Sql);
 
             if (query.DryRun)
             {
-                MissingParameterCheck.RequireSupplied(target.Engine, parameters, query.Sql);
+                MissingParameterCheck.RequireSupplied(
+                    target.Engine,
+                    parameters,
+                    parameterInputs.Where(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar)
+                        .Select(input => input.Name.StartsWith('@') ? input.Name : "@" + input.Name)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase),
+                    query.Sql);
                 return Checked(query, DryRunOutcome("query", BenchmarkReports.ClassificationLabel(safety), SqlRiskTiers.Label(safety.Tier), parameters, 1,
-                    benchmarkClassification: new BenchmarkClassificationReport("none", BenchmarkReports.ClassificationLabel(safety))));
+                    benchmarkClassification: new BenchmarkClassificationReport("none", BenchmarkReports.ClassificationLabel(safety)),
+                    notes: SqlParameterInputs.DryRunNotes(parameterInputs)));
             }
+
+            if (parameterInputs.Any(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar))
+                throw new SqlHarnessSafetyException("Table-valued and list parameter execution is not available in this operation yet.");
 
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
@@ -412,7 +438,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         IReadOnlyList<SqlHarnessParameter> parameters,
         int parameterSets,
         BenchmarkClassificationReport? benchmarkClassification = null,
-        CompareClassificationReport? compareClassification = null) =>
+        CompareClassificationReport? compareClassification = null,
+        IReadOnlyList<string>? notes = null) =>
         WithReceipt(
             new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
@@ -425,6 +452,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 {
                     BenchmarkClassification = benchmarkClassification,
                     CompareClassification = compareClassification,
+                    Notes = notes ?? [],
                 },
                 null),
             new OutputFootprint(0, 0));
@@ -771,7 +799,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var querySafety = dialect.Classify(
                 measure.QuerySql, SqlUsage.Query, target.Database, false, null, setupTemps);
             CompareOperationPreparer.EnsureSafe(querySafety, "query");
-            var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
+            var parameterInputs = SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters).ToArray();
+            ParameterSetResolver.RequireScalarExecution(parameterInputs, target.Engine);
+            var parameters = dialect.BindParameters(parameterInputs);
             var parameterSets = ResolveMeasureParameterSets(measure, dialect, parameters);
             if (parameterSets is null)
                 RecordConditions(measure, () => ConditionsModelBuilder.Build(
@@ -1094,7 +1124,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(watch.Parameters, watch.TypedParameters));
+            var parameterInputs = SqlParameterInputs.Resolve(watch.Parameters, watch.TypedParameters).ToArray();
+            ParameterSetResolver.RequireScalarExecution(parameterInputs, target.Engine);
+            var parameters = dialect.BindParameters(parameterInputs);
             dialect.ValidateParameterReferences(parameters, watch.Sql);
             // Predicate syntax is validated before authentication so bad --until fails closed.
             if (watch.Until is not null)
@@ -1275,7 +1307,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(snapshot.Parameters, snapshot.TypedParameters));
+            var parameterInputs = SqlParameterInputs.Resolve(snapshot.Parameters, snapshot.TypedParameters).ToArray();
+            ParameterSetResolver.RequireScalarExecution(parameterInputs, target.Engine);
+            var parameters = dialect.BindParameters(parameterInputs);
             dialect.ValidateParameterReferences(parameters, snapshot.Sql);
 
             phase = OperationPhase.Authentication;

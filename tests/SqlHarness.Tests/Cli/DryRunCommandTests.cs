@@ -296,6 +296,74 @@ public sealed class DryRunCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Query_dry_run_classifies_a_TVP_source_and_reports_offline_shape_note()
+    {
+        var operation = new SqlHarnessQueryOperation(
+            new SqlTargetRequest(SqlServer, new Dictionary<string, string>()),
+            "SELECT * FROM @Ids",
+            [], 30, 50, false, null)
+        {
+            TypedParameters =
+            [
+                new SqlHarnessParameterInput("Ids", "dbo.IdList", null)
+                {
+                    Kind = "tvp",
+                    Rows = [["1"], ["2"]],
+                },
+            ],
+            DryRun = true,
+        };
+
+        var outcome = await new SqlHarnessModule(_factory, Profiles).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("read-only", report.Classification);
+        Assert.Contains("Table-valued parameter '@Ids': table type shape not verified offline.", report.Notes);
+        AssertOffline();
+    }
+
+    [Fact]
+    public async Task Query_params_json_round_trips_typed_table_input_through_cli_dry_run()
+    {
+        var parameterPath = Path.Combine(_directory, "fixed.sqljson");
+        await File.WriteAllTextAsync(parameterPath,
+            "{\"parameters\":[{\"name\":\"Ids\",\"type\":\"dbo.IdList\",\"kind\":\"tvp\",\"rows\":[[\"1\"],[\"2\"]]}]}");
+        var output = new StringWriter();
+        var module = new SqlHarnessModule(_factory, Profiles);
+
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(
+            ["query", SqlServer, "--file", Sql("SELECT * FROM @Ids"), "--dry-run", "--json", "--params-json", parameterPath]);
+
+        Assert.Equal(0, exit);
+        using var report = JsonDocument.Parse(output.ToString());
+        Assert.Equal("read-only", report.RootElement.GetProperty("classification").GetString());
+        Assert.Contains(
+            "Table-valued parameter '@Ids': table type shape not verified offline.",
+            report.RootElement.GetProperty("notes").EnumerateArray().Select(item => item.GetString()));
+        AssertOffline();
+    }
+
+    [Fact]
+    public async Task Query_dry_run_rejects_TVP_without_exactly_one_source()
+    {
+        var operation = new SqlHarnessQueryOperation(
+            new SqlTargetRequest(SqlServer, new Dictionary<string, string>()),
+            "SELECT * FROM @Ids",
+            [], 30, 50, false, null)
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "dbo.IdList", null) { Kind = "tvp" }],
+            DryRun = true,
+        };
+
+        var outcome = await new SqlHarnessModule(_factory, Profiles).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("Table-valued SQL parameter '@Ids' requires exactly one of rows or rowsFrom.", outcome.SafeError);
+        AssertOffline();
+    }
+
+    [Fact]
     public async Task Compare_dry_run_json_equals_the_core_report_for_the_operation_mcp_maps()
     {
         var run = await Compare(Postgres, "SELECT @a::int;", "SELECT @a::int;", "CREATE TEMP TABLE t (x int);", "--param", "a:int=1");

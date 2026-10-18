@@ -36,6 +36,36 @@ public sealed class ParameterSetFileReaderTests
     }
 
     [Fact]
+    public void Parse_accepts_typed_table_and_list_parameters_inside_a_parameter_set()
+    {
+        var bytes = Encoding.UTF8.GetBytes("""
+            {"name":"small","parameters":[
+              {"name":"Ids","type":"dbo.IdList","kind":"tvp","rows":[["1"],["2"]]},
+              {"name":"Active","type":"bit","kind":"list","values":["true","false"]}
+            ]}
+            """);
+
+        var set = ParameterSetFileReader.Parse(bytes);
+        var typed = Assert.IsAssignableFrom<IReadOnlyList<SqlHarnessParameterInput>>(set.TypedParameters);
+
+        Assert.Empty(set.Parameters);
+        Assert.Equal(["tvp", "list"], typed.Select(parameter => parameter.Kind));
+        Assert.Equal(2, typed[0].Rows!.Count);
+        Assert.Equal(["true", "false"], typed[1].Values);
+    }
+
+    [Fact]
+    public void Fixed_parameter_file_parser_accepts_utf8_bom_and_rejects_duplicate_root_properties()
+    {
+        var bom = Encoding.UTF8.GetPreamble();
+        var json = Encoding.UTF8.GetBytes("{\"parameters\":[{\"name\":\"ids\",\"kind\":\"list\",\"values\":[\"1\"]}]}");
+        var withBom = bom.Concat(json).ToArray();
+
+        Assert.Equal("list", Assert.Single(ParameterInputFileReader.Parse(withBom)).Kind);
+        Assert.Throws<ParameterSetFileException>(() => ParameterInputFileReader.Parse(Encoding.UTF8.GetBytes("{\"parameters\":[],\"parameters\":[]}")));
+    }
+
+    [Fact]
     public async Task ReadAsync_accepts_parameters_before_name_and_trailing_whitespace()
     {
         using var file = TempJson("""  {"parameters":["id:int=1","asOf:date=2026-06-30"],"name":"large-customer"}  """ + "\n\t");

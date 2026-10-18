@@ -1116,6 +1116,39 @@ public class SqlSafetyTests
         Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
     }
 
+    [Fact]
+    public void TVP_parameter_is_a_proven_read_only_table_source()
+    {
+        var decision = _classifier.Classify(
+            "SELECT * FROM @Ids",
+            SqlUsage.Query,
+            "db",
+            allowMutation: false,
+            confirmDatabase: null,
+            tableValuedParameterNames: new HashSet<string>(["@Ids"], StringComparer.OrdinalIgnoreCase));
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.Equal(SqlRiskTier.ReadOnly, decision.Tier);
+    }
+
+    [Theory]
+    [InlineData("INSERT @Ids (Id) VALUES (1)")]
+    [InlineData("UPDATE dbo.Clients SET Active = 0 OUTPUT inserted.Id INTO @Ids (Id)")]
+    public void TVP_parameter_is_not_an_output_or_dml_target(string sql)
+    {
+        var decision = _classifier.Classify(
+            sql,
+            SqlUsage.Query,
+            "db",
+            allowMutation: true,
+            confirmDatabase: "db",
+            tableValuedParameterNames: new HashSet<string>(["@Ids"], StringComparer.OrdinalIgnoreCase));
+
+        Assert.False(decision.Allowed);
+        Assert.False(decision.HasMutation);
+    }
+
     [Theory]
     [InlineData("UPDATE x SET Name = N'b' FROM @t AS x")]
     [InlineData("DELETE x FROM @t AS x")]

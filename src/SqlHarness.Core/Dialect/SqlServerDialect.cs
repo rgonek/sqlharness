@@ -113,6 +113,16 @@ internal sealed class SqlServerDialect : ISqlDialect
         // Local #temp is syntactic on SQL Server; sessionTempTables is ignored.
         _classifier.Classify(sql, usage, database, allowMutation, confirmDatabase);
 
+    public SqlSafetyDecision Classify(
+        string sql,
+        SqlUsage usage,
+        string? database,
+        bool allowMutation,
+        string? confirmDatabase,
+        IReadOnlySet<string> sessionTempTables,
+        IReadOnlySet<string> tableValuedParameterNames) =>
+        _classifier.Classify(sql, usage, database, allowMutation, confirmDatabase, tableValuedParameterNames);
+
     // Legacy text adapter kept for compatibility and characterization tests only (012/final F3): no production call site uses it.
     public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) =>
         BindParameters(inputs.Select(SqlParameterParser.ToInput));

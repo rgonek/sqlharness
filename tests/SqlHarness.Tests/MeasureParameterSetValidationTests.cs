@@ -11,6 +11,124 @@ public sealed class MeasureParameterSetValidationTests
     private const string Secret = "super-secret-value";
 
     [Fact]
+    public void Typed_non_scalar_inputs_obey_the_eight_parameter_limit_and_name_the_parameter()
+    {
+        var inputs = Enumerable.Range(0, 9)
+            .Select(index => new SqlHarnessParameterInput($"p{index}", "int", null)
+            {
+                Kind = "list",
+                Values = ["1"],
+            })
+            .ToArray();
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs(inputs, SqlEngine.SqlServer));
+
+        Assert.Contains("@p8", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("8", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Typed_non_scalar_inputs_obey_combined_row_value_and_materialized_byte_limits()
+    {
+        var rows = new SqlHarnessParameterInput("Rows", "dbo.Rows", null)
+        {
+            Kind = "tvp",
+            Rows = Enumerable.Range(0, 100_001).Select(_ => (IReadOnlyList<string?>)["x"]).ToArray(),
+        };
+        var tooManyRows = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs([rows], SqlEngine.SqlServer));
+        Assert.Contains("@Rows", tooManyRows.Message, StringComparison.Ordinal);
+        Assert.Contains("100000", tooManyRows.Message, StringComparison.Ordinal);
+
+        var oversized = new SqlHarnessParameterInput("Payload", "dbo.Payload", null)
+        {
+            Kind = "tvp",
+            Rows = [(IReadOnlyList<string?>)[new string('x', 32 * 1024 * 1024 + 1)]],
+        };
+        var tooLarge = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs([oversized], SqlEngine.SqlServer));
+        Assert.Contains("@Payload", tooLarge.Message, StringComparison.Ordinal);
+        Assert.Contains("33554432", tooLarge.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void List_inputs_obey_final_command_parameter_limit()
+    {
+        var input = new SqlHarnessParameterInput("Ids", "int", null)
+        {
+            Kind = "list",
+            Values = Enumerable.Repeat<string?>("1", 2_101).ToArray(),
+        };
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs([input], SqlEngine.SqlServer));
+
+        Assert.Contains("@Ids", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("2100", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Scalar_inputs_obey_final_command_parameter_limit()
+    {
+        var inputs = Enumerable.Range(0, 2_101)
+            .Select(index => new SqlHarnessParameterInput($"p{index}", "int", "1"))
+            .ToArray();
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs(inputs, SqlEngine.SqlServer));
+
+        Assert.Contains("@p2100", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("2100", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Table_inputs_reject_inline_rows_with_unequal_arity()
+    {
+        var input = new SqlHarnessParameterInput("Rows", "dbo.Rows", null)
+        {
+            Kind = "tvp",
+            Rows = [(IReadOnlyList<string?>)["1", "2"], (IReadOnlyList<string?>)["3"]],
+        };
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs([input], SqlEngine.SqlServer));
+
+        Assert.Contains("@Rows", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("unequal arity", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Non_scalar_input_cannot_fall_through_to_scalar_execution()
+    {
+        var input = new SqlHarnessParameterInput("Ids", "int", null)
+        {
+            Kind = "list",
+            Values = ["1", "2"],
+        };
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.RequireScalarExecution([input], SqlEngine.SqlServer));
+
+        Assert.Equal("Table-valued and list parameter execution is not available in this operation yet.", exception.Message);
+    }
+
+    [Fact]
+    public void Table_and_list_inputs_are_rejected_for_postgres_with_the_contract_message()
+    {
+        var input = new SqlHarnessParameterInput("Ids", "int", null)
+        {
+            Kind = "list",
+            Values = ["1", "2"],
+        };
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs([input], SqlEngine.Postgres));
+
+        Assert.Equal("Table-valued and list parameters are SQL Server only.", exception.Message);
+    }
+
+    [Fact]
     public void Prepare_combines_fixed_and_set_parameters_without_values_in_metadata()
     {
         var sets = MeasureParameterSetValidator.Prepare(

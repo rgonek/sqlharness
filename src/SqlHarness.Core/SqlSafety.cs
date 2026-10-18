@@ -69,6 +69,14 @@ internal static class SqlParameterInputs
 
         return typed;
     }
+
+    internal static IReadOnlyList<string> DryRunNotes(IReadOnlyList<SqlHarnessParameterInput> inputs) =>
+        inputs.Select(input => ParameterKindParser.Parse(input) switch
+        {
+            ParameterKind.Tvp => $"Table-valued parameter '@{input.Name}': table type shape not verified offline.",
+            ParameterKind.List when input.SourceSql is not null => $"List parameter '@{input.Name}': list length not known offline.",
+            _ => null,
+        }).Where(note => note is not null).Select(note => note!).ToArray();
 }
 
 internal enum SqlUsage
@@ -76,6 +84,28 @@ internal enum SqlUsage
     Query,
     CompareSetup,
     Mutation,
+}
+
+internal enum ParameterKind
+{
+    Scalar,
+    Tvp,
+    List,
+}
+
+internal static class ParameterKindParser
+{
+    internal static ParameterKind Parse(SqlHarnessParameterInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        return input.Kind switch
+        {
+            "scalar" => ParameterKind.Scalar,
+            "tvp" => ParameterKind.Tvp,
+            "list" => ParameterKind.List,
+            _ => throw new SqlHarnessSafetyException($"SQL parameter '@{input.Name}' has unknown kind '{input.Kind}'."),
+        };
+    }
 }
 
 internal enum SqlSafetyReason
@@ -167,7 +197,8 @@ internal sealed class SqlSafetyClassifier
         SqlUsage usage,
         string? database,
         bool allowMutation,
-        string? confirmDatabase = null)
+        string? confirmDatabase = null,
+        IReadOnlySet<string>? tableValuedParameterNames = null)
     {
         var document = SqlServerDocument.Parse(sql);
         if (document.HasErrors || document.Fragment is not TSqlScript script)
@@ -175,7 +206,7 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.ParseError);
         }
 
-        var inspection = new SafetyInspectionVisitor();
+        var inspection = new SafetyInspectionVisitor(tableValuedParameterNames);
         document.Fragment.Accept(inspection);
         var mutationUsage = usage == SqlUsage.Mutation;
         if (inspection.HasCrossDatabaseReference)
@@ -744,6 +775,7 @@ internal sealed class SqlSafetyClassifier
     private sealed class BatchVariableScope(
         IReadOnlyDictionary<string, int> scalarLocals,
         IReadOnlyDictionary<string, int> tableVariables,
+        IReadOnlySet<string> tableValuedParameterNames,
         IReadOnlyDictionary<string, int> localTempTables,
         IReadOnlyDictionary<string, int> localCursors,
         IReadOnlySet<string> nonTableDeclarations)
@@ -751,12 +783,17 @@ internal sealed class SqlSafetyClassifier
         internal static BatchVariableScope Empty { get; } = new(
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         internal bool IsTableVariableName(string? name) =>
-            !string.IsNullOrEmpty(name) && tableVariables.ContainsKey(name);
+            !string.IsNullOrEmpty(name) && (tableVariables.ContainsKey(name) || tableValuedParameterNames.Contains(name));
+
+        internal bool IsProvenTableSource(VariableTableReference? reference) =>
+            IsProvenTableVariable(reference) ||
+            reference?.Variable?.Name is { Length: > 0 } name && tableValuedParameterNames.Contains(name);
 
         internal bool IsProvenTableVariable(VariableTableReference? reference) =>
             reference?.Variable?.Name is { Length: > 0 } name &&
@@ -796,7 +833,7 @@ internal sealed class SqlSafetyClassifier
             element.DataType is (SqlDataTypeReference or UserDataTypeReference or XmlDataTypeReference) and
                 not SqlDataTypeReference { SqlDataTypeOption: SqlDataTypeOption.Cursor });
 
-    private static BatchVariableScope CollectBatchScope(TSqlBatch batch)
+    private static BatchVariableScope CollectBatchScope(TSqlBatch batch, IReadOnlySet<string> tableValuedParameterNames)
     {
         var scalars = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var tables = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -840,7 +877,7 @@ internal sealed class SqlSafetyClassifier
             }
         }
 
-        return new BatchVariableScope(scalars, tables, localTemps, localCursors, nonTables);
+        return new BatchVariableScope(scalars, tables, tableValuedParameterNames, localTemps, localCursors, nonTables);
     }
 
     private static bool HasUnprovenTableVariableUse(TSqlFragment statement, BatchVariableScope scope)
@@ -859,7 +896,7 @@ internal sealed class SqlSafetyClassifier
             // Table position: undeclared, scalar, parameter, other-batch,
             // not-yet-declared, or dual-declared names are not proven local.
             // The inner VariableReference is the table name, not a scalar use.
-            if (!scope.IsProvenTableVariable(node))
+            if (!scope.IsProvenTableSource(node))
                 HasUnprovenUse = true;
         }
 
@@ -1390,10 +1427,13 @@ internal sealed class SqlSafetyClassifier
         }
     }
 
-    private sealed class SafetyInspectionVisitor : TSqlFragmentVisitor
+    private sealed class SafetyInspectionVisitor(IReadOnlySet<string>? tableValuedParameterNames = null) : TSqlFragmentVisitor
     {
         // 011/T3: OUTPUT INTO @t is local only for a table variable proven in the batch being walked.
         private BatchVariableScope _scope = BatchVariableScope.Empty;
+        private readonly IReadOnlySet<string> _tableValuedParameterNames = tableValuedParameterNames is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(tableValuedParameterNames.Select(name => name.StartsWith('@') ? name : "@" + name), StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<TSqlBatch, BatchVariableScope> _scopes = [];
         private readonly Stack<HashSet<string>> _queryAliases = new();
         private readonly Stack<SchemaObjectName> _xmlMethodNames = new();
@@ -1427,7 +1467,7 @@ internal sealed class SqlSafetyClassifier
 
         public override void ExplicitVisit(TSqlBatch node)
         {
-            _scope = CollectBatchScope(node);
+            _scope = CollectBatchScope(node, _tableValuedParameterNames);
             _scopes[node] = _scope;
             base.ExplicitVisit(node);
         }

@@ -308,6 +308,8 @@ public static partial class McpOperationMapper
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionKey);
+        if (parameters?.Any(parameter => parameter is not null && parameter.Kind is "tvp" or "list") == true)
+            throw new McpMappingException("Table-valued and list parameters are not supported by mutation.");
         var sqlText = await McpInputReader.ReadSqlAsync(sql, file, scope, ct);
         return new SqlHarnessMutationOperation(
             scope.TargetRequest,
@@ -572,7 +574,41 @@ public static partial class McpOperationMapper
         {
             if (parameter is null || string.IsNullOrWhiteSpace(parameter.Name))
                 throw new McpMappingException("Each parameter requires a non-empty name.");
-            inputs.Add(new SqlHarnessParameterInput(parameter.Name, parameter.Type, parameter.Value));
+            if (parameter.Kind is not ("scalar" or "tvp" or "list"))
+                throw new McpMappingException($"SQL parameter '@{parameter.Name}' has unknown kind '{parameter.Kind}'.");
+            if (parameter.Kind == "scalar" &&
+                (parameter.Rows is not null || parameter.RowsFrom is not null || parameter.Values is not null || parameter.ValuesFrom is not null))
+                throw new McpMappingException($"Scalar SQL parameter '@{parameter.Name}' cannot include rows, values, or source SQL.");
+            if (parameter.Kind == "tvp")
+            {
+                if ((parameter.Rows is null) == (parameter.RowsFrom is null))
+                    throw new McpMappingException($"Table-valued SQL parameter '@{parameter.Name}' requires exactly one of rows or rowsFrom.");
+                if (parameter.Values is not null || parameter.ValuesFrom is not null)
+                    throw new McpMappingException($"Table-valued SQL parameter '@{parameter.Name}' cannot include values or valuesFrom.");
+                if (parameter.Rows is { Length: > 0 } rows)
+                {
+                    if (rows[0] is null)
+                        throw new McpMappingException($"Table-valued SQL parameter '@{parameter.Name}' contains a null row.");
+                    var arity = rows[0].Length;
+                    if (rows.Any(row => row is null || row.Length != arity))
+                        throw new McpMappingException($"Table-valued SQL parameter '@{parameter.Name}' has inline rows with unequal arity.");
+                }
+            }
+            if (parameter.Kind == "list")
+            {
+                if ((parameter.Values is null) == (parameter.ValuesFrom is null))
+                    throw new McpMappingException($"List SQL parameter '@{parameter.Name}' requires exactly one of values or valuesFrom.");
+                if (parameter.Rows is not null || parameter.RowsFrom is not null)
+                    throw new McpMappingException($"List SQL parameter '@{parameter.Name}' cannot include rows or rowsFrom.");
+            }
+
+            inputs.Add(new SqlHarnessParameterInput(parameter.Name, parameter.Type, parameter.Value)
+            {
+                Kind = parameter.Kind,
+                Rows = parameter.Rows?.Select(row => (IReadOnlyList<string?>)row).ToArray(),
+                Values = parameter.Values,
+                SourceSql = parameter.RowsFrom ?? parameter.ValuesFrom,
+            });
         }
 
         return inputs;

@@ -79,7 +79,7 @@ public sealed class McpToolHandlers(
         string? sql = null,
         [Description("SQL file under an operator input root. Exactly one of sql or file.")]
         string? file = null,
-        [Description("Typed values: culture-invariant text or JSON null.")]
+        [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")]
         int timeout = 30,
@@ -108,7 +108,7 @@ public sealed class McpToolHandlers(
         string? sql = null,
         [Description("SQL file under an operator input root. Exactly one of sql or file.")]
         string? file = null,
-        [Description("Typed values: culture-invariant text or JSON null.")]
+        [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")]
         int timeout = 30,
@@ -165,7 +165,7 @@ public sealed class McpToolHandlers(
         [Description("Exactly one of sql/file.")]
         McpSqlSourceArgument query,
         McpSqlSourceArgument? setup = null,
-        [Description("Typed values: culture-invariant text or JSON null.")]
+        [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
         [Description(McpToolCatalog.ParameterSetFilesDescription)]
         string[]? parameterSetFiles = null,
@@ -209,7 +209,7 @@ public sealed class McpToolHandlers(
         [Description("SQL fragment under test, or exactly 'whole' for the full query.")]
         string scope,
         McpSqlSourceArgument? setup = null,
-        [Description("Typed values: culture-invariant text or JSON null.")]
+        [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
         [Description("Repetitions 1..100.")]
         int repeat = 5,
@@ -276,7 +276,7 @@ public sealed class McpToolHandlers(
         string? sql = null,
         [Description("SQL file under an operator input root. Exactly one of sql or file.")]
         string? file = null,
-        [Description("Typed values: culture-invariant text or JSON null.")]
+        [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")]
         int timeout = 30,
@@ -319,7 +319,7 @@ public sealed class McpToolHandlers(
         string? sql = null,
         [Description("SQL file under an operator input root. Exactly one of sql or file.")]
         string? file = null,
-        [Description("Typed values: culture-invariant text or JSON null.")]
+        [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")]
         int timeout = 30,
@@ -616,10 +616,11 @@ public static class McpToolCatalog
     /// <summary>Common setup text; each catalog appends its engine's setup guidance.</summary>
     private const string SetupParameterName = "setup";
     public const string SetupDescription = "Once per measured session; setup locals do not carry into measured SQL.";
-    public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
+    public const string ParametersDescription = "Scalar values: culture-invariant text or JSON null. SQL Server also accepts kind tvp with rows/rowsFrom and kind list with values/valuesFrom; limits are in capabilities. Non-scalar inputs are supported by query dry-run; execution and other read-only tools are not available yet. Mutation does not support them.";
+    public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; entries may be scalar strings or typed objects; non-scalar execution is not available yet; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
     public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
     public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
-    public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
+    public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. Table-valued and list parameters are not supported. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
     public const string MeasureDescription = "Measure one query across repeats. For an optimization measurement, provide both optional subject and textual scope; this is independent of compare.requireContext. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence.";
     public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode: pass means no elapsed regression under policy, not improvement. Observed equivalence follows the selected ordering, duplicate and nullability rules; it is not domain equivalence. Dry-run reports validation: passed, execution: not-run, and setup/baseline/candidate classifications.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";

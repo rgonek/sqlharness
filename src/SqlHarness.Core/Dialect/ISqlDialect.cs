@@ -12,6 +12,16 @@ internal interface ISqlDialect
         string? confirmDatabase,
         IReadOnlySet<string> sessionTempTables);
 
+    SqlSafetyDecision Classify(
+        string sql,
+        SqlUsage usage,
+        string? database,
+        bool allowMutation,
+        string? confirmDatabase,
+        IReadOnlySet<string> sessionTempTables,
+        IReadOnlySet<string> tableValuedParameterNames) =>
+        Classify(sql, usage, database, allowMutation, confirmDatabase, sessionTempTables);
+
     /// <summary>Legacy text adapter kept for compatibility and characterization tests only (012/final F3): no production call site uses it. Production resolves and binds through <see cref="BindParameters"/>.</summary>
     IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs);
 

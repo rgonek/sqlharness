@@ -152,6 +152,7 @@ public static partial class ParameterSetFileReader
         string? name = null;
         long? nameTokenStart = null;
         List<string>? parameters = null;
+        List<SqlHarnessParameterInput>? typedParameters = null;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
@@ -173,7 +174,7 @@ public static partial class ParameterSetFileReader
                     nameTokenStart = reader.TokenStartIndex;
                     break;
                 case "parameters":
-                    parameters = ReadParameters(ref reader, json);
+                    (parameters, typedParameters) = ReadParameters(ref reader, json, path);
                     break;
                 default:
                     throw new UnknownPropertyException(property);
@@ -182,7 +183,7 @@ public static partial class ParameterSetFileReader
 
         if (reader.TokenType != JsonTokenType.EndObject)
             throw InvalidJson("The object must contain name and parameters.", json, json.Length);
-        if (name is null || parameters is null)
+        if (name is null || parameters is null || typedParameters is null)
             throw InvalidJson("The object must contain name and parameters.", json, reader.TokenStartIndex);
         // '$' matches before a trailing newline; the label must be the entire string.
         var label = LabelPattern().Match(name);
@@ -191,33 +192,68 @@ public static partial class ParameterSetFileReader
         if (reader.Read())
             throw InvalidJson("Unexpected content after the JSON object.", json, reader.TokenStartIndex);
 
-        return new SqlHarnessParameterSetInput(name, parameters.ToArray()) { SourcePath = path };
+        return new SqlHarnessParameterSetInput(name, parameters.ToArray())
+        {
+            TypedParameters = typedParameters.Count == 0 ? null : typedParameters.ToArray(),
+            SourcePath = path,
+        };
     }
 
-    private static List<string> ReadParameters(ref Utf8JsonReader reader, ReadOnlySpan<byte> json)
+    private static (List<string> Legacy, List<SqlHarnessParameterInput> Typed) ReadParameters(
+        ref Utf8JsonReader reader,
+        ReadOnlySpan<byte> json,
+        string? path)
     {
         if (reader.TokenType != JsonTokenType.StartArray)
             throw InvalidJson("The parameters property must be an array.", json, reader.TokenStartIndex);
 
         var parameters = new List<string>();
+        var typedParameters = new List<SqlHarnessParameterInput>();
+        var entryKind = -1;
         while (true)
         {
             if (!reader.Read())
                 throw InvalidJson("The parameters array is incomplete.", json, reader.BytesConsumed);
             if (reader.TokenType == JsonTokenType.EndArray)
                 break;
-            if (reader.TokenType != JsonTokenType.String)
-                throw InvalidJson("Each parameters entry must be a string.", json, reader.TokenStartIndex);
-
-            var value = reader.GetString();
-            if (string.IsNullOrEmpty(value))
-                throw InvalidJson("Each parameters entry must be nonempty.", json, reader.TokenStartIndex);
-            parameters.Add(value);
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                if (entryKind == 1)
+                    throw InvalidJson("A parameter set cannot mix string and typed parameter entries.", json, reader.TokenStartIndex);
+                entryKind = 0;
+                var value = reader.GetString();
+                if (string.IsNullOrEmpty(value))
+                    throw InvalidJson("Each parameters entry must be nonempty.", json, reader.TokenStartIndex);
+                parameters.Add(value);
+            }
+            else if (reader.TokenType == JsonTokenType.StartObject)
+            {
+                if (entryKind == 0)
+                    throw InvalidJson("A parameter set cannot mix string and typed parameter entries.", json, reader.TokenStartIndex);
+                entryKind = 1;
+                using var element = JsonDocument.ParseValue(ref reader);
+                try
+                {
+                    var wrapper = Encoding.UTF8.GetBytes("{\"parameters\":[" + element.RootElement.GetRawText() + "]}");
+                    var parsed = ParameterInputFileReader.Parse(wrapper, path);
+                    if (parsed.Count != 1)
+                        throw InvalidJson("Each typed parameter entry must produce exactly one parameter.", json, reader.TokenStartIndex);
+                    typedParameters.Add(parsed[0]);
+                }
+                catch (ParameterSetFileException exception)
+                {
+                    throw InvalidJson(exception.Message, json, reader.TokenStartIndex);
+                }
+            }
+            else
+            {
+                throw InvalidJson("Each parameters entry must be a string or typed parameter object.", json, reader.TokenStartIndex);
+            }
         }
 
-        if (parameters.Count == 0)
+        if (parameters.Count == 0 && typedParameters.Count == 0)
             throw InvalidJson("The parameters array must not be empty.", json, reader.TokenStartIndex);
-        return parameters;
+        return (parameters, typedParameters);
     }
 
     private static JsonException InvalidJson(string message, ReadOnlySpan<byte> json, long offset)

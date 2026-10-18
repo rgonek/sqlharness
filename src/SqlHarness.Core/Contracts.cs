@@ -134,8 +134,21 @@ public sealed record SqlHarnessCompareMatrixOperation(
 /// </summary>
 public sealed record SqlHarnessParameterInput(string Name, string? Type, string? Value)
 {
-    /// <summary>Name and type only (012/final F8): the generated ToString() would print Value.</summary>
-    public override string ToString() => $"SqlHarnessParameterInput {{ Name = {Name}, Type = {Type} }}";
+    /// <summary>Scalar by default; table-valued and list inputs are SQL Server-only (083).</summary>
+    public string Kind { get; init; } = "scalar";
+
+    /// <summary>Inline rows for a table-valued parameter. Values are never included in ToString.</summary>
+    public IReadOnlyList<IReadOnlyList<string?>>? Rows { get; init; }
+
+    /// <summary>Inline values for list expansion. Values are never included in ToString.</summary>
+    public IReadOnlyList<string?>? Values { get; init; }
+
+    /// <summary>Read-only SQL source for rowsFrom or valuesFrom.</summary>
+    public string? SourceSql { get; init; }
+
+    /// <summary>Name, type, kind, and counts only; never prints parameter contents.</summary>
+    public override string ToString() =>
+        $"SqlHarnessParameterInput {{ Name = {Name}, Type = {Type}, Kind = {Kind}, Rows.Count = {Rows?.Count}, Values.Count = {Values?.Count} }}";
 }
 
 /// <summary>
@@ -291,6 +304,7 @@ public sealed record SqlHarnessDryRunReport(
 {
     public string Validation { get; init; } = "passed";
     public string Execution { get; init; } = "not-run";
+    public IReadOnlyList<string> Notes { get; init; } = [];
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BenchmarkClassificationReport? BenchmarkClassification { get; init; }

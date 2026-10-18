@@ -13,6 +13,114 @@ internal sealed record ResolvedParameterSet(
 internal static partial class ParameterSetResolver
 {
     private const int MaximumSetCount = 32;
+    internal const int MaximumNonScalarParameters = 8;
+    internal const int MaximumCombinedRowsAndValues = 100_000;
+    internal const int MaximumMaterializedBytes = 32 * 1024 * 1024;
+    internal const int MaximumCommandParameters = 2_100;
+
+    internal static IReadOnlySet<string> ValidateInputs(
+        IReadOnlyList<SqlHarnessParameterInput> inputs,
+        SqlEngine engine,
+        bool mutation = false)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        var tableValuedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nonScalarCount = 0;
+        long rowsAndValues = 0;
+        long materializedBytes = 0;
+        long commandParameterCount = 0;
+        foreach (var input in inputs)
+        {
+            ArgumentNullException.ThrowIfNull(input);
+            var kind = ParameterKindParser.Parse(input);
+            if (kind == ParameterKind.Scalar)
+            {
+                if (input.Rows is not null || input.Values is not null || input.SourceSql is not null)
+                    throw new SqlHarnessSafetyException($"SQL parameter '@{input.Name}' is scalar and cannot include rows, values, or source SQL.");
+                commandParameterCount++;
+                if (commandParameterCount > MaximumCommandParameters)
+                    throw new SqlHarnessSafetyException($"SQL parameter '@{input.Name}' exceeds the {MaximumCommandParameters} final command parameter limit.");
+                continue;
+            }
+
+            if (engine != SqlEngine.SqlServer)
+                throw new SqlHarnessSafetyException("Table-valued and list parameters are SQL Server only.");
+            if (mutation)
+                throw new SqlHarnessSafetyException("Table-valued and list parameters are not supported by mutation.");
+            nonScalarCount++;
+            if (nonScalarCount > MaximumNonScalarParameters)
+                throw new SqlHarnessSafetyException($"SQL parameter '@{input.Name}' exceeds the limit of {MaximumNonScalarParameters} table-valued and list parameters.");
+
+            commandParameterCount++;
+            if (kind == ParameterKind.Tvp)
+            {
+                if (string.IsNullOrWhiteSpace(input.Type))
+                    throw new SqlHarnessSafetyException($"Table-valued SQL parameter '@{input.Name}' requires a type name.");
+                if ((input.Rows is null) == (input.SourceSql is null))
+                    throw new SqlHarnessSafetyException($"Table-valued SQL parameter '@{input.Name}' requires exactly one of rows or rowsFrom.");
+                if (input.Values is not null)
+                    throw new SqlHarnessSafetyException($"Table-valued SQL parameter '@{input.Name}' cannot include values or valuesFrom.");
+                if (input.Rows is { } rows)
+                {
+                    var arity = rows.Count == 0 ? (int?)null : rows[0]?.Count;
+                    for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+                    {
+                        var row = rows[rowIndex] ?? throw new SqlHarnessSafetyException($"Table-valued SQL parameter '@{input.Name}' contains a null row.");
+                        if (arity is not null && row.Count != arity)
+                            throw new SqlHarnessSafetyException($"Table-valued SQL parameter '@{input.Name}' has inline rows with unequal arity.");
+                        rowsAndValues++;
+                        foreach (var value in row)
+                            AddMaterializedValue(input.Name, value, ref materializedBytes);
+                    }
+                }
+                if (input.SourceSql is { Length: 0 })
+                    throw new SqlHarnessSafetyException($"Table-valued SQL parameter '@{input.Name}' has empty rowsFrom SQL.");
+                tableValuedNames.Add(input.Name.StartsWith('@') ? input.Name : "@" + input.Name);
+            }
+            else
+            {
+                if ((input.Values is null) == (input.SourceSql is null))
+                    throw new SqlHarnessSafetyException($"List SQL parameter '@{input.Name}' requires exactly one of values or valuesFrom.");
+                if (input.Rows is not null)
+                    throw new SqlHarnessSafetyException($"List SQL parameter '@{input.Name}' cannot include rows or rowsFrom.");
+                if (input.Values is { } values)
+                {
+                    if (values.Count == 0)
+                        throw new SqlHarnessSafetyException($"List SQL parameter '@{input.Name}' requires at least one value.");
+                    rowsAndValues += values.Count;
+                    commandParameterCount += values.Count - 1;
+                    foreach (var value in values)
+                        AddMaterializedValue(input.Name, value, ref materializedBytes);
+                }
+                if (input.SourceSql is { Length: 0 })
+                    throw new SqlHarnessSafetyException($"List SQL parameter '@{input.Name}' has empty valuesFrom SQL.");
+            }
+
+            if (rowsAndValues > MaximumCombinedRowsAndValues)
+                throw new SqlHarnessSafetyException($"SQL parameter '@{input.Name}' exceeds the {MaximumCombinedRowsAndValues} combined rows/values limit.");
+            if (materializedBytes > MaximumMaterializedBytes)
+                throw new SqlHarnessSafetyException($"SQL parameter '@{input.Name}' exceeds the {MaximumMaterializedBytes}-byte materialized input limit.");
+            if (commandParameterCount > MaximumCommandParameters)
+                throw new SqlHarnessSafetyException($"SQL parameter '@{input.Name}' exceeds the {MaximumCommandParameters} final command parameter limit.");
+        }
+
+        if (mutation && inputs.Any(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar))
+            throw new SqlHarnessSafetyException("Table-valued and list parameters are not supported by mutation.");
+        return tableValuedNames;
+    }
+
+    internal static void RequireScalarExecution(IReadOnlyList<SqlHarnessParameterInput> inputs, SqlEngine engine)
+    {
+        ValidateInputs(inputs, engine);
+        if (inputs.Any(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar))
+            throw new SqlHarnessSafetyException("Table-valued and list parameter execution is not available in this operation yet.");
+    }
+
+    private static void AddMaterializedValue(string name, string? value, ref long totalBytes)
+    {
+        if (value is not null)
+            totalBytes += System.Text.Encoding.UTF8.GetByteCount(value);
+    }
 
     internal static IReadOnlyList<ResolvedParameterSet> Resolve(
         ISqlDialect dialect,
@@ -87,6 +195,7 @@ internal static partial class ParameterSetResolver
             try
             {
                 inputs = SqlParameterInputs.Resolve(set.Parameters, set.TypedParameters).ToArray();
+                RequireScalarExecution(inputs, dialect.Engine);
                 bound = dialect.BindParameters(inputs);
             }
             catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)

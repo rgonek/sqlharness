@@ -78,7 +78,9 @@ internal static class CompareOperationPreparer
             candidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
         EnsureSafe(candidateSafety, "candidate");
 
-        var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(parameterInputs, typedParameters));
+        var resolvedParameterInputs = SqlParameterInputs.Resolve(parameterInputs, typedParameters).ToArray();
+        ParameterSetResolver.RequireScalarExecution(resolvedParameterInputs, target.Engine);
+        var parameters = dialect.BindParameters(resolvedParameterInputs);
 
         return new PreparedCompareFamily(
             target,

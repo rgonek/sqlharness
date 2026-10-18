@@ -358,6 +358,17 @@ public sealed class CapabilitiesCommandTests
     }
 
     [Fact]
+    public void Capabilities_expose_table_and_list_parameter_limits()
+    {
+        var limits = SqlHarnessCapabilitiesProvider.Get().Limits;
+
+        Assert.Equal(8, limits["nonScalarParameters"]);
+        Assert.Equal(100_000, limits["combinedParameterRowsAndValues"]);
+        Assert.Equal(32 * 1024 * 1024, limits["materializedParameterBytes"]);
+        Assert.Equal(2100, limits["finalCommandParameters"]);
+    }
+
+    [Fact]
     public void Mutation_is_advertised_with_agent_facing_status_contract()
     {
         var capabilities = SqlHarnessCapabilitiesProvider.Get();

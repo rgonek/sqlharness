@@ -31,6 +31,26 @@ public sealed record McpParameterArgument
     /// </summary>
     [JsonPropertyName("value")]
     public string? Value { get; init; }
+
+    /// <summary>One of scalar, tvp, or list. Defaults to scalar for existing callers.</summary>
+    [JsonPropertyName("kind")]
+    public string Kind { get; init; } = "scalar";
+
+    /// <summary>Inline rows for a table-valued parameter.</summary>
+    [JsonPropertyName("rows")]
+    public string?[][]? Rows { get; init; }
+
+    /// <summary>Read-only SQL returning rows for a table-valued parameter.</summary>
+    [JsonPropertyName("rowsFrom")]
+    public string? RowsFrom { get; init; }
+
+    /// <summary>Inline values for list expansion.</summary>
+    [JsonPropertyName("values")]
+    public string?[]? Values { get; init; }
+
+    /// <summary>Read-only SQL returning values for list expansion.</summary>
+    [JsonPropertyName("valuesFrom")]
+    public string? ValuesFrom { get; init; }
 }
 
 /// <summary>One named set of typed parameter values for measure or compare.</summary>

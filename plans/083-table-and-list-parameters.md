@@ -64,9 +64,9 @@
 **Interfaces:**
 - Produces: `ParameterKind { Scalar, Tvp, List }`; validation errors for both-sources/no-source, >8 tvp/list, inline arity mismatch between rows; dry-run notes text exact.
 
-- [ ] **Step 1: Failing tests:** MCP mapping of each kind; `rows` and `rowsFrom` together → error; mutation with a tvp → exact error; dry run of `SELECT * FROM @Ids` with a tvp reports the offline note and classifies read-only; inline rows of unequal length → error; CLI `--params-json` round-trip; capabilities expose the limits.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(083): accept table-valued and list parameter inputs`.
+- [x] **Step 1: Failing tests:** MCP mapping of each kind; `rows` and `rowsFrom` together → error; mutation with a tvp → exact error; dry run of `SELECT * FROM @Ids` with a tvp reports the offline note and classifies read-only; inline rows of unequal length → error; CLI `--params-json` round-trip; capabilities expose the limits.
+- [x] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
+- [x] **Step 5:** Commit `feat(083): accept table-valued and list parameter inputs`.
 
 ### Task 2: Dapper list expansion
 

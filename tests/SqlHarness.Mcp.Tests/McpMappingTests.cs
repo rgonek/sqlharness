@@ -1182,6 +1182,72 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
+    public void Parameter_mapping_preserves_table_and_list_sources_and_values()
+    {
+        var mapped = McpOperationMapper.MapParameters(
+        [
+            new McpParameterArgument
+            {
+                Name = "Ids",
+                Type = "dbo.IdList",
+                Kind = "tvp",
+                Rows = [["1"], ["2"]],
+            },
+            new McpParameterArgument
+            {
+                Name = "Filter",
+                Type = "int",
+                Kind = "list",
+                Values = ["3", "4"],
+            },
+        ]);
+
+        Assert.Equal("tvp", mapped[0].Kind);
+        Assert.Equal("dbo.IdList", mapped[0].Type);
+        Assert.Equal(
+            new IReadOnlyList<string?>[] { new string?[] { "1" }, new string?[] { "2" } },
+            mapped[0].Rows);
+        Assert.Equal("list", mapped[1].Kind);
+        Assert.Equal(["3", "4"], mapped[1].Values);
+        Assert.DoesNotContain("1", mapped[0].ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parameter_mapping_rejects_inline_and_file_table_sources_together()
+    {
+        var exception = Assert.Throws<McpMappingException>(() => McpOperationMapper.MapParameters(
+        [
+            new McpParameterArgument
+            {
+                Name = "Ids",
+                Type = "dbo.IdList",
+                Kind = "tvp",
+                Rows = [["1"]],
+                RowsFrom = "SELECT Id FROM dbo.Source",
+            },
+        ]));
+
+        Assert.Contains("Ids", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Mutation_mapping_rejects_table_and_list_parameters_with_the_contract_message()
+    {
+        var exception = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapMutationAsync(
+            Scope(),
+            "UPDATE dbo.Target SET Enabled = 0",
+            null,
+            [new McpParameterArgument { Name = "Ids", Kind = "tvp", Type = "dbo.IdList", Rows = [["1"]] }],
+            30,
+            50,
+            "db",
+            "session",
+            CancellationToken.None));
+
+        Assert.Equal("Table-valued and list parameters are not supported by mutation.", exception.Message);
+    }
+
+    [Fact]
     public async Task Watch_and_snapshot_mapping_carry_typed_parameters()
     {
         var scope = Scope();
