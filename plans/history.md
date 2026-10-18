@@ -2,6 +2,10 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 088 implementation archived — 2026-10-18
+
+Plan [088](088-plan-visualization.md) is implemented on feature branch `plan-088`. The Windows branch gate passed on `a737e6d` plus the two unused `PlanTree` deletions; exact results and task reviews are in [verification evidence](088-verification-evidence.md). Task 7 review and the requested Sol low whole-branch review remain pending, so this records branch implementation rather than final plan approval or integration. No merge or push is recorded.
+
 ## Plan 081 completion locally integrated
 
 Plan [081](081-session-control-flow-safety.md) implements SQL Server read-only session/control-flow admissions, logical-batch rollback and connection discard, measured-session option restoration, operation warnings, and opt-in dashboard notices. It is DONE and locally integrated on `main` at `e88c7fdd76ce3ce188296a56e2d63e73c57a52c7`. The integrated product tree `a717d579a6b8be0f96d6d745283442a769cbbcc6` passed the required Windows gate before merge commit `93122e886d40bef7c746ea91272c0169d819b56c`; the local `main` advance did not change product code.

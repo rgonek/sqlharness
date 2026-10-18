@@ -42,10 +42,10 @@ The prototypes use only text labels, so no icon set was considered or copied. Th
 ## Changed files and concerns
 
 - `plans/088-plan-visualization.md`: completed Task 0 checklist and recorded the renderer decision with measurements and tradeoffs.
-- `.superpowers/sdd/088-plan-visualization/task-0-report.md`: this evidence report.
-- `.superpowers/sdd/088-plan-visualization/evidence/baseline-verify-captured-output.txt`: recovered original Task 0 tool-output excerpts, no longer dependent on the shared temp log directory.
-- `.superpowers/sdd/088-plan-visualization/evidence/d3-layout-source-capture.txt`: captured prototype source excerpt confirming the custom right-to-left layout.
-- `.superpowers/sdd/088-plan-visualization/task-0-fix-1-report.md`: evidence reconciliation and validation record.
+- `task-0-report.md`: this permanent evidence report.
+- `evidence/baseline-verify-captured-output.txt`: recovered original Task 0 tool-output excerpts, no longer dependent on the shared temp log directory.
+- `evidence/d3-layout-source-capture.txt`: captured prototype source excerpt confirming the custom right-to-left layout.
+- The review-fix reconciliation is summarized in [verification evidence](../088-verification-evidence.md).
 - Concern: the baseline MCP test failure remains unresolved and the full gate did not reach format. The plan's final gate must pass before overall completion.
 - Evidence limitation: the shared raw gate logs were overwritten by Plan 083. The captured MCP failure and summary plus core-test summary remain available; complete raw build, UI, and core logs do not.
 - No live database, persistent writes, merge, or push occurred.
