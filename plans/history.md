@@ -2,6 +2,16 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 087 completion — 2026-10-18
+
+Plan [087](087-measure-in-optimization.md) is DONE on feature branch `plan-087`; tested product revision: `a0752bd5480eacdf44e08a8bd0ca4ca22447ea68`. Tasks 1–3 were reviewed, and Task 4 records the documentation and final Windows gate. Measures accept optional subject/scope and appear as Optimization observations; journal schema v15 stores operation and case measurement fingerprints so compatible measure/compare conditions group together. README and MCP guidance cover context, fingerprints, pair/equivalence labels, defaults, and the session filter. Plans 082 and 084 now name 087 as a predecessor.
+
+The final `just verify -LogDirectory D:/temp/sqlharness-plan087-final-gate-a0752bd` exited 0 on that product revision: `verify: OK stages=5 6m03s`. `ui-install` skipped because the lockfile was unchanged; build passed in 46.2s with 0 warnings/errors; UI passed in 3m52s (55 files, 291 tests); Core passed 4,194 with 11 skipped; MCP passed 429 with 4 skipped; format was skipped because the committed working tree had 0 changed C# files. The independent `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 1b8bd70b` passed for 28 changed C# files. Logs: `D:/temp/sqlharness-plan087-final-gate-a0752bd`; formatter log: `D:/temp/sqlharness-plan087-format-a0752bd.log`.
+
+The earlier gate on documentation revision `03bb52a` failed in the test stage: Core 4,193 passed/11 skipped/1 failed and MCP 428 passed/4 skipped/1 failed. The Core failure was a fixture with two empty varying-input cases that received the same sealed measurement fingerprint; the fixture now supplies distinct parameter inputs. The MCP assertion expected the old exact measure description; it now checks the optional subject/scope guidance. Both focused regressions passed, the scoped review was clean, and the final gate above passed. The first gate's logs remain at `D:/temp/sqlharness-plan087-final-gate`.
+
+The Task 3 backend-triggered UI build emitted the existing non-failing Vite warning about chunks larger than 500 KB; that warning is retained in the [Task 3 report](../.superpowers/sdd/087-measure-in-optimization/task-3-report.md). The final gate's build log reports 0 .NET warnings and does not repeat the Vite warning; its UI log still records the known non-failing Vitest import-time notice, Node `DEP0190`, and localhost:3000 refusal diagnostic. No live database, Linux gate, merge, push, installation, or publication occurred. This is feature-branch evidence, not verification of an integrated tree.
+
 ## Plan 079 completion — 2026-10-17
 
 Plan [079](079-optimization-evidence-core.md) is DONE on feature branch `plan-079`, product implementation range `9915eca..19c714d`. It adds canonical, privacy-aware optimization conditions and keyed fingerprints, sequential per-case `measure` sessions, streamed table IO, journal-side data-plus-LOB reads and table-variable grouping, SQL Server reproduction scripts, and minimal dashboard evidence surfaces. Task reviews for Tasks 1–8 were clean. Task 9 documentation and final Windows verification are recorded in [verification evidence](079-verification-evidence.md).

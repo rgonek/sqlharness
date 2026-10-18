@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `13b468a` (079 DONE). Depends on 080. Plans 082 and 084 follow this plan.
+- DONE on feature branch `plan-087`, tested product revision `a0752bd5480eacdf44e08a8bd0ca4ca22447ea68`; not merged. Depends on 080. Plans 082 and 084 follow this plan. See [completion evidence](history.md#plan-087-completion--2026-10-18).
 - Priority P2; effort M; risk LOW–MEDIUM.
 
 ## Global Constraints
@@ -38,17 +38,17 @@
 ---
 
 ### Task 0: Drift check
-- [ ] Confirm 080 merged; drift check; `just verify` baseline; record base.
+- [x] Confirm 080 merged; drift check; `just verify` baseline; record base and the load-sensitive UI timeout (see SDD ledger).
 
 ### Task 1: measure accepts subject/scope
 **Files:** `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs` (~`:163-193` `MeasureAsync` + request-scoped twin; `ThrowIfUnknown` lists), `src/SqlHarness.Mcp/McpOperationMapper.cs` (`MapMeasureAsync`), `src/SqlHarness.Core/Contracts.cs` (`SqlHarnessMeasureOperation.Context`), `src/SqlHarness.Core/Journal/OperationJournalDescriber.cs` (journal `compare_subject`/`compare_scope` for measure), `src/SqlHarness.Cli/Commands/SqlHarnessCommands.cs` (measure `--subject`/`--scope`), `MeasureDescription`; tests `tests/SqlHarness.Mcp.Tests` (schema, mapping, catalog budget), `tests/SqlHarness.Tests/MeasureTests.cs`, CLI tests, `OperationJournalDescriberTests.cs`.
-- [ ] Failing tests: MCP measure accepts and journals context; invalid slug → validation error; absent → allowed even with `requireContext=true`; CLI parity; tools/list ≤ 32 KiB.
-- [ ] FAIL → implement → PASS. Commit `feat(087): measure accepts subject and scope`.
+- [x] Failing tests: MCP measure accepts and journals context; invalid slug → validation error; absent → allowed even with `requireContext=true`; CLI parity; tools/list ≤ 32 KiB.
+- [x] FAIL → implement → PASS. Commit `feat(087): measure accepts subject and scope`.
 
 ### Task 2: Measurement fingerprint
 **Files:** `src/SqlHarness.Core/Journal/ConditionsModelBuilder.cs` (~`:69-82` payloads), `ConditionsModel.cs` (`MeasurementFingerprint` on operation and cases), `ActivityJournal.cs` (HMAC), `JournalSchema.cs` (step: `operations.measurement_fingerprint`, case-level storage alongside 079's case fingerprints; `CurrentVersion` +1, `JournalContractTests` pin).
-- [ ] Failing tests: measure and compare with equal params/setup/db/engine → equal measurement fingerprints, different operation fingerprints; ordered vs multiset compare → equal measurement fingerprints; values differ → different; keyed by salt; `Legacy_rows_fall_back_to_operation_fingerprint`.
-- [ ] FAIL → implement → PASS. Commit `feat(087): journal measurement fingerprints`.
+- [x] Failing tests: measure and compare with equal params/setup/db/engine → equal measurement fingerprints, different operation fingerprints; ordered vs multiset compare → equal measurement fingerprints; values differ → different; keyed by salt; `Legacy_rows_fall_back_to_operation_fingerprint`.
+- [x] FAIL → implement → PASS. Commit `feat(087): journal measurement fingerprints`.
 
 ### Task 3: Optimization consumes measure evidence
 **Files:** `src/SqlHarness.Dashboard/JournalReader.cs` (load measure evidence with context), `CompareHistoryBuilder.cs` (measure hashes in version numbering), 080's `Optimization/OptimizationSummaryBuilder.cs`, `OptimizationComparer.cs`, `OptimizationModels.cs`, session-list badge/filter; UI `ComparisonPanel.tsx`, `VersionTable.tsx`, `SessionTable.tsx`/`SessionsPage.tsx` labels; tests `OptimizationSummaryBuilderTests.cs`, `OptimizationComparerTests.cs`, `CompareHistoryBuilderTests.cs`, UI tests.
@@ -56,4 +56,4 @@
 - [x] Scoped FAIL → implement → PASS. Backend focused dashboard tests: 49 passed; UI focused Vitest tests: 28 passed. Full `just verify` is reserved for Task 4/controller. Commit `feat(087): measure observations in optimization`.
 
 ### Task 4: Documentation and verification
-- [ ] README/`docs/mcp.md` (measure context, measurement fingerprint, panel semantics); `plans/README.md`; note in plans 082/084 headers that they follow 087; `just verify`; queue → history; commit `docs(087): record plan 087 evidence`.
+- [x] README/`docs/mcp.md` (measure context, measurement fingerprint, panel semantics); `plans/README.md`; note in plans 082/084 headers that they follow 087; `just verify`; queue → history; commit `docs(087): record plan 087 evidence`.
