@@ -25,7 +25,7 @@
 
 ## Status and dependencies
 
-- IMPLEMENTED on feature branch `plan-081`; required Windows gate and classifier/executor security review passed on the final product tree. Final Sol low whole-branch review remains pending; local integration has not occurred. See [verification evidence](081-verification-evidence.md). Planning base `1737091`. Depends on 079 (message numbers). Independent of 080. Stage C becomes plan 082, stage D plan 083.
+- DONE and locally integrated into `main` at `e88c7fd`. The integrated product tree passed `just verify` at `a717d57` before merge commit `93122e8`; Sol low whole-branch, final-fix, and integration reviews are approved. See [verification evidence](081-verification-evidence.md). No push or live database UAT occurred. Planning base `1737091`. Depends on 079 (message numbers). Independent of 080. Stage C becomes plan 082, stage D plan 083.
 - Priority P1; effort M; risk HIGH (safety classifier) — security review required before completion.
 
 ## Global Constraints
@@ -98,7 +98,7 @@
 
 - [x] **Step 1: Failing tests:** `Measured_options_do_not_leak_between_variants` (baseline sets `ANSI_NULLS OFF`, candidate observes the post-setup state); `Setup_options_persist_for_the_case` (setup `SET NOCOUNT ON` visible in measured runs).
 - [x] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS (Compare/Measure focused suite 96 passed).
-- [x] **Step 5:** Committed `feat(081): isolate session options between measured commands` (`4eb2315`). One deferred minor review note: no dedicated per-parameter-set capture/restore regression. Review found no Critical/Important issues.
+- [x] **Step 5:** Committed `feat(081): isolate session options between measured commands` (`4eb2315`). The later per-parameter-set capture/restore ordering coverage gap was addressed by test-only fix `38b8148`; see final review evidence. The Task 3 review found no Critical/Important issues.
 
 ### Task 4: Notices, journal and opt-in dashboard notifications
 
@@ -113,10 +113,10 @@
 ### Task 5: Contracts, documentation, security review, verification
 
 - [x] **Step 1:** README "Safety contract" documents admitted constructs, explicit denied options/statements, rollback/discard rules, option isolation and notifications; SQL Server engine guidance/capabilities and MCP tool docs carry the interface contract. The user skill does not name rejected constructs and needed no change.
-- [x] **Step 2:** Security review approved the classifier/executor diff at `90afb5c` with no persistent-effect reachability findings. The subsequent cleanup and journal fixes were reviewed at `d65cfac` with no Critical or Important findings. Final Sol whole-branch review remains pending.
-- [x] **Step 3:** `just verify` passed at `d65cfac7b9c472b82daaca132e090709c57b8b87`; see [verification evidence](081-verification-evidence.md) for stage results and scope.
+- [x] **Step 2:** Security review approved the classifier/executor diff at `90afb5c` with no persistent-effect reachability findings. The cleanup/journal fixes were approved at `d65cfac`; Sol low whole-branch review found 0 Critical/Important and 1 Minor, addressed by test-only fix `38b8148`, whose scoped re-review was clean. Integration review found 0 findings.
+- [x] **Step 3:** Feature branch `just verify` passed at `d65cfac`; after integration, `just verify` passed on exact tree `a717d57` (committed as `93122e8`). See [verification evidence](081-verification-evidence.md) for separate results.
 - [x] **Step 4 (operator-authorized, optional):** Not performed; optional live UAT was not authorized. No live database calls were made.
-- [x] **Step 5:** Moved the implementation record from the queue to [history](history.md#plan-081-feature-branch-evidence) with evidence. Task 5 documentation commit: `90afb5c`; final evidence update is recorded separately.
+- [x] **Step 5:** Moved the implementation record from the queue to [history](history.md#plan-081-completion-locally-integrated) with evidence. Documentation commits: `90afb5c` and `d3670d8`; final integrated evidence is recorded in the latest documentation update.
 
 ### Integration with Plan 087
 
