@@ -37,6 +37,26 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
+    public async Task Compare_materializes_list_once_and_binds_identical_values_to_both_sides()
+    {
+        var session = FakeCompareSession.Create();
+        var operation = Compare(1) with
+        {
+            SetupSql = null,
+            BaselineSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            CandidateSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["11", "22"] }],
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var sideCommands = session.Commands.Where(command => command.Sql == "SELECT Id FROM dbo.Items WHERE Id IN (@Ids1, @Ids2)").ToArray();
+        Assert.NotEmpty(sideCommands);
+        Assert.All(sideCommands, command => Assert.Equal(new[] { 11, 22 }, command.Parameters.Select(parameter => (int)parameter.Value).ToArray()));
+    }
+
+    [Fact]
     public async Task Compare_dry_run_includes_a_list_used_only_by_candidate_SQL()
     {
         var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(1) with

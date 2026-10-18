@@ -349,8 +349,8 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.DoesNotContain("id:int=22", json, StringComparison.Ordinal);
         Assert.DoesNotContain(session.QuerySql, json, StringComparison.Ordinal);
         Assert.DoesNotContain(session.SetupSql, json, StringComparison.Ordinal);
-        Assert.Contains(setA.ValueHash, json, StringComparison.Ordinal);
-        Assert.Contains(setB.ValueHash, json, StringComparison.Ordinal);
+        Assert.Contains(setA.ValueHash!, json, StringComparison.Ordinal);
+        Assert.Contains(setB.ValueHash!, json, StringComparison.Ordinal);
 
         Assert.Equal(
             SqlHarnessExitCode.Success,

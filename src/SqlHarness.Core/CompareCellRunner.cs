@@ -25,6 +25,7 @@ internal sealed record PreparedCompareFamily(
     internal required string ClassificationBaselineSql { get; init; }
     internal required string ClassificationCandidateSql { get; init; }
     internal bool HasNonScalarParameters { get; init; }
+    internal IReadOnlyList<SqlHarnessParameterInput> ParameterInputs { get; init; } = [];
 }
 
 internal static class CompareOperationPreparer
@@ -124,6 +125,7 @@ internal static class CompareOperationPreparer
             ClassificationBaselineSql = baselineExpansion.Text,
             ClassificationCandidateSql = candidateExpansion.Text,
             HasNonScalarParameters = resolvedParameterInputs.Any(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar),
+            ParameterInputs = resolvedParameterInputs,
         };
     }
 
@@ -177,6 +179,7 @@ internal sealed record CompareCellRequest(
     internal IReadOnlyList<string> SafetyNotices { get; init; } = [];
 
     internal List<string> KnownSecrets { get; init; } = [];
+    internal IReadOnlyList<SqlHarnessParameterInput> ParameterInputs { get; init; } = [];
 }
 
 internal sealed record CompareCellResult(
@@ -224,11 +227,22 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             await using var session = await _sessions.ConnectAsync(request.Target, ct, request.KnownSecrets);
             phase = CompareCellPhase.Sql;
 
+            var materialized = await TableParameterMaterializer.MaterializeAsync(session, request.ParameterInputs, dialect, ct);
+            var setupExpansion = string.IsNullOrWhiteSpace(request.SetupSql) ? null : materialized.Expand(request.SetupSql);
+            var baselineExpansion = materialized.Expand(request.BaselineSql);
+            var candidateExpansion = materialized.Expand(request.CandidateSql);
+            var structuredParameters = materialized.Parameters.Where(parameter => parameter.Type == System.Data.SqlDbType.Structured).ToArray();
+            var setupParameters = setupExpansion is null ? request.Parameters.Concat(structuredParameters).ToArray() : SqlParameterInputs.CombineClassificationParameters(request.Parameters.Concat(structuredParameters).ToArray(), setupExpansion.Parameters);
+            var baselineParameters = SqlParameterInputs.CombineClassificationParameters(request.Parameters.Concat(structuredParameters).ToArray(), baselineExpansion.Parameters);
+            var candidateParameters = SqlParameterInputs.CombineClassificationParameters(request.Parameters.Concat(structuredParameters).ToArray(), candidateExpansion.Parameters);
+            if (new[] { setupParameters, baselineParameters, candidateParameters }.Any(items => items.Count > ParameterSetResolver.MaximumCommandParameters))
+                throw new SqlHarnessSafetyException($"SQL parameter list exceeds the {ParameterSetResolver.MaximumCommandParameters} final command parameter limit.");
+
             raw = new CanonicalResultAccumulator();
             var setupWarnings = await SetupSqlExecution.ExecuteSetupAsync(
                 request.Target.Engine,
-                request.SetupSql,
-                request.Parameters,
+                setupExpansion?.Text ?? request.SetupSql,
+                setupParameters,
                 request.TimeoutSeconds,
                 session,
                 raw: null,
@@ -239,21 +253,21 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.
             // Warmup is EXPLAIN/STATISTICS only; sidecar follows measured repetitions.
             var captureComparison = request.CompareResults != ResultComparisonMode.Off;
-            await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, 0, "baseline", raw: null, captureComparison: false, sessionState, ct);
-            await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, 0, "candidate", raw: null, captureComparison: false, sessionState, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, baselineExpansion.Text, baselineParameters, request.TimeoutSeconds, 0, "baseline", raw: null, captureComparison: false, sessionState, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, candidateExpansion.Text, candidateParameters, request.TimeoutSeconds, 0, "candidate", raw: null, captureComparison: false, sessionState, ct);
 
             var runs = new List<CollectedBenchmarkRun>(request.Repeat * 2);
             for (var repetition = 1; repetition <= request.Repeat; repetition++)
             {
                 if (repetition % 2 == 1)
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, baselineExpansion.Text, baselineParameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, candidateExpansion.Text, candidateParameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
                 }
                 else
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, candidateExpansion.Text, candidateParameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, baselineExpansion.Text, baselineParameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
                 }
             }
 

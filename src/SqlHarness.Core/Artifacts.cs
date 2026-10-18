@@ -304,7 +304,7 @@ public sealed record SqlHarnessMeasureReport(
 public sealed record MeasureParameterSetReport(
     string Name,
     IReadOnlyList<MeasureParameterMetadata> Parameters,
-    string ValueHash,
+    string? ValueHash,
     int Repetitions,
     bool ResultsStable,
     string? ResultHash,

@@ -219,14 +219,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     notes: SqlParameterInputs.DryRunNotes(parameterInputs)));
             }
 
-            if (parameterInputs.Any(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar))
-                throw new SqlHarnessSafetyException("Table-valued and list parameter execution is not available in this operation yet.");
-
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
 
-            var execution = new SqlExecutionCommand(query.Sql, parameters, query.TimeoutSeconds)
+            var materialized = await TableParameterMaterializer.MaterializeAsync(session, parameterInputs, dialect, ct);
+            var executionExpansion = materialized.Expand(query.Sql);
+            var executionParameters = SqlParameterInputs.CombineClassificationParameters(materialized.Parameters, executionExpansion.Parameters);
+            if (executionParameters.Count > ParameterSetResolver.MaximumCommandParameters)
+                throw new SqlHarnessSafetyException($"SQL parameter list exceeds the {ParameterSetResolver.MaximumCommandParameters} final command parameter limit.");
+
+            var execution = new SqlExecutionCommand(executionExpansion.Text, executionParameters, query.TimeoutSeconds)
             {
                 PostgresMode = target.Engine == SqlEngine.Postgres && safety.HasMutation
                     ? PostgresExecutionMode.ApprovedMutation
@@ -502,10 +505,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                         SqlParameterInputs.Resolve(compare.Parameters, compare.TypedParameters).ToArray()));
             }
 
-            ParameterSetResolver.RequireScalarExecution(
-                SqlParameterInputs.Resolve(compare.Parameters, compare.TypedParameters).ToArray(),
-                target.Engine);
-
             _artifactWriter.CheckStorage();
 
             var request = new CompareCellRequest(
@@ -525,6 +524,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 Owner = ArtifactOwner.From(compare.Target, prepared.Target),
                 KnownSecrets = knownSecrets,
                 OperationRef = compare.OperationRef,
+                ParameterInputs = prepared.ParameterInputs,
             };
             _cellRunner.ComparisonMaximumRows = ComparisonMaximumRows;
 
@@ -601,6 +601,37 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var sets = ParameterSetResolver.Resolve(dialect, fixedParameters, matrixInput, operation.ParameterSets);
             if (sets.Count == 0)
                 throw new SqlHarnessSafetyException("A compare matrix or at least two parameter sets must be supplied.");
+            foreach (var set in sets)
+            {
+                var caseInputs = prepared.ParameterInputs.Concat(set.Inputs).ToArray();
+                SqlParameterInputs.ValidateSourceSql(dialect, prepared.Target.Database, caseInputs, NoSessionTemps);
+                var caseTableNames = ParameterSetResolver.ValidateInputs(caseInputs, prepared.Target.Engine);
+                var caseBaseline = SqlParameterInputs.ExpandListsForClassification(operation.BaselineSql, caseInputs);
+                var caseCandidate = SqlParameterInputs.ExpandListsForClassification(operation.CandidateSql, caseInputs);
+                var caseSetup = string.IsNullOrWhiteSpace(operation.SetupSql)
+                    ? new ExpandedSql(operation.SetupSql ?? string.Empty, [])
+                    : SqlParameterInputs.ExpandListsForClassification(operation.SetupSql, caseInputs);
+                var caseSetupSafety = string.IsNullOrWhiteSpace(operation.SetupSql)
+                    ? null
+                    : dialect.Classify(caseSetup.Text, SqlUsage.CompareSetup, prepared.Target.Database, false, null, NoSessionTemps, caseTableNames);
+                if (caseSetupSafety is not null)
+                    CompareOperationPreparer.EnsureSafe(caseSetupSafety, "setup");
+                var caseBaselineSafety = dialect.Classify(caseBaseline.Text, SqlUsage.Query, prepared.Target.Database, false, null,
+                    caseSetupSafety?.SessionTempTables ?? NoSessionTemps, caseTableNames);
+                var caseCandidateSafety = dialect.Classify(caseCandidate.Text, SqlUsage.Query, prepared.Target.Database, false, null,
+                    caseSetupSafety?.SessionTempTables ?? NoSessionTemps, caseTableNames);
+                CompareOperationPreparer.EnsureSafe(caseBaselineSafety, "baseline");
+                CompareOperationPreparer.EnsureSafe(caseCandidateSafety, "candidate");
+                var caseScalars = dialect.BindParameters(caseInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
+                var caseBindings = SqlParameterInputs.CombineClassificationParameters(
+                    SqlParameterInputs.CombineClassificationParameters(caseScalars, caseSetup.Parameters),
+                    SqlParameterInputs.CombineClassificationParameters(caseBaseline.Parameters, caseCandidate.Parameters));
+                SqlSetupVariableReferenceValidator.Validate(caseSetup.Text, caseBindings, caseBaseline.Text, caseCandidate.Text);
+                dialect.ValidateParameterReferences(caseBindings, caseSetup.Text, caseBaseline.Text, caseCandidate.Text);
+                SetupSqlExecution.Validate(dialect.Engine, caseSetup.Text, caseBindings);
+                dialect.ValidateMeasuredBatch(caseBaseline.Text);
+                dialect.ValidateMeasuredBatch(caseCandidate.Text);
+            }
             var parameterName = matrixInput is null ? null : "@" + SqlParameterNames.Normalize(matrixInput.Name);
             var parameterType = matrixInput?.Type;
             var cellParameters = sets
@@ -652,10 +683,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                         SqlParameterInputs.Resolve(operation.Parameters, operation.TypedParameters).ToArray()));
             }
 
-            ParameterSetResolver.RequireScalarExecution(
-                SqlParameterInputs.Resolve(operation.Parameters, operation.TypedParameters).ToArray(),
-                target.Engine);
-
             _artifactWriter.CheckStorage();
 
             var template = new CompareCellRequest(
@@ -675,6 +702,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 Owner = ArtifactOwner.From(operation.Target, prepared.Target),
                 KnownSecrets = knownSecrets,
                 OperationRef = operation.OperationRef,
+                ParameterInputs = prepared.ParameterInputs,
             };
             _matrixRunner.ComparisonMaximumRows = ComparisonMaximumRows;
             CompareMatrixResult result;
@@ -813,13 +841,19 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var dialect = SqlDialects.For(target.Engine);
             var parameterInputs = SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters).ToArray();
             SqlParameterInputs.ValidateSourceSql(dialect, target.Database, parameterInputs, NoSessionTemps);
-            var tableValuedNames = ParameterSetResolver.ValidateInputs(parameterInputs, target.Engine);
             var parameters = dialect.BindParameters(
                 parameterInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
-            var queryExpansion = SqlParameterInputs.ExpandListsForClassification(measure.QuerySql, parameterInputs);
+            var parameterSets = ResolveMeasureParameterSets(measure, dialect, parameters);
+            var representativeSetInputs = parameterSets is { Count: > 0 }
+                ? SqlParameterInputs.Resolve(parameterSets[0].Parameters, parameterSets[0].TypedParameters).ToArray()
+                : [];
+            var classificationInputs = parameterInputs.Concat(representativeSetInputs).ToArray();
+            SqlParameterInputs.ValidateSourceSql(dialect, target.Database, classificationInputs, NoSessionTemps);
+            var tableValuedNames = ParameterSetResolver.ValidateInputs(classificationInputs, target.Engine);
+            var queryExpansion = SqlParameterInputs.ExpandListsForClassification(measure.QuerySql, classificationInputs);
             var setupExpansion = string.IsNullOrWhiteSpace(measure.SetupSql)
                 ? new ExpandedSql(measure.SetupSql ?? string.Empty, [])
-                : SqlParameterInputs.ExpandListsForClassification(measure.SetupSql, parameterInputs);
+                : SqlParameterInputs.ExpandListsForClassification(measure.SetupSql, classificationInputs);
             var representativeListParameters = SqlParameterInputs.DeduplicateClassificationListParameters(
                 setupExpansion.Parameters,
                 queryExpansion.Parameters);
@@ -837,7 +871,43 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var querySafety = dialect.Classify(
                 queryExpansion.Text, SqlUsage.Query, target.Database, false, null, setupTemps, tableValuedNames);
             CompareOperationPreparer.EnsureSafe(querySafety, "query");
-            var parameterSets = ResolveMeasureParameterSets(measure, dialect, parameters);
+            if (parameterSets is not null)
+            {
+                foreach (var parameterSet in parameterSets)
+                {
+                    var caseInputs = parameterInputs.Concat(SqlParameterInputs.Resolve(parameterSet.Parameters, parameterSet.TypedParameters)).ToArray();
+                    SqlParameterInputs.ValidateSourceSql(dialect, target.Database, caseInputs, NoSessionTemps);
+                    var caseTableNames = ParameterSetResolver.ValidateInputs(caseInputs, target.Engine);
+                    var caseQuery = SqlParameterInputs.ExpandListsForClassification(measure.QuerySql, caseInputs);
+                    var caseSetup = string.IsNullOrWhiteSpace(measure.SetupSql)
+                        ? new ExpandedSql(measure.SetupSql ?? string.Empty, [])
+                        : SqlParameterInputs.ExpandListsForClassification(measure.SetupSql, caseInputs);
+                    var caseSetupSafety = string.IsNullOrWhiteSpace(measure.SetupSql)
+                        ? null
+                        : dialect.Classify(caseSetup.Text, SqlUsage.CompareSetup, target.Database, false, null, NoSessionTemps, caseTableNames);
+                    if (caseSetupSafety is not null)
+                        CompareOperationPreparer.EnsureSafe(caseSetupSafety, "setup");
+                    var caseQuerySafety = dialect.Classify(caseQuery.Text, SqlUsage.Query, target.Database, false, null,
+                        caseSetupSafety?.SessionTempTables ?? NoSessionTemps, caseTableNames);
+                    CompareOperationPreparer.EnsureSafe(caseQuerySafety, "query");
+                    IReadOnlyList<SqlHarnessParameter> caseScalar;
+                    try
+                    {
+                        caseScalar = dialect.BindParameters(caseInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
+                    }
+                    catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
+                    {
+                        throw exception.WithParameterValue($"Parameter set '{parameterSet.Name}' is invalid: {exception.Message}");
+                    }
+                    var caseBindings = SqlParameterInputs.CombineClassificationParameters(
+                        SqlParameterInputs.CombineClassificationParameters(caseScalar, caseSetup.Parameters), caseQuery.Parameters);
+                    if (target.Engine == SqlEngine.SqlServer)
+                        SqlSetupVariableReferenceValidator.Validate(caseSetup.Text, caseBindings, caseQuery.Text);
+                    dialect.ValidateParameterReferences(caseBindings, caseSetup.Text, caseQuery.Text);
+                    SetupSqlExecution.Validate(dialect.Engine, caseSetup.Text, caseBindings);
+                    dialect.ValidateMeasuredBatch(caseQuery.Text);
+                }
+            }
             if (parameterSets is null)
                 RecordConditions(measure, () => ConditionsModelBuilder.Build(
                     measure, target, dialect, parameters,
@@ -882,8 +952,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                             BenchmarkReports.ClassificationLabel(setupSafety), BenchmarkReports.ClassificationLabel(querySafety)),
                         notes: SqlParameterInputs.DryRunNotes(parameterInputs));
                 }
-
-                ParameterSetResolver.RequireScalarExecution(parameterInputs, target.Engine);
 
                 _artifactWriter.CheckStorage();
                 phase = OperationPhase.Authentication;
@@ -950,18 +1018,22 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     notes: SqlParameterInputs.DryRunNotes(parameterInputs));
             }
 
-            ParameterSetResolver.RequireScalarExecution(parameterInputs, target.Engine);
-
             _artifactWriter.CheckStorage();
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
 
+            var materialized = await TableParameterMaterializer.MaterializeAsync(session, parameterInputs, dialect, ct);
+            var setupExecution = string.IsNullOrWhiteSpace(measure.SetupSql) ? null : materialized.Expand(measure.SetupSql);
+            var queryExecution = materialized.Expand(measure.QuerySql);
+            var setupParameters = setupExecution is null ? materialized.Parameters : SqlParameterInputs.CombineClassificationParameters(materialized.Parameters, setupExecution.Parameters);
+            var queryParameters = SqlParameterInputs.CombineClassificationParameters(materialized.Parameters, queryExecution.Parameters);
+
             raw = new CanonicalResultAccumulator();
             var setupWarnings = await SetupSqlExecution.ExecuteSetupAsync(
                 dialect.Engine,
-                measure.SetupSql,
-                parameters,
+                setupExecution?.Text ?? measure.SetupSql,
+                setupParameters,
                 measure.TimeoutSeconds,
                 session,
                 raw: null,
@@ -970,10 +1042,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var sessionState = await dialect.CaptureSessionStateAsync(session, ct);
 
             // Measure never runs ResultComparer; skip fingerprint retention and the 1M row comparison cap.
-            await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw: null, captureComparison: false, sessionState, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, queryExecution.Text, queryParameters, measure.TimeoutSeconds, 0, "measure", raw: null, captureComparison: false, sessionState, ct);
             var runs = new List<CollectedBenchmarkRun>(measure.Repeat);
             for (var repetition = 1; repetition <= measure.Repeat; repetition++)
-                runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", repetition == 1 ? raw : null, captureComparison: false, sessionState, ct));
+                runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, queryExecution.Text, queryParameters, measure.TimeoutSeconds, repetition, "measure", repetition == 1 ? raw : null, captureComparison: false, sessionState, ct));
 
             rawFootprint = raw.Complete().Footprint;
             var targetReport = session.Identity;
@@ -1182,7 +1254,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var parameters = dialect.BindParameters(parameterInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
             var classificationParameters = SqlParameterInputs.CombineClassificationParameters(parameters, expansion.Parameters);
             dialect.ValidateParameterReferences(classificationParameters, expansion.Text);
-            ParameterSetResolver.RequireScalarExecution(parameterInputs, target.Engine);
             // Predicate syntax is validated before authentication so bad --until fails closed.
             if (watch.Until is not null)
                 _ = WatchCondition.Parse(watch.Until);
@@ -1193,6 +1264,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 watch,
                 target,
                 parameters,
+                parameterInputs,
                 knownSecrets,
                 ct);
             rawFootprint = raw;
@@ -1264,7 +1336,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var parameters = dialect.BindParameters(parameterInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
             var classificationParameters = SqlParameterInputs.CombineClassificationParameters(parameters, expansion.Parameters);
             dialect.ValidateParameterReferences(classificationParameters, expansion.Text);
-            ParameterSetResolver.RequireScalarExecution(parameterInputs, target.Engine);
             // Predicate syntax is validated before authentication so bad --until fails closed.
             if (watch.Until is not null)
                 _ = WatchCondition.Parse(watch.Until);
@@ -1276,6 +1347,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 watch,
                 target,
                 parameters,
+                parameterInputs,
                 knownSecrets,
                 stream,
                 ct);
@@ -1377,14 +1449,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var parameters = dialect.BindParameters(parameterInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
             var classificationParameters = SqlParameterInputs.CombineClassificationParameters(parameters, expansion.Parameters);
             dialect.ValidateParameterReferences(classificationParameters, expansion.Text);
-            ParameterSetResolver.RequireScalarExecution(parameterInputs, target.Engine);
-
             phase = OperationPhase.Authentication;
             var runner = new SnapshotRunner(_sessionFactory, _snapshotStore);
             var (outcome, raw) = await runner.ExecuteAsync(
                 snapshot,
                 target,
                 parameters,
+                parameterInputs,
                 knownSecrets,
                 ct);
             rawFootprint = raw;

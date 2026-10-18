@@ -1,5 +1,6 @@
 using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
+using SqlHarness.Core.Dialect;
 
 using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
@@ -21,6 +22,7 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
         SqlHarnessSnapshotOperation operation,
         ResolvedTarget target,
         IReadOnlyList<SqlHarnessParameter> parameters,
+        IReadOnlyList<SqlHarnessParameterInput> parameterInputs,
         List<string> knownSecrets,
         CancellationToken ct)
     {
@@ -82,7 +84,13 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
             await using var session = await _sessions.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
 
-            var execution = new SqlExecutionCommand(operation.Sql, parameters, operation.TimeoutSeconds);
+            var materialized = await TableParameterMaterializer.MaterializeAsync(session, parameterInputs, SqlDialects.For(target.Engine), ct);
+            var expansion = materialized.Expand(operation.Sql);
+            var executionParameters = SqlParameterInputs.CombineClassificationParameters(materialized.Parameters, expansion.Parameters);
+            if (executionParameters.Count > ParameterSetResolver.MaximumCommandParameters)
+                throw new SqlHarnessSafetyException($"SQL parameter list exceeds the {ParameterSetResolver.MaximumCommandParameters} final command parameter limit.");
+
+            var execution = new SqlExecutionCommand(expansion.Text, executionParameters, operation.TimeoutSeconds);
             CollectedQueryResult collected;
             using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Execute))
                 collected = await QueryResultCollector.CollectAsync(

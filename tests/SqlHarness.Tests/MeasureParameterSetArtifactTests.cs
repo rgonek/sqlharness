@@ -102,8 +102,8 @@ public sealed class MeasureParameterSetArtifactTests
         var surface = string.Join('\n', new[] { reportText, runsText }.Concat(names).Concat(Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Select(File.ReadAllText)));
         Assert.Contains("narrow", surface, StringComparison.Ordinal);
         Assert.Contains("small.set", surface, StringComparison.Ordinal);
-        Assert.Contains(sets[0].ValueHash, surface, StringComparison.Ordinal);
-        Assert.Contains(sets[1].ValueHash, surface, StringComparison.Ordinal);
+        Assert.Contains(sets[0].ValueHash!, surface, StringComparison.Ordinal);
+        Assert.Contains(sets[1].ValueHash!, surface, StringComparison.Ordinal);
         Assert.Contains("@id", surface, StringComparison.Ordinal);
         Assert.Contains("@label", surface, StringComparison.Ordinal);
         Assert.Contains("@source", surface, StringComparison.Ordinal);

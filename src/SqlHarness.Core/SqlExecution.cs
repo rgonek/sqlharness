@@ -32,6 +32,8 @@ internal interface ISqlReader : IAsyncDisposable
     int RecordsAffected { get; }
     string GetName(int ordinal);
     Type GetFieldType(int ordinal);
+    string GetSqlTypeName(int ordinal) => GetFieldType(ordinal).Name;
+    SqlReaderColumnMetadata GetColumnMetadata(int ordinal) => new(GetSqlTypeName(ordinal), null, null, null);
     bool GetAllowNull(int ordinal);
 
     /// <summary>
@@ -45,6 +47,8 @@ internal interface ISqlReader : IAsyncDisposable
     Task<bool> ReadAsync(CancellationToken ct);
     Task<bool> NextResultAsync(CancellationToken ct);
 }
+
+internal sealed record SqlReaderColumnMetadata(string TypeName, long? Size, byte? Precision, byte? Scale);
 
 internal interface ISqlSession : IAsyncDisposable
 {
@@ -576,6 +580,14 @@ internal sealed class SqlClientSession(
         foreach (var parameter in execution.Parameters)
         {
             var sqlParameter = command.Parameters.Add(parameter.Name, parameter.Type);
+            if (parameter.Type == SqlDbType.Structured)
+            {
+                if (parameter.TableTypeName is null || parameter.Rows is null)
+                    throw new InvalidOperationException("Structured parameters require a resolved type name and rows.");
+                sqlParameter.TypeName = parameter.TableTypeName;
+                sqlParameter.Value = parameter.Rows;
+                continue;
+            }
             if (parameter.UdtTypeName is { } udtTypeName)
                 sqlParameter.UdtTypeName = udtTypeName;
             if (parameter.Size is { } size)
@@ -628,6 +640,16 @@ internal sealed class SqlClientReader : ISqlReader
     public int RecordsAffected => _reader.RecordsAffected;
     public string GetName(int ordinal) => _reader.GetName(ordinal);
     public Type GetFieldType(int ordinal) => _reader.GetFieldType(ordinal);
+    public string GetSqlTypeName(int ordinal) => _reader.GetDataTypeName(ordinal);
+    public SqlReaderColumnMetadata GetColumnMetadata(int ordinal)
+    {
+        var column = Columns[ordinal];
+        return new SqlReaderColumnMetadata(
+            _reader.GetDataTypeName(ordinal),
+            column.ColumnSize,
+            column.NumericPrecision is null ? null : checked((byte)column.NumericPrecision.Value),
+            column.NumericScale is null ? null : checked((byte)column.NumericScale.Value));
+    }
     public bool GetAllowNull(int ordinal) => ProviderNullability.AllowNull(Columns[ordinal]);
     public bool? GetReportedAllowNull(int ordinal) => ProviderNullability.Reported(Columns[ordinal]);
     public object GetValue(int ordinal) => _reader.GetValue(ordinal);

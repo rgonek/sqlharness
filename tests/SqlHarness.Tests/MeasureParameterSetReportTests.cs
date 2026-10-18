@@ -346,7 +346,7 @@ public sealed class MeasureParameterSetReportTests
         Assert.DoesNotContain(queryPath, json, StringComparison.Ordinal);
         Assert.DoesNotContain(query, json, StringComparison.Ordinal);
         Assert.DoesNotContain(PlanXmlSentinel, json, StringComparison.Ordinal);
-        Assert.Contains(sets[0].ValueHash, json, StringComparison.Ordinal);
+        Assert.Contains(sets[0].ValueHash!, json, StringComparison.Ordinal);
         Assert.Contains("PLAN-NARROW", json, StringComparison.Ordinal);
     }
 

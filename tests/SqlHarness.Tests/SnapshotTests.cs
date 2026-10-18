@@ -16,7 +16,7 @@ public class SnapshotTests
     private const string Name = "before-import";
 
     [Fact]
-    public async Task Snapshot_classifies_list_after_representative_expansion_before_execution_guard()
+    public async Task Snapshot_executes_list_after_materialization()
     {
         var session = FakeSession.WithRows(1);
         var operation = Snapshot(sql: "SELECT Id FROM dbo.Items WHERE Id IN @Ids") with
@@ -30,9 +30,10 @@ public class SnapshotTests
 
         var outcome = await Module(session, new FakeSnapshotStore()).ExecuteAsync(operation);
 
-        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.Equal("Table-valued and list parameter execution is not available in this operation yet.", outcome.SafeError);
-        Assert.Equal(0, session.ConnectCount);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(1, session.ConnectCount);
+        Assert.Equal("SELECT Id FROM dbo.Items WHERE Id IN (@Ids1, @Ids2)", Assert.Single(session.Commands).Sql);
+        Assert.Equal(new[] { 1, 2 }, session.Commands[0].Parameters.Select(parameter => (int)parameter.Value).ToArray());
     }
 
     [Fact]

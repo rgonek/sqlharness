@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
+using SqlHarness.Core.Dialect;
 
 using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
@@ -73,6 +74,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
         SqlHarnessWatchOperation operation,
         ResolvedTarget target,
         IReadOnlyList<SqlHarnessParameter> parameters,
+        IReadOnlyList<SqlHarnessParameterInput> parameterInputs,
         List<string> knownSecrets,
         CancellationToken ct)
     {
@@ -106,11 +108,18 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             await using var session = connected;
             phase = OperationPhase.Sql;
 
+            var materialized = await TableParameterMaterializer.MaterializeAsync(session, parameterInputs, SqlDialects.For(target.Engine), budget.Token);
+            var expansion = materialized.Expand(operation.Sql);
+            var executionParameters = SqlParameterInputs.CombineClassificationParameters(materialized.Parameters, expansion.Parameters);
+            if (executionParameters.Count > ParameterSetResolver.MaximumCommandParameters)
+                throw new SqlHarnessSafetyException($"SQL parameter list exceeds the {ParameterSetResolver.MaximumCommandParameters} final command parameter limit.");
+
             var sink = new ReportWatchSink(operation.HistoryLimit);
             var outcome = await RunPollLoopAsync(
                 session,
                 operation,
-                parameters,
+                executionParameters,
+                expansion.Text,
                 knownSecrets,
                 () =>
                 {
@@ -171,6 +180,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
         SqlHarnessWatchOperation operation,
         ResolvedTarget target,
         IReadOnlyList<SqlHarnessParameter> parameters,
+        IReadOnlyList<SqlHarnessParameterInput> parameterInputs,
         List<string> knownSecrets,
         WatchNdjsonWriter stream,
         CancellationToken ct)
@@ -212,13 +222,20 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             await using var session = connected;
             phase = OperationPhase.Sql;
 
+            var materialized = await TableParameterMaterializer.MaterializeAsync(session, parameterInputs, SqlDialects.For(target.Engine), budget.Token);
+            var expansion = materialized.Expand(operation.Sql);
+            var executionParameters = SqlParameterInputs.CombineClassificationParameters(materialized.Parameters, expansion.Parameters);
+            if (executionParameters.Count > ParameterSetResolver.MaximumCommandParameters)
+                throw new SqlHarnessSafetyException($"SQL parameter list exceeds the {ParameterSetResolver.MaximumCommandParameters} final command parameter limit.");
+
             stream.WriteStarted(new { target = session.Identity }, ElapsedMilliseconds(start));
 
             var sink = new NdjsonWatchSink(stream);
             var outcome = await RunPollLoopAsync(
                 session,
                 operation,
-                parameters,
+                executionParameters,
+                expansion.Text,
                 knownSecrets,
                 () =>
                 {
@@ -321,6 +338,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
         ISqlSession session,
         SqlHarnessWatchOperation operation,
         IReadOnlyList<SqlHarnessParameter> parameters,
+        string sql,
         IReadOnlyCollection<string> knownSecrets,
         Func<CanonicalResultAccumulator> getRaw,
         IWatchPollSink sink,
@@ -350,7 +368,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             // CommandTimeout is whole seconds, so clamp it down to the remaining
             // budget and let the linked token enforce sub-second precision.
             var execution = new SqlExecutionCommand(
-                operation.Sql,
+                sql,
                 parameters,
                 ClampCommandTimeout(operation.TimeoutSeconds, budget.Remaining));
 

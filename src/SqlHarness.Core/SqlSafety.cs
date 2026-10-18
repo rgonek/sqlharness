@@ -1758,7 +1758,13 @@ internal sealed record SqlHarnessParameter(
     int? Size,
     byte? Precision = null,
     byte? Scale = null,
-    string? UdtTypeName = null);
+    string? UdtTypeName = null,
+    IReadOnlyList<Microsoft.Data.SqlClient.Server.SqlDataRecord>? Rows = null,
+    string? TableTypeName = null)
+{
+    public override string ToString() =>
+        $"SqlHarnessParameter {{ Name = {Name}, Type = {Type}, Size = {Size}, Precision = {Precision}, Scale = {Scale}, Rows.Count = {Rows?.Count}, TableTypeName = {TableTypeName} }}";
+}
 
 internal static partial class SqlParameterParser
 {

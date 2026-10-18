@@ -81,6 +81,23 @@ public class SqlHarnessQueryTests
     }
 
     [Fact]
+    public async Task Query_executes_expanded_list_values()
+    {
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a", FakeSqlReader.Rows(["Id"], [1]));
+        var operation = Query("SELECT Id FROM dbo.Items WHERE Id IN @Ids") with
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["1", "2"] }],
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var command = Assert.Single(session.Commands);
+        Assert.Equal("SELECT Id FROM dbo.Items WHERE Id IN (@Ids1, @Ids2)", command.Sql);
+        Assert.Equal(new[] { 1, 2 }, command.Parameters.Select(parameter => (int)parameter.Value).ToArray());
+    }
+
+    [Fact]
     public async Task Query_dry_run_rejects_generated_list_name_that_collides_with_scalar_binding()
     {
         var outcome = await Module(FakeSqlSession.WithIdentity("test-server", "testdb-a"))

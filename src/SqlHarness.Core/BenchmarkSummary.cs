@@ -81,7 +81,7 @@ public sealed record MeasureBenchmarkSummary(
 public sealed record MeasureParameterSetSummary(
     string Name,
     IReadOnlyList<MeasureParameterMetadata> Parameters,
-    string ValueHash,
+    string? ValueHash,
     bool ResultsStable,
     long MedianElapsedMilliseconds,
     long MedianCpuMilliseconds,

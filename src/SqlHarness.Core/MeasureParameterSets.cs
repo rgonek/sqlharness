@@ -16,7 +16,11 @@ internal sealed record PreparedMeasureParameterSet(
     string Name,
     IReadOnlyList<SqlHarnessParameter> Parameters,
     IReadOnlyList<MeasureParameterMetadata> Metadata,
-    string ValueHash);
+    string? ValueHash)
+{
+    internal IReadOnlyList<SqlHarnessParameterInput> Inputs { get; init; } = [];
+    internal string? ExecutionSql { get; init; }
+}
 
 internal static class MeasureParameterSetValidator
 {
@@ -33,7 +37,8 @@ internal static class MeasureParameterSetValidator
         ArgumentNullException.ThrowIfNull(querySql);
         dialect ??= SqlDialects.For(SqlEngine.SqlServer);
 
-        var fixedBound = dialect.BindParameters(SqlParameterInputs.Resolve(fixedParameters, typedFixedParameters));
+        var fixedInputs = SqlParameterInputs.Resolve(fixedParameters, typedFixedParameters).ToArray();
+        var fixedBound = dialect.BindParameters(fixedInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
         // The resolver owns shared set validation and binding; this class adds measure-only
         // reference checks and metadata/hash projection over the resolved execution parameters.
         var resolvedSets = ParameterSetResolver.Resolve(dialect, fixedBound, null, parameterSets);
@@ -42,16 +47,29 @@ internal static class MeasureParameterSetValidator
         foreach (var set in resolvedSets)
         {
             var parameters = fixedBound.Concat(set.Parameters).ToArray();
+            var inputs = fixedInputs.Concat(set.Inputs)
+                .ToArray();
+            ParameterSetResolver.ValidateInputs(inputs, dialect.Engine);
             var orderedParameters = Order(parameters);
+            var queryExpansion = SqlParameterInputs.ExpandListsForClassification(querySql, inputs);
+            var setupExpansion = string.IsNullOrWhiteSpace(setupSql)
+                ? new ExpandedSql(setupSql ?? string.Empty, [])
+                : SqlParameterInputs.ExpandListsForClassification(setupSql, inputs);
+            var validationParameters = SqlParameterInputs.CombineClassificationParameters(
+                SqlParameterInputs.CombineClassificationParameters(parameters, setupExpansion.Parameters),
+                queryExpansion.Parameters);
             if (dialect.Engine == SqlEngine.SqlServer)
-                SqlSetupVariableReferenceValidator.Validate(setupSql, parameters, querySql);
-            dialect.ValidateParameterReferences(parameters, setupSql, querySql);
-            SetupSqlExecution.Validate(dialect.Engine, setupSql, parameters);
+                SqlSetupVariableReferenceValidator.Validate(setupExpansion.Text, validationParameters, queryExpansion.Text);
+            dialect.ValidateParameterReferences(validationParameters, setupExpansion.Text, queryExpansion.Text);
+            SetupSqlExecution.Validate(dialect.Engine, setupExpansion.Text, validationParameters);
             prepared.Add(new PreparedMeasureParameterSet(
                 set.Name,
                 parameters,
                 ToMetadata(orderedParameters),
-                TypedParameterHasher.Hash(parameters)));
+                inputs.Any(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar) ? null : TypedParameterHasher.Hash(parameters))
+            {
+                Inputs = inputs,
+            });
         }
 
         return prepared;
@@ -318,12 +336,23 @@ internal sealed class MeasureParameterSetRunner
                 session = await _sessions.ConnectAsync(target, ct, knownSecrets ?? []);
                 identity ??= session.Identity;
                 phase = "sql";
+                var materialized = await TableParameterMaterializer.MaterializeAsync(session, set.Inputs, _dialect, ct);
+                var structuredParameters = materialized.Parameters.Where(parameter => parameter.Type == SqlDbType.Structured).ToArray();
+                var setupExpansion = string.IsNullOrWhiteSpace(operation.SetupSql) ? null : materialized.Expand(operation.SetupSql);
+                var queryExpansion = materialized.Expand(operation.QuerySql);
+                var setupParameters = setupExpansion is null
+                    ? set.Parameters.Concat(structuredParameters).ToArray()
+                    : SqlParameterInputs.CombineClassificationParameters(set.Parameters.Concat(structuredParameters).ToArray(), setupExpansion.Parameters);
+                var queryParameters = SqlParameterInputs.CombineClassificationParameters(set.Parameters.Concat(structuredParameters).ToArray(), queryExpansion.Parameters);
+                if (setupParameters.Count > ParameterSetResolver.MaximumCommandParameters || queryParameters.Count > ParameterSetResolver.MaximumCommandParameters)
+                    throw new SqlHarnessSafetyException($"SQL parameter list exceeds the {ParameterSetResolver.MaximumCommandParameters} final command parameter limit.");
+                var executionSet = set with { Parameters = queryParameters, ExecutionSql = queryExpansion.Text };
                 if (!string.IsNullOrWhiteSpace(operation.SetupSql))
                 {
                     setupWarnings.AddRange(await SetupSqlExecution.ExecuteSetupAsync(
                         _dialect.Engine,
-                        operation.SetupSql,
-                        set.Parameters,
+                        setupExpansion!.Text,
+                        setupParameters,
                         operation.TimeoutSeconds,
                         session,
                         raw: null,
@@ -333,9 +362,9 @@ internal sealed class MeasureParameterSetRunner
                 }
 
                 var sessionState = await _dialect.CaptureSessionStateAsync(session, ct);
-                await ExecuteSetAsync(session, set, repetition: 0, sessionState);
+                await ExecuteSetAsync(session, executionSet, repetition: 0, sessionState);
                 for (var repetition = 1; repetition <= operation.Repeat; repetition++)
-                    caseRuns.Add(await ExecuteSetAsync(session, set, repetition, sessionState));
+                    caseRuns.Add(await ExecuteSetAsync(session, executionSet, repetition, sessionState));
             }
             catch (Exception exception)
             {
@@ -402,7 +431,7 @@ internal sealed class MeasureParameterSetRunner
             BenchmarkRunner.ExecuteAsync(
                 _dialect,
                 session,
-                operation.QuerySql,
+                set.ExecutionSql ?? operation.QuerySql,
                 set.Parameters,
                 operation.TimeoutSeconds,
                 repetition,

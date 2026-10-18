@@ -8,7 +8,10 @@ namespace SqlHarness.Core;
 internal sealed record ResolvedParameterSet(
     string Name,
     string? ParameterValue,
-    IReadOnlyList<SqlHarnessParameter> Parameters);
+    IReadOnlyList<SqlHarnessParameter> Parameters)
+{
+    internal IReadOnlyList<SqlHarnessParameterInput> Inputs { get; init; } = [];
+}
 
 internal static partial class ParameterSetResolver
 {
@@ -29,9 +32,13 @@ internal static partial class ParameterSetResolver
         long rowsAndValues = 0;
         long materializedBytes = 0;
         long commandParameterCount = 0;
+        var parameterNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var input in inputs)
         {
             ArgumentNullException.ThrowIfNull(input);
+            var normalizedName = SqlParameterNames.Normalize(input.Name);
+            if (!parameterNames.Add("@" + normalizedName))
+                throw new SqlHarnessSafetyException($"Duplicate SQL parameter '@{normalizedName}'.");
             var kind = ParameterKindParser.Parse(input);
             if (kind == ParameterKind.Scalar)
             {
@@ -108,13 +115,6 @@ internal static partial class ParameterSetResolver
         return tableValuedNames;
     }
 
-    internal static void RequireScalarExecution(IReadOnlyList<SqlHarnessParameterInput> inputs, SqlEngine engine)
-    {
-        ValidateInputs(inputs, engine);
-        if (inputs.Any(input => ParameterKindParser.Parse(input) != ParameterKind.Scalar))
-            throw new SqlHarnessSafetyException("Table-valued and list parameter execution is not available in this operation yet.");
-    }
-
     private static void AddMaterializedValue(string name, string? value, ref long totalBytes)
     {
         if (value is not null)
@@ -163,7 +163,7 @@ internal static partial class ParameterSetResolver
                 output[index] = new ResolvedParameterSet(
                     index.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     parsed.DisplayValues[index],
-                    dialectBound);
+                    dialectBound) { Inputs = [new SqlHarnessParameterInput(parsed.Name, parsed.Type, parsed.DisplayValues[index])] };
             }
 
             return output;
@@ -194,8 +194,8 @@ internal static partial class ParameterSetResolver
             try
             {
                 inputs = SqlParameterInputs.Resolve(set.Parameters, set.TypedParameters).ToArray();
-                RequireScalarExecution(inputs, dialect.Engine);
-                bound = dialect.BindParameters(inputs);
+                ValidateInputs(inputs, dialect.Engine);
+                bound = dialect.BindParameters(inputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
             }
             catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
             {
@@ -217,13 +217,11 @@ internal static partial class ParameterSetResolver
                 if (fixedNames.Contains(parameter.Name))
                     throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' repeats fixed SQL parameter '{parameter.Name}'.");
             }
-            if (bound.Count != inputs.Count)
+            if (bound.Count != inputs.Count(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar))
                 throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' is invalid.");
 
             var byName = bound.ToDictionary(parameter => parameter.Name, StringComparer.OrdinalIgnoreCase);
-            var shapes = new Dictionary<string, DeclaredParameterShape>(StringComparer.OrdinalIgnoreCase);
-            for (var index = 0; index < bound.Count; index++)
-                shapes.Add(bound[index].Name, DeclaredParameterShape.From(inputs[index].Type));
+            var shapes = inputs.ToDictionary(input => "@" + SqlParameterNames.Normalize(input.Name), input => DeclaredParameterShape.From(input.Type), StringComparer.OrdinalIgnoreCase);
 
             if (baselineByName is null)
             {
@@ -257,9 +255,19 @@ internal static partial class ParameterSetResolver
                     if (!baselineByName.ContainsKey(parameter.Name))
                         throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' has unexpected SQL parameter '{parameter.Name}'.");
                 }
+                foreach (var (name, shape) in baselineShapes!)
+                {
+                    if (!shapes.TryGetValue(name, out var candidateShape))
+                        throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' is missing SQL parameter '{name}'.");
+                    if (shape != candidateShape)
+                        throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' SQL parameter '{name}' has a different type or shape than parameter set '{baselineName}'.");
+                }
+                foreach (var name in shapes.Keys)
+                    if (!baselineShapes!.ContainsKey(name))
+                        throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' has unexpected SQL parameter '{name}'.");
             }
 
-            resolved.Add(new ResolvedParameterSet(set.Name, null, bound));
+            resolved.Add(new ResolvedParameterSet(set.Name, null, bound) { Inputs = inputs });
         }
 
         return resolved;

@@ -11,6 +11,46 @@ public sealed class MeasureParameterSetValidationTests
     private const string Secret = "super-secret-value";
 
     [Fact]
+    public void Named_parameter_sets_preserve_distinct_list_inputs_for_per_case_materialization()
+    {
+        var sets = new[]
+        {
+            new SqlHarnessParameterSetInput("small", [])
+            {
+                TypedParameters = [new SqlHarnessParameterInput("Ids", "dbo.IdList", null) { Kind = "tvp", Rows = [["1"], ["2"]] }],
+            },
+            new SqlHarnessParameterSetInput("large", [])
+            {
+                TypedParameters = [new SqlHarnessParameterInput("Ids", "dbo.IdList", null) { Kind = "tvp", Rows = Enumerable.Range(1, 5000).Select(value => (IReadOnlyList<string?>)[value.ToString(CultureInfo.InvariantCulture)]).ToArray() }],
+            },
+        };
+
+        var resolved = ParameterSetResolver.Resolve(SqlDialects.For(SqlEngine.SqlServer), [], null, sets);
+
+        Assert.Equal(2, resolved.Count);
+        Assert.Equal(2, Assert.Single(resolved[0].Inputs).Rows!.Count);
+        Assert.Equal(5000, Assert.Single(resolved[1].Inputs).Rows!.Count);
+    }
+
+    [Fact]
+    public void Non_scalar_parameter_set_does_not_create_an_unkeyed_value_hash()
+    {
+        var sets = MeasureParameterSetValidator.Prepare(
+            [],
+            [new SqlHarnessParameterSetInput("small", [])
+            {
+                TypedParameters = [new SqlHarnessParameterInput("Ids", "dbo.IdList", null) { Kind = "tvp", Rows = [["7"]] }],
+            }, new SqlHarnessParameterSetInput("large", [])
+            {
+                TypedParameters = [new SqlHarnessParameterInput("Ids", "dbo.IdList", null) { Kind = "tvp", Rows = [["1"], ["2"]] }],
+            }],
+            null,
+            "SELECT 1");
+
+        Assert.All(sets, set => Assert.Null(set.ValueHash));
+    }
+
+    [Fact]
     public void Typed_non_scalar_inputs_obey_the_eight_parameter_limit_and_name_the_parameter()
     {
         var inputs = Enumerable.Range(0, 9)
@@ -143,7 +183,7 @@ public sealed class MeasureParameterSetValidationTests
     }
 
     [Fact]
-    public void Non_scalar_input_cannot_fall_through_to_scalar_execution()
+    public void SQL_Server_non_scalar_input_is_admitted_for_materialization()
     {
         var input = new SqlHarnessParameterInput("Ids", "int", null)
         {
@@ -151,10 +191,8 @@ public sealed class MeasureParameterSetValidationTests
             Values = ["1", "2"],
         };
 
-        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
-            ParameterSetResolver.RequireScalarExecution([input], SqlEngine.SqlServer));
-
-        Assert.Equal("Table-valued and list parameter execution is not available in this operation yet.", exception.Message);
+        var tableNames = ParameterSetResolver.ValidateInputs([input], SqlEngine.SqlServer);
+        Assert.Empty(tableNames);
     }
 
     [Fact]
@@ -657,7 +695,7 @@ public sealed class MeasureParameterSetValidationTests
             [new("only", setParameters), new("same-shape", setParameters)],
             null,
             "select @b, @Amount, @c, @d");
-        return sets[0].ValueHash;
+        return sets[0].ValueHash!;
     }
 
     private static SqlHarnessSafetyException Reject(

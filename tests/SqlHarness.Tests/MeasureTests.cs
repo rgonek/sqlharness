@@ -24,7 +24,7 @@ public class SqlHarnessMeasureTests
             QuerySql = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
         });
 
-        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
         var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
         Assert.Equal(
             ["isolation level SERIALIZABLE in effect", "isolation level REPEATABLE READ in effect"],
@@ -766,6 +766,39 @@ public class SqlHarnessMeasureTests
         Assert.Equal(4, outcome.BenchmarkRuns!.Count);
         Assert.Equal(["small", "small", "large", "large"], outcome.BenchmarkRuns.Select(run => run.ParameterSet));
         Assert.All(outcome.BenchmarkRuns, run => Assert.Null(run.MatrixCell));
+    }
+
+    [Fact]
+    public async Task Measure_parameter_sets_materialize_distinct_list_values_per_case()
+    {
+        var session = FakeMeasureSession.Create();
+        var operation = Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT Id FROM dbo.Clients WHERE Id IN @Ids",
+            ParameterSets =
+            [
+                new SqlHarnessParameterSetInput("small", [])
+                {
+                    TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["1", "2"] }],
+                },
+                new SqlHarnessParameterSetInput("large", [])
+                {
+                    TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["5", "6", "7"] }],
+                },
+            ],
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        var queryCommands = session.Commands.Where(command => command.Sql.StartsWith("SELECT Id FROM dbo.Clients WHERE Id IN", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(4, queryCommands.Length);
+        Assert.All(queryCommands.Where(command => command.Parameters.Count == 2), command =>
+            Assert.Equal(new[] { 1, 2 }, command.Parameters.Select(parameter => (int)parameter.Value).ToArray()));
+        Assert.All(queryCommands.Where(command => command.Parameters.Count == 3), command =>
+            Assert.Equal(new[] { 5, 6, 7 }, command.Parameters.Select(parameter => (int)parameter.Value).ToArray()));
+        Assert.Null(Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report).Sets[0].ValueHash);
     }
 
     [Fact]

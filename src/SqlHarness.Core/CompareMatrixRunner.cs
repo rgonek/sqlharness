@@ -115,6 +115,7 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
             var request = run.Template with
             {
                 Parameters = [.. run.FixedParameters, .. set.Parameters],
+                ParameterInputs = [.. run.Template.ParameterInputs, .. set.Inputs],
             };
             _cells.ComparisonMaximumRows = ComparisonMaximumRows;
             try
