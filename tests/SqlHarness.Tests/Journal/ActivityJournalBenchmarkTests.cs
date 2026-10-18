@@ -164,17 +164,20 @@ public sealed class ActivityJournalBenchmarkTests
         var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
         const string document = """
             <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements>
-            <StmtSimple StatementText="SELECT 1"><QueryPlan><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan></StmtSimple>
-            <StmtSimple StatementText="SELECT 2"><QueryPlan><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan></StmtSimple>
+            <StmtSimple StatementText="SELECT 1" StatementId="5" StatementCompId="2"><QueryPlan><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan></StmtSimple>
+            <StmtSimple StatementText="SELECT 2" StatementId="6" StatementCompId="3"><QueryPlan><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan></StmtSimple>
             </Statements></Batch></BatchSequence></ShowPlanXML>
             """;
+        const string executedSql = "DECLARE @x int; SELECT 1; SELECT 2;";
         var record = JournalBenchmarkBuilder.Build(
-        [new CompareRunArtifact("measure", 1, 10, 12, 5, new Dictionary<string, long>(), "h", [document], 1)]);
+        [new CompareRunArtifact("measure", 1, 10, 12, 5, new Dictionary<string, long>(), "h", [document], 1)
+            { ExecutedSql = executedSql }]);
 
         journal.RecordBenchmark(handle, record);
 
         var occurrences = JournalDb.Rows(temp.DatabasePath, """
-            SELECT repetition, document_ordinal, statement_index, document_sha
+            SELECT repetition, document_ordinal, statement_index, document_sha,
+                   span_start, span_length, match_kind, statement_id, statement_comp_id
             FROM plan_occurrences ORDER BY statement_index;
             """);
         Assert.Equal(2, occurrences.Count);
@@ -184,7 +187,16 @@ public sealed class ActivityJournalBenchmarkTests
             Assert.Equal(1L, row["repetition"]);
             Assert.Equal(0L, row["document_ordinal"]);
             Assert.Equal(record.PlanDocuments.Single().Sha256, row["document_sha"]);
+            Assert.Equal("exact", row["match_kind"]);
+            Assert.NotNull(row["span_start"]);
+            Assert.NotNull(row["span_length"]);
+            Assert.NotNull(row["statement_id"]);
+            Assert.NotNull(row["statement_comp_id"]);
         });
+        Assert.Equal([5L, 6L], occurrences.Select(row => (long)row["statement_id"]!).ToArray());
+        Assert.Equal([2L, 3L], occurrences.Select(row => (long)row["statement_comp_id"]!).ToArray());
+        Assert.Equal(PlanIdentity.StatementSha256("SELECT 1;"), record.Statements[0].StatementHash);
+        Assert.Equal(PlanIdentity.StatementSha256("SELECT 2;"), record.Statements[1].StatementHash);
     }
 
     [Fact]

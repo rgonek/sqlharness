@@ -9,6 +9,9 @@ namespace SqlHarness.Core;
 /// <summary>Uppercase SHA-256 of a plan's operator tree, not one execution's runtime counters.</summary>
 internal static class PlanIdentity
 {
+    internal static string StatementSha256(string statement) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(statement))).ToLowerInvariant();
+
     private static readonly HashSet<string> RuntimeElements = new(StringComparer.Ordinal)
     {
         "ParameterList",

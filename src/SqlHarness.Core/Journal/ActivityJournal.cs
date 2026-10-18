@@ -514,8 +514,10 @@ public sealed class ActivityJournal : IActivityJournal
 
                         using var insert = Command(connection, transaction, """
                             INSERT OR IGNORE INTO plan_occurrences
-                                (metric_id, repetition, document_ordinal, statement_index, document_sha, omitted)
-                            VALUES ($metric, $repetition, $documentOrdinal, $statementIndex, $sha, $omitted);
+                                (metric_id, repetition, document_ordinal, statement_index, document_sha, omitted,
+                                 span_start, span_length, match_kind, statement_id, statement_comp_id)
+                            VALUES ($metric, $repetition, $documentOrdinal, $statementIndex, $sha, $omitted,
+                                    $spanStart, $spanLength, $matchKind, $statementId, $statementCompId);
                             """);
                         insert.Parameters.AddWithValue("$metric", metricId);
                         insert.Parameters.AddWithValue("$repetition", occurrence.Repetition);
@@ -523,6 +525,11 @@ public sealed class ActivityJournal : IActivityJournal
                         insert.Parameters.AddWithValue("$statementIndex", occurrence.StatementIndex);
                         insert.Parameters.AddWithValue("$sha", !omitted && document is not null ? document.Sha256 : DBNull.Value);
                         insert.Parameters.AddWithValue("$omitted", omitted ? 1 : 0);
+                        insert.Parameters.AddWithValue("$spanStart", (object?)occurrence.SpanStart ?? DBNull.Value);
+                        insert.Parameters.AddWithValue("$spanLength", (object?)occurrence.SpanLength ?? DBNull.Value);
+                        insert.Parameters.AddWithValue("$matchKind", occurrence.MatchKind);
+                        insert.Parameters.AddWithValue("$statementId", (object?)occurrence.StatementId ?? DBNull.Value);
+                        insert.Parameters.AddWithValue("$statementCompId", (object?)occurrence.StatementCompId ?? DBNull.Value);
                         insert.ExecuteNonQuery();
                     }
                 }

@@ -60,10 +60,19 @@ internal static class JournalBenchmarkBuilder
             foreach (var plan in run.PlanXmls)
             {
                 var statements = StatementMetricsExtractor.Extract(plan, out var omitted);
-                extracted.AddRange(statements.Select(statement => (run, statement with
+                var pairs = StatementSpanPairer.Pair(run.ExecutedSql, plan);
+                extracted.AddRange(statements.Select(statement =>
                 {
-                    StatementOrdinal = statement.StatementOrdinal + ordinalOffset,
-                })));
+                    var pair = statement.StatementOrdinal < pairs.Count ? pairs[statement.StatementOrdinal] : null;
+                    var hash = pair is { SpanStart: int start, SpanLength: int length } && run.ExecutedSql is { } sql
+                        ? PlanIdentity.StatementSha256(sql.Substring(start, length))
+                        : statement.StatementHash;
+                    return (run, statement with
+                    {
+                        StatementOrdinal = statement.StatementOrdinal + ordinalOffset,
+                        StatementHash = hash,
+                    });
+                }));
                 ordinalOffset += statements.Count + omitted;
             }
         }
@@ -123,11 +132,22 @@ internal static class JournalBenchmarkBuilder
                 var sha256 = PlanIdentity.DocumentSha256(document);
                 var shapeHash = PlanIdentity.Hash(document);
                 links.Add(new JournalPlanLink(run.Repetition, ordinal, sha256));
+                var pairs = StatementSpanPairer.Pair(run.ExecutedSql, document);
                 var statementCount = StatementMetricsExtractor.CountStatements(document);
                 if (statementCount == 0)
                     statementCount = 1;
                 for (var statementIndex = 0; statementIndex < statementCount; statementIndex++)
-                    occurrences.Add(new JournalPlanOccurrence(run.Repetition, ordinal, statementIndex, sha256));
+                {
+                    var pair = statementIndex < pairs.Count ? pairs[statementIndex] : null;
+                    occurrences.Add(new JournalPlanOccurrence(run.Repetition, ordinal, statementIndex, sha256)
+                    {
+                        SpanStart = pair?.SpanStart,
+                        SpanLength = pair?.SpanLength,
+                        MatchKind = pair?.MatchKind ?? "unmatched",
+                        StatementId = pair?.StatementId,
+                        StatementCompId = pair?.StatementCompId,
+                    });
+                }
                 documents.TryAdd(sha256, new JournalPlanDocument(sha256, shapeHash,
                     IsJson(document) ? "explain-json" : "showplan-xml", document));
             }

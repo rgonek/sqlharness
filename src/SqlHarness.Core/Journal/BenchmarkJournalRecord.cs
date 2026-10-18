@@ -53,7 +53,14 @@ public sealed record JournalPlanOccurrence(
     int DocumentOrdinal,
     int StatementIndex,
     string? DocumentSha,
-    bool Omitted = false);
+    bool Omitted = false)
+{
+    public int? SpanStart { get; init; }
+    public int? SpanLength { get; init; }
+    public string MatchKind { get; init; } = "unmatched";
+    public int? StatementId { get; init; }
+    public int? StatementCompId { get; init; }
+}
 
 public sealed record JournalStatementMetrics(
     string Variant,

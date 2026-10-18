@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
+- IN PROGRESS — Tasks 0–2 complete on `plan-088`; final gate pending. Planning base `5261846`. Depends on 080 and 087. Coordinate with 082: per-statement IO should consume this plan's statement occurrences if 088 lands first; otherwise 088 adapts to 082's statement model.
 - Priority P2; effort L; risk MEDIUM (undocumented `TableReferenceId`, Showplan schema drift).
 
 ## Global Constraints
@@ -72,8 +72,8 @@ The prototypes use no icon set. The official [vscode-mssql repository license](h
 
 ### Task 2: Statement spans from the executed text
 **Files:** new `src/SqlHarness.Core/Plans/StatementSpanPairer.cs` (ScriptDom over executed text, reuse the parser setup in `Dialect/SqlServerDocument.cs`), call site where occurrences are built (Task 1), occurrence columns `span_start`, `span_length`, `match_kind`, `statement_id`, `statement_comp_id`; `StatementMetrics.cs` (~`:89-91` statement hash from the paired span text, not truncated `StatementText`).
-- [ ] Failing tests: exact; `Psp_suffix_is_stripped`; normalized whitespace (CRLF vs LF) without altering literals; `Truncated_statement_text_pairs_by_prefix`; two statements sharing a 3999-character prefix → `ambiguous`; `Planless_statements_do_not_shift_pairing`; unparsable batch → `unmatched` for all, documents still stored.
-- [ ] FAIL → implement → PASS. Commit `feat(088): pair plan statements with executed SQL spans`.
+- [x] Failing tests: exact; `Psp_suffix_is_stripped`; normalized whitespace (CRLF vs LF) without altering literals; `Truncated_statement_text_pairs_by_prefix`; two statements sharing a 3999-character prefix → `ambiguous`; `Planless_statements_do_not_shift_pairing`; unparsable batch → `unmatched` for all, documents still stored.
+- [x] FAIL → implement → PASS. Commit `feat(088): pair plan statements with executed SQL spans`.
 
 ### Task 3: PlanGraph builder
 **Files:** new `src/SqlHarness.Core/Plans/PlanGraph.cs`, `PlanGraphBuilder.cs` (Showplan → nodes with own `Object`, predicates, defined values, estimated/actual rows and executions, per-thread counters summed, warnings, `TableReferenceId`; edges with rows and estimated size; property tree served separately), using the existing `PlanDistiller` safety settings and limits; tests with synthetic Showplan fixtures under `tests/SqlHarness.Tests/Fixtures/Plans/`.
