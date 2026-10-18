@@ -51,3 +51,28 @@ Replace representative preparation with full expansion after `rowsFrom`/`valuesF
 ## Concerns
 
 The representative `valuesFrom` value is typed SQL NULL; it proves offline parse, safety classification, and reference binding but does not establish the materialized list's actual types or length. Full materialization, list execution, and live SQL Server behavior remain unverified until Task 3 and the authorized integration gates.
+
+## Review fix round 1
+
+Addressed both Important findings from `task-2-review.md`: compare representative bindings now union setup, baseline, and candidate expansion outputs; measure representative bindings union setup and query outputs. Shared list names are deduplicated, and conflicting representative values for the same generated name fail closed.
+
+Expansion now returns bindings only for list tokens present in that SQL text. This makes each expansion's result reflect its text and requires the compare/measure union above. Repeated references within one text still share one binding set.
+
+### RED / GREEN evidence
+
+- RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter 'FullyQualifiedName~Does_not_emit_bindings_for_lists_not_referenced_by_this_SQL_text|FullyQualifiedName~Compare_dry_run_includes_a_list_used_only|FullyQualifiedName~Compare_dry_run_deduplicates_a_list_shared|FullyQualifiedName~Measure_dry_run_includes_a_list_used_only|FullyQualifiedName~Measure_dry_run_deduplicates_a_list_shared'` — Failed 1, Passed 5. The new expander contract failed because `SELECT 1` still returned `@Ids1` and `@Ids2`; the operation regressions passed on the previous implementation because it emitted every declared list for every SQL text.
+- GREEN: the same command after the change — Passed 6, Failed 0. Covers the per-text binding contract, candidate-only compare list, setup-only compare list, setup-only measure list, and one binding for list use across multiple SQL texts.
+- Final focused command:
+  `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter 'FullyQualifiedName~SqlHarnessCompareTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~SqlHarnessMeasureTests|FullyQualifiedName~WatchTests|FullyQualifiedName~WatchNdjsonTests|FullyQualifiedName~SnapshotTests|FullyQualifiedName~SnapshotScopeTests|FullyQualifiedName~SqlHarnessQueryTests|FullyQualifiedName~ListParameterExpanderTests'`
+  — Passed 339, Failed 0, Skipped 0.
+- `git diff --check` passed. No full gate or live database was run.
+
+### Changed files in this fix round
+
+- `src/SqlHarness.Core/ListParameterExpander.cs`
+- `src/SqlHarness.Core/CompareCellRunner.cs`
+- `src/SqlHarness.Core/SqlHarnessModule.cs`
+- `src/SqlHarness.Core/SqlSafety.cs`
+- `tests/SqlHarness.Tests/ListParameterExpanderTests.cs`
+- `tests/SqlHarness.Tests/CompareTests.cs`
+- `tests/SqlHarness.Tests/MeasureTests.cs`

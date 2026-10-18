@@ -45,6 +45,17 @@ public sealed class ListParameterExpanderTests
     }
 
     [Fact]
+    public void Does_not_emit_bindings_for_lists_not_referenced_by_this_SQL_text()
+    {
+        var expanded = ListParameterExpander.Expand(
+            "SELECT 1",
+            [new ListValues("Ids", "int", ["1", "2"]) ]);
+
+        Assert.Equal("SELECT 1", expanded.Text);
+        Assert.Empty(expanded.Parameters);
+    }
+
+    [Fact]
     public void Expands_an_empty_list_to_a_typed_false_subquery()
     {
         var expanded = ListParameterExpander.Expand(

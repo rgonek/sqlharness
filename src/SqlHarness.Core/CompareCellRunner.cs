@@ -76,7 +76,11 @@ internal static class CompareOperationPreparer
         var setupExpansion = string.IsNullOrWhiteSpace(setupSql)
             ? new ExpandedSql(setupSql ?? string.Empty, [])
             : SqlParameterInputs.ExpandListsForClassification(setupSql, resolvedParameterInputs);
-        var classificationParameters = SqlParameterInputs.CombineClassificationParameters(scalarParameters, baselineExpansion.Parameters);
+        var representativeListParameters = SqlParameterInputs.DeduplicateClassificationListParameters(
+            setupExpansion.Parameters,
+            baselineExpansion.Parameters,
+            candidateExpansion.Parameters);
+        var classificationParameters = SqlParameterInputs.CombineClassificationParameters(scalarParameters, representativeListParameters);
 
         SqlSafetyDecision? setupSafety = null;
         IReadOnlySet<string> setupTemps = NoSessionTemps;

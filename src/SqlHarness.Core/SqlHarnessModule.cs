@@ -820,7 +820,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var setupExpansion = string.IsNullOrWhiteSpace(measure.SetupSql)
                 ? new ExpandedSql(measure.SetupSql ?? string.Empty, [])
                 : SqlParameterInputs.ExpandListsForClassification(measure.SetupSql, parameterInputs);
-            var classificationParameters = SqlParameterInputs.CombineClassificationParameters(parameters, queryExpansion.Parameters);
+            var representativeListParameters = SqlParameterInputs.DeduplicateClassificationListParameters(
+                setupExpansion.Parameters,
+                queryExpansion.Parameters);
+            var classificationParameters = SqlParameterInputs.CombineClassificationParameters(parameters, representativeListParameters);
             SqlSafetyDecision? setupSafety = null;
             IReadOnlySet<string> setupTemps = NoSessionTemps;
             if (!string.IsNullOrWhiteSpace(measure.SetupSql))

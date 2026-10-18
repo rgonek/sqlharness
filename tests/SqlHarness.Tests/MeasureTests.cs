@@ -123,6 +123,36 @@ public class SqlHarnessMeasureTests
     }
 
     [Fact]
+    public async Task Measure_dry_run_includes_a_list_used_only_by_setup_SQL()
+    {
+        var outcome = await Module(FakeMeasureSession.Create()).ExecuteAsync(Measure(1) with
+        {
+            SetupSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            QuerySql = "SELECT 1",
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["1", "2"] }],
+            DryRun = true,
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal("@Ids1", Assert.Single(Assert.IsType<SqlHarnessDryRunReport>(outcome.Report).Parameters).Name);
+    }
+
+    [Fact]
+    public async Task Measure_dry_run_deduplicates_a_list_shared_by_setup_and_query()
+    {
+        var outcome = await Module(FakeMeasureSession.Create()).ExecuteAsync(Measure(1) with
+        {
+            SetupSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            QuerySql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["1", "2"] }],
+            DryRun = true,
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal("@Ids1", Assert.Single(Assert.IsType<SqlHarnessDryRunReport>(outcome.Report).Parameters).Name);
+    }
+
+    [Fact]
     public async Task Measure_parameter_set_dry_run_binds_every_set_without_connecting_or_preflighting_artifacts()
     {
         var session = FakeMeasureSession.Create();

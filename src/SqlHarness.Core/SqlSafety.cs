@@ -117,6 +117,28 @@ internal static class SqlParameterInputs
                 throw new SqlHarnessSafetyException($"List expansion parameter '{parameter.Name}' collides with another supplied SQL parameter.");
         return scalarParameters.Concat(listParameters).ToArray();
     }
+
+    internal static IReadOnlyList<SqlHarnessParameter> DeduplicateClassificationListParameters(
+        params IReadOnlyList<SqlHarnessParameter>[] parameterSets)
+    {
+        var unique = new Dictionary<string, SqlHarnessParameter>(StringComparer.OrdinalIgnoreCase);
+        foreach (var parameter in parameterSets.SelectMany(set => set))
+        {
+            if (unique.TryGetValue(parameter.Name, out var existing))
+            {
+                if (existing.Type != parameter.Type
+                    || existing.Size != parameter.Size
+                    || existing.Precision != parameter.Precision
+                    || existing.Scale != parameter.Scale
+                    || !string.Equals(existing.UdtTypeName, parameter.UdtTypeName, StringComparison.Ordinal)
+                    || !System.Collections.StructuralComparisons.StructuralEqualityComparer.Equals(existing.Value, parameter.Value))
+                    throw new SqlHarnessSafetyException($"List parameter '{parameter.Name}' has inconsistent representative bindings across SQL texts.");
+                continue;
+            }
+            unique.Add(parameter.Name, parameter);
+        }
+        return unique.Values.ToArray();
+    }
 }
 
 internal enum SqlUsage

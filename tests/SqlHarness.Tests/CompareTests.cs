@@ -37,6 +37,56 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
+    public async Task Compare_dry_run_includes_a_list_used_only_by_candidate_SQL()
+    {
+        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(1) with
+        {
+            SetupSql = null,
+            BaselineSql = "SELECT Id FROM dbo.Items",
+            CandidateSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["1", "2"] }],
+            DryRun = true,
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("@Ids1", Assert.Single(report.Parameters).Name);
+    }
+
+    [Fact]
+    public async Task Compare_dry_run_includes_a_list_used_only_by_setup_SQL()
+    {
+        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(1) with
+        {
+            SetupSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            BaselineSql = "SELECT 1",
+            CandidateSql = "SELECT 1",
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["1", "2"] }],
+            DryRun = true,
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("@Ids1", Assert.Single(report.Parameters).Name);
+    }
+
+    [Fact]
+    public async Task Compare_dry_run_deduplicates_a_list_shared_by_multiple_SQL_texts()
+    {
+        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(1) with
+        {
+            SetupSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            BaselineSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            CandidateSql = "SELECT Id FROM dbo.Items WHERE Id IN @Ids",
+            TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["1", "2"] }],
+            DryRun = true,
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal("@Ids1", Assert.Single(Assert.IsType<SqlHarnessDryRunReport>(outcome.Report).Parameters).Name);
+    }
+
+    [Fact]
     public async Task Compare_report_includes_setup_and_variant_isolation_notices()
     {
         var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(1) with

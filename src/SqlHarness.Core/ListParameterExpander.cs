@@ -16,11 +16,22 @@ internal static class ListParameterExpander
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(lists);
 
+        var parser = new TSql180Parser(initialQuotedIdentifiers: true);
+        var tokens = parser.GetTokenStream(new StringReader(sql), out _);
+        var referencedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var token in tokens)
+        {
+            if (token.TokenType == TSqlTokenType.Variable)
+                referencedNames.Add(token.Text);
+            else if (token.TokenType == TSqlTokenType.Identifier && token.Text.StartsWith("IN@", StringComparison.OrdinalIgnoreCase))
+                referencedNames.Add("@" + token.Text[3..]);
+        }
+
         var parameters = new List<SqlHarnessParameter>();
         var listNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var expandedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var replacements = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var list in lists)
+        foreach (var list in lists.Where(list => referencedNames.Contains("@" + SqlParameterNames.Normalize(list.Name))))
         {
             var baseName = "@" + SqlParameterNames.Normalize(list.Name);
             if (!listNames.Add(baseName))
@@ -56,8 +67,6 @@ internal static class ListParameterExpander
             throw new SqlHarnessSafetyException($"SQL parameter '@{SqlParameterNames.Normalize(list?.Name)}' exceeds the {ParameterSetResolver.MaximumCommandParameters} final command parameter limit.");
         }
 
-        var parser = new TSql180Parser(initialQuotedIdentifiers: true);
-        var tokens = parser.GetTokenStream(new StringReader(sql), out _);
         var significant = tokens.Select((token, index) => (token, index))
             .Where(item => item.token.TokenType is not (TSqlTokenType.WhiteSpace or TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment or TSqlTokenType.EndOfFile))
             .ToArray();
