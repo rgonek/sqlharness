@@ -477,6 +477,7 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                             WHERE s.agent_kind = 'claude' AND o.client_call_id = agent_tool_calls.call_id)
                     OR seen_at < $stagingCutoff);
                 """, ("$stagingCutoff", Timestamp(time.GetUtcNow() - StagingLifetime)));
+            FreezeCompareVersionLabels(connection);
             Execute(connection, "COMMIT;");
         }
         catch
@@ -485,6 +486,98 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
             throw;
         }
     }
+
+    private static void FreezeCompareVersionLabels(SqliteConnection connection)
+    {
+        var occurrences = new List<VersionOccurrence>();
+        using (var command = Command(connection, """
+            SELECT o.id, o.started_at, s.agent_kind, c.conversation_id, o.compare_subject, o.compare_scope,
+                   o.sql_hash, o.candidate_sql_hash, o.agent_session_id
+            FROM operations o JOIN sessions s ON s.id = o.session_id
+            LEFT JOIN operation_agent_links l ON l.operation_id = o.id
+            LEFT JOIN agent_conversations c ON c.id = l.conversation
+            WHERE s.transport = 'mcp' AND o.compare_subject IS NOT NULL AND o.compare_scope IS NOT NULL
+              AND (o.operation = 'compare' OR (o.operation = 'measure' AND o.sql_hash IS NOT NULL))
+              AND ((l.operation_id IS NOT NULL AND c.agent_kind = s.agent_kind)
+                   OR (s.agent_kind IN ('codex', 'opencode') AND o.agent_session_id IS NOT NULL))
+            ORDER BY o.started_at, o.id;
+            """))
+        using (var reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                var kind = reader.GetString(2);
+                var conversation = reader.IsDBNull(3) ? null : reader.GetString(3);
+                if (kind is "codex" or "opencode" && !reader.IsDBNull(8))
+                    conversation ??= reader.GetString(8);
+                if (conversation is null)
+                    continue;
+                var id = reader.GetInt64(0);
+                var started = reader.GetString(1);
+                var subject = reader.GetString(4);
+                var scope = reader.GetString(5);
+                if (!reader.IsDBNull(6))
+                    occurrences.Add(new VersionOccurrence(id, started, kind, conversation, subject, scope, reader.GetString(6), 0));
+                if (!reader.IsDBNull(7))
+                    occurrences.Add(new VersionOccurrence(id, started, kind, conversation, subject, scope, reader.GetString(7), 1));
+            }
+        }
+
+        var earliestPending = new Dictionary<string, (string StartedAt, long OperationId)>(StringComparer.Ordinal);
+        using (var command = Command(connection, """
+            SELECT s.agent_kind, o.started_at, o.id FROM operations o JOIN sessions s ON s.id = o.session_id
+            WHERE s.transport = 'mcp' AND ((s.agent_kind = 'claude' AND o.client_call_id IS NOT NULL)
+                OR (s.agent_kind IN ('codex', 'opencode') AND o.agent_session_id IS NOT NULL))
+              AND NOT EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.operation_id = o.id);
+            """))
+        using (var reader = command.ExecuteReader())
+            while (reader.Read())
+            {
+                var kind = reader.GetString(0);
+                var started = reader.GetString(1);
+                var operationId = reader.GetInt64(2);
+                if (!earliestPending.TryGetValue(kind, out var earliest)
+                    || string.CompareOrdinal(started, earliest.StartedAt) < 0
+                    || started == earliest.StartedAt && operationId < earliest.OperationId)
+                    earliestPending[kind] = (started, operationId);
+            }
+
+        var labels = new Dictionary<(string Kind, string Conversation, string Subject, string Scope, string Hash), string>();
+        using (var command = Command(connection, "SELECT context_kind, context_key, subject, scope, sql_hash, label FROM compare_version_labels;"))
+        using (var reader = command.ExecuteReader())
+            while (reader.Read())
+                labels[(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4))] = reader.GetString(5);
+
+        var next = labels.GroupBy(pair => (pair.Key.Kind, pair.Key.Conversation, pair.Key.Subject, pair.Key.Scope))
+            .ToDictionary(group => group.Key, group => group.Select(pair => ParseVersion(pair.Value) + 1).DefaultIfEmpty(0).Max());
+        foreach (var occurrence in occurrences.OrderBy(item => item.StartedAt, StringComparer.Ordinal)
+                     .ThenBy(item => item.OperationId).ThenBy(item => item.Side))
+        {
+            var key = ($"agent:{occurrence.AgentKind}", occurrence.ConversationId, occurrence.Subject, occurrence.Scope, occurrence.Hash);
+            if (labels.ContainsKey(key))
+                continue;
+            if (earliestPending.TryGetValue(occurrence.AgentKind, out var pending)
+                && (string.CompareOrdinal(pending.StartedAt, occurrence.StartedAt) < 0
+                    || pending.StartedAt == occurrence.StartedAt && pending.OperationId < occurrence.OperationId))
+                continue;
+            var group = (key.Item1, key.ConversationId, key.Subject, key.Scope);
+            var ordinal = next.GetValueOrDefault(group);
+            var label = $"v{ordinal.ToString(CultureInfo.InvariantCulture)}";
+            Execute(connection, """
+                INSERT OR IGNORE INTO compare_version_labels (context_kind, context_key, subject, scope, sql_hash, label)
+                VALUES ($kind, $context, $subject, $scope, $hash, $label);
+                """, ("$kind", key.Item1), ("$context", key.ConversationId), ("$subject", key.Subject),
+                ("$scope", key.Scope), ("$hash", key.Hash), ("$label", label));
+            labels[key] = label;
+            next[group] = ordinal + 1;
+        }
+    }
+
+    private static int ParseVersion(string value) => value.Length > 1 && value[0] == 'v'
+        && int.TryParse(value.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number : -1;
+
+    private sealed record VersionOccurrence(long OperationId, string StartedAt, string AgentKind,
+        string ConversationId, string Subject, string Scope, string Hash, int Side);
 
     private static TailCursor? LoadCursor(SqliteConnection connection, string path)
     {

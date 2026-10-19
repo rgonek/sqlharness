@@ -175,6 +175,122 @@ public sealed class AgentSessionsTests
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/agent-sessions/codex/thread-1")).StatusCode);
         using var patch = Patch("/api/agent-sessions/codex/thread-1/annotation", "{\"title\":\"hidden\"}");
         Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(patch)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/agent-sessions/claude/conversation-1/optimization")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/agent-sessions/claude/conversation-1/optimization/compare")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Agent_optimization_is_provisional_while_an_earlier_exact_call_is_unmatched_and_get_does_not_freeze_labels()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var child = JournalSeed.Session("claude:optimization", "claude") with { Transport = JournalTransport.Mcp };
+        seed.Operation(child, agent: new AgentCallMetadata("tool-pending", null, null, null, null, null, null));
+        var compare = seed.Compare(child, "orders", "whole", "sha256:h0", "sha256:h1",
+            agent: new AgentCallMetadata("tool-linked", null, null, null, null, null, null));
+        JournalSeed.Link(home.DatabasePath, compare.OperationId, "claude", "conversation-1", "Conversation");
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+        var before = SqlHarness.Tests.Journal.JournalDb.Rows(home.DatabasePath, "SELECT * FROM compare_version_labels").Count;
+
+        using var summaryResponse = await client.GetAsync("/api/agent-sessions/claude/conversation-1/optimization");
+        Assert.Equal(HttpStatusCode.OK, summaryResponse.StatusCode);
+        using var summary = JsonDocument.Parse(await summaryResponse.Content.ReadAsStringAsync());
+        Assert.True(summary.RootElement.GetProperty("versionLabelsProvisional").GetBoolean());
+        Assert.Equal("versions may renumber while matching catches up", summary.RootElement.GetProperty("versionLabelNote").GetString());
+
+        using var compareResponse = await client.GetAsync("/api/agent-sessions/claude/conversation-1/optimization/compare");
+        Assert.Equal(HttpStatusCode.OK, compareResponse.StatusCode);
+        using var comparison = JsonDocument.Parse(await compareResponse.Content.ReadAsStringAsync());
+        Assert.True(comparison.RootElement.GetProperty("versionLabelsProvisional").GetBoolean());
+        Assert.Equal("versions may renumber while matching catches up", comparison.RootElement.GetProperty("versionLabelNote").GetString());
+        Assert.Equal(before, SqlHarness.Tests.Journal.JournalDb.Rows(home.DatabasePath, "SELECT * FROM compare_version_labels").Count);
+    }
+
+    [Fact]
+    public async Task Agent_optimization_joins_exact_mcp_histories_and_leaves_cli_history_on_its_child()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var firstSession = JournalSeed.Session("codex:first", "codex") with { Transport = JournalTransport.Mcp };
+        var secondSession = JournalSeed.Session("codex:second", "codex") with { Transport = JournalTransport.Mcp };
+        var cliSession = JournalSeed.Session("codex:cli", "codex");
+        var first = seed.Compare(firstSession, "orders", "whole", "sha256:h0", "sha256:h1",
+            agent: new AgentCallMetadata(null, null, null, "thread-1", null, null, null));
+        seed.Compare(secondSession, "orders", "whole", "sha256:h1", "sha256:h2",
+            agent: new AgentCallMetadata(null, null, null, "thread-1", null, null, null));
+        seed.Compare(cliSession, "orders", "whole", "sha256:h2", "sha256:h3",
+            agent: new AgentCallMetadata(null, null, null, "thread-1", null, null, null));
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync("/api/agent-sessions/codex/thread-1/optimization");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var aggregate = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var aggregateHashes = aggregate.RootElement.GetProperty("subjects").EnumerateArray()
+            .SelectMany(subject => subject.GetProperty("groups").EnumerateArray())
+            .SelectMany(group => group.GetProperty("scopes").EnumerateArray())
+            .SelectMany(scope => scope.GetProperty("versions").EnumerateArray())
+            .Select(version => version.GetProperty("hash").GetString()).ToArray();
+        Assert.Equal(new[] { "sha256:h0", "sha256:h1", "sha256:h2" }, aggregateHashes);
+
+        var childId = (long)SqlHarness.Tests.Journal.JournalDb.Rows(home.DatabasePath,
+            "SELECT id FROM sessions WHERE session_key = 'codex:cli'").Single()["id"]!;
+        using var childResponse = await client.GetAsync($"/api/sessions/{childId}/optimization");
+        Assert.Equal(HttpStatusCode.OK, childResponse.StatusCode);
+        using var child = JsonDocument.Parse(await childResponse.Content.ReadAsStringAsync());
+        Assert.Contains(child.RootElement.GetProperty("subjects").EnumerateArray()
+            .SelectMany(subject => subject.GetProperty("groups").EnumerateArray())
+            .SelectMany(group => group.GetProperty("scopes").EnumerateArray())
+            .SelectMany(scope => scope.GetProperty("versions").EnumerateArray())
+            .Select(version => version.GetProperty("hash").GetString()), hash => hash == "sha256:h3");
+        Assert.NotEqual(0, first.OperationId);
+    }
+
+    [Fact]
+    public async Task Agent_optimization_excludes_inferred_compare_kept_in_child_history()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("claude:inferred", "claude") with { Transport = JournalTransport.Mcp };
+        var first = seed.Compare(session, "orders", "whole", "sha256:h0", "sha256:h1",
+            agent: new AgentCallMetadata("tool-first", null, null, null, null, null, null));
+        var inferred = seed.Compare(session, "orders", "whole", "sha256:h1", "sha256:h3");
+        var last = seed.Compare(session, "orders", "whole", "sha256:h1", "sha256:h2",
+            agent: new AgentCallMetadata("tool-last", null, null, null, null, null, null));
+        JournalSeed.Link(home.DatabasePath, first.OperationId, "claude", "conversation-inferred", null);
+        JournalSeed.Link(home.DatabasePath, last.OperationId, "claude", "conversation-inferred", null);
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var aggregateResponse = await client.GetAsync("/api/agent-sessions/claude/conversation-inferred/optimization");
+        Assert.Equal(HttpStatusCode.OK, aggregateResponse.StatusCode);
+        using var aggregate = JsonDocument.Parse(await aggregateResponse.Content.ReadAsStringAsync());
+        var aggregateHashes = aggregate.RootElement.GetProperty("subjects").EnumerateArray()
+            .SelectMany(subject => subject.GetProperty("groups").EnumerateArray())
+            .SelectMany(group => group.GetProperty("scopes").EnumerateArray())
+            .SelectMany(scope => scope.GetProperty("versions").EnumerateArray())
+            .Select(version => version.GetProperty("hash").GetString()).ToArray();
+        Assert.DoesNotContain("sha256:h3", aggregateHashes);
+
+        using var detailResponse = await client.GetAsync("/api/agent-sessions/claude/conversation-inferred");
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        using var detail = JsonDocument.Parse(await detailResponse.Content.ReadAsStringAsync());
+        Assert.Contains(detail.RootElement.GetProperty("operations").EnumerateArray(), operation =>
+            operation.GetProperty("operation").GetProperty("id").GetInt64() == inferred.OperationId
+            && operation.GetProperty("membership").GetString() == "inferred");
+
+        var childId = (long)SqlHarness.Tests.Journal.JournalDb.Rows(home.DatabasePath,
+            "SELECT id FROM sessions WHERE session_key = 'claude:inferred'").Single()["id"]!;
+        using var childResponse = await client.GetAsync($"/api/sessions/{childId}/optimization");
+        Assert.Equal(HttpStatusCode.OK, childResponse.StatusCode);
+        using var child = JsonDocument.Parse(await childResponse.Content.ReadAsStringAsync());
+        Assert.Contains(child.RootElement.GetProperty("subjects").EnumerateArray()
+            .SelectMany(subject => subject.GetProperty("groups").EnumerateArray())
+            .SelectMany(group => group.GetProperty("scopes").EnumerateArray())
+            .SelectMany(scope => scope.GetProperty("versions").EnumerateArray())
+            .Select(version => version.GetProperty("hash").GetString()), hash => hash == "sha256:h3");
+        Assert.NotEqual(inferred.OperationId, last.OperationId);
     }
 
     [Fact]

@@ -390,8 +390,37 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     public OptimizationSection Optimization(long sessionId, bool storeSensitive = true) =>
         OptimizationSummaryBuilder.Build(OptimizationEvidence(sessionId, storeSensitive));
 
+    public OptimizationSection AgentOptimization(AgentSessionKey key, bool storeSensitive = true)
+    {
+        var evidence = OptimizationEvidenceForAgentSession(key, storeSensitive);
+        var context = ContextKey.AgentSession(key.AgentKind, key.ConversationId);
+        var labels = CompareVersionLabels(context);
+        var hashes = evidence.Where(item => item.Subject is not null && item.Scope is not null)
+            .SelectMany(item => new[] { item.BaselineHash, item.CandidateHash }.Where(hash => hash is not null)
+                .Select(hash => (item.Subject!, item.Scope!, hash!))).Distinct().ToArray();
+        var provisional = hashes.Any(hash => !labels.ContainsKey(hash));
+        return OptimizationSummaryBuilder.Build(evidence, context, labels, provisional);
+    }
+
     /// <summary>Reads every retained compare with its actual per-case and per-table journal evidence.</summary>
     public IReadOnlyList<CompareEvidence> OptimizationEvidence(long sessionId, bool storeSensitive = true)
+        => ReadOptimizationEvidence(sessionId, null, storeSensitive);
+
+    public IReadOnlyList<CompareEvidence> OptimizationEvidenceForAgentSession(AgentSessionKey key, bool storeSensitive = true)
+        => ReadOptimizationEvidence(null, key, storeSensitive);
+
+    private IReadOnlyDictionary<(string Subject, string Scope, string Hash), string> CompareVersionLabels(ContextKey context)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return new Dictionary<(string Subject, string Scope, string Hash), string>();
+        return Query(connection, "SELECT subject, scope, sql_hash, label FROM compare_version_labels WHERE context_kind = $kind AND context_key = $key;",
+            [("$kind", context.Kind), ("$key", context.Key)], reader =>
+                (Key: (reader.GetString(0), reader.GetString(1), reader.GetString(2)), Label: reader.GetString(3)))
+            .ToDictionary(row => row.Key, row => row.Label);
+    }
+
+    private IReadOnlyList<CompareEvidence> ReadOptimizationEvidence(long? sessionId, AgentSessionKey? agentSession, bool storeSensitive)
     {
         using var connection = OpenSnapshot();
         if (connection is null)
@@ -407,13 +436,18 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                    m.cpu_ms_median, m.pg_shared_hit, m.pg_shared_read, m.pg_shared_dirtied,
                    m.pg_shared_written, m.pg_temp_read, m.pg_temp_written,
                    t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, COALESCE(m.omitted_statements, 0)
-            FROM operations o
+            FROM operations o JOIN sessions s ON s.id = o.session_id
             LEFT JOIN operation_metrics m ON m.operation_id = o.id
             LEFT JOIN operation_table_io t ON t.metric_id = m.id
-            WHERE o.session_id = $session AND (o.operation = 'compare' OR (o.operation = 'measure'
+            WHERE (($session IS NOT NULL AND o.session_id = $session) OR ($agentKind IS NOT NULL AND s.transport = 'mcp'
+                  AND s.agent_kind = $agentKind AND (EXISTS (SELECT 1 FROM operation_agent_links l
+                      JOIN agent_conversations c ON c.id = l.conversation WHERE l.operation_id = o.id
+                      AND c.agent_kind = $agentKind AND c.conversation_id = $conversation)
+                    OR (s.agent_kind IN ('codex', 'opencode') AND o.agent_session_id = $conversation))))
+              AND (o.operation = 'compare' OR (o.operation = 'measure'
                 AND o.compare_subject IS NOT NULL AND o.compare_scope IS NOT NULL))
             ORDER BY o.started_at, o.id, m.ordinal, t.table_name;
-            """, [("$session", sessionId)], r => new OptimizationEvidenceRow(
+            """, [("$session", sessionId), ("$agentKind", agentSession?.AgentKind), ("$conversation", agentSession?.ConversationId)], r => new OptimizationEvidenceRow(
             r.GetInt64(0), r.GetString(1), NullableString(r, 2), NullableString(r, 3), NullableString(r, 4), NullableString(r, 5), NullableString(r, 6),
             NullableString(r, 7), NullableString(r, 8), NullableString(r, 9), r.GetString(10),
             liveness.Status(r.GetString(11), r.GetInt64(12), NullableString(r, 13)), NullableString(r, 14), NullableString(r, 15),

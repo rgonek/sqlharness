@@ -5,6 +5,18 @@ namespace SqlHarness.Dashboard;
 public static class OptimizationSummaryBuilder
 {
     public static OptimizationSection Build(IReadOnlyList<CompareEvidence> compares)
+        => BuildCore(compares, null, null, false);
+
+    public static OptimizationSection Build(IReadOnlyList<CompareEvidence> compares, ContextKey context,
+        IReadOnlyDictionary<(string Subject, string Scope, string Hash), string> frozenLabels, bool provisional)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(frozenLabels);
+        return BuildCore(compares, context, frozenLabels, provisional);
+    }
+
+    private static OptimizationSection BuildCore(IReadOnlyList<CompareEvidence> compares, ContextKey? context,
+        IReadOnlyDictionary<(string Subject, string Scope, string Hash), string>? frozenLabels, bool provisional)
     {
         ArgumentNullException.ThrowIfNull(compares);
 
@@ -33,7 +45,12 @@ public static class OptimizationSummaryBuilder
         var unassigned = ordered.Where(compare => !compare.IsMeasure && !IsAssigned(compare))
             .Select(compare => new UnassignedCompare(compare.OperationId, compare.StartedAt, compare.Status))
             .ToArray();
-        return new OptimizationSection(subjects, unassigned);
+        return new OptimizationSection(subjects, unassigned)
+        {
+            Context = context,
+            VersionLabelsProvisional = provisional,
+            VersionLabelNote = provisional ? "versions may renumber while matching catches up" : null,
+        };
 
         string? Version(string? subject, string? scope, string? hash)
         {
@@ -42,6 +59,12 @@ public static class OptimizationSummaryBuilder
             var key = (subject, scope);
             if (!versionMaps.TryGetValue(key, out var map))
                 versionMaps.Add(key, map = new Dictionary<string, string>(StringComparer.Ordinal));
+            if (frozenLabels is not null && frozenLabels.TryGetValue((subject, scope, hash), out var frozen))
+            {
+                map[hash] = frozen;
+                nextVersion[key] = Math.Max(nextVersion.GetValueOrDefault(key), FrozenVersionOrdinal(frozen) + 1);
+                return frozen;
+            }
             if (!map.TryGetValue(hash, out var version))
             {
                 nextVersion.TryGetValue(key, out var ordinal);
@@ -282,6 +305,10 @@ public static class OptimizationSummaryBuilder
     private static long NumericVersion(string version) =>
         version.Length > 1 && version[0] == 'v' && long.TryParse(version.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var value)
             ? value : long.MaxValue;
+
+    private static int FrozenVersionOrdinal(string version) =>
+        version.Length > 1 && version[0] == 'v' && int.TryParse(version.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+            ? value : -1;
 
     private static long Sum(IEnumerable<long> values)
     {

@@ -23,6 +23,27 @@ public sealed class OptimizationSummaryBuilderTests
     }
 
     [Fact]
+    public void Provisional_suffix_continues_after_the_highest_frozen_label()
+    {
+        var frozen = new Dictionary<(string Subject, string Scope, string Hash), string>
+        {
+            [("orders", "whole", "h0")] = "v4",
+            [("orders", "whole", "h1")] = "v5",
+        };
+
+        var section = OptimizationSummaryBuilder.Build([
+            Compare(1, "orders", "whole", "db", "f", "h0", "h1"),
+            Compare(2, "orders", "whole", "db", "f", "h1", "h2"),
+        ], ContextKey.AgentSession("claude", "conversation"), frozen, provisional: true);
+
+        var versions = Assert.Single(Assert.Single(Assert.Single(section.Subjects).Groups).Scopes).Versions;
+        Assert.Equal(new[] { ("h0", "v4"), ("h1", "v5"), ("h2", "v6") },
+            versions.Select(version => (version.Hash, version.Version)).ToArray());
+        Assert.True(section.VersionLabelsProvisional);
+        Assert.Equal("versions may renumber while matching catches up", section.VersionLabelNote);
+    }
+
+    [Fact]
     public void Version_in_two_groups_is_listed_in_each_with_that_groups_numbers()
     {
         var section = OptimizationSummaryBuilder.Build([

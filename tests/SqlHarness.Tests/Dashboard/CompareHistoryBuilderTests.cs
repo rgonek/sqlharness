@@ -32,6 +32,25 @@ public sealed class CompareHistoryBuilderTests
     }
 
     [Fact]
+    public void Context_scoped_build_uses_frozen_labels_and_keeps_context_components_separate()
+    {
+        var context = ContextKey.AgentSession("claude", "conversation:one");
+        var frozen = new Dictionary<(string Subject, string Scope, string Hash), string>
+        {
+            [("orders", "whole", "h0")] = "v4",
+            [("orders", "whole", "h1")] = "v5",
+        };
+
+        var history = CompareHistoryBuilder.Build([
+            Row(1, 10, "orders", "whole", "h0", "h1"),
+        ], context, frozen);
+
+        Assert.Equal(("v4", "v5"), Pair(history, 1));
+        Assert.NotEqual(ContextKey.AgentSession("claude", "a:b"), ContextKey.AgentSession("claude:a", "b"));
+        Assert.NotEqual(context, ContextKey.Mcp(10));
+    }
+
+    [Fact]
     public void Missing_hashes_and_context_remain_unassigned_and_cases_are_projected()
     {
         var summary = JsonDocument.Parse("""{"regression":{"verdict":"improved"},"cases":[{"index":0,"equivalence":{"status":"equal"},"regression":{"verdict":"regression"} }]}""").RootElement.Clone();

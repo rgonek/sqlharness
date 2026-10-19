@@ -66,8 +66,8 @@
 ### Task 4: Optimization per agent session with frozen labels
 **Files:** `src/SqlHarness.Dashboard/CompareHistoryBuilder.cs` (scope-key parameter), 080's `OptimizationSummaryBuilder.cs`/`OptimizationComparer.cs`, matcher freeze step in `TranscriptMatcher.cs`; tests `CompareHistoryBuilderTests.cs`, `OptimizationSummaryBuilderTests.cs`.
 **Interfaces:** `CompareHistoryBuilder.Build(…, ContextKey context)` where `ContextKey` = agent session (exact members) or MCP session; `GET /api/agent-sessions/{kind}/{id}/optimization` and `/optimization/compare` mirroring 080's session endpoints.
-- [ ] Failing tests: versions across two MCP sessions of one conversation share one history with chronological labels; `Frozen_labels_survive_late_links`; inferred/CLI compares absent from agent-session history but present in their child session; renumbering note shown while unfrozen.
-- [ ] FAIL → implement → PASS. Commit `feat(084): optimization history per agent session`.
+- [x] Failing tests: versions across two MCP sessions of one conversation share one history with chronological labels; `Frozen_labels_survive_late_links`; inferred/CLI compares absent from agent-session history but present in their child session; renumbering note shown while unfrozen. Added tests for partial frozen prefixes and unknown-child pending links.
+- [x] FAIL → implement → PASS. Focused optimization, matcher, and agent-session tests passed 89/89; commit `feat(084): optimization history per agent session`.
 
 ### Task 5: Dashboard UI
 **Files:** `ui/src/pages/SessionsPage.tsx`, `ui/src/components/SessionTable.tsx`, `ui/src/pages/SessionPage.tsx` (agent-session variant), router, `ui/src/api/*`, Settings coverage panel in `ui/src/pages/SettingsPage.tsx`; tests alongside.

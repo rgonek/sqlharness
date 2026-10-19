@@ -72,6 +72,79 @@ public sealed class TranscriptMatcherTests
     }
 
     [Fact]
+    public void Version_labels_are_frozen_before_a_later_link_can_change_chronology()
+    {
+        using var f = new Fixture();
+        var firstSession = JournalSeed.Session("mcp:first", "claude") with { Transport = JournalTransport.Mcp };
+        var secondSession = JournalSeed.Session("mcp:second", "claude") with { Transport = JournalTransport.Mcp };
+        var first = f.Seed.Compare(firstSession, "orders", "whole", "sha256:h0", "sha256:h1", agent: Call("toolu_first"));
+        var second = f.Seed.Compare(secondSession, "orders", "whole", "sha256:h1", "sha256:h2", agent: Call("toolu_second"));
+        var late = f.Seed.Compare(firstSession, "orders", "whole", "sha256:h2", "sha256:h3", agent: Call("toolu_late"));
+        using (var connection = new SqliteConnection($"Data Source={f.Home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE operations SET started_at = CASE id WHEN $first THEN '2026-01-02T00:00:00.000Z' WHEN $second THEN '2026-01-03T00:00:00.000Z' WHEN $late THEN '2026-01-04T00:00:00.000Z' ELSE started_at END;";
+            update.Parameters.AddWithValue("$first", first.OperationId);
+            update.Parameters.AddWithValue("$second", second.OperationId);
+            update.Parameters.AddWithValue("$late", late.OperationId);
+            update.ExecuteNonQuery();
+        }
+        f.ClaudeFile("conversation", ClaudeFixtures.Assistant("conversation", "model", null,
+            ("toolu_first", "mcp__s__sqlharness_compare"), ("toolu_second", "mcp__s__sqlharness_compare")));
+
+        var matcher = f.Matcher();
+        matcher.RunCycle(enabled: true);
+
+        Assert.Equal(3, Journal.JournalDb.Rows(f.Home.DatabasePath, "SELECT * FROM compare_version_labels").Count);
+        Assert.Equal(new[] { ("sha256:h0", "v0"), ("sha256:h1", "v1"), ("sha256:h2", "v2") },
+            Journal.JournalDb.Rows(f.Home.DatabasePath, "SELECT sql_hash, label FROM compare_version_labels ORDER BY label")
+                .Select(row => ((string)row["sql_hash"]!, (string)row["label"]!)).ToArray());
+
+        f.ClaudeFile("conversation", ClaudeFixtures.Assistant("conversation", "model", null,
+            ("toolu_late", "mcp__s__sqlharness_compare")));
+        matcher.RunCycle(enabled: true);
+
+        Assert.Equal(new[] { ("sha256:h0", "v0"), ("sha256:h1", "v1"), ("sha256:h2", "v2"), ("sha256:h3", "v3") },
+            Journal.JournalDb.Rows(f.Home.DatabasePath, "SELECT sql_hash, label FROM compare_version_labels ORDER BY label")
+                .Select(row => ((string)row["sql_hash"]!, (string)row["label"]!)).ToArray());
+    }
+
+    [Fact]
+    public void Pending_earlier_child_blocks_only_the_unfrozen_label_suffix_until_exact_link_arrives()
+    {
+        using var f = new Fixture();
+        var session = JournalSeed.Session("mcp:partial-freeze", "claude") with { Transport = JournalTransport.Mcp };
+        var first = f.Seed.Compare(session, "orders", "whole", "sha256:h0", "sha256:h1");
+        var pending = f.Seed.Operation(session, agent: Call("toolu_pending"));
+        var second = f.Seed.Compare(session, "orders", "whole", "sha256:h1", "sha256:h2");
+        JournalSeed.Link(f.Home.DatabasePath, first.OperationId, "claude", "conversation", null);
+        JournalSeed.Link(f.Home.DatabasePath, second.OperationId, "claude", "conversation", null);
+        using (var connection = new SqliteConnection($"Data Source={f.Home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE operations SET started_at = CASE id WHEN $first THEN '2026-01-01T00:00:00.000Z' WHEN $pending THEN '2026-01-02T00:00:00.000Z' WHEN $second THEN '2026-01-03T00:00:00.000Z' END;";
+            update.Parameters.AddWithValue("$first", first.OperationId);
+            update.Parameters.AddWithValue("$pending", pending.OperationId);
+            update.Parameters.AddWithValue("$second", second.OperationId);
+            update.ExecuteNonQuery();
+        }
+
+        var matcher = f.Matcher();
+        matcher.RunCycle(enabled: true);
+        Assert.Equal(new[] { ("sha256:h0", "v0"), ("sha256:h1", "v1") },
+            Journal.JournalDb.Rows(f.Home.DatabasePath, "SELECT sql_hash, label FROM compare_version_labels ORDER BY label")
+                .Select(row => ((string)row["sql_hash"]!, (string)row["label"]!)).ToArray());
+
+        JournalSeed.Link(f.Home.DatabasePath, pending.OperationId, "claude", "conversation", null);
+        matcher.RunCycle(enabled: true);
+        Assert.Equal(new[] { ("sha256:h0", "v0"), ("sha256:h1", "v1"), ("sha256:h2", "v2") },
+            Journal.JournalDb.Rows(f.Home.DatabasePath, "SELECT sql_hash, label FROM compare_version_labels ORDER BY label")
+                .Select(row => ((string)row["sql_hash"]!, (string)row["label"]!)).ToArray());
+    }
+
+    [Fact]
     public void Shared_observer_connection_ignores_matcher_commits_but_sees_external_commits()
     {
         using var f = new Fixture();

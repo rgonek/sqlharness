@@ -58,10 +58,10 @@ internal sealed class JournalSeed
     }
 
     public JournalHandle Compare(SessionIdentity session, string? subject, string? scope, string? baselineHash,
-        string? candidateHash, string status = "succeeded", bool complete = true)
+        string? candidateHash, string status = "succeeded", bool complete = true, AgentCallMetadata? agent = null)
     {
         var start = new OperationStart("compare", "local", new Dictionary<string, string> { ["tenant"] = "acme" },
-            false, baselineHash, candidateHash, null, null)
+            false, baselineHash, candidateHash, null, null, agent)
         {
             Context = subject is null || scope is null ? null : new CompareContext(subject, scope),
         };

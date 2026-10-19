@@ -4,7 +4,12 @@ namespace SqlHarness.Dashboard;
 
 public sealed record OptimizationSection(
     IReadOnlyList<OptimizationSubject> Subjects,
-    IReadOnlyList<UnassignedCompare> Unassigned);
+    IReadOnlyList<UnassignedCompare> Unassigned)
+{
+    public ContextKey? Context { get; init; }
+    public bool VersionLabelsProvisional { get; init; }
+    public string? VersionLabelNote { get; init; }
+}
 
 public sealed record OptimizationSubject(
     string Subject,
@@ -112,6 +117,8 @@ public sealed record OptimizationComparison(
     IReadOnlyList<CaseOption> Cases, string SelectedCase, string Aggregate, string CoverageLabel,
     MixedWarning? Mixed, IReadOnlyList<TableRow> Tables, CollapsedRow? Collapsed, ElapsedInfo Elapsed)
 {
+    public bool VersionLabelsProvisional { get; init; }
+    public string? VersionLabelNote { get; init; }
     public string VerdictBasis { get; init; } = "whole batch";
     public string View { get; init; } = "changed";
     public WholeBatchLine WholeBatch { get; init; } = new(null, null, null, "");

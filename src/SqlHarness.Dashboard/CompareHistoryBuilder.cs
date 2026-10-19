@@ -10,6 +10,13 @@ public sealed record CompareHistoryRow(
     public bool IsMeasure { get; init; }
 }
 
+/// <summary>A collision-free version namespace. Agent kind is kept in the kind field, separate from its id.</summary>
+public sealed record ContextKey(string Kind, string Key)
+{
+    public static ContextKey Mcp(long sessionId) => new("mcp", sessionId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    public static ContextKey AgentSession(string agentKind, string conversationId) => new($"agent:{agentKind}", conversationId);
+}
+
 /// <summary>Compact compare history entry. Versions describe retained hash occurrences only.</summary>
 public sealed record CompareAttemptSummary(
     long OperationId, string? Subject, string? Scope, string? BaselineHash, string? CandidateHash,
@@ -32,10 +39,21 @@ public sealed record CompareSqlVersion(string Version, string Hash);
 public static class CompareHistoryBuilder
 {
     public static IReadOnlyList<CompareAttemptSummary> Build(IEnumerable<CompareHistoryRow> rows)
+        => BuildCore(rows, null, null);
+
+    public static IReadOnlyList<CompareAttemptSummary> Build(IEnumerable<CompareHistoryRow> rows, ContextKey context,
+        IReadOnlyDictionary<(string Subject, string Scope, string Hash), string>? frozenLabels = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return BuildCore(rows, context, frozenLabels);
+    }
+
+    private static IReadOnlyList<CompareAttemptSummary> BuildCore(IEnumerable<CompareHistoryRow> rows, ContextKey? context,
+        IReadOnlyDictionary<(string Subject, string Scope, string Hash), string>? frozenLabels)
     {
         var source = rows.OrderBy(row => row.StartedAt, StringComparer.Ordinal).ThenBy(row => row.OperationId).ToArray();
-        var versions = new Dictionary<(long Session, string Subject, string Scope), Dictionary<string, string>>();
-        var next = new Dictionary<(long Session, string Subject, string Scope), int>();
+        var versions = new Dictionary<(string Context, string Subject, string Scope), Dictionary<string, string>>();
+        var next = new Dictionary<(string Context, string Subject, string Scope), int>();
         var attempts = new List<CompareAttemptSummary>(source.Length);
         foreach (var row in source)
         {
@@ -43,7 +61,7 @@ public static class CompareHistoryBuilder
             string? candidateVersion = null;
             if (row.Subject is not null && row.Scope is not null)
             {
-                var key = (row.SessionId, row.Subject, row.Scope);
+                var key = (context is null ? $"mcp:{row.SessionId.ToString(System.Globalization.CultureInfo.InvariantCulture)}" : $"{context.Kind.Length}:{context.Kind}{context.Key.Length}:{context.Key}", row.Subject, row.Scope);
                 if (!versions.TryGetValue(key, out var map))
                     versions.Add(key, map = new Dictionary<string, string>(StringComparer.Ordinal));
                 baselineVersion = Version(row.BaselineHash);
@@ -53,6 +71,15 @@ public static class CompareHistoryBuilder
                 {
                     if (hash is null)
                         return null;
+                    if (frozenLabels is not null && frozenLabels.TryGetValue((row.Subject, row.Scope, hash), out var frozen))
+                    {
+                        map[hash] = frozen;
+                        if (frozen.Length > 1 && frozen[0] == 'v'
+                            && int.TryParse(frozen.AsSpan(1), System.Globalization.NumberStyles.None,
+                                System.Globalization.CultureInfo.InvariantCulture, out var frozenOrdinal))
+                            next[key] = Math.Max(next.GetValueOrDefault(key), frozenOrdinal + 1);
+                        return frozen;
+                    }
                     if (!map.TryGetValue(hash, out var version))
                     {
                         next.TryGetValue(key, out var ordinal);
