@@ -127,8 +127,10 @@ public static class OptimizationComparer
                 : "whole batch: reads unavailable") { SharedBefore = sharedBefore, SharedAfter = sharedAfter };
         wholeBatch = wholeBatch with
         {
-            ChangedBefore = allCasesConfirmed ? ReduceNullable(selectedIds.Select(id => caseComparisons[id].ChangedBefore), normalizedAggregate) : null,
-            ChangedAfter = allCasesConfirmed ? ReduceNullable(selectedIds.Select(id => caseComparisons[id].ChangedAfter), normalizedAggregate) : null,
+            ChangedBefore = allCasesConfirmed && batchBefore.HasValue && sharedBefore.HasValue
+                ? batchBefore.Value - sharedBefore.Value : null,
+            ChangedAfter = allCasesConfirmed && batchAfter.HasValue && sharedAfter.HasValue
+                ? batchAfter.Value - sharedAfter.Value : null,
         };
 
         return new OptimizationComparison(a, b, basis, direct?.OperationId, equivalence, caseOptions,

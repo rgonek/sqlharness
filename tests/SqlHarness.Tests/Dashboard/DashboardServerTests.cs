@@ -444,7 +444,14 @@ public sealed class DashboardServerTests
         using var home = new TempHome();
         await SetStoreSensitiveAsync(home, true);
         var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
-        var handle = seed.Operation(JournalSeed.Session("cli:a"), operation: "measure", benchmark: JournalSeed.Benchmark());
+        var handle = seed.Operation(JournalSeed.Session("cli:a"), operation: "measure", benchmark: JournalSeed.Benchmark() with
+        {
+            Statements = [new JournalStatementMetrics("measure", null, null, 0, "0123456789abcdef", null, null, null, [])
+            {
+                CaseId = "0", StatementKey = "measure-statement", PlanHash = "measure-plan", Status = StatementStatus.Confirmed,
+                Objects = [new StatementObjectCounters("Orders", "table", 45, 0, 2)],
+            }],
+        });
         await using var dashboard = await StartAuthenticated(home);
         var (_, client) = dashboard;
 
@@ -453,6 +460,16 @@ public sealed class DashboardServerTests
 
         using var detail = JsonDocument.Parse(await client.GetStringAsync($"/api/operations/{handle.OperationId}"));
         Assert.Equal("measure", detail.RootElement.GetProperty("operation").GetProperty("operation").GetString());
+        var measuredStatement = Assert.Single(detail.RootElement.GetProperty("statements").EnumerateArray());
+        Assert.Equal("measured", measuredStatement.GetProperty("status").GetString());
+        Assert.Equal("confirmed", measuredStatement.GetProperty("attribution").GetString());
+        Assert.Equal(JsonValueKind.Null, measuredStatement.GetProperty("readsBefore").ValueKind);
+        Assert.Equal(45, measuredStatement.GetProperty("readsAfter").GetInt64());
+        Assert.Equal(string.Empty, measuredStatement.GetProperty("change").GetString());
+        var measuredObject = Assert.Single(measuredStatement.GetProperty("objects").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, measuredObject.GetProperty("readsBefore").ValueKind);
+        Assert.Equal(45, measuredObject.GetProperty("readsAfter").GetInt64());
+        Assert.Equal(string.Empty, measuredObject.GetProperty("change").GetString());
 
         // The server's process reader sees no live process, so the journaled host is gone.
         var orphan = seed.Operation(JournalSeed.Session("cli:gone", hostPid: 6161), complete: false);

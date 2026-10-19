@@ -388,22 +388,22 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         {
             var row = group.First();
             var objects = group.Where(item => item.ObjectName is not null).Select(item => new TableRow(
-                item.ObjectName!, item.ObjectScans, item.ObjectScans,
-                item.ObjectReads is { } reads ? SaturatingAdd(reads, item.ObjectLobReads ?? 0) : null,
-                item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null, "0%")).ToArray();
-            var reads = objects.All(item => item.ReadsBefore.HasValue)
-                ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsBefore!.Value)) : (long?)null;
-            var scans = objects.All(item => item.ScansBefore.HasValue)
-                ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ScansBefore!.Value)) : (long?)null;
+                item.ObjectName!, null, item.ObjectScans, null,
+                item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null,
+                string.Empty)).ToArray();
+            var reads = objects.Length > 0 && objects.All(item => item.ReadsAfter.HasValue)
+                ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsAfter!.Value)) : (long?)null;
+            var scans = objects.Length > 0 && objects.All(item => item.ScansAfter.HasValue)
+                ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ScansAfter!.Value)) : (long?)null;
             var text = row.Text ?? $"statement {row.Ordinal + 1} ({row.Hash[..Math.Min(8, row.Hash.Length)]})";
             IReadOnlyList<HiddenWork> hidden;
             try { hidden = JsonSerializer.Deserialize<HiddenWork[]>(row.HiddenWorkJson, ConditionsJsonOptions) ?? []; }
             catch (JsonException) { hidden = []; }
-            return new StatementRow(row.Key, text, row.Status, reads, null, scans, null, row.Executions,
-                "—", row.Status, hidden, objects)
+            return new StatementRow(row.Key, text, "measured", null, reads, null, scans, row.Executions,
+                string.Empty, row.Status, hidden, objects)
             {
                 Occurrence = row.Occurrence,
-                PlanHashBefore = row.PlanHash,
+                PlanHashAfter = row.PlanHash,
                 UdfElapsedMilliseconds = row.UdfElapsedMs,
             };
         }).ToArray();

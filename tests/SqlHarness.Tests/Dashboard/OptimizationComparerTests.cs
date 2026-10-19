@@ -104,6 +104,29 @@ public sealed class OptimizationComparerTests
     }
 
     [Fact]
+    public void Mean_breakdown_derives_changed_reads_from_rounded_whole_and_shared_totals()
+    {
+        var compare = Evidence(203, "h1", "h2", (100, 100), (100, 100)) with
+        {
+            Metrics = [
+                CaseMetric("baseline", "0", 100, Statement("shared", "SELECT shared", 1, "shared-plan"), Statement("work", "SELECT work", 99, "work-plan")),
+                CaseMetric("candidate", "0", 100, Statement("shared", "SELECT shared", 1, "shared-plan"), Statement("work", "SELECT work", 99, "new-work-plan")),
+                CaseMetric("baseline", "1", 100, Statement("shared", "SELECT shared", 0, "shared-plan"), Statement("work", "SELECT work", 100, "work-plan")),
+                CaseMetric("candidate", "1", 100, Statement("shared", "SELECT shared", 0, "shared-plan"), Statement("work", "SELECT work", 100, "new-work-plan")),
+            ],
+        };
+
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "mean", "whole");
+
+        Assert.Equal(100, result.WholeBatch.Before);
+        Assert.Equal(1, result.WholeBatch.SharedBefore);
+        Assert.Equal(99, result.WholeBatch.ChangedBefore);
+        Assert.Equal(result.WholeBatch.Before, result.WholeBatch.SharedBefore + result.WholeBatch.ChangedBefore);
+        Assert.Equal(100, result.WholeBatch.After);
+        Assert.Equal(result.WholeBatch.After, result.WholeBatch.SharedAfter + result.WholeBatch.ChangedAfter);
+    }
+
+    [Fact]
     public void Measured_together_uses_that_operation()
     {
         var result = Compare([

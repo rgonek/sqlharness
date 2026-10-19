@@ -192,7 +192,22 @@ public sealed class JournalReaderTests
         Assert.Equal("partial", Assert.Single(evidence.Single(item => item.OperationId == omitted.OperationId).Metrics, item => item.Variant == "baseline").StatementAttribution);
         var detail = reader.Operation(measure.OperationId, storeSensitive: false)!;
         Assert.Equal("statement 1 (01234567)", Assert.Single(detail.Statements!).Text);
-        Assert.Equal("measure-plan", Assert.Single(detail.Statements!).PlanHashBefore);
+        var measuredStatement = Assert.Single(detail.Statements!);
+        Assert.Equal("measured", measuredStatement.Status);
+        Assert.Equal("confirmed", measuredStatement.Attribution);
+        Assert.Null(measuredStatement.ReadsBefore);
+        Assert.Equal(45, measuredStatement.ReadsAfter);
+        Assert.Null(measuredStatement.PlanHashBefore);
+        Assert.Equal("measure-plan", measuredStatement.PlanHashAfter);
+        Assert.Null(measuredStatement.ScansBefore);
+        Assert.Equal(2, measuredStatement.ScansAfter);
+        Assert.Equal(string.Empty, measuredStatement.Change);
+        var measuredObject = Assert.Single(measuredStatement.Objects);
+        Assert.Null(measuredObject.ReadsBefore);
+        Assert.Equal(45, measuredObject.ReadsAfter);
+        Assert.Null(measuredObject.ScansBefore);
+        Assert.Equal(2, measuredObject.ScansAfter);
+        Assert.Equal(string.Empty, measuredObject.Change);
     }
 
     [Fact]
@@ -220,6 +235,7 @@ public sealed class JournalReaderTests
         var badge = Assert.Single(Assert.Single(Reader(home).Sessions(new SessionQuery()).Items).Optimization);
 
         Assert.Equal("−50%", badge.Change);
+        Assert.Equal("changed statements", badge.VerdictBasis);
     }
 
     private static JournalStatementMetrics StoredStatement(string variant, string text, string planHash) =>

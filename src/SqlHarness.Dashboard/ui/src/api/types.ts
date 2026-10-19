@@ -143,7 +143,7 @@ export type OptimizationActionReference = { operationId: number; side: "baseline
 export type HiddenWork = { kind: string; name: string; executions: number | null; sharePercent: number | null }
 export type StatementRow = {
   key: string; occurrence: number; text: string
-  status: "shared" | "different-work" | "only-baseline" | "only-candidate" | "not-executed" | string
+  status: "shared" | "different-work" | "only-baseline" | "only-candidate" | "not-executed" | "measured" | string
   readsBefore: number | null; readsAfter: number | null; scansBefore: number | null; scansAfter: number | null
   executions: number | null; change: string; attribution: "confirmed" | "partial" | "unavailable" | string
   hiddenWork: HiddenWork[]; objects: { table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
