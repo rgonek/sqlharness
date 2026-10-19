@@ -22,7 +22,7 @@
 
 ## Status and dependencies
 
-- Implementation, Task 5 evidence, and both final-review fixes are complete on product revision `b9f60924d09cdfa13f07106662549fcca8ee1f56`; the final Sol low whole-branch re-review is pending. Planning base `760f7d6`. Depends on 079, 080, 081 and 087 (measure observations in the comparer).
+- DONE and locally merged into `main` at `dd375124d6ca442ea03dadb7cda90cb9489034b8`. Product revision `b9f60924d09cdfa13f07106662549fcca8ee1f56` passed the Windows gate and branch formatting; all task reviews and the final Sol low scoped re-review are approved. The merge preserves that product tree. Linux was explicitly skipped. Planning base `760f7d6`; dependencies 079, 080, 081 and 087 are merged.
 - Priority P2; effort L; risk MEDIUM (verdict basis changes what reviewers see).
 
 ## Global Constraints
@@ -122,4 +122,4 @@
 
 - [x] Joined comparison object rows by object identity and aggregated each side across selected cases; confirmed absences contribute zero for sum/mean while unavailable attribution stays null.
 - [x] Added comparer, endpoint API, and UI regressions. Focused checks, branch formatting, and the required Windows gate passed on `b9f6092`; see [final fix report](../.superpowers/sdd/082-statement-io-attribution/final-fix-report.md) and [verification evidence](082-verification-evidence.md).
-- [ ] Final Sol low whole-branch re-review remains pending before marking Plan 082 done or integrating it into `main`.
+- [x] Final Sol low whole-branch review and scoped fix re-review are complete; both Important findings are addressed, with no remaining findings. Local integration into `main` is recorded above.

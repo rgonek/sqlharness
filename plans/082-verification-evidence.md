@@ -2,9 +2,9 @@
 
 ## State and exact product tree
 
-The implementation and operator-authorized synthetic UAT are complete. Tasks 0–4 have clean scoped task reviews; the final Sol low whole-branch review is still pending. Do not treat this as the whole-branch approval or as merged into `main`.
+Plan 082 is DONE and locally merged into `main` at `dd375124d6ca442ea03dadb7cda90cb9489034b8`. Tasks 0–5 have clean scoped reviews. The Sol low whole-branch review's two Important findings were fixed together, and its scoped re-review approved both fixes with no new breakage or remaining findings. The final verified product revision is `b9f60924d09cdfa13f07106662549fcca8ee1f56`.
 
-The final Windows gate tested product revision `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34` (`7f98ef9`). Feature commits `dd0544d` (narrow IO attribution and legacy hash fixes) and `c60b1b6` (hand-corrected branch C# formatting) preceded integration of current `main` baseline `ca4c8b8` into the feature branch as `5bfa9f3`. The post-integration fixes are `c7bd3d7` (TypeScript test query type fix) and `7f98ef9` (contract expectations for schema/API/fallback). Documentation edits follow the green product gate and do not change the tested product tree.
+An earlier integrated Windows gate tested product revision `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34` (`7f98ef9`). Feature commits `dd0544d` (narrow IO attribution and legacy hash fixes) and `c60b1b6` (hand-corrected branch C# formatting) preceded integration of main baseline `ca4c8b8` into the feature branch as `5bfa9f3`. The post-integration fixes are `c7bd3d7` (TypeScript test query type fix) and `7f98ef9` (contract expectations for schema/API/fallback). The final review fix and its repeated green gate on `b9f6092` are recorded below. Later documentation edits do not change that tested product tree.
 
 ## Task review ledger
 
@@ -15,13 +15,17 @@ The final Windows gate tested product revision `7f98ef99f731af5fbc2ba37f8bb6e0d4
 | 2 | `8e9ca2b..fca7755` | Clean spec and quality review; median-total-run reconciliation, omission persistence, and empty statement sets were reviewed. The 45/45 focused run was pre-final-edit working-tree evidence, not verification of committed `fca7755`; see the Task 2/3 correction below. |
 | 3 | `fca7755..a06e7e5` | Clean scoped review after mean additivity, measured-row semantics, and badge-basis fixes. |
 | 4 | `a06e7e5..14518e8` | Clean scoped review after parameter-set plan identity, PostgreSQL Markdown wording, migration coverage, and sort coverage fixes. |
-| 5 | `14518e8..7f98ef9` | Task 5 work and test corrections are recorded here. Final whole-branch Sol low review is pending. |
+| 5 | `14518e8..c7b9e4a` | Clean scoped review of the Task 5 fixes, UAT, verification, and documentation. |
+| Whole branch | `ca4c8b8..c7b9e4a` | Sol low found two Important breakdown issues; both were fixed in `b9f6092`. |
+| Final scoped re-review | `c7b9e4a..2184c13` | Sol low approved both fixes; no new breakage or out-of-scope observations. |
 
-The feature branch includes main baseline `ca4c8b8` through merge commit `5bfa9f3`. `main` itself has not been advanced. The user authorized a local merge after all required review and verification; the controller will handle integration after the pending final review. No push was made.
+The feature branch included main baseline `ca4c8b8` through merge commit `5bfa9f3` before final verification. The user-authorized local merge into `main` is `dd375124d6ca442ea03dadb7cda90cb9489034b8`. Its complete tree matched the reviewed feature head, and a separate product-path comparison against verified revision `b9f6092` was empty. Consequently no redundant integrated-tree gate was run; subsequent changes are documentation only. No push was made.
 
-## Verification
+Raw log paths below identify temporary verification locations. The completed plan's SDD workspace is cleaned after integration; this committed evidence and the synthetic plan fixtures preserve the results and reproduction context.
 
-The explicit branch C# formatting check passed on the final product tree:
+## Earlier integrated verification (7f98ef9)
+
+The explicit branch C# formatting check passed on that earlier integrated product tree:
 
 ```powershell
 pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef ca4c8b8
@@ -82,9 +86,9 @@ Focused regression evidence:
 - GREEN: from `src/SqlHarness.Dashboard/ui`, `npm test -- src/components/optimization/StatementRows.test.tsx` exited `0`: 1 file and 4 tests passed, including one row rendering 20 → 10.
 - Formatting: `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef ca4c8b8` exited `0` on the final product tree and checked 23 branch-changed C# files. The first invocation flagged only an extra trailing CRLF in the three edited C# files; it was removed manually and the command was rerun successfully.
 
-The required Windows `just verify` gate exited `0` directly on product revision `b9f60924d09cdfa13f07106662549fcca8ee1f56` in 5m47s. Build passed with 0 warnings and 0 errors; UI check passed 60 files / 313 tests, lint, and typecheck; .NET tests passed (`SqlHarness.Tests`: 4,509 passed / 11 skipped / 0 failed; `SqlHarness.Mcp.Tests`: 435 passed / 4 skipped / 0 failed). The gate format stage skipped because the clean committed tree had zero changed C# files; the explicit branch format check above covers the product diff. Direct exit is saved in `.superpowers/sdd/082-statement-io-attribution/task-final-fix-verify-b9f6092/just-verify.exit`; stage logs are in its `logs/` directory. The UI check log includes `ECONNREFUSED` diagnostics for localhost port 3000 after successful tests and a successful stage exit; they are not called pristine-console output.
+The Windows verification gate (`scripts/verify.ps1`, the command used by `just verify`) exited `0` directly on product revision `b9f60924d09cdfa13f07106662549fcca8ee1f56` in 5m47s. Build passed with 0 warnings and 0 errors; UI check passed 60 files / 313 tests, lint, and typecheck; .NET tests passed (`SqlHarness.Tests`: 4,509 passed / 11 skipped / 0 failed; `SqlHarness.Mcp.Tests`: 435 passed / 4 skipped / 0 failed). The gate format stage skipped because the clean committed tree had zero changed C# files; the explicit branch format check above covers the product diff. Direct exit was captured in `.superpowers/sdd/082-statement-io-attribution/task-final-fix-verify-b9f6092/just-verify.exit`; stage logs were in its `logs/` directory. The UI check log includes `ECONNREFUSED` diagnostics for localhost port 3000 after successful tests and a successful stage exit; they are not called pristine-console output.
 
-Linux verification remains unrun. The final Sol low whole-branch re-review is pending. No synthetic SQL Server UAT rerun was needed because these fixes only change comparison presentation and aggregation in the Dashboard.
+Linux verification remains unrun, as explicitly requested. The final Sol low scoped re-review approved both fixes with no new Critical or Important breakage and no out-of-scope observations. No synthetic SQL Server UAT rerun was needed because these fixes only change comparison presentation and aggregation in the Dashboard.
 
 ## Task 2 and Task 3 evidence correction
 

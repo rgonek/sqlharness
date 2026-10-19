@@ -2,9 +2,9 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
-## Plan 082 implementation verified — final review pending
+## Plan 082 DONE — locally integrated
 
-Plan [082](082-statement-io-attribution.md) implements per-statement IO attribution, reconciliation, Optimization views, and hidden-work reporting. Tasks 0–4 have clean scoped reviews; Task 5 added the authorized synthetic SQL Server UAT, user-facing dashboard guidance, and verification evidence. The final integrated product tree `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34` passed the Windows gate. The final Sol low whole-branch review remains pending, so Plan 082 is not marked DONE and has not been merged into `main`. Linux was explicitly skipped; no push was made. See [verification evidence](082-verification-evidence.md).
+Plan [082](082-statement-io-attribution.md) implements per-statement IO attribution, reconciliation, Optimization views, and hidden-work reporting. All task reviews are approved. The final Sol low whole-branch review found two Important breakdown issues; both were fixed and approved by the scoped re-review. Product revision `b9f60924d09cdfa13f07106662549fcca8ee1f56` passed branch formatting and the Windows gate (Core 4,509 passed, MCP 435 passed, UI 313 passed; 15 .NET tests skipped). Authorized synthetic UAT confirmed attribution and the focused verdict. Local merge `dd375124d6ca442ea03dadb7cda90cb9489034b8` preserves the verified product tree, so no redundant integrated-tree gate was run. Linux was explicitly skipped; no push was made. See [verification evidence](082-verification-evidence.md).
 
 ## Plan 088 implementation archived — 2026-10-18
 
