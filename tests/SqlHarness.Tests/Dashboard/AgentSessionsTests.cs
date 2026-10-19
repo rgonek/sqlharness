@@ -77,6 +77,35 @@ public sealed class AgentSessionsTests
     }
 
     [Fact]
+    public async Task Agent_session_detail_and_annotation_resolve_keys_after_the_first_list_page()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        for (var i = 0; i < 51; i++)
+            seed.Operation(JournalSeed.Session($"codex:child-{i:D2}", "codex"),
+                agent: new AgentCallMetadata(null, null, null, $"thread-{i:D2}", null, null, null));
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var pageResponse = await client.GetAsync("/api/agent-sessions?archived=any&limit=50");
+        Assert.Equal(HttpStatusCode.OK, pageResponse.StatusCode);
+        using var page = JsonDocument.Parse(await pageResponse.Content.ReadAsStringAsync());
+        var visibleIds = page.RootElement.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("key").GetProperty("conversationId").GetString()).ToHashSet();
+        var target = Enumerable.Range(0, 51).Select(i => $"thread-{i:D2}").Single(id => !visibleIds.Contains(id));
+
+        using var detail = await client.GetAsync($"/api/agent-sessions/codex/{target}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        using var detailJson = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());
+        Assert.Equal(target, detailJson.RootElement.GetProperty("agentSession").GetProperty("key").GetProperty("conversationId").GetString());
+
+        using var patch = await client.SendAsync(Patch($"/api/agent-sessions/codex/{target}/annotation", "{\"title\":\"Beyond page\"}"));
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+        using var patchJson = JsonDocument.Parse(await patch.Content.ReadAsStringAsync());
+        Assert.Equal("Beyond page", patchJson.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task Agent_session_patch_reuses_session_annotation_validation_and_matching_flag_is_live()
     {
         using var home = new TempHome();
