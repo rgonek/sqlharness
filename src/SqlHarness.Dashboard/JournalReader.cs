@@ -200,6 +200,30 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             query.Starred is not null && rows.Count > limit ? page[^1].Id : null);
     }
 
+    /// <summary>Reads current operation identities and cached transcript links, then derives one membership per operation.</summary>
+    internal IReadOnlyList<OperationMembership> AgentSessionMemberships()
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return [];
+
+        var operations = Query(connection, """
+            SELECT o.id, o.session_id, s.agent_kind, s.transport, s.agent_pid, s.agent_started_at,
+                   o.started_at, o.agent_session_id, o.agent_thread_source
+            FROM operations o JOIN sessions s ON s.id = o.session_id
+            ORDER BY o.id;
+            """, [], reader => new OperationIdentityRow(
+                reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
+                NullableLong(reader, 4), NullableString(reader, 5), reader.GetString(6),
+                NullableString(reader, 7), NullableString(reader, 8)));
+        var links = Query(connection, """
+            SELECT l.operation_id, c.agent_kind, c.conversation_id
+            FROM operation_agent_links l JOIN agent_conversations c ON c.id = l.conversation
+            ORDER BY l.operation_id;
+            """, [], reader => new LinkRow(reader.GetInt64(0), reader.GetString(1), reader.GetString(2)));
+        return AgentSessionMembership.Resolve(operations, links);
+    }
+
     public SessionDetail? Session(long id)
     {
         using var connection = OpenSnapshot();
