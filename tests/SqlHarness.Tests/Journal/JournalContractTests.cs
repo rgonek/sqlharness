@@ -71,7 +71,9 @@ public sealed class JournalContractTests : IDisposable
             "SELECT value FROM journal_meta WHERE key = 'fingerprint_salt'").Single()["value"]);
         Assert.Equal(32, salt.Length);
         Assert.Equal(7, JournalDb.Rows(path, "SELECT name FROM pragma_table_info('agent_session_annotations')").Count);
-        Assert.Equal(6, JournalDb.Rows(path, "SELECT name FROM pragma_table_info('compare_version_labels')").Count);
+        Assert.Equal(new[] { "context_kind", "context_key", "subject", "scope", "sql_hash", "label" },
+            JournalDb.Rows(path, "SELECT name FROM pragma_table_info('compare_version_labels') ORDER BY cid")
+                .Select(row => (string)row["name"]!).ToArray());
     }
 
     [Fact]
@@ -98,6 +100,33 @@ public sealed class JournalContractTests : IDisposable
         Assert.Contains("plan_document_ordinal", columns);
         Assert.Contains("plan_statement_index", columns);
         Assert.Equal(7, JournalDb.Rows(path, "SELECT name FROM pragma_table_info('agent_session_annotations')").Count);
+        Assert.Equal("label", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('compare_version_labels') WHERE cid = 5").Single()["name"]);
+    }
+
+    [Fact]
+    public void Journal_v19_migrates_in_place_to_v21_with_canonical_label_columns()
+    {
+        var path = Path.Combine(_temp.Path, "data", "activity.db");
+        _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
+            new FixedTimeProvider(JournalTestData.T0));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            connection.Open();
+            using var downgrade = connection.CreateCommand();
+            downgrade.CommandText = "DROP TRIGGER anchor_agent_session_link_insert; DROP TRIGGER anchor_agent_session_direct_operation; DROP TRIGGER anchor_agent_session_annotation_insert; DROP TABLE operation_annotations; DROP TABLE agent_session_annotation_operations; DROP TABLE agent_session_annotations; DROP TABLE compare_version_labels; PRAGMA user_version = 19;";
+            downgrade.ExecuteNonQuery();
+        }
+
+        _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
+            new FixedTimeProvider(JournalTestData.T0));
+
+        Assert.Equal(21L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(new[] { "context_kind", "context_key", "subject", "scope", "sql_hash", "label" },
+            JournalDb.Rows(path, "SELECT name FROM pragma_table_info('compare_version_labels') ORDER BY cid")
+                .Select(row => (string)row["name"]!).ToArray());
+        Assert.Equal(new[] { "operation_id", "agent_label_initial", "agent_label", "agent_keep", "owner_starred", "owner_note", "updated_at" },
+            JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_annotations') ORDER BY cid")
+                .Select(row => (string)row["name"]!).ToArray());
     }
 
     [Fact]

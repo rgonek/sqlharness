@@ -115,8 +115,7 @@ public static class McpResultAdapter
         SqlHarnessOutcome outcome,
         string command,
         McpResultBudget? budget = null,
-        IReadOnlyList<string>? knownSecrets = null,
-        bool includeOperationRef = false)
+        IReadOnlyList<string>? knownSecrets = null)
     {
         ArgumentNullException.ThrowIfNull(outcome);
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
@@ -125,7 +124,7 @@ public static class McpResultAdapter
         var secrets = knownSecrets ?? [];
         var maximumBytes = active.MaximumBytes;
         var maximumCellCharacters = active.MaximumCellCharacters;
-        var operationRef = (includeOperationRef || outcome.OperationRefEligible) && outcome.Journaled && IsAnnotatableCommand(command) && !string.IsNullOrWhiteSpace(outcome.OperationRef)
+        var operationRef = outcome.OperationRefEligible && outcome.Journaled && IsAnnotatableCommand(command) && !string.IsNullOrWhiteSpace(outcome.OperationRef)
             ? outcome.OperationRef
             : null;
 
@@ -240,10 +239,9 @@ public static class McpResultAdapter
     internal static async Task<CallToolResult> AdaptAndCompleteAsync(
         SqlHarnessOutcome outcome,
         string command,
-        McpResultBudget? budget = null,
-        bool includeOperationRef = false)
+        McpResultBudget? budget = null)
     {
-        var result = Adapt(outcome, command, budget, includeOperationRef: includeOperationRef);
+        var result = Adapt(outcome, command, budget);
         if (outcome.EmissionReceipt is { } receipt)
             await receipt.CompleteAsync(EmittedFootprint(result), CancellationToken.None).ConfigureAwait(false);
         return result;

@@ -142,9 +142,10 @@ public sealed class McpTokenBudgetTests
         {
             OperationRef = "0123456789abcdef0123456789abcdef",
             Journaled = true,
+            OperationRefEligible = true,
         };
 
-        var result = McpResultAdapter.Adapt(outcome, "query", new McpResultBudget(McpLimits.MinCallToolResultBudgetBytes), includeOperationRef: true);
+        var result = McpResultAdapter.Adapt(outcome, "query", new McpResultBudget(McpLimits.MinCallToolResultBudgetBytes));
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
 
@@ -159,9 +160,10 @@ public sealed class McpTokenBudgetTests
         {
             OperationRef = "0123456789abcdef0123456789abcdef",
             Journaled = true,
+            OperationRefEligible = true,
         };
 
-        var result = McpResultAdapter.Adapt(outcome, "query", new McpResultBudget(McpLimits.MinCallToolResultBudgetBytes), includeOperationRef: true);
+        var result = McpResultAdapter.Adapt(outcome, "query", new McpResultBudget(McpLimits.MinCallToolResultBudgetBytes));
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
 
@@ -178,9 +180,10 @@ public sealed class McpTokenBudgetTests
         {
             OperationRef = "0123456789abcdef0123456789abcdef",
             Journaled = journaled,
+            OperationRefEligible = true,
         };
 
-        var result = McpResultAdapter.Adapt(outcome, command, includeOperationRef: true);
+        var result = McpResultAdapter.Adapt(outcome, command);
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
 
         Assert.False(document.RootElement.TryGetProperty("operationRef", out _));
