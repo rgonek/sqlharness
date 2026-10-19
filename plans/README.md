@@ -26,7 +26,7 @@ Plans 063, 070, 071, 072, 073, 074, 076, 079, 080, 081, and 087 are DONE; see th
 
 Plan 082 is DONE and locally merged into `main` at `dd37512`. All task reviews and the final Sol low scoped re-review are approved. The Windows gate and branch formatting passed on `b9f6092`; the merge preserves that verified product tree. Synthetic UAT confirmed the focused verdict. Linux was explicitly skipped; see [verification evidence](082-verification-evidence.md) and [history](history.md).
 
-Plan 084 is complete for local integration with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up plans 089, 090 and 091 cover the parked detail limit and both deferred Minors. See [084 evidence](084-verification-evidence.md) and [history](history.md).
+Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up plans 089, 090 and 091 cover the parked detail limit and both deferred Minors. See [084 evidence](084-verification-evidence.md) and [history](history.md).
 
 ## History
 
