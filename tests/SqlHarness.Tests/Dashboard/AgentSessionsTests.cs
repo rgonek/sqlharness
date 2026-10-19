@@ -218,6 +218,35 @@ public sealed class AgentSessionsTests
     }
 
     [Fact]
+    public async Task Agent_session_detail_keeps_members_beyond_child_limit_and_uses_member_recency()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var shared = JournalSeed.Session("claude:shared-limit", "claude") with { Transport = JournalTransport.Mcp };
+        var olderConversationOperation = seed.Operation(shared, agent: new AgentCallMetadata("tool-a", null, null, null, null, null, null));
+        JournalSeed.Link(home.DatabasePath, olderConversationOperation.OperationId, "claude", "conversation-a", "A");
+
+        for (var i = 0; i < 500; i++)
+        {
+            var otherConversationOperation = seed.Operation(shared, agent: new AgentCallMetadata($"tool-b-{i}", null, null, null, null, null, null));
+            JournalSeed.Link(home.DatabasePath, otherConversationOperation.OperationId, "claude", "conversation-b", "B");
+        }
+
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync("/api/agent-sessions/claude/conversation-a");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var detail = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var session = detail.RootElement.GetProperty("agentSession");
+        Assert.Equal(1, session.GetProperty("exact").GetInt32());
+        var operation = Assert.Single(detail.RootElement.GetProperty("operations").EnumerateArray());
+        Assert.Equal(olderConversationOperation.OperationId, operation.GetProperty("operation").GetProperty("id").GetInt64());
+        Assert.Equal("exact", operation.GetProperty("membership").GetString());
+        Assert.Equal("2026-10-07T09:00:01.000Z", session.GetProperty("lastSeen").GetString());
+    }
+
+    [Fact]
     public async Task Agent_session_aggregate_endpoints_are_hidden_when_matching_is_disabled()
     {
         using var home = new TempHome();

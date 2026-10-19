@@ -222,13 +222,13 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
         var operations = Query(connection, """
             SELECT o.id, o.session_id, s.agent_kind, s.transport, s.agent_pid, s.agent_started_at,
-                   o.started_at, o.agent_session_id, o.agent_thread_source
+                   o.started_at, o.agent_session_id, o.agent_thread_source, o.updated_at
             FROM operations o JOIN sessions s ON s.id = o.session_id
             ORDER BY o.id;
             """, [], reader => new OperationIdentityRow(
                 reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
                 NullableLong(reader, 4), NullableString(reader, 5), reader.GetString(6),
-                NullableString(reader, 7), NullableString(reader, 8)));
+                NullableString(reader, 7), NullableString(reader, 8), reader.GetString(9)));
         var links = Query(connection, """
             SELECT l.operation_id, c.agent_kind, c.conversation_id
             FROM operation_agent_links l JOIN agent_conversations c ON c.id = l.conversation
@@ -321,7 +321,16 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 continue;
             var byId = memberships.Where(item => item.SessionId == childId
                 && (item.Key == key || item.Membership == Membership.Unassigned)).ToDictionary(item => item.OperationId);
-            var displayed = detail.Operations.Where(operation => byId.ContainsKey(operation.Id))
+            var selectedOperationIds = byId.Keys.OrderByDescending(id => id).Take(SessionOperationLimit).ToArray();
+            var operationParameters = selectedOperationIds.Select((id, index) => ($"$operation{index}", (object?)id))
+                .Append(("$sessionId", (object?)childId)).ToArray();
+            var operationFilter = selectedOperationIds.Length == 0 ? "0" : $"o.id IN ({string.Join(",", selectedOperationIds.Select((_, index) => $"$operation{index}"))})";
+            var liveness = new ProcessLiveness(processes, _dead);
+            var operationRows = selectedOperationIds.Length == 0 ? [] : Query(connection, $"""
+                SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
+                WHERE o.session_id = $sessionId AND {operationFilter} ORDER BY o.id DESC;
+                """, operationParameters, reader => ReadOperation(reader, liveness));
+            var displayed = operationRows.Where(operation => byId.ContainsKey(operation.Id))
                 .Select(operation => new AgentSessionOperation(operation,
                     byId[operation.Id].Membership.ToString().ToLowerInvariant())).ToArray();
             allRows.AddRange(displayed);
@@ -365,7 +374,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             WHERE s.agent_kind = $kind AND o.agent_session_id = $id AND lower(COALESCE(o.agent_thread_source, '')) = 'subagent';
             """, [("$kind", key.AgentKind), ("$id", key.ConversationId)]) > 0;
         var title = annotation.Title ?? conversation ?? newestChildTitle ?? (sourceIsSubagent ? "subagent of unknown parent" : null);
-        var lastSeen = children.Select(child => child.Session.LastSeen).OrderByDescending(value => value, StringComparer.Ordinal).FirstOrDefault() ?? "";
+        var lastSeen = relevant.Select(item => item.UpdatedAt).OrderByDescending(value => value, StringComparer.Ordinal).FirstOrDefault() ?? "";
         return new AgentSessionSummary(key, title, conversation, annotation.Title,
             PreviewNote(annotation.Note), annotation.Starred, annotation.Archived,
             relevant.Count(item => item.Membership == Membership.Exact),
@@ -377,11 +386,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     {
         var operations = Query(connection, """
             SELECT o.id, o.session_id, s.agent_kind, s.transport, s.agent_pid, s.agent_started_at,
-                   o.started_at, o.agent_session_id, o.agent_thread_source
+                   o.started_at, o.agent_session_id, o.agent_thread_source, o.updated_at
             FROM operations o JOIN sessions s ON s.id = o.session_id ORDER BY o.id;
             """, [], reader => new OperationIdentityRow(reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2),
                 reader.GetString(3), NullableLong(reader, 4), NullableString(reader, 5), reader.GetString(6),
-                NullableString(reader, 7), NullableString(reader, 8)));
+                NullableString(reader, 7), NullableString(reader, 8), reader.GetString(9)));
         var links = Query(connection, """
             SELECT l.operation_id, c.agent_kind, c.conversation_id FROM operation_agent_links l
             JOIN agent_conversations c ON c.id = l.conversation ORDER BY l.operation_id;

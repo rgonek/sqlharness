@@ -124,7 +124,7 @@ public sealed class AgentSessionMembershipTests
 
     private static OperationIdentityRow Op(long id, long session, string startedAt, string agentKind = "claude", string transport = "mcp",
         long? agentPid = null, string? agentStartedAt = null, string? agentSessionId = null, string? threadSource = null) =>
-        new(id, session, agentKind, transport, agentPid ?? 42, agentStartedAt ?? "process-start", startedAt, agentSessionId, threadSource);
+        new(id, session, agentKind, transport, agentPid ?? 42, agentStartedAt ?? "process-start", startedAt, agentSessionId, threadSource, startedAt);
 
     private static LinkRow Link(long operationId, string kind, string conversationId) => new(operationId, kind, conversationId);
 

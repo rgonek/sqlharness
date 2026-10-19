@@ -18,11 +18,12 @@ public sealed record OperationIdentityRow(
     string? AgentStartedAt,
     string StartedAt,
     string? AgentSessionId,
-    string? AgentThreadSource);
+    string? AgentThreadSource,
+    string UpdatedAt);
 
 public sealed record LinkRow(long OperationId, string AgentKind, string ConversationId);
 
-public sealed record OperationMembership(long OperationId, long SessionId, AgentSessionKey? Key, Membership Membership);
+public sealed record OperationMembership(long OperationId, long SessionId, AgentSessionKey? Key, Membership Membership, string UpdatedAt);
 
 /// <summary>Derives one agent-session membership classification for every retained operation.</summary>
 public static class AgentSessionMembership
@@ -53,10 +54,10 @@ public static class AgentSessionMembership
         return ops.Select(operation =>
         {
             if (exactByOperation.TryGetValue(operation.OperationId, out var exact))
-                return new OperationMembership(operation.OperationId, operation.SessionId, exact, Membership.Exact);
+                return new OperationMembership(operation.OperationId, operation.SessionId, exact, Membership.Exact, operation.UpdatedAt);
             return inferred.TryGetValue(operation.OperationId, out var key)
-                ? new OperationMembership(operation.OperationId, operation.SessionId, key, Membership.Inferred)
-                : new OperationMembership(operation.OperationId, operation.SessionId, null, Membership.Unassigned);
+                ? new OperationMembership(operation.OperationId, operation.SessionId, key, Membership.Inferred, operation.UpdatedAt)
+                : new OperationMembership(operation.OperationId, operation.SessionId, null, Membership.Unassigned, operation.UpdatedAt);
         }).ToArray();
     }
 
