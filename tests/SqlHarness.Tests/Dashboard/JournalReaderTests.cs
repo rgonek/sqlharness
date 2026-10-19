@@ -169,13 +169,28 @@ public sealed class JournalReaderTests
             new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2) with { OmittedStatements = 1 }, OptimizationMetric("candidate", 80, 8, 1)], []));
         var measured = JournalSeed.Benchmark() with
         {
-            Variants = [JournalSeed.Benchmark().Variants[0] with { OmittedStatements = 2 }],
-            Statements = [StoredStatement("measure", "SELECT secret measure", "measure-plan") with
-            {
-                PlanRepetition = 1,
-                PlanDocumentOrdinal = 0,
-                PlanStatementIndex = 0,
-            }],
+            Variants = [
+                JournalSeed.Benchmark().Variants[0] with { OmittedStatements = 2 },
+                JournalSeed.Benchmark().Variants[0] with { ParameterSet = "", OmittedStatements = 2 },
+            ],
+            Statements = [
+                StoredStatement("measure", "SELECT secret measure", "measure-plan") with
+                {
+                    ParameterSet = null,
+                    PlanRepetition = 1,
+                    PlanDocumentOrdinal = 0,
+                    PlanStatementIndex = 0,
+                },
+                StoredStatement("measure", "SELECT secret measure", "measure-plan") with
+                {
+                    ParameterSet = "",
+                    Text = "SELECT empty set",
+                    StatementOrdinal = 1,
+                    PlanRepetition = 1,
+                    PlanDocumentOrdinal = 0,
+                    PlanStatementIndex = 0,
+                },
+            ],
         };
         var measure = seed.Operation(session, operation: "measure", benchmark: measured);
 
@@ -184,7 +199,7 @@ public sealed class JournalReaderTests
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT count(*) FROM operation_statements;";
-            Assert.Equal(3, (long)command.ExecuteScalar()!);
+            Assert.Equal(4, (long)command.ExecuteScalar()!);
         }
 
         var reader = Reader(home);
@@ -200,8 +215,9 @@ public sealed class JournalReaderTests
         var detail = reader.Operation(measure.OperationId, storeSensitive: false)!;
         Assert.Equal(2, detail.OmittedStatements);
         Assert.Equal("partial", detail.StatementAttribution);
-        Assert.Equal("statement 1 (01234567)", Assert.Single(detail.Statements!).Text);
-        var measuredStatement = Assert.Single(detail.Statements!);
+        Assert.Equal(2, detail.Statements!.Count);
+        var measuredStatement = Assert.Single(detail.Statements!, row => row.Text == "statement 1 (01234567)");
+        Assert.Single(detail.Statements!, row => row.Text == "statement 2 (01234567)");
         Assert.Equal("measured", measuredStatement.Status);
         Assert.Equal("confirmed", measuredStatement.Attribution);
         Assert.Null(measuredStatement.ReadsBefore);
@@ -217,9 +233,11 @@ public sealed class JournalReaderTests
         Assert.Null(measuredObject.ScansBefore);
         Assert.Equal(2, measuredObject.ScansAfter);
         Assert.Equal(string.Empty, measuredObject.Change);
-        var sensitiveStatement = Assert.Single(Reader(home).Operation(measure.OperationId, storeSensitive: true)!.Statements!);
-        Assert.Equal("/operations/" + measure.OperationId + "?planCase=0&planVariant=measure&planRepetition=1&planDocument=0&planStatement=0",
-            sensitiveStatement.PlanLinkAfter);
+        var sensitiveStatements = Reader(home).Operation(measure.OperationId, storeSensitive: true)!.Statements!;
+        Assert.Equal("/operations/" + measure.OperationId + "?planCase=s:0&planVariant=measure&planParameterSetNull=true&planRepetition=1&planDocument=0&planStatement=0",
+            Assert.Single(sensitiveStatements, row => row.PlanLinkAfter?.Contains("planParameterSetNull=true") == true).PlanLinkAfter);
+        Assert.Equal("/operations/" + measure.OperationId + "?planCase=s:0&planVariant=measure&planParameterSet=&planRepetition=1&planDocument=0&planStatement=0",
+            Assert.Single(sensitiveStatements, row => row.PlanLinkAfter?.Contains("planParameterSet=") == true && row.PlanLinkAfter.Contains("planParameterSetNull") == false).PlanLinkAfter);
     }
 
     [Fact]

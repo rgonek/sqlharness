@@ -83,6 +83,11 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
   }
 
   if (comparison.view === "statements" || comparison.view === "changed") {
+    if (comparison.tableIoUnavailable) {
+      lines.push("per-statement IO not available for this engine")
+      appendMetrics(lines, comparison)
+      return lines.join("\n")
+    }
     lines.push(
       "| Statement | Status | Executions | Reads before | Reads after | Change |",
       "| --- | --- | ---: | ---: | ---: | --- |",

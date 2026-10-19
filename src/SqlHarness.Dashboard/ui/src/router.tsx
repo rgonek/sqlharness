@@ -13,7 +13,7 @@ import { StatsPage } from "@/pages/StatsPage"
 
 export type OptimizationView = "changed" | "whole" | "statements"
 export type SessionSearch = { subject?: string; db?: string; group?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; view?: OptimizationView; unassigned?: boolean }
-export type OperationDetailSearch = { case?: string; agg?: string; view?: OptimizationView; planCase?: string; planVariant?: string; planRepetition?: number; planDocument?: number; planStatement?: number; returnSession?: number; returnSubject?: string; returnDb?: string; returnGroup?: string; returnScope?: string; returnA?: string; returnB?: string; returnCase?: string; returnAgg?: string; returnView?: OptimizationView; returnUnassigned?: boolean }
+export type OperationDetailSearch = { case?: string; agg?: string; view?: OptimizationView; planCase?: string; planVariant?: string; planParameterSet?: string; planParameterSetNull?: boolean; planRepetition?: number; planDocument?: number; planStatement?: number; returnSession?: number; returnSubject?: string; returnDb?: string; returnGroup?: string; returnScope?: string; returnA?: string; returnB?: string; returnCase?: string; returnAgg?: string; returnView?: OptimizationView; returnUnassigned?: boolean }
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
@@ -39,8 +39,12 @@ const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/op
       : typeof search.case === "number" && Number.isSafeInteger(search.case) ? String(search.case) : undefined,
     agg: search.agg === "mean" ? "mean" : search.agg === "sum" ? "sum" : undefined,
     view: search.view === "whole" || search.view === "statements" ? search.view : search.view === "changed" ? "changed" : undefined,
-    planCase: typeof search.planCase === "string" && search.planCase.length <= 256 ? search.planCase : undefined,
+    planCase: typeof search.planCase === "string" && search.planCase.startsWith("s:") && search.planCase.length <= 258 ? search.planCase.slice(2)
+      : typeof search.planCase === "string" && search.planCase.length <= 256 ? search.planCase
+      : typeof search.planCase === "number" && Number.isSafeInteger(search.planCase) ? String(search.planCase) : undefined,
     planVariant: typeof search.planVariant === "string" && search.planVariant.length <= 64 ? search.planVariant : undefined,
+    planParameterSet: typeof search.planParameterSet === "string" && search.planParameterSet.length <= 256 ? search.planParameterSet : undefined,
+    planParameterSetNull: search.planParameterSetNull === true || search.planParameterSetNull === "true",
     planRepetition: typeof search.planRepetition === "number" && Number.isSafeInteger(search.planRepetition) && search.planRepetition >= 0 ? search.planRepetition : undefined,
     planDocument: typeof search.planDocument === "number" && Number.isSafeInteger(search.planDocument) && search.planDocument >= 0 ? search.planDocument : undefined,
     planStatement: typeof search.planStatement === "number" && Number.isSafeInteger(search.planStatement) && search.planStatement >= 0 ? search.planStatement : undefined,

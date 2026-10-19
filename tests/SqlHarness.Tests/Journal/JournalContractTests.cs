@@ -73,6 +73,31 @@ public sealed class JournalContractTests : IDisposable
     }
 
     [Fact]
+    public void Journal_v18_migrates_in_place_to_v19_statement_plan_provenance()
+    {
+        var path = Path.Combine(_temp.Path, "data", "activity.db");
+        _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
+            new FixedTimeProvider(JournalTestData.T0));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            connection.Open();
+            using var downgrade = connection.CreateCommand();
+            downgrade.CommandText = "ALTER TABLE operation_statements DROP COLUMN plan_statement_index; ALTER TABLE operation_statements DROP COLUMN plan_document_ordinal; ALTER TABLE operation_statements DROP COLUMN plan_repetition; PRAGMA user_version = 18;";
+            downgrade.ExecuteNonQuery();
+        }
+
+        _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
+            new FixedTimeProvider(JournalTestData.T0));
+
+        Assert.Equal(19L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        var columns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_statements')")
+            .Select(row => (string)row["name"]!).ToArray();
+        Assert.Contains("plan_repetition", columns);
+        Assert.Contains("plan_document_ordinal", columns);
+        Assert.Contains("plan_statement_index", columns);
+    }
+
+    [Fact]
     public void Journal_v16_is_archived_without_migrating_old_rows()
     {
         var path = Path.Combine(_temp.Path, "data", "activity.db");

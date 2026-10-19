@@ -182,12 +182,12 @@ export function usePlanSourceMap(id: number, selection: PlanSourceMapParams | nu
 }
 
 export function fetchPlanSourceMap(id: number, selection: PlanSourceMapParams): Promise<PlanSourceMapResponse> {
-  return getJson<PlanSourceMapResponse>(`/api/operations/${id}/source-map`, {
-    variant: selection.variant,
-    parameterSet: selection.parameterSet,
-    repetition: selection.repetition,
-    caseId: selection.caseId,
-  })
+  const query = new URLSearchParams()
+  query.set("variant", selection.variant)
+  if (selection.parameterSet !== null && selection.parameterSet !== undefined) query.set("parameterSet", selection.parameterSet)
+  query.set("repetition", String(selection.repetition))
+  query.set("caseId", selection.caseId)
+  return getJson<PlanSourceMapResponse>(`/api/operations/${id}/source-map?${query.toString()}`)
 }
 
 export function usePlanGraph(sha: string, enabled = true) {

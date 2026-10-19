@@ -37,3 +37,15 @@ test("renders both hidden-work flag forms", () => {
   expect(screen.getByText("UDF time 15% of statement")).toBeInTheDocument()
   expect(screen.getByText("multi-statement function: internal reads not visible (7 executions)")).toBeInTheDocument()
 })
+
+test("sorts comparison rows by absolute read change", () => {
+  render(<StatementRows rows={[row, {
+    ...row, key: "larger", text: "SELECT larger change", readsBefore: 10, readsAfter: 510, change: "+5000%",
+  }]} />)
+
+  const rows = within(screen.getByRole("table", { name: "Statement IO rows" })).getAllByRole("row")
+  const largerIndex = rows.findIndex(item => item.textContent?.includes("SELECT larger change"))
+  const smallerIndex = rows.findIndex(item => item.textContent?.includes("SELECT * FROM Orders"))
+  expect(largerIndex).toBeGreaterThan(0)
+  expect(smallerIndex).toBeGreaterThan(largerIndex)
+})

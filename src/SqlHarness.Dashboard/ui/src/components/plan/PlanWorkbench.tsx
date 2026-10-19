@@ -64,7 +64,7 @@ function matchingOccurrences(occurrences: PlanOccurrenceManifest[], variant: Var
   return occurrences.filter(occurrence => occurrence.variant === variant.variant && occurrence.parameterSet === variant.parameterSet)
 }
 
-export function PlanWorkbench({ operationId, variant, engine, initialTarget }: { operationId: number; variant: VariantDetail; engine: string | null; initialTarget?: { caseId: string; repetition: number; documentOrdinal: number; statementIndex: number } }) {
+export function PlanWorkbench({ operationId, variant, engine, initialTarget }: { operationId: number; variant: VariantDetail; engine: string | null; initialTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
   const manifest = useOperationPlans(operationId)
   const [selectedCase, setSelectedCase] = useState(initialTarget?.caseId ?? variant.caseId)
   const [selectedRepetition, setSelectedRepetition] = useState<number | null>(initialTarget?.repetition ?? null)
@@ -89,7 +89,7 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget }: {
   const documentOptions = useMemo(() => uniqueDocuments(occurrences), [occurrences])
   const targetOccurrence = initialTarget ? occurrences.find(occurrence => occurrence.documentOrdinal === initialTarget.documentOrdinal
     && occurrence.statementIndex === initialTarget.statementIndex && occurrence.repetition === initialTarget.repetition
-    && occurrence.caseId === initialTarget.caseId) : undefined
+    && occurrence.caseId === initialTarget.caseId && occurrence.parameterSet === initialTarget.parameterSet) : undefined
   const targetDocumentKey = targetOccurrence?.documentSha256 ? `${targetOccurrence.documentSha256}:${targetOccurrence.documentOrdinal}` : null
   const documentSelection = selectedDocumentKey === "target" ? targetDocumentKey ?? "all"
     : selectedDocumentKey === "all" || documentOptions.some(option => documentKey(option) === selectedDocumentKey)

@@ -67,3 +67,8 @@ test("Markdown records the selected statement view, verdict basis, batch headlin
   expect(markdown).toContain("omitted statements: 1 (their reads remain in the batch total)")
   expect(markdown).toContain("omitted statements: 2 (their reads remain in the batch total)")
 })
+
+test("statement-view Markdown preserves the PostgreSQL unavailable message when rows are empty", () => {
+  const markdown = optimizationMarkdown({ ...comparison, view: "statements", tableIoUnavailable: true, tables: [], collapsed: null, statements: [] }, "Orders", "whole query")
+  expect(markdown).toContain("per-statement IO not available for this engine")
+})

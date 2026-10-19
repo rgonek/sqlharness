@@ -25,7 +25,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         long? PgTempRead, long? PgTempWritten,
         string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, int OmittedStatements);
 
-    private sealed record StoredStatement(long Id, long OperationId, string Variant, string CaseId, int Ordinal, string Key,
+    private sealed record StoredStatement(long Id, long OperationId, string Variant, string? ParameterSet, string CaseId, int Ordinal, string Key,
         int Occurrence, string Hash, string? Text, long? Executions, string? PlanHash, string Status,
         double? UdfElapsedMs, string HiddenWorkJson, string? ObjectName, string? ObjectKind,
         long? ObjectReads, long? ObjectLobReads, long? ObjectScans, int OmittedStatements,
@@ -363,7 +363,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             var placeholders = string.Join(",", parameters.Select(item => item.Item1));
             var queryParameters = parameters.Append(("$storeSensitive", (object?)(storeSensitive ? 1 : 0))).ToArray();
             result.AddRange(Query(connection, $"""
-                SELECT s.id, s.operation_id, s.variant, s.case_id, s.statement_ordinal, s.statement_key,
+                SELECT s.id, s.operation_id, s.variant, s.parameter_set, s.case_id, s.statement_ordinal, s.statement_key,
                        s.occurrence, s.statement_hash, s.statement_text, s.executions, s.plan_hash, s.status,
                        s.udf_elapsed_ms, s.hidden_work_json, o.object, o.kind, o.logical_reads, o.lob_logical_reads,
                        o.scans, COALESCE(m.omitted_statements, 0),
@@ -372,7 +372,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                        CASE WHEN $storeSensitive = 1 AND p.document_sha IS NOT NULL THEN p.statement_index END
                 FROM operation_statements s
                 LEFT JOIN operation_statement_objects o ON o.statement_id = s.id
-                LEFT JOIN operation_metrics m ON m.operation_id = s.operation_id AND m.variant = s.variant AND m.case_id = s.case_id
+                LEFT JOIN operation_metrics m ON m.operation_id = s.operation_id AND m.variant = s.variant
+                    AND m.parameter_set IS s.parameter_set AND m.case_id = s.case_id
                 LEFT JOIN operation_metrics pm ON pm.operation_id = s.operation_id AND lower(pm.variant) = lower(s.variant)
                     AND pm.parameter_set IS s.parameter_set AND pm.case_id = s.case_id
                 LEFT JOIN plan_occurrences p ON p.metric_id = pm.id AND p.repetition = s.plan_repetition
@@ -381,12 +382,12 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     AND EXISTS (SELECT 1 FROM plan_documents d WHERE d.sha256 = p.document_sha)
                 WHERE s.operation_id IN ({placeholders})
                 ORDER BY s.operation_id, s.ordinal, o.object;
-                """, queryParameters, r => new StoredStatement(r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetString(3),
-                r.GetInt32(4), r.GetString(5), r.GetInt32(6), r.GetString(7),
-                storeSensitive ? NullableString(r, 8) : null, NullableLong(r, 9), NullableString(r, 10),
-                r.GetString(11), NullableDouble(r, 12), r.GetString(13),
-                NullableString(r, 14), NullableString(r, 15), NullableLong(r, 16), NullableLong(r, 17),
-                NullableLong(r, 18), r.GetInt32(19), NullableInt(r, 20), NullableInt(r, 21), NullableInt(r, 22))));
+                """, queryParameters, r => new StoredStatement(r.GetInt64(0), r.GetInt64(1), r.GetString(2), NullableString(r, 3), r.GetString(4),
+                r.GetInt32(5), r.GetString(6), r.GetInt32(7), r.GetString(8),
+                storeSensitive ? NullableString(r, 9) : null, NullableLong(r, 10), NullableString(r, 11),
+                r.GetString(12), NullableDouble(r, 13), r.GetString(14),
+                NullableString(r, 15), NullableString(r, 16), NullableLong(r, 17), NullableLong(r, 18),
+                NullableLong(r, 19), r.GetInt32(20), NullableInt(r, 21), NullableInt(r, 22), NullableInt(r, 23))));
         }
         return result;
     }
@@ -436,7 +437,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     private static string? PlanLink(StoredStatement statement) =>
         statement.PlanRepetition is { } repetition && statement.PlanDocumentOrdinal is { } document
             && statement.PlanStatementIndex is { } index
-            ? $"/operations/{statement.OperationId}?planCase={Uri.EscapeDataString(statement.CaseId)}&planVariant={Uri.EscapeDataString(statement.Variant)}&planRepetition={repetition.ToString(CultureInfo.InvariantCulture)}&planDocument={document.ToString(CultureInfo.InvariantCulture)}&planStatement={index.ToString(CultureInfo.InvariantCulture)}"
+            ? $"/operations/{statement.OperationId}?planCase=s:{Uri.EscapeDataString(statement.CaseId)}&planVariant={Uri.EscapeDataString(statement.Variant)}&{(statement.ParameterSet is null ? "planParameterSetNull=true" : $"planParameterSet={Uri.EscapeDataString(statement.ParameterSet)}")}&planRepetition={repetition.ToString(CultureInfo.InvariantCulture)}&planDocument={document.ToString(CultureInfo.InvariantCulture)}&planStatement={index.ToString(CultureInfo.InvariantCulture)}"
             : null;
 
     public SqlVersionText? SessionSqlText(long sessionId, string hash)

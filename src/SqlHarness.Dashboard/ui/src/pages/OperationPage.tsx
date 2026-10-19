@@ -129,12 +129,13 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
   const op = detail.operation
   if (op.operation === "compare") return <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
   const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
-  const planTarget = returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
+  const hasPlanParameterSet = returnSearch.planParameterSetNull === true || returnSearch.planParameterSet !== undefined
+  const planTarget = hasPlanParameterSet && returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
     && returnSearch.planDocument !== undefined && returnSearch.planStatement !== undefined
-    ? { caseId: returnSearch.planCase, repetition: returnSearch.planRepetition, documentOrdinal: returnSearch.planDocument, statementIndex: returnSearch.planStatement }
+    ? { caseId: returnSearch.planCase, parameterSet: returnSearch.planParameterSetNull ? null : returnSearch.planParameterSet!, repetition: returnSearch.planRepetition, documentOrdinal: returnSearch.planDocument, statementIndex: returnSearch.planStatement }
     : undefined
   const targetVariant = planTarget ? detail.variants.find(variant => variant.caseId === planTarget.caseId
-    && variant.variant === returnSearch.planVariant) : undefined
+    && variant.variant === returnSearch.planVariant && variant.parameterSet === planTarget.parameterSet) : undefined
   const tabVariant = targetVariant ?? detail.variants[0]
   return (
     <div className="space-y-4">
