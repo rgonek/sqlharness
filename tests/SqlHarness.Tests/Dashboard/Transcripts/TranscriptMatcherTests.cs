@@ -150,6 +150,48 @@ public sealed class TranscriptMatcherTests
     }
 
     [Fact]
+    public async Task Codex_title_backfill_resumes_after_budget_and_targeted_lookup()
+    {
+        using var f = new Fixture();
+        f.Seed.Operation(JournalSeed.Session("mcp:old-codex", "codex"), agent: Call("exec-old", sessionId: "old-thread"));
+
+        var indexPath = f.Homes.CodexSessionIndex;
+        Directory.CreateDirectory(Path.GetDirectoryName(indexPath)!);
+        using (var writer = new StreamWriter(indexPath))
+        {
+            writer.WriteLine("{\"id\":\"target-thread\",\"thread_name\":\"Target title\",\"updated_at\":\"t\"}");
+            var padding = new string('x', 1024 * 1024);
+            for (var i = 0; i < 33; i++)
+                writer.WriteLine(padding);
+            writer.WriteLine("{\"id\":\"old-thread\",\"thread_name\":\"Older title\",\"updated_at\":\"t2\"}");
+        }
+
+        var matcher = f.Matcher();
+        matcher.RunCycle(enabled: true);
+        var old = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "old-thread");
+        Assert.Null(old["title"]);
+
+        f.Seed.Operation(JournalSeed.Session("mcp:new-codex", "codex"), agent: Call("exec-target", sessionId: "target-thread"));
+        var targetOperationId = Convert.ToInt64(Journal.JournalDb.Rows(f.Home.DatabasePath,
+            "SELECT id FROM operations WHERE agent_session_id = 'target-thread'").Single()["id"]);
+        await matcher.RunTargetedAsync([targetOperationId], CancellationToken.None);
+
+        var target = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "target-thread");
+        Assert.Equal("Target title", target["title"]);
+        Assert.Equal(1, matcher.LastCodexLookupIdentityCount);
+
+        for (var i = 0; i < 3; i++)
+        {
+            matcher.RunCycle(enabled: true);
+            old = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "old-thread");
+            if ((string?)old["title"] == "Older title")
+                break;
+        }
+
+        Assert.Equal("Older title", old["title"]);
+    }
+
+    [Fact]
     public async Task A_targeted_codex_backfill_keeps_other_unresolved_titles_in_scope()
     {
         using var f = new Fixture();

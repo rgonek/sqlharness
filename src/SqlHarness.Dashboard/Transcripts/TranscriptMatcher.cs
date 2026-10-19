@@ -24,6 +24,7 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
     private readonly object _gate = new();
     private readonly HashSet<(string Kind, string Id)> _codexTitleBackfillPending = [];
     private readonly HashSet<(string Kind, string Id)> _codexTitleBackfillAttempted = [];
+    private TailCursor? _codexTitleBackfillCursor;
     private bool _restartCodexTitleBackfill;
     private int _readErrors;
     private string? _lastCycleAt;
@@ -152,6 +153,10 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                 {
                     Execute(connection, "DELETE FROM operation_agent_links; DELETE FROM agent_tool_calls; DELETE FROM agent_conversations; DELETE FROM transcript_cursors;");
                     Execute(connection, "COMMIT;");
+                    _codexTitleBackfillPending.Clear();
+                    _codexTitleBackfillAttempted.Clear();
+                    _codexTitleBackfillCursor = null;
+                    _restartCodexTitleBackfill = false;
                     return true;
                 }
                 catch
@@ -315,7 +320,10 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
         foreach (var key in missingTitles)
         {
             if (_codexTitleBackfillPending.Count < MaxPendingCodexTitleBackfills && _codexTitleBackfillPending.Add(key))
+            {
                 _restartCodexTitleBackfill = true;
+                _codexTitleBackfillCursor = null;
+            }
         }
 
         if (fullSweep)
@@ -332,7 +340,14 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
         var path = homes.CodexSessionIndex;
         try
         {
-            var cursor = _restartCodexTitleBackfill ? null : LoadCursor(connection, path);
+            var backfillActive = _codexTitleBackfillPending.Count > 0;
+            TailCursor? cursor;
+            if (fullSweep && backfillActive)
+                cursor = _restartCodexTitleBackfill ? null : _codexTitleBackfillCursor ?? LoadCursor(connection, path);
+            else if (backfillActive)
+                cursor = null;
+            else
+                cursor = LoadCursor(connection, path);
             var result = IncrementalTail.Read(path, cursor, budget, line =>
             {
                 var entry = TranscriptLines.ParseCodexIndex(line);
@@ -352,9 +367,17 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                         _codexTitleBackfillAttempted.Add(key);
                 }
                 _codexTitleBackfillPending.Clear();
+                _codexTitleBackfillCursor = null;
                 _restartCodexTitleBackfill = false;
             }
-            batch.Cursors[path] = result.Cursor;
+            else if (fullSweep && backfillActive)
+            {
+                _codexTitleBackfillCursor = result.Cursor;
+                _restartCodexTitleBackfill = false;
+            }
+
+            if (fullSweep || !backfillActive)
+                batch.Cursors[path] = result.Cursor;
             return budget - result.BytesRead;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
