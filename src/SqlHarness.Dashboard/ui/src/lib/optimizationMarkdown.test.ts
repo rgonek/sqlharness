@@ -8,6 +8,7 @@ const comparison: OptimizationComparison = {
   selectedCase: "all", aggregate: "sum", coverageLabel: "", mixed: { better: 2, worse: 1, worstCaseLabel: "@CustomerId = 9001", worstChangePercent: 35 },
   tables: [{ table: "dbo.Orders", scansBefore: 4, scansAfter: 2, readsBefore: 100, readsAfter: 135, change: "+35%" }],
   collapsed: { count: 2, label: "2 smaller tables" }, elapsed: { beforeMs: 10, afterMs: 11, policyVerdict: null, differentRun: false },
+  view: "whole", verdictBasis: "whole batch",
 }
 
 test("Markdown matches the selected comparison rows and labels", () => {
@@ -15,6 +16,8 @@ test("Markdown matches the selected comparison rows and labels", () => {
     "# Orders — whole query — v0 → v3",
     "Case: all cases (Sum)",
     "Basis: measured together in #214",
+    "View: Whole batch",
+    "basis: whole batch",
     "Equivalence: results equivalent (direct)",
     "",
     "Mixed: 2 better, 1 worse — @CustomerId = 9001: logical reads +35%",
@@ -42,4 +45,30 @@ test("measure-only Markdown states the different-run basis and unverified result
 
   expect(markdown).toContain("Basis: different runs, same conditions")
   expect(markdown).toContain("Equivalence: results not compared")
+})
+
+test("Markdown records the selected statement view, verdict basis, batch headline, hidden work, and omissions", () => {
+  const markdown = optimizationMarkdown({ ...comparison,
+    view: "statements", verdictBasis: "changed statements",
+    wholeBatch: { before: 500, after: 650, shared: 100,
+      label: "whole batch: 500 → 650 reads (shared statements: 100)",
+      sharedBefore: 100, sharedAfter: 100, changedBefore: 400, changedAfter: 550 },
+    omittedStatementsBefore: 1, omittedStatementsAfter: 2,
+    statements: [{ key: "q", occurrence: 0, text: "SELECT 1", status: "different-work",
+      readsBefore: 20, readsAfter: 40, scansBefore: 1, scansAfter: 2, executions: 3, change: "+100%", attribution: "confirmed",
+      hiddenWork: [{ kind: "scalar-udf", name: "dbo.Price", executions: null, sharePercent: 15 }], objects: [],
+      planHashBefore: null, planHashAfter: null, planLinkBefore: null, planLinkAfter: null, udfElapsedMilliseconds: 4 }],
+  }, "Orders", "whole query")
+
+  expect(markdown).toContain("View: By statement")
+  expect(markdown).toContain("basis: changed statements")
+  expect(markdown).toContain("whole batch: 500 → 650 reads (shared statements: 100)")
+  expect(markdown).toContain("UDF time 15% of statement")
+  expect(markdown).toContain("omitted statements: 1 (their reads remain in the batch total)")
+  expect(markdown).toContain("omitted statements: 2 (their reads remain in the batch total)")
+})
+
+test("statement-view Markdown preserves the PostgreSQL unavailable message when rows are empty", () => {
+  const markdown = optimizationMarkdown({ ...comparison, view: "statements", tableIoUnavailable: true, tables: [], collapsed: null, statements: [] }, "Orders", "whole query")
+  expect(markdown).toContain("per-statement IO not available for this engine")
 })

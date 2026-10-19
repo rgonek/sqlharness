@@ -25,14 +25,14 @@ public sealed class JournalContractTests : IDisposable
     };
 
     [Fact]
-    public void Journal_v17_pins_content_addressed_documents_and_occurrences()
+    public void Journal_v19_pins_statement_plan_occurrence_provenance()
     {
         var path = Path.Combine(_temp.Path, "data", "activity.db");
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(17, JournalSchema.FirstRetainedVersion);
-        Assert.Equal(17, JournalSchema.CurrentVersion);
+        Assert.Equal(18, JournalSchema.FirstRetainedVersion);
+        Assert.Equal(19, JournalSchema.CurrentVersion);
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         var operationColumns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operations')")
             .Select(row => (string)row["name"]!).ToArray();
@@ -44,6 +44,22 @@ public sealed class JournalContractTests : IDisposable
             .Select(row => (string)row["name"]!));
         Assert.Contains("case_label", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_statements')")
             .Select(row => (string)row["name"]!));
+        var statementColumns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_statements')")
+            .Select(row => (string)row["name"]!).ToArray();
+        Assert.Contains("statement_key", statementColumns);
+        Assert.Contains("occurrence", statementColumns);
+        Assert.Contains("executions", statementColumns);
+        Assert.Contains("plan_hash", statementColumns);
+        Assert.Contains("status", statementColumns);
+        Assert.Contains("udf_elapsed_ms", statementColumns);
+        Assert.Contains("hidden_work_json", statementColumns);
+        Assert.Contains("statement_text", statementColumns);
+        Assert.Contains("plan_repetition", statementColumns);
+        Assert.Contains("plan_document_ordinal", statementColumns);
+        Assert.Contains("plan_statement_index", statementColumns);
+        Assert.Contains("omitted_statements", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_metrics')")
+            .Select(row => (string)row["name"]!));
+        Assert.Equal(6, JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_statement_objects')").Count);
         Assert.Contains("shape_hash", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_documents')").Select(row => (string)row["name"]!));
         Assert.Contains("sha256", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_documents')").Select(row => (string)row["name"]!));
         Assert.Contains("span_start", JournalDb.Rows(path, "SELECT name FROM pragma_table_info('plan_occurrences')").Select(row => (string)row["name"]!));
@@ -54,6 +70,31 @@ public sealed class JournalContractTests : IDisposable
         var salt = Assert.IsType<byte[]>(JournalDb.Rows(path,
             "SELECT value FROM journal_meta WHERE key = 'fingerprint_salt'").Single()["value"]);
         Assert.Equal(32, salt.Length);
+    }
+
+    [Fact]
+    public void Journal_v18_migrates_in_place_to_v19_statement_plan_provenance()
+    {
+        var path = Path.Combine(_temp.Path, "data", "activity.db");
+        _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
+            new FixedTimeProvider(JournalTestData.T0));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            connection.Open();
+            using var downgrade = connection.CreateCommand();
+            downgrade.CommandText = "ALTER TABLE operation_statements DROP COLUMN plan_statement_index; ALTER TABLE operation_statements DROP COLUMN plan_document_ordinal; ALTER TABLE operation_statements DROP COLUMN plan_repetition; PRAGMA user_version = 18;";
+            downgrade.ExecuteNonQuery();
+        }
+
+        _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
+            new FixedTimeProvider(JournalTestData.T0));
+
+        Assert.Equal(19L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        var columns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_statements')")
+            .Select(row => (string)row["name"]!).ToArray();
+        Assert.Contains("plan_repetition", columns);
+        Assert.Contains("plan_document_ordinal", columns);
+        Assert.Contains("plan_statement_index", columns);
     }
 
     [Fact]
@@ -71,7 +112,7 @@ public sealed class JournalContractTests : IDisposable
 
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null, new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(17L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(19L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         Assert.Empty(JournalDb.Rows(path, "SELECT id FROM sessions"));
         var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "activity.db.v16-*.bak"));
         Assert.Single(JournalDb.Rows(backup, "SELECT session_key FROM sessions WHERE session_key = 'old'"));
@@ -95,7 +136,7 @@ public sealed class JournalContractTests : IDisposable
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(17L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(19L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "activity.db.v15-*.bak"));
     }
 

@@ -53,41 +53,63 @@ internal static class JournalBenchmarkBuilder
 
     private static IReadOnlyList<JournalStatementMetrics> BuildStatements(IReadOnlyList<CompareRunArtifact> runs)
     {
-        var extracted = new List<(CompareRunArtifact Run, StatementMetrics Metric)>();
-        foreach (var run in runs)
+        var output = new List<JournalStatementMetrics>();
+        foreach (var group in runs.GroupBy(run => (run.Variant, run.ParameterSet, run.MatrixCell)))
         {
-            var ordinalOffset = 0;
+            var run = SelectMedianTotalRun(group.ToArray());
+            var metrics = JournalStatementMetricsExtractor.Extract(run.PlanXmls, out var omitted);
+            var statuses = StatementReconciler.Reconcile(metrics, run.TableIo);
+            var legacyMetrics = new List<StatementMetrics>();
             var pairsByDocument = StatementSpanPairer.PairDocuments(run.ExecutedSql, run.PlanXmls);
             for (var documentIndex = 0; documentIndex < run.PlanXmls.Count; documentIndex++)
+                legacyMetrics.AddRange(StatementMetricsExtractor.Extract(
+                    run.PlanXmls[documentIndex], run.ExecutedSql, pairsByDocument[documentIndex], out _));
+            var topOperatorsByHash = legacyMetrics
+                .GroupBy(metric => metric.StatementHash, StringComparer.Ordinal)
+                .ToDictionary(items => items.Key, items => items.First().TopOperators, StringComparer.Ordinal);
+            for (var index = 0; index < metrics.Count; index++)
             {
-                var statements = StatementMetricsExtractor.Extract(
-                    run.PlanXmls[documentIndex], run.ExecutedSql, pairsByDocument[documentIndex], out var omitted);
-                extracted.AddRange(statements.Select(statement => (run, statement with
+                var metric = metrics[index];
+                var statementHash = metric.StatementHash;
+                if (run.ExecutedSql is { } executedSql
+                    && metric.PlanDocumentOrdinal is int documentOrdinal
+                    && documentOrdinal >= 0 && documentOrdinal < pairsByDocument.Count
+                    && metric.PlanStatementIndex is int statementIndex
+                    && statementIndex >= 0 && statementIndex < pairsByDocument[documentOrdinal].Count)
                 {
-                    StatementOrdinal = statement.StatementOrdinal + ordinalOffset,
-                })));
-                ordinalOffset += statements.Count + omitted;
+                    var pair = pairsByDocument[documentOrdinal][statementIndex];
+                    if (pair is { SpanStart: int start, SpanLength: int length }
+                        && start >= 0 && length > 0 && start <= executedSql.Length - length)
+                        statementHash = PlanIdentity.StatementSha256(executedSql.Substring(start, length));
+                }
+                output.Add(new JournalStatementMetrics(
+                    run.Variant,
+                    run.ParameterSet,
+                    run.MatrixCell,
+                    metric.StatementOrdinal,
+                    statementHash,
+                    metric.CpuTimeMilliseconds,
+                    metric.ElapsedTimeMilliseconds,
+                    metric.DegreeOfParallelism,
+                    topOperatorsByHash.GetValueOrDefault(statementHash) ?? metric.TopOperators)
+                {
+                    StatementKey = metric.Key ?? string.Empty,
+                    Occurrence = metric.Occurrence ?? 0,
+                    Executions = metric.Executions,
+                    PlanHash = metric.PlanHash,
+                    PlanRepetition = run.Repetition,
+                    PlanDocumentOrdinal = metric.PlanDocumentOrdinal,
+                    PlanStatementIndex = metric.PlanStatementIndex,
+                    Status = omitted > 0 ? StatementStatus.Partial : statuses[index],
+                    UdfElapsedMilliseconds = metric.UdfElapsedMs,
+                    HiddenWork = metric.HiddenWork ?? [],
+                    Objects = metric.Objects ?? [],
+                    Text = metric.Text,
+                });
             }
         }
 
-        return extracted
-            .GroupBy(item => (item.Run.Variant, item.Run.ParameterSet, item.Run.MatrixCell, item.Metric.StatementOrdinal))
-            .Select(group =>
-            {
-                var samples = group.ToArray();
-                var first = samples[0].Metric;
-                var dops = samples.Select(sample => sample.Metric.DegreeOfParallelism).OfType<int>().ToArray();
-                return new JournalStatementMetrics(
-                    group.Key.Variant,
-                    group.Key.ParameterSet,
-                    group.Key.MatrixCell,
-                    group.Key.StatementOrdinal,
-                    first.StatementHash,
-                    StatementMedian(samples.Select(sample => sample.Metric.CpuTimeMilliseconds)),
-                    StatementMedian(samples.Select(sample => sample.Metric.ElapsedTimeMilliseconds)),
-                    dops.Length == 0 ? null : dops.Max(),
-                    first.TopOperators);
-            })
+        return output
             .OrderBy(statement => statement.Variant, StringComparer.Ordinal)
             .ThenBy(statement => statement.MatrixCell)
             .ThenBy(statement => statement.ParameterSet, StringComparer.Ordinal)
@@ -95,10 +117,14 @@ internal static class JournalBenchmarkBuilder
             .ToArray();
     }
 
-    private static long? StatementMedian(IEnumerable<long?> values)
+    private static CompareRunArtifact SelectMedianTotalRun(IReadOnlyList<CompareRunArtifact> runs)
     {
-        var present = values.OfType<long>().ToArray();
-        return present.Length == 0 ? null : Distribution.From(present).Median;
+        var ordered = runs.Select((run, index) => (Run: run, Index: index, Total: TotalLogicalReads(run, run.TableIo.Count > 0)))
+            .OrderBy(item => item.Total)
+            .ThenBy(item => item.Run.Repetition)
+            .ThenBy(item => item.Index)
+            .ToArray();
+        return ordered[(ordered.Length - 1) / 2].Run;
     }
 
     private static JournalVariantMetrics BuildVariant(
@@ -186,7 +212,14 @@ internal static class JournalBenchmarkBuilder
             links)
         {
             PlanOccurrences = occurrences,
+            OmittedStatements = GetOmittedStatements(SelectMedianTotalRun(runs)),
         };
+    }
+
+    private static int GetOmittedStatements(CompareRunArtifact run)
+    {
+        _ = JournalStatementMetricsExtractor.Extract(run.PlanXmls, out var omitted);
+        return omitted;
     }
 
     private static IReadOnlyList<JournalTableIo> TableIo(CompareRunArtifact[] runs)

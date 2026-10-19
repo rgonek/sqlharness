@@ -4,13 +4,14 @@ namespace SqlHarness.Core;
 
 internal static class JournalSchema
 {
-    internal const int FirstRetainedVersion = 17;
-    internal const int CurrentVersion = 17;
+    internal const int FirstRetainedVersion = 18;
+    internal const int CurrentVersion = 19;
 
     internal static readonly IReadOnlyDictionary<int, string> Migrations = new Dictionary<int, string>
     {
         [15] = "ALTER TABLE operations ADD COLUMN measurement_fingerprint TEXT;",
         [16] = "ALTER TABLE operations ADD COLUMN warnings_json TEXT NOT NULL DEFAULT '[]';",
+        [19] = "ALTER TABLE operation_statements ADD COLUMN plan_repetition INTEGER; ALTER TABLE operation_statements ADD COLUMN plan_document_ordinal INTEGER; ALTER TABLE operation_statements ADD COLUMN plan_statement_index INTEGER;",
     };
 
     internal const string Current = """
@@ -115,7 +116,8 @@ internal static class JournalSchema
             missing_index_count INTEGER NOT NULL,
             waits_json TEXT,
             pg_shared_hit INTEGER, pg_shared_read INTEGER, pg_shared_dirtied INTEGER, pg_shared_written INTEGER,
-            pg_temp_read INTEGER, pg_temp_written INTEGER
+            pg_temp_read INTEGER, pg_temp_written INTEGER,
+            omitted_statements INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX ix_operation_metrics_operation ON operation_metrics(operation_id, ordinal);
         CREATE TABLE operation_table_io (
@@ -160,13 +162,33 @@ internal static class JournalSchema
             case_label TEXT NOT NULL DEFAULT 'Case 1 of 1',
             statement_ordinal INTEGER NOT NULL,
             statement_hash TEXT NOT NULL,
+            statement_key TEXT NOT NULL,
+            occurrence INTEGER NOT NULL,
+            statement_text TEXT,
+            executions INTEGER,
+            plan_hash TEXT,
+            plan_repetition INTEGER,
+            plan_document_ordinal INTEGER,
+            plan_statement_index INTEGER,
+            status TEXT NOT NULL,
             cpu_ms INTEGER,
             elapsed_ms INTEGER,
             dop INTEGER,
-            operators_json TEXT NOT NULL
+            operators_json TEXT NOT NULL,
+            udf_elapsed_ms REAL,
+            hidden_work_json TEXT NOT NULL DEFAULT '[]'
         );
         CREATE INDEX ix_operation_statements_operation ON operation_statements(operation_id, ordinal);
         CREATE INDEX ix_operation_statements_hash ON operation_statements(statement_hash);
+        CREATE TABLE operation_statement_objects (
+            statement_id INTEGER NOT NULL REFERENCES operation_statements(id) ON DELETE CASCADE,
+            object TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            logical_reads INTEGER NOT NULL,
+            lob_logical_reads INTEGER NOT NULL,
+            scans INTEGER NOT NULL,
+            PRIMARY KEY (statement_id, object, kind)
+        );
         CREATE UNIQUE INDEX ix_operations_operation_ref ON operations(operation_ref) WHERE operation_ref IS NOT NULL;
         CREATE TABLE session_annotations (
             session_id INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,

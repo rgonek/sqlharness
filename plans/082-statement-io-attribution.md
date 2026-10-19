@@ -14,7 +14,7 @@
 
 ## Review amendments (2026-10-16, cross-plan review) — these override task text below
 
-1. **No per-run table; reconcile at build time (Task 2).** In `JournalBenchmarkBuilder`, per (variant, case): pick the median-total run (lower median), reconcile that run's plan counters against its `CompareRunArtifact.TableIo`, and journal only that run's statement objects and statuses. Drop `operation_runs.median_total_run`. Status of a statement = its status in the median-total run.
+1. **No per-run table; reconcile at build time (Task 2).** In `JournalBenchmarkBuilder`, per (variant, case): pick the median-total run (lower median), reconcile that run's plan counters against its `CompareRunArtifact.TableIo`, and journal only that run's statement objects and statuses. Do not add `operation_runs.median_total_run`. Status of a statement = its status in the median-total run. Omission counts live on the existing per-variant/case `operation_metrics` row. With no plan statements, the statement row set is empty; readers interpret that as unavailable at statement grain.
 2. **Journal version.** Declare a new step (`VersionN`, next free at execution; follows 079's `FirstRetainedVersion` rule) for `operation_statement_objects` and new `operation_statements` columns; pin in `JournalContractTests`.
 3. **Statement cap stays artifact-neutral (Task 1).** Do not change `StatementMetricsExtractor.MaximumStatements` (it shapes 077's artifact `statements` section). Add a journal-only extraction path with a byte bound. Put extractor tests in 077's `StatementMetricsTests.cs` (not `PlanMetricsExtractorTests`, which tests another class).
 4. **Statement text.** Text comes only from plan XML (`storeSensitive`); without it `StatementRow.Text` = `statement {ordinal} ({shortHash})`.
@@ -22,7 +22,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `760f7d6`. Depends on 079, 080, 081 and 087 (measure observations in the comparer).
+- Implementation, Task 5 evidence, and both final-review fixes are complete on product revision `b9f60924d09cdfa13f07106662549fcca8ee1f56`; the final Sol low whole-branch re-review is pending. Planning base `760f7d6`. Depends on 079, 080, 081 and 087 (measure observations in the comparer).
 - Priority P2; effort L; risk MEDIUM (verdict basis changes what reviewers see).
 
 ## Global Constraints
@@ -51,35 +51,37 @@
 
 ### Task 0: Drift check and post-081 spike
 
-- [ ] **Step 1:** Confirm 079/080/081 merged; drift check; `just verify` baseline.
-- [ ] **Step 2 (operator-authorized UAT, read-only):** measure a batch with a `WHILE` loop doing `INSERT @t SELECT …` (5 iterations), a local cursor over a `SELECT`, a `CREATE INDEX` on `#temp`, and a query producing a worktable/spool with reads. Record: plan documents per loop iteration vs per statement, `ActualExecutions`, reconciliation per object. Adapt Task 1's identity/aggregation to what SQL Server emits; record findings here without business data.
+- [x] **Step 1:** Confirm 079/080/081/087 merged; drift check; `just verify` baseline. The existing baseline record covers the unchanged revision and predecessor implementation evidence; the passing gate was not rerun for the spike.
+- [x] **Step 2 (operator-authorized UAT, read-only):** measured the five-iteration table-variable loop, local cursor, `CREATE INDEX` on a uniquely named `#temp`, and recursive spool query on the explicitly authorized SQL Server `civiclens-dev` profile. Recorded plan identity, executions, per-object reads, and unresolved Worktable reconciliation in [spike evidence](082-spike-evidence.md), with synthetic plan XML under the Task 0 scratch directory.
+
+**Task 0 findings (2026-10-19):** The unchanged baseline was not rerun. The rebuilt worktree CLI/MCP passed the synthetic batch's offline validation. The first authorized local-playground attempt timed out before SQL execution; following user steering, the live spike used the exact `civiclens-dev` SQL Server profile after a successful read-only identity query confirmed `CivicLens` on SQL Server 2025. Loop-expanded plan documents share `StatementCompId` and have one root execution apiece, while explicit same-text source statements have distinct `StatementCompId` values. Table-variable and named-temp logical reads reconcile; Worktable reads do not, so the affected attribution must fail closed. Synthetic plan XML is retained in the Task 0 scratch directory for Task 1 fixture capture; durable findings are in [spike evidence](082-spike-evidence.md).
 
 ### Task 1: Extract per-statement object counters
 
 **Files:**
-- Modify: `src/SqlHarness.Core/StatementMetrics.cs:9-104` (raise `MaximumStatements` → byte bound, add object counters, UDF times, TVF flags, normalized key), `src/SqlHarness.Core/Dialect/SqlServerDialect.cs` (pass engine IO per object to reconciliation)
-- Test: `tests/SqlHarness.Tests/Journal/PlanMetricsExtractorTests.cs`; fixtures under `tests/SqlHarness.Tests/Fixtures/Plans/` (synthetic XML shaped like the spike: table variables `[@P]`/`[@R]`, `#F`, DOP-2 scan with three thread counters, scalar UDF with `UdfElapsedTime`, MSTVF)
+- Modify: `src/SqlHarness.Core/StatementMetrics.cs` (add journal-only extraction with a byte bound, object counters, UDF times, TVF flags and normalized keys; keep the artifact `MaximumStatements` cap and wire shape unchanged)
+- Test: `tests/SqlHarness.Tests/StatementMetricsTests.cs`; fixtures under `tests/SqlHarness.Tests/Fixtures/Plans/` (spike-captured cursor and recursive spool XML plus synthetic counters for `[@P]`/`[@R]`, `#F`, DOP-2 parallel scan, scalar UDF and MSTVF)
 
 **Interfaces:**
 - Produces: `sealed record StatementObjectCounters(string Object /* "[@P]", "[#F]", "[dbo].[T]" */, string Kind /* "table" | "temp" | "table-variable" | "worktable" */, long LogicalReads, long LobLogicalReads, long Scans)`; `StatementMetrics` gains `string Key`, `int Occurrence`, `long? Executions`, `string? PlanHash`, `IReadOnlyList<StatementObjectCounters> Objects`, `double? UdfElapsedMs`, `IReadOnlyList<HiddenWork> HiddenWork`; `sealed record HiddenWork(string Kind /* "scalar-udf" | "multi-statement-tvf" */, string Name, long? Executions, double? SharePercent)`; `static StatementKey.Normalize(string text) : string`.
 
-- [ ] **Step 1: Failing tests:** `Counters_sum_operators_per_object` (insert into `[@P]` 1001 + scans 2 + 2 across statements → per statement values); `Parallel_counters_sum_over_threads` (41,943 + 42,810 + 2 = 84,755; scans 3); `Table_variable_names_come_from_plan`; `Scalar_udf_share` (`UdfElapsedTime` 28 of 29 → 96.6%); `Multi_statement_tvf_flagged` (executions from operator); `Normalized_key_ignores_comments_and_whitespace`; `Occurrence_distinguishes_repeated_text`; `Large_batch_reports_omissions` (300 statements, byte bound hit → `omittedStatements > 0`).
-- [ ] **Step 2:** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~PlanMetricsExtractor"` → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(082): extract per-statement object counters from actual plans`.
+- [x] **Step 1: Failing tests:** `Counters_sum_operators_per_object`; `Parallel_counters_sum_over_threads`; `Table_variable_names_come_from_plan`; `Scalar_udf_share`; `Multi_statement_tvf_flagged`; `Normalized_key_ignores_comments_and_whitespace`; `Occurrence_distinguishes_repeated_text`; `Large_batch_reports_omissions`; captured cursor/spool shapes; legacy artifact cap and wire shape.
+- [x] **Step 2:** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~StatementMetricsTests" --no-restore` → FAIL because `JournalStatementMetricsExtractor` and `StatementKey` were missing. **Step 3:** Implemented. **Step 4:** Same command → PASS (18 passed, 0 failed).
+- [x] **Step 5:** Commit `feat(082): extract per-statement object counters from actual plans` (`4c42914`).
 
 ### Task 2: Reconcile and journal
 
 **Files:**
 - Create: `src/SqlHarness.Core/Journal/StatementReconciler.cs`
-- Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs` (`operation_statement_objects(statement_id, object, kind, logical_reads, lob_logical_reads, scans)`; `operation_statements.statement_key`, `occurrence`, `executions`, `plan_hash`, `status`, `udf_elapsed_ms`, `hidden_work_json`; `operation_runs.median_total_run INTEGER` flag), `JournalBenchmarkBuilder.cs`, `ActivityJournal.cs`
+- Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs` (`operation_statement_objects(statement_id, object, kind, logical_reads, lob_logical_reads, scans)`; `operation_statements.statement_key`, `occurrence`, `statement_text`, `executions`, `plan_hash`, `status`, `udf_elapsed_ms`, `hidden_work_json`; `operation_metrics.omitted_statements`), `JournalBenchmarkBuilder.cs`, `ActivityJournal.cs`
 - Test: create `tests/SqlHarness.Tests/Journal/StatementReconcilerTests.cs`; `JournalBenchmarkBuilderTests.cs`
 
 **Interfaces:**
 - Produces: `static IReadOnlyList<StatementStatus> StatementReconciler.Reconcile(IReadOnlyList<StatementMetrics> statements, IReadOnlyList<TableIoCounters> observed)`; `enum StatementStatus { Confirmed, Partial, Unavailable }`; journal marks the median-total run per (operation, variant, case).
 
-- [ ] **Step 1: Failing tests:** all objects reconcile → all `Confirmed`; one object off by 3 pages → every statement touching it `Partial`, others `Confirmed`; table variables reconcile by group sum; no plans → `Unavailable`; median-total run chosen (lower median for even count).
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(082): reconcile and journal statement attribution`.
+- [x] **Step 1: Failing tests:** all objects reconcile → all `Confirmed`; one object off by 3 pages → every statement touching it `Partial`, others `Confirmed`; table variables reconcile by group sum; no plan statements produce no rows (unavailable at statement grain); median-total run chosen (lower median for even count); omitted statements fail closed.
+- [x] **Step 2:** Focused filter → FAIL because `StatementReconciler`, `StatementStatus`, and new journal attribution fields were absent. **Step 3:** Implemented reconciliation, lower-median selected-run extraction, v18 persistence, and omission metadata. **Step 4:** Focused journal filter → PASS (45 passed, 0 failed).
+- [x] **Step 5:** Commit `feat(082): reconcile and journal statement attribution` (see Task 2 report for revision and evidence).
 
 ### Task 3: Comparer: statement classes and verdict basis
 
@@ -90,9 +92,11 @@
 **Interfaces:**
 - Produces: `OptimizationComparison` gains `string VerdictBasis /* "changed statements" | "whole batch" */`, `string View /* "changed" | "whole" | "statements" */`, `WholeBatchLine WholeBatch` (`Before`, `After`, `Shared`), `IReadOnlyList<StatementRow> Statements`, `string? FallbackNote`; `sealed record StatementRow(string Key, string Text, string Status /* shared | different-work | only-baseline | only-candidate | not-executed */, long? ReadsBefore, long? ReadsAfter, long? ScansBefore, long? ScansAfter, long? Executions, string Change, string Attribution /* confirmed|partial|unavailable */, IReadOnlyList<HiddenWork> HiddenWork, IReadOnlyList<TableRow> Objects)`; query parameter `view=changed|whole|statements` on the compare endpoint (default `changed`).
 
-- [ ] **Step 1: Failing tests:** `Op203_shape_focuses_on_changed_statement` (shared 11,910 each side + changed 100 → 50: verdict `better`, basis `changed statements`, line `whole batch: 12010 → 11960 reads (shared statements: 11910)`); `Mismatch_on_shared_object_fails_closed` (basis `whole batch`, note `per-statement attribution incomplete`, nothing collapsed); `Equal_reads_different_plan_is_not_shared`; `Branch_in_some_cases_is_never_collapsed`; `All_cases_collapses_only_everywhere_shared`; `Breakdown_is_additive` (changed + shared = whole batch); `Version_table_and_session_badge_use_same_basis`.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(082): classify statements and focus verdicts on changed work`.
+- [x] **Step 1: Failing tests:** Op203, partial shared-object fail-closed, equal-read/different-plan, branch in some cases, all-case shared/additivity, version-table basis, and session badge basis are covered by the named comparer, summary-builder and reader tests. The first feature RED reached the comparer and failed because the changed view included a shared row.
+- [x] **Step 2:** Focused comparer/summary/reader/API filter → PASS (47 passed, 0 failed); Task 2 journal regression filter → PASS (47 passed, 0 failed); dashboard contract and fractional UDF persistence filter → PASS (9 passed, 0 failed).
+- [x] **Step 3:** Implemented per-case statement classification, additive whole-batch line with per-side shared totals, fail-closed fallback, current-policy text fallback, and statement detail for measure operations.
+- [x] **Step 4:** See `.superpowers/sdd/082-statement-io-attribution/task-3-report.md` for exact commands and evidence.
+- [x] **Step 5:** Commit `feat(082): classify statements and focus verdicts on changed work`.
 
 ### Task 4: Dashboard views
 
@@ -101,13 +105,21 @@
 - Create: `ui/src/components/optimization/StatementRows.tsx`, `HiddenWorkFlag.tsx`
 - Test: `ComparisonPanel.test.tsx`, `lib/optimizationMarkdown.test.ts`, create `StatementRows.test.tsx`, `OperationPage.test.tsx` (measure)
 
-- [ ] **Step 1: Failing tests:** toggle `Changed statements | Whole batch | By statement` (URL param `view`), default `Changed statements`; headline line text exact; verdict shows `basis: changed statements`; fallback note shown and toggle defaults to `Whole batch`; by-statement rows sorted by absolute change, status labels, execution count, plan link per statement, expandable objects; hidden-work flag texts exact, also next to the reads headline; omission text; Markdown states the view and basis and includes the headline line; measure operation page shows by-statement rows and flags; PostgreSQL message.
-- [ ] **Step 2:** `npm --prefix src/SqlHarness.Dashboard/ui test` → FAIL. **Step 3:** Implement. **Step 4:** → PASS; build.
-- [ ] **Step 5:** Commit `feat(082): per-statement views and hidden-work flags`.
+- [x] **Step 1: Failing tests:** RED observed for the missing view controls, fallback note and Markdown view/basis lines; the named tests cover URL `view`, fallback behavior, sorted status-bearing rows, execution counts, exact retained-plan destinations, expandable objects, both hidden-work forms, batch headline, omissions, Markdown, measure-only values and PostgreSQL wording.
+- [x] **Step 2:** Focused UI suite → PASS (53 passed). Targeted backend schema, provenance, reader, and incomplete-attribution fallback filter → PASS (4 passed). UI production build passed with the Vite large-chunk warning; see ignored `.superpowers/sdd/082-statement-io-attribution/task-4-report.md` for exact commands/output.
+- [x] **Step 3:** Added URL/query view wiring, comparison and measured statement views, copy evidence, basis labels/tooltips, and selected-run retained plan links. Operation detail now includes omission count and attribution summary.
+- [x] **Step 4:** UI check/build and focused evidence are recorded in the Task 4 report; full `just verify` remains Task 5.
+- [x] **Step 5:** Commit `feat(082): per-statement views and hidden-work flags`.
 
 ### Task 5: Documentation and verification
 
-- [ ] **Step 1:** README dashboard section (views, verdict basis, attribution statuses, hidden work); `plans/README.md`.
-- [ ] **Step 2:** `just verify` → exit 0; record revision/result.
-- [ ] **Step 3 (operator-authorized):** UAT measure/compare of an op-203-like batch; confirm reconciliation `confirmed` and the focused verdict; record without business data.
-- [ ] **Step 4:** Queue → history; commit `docs(082): record plan 082 evidence`.
+- [x] **Step 1:** README dashboard section (views, verdict basis, attribution statuses, hidden work); `plans/README.md` and `plans/history.md` updated.
+- [x] **Step 2:** `just verify` exited 0 on exact product revision `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34`; durable results in [verification evidence](082-verification-evidence.md).
+- [x] **Step 3 (operator-authorized):** UAT measure/compare of an op-203-like batch on the authorized `civiclens-dev` SQL Server target; plan counters reconciled `confirmed` and the focused verdict was better; recorded without business data.
+- [x] **Step 4:** Archived the implementation evidence in plan history; commit `docs(082): record plan 082 evidence`.
+
+### Final whole-branch review fix wave
+
+- [x] Joined comparison object rows by object identity and aggregated each side across selected cases; confirmed absences contribute zero for sum/mean while unavailable attribution stays null.
+- [x] Added comparer, endpoint API, and UI regressions. Focused checks, branch formatting, and the required Windows gate passed on `b9f6092`; see [final fix report](../.superpowers/sdd/082-statement-io-attribution/final-fix-report.md) and [verification evidence](082-verification-evidence.md).
+- [ ] Final Sol low whole-branch re-review remains pending before marking Plan 082 done or integrating it into `main`.

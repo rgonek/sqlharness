@@ -13,6 +13,7 @@ const comparison: OptimizationComparison = {
   collapsed: { count: 2, label: "2 smaller tables" }, elapsed: { beforeMs: 10, afterMs: 11, policyVerdict: null, differentRun: false },
   beforeAction: { operationId: 214, side: "baseline", caseIds: ["0", "customer-9001"] },
   afterAction: { operationId: 214, side: "candidate", caseIds: ["customer-9001", "1"] },
+  view: "whole", verdictBasis: "whole batch",
 }
 
 function renderPanel(payload = comparison, versions = [{ version: "v0", hash: "h0", logicalReadsSum: 100, logicalReadsMean: 100, scansSum: 4, elapsedMedianMs: 10, caseOutcome: "1/1 ok", measuredIn: [214], latestOperationId: 214 }, { version: "v3", hash: "h3", logicalReadsSum: 135, logicalReadsMean: 135, scansSum: 2, elapsedMedianMs: 11, caseOutcome: "worse", measuredIn: [214], latestOperationId: 214 }], searchUrl = "/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v0&b=v3&case=all&agg=sum") {
@@ -78,6 +79,8 @@ test("shows the engine IO message and action links and copies the panel Markdown
     "# Orders — whole query — v0 → v3",
     "Case: all cases (Sum)",
     "Basis: measured together in #214",
+    "View: Whole batch",
+    "basis: whole batch",
     "Equivalence: results equivalent (direct)",
     "",
     "Mixed: 2 better, 1 worse — @CustomerId = 9001: logical reads +35%",
@@ -156,4 +159,35 @@ test("shows PostgreSQL CPU and buffer totals in the panel and copied summary whe
   await userEvent.click(screen.getByRole("button", { name: "Copy summary" }))
   await expect.poll(() => writeText.mock.calls[0]?.[0]).toContain("| CPU (ms) | 12 | 8 |")
   expect(writeText.mock.calls[0]?.[0]).toContain("| Buffers | shared hit 7, shared read 2, shared dirtied 1, shared written 0, temp read 0, temp written 3 | shared hit 5, shared read 1, shared dirtied 0, shared written 0, temp read 0, temp written 1 |")
+})
+
+test("view selection is URL-backed and the query receives the selected view", async () => {
+  const payload = {
+    ...comparison,
+    view: "changed" as const,
+    verdictBasis: "changed statements" as const,
+    wholeBatch: { before: 500, after: 650, shared: 100, label: "whole batch: 500 → 650 reads (shared statements: 100)",
+      sharedBefore: 100, sharedAfter: 100, changedBefore: 400, changedAfter: 550 },
+    statements: [],
+  }
+  const { calls, router } = renderPanel(payload, undefined,
+    "/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v0&b=v3&case=all&agg=sum")
+
+  expect(await screen.findByRole("button", { name: "Changed statements" })).toHaveAttribute("aria-pressed", "true")
+  expect(screen.getByText("whole batch: 500 → 650 reads (shared statements: 100)")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Whole batch" }))
+  expect(router.state.location.search).toMatchObject({ view: "whole" })
+  await expect.poll(() => calls.some(call => new URL(call, "http://dashboard").searchParams.get("view") === "whole")).toBe(true)
+  await userEvent.click(screen.getByRole("button", { name: "By statement" }))
+  expect(router.state.location.search).toMatchObject({ view: "statements" })
+})
+
+test("incomplete attribution visibly falls back to Whole batch", async () => {
+  renderPanel({ ...comparison, view: "whole", verdictBasis: "whole batch", fallbackNote: "per-statement attribution incomplete",
+    wholeBatch: { before: 500, after: 650, shared: null, label: "whole batch: 500 → 650 reads (shared statements: unavailable)",
+      sharedBefore: null, sharedAfter: null, changedBefore: null, changedAfter: null }, statements: [] })
+
+  expect(await screen.findByText("per-statement attribution incomplete")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Whole batch" })).toHaveAttribute("aria-pressed", "true")
+  expect(screen.getByText("basis: whole batch")).toBeInTheDocument()
 })

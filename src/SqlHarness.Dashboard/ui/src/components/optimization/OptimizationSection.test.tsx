@@ -7,6 +7,7 @@ import { renderApp, stubFetch } from "@/test/render"
 const versions = Array.from({ length: 40 }, (_, index) => ({
   version: `v${index}`, hash: `hash-${index}`, logicalReadsSum: index * 10, logicalReadsMean: index * 10,
   scansSum: index, elapsedMedianMs: index, caseOutcome: "1/1 ok", measuredIn: [index + 10], latestOperationId: index + 10,
+  verdictBasis: "whole batch",
 }))
 
 const section = {
@@ -56,6 +57,7 @@ test("puts the optimization section first, preserves scope defaults and lists un
   expect(screen.getByRole("heading", { name: "Optimization" }).compareDocumentPosition(allOperations) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(await screen.findByRole("radio", { name: "A v0" })).toBeChecked()
   expect(await screen.findByRole("radio", { name: "B v39" })).toBeChecked()
+  expect(screen.getAllByText("basis: whole batch").length).toBeGreaterThan(0)
   expect(screen.getByText("Unassigned compares (1)")).toBeInTheDocument()
   await userEvent.click(screen.getByText("Unassigned compares (1)"))
   const unassignedLink = screen.getByRole("link", { name: "Compare #999" })

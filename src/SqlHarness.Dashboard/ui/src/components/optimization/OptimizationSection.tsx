@@ -48,20 +48,21 @@ function SubjectCard({ sessionId, subject }: { sessionId: number; subject: Optim
   const selectedB = hasVersion(matchesCard ? search.b : undefined) ? search.b! : scope?.defaultB ?? ""
   const caseId = matchesCard ? search.case ?? "all" : "all"
   const aggregate = matchesCard ? search.agg ?? "sum" : "sum"
-  const selectedSearch: SessionSearch = { subject: subject.subject, db: subject.database, group: group?.fingerprint, scope: scope?.scope, a: selectedA || undefined, b: selectedB || undefined, case: caseId, agg: aggregate }
+  const view = matchesCard ? search.view ?? "changed" : "changed"
+  const selectedSearch: SessionSearch = { subject: subject.subject, db: subject.database, group: group?.fingerprint, scope: scope?.scope, a: selectedA || undefined, b: selectedB || undefined, case: caseId, agg: aggregate, view }
   const compareQuery = useSessionOptimizationComparison(sessionId, group && scope && selectedA && selectedB ? {
     subject: subject.subject, database: subject.database, group: group.fingerprint, scope: scope.scope,
-    a: selectedA, b: selectedB, case: caseId, aggregate,
+    a: selectedA, b: selectedB, case: caseId, aggregate, view,
   } : null)
 
   function update(patch: Record<string, string | undefined>, reset = false) {
     void navigate({ search: current => ({ ...current, subject: subject.subject, db: subject.database, group: group?.fingerprint,
-      scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, case: undefined, agg: undefined } : {}), ...patch }), replace: false })
+      scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined } : {}), ...patch }), replace: false })
   }
 
   return <article aria-current={matchesCard ? "true" : undefined} className="space-y-3 rounded-lg border p-3">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-medium">{subject.subject}</h3><p className="text-sm text-muted-foreground">{subject.database || "(no database)"} · {subject.engine}</p></div>
-      {!matchesCard && <Button type="button" variant="outline" size="sm" onClick={() => update({ a: undefined, b: undefined, case: undefined, agg: undefined })}>Select comparison</Button>}
+      {!matchesCard && <Button type="button" variant="outline" size="sm" onClick={() => update({ a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })}>Select comparison</Button>}
     </div>
     {groups.length > 1 && group && <label className="grid max-w-xl gap-1 text-sm">Conditions group
       <select aria-label={`${subject.subject} conditions group`} value={group.fingerprint} onChange={event => {
@@ -84,7 +85,7 @@ function SubjectCard({ sessionId, subject }: { sessionId: number; subject: Optim
       {compareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
       {compareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {compareQuery.error.message}</p>}
       {compareQuery.data && <div className="mt-4"><ComparisonPanel comparison={compareQuery.data} sessionId={sessionId} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
-        sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate }} onSelectionChange={patch => update(patch)} /></div>}
+        sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={patch => update(patch)} /></div>}
     </> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
   </article>
 }

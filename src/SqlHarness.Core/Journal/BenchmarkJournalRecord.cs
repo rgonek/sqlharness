@@ -42,6 +42,7 @@ public sealed record JournalVariantMetrics(
 {
     public string CaseId { get; init; } = "0";
     public string CaseLabel { get; init; } = "Case 1 of 1";
+    public int OmittedStatements { get; init; }
     public IReadOnlyList<JournalPlanOccurrence> PlanOccurrences { get; init; } = [];
 }
 
@@ -75,6 +76,18 @@ public sealed record JournalStatementMetrics(
 {
     public string CaseId { get; init; } = "0";
     public string CaseLabel { get; init; } = "Case 1 of 1";
+    public string StatementKey { get; init; } = string.Empty;
+    public int Occurrence { get; init; }
+    public long? Executions { get; init; }
+    public string? PlanHash { get; init; }
+    public int? PlanRepetition { get; init; }
+    public int? PlanDocumentOrdinal { get; init; }
+    public int? PlanStatementIndex { get; init; }
+    public StatementStatus Status { get; init; } = StatementStatus.Unavailable;
+    public double? UdfElapsedMilliseconds { get; init; }
+    public IReadOnlyList<HiddenWork> HiddenWork { get; init; } = [];
+    public IReadOnlyList<StatementObjectCounters> Objects { get; init; } = [];
+    public string? Text { get; init; }
 }
 
 public sealed record BenchmarkJournalRecord(

@@ -444,7 +444,14 @@ public sealed class DashboardServerTests
         using var home = new TempHome();
         await SetStoreSensitiveAsync(home, true);
         var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
-        var handle = seed.Operation(JournalSeed.Session("cli:a"), operation: "measure", benchmark: JournalSeed.Benchmark());
+        var handle = seed.Operation(JournalSeed.Session("cli:a"), operation: "measure", benchmark: JournalSeed.Benchmark() with
+        {
+            Statements = [new JournalStatementMetrics("measure", null, null, 0, "0123456789abcdef", null, null, null, [])
+            {
+                CaseId = "0", StatementKey = "measure-statement", PlanHash = "measure-plan", Status = StatementStatus.Confirmed,
+                Objects = [new StatementObjectCounters("Orders", "table", 45, 0, 2)],
+            }],
+        });
         await using var dashboard = await StartAuthenticated(home);
         var (_, client) = dashboard;
 
@@ -453,6 +460,16 @@ public sealed class DashboardServerTests
 
         using var detail = JsonDocument.Parse(await client.GetStringAsync($"/api/operations/{handle.OperationId}"));
         Assert.Equal("measure", detail.RootElement.GetProperty("operation").GetProperty("operation").GetString());
+        var measuredStatement = Assert.Single(detail.RootElement.GetProperty("statements").EnumerateArray());
+        Assert.Equal("measured", measuredStatement.GetProperty("status").GetString());
+        Assert.Equal("confirmed", measuredStatement.GetProperty("attribution").GetString());
+        Assert.Equal(JsonValueKind.Null, measuredStatement.GetProperty("readsBefore").ValueKind);
+        Assert.Equal(45, measuredStatement.GetProperty("readsAfter").GetInt64());
+        Assert.Equal(string.Empty, measuredStatement.GetProperty("change").GetString());
+        var measuredObject = Assert.Single(measuredStatement.GetProperty("objects").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, measuredObject.GetProperty("readsBefore").ValueKind);
+        Assert.Equal(45, measuredObject.GetProperty("readsAfter").GetInt64());
+        Assert.Equal(string.Empty, measuredObject.GetProperty("change").GetString());
 
         // The server's process reader sees no live process, so the journaled host is gone.
         var orphan = seed.Operation(JournalSeed.Session("cli:gone", hostPid: 6161), complete: false);
@@ -544,7 +561,6 @@ public sealed class DashboardServerTests
         Assert.Equal("v1", comparison.RootElement.GetProperty("b").GetString());
         Assert.Equal(compare.OperationId, comparison.RootElement.GetProperty("operationId").GetInt64());
         Assert.Equal(100, comparison.RootElement.GetProperty("tables")[0].GetProperty("readsBefore").GetInt64());
-
         using var fragmentResponse = await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&scope=fragment%3A1");
         Assert.Equal(HttpStatusCode.OK, fragmentResponse.StatusCode);
         using var fragmentComparison = JsonDocument.Parse(await fragmentResponse.Content.ReadAsStringAsync());
@@ -566,6 +582,35 @@ public sealed class DashboardServerTests
             (await client.GetAsync("/api/sessions/987654/optimization")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
             (await client.GetAsync($"/api/sessions/987654/optimization/compare?subject=orders&database=db&group={fingerprint}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Optimization_compare_endpoint_returns_one_object_row_with_side_specific_counts()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:optimization-object-api");
+        var compare = seed.Compare(session, "orders", "whole", "base", "candidate");
+        seed.CompareEvidence(compare, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
+            OptimizationMetrics(20, 10) with
+            {
+                Statements = [ApiStatement("baseline", 20, "old-plan"), ApiStatement("candidate", 10, "new-plan")],
+            });
+        var id = new JournalReader(home.DatabasePath, new FakeProcesses()).Sessions(new SessionQuery()).Items.Single().Id;
+        var fingerprint = new JournalReader(home.DatabasePath, new FakeProcesses()).OptimizationEvidence(id).Single().Fingerprint;
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&view=statements");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var comparison = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var work = Assert.Single(comparison.RootElement.GetProperty("statements").EnumerateArray());
+        var obj = Assert.Single(work.GetProperty("objects").EnumerateArray());
+        Assert.Equal("Orders", obj.GetProperty("table").GetString());
+        Assert.Equal(20, obj.GetProperty("readsBefore").GetInt64());
+        Assert.Equal(10, obj.GetProperty("readsAfter").GetInt64());
+        Assert.Equal("−50%", obj.GetProperty("change").GetString());
     }
 
     [Fact]
@@ -591,8 +636,13 @@ public sealed class DashboardServerTests
         Assert.Equal(unassigned.OperationId, result.RootElement.GetProperty("operationId").GetInt64());
         Assert.Equal(400, result.RootElement.GetProperty("tables")[0].GetProperty("readsBefore").GetInt64());
         Assert.Equal(300, result.RootElement.GetProperty("tables")[0].GetProperty("readsAfter").GetInt64());
+        Assert.Equal("whole", result.RootElement.GetProperty("view").GetString());
+        Assert.Equal("per-statement attribution incomplete",
+            result.RootElement.GetProperty("fallbackNote").GetString());
         Assert.Equal(HttpStatusCode.BadRequest,
             (await client.GetAsync($"/api/operations/{unassigned.OperationId}/optimization?aggregate=median")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync($"/api/operations/{unassigned.OperationId}/optimization?view=unknown")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/operations/987654/optimization")).StatusCode);
         var measure = seed.Operation(session);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/operations/{measure.OperationId}/optimization")).StatusCode);
@@ -603,6 +653,17 @@ public sealed class DashboardServerTests
         OptimizationVariant("baseline", before),
         OptimizationVariant("candidate", after),
     ], []);
+
+    private static JournalStatementMetrics ApiStatement(string variant, long reads, string planHash) =>
+        new(variant, null, null, 0, planHash, null, null, null, [])
+        {
+            CaseId = "0",
+            StatementKey = "work",
+            PlanHash = planHash,
+            Status = StatementStatus.Confirmed,
+            Text = "SELECT work",
+            Objects = [new StatementObjectCounters("Orders", "table", reads, 0, 1)],
+        };
 
     private static JournalVariantMetrics OptimizationVariant(string variant, long reads) => new(
         variant, null, null, 1, new CompareDistribution(10, 10, 10), new CompareDistribution(8, 8, 8),

@@ -77,7 +77,7 @@ test("compare opens on the Optimization panel and carries selected case and aggr
     const url = new URL(call, "http://dashboard")
     return url.pathname === "/api/operations/10/optimization" && url.searchParams.get("case") === value && url.searchParams.get("aggregate") === "sum"
   })
-  expect(calls.filter(call => call.includes("optimization"))).toEqual(["/api/operations/10/optimization?case=0&aggregate=sum"])
+  expect(calls.filter(call => call.includes("optimization"))).toEqual(["/api/operations/10/optimization?case=0&aggregate=sum&view=changed"])
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "Case" }), "1")
   await screen.findByText("@tenant = N'other'")
   expect(requestedCase("1")).toBe(true)
@@ -292,4 +292,61 @@ test("measure operation shows recorded setup SQL before the measured query", asy
   expect(within(section).getByRole("button", { name: "Copy" })).toBeInTheDocument()
   expect(within(section).getByText(/same database session/)).toBeInTheDocument()
   expect(screen.getAllByTestId("sql-code")).toHaveLength(2)
+})
+
+test("measure attribution shows single-run after values, hidden work, plan access, and PostgreSQL availability", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({
+    operation: operation({ operation: "measure", engine: "PostgreSql" }),
+    statements: [{ key: "q", occurrence: 0, text: "SELECT 1", status: "measured",
+      readsBefore: null, readsAfter: 42, scansBefore: null, scansAfter: 2, executions: 3, change: "", attribution: "confirmed",
+      hiddenWork: [{ kind: "multi-statement-tvf", name: "dbo.Expand", executions: 7, sharePercent: null }],
+      objects: [{ table: "dbo.Orders", scansBefore: null, scansAfter: 2, readsBefore: null, readsAfter: 42, change: "" }],
+      planHashBefore: null, planHashAfter: "shape-only", planLinkBefore: null,
+      planLinkAfter: "/operations/10?planCase=s:0&planRepetition=2&planDocument=0&planStatement=0", udfElapsedMilliseconds: null }],
+  }) })
+  renderApp("/operations/10")
+
+  const rows = await screen.findByRole("region", { name: "Statement IO" })
+  expect(within(rows).getAllByText("42")).toHaveLength(2)
+  expect(within(rows).queryByText("before", { exact: true })).not.toBeInTheDocument()
+  expect(within(rows).getByText("multi-statement function: internal reads not visible (7 executions)")).toBeInTheDocument()
+  expect(within(rows).getByRole("link", { name: "Plan after" })).toHaveAttribute("href", expect.stringContaining("planStatement=0"))
+  expect(within(rows).getByText("per-statement IO not available for this engine")).toBeInTheDocument()
+})
+
+test.each([
+  { parameterSet: "", query: "planParameterSet=", expectedTab: "1" },
+  { parameterSet: null, query: "planParameterSetNull=true", expectedTab: "0" },
+])("plan deep link selects the exact parameter set ($query)", async ({ parameterSet, query, expectedTab }) => {
+  const hash = "A".repeat(64)
+  const calls = stubOperationFetch({
+    "/api/operations/10": operationDetail({
+      operation: operation({ id: 10, operation: "measure" }),
+      variants: [variant({ ordinal: 0, variant: "measure", parameterSet: null, caseId: "0" }),
+        variant({ ordinal: 1, variant: "measure", parameterSet: "", caseId: "0" })],
+    }),
+    "/api/operations/10/plans": { operationId: 10, state: "stored", occurrences: [{ variant: "measure", parameterSet,
+      caseId: "0", caseLabel: "Case 1 of 1", repetition: 1, documentOrdinal: 0, statementIndex: 0,
+      spanStart: null, spanLength: null, statementId: null, statementCompId: null, documentSha256: hash,
+      shapeHash: "shape", format: "showplan-xml", matchKind: "exact", omitted: false, stored: true }] },
+    "/api/operations/10/source-map?variant=measure&parameterSet=&repetition=1&caseId=0": {
+      operationId: 10, state: "stored", engine: "sqlserver", variant: "measure", parameterSet: "", caseId: "0",
+      caseLabel: "Case 1 of 1", repetition: 1, executedText: "SELECT 1", algorithmVersion: 1, links: [], omittedDocuments: [], errors: [],
+    },
+    "/api/operations/10/source-map?variant=measure&repetition=1&caseId=0": {
+      operationId: 10, state: "stored", engine: "sqlserver", variant: "measure", parameterSet: null, caseId: "0",
+      caseLabel: "Case 1 of 1", repetition: 1, executedText: "SELECT 1", algorithmVersion: 1, links: [], omittedDocuments: [], errors: [],
+    },
+  })
+  const { router } = renderApp(`/operations/10?planCase=s%3A0&planVariant=measure&${query}&planRepetition=1&planDocument=0&planStatement=0`)
+  expect(router.state.location.search).toMatchObject(parameterSet === ""
+    ? { planParameterSet: "", planCase: "0", planVariant: "measure" }
+    : { planParameterSetNull: true, planCase: "0", planVariant: "measure" })
+
+  const tabs = await screen.findAllByRole("tab", { name: "measure" })
+  expect(tabs.findIndex(tab => tab.getAttribute("data-active") !== null)).toBe(Number(expectedTab))
+  await screen.findByRole("region", { name: "Plans" })
+  expect(calls).toContain(parameterSet === ""
+    ? "/api/operations/10/source-map?variant=measure&parameterSet=&repetition=1&caseId=0"
+    : "/api/operations/10/source-map?variant=measure&repetition=1&caseId=0")
 })

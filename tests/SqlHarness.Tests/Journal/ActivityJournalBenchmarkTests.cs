@@ -74,6 +74,21 @@ public sealed class ActivityJournalBenchmarkTests
     }
 
     [Fact]
+    public void Omitted_statement_count_is_persisted_on_its_variant_case_metric()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, storeSensitive: false);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        var record = Record();
+        var variant = record.Variants.Single() with { OmittedStatements = 2 };
+
+        journal.RecordBenchmark(handle, record with { Variants = [variant] });
+
+        Assert.Equal(2L, JournalDb.Rows(temp.DatabasePath,
+            "SELECT omitted_statements FROM operation_metrics").Single()["omitted_statements"]);
+    }
+
+    [Fact]
     public void Benchmark_record_persists_per_statement_metrics_without_statement_text()
     {
         using var temp = new JournalTempDirectory();
@@ -87,12 +102,17 @@ public sealed class ActivityJournalBenchmarkTests
             """;
         var record = JournalBenchmarkBuilder.Build(
             [new CompareRunArtifact("baseline", 1, 30, 40, 0, new Dictionary<string, long>(), "h", [plan], 0)]);
+        record = record with
+        {
+            Statements = record.Statements.Select(statement => statement with { UdfElapsedMilliseconds = 14.75 }).ToArray(),
+        };
 
         journal.RecordBenchmark(handle, record);
 
         var statements = JournalDb.Rows(temp.DatabasePath,
-            "SELECT statement_ordinal, statement_hash, cpu_ms, elapsed_ms, dop, operators_json, case_id, case_label FROM operation_statements ORDER BY statement_ordinal");
+            "SELECT statement_ordinal, statement_hash, statement_key, occurrence, statement_text, executions, plan_hash, status, cpu_ms, elapsed_ms, dop, operators_json, udf_elapsed_ms, hidden_work_json, case_id, case_label FROM operation_statements ORDER BY statement_ordinal");
         Assert.Equal(2, statements.Count);
+        Assert.Equal(14.75d, Convert.ToDouble(statements[0]["udf_elapsed_ms"], System.Globalization.CultureInfo.InvariantCulture));
         Assert.All(statements, row =>
         {
             Assert.Equal("0", row["case_id"]);
@@ -101,8 +121,17 @@ public sealed class ActivityJournalBenchmarkTests
         Assert.Equal([10L, 20L], statements.Select(row => (long)row["cpu_ms"]!).ToArray());
         Assert.Equal([15L, 25L], statements.Select(row => (long)row["elapsed_ms"]!).ToArray());
         Assert.All(statements, row => Assert.Equal(64, ((string)row["statement_hash"]!).Length));
+        Assert.All(statements, row =>
+        {
+            Assert.Equal(64, ((string)row["statement_key"]!).Length);
+            Assert.Equal("unavailable", row["status"]);
+            Assert.StartsWith("statement ", (string)row["statement_text"]!);
+            Assert.Equal("[]", row["hidden_work_json"]);
+        });
         Assert.Contains("Index Seek", (string)statements[0]["operators_json"]!);
         Assert.DoesNotContain("UPDATE dbo.SecretTable", (string)statements[0]["operators_json"]!, StringComparison.Ordinal);
+        Assert.Equal(2, JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_statement_objects").Count);
+        Assert.Equal(0L, JournalDb.Rows(temp.DatabasePath, "SELECT omitted_statements FROM operation_metrics").Single()["omitted_statements"]);
     }
 
     [Fact]

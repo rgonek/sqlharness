@@ -10,6 +10,7 @@ import { badgeTier } from "@/lib/flags"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SqlVersionOption } from "@/lib/compare"
 import type { SessionSearch } from "@/router"
+import { StatementHiddenWork, StatementRows } from "./StatementRows"
 
 function basisLabel(comparison: OptimizationComparison): string {
   switch (comparison.basis) {
@@ -49,16 +50,17 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
   versions?: ScopeVersions["versions"]
   engine?: string | null
   sessionSearch?: SessionSearch
-  searchState?: { case?: string; agg?: string }
-  onSelectionChange?: (patch: { case?: string; agg?: string }) => void
+  searchState?: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }
+  onSelectionChange?: (patch: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }) => void
   hideCaseSelector?: boolean
 }) {
   const activeCase = searchState?.case ?? comparison.selectedCase
   const activeAggregate = searchState?.agg ?? comparison.aggregate
+  const activeView = comparison.view ?? searchState?.view ?? "changed"
   const scriptCase = activeCase === "all" ? comparison.cases[0]?.id ?? "all" : activeCase
   const [showDiff, setShowDiff] = useState(false)
   const sqlOptions: SqlVersionOption[] = versions.map(version => ({ version: version.version, hash: version.hash }))
-  function updateSearch(patch: { case?: string; agg?: string }) {
+  function updateSearch(patch: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }) {
     onSelectionChange?.(patch)
   }
 
@@ -74,6 +76,22 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
       </div>
     </div>
 
+    <div className="flex flex-wrap items-center gap-2" aria-label="Statement views">
+      <Button type="button" size="sm" variant={activeView === "changed" ? "secondary" : "outline"} aria-pressed={activeView === "changed"} onClick={() => updateSearch({ view: "changed" })}>Changed statements</Button>
+      <Button type="button" size="sm" variant={activeView === "whole" ? "secondary" : "outline"} aria-pressed={activeView === "whole"} onClick={() => updateSearch({ view: "whole" })}>Whole batch</Button>
+      <Button type="button" size="sm" variant={activeView === "statements" ? "secondary" : "outline"} aria-pressed={activeView === "statements"} onClick={() => updateSearch({ view: "statements" })}>By statement</Button>
+    </div>
+    {comparison.wholeBatch?.label && <div className="space-y-2 rounded-md bg-muted/40 p-3">
+      <p className="text-sm font-medium">{comparison.wholeBatch.label}</p>
+      <StatementHiddenWork rows={comparison.statements ?? []} />
+    </div>}
+    <p className="text-sm">basis: {comparison.verdictBasis ?? "whole batch"}</p>
+    {comparison.fallbackNote && <p className="text-sm text-muted-foreground">{comparison.fallbackNote}</p>}
+    {((comparison.omittedStatementsBefore ?? 0) > 0 || (comparison.omittedStatementsAfter ?? 0) > 0) && <div className="space-y-1 text-sm text-muted-foreground">
+      {(comparison.omittedStatementsBefore ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsBefore} (their reads remain in the batch total)</p>}
+      {(comparison.omittedStatementsAfter ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsAfter} (their reads remain in the batch total)</p>}
+    </div>}
+
     <div className="flex flex-wrap items-center gap-2" aria-label="Cases">
       {!hideCaseSelector && <><span className="text-sm font-medium">Case</span>
         <Button type="button" size="sm" variant={activeCase === "all" ? "secondary" : "outline"} aria-pressed={activeCase === "all"} onClick={() => updateSearch({ case: "all" })}>All cases</Button>
@@ -85,7 +103,9 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
     {comparison.coverageLabel && <p className="text-sm text-muted-foreground">{comparison.coverageLabel}</p>}
     {comparison.mixed && <p data-tier={badgeTier("mixed")} className="text-sm text-amber-700 dark:text-amber-300">Mixed: {comparison.mixed.better} better, {comparison.mixed.worse} worse — {comparison.mixed.worstCaseLabel}: logical reads {comparison.mixed.worstChangePercent > 0 ? "+" : ""}{Math.round(comparison.mixed.worstChangePercent)}%</p>}
     {comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <>
-      {comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <div className="overflow-x-auto">
+      {activeView === "statements" || activeView === "changed"
+        ? <StatementRows rows={comparison.statements ?? []} postgres={comparison.tableIoUnavailable ?? false} />
+        : comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <div className="overflow-x-auto">
         <table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2 pr-3">Table</th><th className="px-3 py-2">Scans before</th><th className="px-3 py-2">Scans after</th><th className="px-3 py-2">Logical reads before</th><th className="px-3 py-2">Logical reads after</th><th className="px-3 py-2">Change</th></tr></thead>
           <tbody>{comparison.tables.map(row => <tr key={row.table} className="border-b"><th scope="row" className="py-2 pr-3 text-left font-normal">{row.table}</th><td className="px-3 py-2">{row.scansBefore ?? "—"}</td><td className="px-3 py-2">{row.scansAfter ?? "—"}</td><td className="px-3 py-2">{row.readsBefore ?? "—"}</td><td className="px-3 py-2">{row.readsAfter ?? "—"}</td><td className="px-3 py-2">{row.change}</td></tr>)}
             {comparison.collapsed && <tr><td colSpan={6} className="py-2 text-muted-foreground">{comparison.collapsed.label}</td></tr>}</tbody></table>

@@ -143,6 +143,145 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Statement_reader_uses_current_sensitivity_and_preserves_omission_and_no_plan_states()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
+        var session = JournalSeed.Session("cli:statement-reader");
+        var compare = seed.Compare(session, "orders", "whole", "h0", "h1");
+        var compareMetrics = new BenchmarkJournalRecord(
+        [
+            OptimizationMetric("baseline", 100, 10, 2),
+            OptimizationMetric("candidate", 90, 9, 1),
+        ], [])
+        {
+            Statements = [StoredStatement("baseline", "SELECT secret baseline", "plan-a"),
+                StoredStatement("candidate", "SELECT secret candidate", "plan-b")],
+        };
+        seed.CompareEvidence(compare, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"case 0","equivalence":{"equivalent":true}}]}""",
+            compareMetrics);
+        var noPlan = seed.Compare(session, "orders", "whole", "h0", "h2");
+        seed.CompareEvidence(noPlan, JournalSeed.ReproConditions(), """{"kind":"compare","cases":[{"caseId":"0","caseLabel":"case 0"}]}""",
+            new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2), OptimizationMetric("candidate", 80, 8, 1)], []));
+        var omitted = seed.Compare(session, "orders", "whole", "h0", "h3");
+        seed.CompareEvidence(omitted, JournalSeed.ReproConditions(), """{"kind":"compare","cases":[{"caseId":"0","caseLabel":"case 0"}]}""",
+            new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2) with { OmittedStatements = 1 }, OptimizationMetric("candidate", 80, 8, 1)], []));
+        var measured = JournalSeed.Benchmark() with
+        {
+            Variants = [
+                JournalSeed.Benchmark().Variants[0] with { OmittedStatements = 2 },
+                JournalSeed.Benchmark().Variants[0] with { ParameterSet = "", OmittedStatements = 2 },
+            ],
+            Statements = [
+                StoredStatement("measure", "SELECT secret measure", "measure-plan") with
+                {
+                    ParameterSet = null,
+                    PlanRepetition = 1,
+                    PlanDocumentOrdinal = 0,
+                    PlanStatementIndex = 0,
+                },
+                StoredStatement("measure", "SELECT secret measure", "measure-plan") with
+                {
+                    ParameterSet = "",
+                    Text = "SELECT empty set",
+                    StatementOrdinal = 1,
+                    PlanRepetition = 1,
+                    PlanDocumentOrdinal = 0,
+                    PlanStatementIndex = 0,
+                },
+            ],
+        };
+        var measure = seed.Operation(session, operation: "measure", benchmark: measured);
+
+        using (var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT count(*) FROM operation_statements;";
+            Assert.Equal(4, (long)command.ExecuteScalar()!);
+        }
+
+        var reader = Reader(home);
+        var evidence = reader.OptimizationEvidence(Assert.Single(reader.Sessions(new SessionQuery()).Items).Id, storeSensitive: false);
+        var hydrated = Assert.Single(evidence, item => item.OperationId == compare.OperationId);
+        var baseline = Assert.Single(hydrated.Metrics, item => item.Variant == "baseline");
+        Assert.Equal("statement 1 (01234567)", Assert.Single(baseline.Statements).Text);
+        Assert.Equal("confirmed", baseline.StatementAttribution);
+        Assert.Equal(45, Assert.Single(Assert.Single(baseline.Statements).Objects).ReadsBefore);
+        Assert.Equal("unavailable", Assert.Single(evidence.Single(item => item.OperationId == noPlan.OperationId).Metrics, item => item.Variant == "baseline").StatementAttribution);
+        Assert.Equal(1, Assert.Single(evidence.Single(item => item.OperationId == omitted.OperationId).Metrics, item => item.Variant == "baseline").OmittedStatements);
+        Assert.Equal("partial", Assert.Single(evidence.Single(item => item.OperationId == omitted.OperationId).Metrics, item => item.Variant == "baseline").StatementAttribution);
+        var detail = reader.Operation(measure.OperationId, storeSensitive: false)!;
+        Assert.Equal(2, detail.OmittedStatements);
+        Assert.Equal("partial", detail.StatementAttribution);
+        Assert.Equal(2, detail.Statements!.Count);
+        var measuredStatement = Assert.Single(detail.Statements!, row => row.Text == "statement 1 (01234567)");
+        Assert.Single(detail.Statements!, row => row.Text == "statement 2 (01234567)");
+        Assert.Equal("measured", measuredStatement.Status);
+        Assert.Equal("confirmed", measuredStatement.Attribution);
+        Assert.Null(measuredStatement.ReadsBefore);
+        Assert.Equal(45, measuredStatement.ReadsAfter);
+        Assert.Null(measuredStatement.PlanHashBefore);
+        Assert.Equal("measure-plan", measuredStatement.PlanHashAfter);
+        Assert.Null(measuredStatement.ScansBefore);
+        Assert.Equal(2, measuredStatement.ScansAfter);
+        Assert.Equal(string.Empty, measuredStatement.Change);
+        var measuredObject = Assert.Single(measuredStatement.Objects);
+        Assert.Null(measuredObject.ReadsBefore);
+        Assert.Equal(45, measuredObject.ReadsAfter);
+        Assert.Null(measuredObject.ScansBefore);
+        Assert.Equal(2, measuredObject.ScansAfter);
+        Assert.Equal(string.Empty, measuredObject.Change);
+        var sensitiveStatements = Reader(home).Operation(measure.OperationId, storeSensitive: true)!.Statements!;
+        Assert.Equal("/operations/" + measure.OperationId + "?planCase=s:0&planVariant=measure&planParameterSetNull=true&planRepetition=1&planDocument=0&planStatement=0",
+            Assert.Single(sensitiveStatements, row => row.PlanLinkAfter?.Contains("planParameterSetNull=true") == true).PlanLinkAfter);
+        Assert.Equal("/operations/" + measure.OperationId + "?planCase=s:0&planVariant=measure&planParameterSet=&planRepetition=1&planDocument=0&planStatement=0",
+            Assert.Single(sensitiveStatements, row => row.PlanLinkAfter?.Contains("planParameterSet=") == true && row.PlanLinkAfter.Contains("planParameterSetNull") == false).PlanLinkAfter);
+    }
+
+    [Fact]
+    public void Session_optimization_badge_uses_the_changed_statement_basis()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:statement-badge");
+        var compare = seed.Compare(session, "orders", "whole", "h0", "h1");
+        var metrics = new BenchmarkJournalRecord(
+        [
+            OptimizationMetric("baseline", 12010, 20, 5),
+            OptimizationMetric("candidate", 11960, 19, 5),
+        ], [])
+        {
+            Statements = [StoredStatement("baseline", "SELECT prepare", "same-plan") with { StatementKey = "prepare", Objects = [new StatementObjectCounters("Prep", "table", 11910, 0, 1)] },
+                StoredStatement("baseline", "SELECT work", "old-plan") with { StatementKey = "work", StatementOrdinal = 1, Objects = [new StatementObjectCounters("Work", "table", 100, 0, 1)] },
+                StoredStatement("candidate", "SELECT prepare", "same-plan") with { StatementKey = "prepare", Objects = [new StatementObjectCounters("Prep", "table", 11910, 0, 1)] },
+                StoredStatement("candidate", "SELECT work", "new-plan") with { StatementKey = "work", StatementOrdinal = 1, Objects = [new StatementObjectCounters("Work", "table", 50, 0, 1)] },
+            ],
+        };
+        seed.CompareEvidence(compare, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"case 0","equivalence":{"equivalent":true}}]}""", metrics);
+
+        var badge = Assert.Single(Assert.Single(Reader(home).Sessions(new SessionQuery()).Items).Optimization);
+
+        Assert.Equal("−50%", badge.Change);
+        Assert.Equal("changed statements", badge.VerdictBasis);
+    }
+
+    private static JournalStatementMetrics StoredStatement(string variant, string text, string planHash) =>
+        new(variant, null, null, 0, "0123456789abcdef", null, null, null, [])
+        {
+            CaseId = "0",
+            StatementKey = "statement-key",
+            Occurrence = 0,
+            Executions = 1,
+            PlanHash = planHash,
+            Status = StatementStatus.Confirmed,
+            Objects = [new StatementObjectCounters("Orders", "table", 40, 5, 2)],
+            Text = text,
+        };
+
+    [Fact]
     public void Optimization_reader_loads_measure_observations_with_legacy_case_fingerprint_fallback()
     {
         using var home = new TempHome();
@@ -230,6 +369,7 @@ public sealed class JournalReaderTests
         var badge = Assert.Single(item.Optimization);
         Assert.Equal("orders", badge.Subject);
         Assert.Equal("−94%", badge.Change);
+        Assert.Equal("whole batch", badge.VerdictBasis);
         Assert.False(badge.Warning);
 
         Assert.Equal(["cli:measure-without-subject", "cli:no-compare"],

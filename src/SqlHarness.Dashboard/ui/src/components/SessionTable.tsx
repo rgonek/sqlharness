@@ -50,7 +50,7 @@ function SessionRow({ session, now }: { session: SessionSummary; now: number }) 
       <TableCell className="text-right">{session.operations}</TableCell>
       <TableCell>
         {session.hasCompare && <Link to="/sessions/$id" params={{ id: String(session.id) }} className="flex flex-wrap gap-1" aria-label="Optimization subjects">
-          {session.optimization.map(item => <Badge key={item.subject} variant="outline" className="gap-1">
+          {session.optimization.map(item => <Badge key={item.subject} variant="outline" className="gap-1" title={`Verdict basis: ${item.verdictBasis}`}>
             {item.warning && <TriangleAlert aria-label="Warning" className="size-3 text-amber-600" />}
             {item.subject} {item.change}
           </Badge>)}

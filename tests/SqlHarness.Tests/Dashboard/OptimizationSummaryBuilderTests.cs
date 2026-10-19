@@ -102,6 +102,25 @@ public sealed class OptimizationSummaryBuilderTests
     }
 
     [Fact]
+    public void Version_table_outcome_uses_the_same_changed_statement_basis()
+    {
+        var compare = Compare(203, "orders", "whole", "db", "f", "h0", "h1", reads: (12010, 11960)) with
+        {
+            Metrics =
+            [
+                Metric("baseline", "0", 12010) with { Statements = [Statement("shared", 11910, "same-plan"), Statement("changed", 100, "old-plan")], StatementAttribution = "confirmed" },
+                Metric("candidate", "0", 11960) with { Statements = [Statement("shared", 11910, "same-plan"), Statement("changed", 50, "new-plan")], StatementAttribution = "confirmed" },
+            ],
+        };
+
+        var section = OptimizationSummaryBuilder.Build([compare]);
+        var candidate = Assert.Single(Assert.Single(Assert.Single(section.Subjects).Groups).Scopes).Versions.Single(version => version.Version == "v1");
+
+        Assert.Equal("1 better", candidate.CaseOutcome);
+        Assert.Equal("changed statements", candidate.VerdictBasis);
+    }
+
+    [Fact]
     public void Candidate_outcome_is_incomplete_when_any_baseline_case_metric_is_missing()
     {
         var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
@@ -205,4 +224,7 @@ public sealed class OptimizationSummaryBuilderTests
 
     private static CompareMetricEvidence Metric(string variant, string caseId, long reads) =>
         new(variant, caseId, $"@CustomerId = {int.Parse(caseId, System.Globalization.CultureInfo.InvariantCulture) + 1}", reads, reads, 12, []);
+
+    private static CompareStatementEvidence Statement(string key, long reads, string planHash) =>
+        new(key, 0, key, planHash, "confirmed", reads, 1, 1, [], []);
 }
