@@ -24,7 +24,8 @@ public sealed class CapabilitiesCommandTests
         Assert.Empty(module.Operations);
         using var document = JsonDocument.Parse(output.ToString());
         var root = document.RootElement;
-        Assert.Equal(7, root.GetProperty("contractVersion").GetInt32());
+        Assert.Equal(8, root.GetProperty("contractVersion").GetInt32());
+        Assert.False(root.TryGetProperty("operationAnnotations", out _));
         var mutations = root.GetProperty("mutations");
         Assert.Equal("never", mutations.GetProperty("defaultMode").GetString());
         Assert.Equal("click", mutations.GetProperty("verification").GetString());
@@ -71,8 +72,8 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public void Contract_version_is_pinned()
     {
-        Assert.Equal(7, SqlHarnessCapabilitiesProvider.ContractVersion);
-        Assert.Equal(7, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+        Assert.Equal(8, SqlHarnessCapabilitiesProvider.ContractVersion);
+        Assert.Equal(8, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
     }
 
     [Fact]
@@ -86,6 +87,10 @@ public sealed class CapabilitiesCommandTests
             .GetProperty("planStorage").GetProperty("state").GetString());
         Assert.Equal("stored", enabled.RootElement.GetProperty("limits").GetProperty("activityJournalStorage")
             .GetProperty("planStorage").GetProperty("state").GetString());
+
+        using var annotated = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get(
+            journalConfig: new JournalConfig { OperationAnnotations = true })));
+        Assert.True(annotated.RootElement.GetProperty("operationAnnotations").GetBoolean());
     }
 
     [Fact]

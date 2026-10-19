@@ -815,7 +815,7 @@ public sealed class McpTokenBudgetTests
             tools.Select(tool => tool.ProtocolTool), McpJsonUtilities.DefaultOptions);
         var bytes = Encoding.UTF8.GetByteCount(catalogJson);
         _output.WriteLine($"tools/list bytes: {bytes} of {McpLimits.ToolsListBudgetBytes} ({tools.Count} tools; no output schemas).");
-        Assert.Equal(McpLimits.MaxTools, tools.Count);
+        Assert.Equal(McpLimits.MaxToolsWithoutOperationAnnotations, tools.Count);
         Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"tools/list is {bytes} bytes.");
         Assert.DoesNotContain("AGENTS.md", catalogJson, StringComparison.Ordinal);
         foreach (var tool in tools)

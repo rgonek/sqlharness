@@ -19,7 +19,8 @@ public sealed record SqlHarnessCapabilities(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlHarnessProfileCapability? Profile = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ParameterTypes = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlHarnessEngineGuidance? EngineGuidance = null,
-    SqlHarnessMutationCapability? Mutations = null);
+    SqlHarnessMutationCapability? Mutations = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? OperationAnnotations = null);
 
 /// <summary>
 /// One engine's operation guidance: facts a caller needs at the call site that the shared command
@@ -52,7 +53,8 @@ public static class SqlHarnessCapabilitiesProvider
     // 3: report the active compare-context requirement and version/history semantics.
     // 4: add the persistent mutation command and remove query mutation switches.
     // 6: report whether plan documents are available through the sensitive journal gate.
-    public const int ContractVersion = 7;
+    // 8: add the opt-in operationAnnotations member.
+    public const int ContractVersion = 8;
 
     public static SqlHarnessCompareContextCapability CompareContextPolicy(CompareConfig? config = null)
     {
@@ -265,7 +267,8 @@ public static class SqlHarnessCapabilitiesProvider
             profile,
             parameterTypes,
             guidance,
-            mutationCapability);
+            mutationCapability,
+            OperationAnnotations: journalConfig?.OperationAnnotations == true ? true : null);
     }
 
     private static Dictionary<string, IReadOnlyList<string>> OutputModesByCommand()

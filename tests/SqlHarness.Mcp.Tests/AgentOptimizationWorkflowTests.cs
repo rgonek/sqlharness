@@ -204,6 +204,11 @@ public sealed class AgentOptimizationWorkflowTests
                 var discoveryBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(
                     discovery.Select(tool => tool.ProtocolTool).ToArray()));
                 Assert.InRange(discoveryBytes, 1, McpLimits.ToolsListBudgetBytes);
+                if (scenario == WorkflowScenarios.UnavailableMetricsId)
+                {
+                    var catalogGolden = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "OperationAnnotations", "off", "tools-list.json"));
+                    Assert.Equal(catalogGolden, JsonSerializer.Serialize(discovery.Select(tool => tool.ProtocolTool).ToArray()));
+                }
 
                 var calls = new List<object>();
                 var artifactId = await RunScriptedAsync(session, scenario, budget, calls);
@@ -231,6 +236,9 @@ public sealed class AgentOptimizationWorkflowTests
                 var path = Path.Combine(recordsDir, $"{scenario}-{budget}.json");
                 Assert.True(File.Exists(path), $"Frozen pre-change record missing: {path}");
                 _ = Normalize(File.ReadAllText(path));
+                var annotationGolden = Path.Combine(AppContext.BaseDirectory, "Fixtures", "OperationAnnotations", "off", "results", $"{scenario}-{budget}.json");
+                Assert.True(File.Exists(annotationGolden), $"Operation-annotation off golden record missing: {annotationGolden}");
+                Assert.Equal(Normalize(File.ReadAllText(annotationGolden)), json);
                 _output.WriteLine($"{scenario}@{budget}: discovery={discoveryBytes} protocolFrameBytes={protocolBytes} (machine-local; omitted from snapshot) calls={calls.Count}");
                 session.AssertNoDatabaseConnections();
             }

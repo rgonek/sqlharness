@@ -16,6 +16,7 @@ public sealed record JournalConfig
 {
     public bool Enabled { get; init; } = true;
     public bool StoreSensitive { get; init; }
+    public bool OperationAnnotations { get; init; }
     public JournalRetentionConfig Retention { get; init; } = new();
 }
 

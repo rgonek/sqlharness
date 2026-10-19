@@ -282,8 +282,8 @@ public sealed class McpToolSchemaTests : IDisposable
     {
         var scope = Scope();
         var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
-        Assert.Equal(9, McpLimits.MaxTools);
-        Assert.Equal(McpLimits.MaxTools, tools.Count);
+        Assert.Equal(9, McpLimits.MaxToolsWithoutOperationAnnotations);
+        Assert.Equal(McpLimits.MaxToolsWithoutOperationAnnotations, tools.Count);
         Assert.Equal(ExpectedTools, tools.Select(tool => tool.ProtocolTool.Name));
         Assert.Equal(ExpectedTools, McpToolCatalog.ToolNames);
         Assert.Equal(ExpectedTools.Length, McpToolCatalog.ToolNames.Distinct(StringComparer.Ordinal).Count());
@@ -297,6 +297,83 @@ public sealed class McpToolSchemaTests : IDisposable
         // The transport may order tools differently; the contract is the set.
         Assert.Equal(ExpectedTools.Order(StringComparer.Ordinal), tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(ExpectedTools.Length, tools.Count());
+    }
+
+    [Fact]
+    public async Task Operation_annotation_members_are_gated_by_the_startup_config()
+    {
+        Assert.False(SqlHarnessConfig.Default.Journal.OperationAnnotations);
+        var scope = Scope();
+        var offProcess = McpProcessContext.Create(new McpServerOptions { Profile = ProfileName, Vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
+            () => scope.Profiles);
+        await using var off = await ServedCatalog.CreateAsync(offProcess);
+        var offTools = await off.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        foreach (var tool in offTools)
+        {
+            var properties = Properties(ServedSchema(tool));
+            Assert.False(properties.TryGetProperty("label", out _), tool.Name);
+            Assert.False(properties.TryGetProperty("keep", out _), tool.Name);
+            Assert.DoesNotContain("annotation", tool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+        var offCapabilities = await off.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+        Assert.False(ServedEnvelope(offCapabilities, "sqlharness_capabilities").GetProperty("result").TryGetProperty("operationAnnotations", out _));
+
+        var enabledConfig = new SqlHarnessConfig
+        {
+            Journal = JsonSerializer.Deserialize<JournalConfig>("{\"Enabled\":true,\"OperationAnnotations\":true}")!,
+        };
+        var onProcess = McpProcessContext.Create(new McpServerOptions { Profile = ProfileName, Vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
+            () => scope.Profiles, config: enabledConfig);
+        await using var on = await ServedCatalog.CreateAsync(onProcess);
+        var onTools = await on.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        foreach (var name in new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot" })
+        {
+            var schema = ServedSchema(onTools.Single(tool => tool.Name == name));
+            Assert.True(Properties(schema).TryGetProperty("label", out var label), name);
+            Assert.True(Properties(schema).TryGetProperty("keep", out _), name);
+            var description = label.GetProperty("description").GetString()!;
+            Assert.DoesNotContain("\n", description, StringComparison.Ordinal);
+            Assert.InRange(description.Length, 1, 160);
+        }
+        foreach (var name in new[] { "sqlharness_capabilities", "sqlharness_mutation", "sqlharness_plan", "sqlharness_artifact" })
+        {
+            var schema = ServedSchema(onTools.Single(tool => tool.Name == name));
+            Assert.False(Properties(schema).TryGetProperty("label", out _), name);
+            Assert.False(Properties(schema).TryGetProperty("keep", out _), name);
+        }
+        var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(onTools.Select(tool => tool.ProtocolTool).ToArray()));
+        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"annotation-enabled tools/list is {bytes} bytes.");
+        var onCapabilities = await on.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+        Assert.True(ServedEnvelope(onCapabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("operationAnnotations").GetBoolean());
+
+        var requestProcess = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => scope.Profiles, config: enabledConfig);
+        await using var requestOn = await ServedCatalog.CreateAsync(requestProcess);
+        var requestTools = await requestOn.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        foreach (var name in new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot" })
+            Assert.True(Properties(ServedSchema(requestTools.Single(tool => tool.Name == name))).TryGetProperty("label", out _), name);
+
+        var rejected = await off.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = "SELECT 1",
+            ["label"] = "hidden when off",
+        }, cancellationToken: CancellationToken.None);
+        Assert.True(rejected.IsError == true);
+    }
+
+    [Fact]
+    public void Operation_annotations_require_the_activity_journal_at_startup()
+    {
+        var scope = Scope();
+        var config = new SqlHarnessConfig
+        {
+            Journal = JsonSerializer.Deserialize<JournalConfig>("{\"Enabled\":false,\"OperationAnnotations\":true}")!,
+        };
+        Assert.Throws<McpStartupException>(() => McpProcessContext.Create(
+            new McpServerOptions { Profile = ProfileName, Vars = new Dictionary<string, string> { ["tenant"] = "frozen" } }, () => scope.Profiles, config: config));
     }
 
     [Fact]

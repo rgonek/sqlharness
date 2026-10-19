@@ -90,6 +90,9 @@ public sealed class McpProcessContext
         var profiles = McpScope.FreezeProfiles(loaded);
         var roots = McpScope.ValidateOptions(options);
         var allowedProfiles = ValidateAllowlist(options, profiles);
+        var effectiveConfig = config ?? SqlHarnessConfig.Default;
+        if (effectiveConfig.Journal.OperationAnnotations && !effectiveConfig.Journal.Enabled)
+            throw new McpStartupException("Operation annotations require the activity journal to be enabled.");
 
         if (options.RequestScope)
         {
@@ -106,7 +109,7 @@ public sealed class McpProcessContext
                 options.MaxResultBytes,
                 options.MaxOperationSeconds,
                 compareConfig ?? SqlHarnessConfig.Default.Compare,
-                config ?? SqlHarnessConfig.Default,
+                effectiveConfig,
                 dashboardReachability ?? (static () => false),
                 McpScope.NewConfigurationRef());
         }
@@ -123,7 +126,7 @@ public sealed class McpProcessContext
             options.MaxResultBytes,
             options.MaxOperationSeconds,
             compareConfig ?? SqlHarnessConfig.Default.Compare,
-            config ?? SqlHarnessConfig.Default,
+            effectiveConfig,
             dashboardReachability ?? (static () => false),
             fixedScope.ConfigurationRef);
     }
