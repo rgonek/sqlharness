@@ -207,7 +207,8 @@ public sealed class AgentOptimizationWorkflowTests
 
                 var calls = new List<object>();
                 var artifactId = await RunScriptedAsync(session, scenario, budget, calls);
-                Assert.False(string.IsNullOrWhiteSpace(artifactId));
+                Assert.False(string.IsNullOrWhiteSpace(artifactId),
+                    $"{scenario}@{budget}: no artifact ID returned. Calls: {JsonSerializer.Serialize(calls, JsonOptions)}");
 
                 await session.ShutdownAsync();
                 var protocolBytes = session.Child.StdoutTee.Recorded.Length;

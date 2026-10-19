@@ -6,6 +6,47 @@ namespace SqlHarness.Tests;
 
 public sealed class ArtifactDirectoryPublisherTests
 {
+    [WindowsFact]
+    public void when_windows_directory_move_is_temporarily_denied_then_publish_reuses_staging()
+    {
+        using var temp = new TempDirectory();
+        var attempts = 0;
+        var writes = 0;
+        var publisher = new ArtifactDirectoryPublisher(temp.Path, () => DateTimeOffset.UnixEpoch,
+            moveDirectory: (source, destination) =>
+            {
+                if (++attempts == 1)
+                    throw new IOException("Temporary access denial", unchecked((int)0x80070005));
+                Directory.Move(source, destination);
+            });
+
+        var directory = publisher.Publish("wind", (staging, _) =>
+        {
+            writes++;
+            WriteMarker(staging);
+        });
+
+        Assert.Equal(2, attempts);
+        Assert.Equal(1, writes);
+        Assert.Equal("marker", File.ReadAllText(Path.Combine(directory, "report.json")));
+    }
+
+    [WindowsFact]
+    public void when_windows_directory_move_stays_denied_then_publish_stops_and_cleans_up()
+    {
+        using var temp = new TempDirectory();
+        var attempts = 0;
+        var failure = new IOException("Persistent access denial", unchecked((int)0x80070005));
+        var publisher = new ArtifactDirectoryPublisher(temp.Path, () => DateTimeOffset.UnixEpoch,
+            moveDirectory: (_, _) => { attempts++; throw failure; });
+
+        var exception = Assert.Throws<IOException>(() => publisher.Publish("wind", (staging, _) => WriteMarker(staging)));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(4, attempts);
+        Assert.Empty(Directory.GetFileSystemEntries(temp.Path));
+    }
+
     [Fact]
     public void Publish_creates_unique_directories_and_hands_staging_to_the_writer()
     {

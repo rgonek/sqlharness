@@ -349,6 +349,9 @@ internal static class McpStdioProcessHarness
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-stdio-tests", Version = "1.0.0" },
                 ProtocolVersion = protocolVersion,
+                // This fixture launches a known discovery-capable server. A slow cold start must not
+                // be mistaken for an older server; initialization and the caller token still bound it.
+                DiscoverProbeTimeout = Timeout.InfiniteTimeSpan,
             },
             NullLoggerFactory.Instance,
             ct);
