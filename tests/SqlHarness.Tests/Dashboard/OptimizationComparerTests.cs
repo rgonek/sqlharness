@@ -86,6 +86,93 @@ public sealed class OptimizationComparerTests
     }
 
     [Fact]
+    public void Compared_statement_objects_join_by_name_and_report_the_side_to_side_change()
+    {
+        var before = Statement("work", "SELECT work", 20, "old-plan") with
+        {
+            Objects = [
+                new TableRow("dbo.T", 2, 2, 20, 20, "0%"),
+                new TableRow("dbo.OldOnly", 1, 1, 5, 5, "0%"),
+            ],
+        };
+        var after = Statement("work", "SELECT work", 10, "new-plan") with
+        {
+            Objects = [
+                new TableRow("dbo.T", 1, 1, 10, 10, "0%"),
+                new TableRow("dbo.NewOnly", 1, 1, 7, 7, "0%"),
+            ],
+        };
+        var compare = Evidence(203, "h1", "h2", (25, 17)) with
+        {
+            Metrics = [StatementMetric("baseline", 0, 25, before), StatementMetric("candidate", 0, 17, after)],
+        };
+
+        var result = Compare([compare], "v1", "v2");
+
+        var objects = Assert.Single(result.Statements).Objects.ToDictionary(row => row.Table);
+        var obj = objects["dbo.T"];
+        Assert.Equal("dbo.T", obj.Table);
+        Assert.Equal(2, obj.ScansBefore);
+        Assert.Equal(1, obj.ScansAfter);
+        Assert.Equal(20, obj.ReadsBefore);
+        Assert.Equal(10, obj.ReadsAfter);
+        Assert.Equal("−50%", obj.Change);
+        Assert.Equal((long?)5, objects["dbo.OldOnly"].ReadsBefore);
+        Assert.Equal((long?)0, objects["dbo.OldOnly"].ReadsAfter);
+        Assert.Equal((long?)0, objects["dbo.NewOnly"].ReadsBefore);
+        Assert.Equal((long?)7, objects["dbo.NewOnly"].ReadsAfter);
+    }
+
+    [Fact]
+    public void All_case_branch_uses_confirmed_absence_as_zero_and_mean_includes_it()
+    {
+        var compare = Evidence(203, "h1", "h2", (20, 10), (0, 0)) with
+        {
+            Metrics = [
+                CaseMetric("baseline", "0", 20, Statement("branch", "SELECT branch", 20, "before") with
+                {
+                    Objects = [new TableRow("dbo.T", 1, 1, 20, 20, "0%")],
+                }),
+                CaseMetric("candidate", "0", 10, Statement("branch", "SELECT branch", 10, "after") with
+                {
+                    Objects = [new TableRow("dbo.T", 1, 1, 10, 10, "0%")],
+                }),
+                CaseMetric("baseline", "1", 0),
+                CaseMetric("candidate", "1", 0),
+            ],
+        };
+
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "mean", "statements");
+
+        var branch = Assert.Single(result.Statements);
+        Assert.Equal("not-executed", branch.Status);
+        Assert.Equal(10, branch.ReadsBefore);
+        Assert.Equal(5, branch.ReadsAfter);
+        var obj = Assert.Single(branch.Objects);
+        Assert.Equal(10, obj.ReadsBefore);
+        Assert.Equal(5, obj.ReadsAfter);
+    }
+
+    [Fact]
+    public void Missing_branch_with_unavailable_attribution_stays_null()
+    {
+        var compare = Evidence(203, "h1", "h2", (20, 10)) with
+        {
+            Metrics = [
+                CaseMetric("baseline", "0", 20, Statement("branch", "SELECT branch", 20, "before")),
+                CaseMetric("candidate", "0", 10) with { StatementAttribution = "unavailable" },
+            ],
+        };
+
+        var result = Compare([compare], "v1", "v2");
+
+        var branch = Assert.Single(result.Statements);
+        Assert.Equal("only-baseline", branch.Status);
+        Assert.Null(branch.ReadsAfter);
+        Assert.Equal("whole batch", result.VerdictBasis);
+    }
+
+    [Fact]
     public void Breakdown_is_additive_and_all_cases_share_only_when_each_case_matches()
     {
         var compare = Evidence(203, "h1", "h2", (100, 100), (200, 200)) with

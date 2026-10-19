@@ -25,6 +25,18 @@ test("renders statement status, counters, expandable objects, and only the resol
   expect(within(objects).getByRole("rowheader", { name: "dbo.Orders" })).toBeInTheDocument()
 })
 
+test("renders one joined object row with its before and after counters", () => {
+  render(<StatementRows rows={[{
+    ...row,
+    objects: [{ table: "dbo.T", scansBefore: 2, scansAfter: 1, readsBefore: 20, readsAfter: 10, change: "−50%" }],
+  }]} />)
+
+  const objects = screen.getByText("Objects (1)").closest("details")!
+  fireEvent.click(within(objects).getByText("Objects (1)"))
+  const objectRow = within(objects).getByRole("row", { name: "dbo.T 2 1 20 10 −50%" })
+  expect(objectRow).toBeInTheDocument()
+})
+
 test("renders both hidden-work flag forms", () => {
   render(<StatementRows rows={[{
     ...row,

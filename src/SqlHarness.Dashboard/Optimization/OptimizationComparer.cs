@@ -115,7 +115,7 @@ public static class OptimizationComparer
         var buffersBefore = AggregateBuffers(before.Metrics, selectedIds, normalizedAggregate);
         var buffersAfter = AggregateBuffers(after.Metrics, selectedIds, normalizedAggregate);
         var mixed = Mixed(caseOptions, before.Metrics, after.Metrics, caseComparisons);
-        var allStatementRows = BuildStatementRows(before.Metrics, after.Metrics, selectedIds, caseComparisons);
+        var allStatementRows = BuildStatementRows(before.Metrics, after.Metrics, selectedIds, caseComparisons, normalizedAggregate);
         var statementRows = effectiveView == "changed"
             ? allStatementRows.Where(row => row.Status != "shared").ToArray()
             : allStatementRows;
@@ -217,7 +217,8 @@ public static class OptimizationComparer
     private static IReadOnlyList<StatementRow> BuildStatementRows(
         IReadOnlyDictionary<string, CompareMetricEvidence> before, IReadOnlyDictionary<string, CompareMetricEvidence> after,
         IReadOnlyList<string> cases,
-        IReadOnlyDictionary<string, (string VerdictBasis, long? ChangedBefore, long? ChangedAfter, long? SharedBefore, long? SharedAfter)> caseComparisons)
+        IReadOnlyDictionary<string, (string VerdictBasis, long? ChangedBefore, long? ChangedAfter, long? SharedBefore, long? SharedAfter)> caseComparisons,
+        string aggregate)
     {
         var keys = cases.SelectMany(id => (before.GetValueOrDefault(id)?.Statements ?? []).Select(row => (row.Key, row.Occurrence)))
             .Concat(cases.SelectMany(id => (after.GetValueOrDefault(id)?.Statements ?? []).Select(row => (row.Key, row.Occurrence))))
@@ -235,10 +236,29 @@ public static class OptimizationComparer
                 : l.Length == 0 ? "only-candidate"
                 : r.Length == 0 ? "only-baseline"
                 : presentSome ? "not-executed" : "different-work";
-            var readsBefore = SumNullable(left.Select(row => row?.Reads));
-            var readsAfter = SumNullable(right.Select(row => row?.Reads));
-            var scansBefore = SumNullable(left.Select(row => row?.Scans));
-            var scansAfter = SumNullable(right.Select(row => row?.Scans));
+            var readsBefore = ReduceNullable(cases.Select((id, index) => StatementCounter(before.GetValueOrDefault(id), left[index], null,
+                static row => row.Reads, static _ => null)), aggregate);
+            var readsAfter = ReduceNullable(cases.Select((id, index) => StatementCounter(after.GetValueOrDefault(id), right[index], null,
+                static row => row.Reads, static _ => null)), aggregate);
+            var scansBefore = ReduceNullable(cases.Select((id, index) => StatementCounter(before.GetValueOrDefault(id), left[index], null,
+                static row => row.Scans, static _ => null)), aggregate);
+            var scansAfter = ReduceNullable(cases.Select((id, index) => StatementCounter(after.GetValueOrDefault(id), right[index], null,
+                static row => row.Scans, static _ => null)), aggregate);
+            var objectNames = l.Concat(r).SelectMany(row => row.Objects).Select(row => row.Table)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var objects = objectNames.Select(name =>
+            {
+                var objectReadsBefore = ReduceNullable(cases.Select((id, index) => StatementCounter(before.GetValueOrDefault(id), left[index], name,
+                    static _ => null, static row => row.ReadsAfter ?? row.ReadsBefore)), aggregate);
+                var objectReadsAfter = ReduceNullable(cases.Select((id, index) => StatementCounter(after.GetValueOrDefault(id), right[index], name,
+                    static _ => null, static row => row.ReadsAfter ?? row.ReadsBefore)), aggregate);
+                var objectScansBefore = ReduceNullable(cases.Select((id, index) => StatementCounter(before.GetValueOrDefault(id), left[index], name,
+                    static _ => null, static row => row.ScansAfter ?? row.ScansBefore)), aggregate);
+                var objectScansAfter = ReduceNullable(cases.Select((id, index) => StatementCounter(after.GetValueOrDefault(id), right[index], name,
+                    static _ => null, static row => row.ScansAfter ?? row.ScansBefore)), aggregate);
+                return new TableRow(name, objectScansBefore, objectScansAfter, objectReadsBefore, objectReadsAfter,
+                    Change(objectReadsBefore, objectReadsAfter));
+            }).ToArray();
             var attribution = cases.All(id => caseComparisons.GetValueOrDefault(id).VerdictBasis == "changed statements") ? "confirmed" : "partial";
             var text = l.Concat(r).Select(row => row.Text).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
                 ?? $"statement {key.Key}";
@@ -246,7 +266,7 @@ public static class OptimizationComparer
                 l.Concat(r).Select(row => row.Executions).FirstOrDefault(value => value.HasValue),
                 Change(readsBefore, readsAfter), attribution,
                 l.Concat(r).SelectMany(row => row.HiddenWork).Distinct().ToArray(),
-                l.Concat(r).SelectMany(row => row.Objects).Distinct().ToArray())
+                objects)
             {
                 Occurrence = key.Occurrence,
                 PlanHashBefore = l.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
@@ -257,6 +277,18 @@ public static class OptimizationComparer
             };
         }).OrderBy(row => row.Status == "shared" ? 1 : 0)
             .ThenByDescending(row => AbsoluteChange(row.ReadsBefore, row.ReadsAfter)).ToArray();
+    }
+
+    private static long? StatementCounter(CompareMetricEvidence? metric, CompareStatementEvidence? statement,
+        string? objectName, Func<CompareStatementEvidence, long?> statementValue, Func<TableRow, long?> objectValue)
+    {
+        if (metric is null || !string.Equals(metric.StatementAttribution, "confirmed", StringComparison.Ordinal)) return null;
+        if (statement is null) return 0;
+        if (objectName is null) return statement.Status == "confirmed" ? statementValue(statement) : null;
+        var matchingObjects = statement.Objects.Where(row => row.Table.Equals(objectName, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (matchingObjects.Length == 0) return statement.Status == "confirmed" ? 0 : null;
+        if (matchingObjects.Any(row => objectValue(row) is null)) return null;
+        return matchingObjects.Aggregate(0L, (sum, row) => SaturatingAdd(sum, objectValue(row)!.Value));
     }
 
     private static long SaturatingAdd(long a, long b) => b > long.MaxValue - a ? long.MaxValue : a + b;
