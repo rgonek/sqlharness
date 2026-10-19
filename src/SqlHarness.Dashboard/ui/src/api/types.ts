@@ -42,6 +42,7 @@ export type SessionOptimizationBadge = {
   subject: string
   change: string
   warning: boolean
+  verdictBasis: string
 }
 
 export type OperationSummary = {
@@ -135,10 +136,20 @@ export type ConditionsGroup = {
 export type ScopeVersions = { scope: string; versions: OptimizationVersion[]; defaultA: string | null; defaultB: string | null }
 export type OptimizationVersion = {
   version: string; hash: string; logicalReadsSum: number | null; logicalReadsMean: number | null; scansSum: number | null
-  elapsedMedianMs: number | null; caseOutcome: string; measuredIn: number[]; latestOperationId: number
+  elapsedMedianMs: number | null; caseOutcome: string; measuredIn: number[]; latestOperationId: number; verdictBasis: string
 }
 export type UnassignedCompare = { operationId: number; startedAt: string; status: string }
 export type OptimizationActionReference = { operationId: number; side: "baseline" | "candidate" | "measure"; caseIds: string[]; caseIdsByFingerprint?: Record<string, string> }
+export type HiddenWork = { kind: string; name: string; executions: number | null; sharePercent: number | null }
+export type StatementRow = {
+  key: string; occurrence: number; text: string
+  status: "shared" | "different-work" | "only-baseline" | "only-candidate" | "not-executed" | string
+  readsBefore: number | null; readsAfter: number | null; scansBefore: number | null; scansAfter: number | null
+  executions: number | null; change: string; attribution: "confirmed" | "partial" | "unavailable" | string
+  hiddenWork: HiddenWork[]; objects: { table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
+  planHashBefore: string | null; planHashAfter: string | null; planLinkBefore: string | null; planLinkAfter: string | null
+  udfElapsedMilliseconds: number | null
+}
 export type OptimizationComparison = {
   a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql"
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]
@@ -150,6 +161,11 @@ export type OptimizationComparison = {
   tableIoUnavailable?: boolean; cpuBeforeMs?: number | null; cpuAfterMs?: number | null
   buffersBefore?: PostgresBuffers | null; buffersAfter?: PostgresBuffers | null
   beforeAction?: OptimizationActionReference | null; afterAction?: OptimizationActionReference | null
+  verdictBasis?: "changed statements" | "whole batch"
+  view?: "changed" | "whole" | "statements"
+  wholeBatch?: { before: number | null; after: number | null; shared: number | null; label: string; sharedBefore: number | null; sharedAfter: number | null; changedBefore: number | null; changedAfter: number | null }
+  statements?: StatementRow[]; fallbackNote?: string | null
+  omittedStatementsBefore?: number; omittedStatementsAfter?: number
 }
 
 export type CompareSqlVersion = {
@@ -353,6 +369,7 @@ export type OperationDetail = {
   phases: OperationPhaseSummary[]
   events?: OperationEventSummary[]
   conditions: ConditionsModel | null
+  statements?: StatementRow[]
 }
 
 export type OperationPhaseSummary = { phase: string; count: number; totalMs: number; maxMs: number }

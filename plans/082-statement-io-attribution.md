@@ -92,9 +92,11 @@
 **Interfaces:**
 - Produces: `OptimizationComparison` gains `string VerdictBasis /* "changed statements" | "whole batch" */`, `string View /* "changed" | "whole" | "statements" */`, `WholeBatchLine WholeBatch` (`Before`, `After`, `Shared`), `IReadOnlyList<StatementRow> Statements`, `string? FallbackNote`; `sealed record StatementRow(string Key, string Text, string Status /* shared | different-work | only-baseline | only-candidate | not-executed */, long? ReadsBefore, long? ReadsAfter, long? ScansBefore, long? ScansAfter, long? Executions, string Change, string Attribution /* confirmed|partial|unavailable */, IReadOnlyList<HiddenWork> HiddenWork, IReadOnlyList<TableRow> Objects)`; query parameter `view=changed|whole|statements` on the compare endpoint (default `changed`).
 
-- [ ] **Step 1: Failing tests:** `Op203_shape_focuses_on_changed_statement` (shared 11,910 each side + changed 100 → 50: verdict `better`, basis `changed statements`, line `whole batch: 12010 → 11960 reads (shared statements: 11910)`); `Mismatch_on_shared_object_fails_closed` (basis `whole batch`, note `per-statement attribution incomplete`, nothing collapsed); `Equal_reads_different_plan_is_not_shared`; `Branch_in_some_cases_is_never_collapsed`; `All_cases_collapses_only_everywhere_shared`; `Breakdown_is_additive` (changed + shared = whole batch); `Version_table_and_session_badge_use_same_basis`.
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(082): classify statements and focus verdicts on changed work`.
+- [x] **Step 1: Failing tests:** Op203, partial shared-object fail-closed, equal-read/different-plan, branch in some cases, all-case shared/additivity, version-table basis, and session badge basis are covered by the named comparer, summary-builder and reader tests. The first feature RED reached the comparer and failed because the changed view included a shared row.
+- [x] **Step 2:** Focused comparer/summary/reader/API filter → PASS (47 passed, 0 failed); Task 2 journal regression filter → PASS (47 passed, 0 failed); dashboard contract and fractional UDF persistence filter → PASS (9 passed, 0 failed).
+- [x] **Step 3:** Implemented per-case statement classification, additive whole-batch line with per-side shared totals, fail-closed fallback, current-policy text fallback, and statement detail for measure operations.
+- [x] **Step 4:** See `.superpowers/sdd/082-statement-io-attribution/task-3-report.md` for exact commands and evidence.
+- [x] **Step 5:** Commit `feat(082): classify statements and focus verdicts on changed work`.
 
 ### Task 4: Dashboard views
 

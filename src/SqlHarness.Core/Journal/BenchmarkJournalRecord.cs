@@ -81,7 +81,7 @@ public sealed record JournalStatementMetrics(
     public long? Executions { get; init; }
     public string? PlanHash { get; init; }
     public StatementStatus Status { get; init; } = StatementStatus.Unavailable;
-    public long? UdfElapsedMilliseconds { get; init; }
+    public double? UdfElapsedMilliseconds { get; init; }
     public IReadOnlyList<HiddenWork> HiddenWork { get; init; } = [];
     public IReadOnlyList<StatementObjectCounters> Objects { get; init; } = [];
     public string? Text { get; init; }

@@ -5,6 +5,105 @@ namespace SqlHarness.Tests.Dashboard;
 public sealed class OptimizationComparerTests
 {
     [Fact]
+    public void Op203_shape_focuses_on_changed_statement()
+    {
+        var evidence = Evidence(203, "h1", "h2", (12010, 11960)) with
+        {
+            Metrics = [
+                StatementMetric("baseline", 0, 12010,
+                    Statement("prep", "SELECT prep", 11910, "prep-plan"), Statement("work", "SELECT work", 100, "old-plan")),
+                StatementMetric("candidate", 0, 11960,
+                    Statement("prep", "SELECT prep", 11910, "prep-plan"), Statement("work", "SELECT work", 50, "new-plan")),
+            ],
+        };
+
+        var result = Compare([evidence], "v1", "v2");
+
+        Assert.Equal("better", Assert.Single(result.Cases).Outcome);
+        Assert.Equal("changed statements", result.VerdictBasis);
+        Assert.Equal("whole batch: 12010 → 11960 reads (shared statements: 11910)", result.WholeBatch.Label);
+        Assert.Equal("changed", result.View);
+        Assert.Equal("work", Assert.Single(result.Statements, row => row.Status != "shared").Key);
+    }
+
+    [Fact]
+    public void Partial_attribution_falls_back_to_whole_batch_without_collapsing()
+    {
+        var compare = Evidence(203, "h1", "h2", (12010, 11960)) with
+        {
+            Metrics = [
+                StatementMetric("baseline", 0, 12010, Statement("prep", "SELECT prep", 11910, "p") with { Status = "partial" }, Statement("work", "SELECT work", 100, "old")),
+                StatementMetric("candidate", 0, 11960, Statement("prep", "SELECT prep", 11910, "p"), Statement("work", "SELECT work", 50, "new")),
+            ],
+        };
+
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "sum", "whole");
+
+        Assert.Equal("whole batch", result.VerdictBasis);
+        Assert.Equal("per-statement attribution incomplete", result.FallbackNote);
+        Assert.Contains(result.Statements, row => row.Key == "prep");
+        Assert.Equal("same", Assert.Single(result.Cases).Outcome);
+    }
+
+    [Fact]
+    public void Equal_reads_with_different_plan_hashes_are_not_shared()
+    {
+        var compare = Evidence(203, "h1", "h2", (100, 100)) with
+        {
+            Metrics = [StatementMetric("baseline", 0, 100, Statement("same", "SELECT same", 100, "plan-a")),
+                StatementMetric("candidate", 0, 100, Statement("same", "SELECT same", 100, "plan-b"))],
+        };
+
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "sum", "whole");
+
+        Assert.Equal("different-work", Assert.Single(result.Statements).Status);
+        Assert.Contains("shared statements: 0", result.WholeBatch.Label);
+        Assert.Equal("changed statements", result.VerdictBasis);
+    }
+
+    [Fact]
+    public void Branch_statement_is_not_collapsed_when_missing_in_one_case()
+    {
+        var compare = Evidence(203, "h1", "h2", (100, 90), (120, 110)) with
+        {
+            Metrics = [
+                CaseMetric("baseline", "0", 100, Statement("common", "SELECT common", 90, "common-plan"), Statement("branch", "SELECT branch", 10, "branch-plan")),
+                CaseMetric("candidate", "0", 90, Statement("common", "SELECT common", 90, "common-plan"), Statement("branch", "SELECT branch", 0, "branch-plan")),
+                CaseMetric("baseline", "1", 120, Statement("common", "SELECT common", 120, "common-plan")),
+                CaseMetric("candidate", "1", 110, Statement("common", "SELECT common", 110, "common-plan")),
+            ],
+        };
+
+        var result = Compare([compare], "v1", "v2");
+
+        Assert.Equal("not-executed", Assert.Single(result.Statements, row => row.Key == "branch").Status);
+        Assert.Equal("changed statements", result.VerdictBasis);
+    }
+
+    [Fact]
+    public void Breakdown_is_additive_and_all_cases_share_only_when_each_case_matches()
+    {
+        var compare = Evidence(203, "h1", "h2", (100, 100), (200, 200)) with
+        {
+            Metrics = [
+                CaseMetric("baseline", "0", 100, Statement("common", "SELECT common", 100, "common-plan")),
+                CaseMetric("candidate", "0", 100, Statement("common", "SELECT common", 100, "common-plan")),
+                CaseMetric("baseline", "1", 200, Statement("common", "SELECT common", 200, "common-plan")),
+                CaseMetric("candidate", "1", 200, Statement("common", "SELECT common", 200, "common-plan")),
+            ],
+        };
+
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "sum", "whole");
+
+        Assert.Equal(300, result.WholeBatch.Before);
+        Assert.Equal(300, result.WholeBatch.SharedBefore);
+        Assert.Equal(300, result.WholeBatch.SharedAfter);
+        Assert.Equal(0, result.WholeBatch.ChangedBefore);
+        Assert.Equal("shared", Assert.Single(result.Statements).Status);
+        Assert.Equal("changed statements", result.VerdictBasis);
+    }
+
+    [Fact]
     public void Measured_together_uses_that_operation()
     {
         var result = Compare([
@@ -484,6 +583,19 @@ public sealed class OptimizationComparerTests
     private static CompareMetricEvidence Metric(string variant, string caseId, long reads, string table) =>
         new(variant, caseId, $"@CustomerId = {9001 + int.Parse(caseId, System.Globalization.CultureInfo.InvariantCulture)}",
             reads, reads, 1, [new CompareTableIoEvidence(table, reads, 0, 1)]);
+
+    private static CompareMetricEvidence StatementMetric(string variant, long caseReads,
+        long reads, params CompareStatementEvidence[] statements) =>
+        CaseMetric(variant, "0", reads, statements);
+
+    private static CompareMetricEvidence CaseMetric(string variant, string caseId,
+        long reads, params CompareStatementEvidence[] statements) =>
+        new(variant, caseId, $"@CustomerId = {9001 + int.Parse(caseId)}", reads, reads, 1,
+            [new CompareTableIoEvidence("Orders", reads, 0, 1)])
+        { Statements = statements, StatementReads = reads, StatementAttribution = "confirmed" };
+
+    private static CompareStatementEvidence Statement(string key, string text, long reads, string planHash) =>
+        new(key, 0, text, planHash, "confirmed", reads, 1, 1, [], []);
 
     private static CompareMetricEvidence TableMetric(string variant, params (string Table, long Reads)[] tables) =>
         new(variant, "0", "@CustomerId = 9001", 100, 100, 1,

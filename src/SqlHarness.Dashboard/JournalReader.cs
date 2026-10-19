@@ -23,7 +23,12 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         long? MetricId, string? Variant, string? CaseId, string? CaseLabel, long? LogicalReadsMedian, long? ElapsedMedianMs,
         long? CpuMedianMs, long? PgSharedHit, long? PgSharedRead, long? PgSharedDirtied, long? PgSharedWritten,
         long? PgTempRead, long? PgTempWritten,
-        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount);
+        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, int OmittedStatements);
+
+    private sealed record StoredStatement(long Id, long OperationId, string Variant, string CaseId, int Ordinal, string Key,
+        int Occurrence, string Hash, string? Text, long? Executions, string? PlanHash, string Status,
+        double? UdfElapsedMs, string HiddenWorkJson, string? ObjectName, string? ObjectKind,
+        long? ObjectReads, long? ObjectLobReads, long? ObjectScans, int OmittedStatements);
 
     private static readonly JsonSerializerOptions ConditionsJsonOptions = new(JsonSerializerDefaults.Web);
     public const int DefaultLimit = 50;
@@ -230,10 +235,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     }
 
     /// <summary>Builds the optimization section from every retained compare and its journaled case evidence.</summary>
-    public OptimizationSection Optimization(long sessionId) => OptimizationSummaryBuilder.Build(OptimizationEvidence(sessionId));
+    public OptimizationSection Optimization(long sessionId, bool storeSensitive = true) =>
+        OptimizationSummaryBuilder.Build(OptimizationEvidence(sessionId, storeSensitive));
 
     /// <summary>Reads every retained compare with its actual per-case and per-table journal evidence.</summary>
-    public IReadOnlyList<CompareEvidence> OptimizationEvidence(long sessionId)
+    public IReadOnlyList<CompareEvidence> OptimizationEvidence(long sessionId, bool storeSensitive = true)
     {
         using var connection = OpenSnapshot();
         if (connection is null)
@@ -248,7 +254,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                    m.id, m.variant, m.case_id, m.case_label, m.logical_reads_median, m.elapsed_ms_median,
                    m.cpu_ms_median, m.pg_shared_hit, m.pg_shared_read, m.pg_shared_dirtied,
                    m.pg_shared_written, m.pg_temp_read, m.pg_temp_written,
-                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count
+                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, COALESCE(m.omitted_statements, 0)
             FROM operations o
             LEFT JOIN operation_metrics m ON m.operation_id = o.id
             LEFT JOIN operation_table_io t ON t.metric_id = m.id
@@ -262,7 +268,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             r.IsDBNull(16) ? null : r.GetInt64(16), NullableString(r, 17), NullableString(r, 18), NullableString(r, 19),
             NullableLong(r, 20), NullableLong(r, 21), NullableLong(r, 22), NullableLong(r, 23), NullableLong(r, 24),
             NullableLong(r, 25), NullableLong(r, 26), NullableLong(r, 27), NullableLong(r, 28), NullableString(r, 29),
-            NullableLong(r, 30), NullableLong(r, 31), NullableLong(r, 32)));
+            NullableLong(r, 30), NullableLong(r, 31), NullableLong(r, 32), r.GetInt32(33)));
+
+        var statementsByMetric = LoadStoredStatements(connection, rows.Select(row => row.OperationId).Distinct(), storeSensitive)
+            .GroupBy(row => (row.OperationId, row.Variant, row.CaseId))
+            .ToDictionary(group => group.Key, group => group.ToArray());
 
         var compares = rows.GroupBy(row => row.OperationId).Select(group =>
         {
@@ -286,12 +296,42 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                             samples[0].PgSharedWritten, samples[0].PgTempRead, samples[0].PgTempWritten)
                         : null;
                     var caseFingerprint = conditions?.Cases.FirstOrDefault(item => item.Id == metric.Key.CaseId)?.EffectiveMeasurementFingerprint;
+                    var statementRows = statementsByMetric.GetValueOrDefault((first.OperationId, metric.Key.Variant!, metric.Key.CaseId!)) ?? [];
+                    var statements = statementRows.GroupBy(row => row.Id).Select(statement =>
+                    {
+                        var row = statement.First();
+                        var objectRows = statement.Where(item => item.ObjectName is not null).Select(item =>
+                            new TableRow(item.ObjectName!, item.ObjectScans, item.ObjectScans,
+                                item.ObjectReads is { } reads ? SaturatingAdd(reads, item.ObjectLobReads ?? 0) : null,
+                                item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null, "0%")).ToArray();
+                        var reads = objectRows.All(item => item.ReadsBefore.HasValue)
+                            ? objectRows.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsBefore!.Value)) : (long?)null;
+                        var scansForStatement = objectRows.All(item => item.ScansBefore.HasValue)
+                            ? objectRows.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ScansBefore!.Value)) : (long?)null;
+                        var text = storeSensitive ? row.Text : null;
+                        text ??= $"statement {row.Ordinal + 1} ({row.Hash[..Math.Min(8, row.Hash.Length)]})";
+                        IReadOnlyList<HiddenWork> hiddenWork;
+                        try { hiddenWork = JsonSerializer.Deserialize<HiddenWork[]>(row.HiddenWorkJson, ConditionsJsonOptions) ?? []; }
+                        catch (JsonException) { hiddenWork = []; }
+                        return new CompareStatementEvidence(row.Key, row.Occurrence, text, row.PlanHash,
+                            row.Status, reads, scansForStatement,
+                            row.Executions, hiddenWork, objectRows)
+                        { UdfElapsedMilliseconds = row.UdfElapsedMs };
+                    }).ToArray();
+                    var omittedStatements = samples.Select(row => row.OmittedStatements).DefaultIfEmpty(0).Max();
+                    var attribution = statements.Length > 0 && omittedStatements == 0 && statements.All(row => row.Status == "confirmed")
+                        ? "confirmed" : statements.Length == 0 && omittedStatements == 0 ? "unavailable" : "partial";
                     return new CompareMetricEvidence(metric.Key.Variant!, metric.Key.CaseId!, metric.Key.CaseLabel!,
                         samples[0].LogicalReadsMedian, samples[0].ElapsedMedianMs, scans, tableRows)
                     {
                         CpuMedianMs = samples[0].CpuMedianMs,
                         Postgres = postgres,
                         MeasurementFingerprint = caseFingerprint,
+                        Statements = statements,
+                        OmittedStatements = omittedStatements,
+                        StatementReads = statements.All(row => row.Reads.HasValue)
+                            ? statements.Aggregate(0L, (sum, row) => SaturatingAdd(sum, row.Reads!.Value)) : null,
+                        StatementAttribution = attribution,
                     };
                 }).ToArray();
             var summary = Json(first.SummaryJson);
@@ -307,6 +347,66 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         }).ToArray();
 
         return compares;
+    }
+
+    private static IReadOnlyList<StoredStatement> LoadStoredStatements(SqliteConnection connection,
+        IEnumerable<long> operationIds, bool storeSensitive)
+    {
+        var ids = operationIds.Distinct().ToArray();
+        if (ids.Length == 0 || Scalar<long>(connection, "PRAGMA user_version;", []) < 18)
+            return [];
+        var result = new List<StoredStatement>();
+        foreach (var batch in ids.Chunk(200))
+        {
+            var parameters = batch.Select((id, index) => ($"$id{index}", (object?)id)).ToArray();
+            var placeholders = string.Join(",", parameters.Select(item => item.Item1));
+            result.AddRange(Query(connection, $"""
+                SELECT s.id, s.operation_id, s.variant, s.case_id, s.statement_ordinal, s.statement_key,
+                       s.occurrence, s.statement_hash, s.statement_text, s.executions, s.plan_hash, s.status,
+                       s.udf_elapsed_ms, s.hidden_work_json, o.object, o.kind, o.logical_reads, o.lob_logical_reads,
+                       o.scans, COALESCE(m.omitted_statements, 0)
+                FROM operation_statements s
+                LEFT JOIN operation_statement_objects o ON o.statement_id = s.id
+                LEFT JOIN operation_metrics m ON m.operation_id = s.operation_id AND m.variant = s.variant AND m.case_id = s.case_id
+                WHERE s.operation_id IN ({placeholders})
+                ORDER BY s.operation_id, s.ordinal, o.object;
+                """, parameters, r => new StoredStatement(r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetString(3),
+                r.GetInt32(4), r.GetString(5), r.GetInt32(6), r.GetString(7),
+                storeSensitive ? NullableString(r, 8) : null, NullableLong(r, 9), NullableString(r, 10),
+                r.GetString(11), NullableDouble(r, 12), r.GetString(13),
+                NullableString(r, 14), NullableString(r, 15), NullableLong(r, 16), NullableLong(r, 17),
+                NullableLong(r, 18), r.GetInt32(19))));
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<StatementRow> OperationStatements(SqliteConnection connection, long operationId,
+        bool storeSensitive)
+    {
+        var statements = LoadStoredStatements(connection, [operationId], storeSensitive);
+        return statements.GroupBy(row => row.Id).Select(group =>
+        {
+            var row = group.First();
+            var objects = group.Where(item => item.ObjectName is not null).Select(item => new TableRow(
+                item.ObjectName!, item.ObjectScans, item.ObjectScans,
+                item.ObjectReads is { } reads ? SaturatingAdd(reads, item.ObjectLobReads ?? 0) : null,
+                item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null, "0%")).ToArray();
+            var reads = objects.All(item => item.ReadsBefore.HasValue)
+                ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsBefore!.Value)) : (long?)null;
+            var scans = objects.All(item => item.ScansBefore.HasValue)
+                ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ScansBefore!.Value)) : (long?)null;
+            var text = row.Text ?? $"statement {row.Ordinal + 1} ({row.Hash[..Math.Min(8, row.Hash.Length)]})";
+            IReadOnlyList<HiddenWork> hidden;
+            try { hidden = JsonSerializer.Deserialize<HiddenWork[]>(row.HiddenWorkJson, ConditionsJsonOptions) ?? []; }
+            catch (JsonException) { hidden = []; }
+            return new StatementRow(row.Key, text, row.Status, reads, null, scans, null, row.Executions,
+                "—", row.Status, hidden, objects)
+            {
+                Occurrence = row.Occurrence,
+                PlanHashBefore = row.PlanHash,
+                UdfElapsedMilliseconds = row.UdfElapsedMs,
+            };
+        }).ToArray();
     }
 
     public SqlVersionText? SessionSqlText(long sessionId, string hash)
@@ -506,7 +606,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
     public OperationDetail? Operation(
         long id,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? profileDimensions = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? profileDimensions = null,
+        bool storeSensitive = true)
     {
         using var connection = OpenSnapshot();
         if (connection is null)
@@ -597,7 +698,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             Phases: phases,
             Events: events.Count == 0 ? null : events,
             SetupSqlText: extra.SetupSqlText,
-            Conditions: extra.CompareConditions);
+            Conditions: extra.CompareConditions,
+            Statements: OperationStatements(connection, id, storeSensitive));
     }
 
     public ReproScript? Reproduction(long operationId, string side, string caseId, ReproScriptForm form)
@@ -1234,12 +1336,19 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     && (item.Scope == scope.Scope || (scope.Scope == "whole query" && item.Scope == "whole"))).ToArray();
                 var comparison = OptimizationComparer.Compare(scopedGroup, scopedEvidence,
                     scope.DefaultA, scope.DefaultB, "all", "sum");
-                var before = scope.Versions.FirstOrDefault(version => version.Version == scope.DefaultA)?.LogicalReadsSum;
-                var after = scope.Versions.FirstOrDefault(version => version.Version == scope.DefaultB)?.LogicalReadsSum;
+                var before = comparison.VerdictBasis == "changed statements"
+                    ? comparison.WholeBatch.ChangedBefore
+                    : scope.Versions.FirstOrDefault(version => version.Version == scope.DefaultA)?.LogicalReadsSum;
+                var after = comparison.VerdictBasis == "changed statements"
+                    ? comparison.WholeBatch.ChangedAfter
+                    : scope.Versions.FirstOrDefault(version => version.Version == scope.DefaultB)?.LogicalReadsSum;
                 var change = before is null || after is null ? "—" : ChangeLabel(before.Value, after.Value);
                 var warning = comparison.Mixed is not null
                     || !comparison.EquivalenceLabel.StartsWith("results equivalent", StringComparison.Ordinal);
-                badges.Add(new SessionOptimizationBadge(subject.Subject, change, warning));
+                badges.Add(new SessionOptimizationBadge(subject.Subject, change, warning)
+                {
+                    VerdictBasis = comparison.VerdictBasis,
+                });
                 added = true;
                 break;
             }
@@ -1465,6 +1574,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     }
 
     private static long? NullableLong(SqliteDataReader r, int index) => r.IsDBNull(index) ? null : r.GetInt64(index);
+    private static double? NullableDouble(SqliteDataReader r, int index) => r.IsDBNull(index) ? null : r.GetDouble(index);
+    private static long SaturatingAdd(long a, long b) => b > long.MaxValue - a ? long.MaxValue : a + b;
 
     private static int Clamp(int limit) => Math.Clamp(limit, 1, MaximumLimit);
 

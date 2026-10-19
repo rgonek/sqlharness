@@ -45,7 +45,10 @@ public sealed record SessionSummary(
     public IReadOnlyList<SessionOptimizationBadge> Optimization { get; init; } = [];
 }
 
-public sealed record SessionOptimizationBadge(string Subject, string Change, bool Warning);
+public sealed record SessionOptimizationBadge(string Subject, string Change, bool Warning)
+{
+    public string VerdictBasis { get; init; } = "whole batch";
+}
 
 public sealed record OperationSummary(
     long Id, long SessionId, string AgentKind, string Operation, string Status, int? ExitCode, string? ErrorKind,
@@ -111,7 +114,8 @@ public sealed record OperationDetail(
     IReadOnlyList<JsonElement>? CompareCases = null, JsonElement? CompareConditions = null,
     IReadOnlyList<OperationPhaseSummary>? Phases = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<OperationEventSummary>? Events = null,
-    string? SetupSqlText = null, JsonElement? Conditions = null);
+    string? SetupSqlText = null, JsonElement? Conditions = null,
+    IReadOnlyList<StatementRow>? Statements = null);
 
 public sealed record OperationPhaseSummary(string Phase, int Count, long TotalMs, long MaxMs);
 

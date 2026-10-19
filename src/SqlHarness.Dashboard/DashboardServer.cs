@@ -223,10 +223,10 @@ public static partial class DashboardServer
         MapRead(api, "/sessions/{id:long}", (long id) =>
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
         MapRead(api, "/sessions/{id:long}/optimization", (long id) =>
-            reader.Session(id) is null ? Results.NotFound() : Results.Json(reader.Optimization(id), Json));
+            reader.Session(id) is null ? Results.NotFound() : Results.Json(reader.Optimization(id, loadConfig().Journal.StoreSensitive), Json));
         MapRead(api, "/sessions/{id:long}/optimization/compare", (long id, string? subject, string? database,
-            string? group, string? scope, string? a, string? b, string? @case, string? aggregate) =>
-            SessionOptimizationCompare(reader, id, subject, database, group, scope, a, b, @case, aggregate, Json));
+            string? group, string? scope, string? a, string? b, string? @case, string? aggregate, string? view) =>
+            SessionOptimizationCompare(reader, id, subject, database, group, scope, a, b, @case, aggregate, view, loadConfig().Journal.StoreSensitive, Json));
         MapRead(api, "/sessions/{id:long}/compares", (long id, long? cursor, int? limit) =>
             Results.Json(reader.CompareAttempts(id, cursor, limit ?? JournalReader.CompareHistoryPageLimit), Json));
         MapRead(api, "/sessions/{id:long}/sql", (long id, string? hash) =>
@@ -242,11 +242,11 @@ public static partial class DashboardServer
                     : Results.Json(reader.Operations(new OperationQuery(session, status, operation, window.From, window.To, cursor,
                         limit ?? JournalReader.DefaultLimit, profile, dimensionFilters, unprofiled ?? false)), Json));
         MapRead(api, "/operations/{id:long}", (long id) =>
-            reader.Operation(id, DashboardProfiles.DimensionNames(options.TargetsPath)) is { } detail
+            reader.Operation(id, DashboardProfiles.DimensionNames(options.TargetsPath), loadConfig().Journal.StoreSensitive) is { } detail
                 ? Results.Json(detail, Json)
                 : Results.NotFound());
-        MapRead(api, "/operations/{id:long}/optimization", (long id, string? @case, string? aggregate) =>
-            OperationOptimizationCompare(reader, id, @case, aggregate, Json));
+        MapRead(api, "/operations/{id:long}/optimization", (long id, string? @case, string? aggregate, string? view) =>
+            OperationOptimizationCompare(reader, id, @case, aggregate, view, loadConfig().Journal.StoreSensitive, Json));
         MapRead(api, "/operations/{id:long}/repro", (long id, string? side, string? @case, string? form) =>
         {
             if (side is not ("baseline" or "candidate" or "query"))
@@ -342,7 +342,7 @@ public static partial class DashboardServer
 
     private static IResult SessionOptimizationCompare(JournalReader reader, long sessionId, string? subject,
         string? database, string? fingerprint, string? scope, string? a, string? b, string? selectedCase,
-        string? aggregate, JsonSerializerOptions json)
+        string? aggregate, string? view, bool storeSensitive, JsonSerializerOptions json)
     {
         var normalizedAggregate = NormalizeAggregate(aggregate);
         if (normalizedAggregate is null)
@@ -350,7 +350,9 @@ public static partial class DashboardServer
         if (reader.Session(sessionId) is null)
             return Results.NotFound();
 
-        var evidence = reader.OptimizationEvidence(sessionId);
+        if (!TryNormalizeView(view, out var normalizedView))
+            return BadRequest("view must be changed, whole or statements.");
+        var evidence = reader.OptimizationEvidence(sessionId, storeSensitive);
         var section = OptimizationSummaryBuilder.Build(evidence);
         var subjectChoices = section.Subjects.Where(item => (subject is null || item.Subject == subject)
             && (database is null || item.Database == database)).ToArray();
@@ -386,7 +388,7 @@ public static partial class DashboardServer
                 && NormalizeOptimizationScope(item.Scope) == NormalizeOptimizationScope(selectedScope.Scope))
             .ToArray();
         var comparison = OptimizationComparer.Compare(scopedGroup, scopedEvidence, selectedA, selectedB,
-            selectedCase ?? "all", normalizedAggregate);
+            selectedCase ?? "all", normalizedAggregate, normalizedView);
         if (selectedCase is not null && selectedCase != "all"
             && !comparison.Cases.Any(item => item.Id == selectedCase))
             return Results.NotFound();
@@ -394,15 +396,17 @@ public static partial class DashboardServer
     }
 
     private static IResult OperationOptimizationCompare(JournalReader reader, long operationId, string? selectedCase,
-        string? aggregate, JsonSerializerOptions json)
+        string? aggregate, string? view, bool storeSensitive, JsonSerializerOptions json)
     {
         var normalizedAggregate = NormalizeAggregate(aggregate);
         if (normalizedAggregate is null)
             return BadRequest("aggregate must be sum or mean.");
-        var operation = reader.Operation(operationId);
+        if (!TryNormalizeView(view, out var normalizedView))
+            return BadRequest("view must be changed, whole or statements.");
+        var operation = reader.Operation(operationId, storeSensitive: storeSensitive);
         if (operation is null || operation.Operation.Operation != "compare")
             return Results.NotFound();
-        var allEvidence = reader.OptimizationEvidence(operation.Operation.SessionId);
+        var allEvidence = reader.OptimizationEvidence(operation.Operation.SessionId, storeSensitive);
         var evidence = allEvidence.SingleOrDefault(item => item.OperationId == operationId);
         if (evidence is null || evidence.BaselineHash is null || evidence.CandidateHash is null)
             return Results.NotFound();
@@ -437,7 +441,7 @@ public static partial class DashboardServer
             Database = database,
         };
         var comparison = OptimizationComparer.Compare(compareGroup, [ownEvidence], a, b,
-            selectedCase ?? "all", normalizedAggregate);
+            selectedCase ?? "all", normalizedAggregate, normalizedView);
         if (selectedCase is not null && selectedCase != "all"
             && !comparison.Cases.Any(item => item.Id == selectedCase))
             return Results.NotFound();
@@ -447,6 +451,15 @@ public static partial class DashboardServer
     private static string? NormalizeAggregate(string? aggregate) => aggregate is null
         || aggregate.Equals("sum", StringComparison.OrdinalIgnoreCase) ? "sum"
         : aggregate.Equals("mean", StringComparison.OrdinalIgnoreCase) ? "mean" : null;
+
+    private static bool TryNormalizeView(string? view, out string normalized)
+    {
+        normalized = view?.ToLowerInvariant() ?? "changed";
+        if (normalized is "changed" or "whole" or "statements")
+            return true;
+        normalized = "changed";
+        return false;
+    }
 
     private static string? NormalizeOptimizationScope(string? scope) => scope switch
     {

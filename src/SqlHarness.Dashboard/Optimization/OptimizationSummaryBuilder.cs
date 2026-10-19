@@ -148,6 +148,20 @@ public static class OptimizationSummaryBuilder
                 var outcome = latest.Compare.IsMeasure
                     ? latestCompare.Compare is null ? "measured only" : CaseOutcome(latestCompare.Compare, latestCompare.Variant)
                     : CaseOutcome(latest.Compare, latest.Variant);
+                var verdictCompare = latest.Compare.IsMeasure ? latestCompare.Compare : latest.Compare;
+                var verdictVariant = latest.Compare.IsMeasure ? latestCompare.Variant : latest.Variant;
+                var verdictMetricsBefore = verdictCompare is null ? [] : MetricsFor(verdictCompare, "baseline");
+                var verdictMetricsAfter = verdictCompare is null ? [] : MetricsFor(verdictCompare, "candidate");
+                var verdictBasis = verdictCompare is not null && verdictVariant is not null
+                    && verdictVariant.Equals("candidate", StringComparison.OrdinalIgnoreCase)
+                    && verdictCompare.Cases.Count > 0
+                    && verdictCompare.Cases.All(item =>
+                    {
+                        var before = verdictMetricsBefore.FirstOrDefault(metric => metric.CaseId == item.CaseId);
+                        var after = verdictMetricsAfter.FirstOrDefault(metric => metric.CaseId == item.CaseId);
+                        return before is not null && after is not null
+                            && OptimizationComparer.CompareCase(before, after).VerdictBasis == "changed statements";
+                    }) ? "changed statements" : "whole batch";
                 return new VersionRow(
                     group.Key.Version,
                     group.Key.Hash,
@@ -157,7 +171,10 @@ public static class OptimizationSummaryBuilder
                     Median(elapsed),
                     outcome,
                     measurements.Select(item => item.Compare.OperationId).Distinct().Order().ToArray(),
-                    latest.Compare.OperationId);
+                    latest.Compare.OperationId)
+                {
+                    VerdictBasis = verdictBasis,
+                };
             })
             .ToArray();
         return versions;
@@ -196,8 +213,11 @@ public static class OptimizationSummaryBuilder
         var worse = 0;
         foreach (var item in cases)
         {
-            var beforeReads = baseline[item.CaseId].LogicalReadsMedian!.Value;
-            var afterReads = candidate[item.CaseId].LogicalReadsMedian!.Value;
+            var attribution = OptimizationComparer.CompareCase(baseline[item.CaseId], candidate[item.CaseId]);
+            var beforeReads = attribution.VerdictBasis == "changed statements"
+                ? attribution.ChangedBefore!.Value : baseline[item.CaseId].LogicalReadsMedian!.Value;
+            var afterReads = attribution.VerdictBasis == "changed statements"
+                ? attribution.ChangedAfter!.Value : candidate[item.CaseId].LogicalReadsMedian!.Value;
             if (Change(beforeReads, afterReads) == "better") better++;
             else if (Change(beforeReads, afterReads) == "worse") worse++;
         }

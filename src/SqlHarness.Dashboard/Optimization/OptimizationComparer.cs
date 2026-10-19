@@ -5,7 +5,7 @@ namespace SqlHarness.Dashboard;
 public static class OptimizationComparer
 {
     public static OptimizationComparison Compare(ConditionsGroup group, IReadOnlyList<CompareEvidence> compares,
-        string a, string b, string selectedCase, string aggregate)
+        string a, string b, string selectedCase, string aggregate, string view = "changed")
     {
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(compares);
@@ -81,10 +81,13 @@ public static class OptimizationComparer
             .ToArray();
         var differingCases = direct?.Cases.Where(item => item.ResultsEquivalent == false)
             .Select(CaseKey).ToHashSet(StringComparer.Ordinal) ?? [];
+        var caseComparisons = commonIds.ToDictionary(id => id, id => CompareCase(before.Metrics[id], after.Metrics[id]));
         var caseOptions = commonIds.Select(id => new CaseOption(id, caseLabels.GetValueOrDefault(id, id),
             differingCases.Contains(id) ? "results differ"
-                : before.Metrics[id].LogicalReadsMedian is { } readsBefore && after.Metrics[id].LogicalReadsMedian is { } readsAfter
-                    ? Outcome(readsBefore, readsAfter) : "unavailable")).ToArray();
+                : caseComparisons[id].VerdictBasis == "changed statements"
+                    ? Outcome(caseComparisons[id].ChangedBefore!.Value, caseComparisons[id].ChangedAfter!.Value)
+                    : before.Metrics[id].LogicalReadsMedian is { } readsBefore && after.Metrics[id].LogicalReadsMedian is { } readsAfter
+                        ? Outcome(readsBefore, readsAfter) : "unavailable")).ToArray();
         var validSelection = selectedCase == "all" || commonIds.Contains(selectedCase, StringComparer.Ordinal);
         var resolvedSelection = validSelection ? selectedCase : "all";
         var selectedIds = resolvedSelection == "all" ? commonIds : [resolvedSelection];
@@ -92,10 +95,15 @@ public static class OptimizationComparer
             ? $"{commonIds.Length.ToString(CultureInfo.InvariantCulture)} of {totalCaseIds.Length.ToString(CultureInfo.InvariantCulture)} cases"
             : string.Empty;
         var normalizedAggregate = aggregate.Equals("mean", StringComparison.OrdinalIgnoreCase) ? "mean" : "sum";
+        var allCasesConfirmed = selectedIds.Length > 0 && selectedIds.All(id => caseComparisons.TryGetValue(id, out var item)
+            && item.VerdictBasis == "changed statements");
+        var verdictBasis = allCasesConfirmed ? "changed statements" : "whole batch";
         var tableIoUnavailable = postgresMetrics;
         var tableRows = tableIoUnavailable
             ? []
-            : BuildTableRows(before, after, selectedIds, normalizedAggregate);
+            : allCasesConfirmed && view is not "whole"
+                ? BuildStatementTableRows(before.Metrics, after.Metrics, selectedIds, caseComparisons, normalizedAggregate)
+                : BuildTableRows(before, after, selectedIds, normalizedAggregate);
         var collapsed = tableIoUnavailable ? null : Collapse(tableRows);
         var visibleTables = tableIoUnavailable ? tableRows : tableRows.Where(row => !IsCollapsed(row)).ToArray();
         var elapsedBefore = Aggregate(before.Metrics, selectedIds, metric => metric.ElapsedMedianMs, normalizedAggregate);
@@ -104,7 +112,24 @@ public static class OptimizationComparer
         var cpuAfter = Aggregate(after.Metrics, selectedIds, metric => metric.CpuMedianMs, normalizedAggregate);
         var buffersBefore = AggregateBuffers(before.Metrics, selectedIds, normalizedAggregate);
         var buffersAfter = AggregateBuffers(after.Metrics, selectedIds, normalizedAggregate);
-        var mixed = Mixed(caseOptions, before.Metrics, after.Metrics);
+        var mixed = Mixed(caseOptions, before.Metrics, after.Metrics, caseComparisons);
+        var allStatementRows = BuildStatementRows(before.Metrics, after.Metrics, selectedIds, caseComparisons);
+        var statementRows = view == "changed" && allCasesConfirmed
+            ? allStatementRows.Where(row => row.Status != "shared").ToArray()
+            : allStatementRows;
+        var sharedBefore = ReduceNullable(selectedIds.Select(id => caseComparisons.GetValueOrDefault(id).SharedBefore), normalizedAggregate);
+        var sharedAfter = ReduceNullable(selectedIds.Select(id => caseComparisons.GetValueOrDefault(id).SharedAfter), normalizedAggregate);
+        var batchBefore = AggregateReads(before.Metrics, selectedIds, normalizedAggregate);
+        var batchAfter = AggregateReads(after.Metrics, selectedIds, normalizedAggregate);
+        var wholeBatch = new WholeBatchLine(batchBefore, batchAfter, sharedBefore,
+            batchBefore is { } wb && batchAfter is { } wa && sharedBefore is { } sh
+                ? $"whole batch: {wb.ToString(CultureInfo.InvariantCulture)} → {wa.ToString(CultureInfo.InvariantCulture)} reads (shared statements: {sh.ToString(CultureInfo.InvariantCulture)})"
+                : "whole batch: reads unavailable") { SharedBefore = sharedBefore, SharedAfter = sharedAfter };
+        wholeBatch = wholeBatch with
+        {
+            ChangedBefore = allCasesConfirmed ? ReduceNullable(selectedIds.Select(id => caseComparisons[id].ChangedBefore), normalizedAggregate) : null,
+            ChangedAfter = allCasesConfirmed ? ReduceNullable(selectedIds.Select(id => caseComparisons[id].ChangedAfter), normalizedAggregate) : null,
+        };
 
         return new OptimizationComparison(a, b, basis, direct?.OperationId, equivalence, caseOptions,
             resolvedSelection, normalizedAggregate, coverage, mixed, visibleTables, collapsed,
@@ -117,6 +142,13 @@ public static class OptimizationComparer
             CpuAfterMs = cpuAfter,
             BuffersBefore = buffersBefore,
             BuffersAfter = buffersAfter,
+            VerdictBasis = verdictBasis,
+            View = view is "whole" or "statements" ? view : "changed",
+            WholeBatch = wholeBatch,
+            Statements = statementRows,
+            FallbackNote = allCasesConfirmed ? null : "per-statement attribution incomplete",
+            OmittedStatementsBefore = selectedIds.Where(before.Metrics.ContainsKey).Sum(id => before.Metrics[id].OmittedStatements),
+            OmittedStatementsAfter = selectedIds.Where(after.Metrics.ContainsKey).Sum(id => after.Metrics[id].OmittedStatements),
         };
 
         static OptimizationActionReference Action(VersionSnapshot snapshot)
@@ -131,6 +163,115 @@ public static class OptimizationComparer
         }
 
     }
+
+    internal static (string VerdictBasis, long? ChangedBefore, long? ChangedAfter, long? SharedBefore, long? SharedAfter)
+        CompareCase(CompareMetricEvidence before, CompareMetricEvidence after)
+    {
+        if (before.StatementAttribution != "confirmed" || after.StatementAttribution != "confirmed"
+            || before.OmittedStatements > 0 || after.OmittedStatements > 0
+            || before.Statements.Count == 0 || after.Statements.Count == 0
+            || before.Statements.Any(row => row.Status != "confirmed") || after.Statements.Any(row => row.Status != "confirmed"))
+            return ("whole batch", null, null, null, null);
+
+        var a = before.Statements.ToDictionary(row => (row.Key, row.Occurrence));
+        var b = after.Statements.ToDictionary(row => (row.Key, row.Occurrence));
+        long sharedA = 0, sharedB = 0, changedA = 0, changedB = 0;
+        foreach (var key in a.Keys.Union(b.Keys))
+        {
+            if (a.TryGetValue(key, out var left) && b.TryGetValue(key, out var right) && IsShared(left, right))
+            {
+                if (left.Reads is null || right.Reads is null) return ("whole batch", null, null, null, null);
+                sharedA = SaturatingAdd(sharedA, left.Reads.Value);
+                sharedB = SaturatingAdd(sharedB, right.Reads.Value);
+            }
+            else
+            {
+                if (a.TryGetValue(key, out left))
+                {
+                    if (left.Reads is null) return ("whole batch", null, null, null, null);
+                    changedA = SaturatingAdd(changedA, left.Reads.Value);
+                }
+                if (b.TryGetValue(key, out right))
+                {
+                    if (right.Reads is null) return ("whole batch", null, null, null, null);
+                    changedB = SaturatingAdd(changedB, right.Reads.Value);
+                }
+            }
+        }
+        return ("changed statements", changedA, changedB, sharedA, sharedB);
+    }
+
+    private static bool IsShared(CompareStatementEvidence a, CompareStatementEvidence b)
+    {
+        if (a.PlanHash is null || b.PlanHash is null || a.PlanHash != b.PlanHash || a.Scans != b.Scans
+            || a.Reads is null || b.Reads is null) return false;
+        var difference = Math.Abs((decimal)a.Reads.Value - b.Reads.Value);
+        return difference < 10m || difference < Math.Max(a.Reads.Value, b.Reads.Value) * 0.01m;
+    }
+
+    private static IReadOnlyList<StatementRow> BuildStatementRows(
+        IReadOnlyDictionary<string, CompareMetricEvidence> before, IReadOnlyDictionary<string, CompareMetricEvidence> after,
+        IReadOnlyList<string> cases,
+        IReadOnlyDictionary<string, (string VerdictBasis, long? ChangedBefore, long? ChangedAfter, long? SharedBefore, long? SharedAfter)> caseComparisons)
+    {
+        var keys = cases.SelectMany(id => (before.GetValueOrDefault(id)?.Statements ?? []).Select(row => (row.Key, row.Occurrence)))
+            .Concat(cases.SelectMany(id => (after.GetValueOrDefault(id)?.Statements ?? []).Select(row => (row.Key, row.Occurrence))))
+            .Distinct().ToArray();
+        return keys.Select(key =>
+        {
+            var left = cases.Select(id => before.GetValueOrDefault(id)?.Statements.FirstOrDefault(row => (row.Key, row.Occurrence) == key)).ToArray();
+            var right = cases.Select(id => after.GetValueOrDefault(id)?.Statements.FirstOrDefault(row => (row.Key, row.Occurrence) == key)).ToArray();
+            var l = left.Where(row => row is not null).Cast<CompareStatementEvidence>().ToArray();
+            var r = right.Where(row => row is not null).Cast<CompareStatementEvidence>().ToArray();
+            var sharedEverywhere = cases.Count > 0 && cases.Select((id, index) => (id, index))
+                .All(pair => left[pair.index] is { } x && right[pair.index] is { } y && IsShared(x, y));
+            var presentSome = l.Length < cases.Count || r.Length < cases.Count;
+            var status = sharedEverywhere ? "shared"
+                : l.Length == 0 ? "only-candidate"
+                : r.Length == 0 ? "only-baseline"
+                : presentSome ? "not-executed" : "different-work";
+            var readsBefore = SumNullable(left.Select(row => row?.Reads));
+            var readsAfter = SumNullable(right.Select(row => row?.Reads));
+            var scansBefore = SumNullable(left.Select(row => row?.Scans));
+            var scansAfter = SumNullable(right.Select(row => row?.Scans));
+            var attribution = cases.All(id => caseComparisons.GetValueOrDefault(id).VerdictBasis == "changed statements") ? "confirmed" : "partial";
+            var text = l.Concat(r).Select(row => row.Text).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+                ?? $"statement {key.Key}";
+            return new StatementRow(key.Key, text, status, readsBefore, readsAfter, scansBefore, scansAfter,
+                l.Concat(r).Select(row => row.Executions).FirstOrDefault(value => value.HasValue),
+                Change(readsBefore, readsAfter), attribution,
+                l.Concat(r).SelectMany(row => row.HiddenWork).Distinct().ToArray(),
+                l.Concat(r).SelectMany(row => row.Objects).Distinct().ToArray())
+            {
+                Occurrence = key.Occurrence,
+                PlanHashBefore = l.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
+                PlanHashAfter = r.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
+                UdfElapsedMilliseconds = l.Concat(r).Select(row => row.UdfElapsedMilliseconds).FirstOrDefault(value => value.HasValue),
+            };
+        }).OrderBy(row => row.Status == "shared" ? 1 : 0)
+            .ThenByDescending(row => AbsoluteChange(row.ReadsBefore, row.ReadsAfter)).ToArray();
+    }
+
+    private static long SaturatingAdd(long a, long b) => b > long.MaxValue - a ? long.MaxValue : a + b;
+    private static long? ReduceNullable(IEnumerable<long?> values, string aggregate)
+    {
+        var rows = values.ToArray();
+        if (rows.Length == 0 || rows.Any(value => value is null)) return null;
+        var sum = rows.Aggregate(0L, (total, value) => SaturatingAdd(total, value!.Value));
+        return aggregate == "mean" ? (long)Math.Round((double)sum / rows.Length, MidpointRounding.AwayFromZero) : sum;
+    }
+
+    private static long? SumNullable(IEnumerable<long?> values)
+    {
+        var rows = values.ToArray();
+        return rows.Any(value => value is null) ? null : rows.Aggregate(0L, (sum, value) => SaturatingAdd(sum, value!.Value));
+    }
+
+    private static long? AggregateReads(IReadOnlyDictionary<string, CompareMetricEvidence> metrics,
+        IReadOnlyList<string> caseIds, string aggregate) =>
+        caseIds.Any(id => !metrics.TryGetValue(id, out var metric) || metric.LogicalReadsMedian is null)
+            ? null
+            : ReduceNullable(caseIds.Select(id => metrics[id].LogicalReadsMedian), aggregate);
 
     private static string CaseKey(CompareCaseEvidence evidence) => evidence.MeasurementFingerprint ?? evidence.CaseId;
 
@@ -276,6 +417,56 @@ public static class OptimizationComparer
         .ThenBy(row => row.Table, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    private static IReadOnlyList<TableRow> BuildStatementTableRows(
+        IReadOnlyDictionary<string, CompareMetricEvidence> before,
+        IReadOnlyDictionary<string, CompareMetricEvidence> after,
+        IReadOnlyList<string> caseIds,
+        IReadOnlyDictionary<string, (string VerdictBasis, long? ChangedBefore, long? ChangedAfter, long? SharedBefore, long? SharedAfter)> comparisons,
+        string aggregate)
+    {
+        var tables = caseIds.SelectMany(id => (before.GetValueOrDefault(id)?.Statements ?? [])
+                .SelectMany(statement => statement.Objects.Select(row => row.Table)))
+            .Concat(caseIds.SelectMany(id => (after.GetValueOrDefault(id)?.Statements ?? [])
+                .SelectMany(statement => statement.Objects.Select(row => row.Table))))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return tables.Select(table =>
+        {
+            var readsBefore = StatementObjectAggregate(before, after, caseIds, comparisons, table, aggregate, true, true);
+            var readsAfter = StatementObjectAggregate(before, after, caseIds, comparisons, table, aggregate, false, true);
+            var scansBefore = StatementObjectAggregate(before, after, caseIds, comparisons, table, aggregate, true, false);
+            var scansAfter = StatementObjectAggregate(before, after, caseIds, comparisons, table, aggregate, false, false);
+            return new TableRow(table, scansBefore, scansAfter, readsBefore, readsAfter, Change(readsBefore, readsAfter));
+        }).OrderByDescending(row => AbsoluteChange(row.ReadsBefore, row.ReadsAfter))
+          .ThenBy(row => row.Table, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static long? StatementObjectAggregate(
+        IReadOnlyDictionary<string, CompareMetricEvidence> before,
+        IReadOnlyDictionary<string, CompareMetricEvidence> after,
+        IReadOnlyList<string> caseIds,
+        IReadOnlyDictionary<string, (string VerdictBasis, long? ChangedBefore, long? ChangedAfter, long? SharedBefore, long? SharedAfter)> comparisons,
+        string table, string aggregate, bool baseline, bool reads)
+    {
+        var totals = new List<long>();
+        foreach (var id in caseIds)
+        {
+            var metrics = baseline ? before : after;
+            if (!metrics.TryGetValue(id, out var metric)) return null;
+            var other = (baseline ? after : before).GetValueOrDefault(id);
+            var excluded = comparisons[id].VerdictBasis == "changed statements" && other is not null
+                ? metric.Statements.Join(other.Statements, row => (row.Key, row.Occurrence), row => (row.Key, row.Occurrence),
+                    (left, right) => (left, right)).Where(pair => IsShared(pair.left, pair.right))
+                    .Select(pair => (pair.left.Key, pair.left.Occurrence)).ToHashSet()
+                : [];
+            var matching = metric.Statements.Where(row => !excluded.Contains((row.Key, row.Occurrence)))
+                .SelectMany(row => row.Objects.Where(obj => obj.Table.Equals(table, StringComparison.OrdinalIgnoreCase)));
+            var values = matching.Select(obj => reads ? obj.ReadsBefore : obj.ScansBefore).ToArray();
+            if (values.Any(value => value is null)) return null;
+            totals.Add(values.Length == 0 ? 0 : values.Aggregate(0L, (sum, value) => SaturatingAdd(sum, value!.Value)));
+        }
+        return ReduceNullable(totals.Select(value => (long?)value), aggregate);
+    }
+
     private static long? AggregateTable(IReadOnlyDictionary<string, CompareMetricEvidence> metrics,
         IReadOnlyList<string> caseIds, string table, string aggregate, Func<CompareTableIoEvidence, long?> value)
     {
@@ -402,7 +593,8 @@ public static class OptimizationComparer
 
     private static MixedWarning? Mixed(IReadOnlyList<CaseOption> cases,
         IReadOnlyDictionary<string, CompareMetricEvidence> before,
-        IReadOnlyDictionary<string, CompareMetricEvidence> after)
+        IReadOnlyDictionary<string, CompareMetricEvidence> after,
+        IReadOnlyDictionary<string, (string VerdictBasis, long? ChangedBefore, long? ChangedAfter, long? SharedBefore, long? SharedAfter)> comparisons)
     {
         var comparableCases = cases.Where(item => item.Outcome is "better" or "worse" or "same").ToArray();
         var better = comparableCases.Count(item => item.Outcome == "better");
@@ -411,8 +603,11 @@ public static class OptimizationComparer
         var increases = cases.Where(item => item.Outcome == "worse")
             .Select(item =>
             {
-                var baseline = before[item.Id].LogicalReadsMedian!.Value;
-                var candidate = after[item.Id].LogicalReadsMedian!.Value;
+                var statement = comparisons[item.Id];
+                var baseline = statement.VerdictBasis == "changed statements"
+                    ? statement.ChangedBefore!.Value : before[item.Id].LogicalReadsMedian!.Value;
+                var candidate = statement.VerdictBasis == "changed statements"
+                    ? statement.ChangedAfter!.Value : after[item.Id].LogicalReadsMedian!.Value;
                 var percent = baseline == 0 ? 100d : (candidate - (double)baseline) * 100d / baseline;
                 return (Case: item, Percent: percent);
             })

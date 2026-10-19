@@ -102,12 +102,17 @@ public sealed class ActivityJournalBenchmarkTests
             """;
         var record = JournalBenchmarkBuilder.Build(
             [new CompareRunArtifact("baseline", 1, 30, 40, 0, new Dictionary<string, long>(), "h", [plan], 0)]);
+        record = record with
+        {
+            Statements = record.Statements.Select(statement => statement with { UdfElapsedMilliseconds = 14.75 }).ToArray(),
+        };
 
         journal.RecordBenchmark(handle, record);
 
         var statements = JournalDb.Rows(temp.DatabasePath,
             "SELECT statement_ordinal, statement_hash, statement_key, occurrence, statement_text, executions, plan_hash, status, cpu_ms, elapsed_ms, dop, operators_json, udf_elapsed_ms, hidden_work_json, case_id, case_label FROM operation_statements ORDER BY statement_ordinal");
         Assert.Equal(2, statements.Count);
+        Assert.Equal(14.75d, Convert.ToDouble(statements[0]["udf_elapsed_ms"], System.Globalization.CultureInfo.InvariantCulture));
         Assert.All(statements, row =>
         {
             Assert.Equal("0", row["case_id"]);

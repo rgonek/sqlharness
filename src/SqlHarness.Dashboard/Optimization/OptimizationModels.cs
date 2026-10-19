@@ -1,3 +1,5 @@
+using SqlHarness.Core;
+
 namespace SqlHarness.Dashboard;
 
 public sealed record OptimizationSection(
@@ -36,7 +38,10 @@ public sealed record VersionRow(
     double? ElapsedMedianMs,
     string CaseOutcome,
     IReadOnlyList<long> MeasuredIn,
-    long LatestOperationId);
+    long LatestOperationId)
+{
+    public string VerdictBasis { get; init; } = "whole batch";
+}
 
 public sealed record UnassignedCompare(long OperationId, string StartedAt, string Status);
 
@@ -84,9 +89,20 @@ public sealed record CompareMetricEvidence(
     public double? CpuMedianMs { get; init; }
     public PostgresBuffers? Postgres { get; init; }
     public string? MeasurementFingerprint { get; init; }
+    public IReadOnlyList<CompareStatementEvidence> Statements { get; init; } = [];
+    public int OmittedStatements { get; init; }
+    public long? StatementReads { get; init; }
+    public string StatementAttribution { get; init; } = "unavailable";
 }
 
 public sealed record CompareTableIoEvidence(string Table, long LogicalReads, long? LobLogicalReads, long? Scans);
+public sealed record CompareStatementEvidence(
+    string Key, int Occurrence, string? Text, string? PlanHash, string Status, long? Reads,
+    long? Scans, long? Executions, IReadOnlyList<HiddenWork> HiddenWork,
+    IReadOnlyList<TableRow> Objects)
+{
+    public double? UdfElapsedMilliseconds { get; init; }
+}
 
 public enum PairBasis { MeasuredTogether, DifferentRunsSameConditions, ConditionsDiffer, SameSql }
 
@@ -95,6 +111,13 @@ public sealed record OptimizationComparison(
     IReadOnlyList<CaseOption> Cases, string SelectedCase, string Aggregate, string CoverageLabel,
     MixedWarning? Mixed, IReadOnlyList<TableRow> Tables, CollapsedRow? Collapsed, ElapsedInfo Elapsed)
 {
+    public string VerdictBasis { get; init; } = "whole batch";
+    public string View { get; init; } = "changed";
+    public WholeBatchLine WholeBatch { get; init; } = new(null, null, null, "");
+    public IReadOnlyList<StatementRow> Statements { get; init; } = [];
+    public string? FallbackNote { get; init; }
+    public int OmittedStatementsBefore { get; init; }
+    public int OmittedStatementsAfter { get; init; }
     public OptimizationActionReference? BeforeAction { get; init; }
     public OptimizationActionReference? AfterAction { get; init; }
     public bool TableIoUnavailable { get; init; }
@@ -102,6 +125,26 @@ public sealed record OptimizationComparison(
     public double? CpuAfterMs { get; init; }
     public PostgresBuffers? BuffersBefore { get; init; }
     public PostgresBuffers? BuffersAfter { get; init; }
+}
+
+public sealed record WholeBatchLine(long? Before, long? After, long? Shared, string Label)
+{
+    public long? SharedBefore { get; init; }
+    public long? SharedAfter { get; init; }
+    public long? ChangedBefore { get; init; }
+    public long? ChangedAfter { get; init; }
+}
+
+public sealed record StatementRow(string Key, string Text, string Status, long? ReadsBefore, long? ReadsAfter,
+    long? ScansBefore, long? ScansAfter, long? Executions, string Change, string Attribution,
+    IReadOnlyList<HiddenWork> HiddenWork, IReadOnlyList<TableRow> Objects)
+{
+    public int Occurrence { get; init; }
+    public string? PlanHashBefore { get; init; }
+    public string? PlanHashAfter { get; init; }
+    public string? PlanLinkBefore { get; init; }
+    public string? PlanLinkAfter { get; init; }
+    public double? UdfElapsedMilliseconds { get; init; }
 }
 
 public sealed record OptimizationActionReference(long OperationId, string Side, IReadOnlyList<string> CaseIds)

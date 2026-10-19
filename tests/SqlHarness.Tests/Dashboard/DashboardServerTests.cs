@@ -591,8 +591,11 @@ public sealed class DashboardServerTests
         Assert.Equal(unassigned.OperationId, result.RootElement.GetProperty("operationId").GetInt64());
         Assert.Equal(400, result.RootElement.GetProperty("tables")[0].GetProperty("readsBefore").GetInt64());
         Assert.Equal(300, result.RootElement.GetProperty("tables")[0].GetProperty("readsAfter").GetInt64());
+        Assert.Equal("changed", result.RootElement.GetProperty("view").GetString());
         Assert.Equal(HttpStatusCode.BadRequest,
             (await client.GetAsync($"/api/operations/{unassigned.OperationId}/optimization?aggregate=median")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync($"/api/operations/{unassigned.OperationId}/optimization?view=unknown")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/operations/987654/optimization")).StatusCode);
         var measure = seed.Operation(session);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/operations/{measure.OperationId}/optimization")).StatusCode);
