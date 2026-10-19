@@ -1,0 +1,36 @@
+{
+  "kind": "operation-annotations-off-baseline",
+  "sourceRevision": "3702ce1b9947717c72cfc473deaa8299c582742a",
+  "replayable": true,
+  "capture": {
+    "host": "tests/SqlHarness.Mcp.WorkflowHost",
+    "client": "ModelContextProtocol SDK",
+    "test": "AgentOptimizationWorkflowTests.Scripted_workflows_fit_4096_and_65536_and_freeze_portable_records",
+    "databaseConnections": 0,
+    "catalogUtf8Bytes": 23462,
+    "toolCount": 9,
+    "callBudgets": [4096, 65536],
+    "scenarios": [
+      "no-improvement",
+      "partial-matrix-32",
+      "colliding-operators",
+      "unavailable-metrics"
+    ]
+  },
+  "normalization": [
+    "ephemeral artifact IDs replaced with <artifact-id>",
+    "temporary SQLHARNESS_HOME replaced with <home>",
+    "configuration IDs replaced with <configuration-ref>"
+  ],
+  "files": [
+    { "path": "tools-list.json", "bytes": 23462, "sha256": "1A3D76B866DF24D3704DE5B4E94D6C16B4AE632A21991D4F0A511E0F20CBDFD5" },
+    { "path": "results/colliding-operators-4096.json", "bytes": 6506, "sha256": "B2A04542A2B5D2007C3FC35CC108AB574AA65215CF3D0B2E6C3157DA77030BC1" },
+    { "path": "results/colliding-operators-65536.json", "bytes": 6508, "sha256": "D6DC828AD05D9CD1415FDBB8C8FA924E66BC4692E94F14F9AAB132326BEF88A3" },
+    { "path": "results/no-improvement-4096.json", "bytes": 6954, "sha256": "A25C6A3287C506AE81911CF90732D5C99EBF5DD79DCFBBAC8646D640A5A081B7" },
+    { "path": "results/no-improvement-65536.json", "bytes": 6956, "sha256": "CC8B23A43937E3C9CBE73FA4C73234AFFFB438267EF73D796213CC5B94A1225C" },
+    { "path": "results/partial-matrix-32-4096.json", "bytes": 32801, "sha256": "56E16D97913152E99978CB1BA3023924AAC6C246C3A6F9084B31BC3D8537165C" },
+    { "path": "results/partial-matrix-32-65536.json", "bytes": 31968, "sha256": "D993473E47899BEDFEBEEDE8BA968CBA35E83CECDFC7376C623AF7D28FD82C52" },
+    { "path": "results/unavailable-metrics-4096.json", "bytes": 4775, "sha256": "15FD46582A56A56D661D1223858F0919DE198A576F173805184D21CF5C9130E9" },
+    { "path": "results/unavailable-metrics-65536.json", "bytes": 4777, "sha256": "0481378616BC7C72637F6BF9399F56AF5CCCE22B846788C5B25CB55932DC40AE" }
+  ]
+}

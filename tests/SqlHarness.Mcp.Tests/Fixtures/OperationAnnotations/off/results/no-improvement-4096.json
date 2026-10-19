@@ -1,0 +1,51 @@
+{
+  "scenario": "no-improvement",
+  "budget": 4096,
+  "discoveryUtf8Bytes": 28248,
+  "identities": {
+    "host": "SqlHarness.Mcp.WorkflowHost",
+    "manifest": "tests/SqlHarness.Mcp.Tests/Fixtures/OptimizationWorkflows/manifest.json"
+  },
+  "calls": [
+    {
+      "tool": "sqlharness_compare",
+      "arguments": {
+        "baseline": {
+          "sql": "\u003Csynthetic\u003E"
+        },
+        "candidate": {
+          "sql": "\u003Csynthetic\u003E"
+        },
+        "subject": "workflow-fixture",
+        "scope": "whole",
+        "repeat": 5,
+        "maxResultBytes": 4096
+      },
+      "isError": false,
+      "modelVisibleUtf8Bytes": 1701,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022target\u0022:{\u0022server\u0022:\u0022workflow-unreachable.invalid\u0022,\u0022database\u0022:\u0022fixturedb\u0022,\u0022engine\u0022:\u0022sqlserver\u0022},\u0022repetitions\u0022:5,\u0022classification\u0022:{\u0022setup\u0022:\u0022none\u0022,\u0022baseline\u0022:\u0022read-only\u0022,\u0022candidate\u0022:\u0022read-only\u0022},\u0022parameters\u0022:[{\u0022name\u0022:\u0022Region\u0022,\u0022type\u0022:\u0022nvarchar\u0022,\u0022size\u0022:32,\u0022precision\u0022:null,\u0022scale\u0022:null}],\u0022equivalence\u0022:{\u0022mode\u0022:\u0022ordered\u0022,\u0022equivalent\u0022:false,\u0022differingPositions\u0022:3,\u0022baselineOnlyCount\u0022:1,\u0022candidateOnlyCount\u0022:1,\u0022compareNullability\u0022:false,\u0022nullabilityEquivalent\u0022:null,\u0022mismatchReason\u0022:\u0022rows\u0022,\u0022baselineStable\u0022:true,\u0022candidateStable\u0022:true,\u0022schemaEquivalent\u0022:true,\u0022mismatchReasons\u0022:[\u0022rows\u0022]},\u0022baseline\u0022:{\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:40,\u0022median\u0022:40,\u0022max\u0022:40},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:40,\u0022median\u0022:40,\u0022max\u0022:40},\u0022logicalReads\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022logicalReadsByTable\u0022:{\u0022Orders\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12}},\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},\u0022candidate\u0022:{\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022logicalReads\u0022:{\u0022min\u0022:4,\u0022median\u0022:4,\u0022max\u0022:4},\u0022logicalReadsByTable\u0022:{\u0022Orders\u0022:{\u0022min\u0022:4,\u0022median\u0022:4,\u0022max\u0022:4}},\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},\u0022noteworthyOperators\u0022:[],\u0022artifactId\u0022:\u0022\u003Cartifact-id\u003E\u0022,\u0022regression\u0022:{\u0022verdict\u0022:\u0022inconclusive\u0022,\u0022reasons\u0022:[\u0022results-not-equivalent\u0022],\u0022policyVersion\u0022:2,\u0022elapsed\u0022:{\u0022status\u0022:\u0022inconclusive\u0022,\u0022delta\u0022:-28,\u0022deltaPercent\u0022:-70.0},\u0022logicalReads\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-8,\u0022deltaPercent\u0022:-66.67},\u0022cpu\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-28,\u0022deltaPercent\u0022:-70.0}}}}",
+      "omittedItems": null,
+      "continuation": null,
+      "terminal": "complete",
+      "selectedArtifacts": [
+        "<artifact-id>"
+      ]
+    },
+    {
+      "tool": "sqlharness_artifact",
+      "arguments": {
+        "id": "<artifact-id>",
+        "section": "summary"
+      },
+      "isError": false,
+      "modelVisibleUtf8Bytes": 1701,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022target\u0022:{\u0022server\u0022:\u0022workflow-unreachable.invalid\u0022,\u0022database\u0022:\u0022fixturedb\u0022,\u0022engine\u0022:\u0022sqlserver\u0022},\u0022repetitions\u0022:5,\u0022classification\u0022:{\u0022setup\u0022:\u0022none\u0022,\u0022baseline\u0022:\u0022read-only\u0022,\u0022candidate\u0022:\u0022read-only\u0022},\u0022parameters\u0022:[{\u0022name\u0022:\u0022Region\u0022,\u0022type\u0022:\u0022nvarchar\u0022,\u0022size\u0022:32,\u0022precision\u0022:null,\u0022scale\u0022:null}],\u0022equivalence\u0022:{\u0022mode\u0022:\u0022ordered\u0022,\u0022equivalent\u0022:false,\u0022differingPositions\u0022:3,\u0022baselineOnlyCount\u0022:1,\u0022candidateOnlyCount\u0022:1,\u0022compareNullability\u0022:false,\u0022nullabilityEquivalent\u0022:null,\u0022mismatchReason\u0022:\u0022rows\u0022,\u0022baselineStable\u0022:true,\u0022candidateStable\u0022:true,\u0022schemaEquivalent\u0022:true,\u0022mismatchReasons\u0022:[\u0022rows\u0022]},\u0022baseline\u0022:{\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:40,\u0022median\u0022:40,\u0022max\u0022:40},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:40,\u0022median\u0022:40,\u0022max\u0022:40},\u0022logicalReads\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022logicalReadsByTable\u0022:{\u0022Orders\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12}},\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},\u0022candidate\u0022:{\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022logicalReads\u0022:{\u0022min\u0022:4,\u0022median\u0022:4,\u0022max\u0022:4},\u0022logicalReadsByTable\u0022:{\u0022Orders\u0022:{\u0022min\u0022:4,\u0022median\u0022:4,\u0022max\u0022:4}},\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},\u0022noteworthyOperators\u0022:[],\u0022artifactId\u0022:\u0022\u003Cartifact-id\u003E\u0022,\u0022regression\u0022:{\u0022verdict\u0022:\u0022inconclusive\u0022,\u0022reasons\u0022:[\u0022results-not-equivalent\u0022],\u0022policyVersion\u0022:2,\u0022elapsed\u0022:{\u0022status\u0022:\u0022inconclusive\u0022,\u0022delta\u0022:-28,\u0022deltaPercent\u0022:-70.0},\u0022logicalReads\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-8,\u0022deltaPercent\u0022:-66.67},\u0022cpu\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-28,\u0022deltaPercent\u0022:-70.0}}}}",
+      "omittedItems": null,
+      "continuation": null,
+      "terminal": "complete",
+      "selectedArtifacts": [
+        "<artifact-id>"
+      ]
+    }
+  ]
+}
