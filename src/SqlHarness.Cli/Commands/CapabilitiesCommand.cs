@@ -32,7 +32,7 @@ public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer,
         if (string.IsNullOrWhiteSpace(settings.Profile))
         {
             capabilities = SqlHarnessCapabilitiesProvider.Get(compareConfig, config.Mutations,
-                DashboardLock.ReadRunning(SqlHarnessPaths.Home, ProcessInfo.Current) is not null, config.Journal);
+                DashboardLock.ReadRunning(SqlHarnessPaths.Home, ProcessInfo.Current) is not null, config.Journal, config.Connection);
         }
         else
         {
@@ -42,7 +42,7 @@ public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer,
                 if (!profiles.TryGetValue(settings.Profile, out var profile))
                     return Task.FromResult(RejectProfile("profile_unknown", UnknownProfileMessage(settings.Profile, profiles.Keys)));
                 capabilities = SqlHarnessCapabilitiesProvider.Get(settings.Profile, profile.Engine, compareConfig, profile, config.Mutations,
-                    DashboardLock.ReadRunning(SqlHarnessPaths.Home, ProcessInfo.Current) is not null, config.Journal);
+                    DashboardLock.ReadRunning(SqlHarnessPaths.Home, ProcessInfo.Current) is not null, config.Journal, config.Connection);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {

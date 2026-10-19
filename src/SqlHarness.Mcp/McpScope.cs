@@ -87,7 +87,10 @@ public sealed class McpScope
     /// session factories and session policy as the CLI, without duplicating
     /// them. Construction opens no connection and performs no auth.
     /// </summary>
-    public ISqlHarnessModule CreateModule(CompareConfig? compareConfig = null) => new SqlHarnessModule(ProfileProvider, compareConfig ?? SqlHarnessConfig.Default.Compare);
+    public ISqlHarnessModule CreateModule(CompareConfig? compareConfig = null) => CreateModule(compareConfig, null);
+
+    public ISqlHarnessModule CreateModule(CompareConfig? compareConfig, ConnectionConfig? connectionConfig) =>
+        new SqlHarnessModule(ProfileProvider, compareConfig ?? SqlHarnessConfig.Default.Compare, connectionConfig);
 
     /// <summary>
     /// Resolves and freezes the startup scope, reading the profile set

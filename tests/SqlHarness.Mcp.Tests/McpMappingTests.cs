@@ -122,6 +122,7 @@ public sealed class McpMappingTests : IDisposable
         }, () => ProfileStore.Load(_targetsFile), config: new SqlHarnessConfig
         {
             Mutations = new MutationsConfig { DefaultMode = "operator", Verification = "click", ApprovalTimeoutSeconds = 240 },
+            Connection = new ConnectionConfig { TimeoutSeconds = 75 },
         }, dashboardReachability: () => true);
 
         var document = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(process, includeDiagnostics: false), new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -129,6 +130,7 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal("operator", document.GetProperty("mutations").GetProperty("defaultMode").GetString());
         Assert.Equal(240, document.GetProperty("mutations").GetProperty("approvalTimeoutSeconds").GetInt32());
         Assert.True(document.GetProperty("mutations").GetProperty("dashboardReachable").GetBoolean());
+        Assert.Equal(75, document.GetProperty("connectionTimeoutSeconds").GetInt32());
         Assert.Equal([ProfileName], document.GetProperty("allowedProfiles").EnumerateArray().Select(item => item.GetString()));
         var profile = Assert.Single(document.GetProperty("allowedProfileMutations").EnumerateArray());
         Assert.Equal(ProfileName, profile.GetProperty("profile").GetString());

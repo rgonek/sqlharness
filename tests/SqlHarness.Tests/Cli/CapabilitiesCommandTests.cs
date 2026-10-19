@@ -24,7 +24,7 @@ public sealed class CapabilitiesCommandTests
         Assert.Empty(module.Operations);
         using var document = JsonDocument.Parse(output.ToString());
         var root = document.RootElement;
-        Assert.Equal(6, root.GetProperty("contractVersion").GetInt32());
+        Assert.Equal(7, root.GetProperty("contractVersion").GetInt32());
         var mutations = root.GetProperty("mutations");
         Assert.Equal("never", mutations.GetProperty("defaultMode").GetString());
         Assert.Equal("click", mutations.GetProperty("verification").GetString());
@@ -43,6 +43,7 @@ public sealed class CapabilitiesCommandTests
         Assert.False(root.TryGetProperty("parameterTypes", out _));
         Assert.Contains("agentOutputBytes", root.GetProperty("limits").EnumerateObject().Select(property => property.Name));
         var limits = root.GetProperty("limits");
+        Assert.Equal(30, limits.GetProperty("connectionTimeoutSeconds").GetInt32());
         var journalStorage = limits.GetProperty("activityJournalStorage");
         Assert.Equal("credential-redacted error messages are stored by default", journalStorage.GetProperty("errorMessages").GetString());
         Assert.Equal("journal.storeSensitive", journalStorage.GetProperty("sqlTextAndPlans").GetString());
@@ -55,10 +56,23 @@ public sealed class CapabilitiesCommandTests
     }
 
     [Fact]
+    public async Task Capabilities_reports_the_effective_configured_connection_timeout()
+    {
+        var output = new StringWriter();
+        var config = SqlHarnessConfig.Default with { Connection = new ConnectionConfig { TimeoutSeconds = 75 } };
+
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output, config: config).RunAsync(["capabilities", "--json"]);
+
+        Assert.Equal(0, exitCode);
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.Equal(75, document.RootElement.GetProperty("limits").GetProperty("connectionTimeoutSeconds").GetInt32());
+    }
+
+    [Fact]
     public void Contract_version_is_pinned()
     {
-        Assert.Equal(6, SqlHarnessCapabilitiesProvider.ContractVersion);
-        Assert.Equal(6, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+        Assert.Equal(7, SqlHarnessCapabilitiesProvider.ContractVersion);
+        Assert.Equal(7, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
     }
 
     [Fact]

@@ -123,6 +123,18 @@ public sealed class SqlExecutionTests
     }
 
     [Fact]
+    public async Task Configured_connection_timeout_is_applied_to_sql_server_driver()
+    {
+        var connector = new FakeConnector("server", "database");
+        var factory = new SqlClientSessionFactory(new FakeAzureCli("unused"), connector.ConnectAsync, 75);
+
+        await using var session = await factory.ConnectAsync(
+            new ResolvedTarget("server", "database", AuthSpec.Parse("integrated", null, null, false), "profile"), default);
+
+        Assert.Equal(75, new SqlConnectionStringBuilder(connector.ConnectionString).ConnectTimeout);
+    }
+
+    [Fact]
     public async Task Server_name_difference_does_not_reject_a_connection()
     {
         var connector = new FakeConnector("other-server", "database");

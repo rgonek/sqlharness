@@ -55,6 +55,21 @@ public sealed class PostgresConnectionStringTests
     }
 
     [Fact]
+    public void Configured_connection_timeout_is_applied_to_postgres_driver()
+    {
+        var variable = $"SQLHARNESS_TEST_{Guid.NewGuid():N}";
+        Environment.SetEnvironmentVariable(variable, "secret");
+        try
+        {
+            var target = new ResolvedTarget("db.example.com", "appdb", AuthSpec.Parse("sql", "u", variable, false), "direct", SqlEngine.Postgres);
+            var built = new NpgsqlConnectionStringBuilder(PostgresConnectionString.Build(target, 75));
+
+            Assert.Equal(75, built.Timeout);
+        }
+        finally { Environment.SetEnvironmentVariable(variable, null); }
+    }
+
+    [Fact]
     public void Missing_password_env_fails_without_echoing_name_value_pair()
     {
         var variable = $"SQLHARNESS_TEST_{Guid.NewGuid():N}";

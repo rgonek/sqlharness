@@ -23,7 +23,7 @@ public sealed class McpRequestToolHandlers(
 {
     private static readonly JsonSerializerOptions ScopeJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
-    private readonly Func<McpScope, ISqlHarnessModule> _moduleFactory = moduleFactory ?? (scope => process.Decorate(scope.CreateModule(process.CompareConfig)));
+    private readonly Func<McpScope, ISqlHarnessModule> _moduleFactory = moduleFactory ?? (scope => process.Decorate(scope.CreateModule(process.CompareConfig, process.Config.Connection)));
     private readonly IMutationBrokerClient _mutationBroker = mutationBroker ?? UnavailableMutationBrokerClient.Instance;
     private readonly string _mutationSessionKey = mutationSessionKey ?? "mcp:" + Guid.NewGuid().ToString("N");
 

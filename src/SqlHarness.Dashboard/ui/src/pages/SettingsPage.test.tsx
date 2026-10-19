@@ -13,6 +13,7 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
     compare: { requireContext: true },
     diagnostics: { enabled: false },
     mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
+    connection: { timeoutSeconds: 30 },
   },
   ...over,
 })
@@ -61,6 +62,21 @@ test("connection diagnostics saves without confirmation and preserves other sett
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
   expect((puts[0].body as { diagnostics: { enabled: boolean } }).diagnostics.enabled).toBe(true)
   expect((puts[0].body as { journal: unknown }).journal).toEqual(response().settings.journal)
+  expect((puts[0].body as { compare: unknown }).compare).toEqual(response().settings.compare)
+})
+
+test("connection timeout saves within range and preserves unrelated settings", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  const field = await screen.findByRole("spinbutton", { name: "Connection timeout (seconds)" })
+  expect(field).toHaveValue(30)
+  await userEvent.clear(field)
+  await userEvent.type(field, "75")
+  await userEvent.tab()
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as { connection: { timeoutSeconds: number } }).connection.timeoutSeconds).toBe(75)
+  expect((puts[0].body as { dashboard: unknown }).dashboard).toEqual(response().settings.dashboard)
   expect((puts[0].body as { compare: unknown }).compare).toEqual(response().settings.compare)
 })
 

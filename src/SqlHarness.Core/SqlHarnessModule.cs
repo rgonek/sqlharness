@@ -58,12 +58,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     internal int ComparisonMaximumRows { get; init; } = CanonicalComparisonAccumulator.MaximumComparedRows;
 
     public SqlHarnessModule()
-        : this(() => ProfileStore.Load(), SqlHarnessConfig.Default.Compare)
+        : this(() => ProfileStore.Load(), SqlHarnessConfig.Default.Compare, SqlHarnessConfig.Default.Connection)
     {
     }
 
     public SqlHarnessModule(CompareConfig compareConfig)
-        : this(() => ProfileStore.Load(), compareConfig)
+        : this(compareConfig, null)
+    {
+    }
+
+    public SqlHarnessModule(CompareConfig compareConfig, ConnectionConfig? connectionConfig)
+        : this(() => ProfileStore.Load(), compareConfig, connectionConfig)
     {
     }
 
@@ -74,13 +79,20 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     /// global store. Construction opens no connection and performs no auth.
     /// </summary>
     public SqlHarnessModule(Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles)
-        : this(loadProfiles, SqlHarnessConfig.Default.Compare)
+        : this(loadProfiles, SqlHarnessConfig.Default.Compare, SqlHarnessConfig.Default.Connection)
     {
     }
 
     public SqlHarnessModule(Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles, CompareConfig compareConfig)
+        : this(loadProfiles, compareConfig, null)
+    {
+    }
+
+    public SqlHarnessModule(Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles, CompareConfig compareConfig, ConnectionConfig? connectionConfig)
         : this(
-            new EngineSessionFactory(new SqlClientSessionFactory(new AzureCli()), new NpgsqlSessionFactory()),
+            new EngineSessionFactory(
+                new SqlClientSessionFactory(new AzureCli(), (connectionConfig ?? SqlHarnessConfig.Default.Connection).TimeoutSeconds),
+                new NpgsqlSessionFactory((connectionConfig ?? SqlHarnessConfig.Default.Connection).TimeoutSeconds)),
             new CompareArtifactWriter(),
             loadProfiles,
             compareConfig: compareConfig)
