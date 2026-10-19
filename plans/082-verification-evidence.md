@@ -1,0 +1,76 @@
+# Plan 082 verification evidence
+
+## State and exact product tree
+
+The implementation and operator-authorized synthetic UAT are complete. Tasks 0–4 have clean scoped task reviews; the final Sol low whole-branch review is still pending. Do not treat this as the whole-branch approval or as merged into `main`.
+
+The final Windows gate tested product revision `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34` (`7f98ef9`) after integrating current `main` baseline `ca4c8b8` into the feature branch as `5bfa9f3`. Product changes after that integration are `dd0544d` (narrow IO attribution and legacy hash fixes), `c60b1b6` (hand-corrected branch C# formatting), `c7bd3d7` (TypeScript test query type fix), and `7f98ef9` (contract expectations for schema/API/fallback). Documentation edits follow the green product gate and do not change the tested product tree.
+
+## Task review ledger
+
+| Task | Reviewed implementation range | Result |
+|---|---|---|
+| 0 | `9dc73f6..03716f8` | Clean spec and quality review; spike evidence is separate from Task 5 UAT. |
+| 1 | `03716f8..8e9ca2b` | Clean scoped review; root executions remain independent from object IO completeness. |
+| 2 | `8e9ca2b..fca7755` | Clean spec and quality review; median-total-run reconciliation, omission persistence, and empty statement sets were reviewed. The earlier report's stale-test diagnosis was corrected below. |
+| 3 | `fca7755..a06e7e5` | Clean scoped review after mean additivity, measured-row semantics, and badge-basis fixes. |
+| 4 | `a06e7e5..14518e8` | Clean scoped review after parameter-set plan identity, PostgreSQL Markdown wording, migration coverage, and sort coverage fixes. |
+| 5 | `14518e8..7f98ef9` | Task 5 work and test corrections are recorded here. Final whole-branch Sol low review is pending. |
+
+The feature branch includes main baseline `ca4c8b8` through merge commit `5bfa9f3`. `main` itself has not been advanced. The user authorized a local merge after all required review and verification; the controller will handle integration after the pending final review. No push was made.
+
+## Verification
+
+The explicit branch C# formatting check passed on the final product tree:
+
+```powershell
+pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef ca4c8b8
+```
+
+It checked 23 branch-changed C# files and exited `0`. `just verify` also exited `0` directly on the exact product revision above, with five stages in 5m44s:
+
+- Build passed in 31.9s.
+- UI check passed in 3m34s: 60 test files and 312 tests passed; lint and typecheck passed.
+- .NET tests passed in 2m10s: `SqlHarness.Tests` 4,505 passed / 11 skipped / 0 failed; `SqlHarness.Mcp.Tests` 435 passed / 4 skipped / 0 failed.
+- The gate's format substage skipped because it found zero C# files changed in the clean working tree. The separate branch formatting check above covers the feature diff against `ca4c8b8`.
+
+The UI check log contains `ECONNREFUSED` diagnostics for localhost port 3000 after the test output, but the stage exited `0`; this is not described as pristine-console output. The full gate log and direct exit capture were retained under ignored scratch directory `.superpowers/sdd/082-statement-io-attribution/task-5-scratch/verify-final-7f98ef9/` and `just-verify-final-7f98ef9.exit`. Linux verification was explicitly skipped. No extra gate was run after documentation edits.
+
+Before the final green run, two failed full-gate attempts exposed real test/fixture issues and were corrected:
+
+- The first integrated gate run found an unsupported `exact` option in the Plan 082 `OperationPage.test.tsx` role query. Removing that option preserved the exact accessible-name match. Focused UI typecheck exited `0`; `OperationPage.test.tsx` passed 21/21.
+- The next run found three stale assertions: the operation-detail property contract lacked `omittedStatements` and `statementAttribution`; a migration test pinned journal version 17 although current schema is 19; and an Optimization fixture with no statement evidence expected a changed-statement view. The contract now names both fields, the pin is 19, and the incomplete fixture asserts whole-batch fallback plus the exact note `per-statement attribution incomplete`. Those checks passed 10/10 before the final gate.
+
+The initial `c60b1b6` gate attempt also hit MSBuild DLL locks from test-owned dashboard process 10948. Its executable was the Plan 082 worktree CLI, and its start time matched the isolated scratch dashboard state. A normal `dashboard --stop` using the exact isolated `SQLHARNESS_HOME` stopped it with direct exit `0`; the subsequent gate was rerun. The first stop had pointed at the nested `home` directory and missed this session. No unrelated process was stopped.
+
+## Operator-authorized synthetic UAT
+
+The UAT target was the named `civiclens-dev` SQL Server profile on `localhost` / `CivicLens`, using integrated authentication. `SQLHARNESS_HOME` pointed to a Task 5 scratch home containing only that named profile; the operator's normal home, journal, and config were not modified. A read-only identity query verified the target before measuring. No persistent SQL, approval, other database, or credential output was used.
+
+The synthetic batch created a uniquely named local `#temp` seed with generated rows, populated a table variable, and compared two reads of `@work` with one read in the candidate. Setup and measured SQL used local temporary objects only. The captured actual Showplan documents are retained as test fixtures:
+
+- `tests/SqlHarness.Tests/Fixtures/Plans/082-scalar-baseline-setup.sqlplan`
+- `tests/SqlHarness.Tests/Fixtures/Plans/082-scalar-baseline.sqlplan`
+- `tests/SqlHarness.Tests/Fixtures/Plans/082-scalar-candidate-setup.sqlplan`
+- `tests/SqlHarness.Tests/Fixtures/Plans/082-scalar-candidate.sqlplan`
+
+The final measure returned direct exit `0` and dashboard operation 6 reported `statementAttribution=confirmed`, zero omitted statements, 9,019 median logical reads, and one scan for the changed aggregate. The final compare returned direct exit `0`, equivalent results, and one case whose dashboard outcome was `better`. The changed work was 20 reads / two scans before and 10 reads / one scan after. Shared preparation was 9,009 reads on each side; therefore whole-batch totals were 9,029 before and 9,019 after. The dashboard API reported `verdictBasis=changed statements`, `view=changed`, no fallback note, and the additive whole-batch line `whole batch: 9029 → 9019 reads (shared statements: 9009)`. The regression policy was inconclusive only for unstable elapsed time; the logical-read result was not regressed (0.11% fewer reads). This elapsed-time policy result is separate from the better per-case read verdict.
+
+Exact measure/compare logs, direct exits, selected dashboard summaries, and generated SQL are retained in the ignored Task 5 scratch directory. This durable record intentionally contains no business rows, login, credentials, or tokens.
+
+## Decisions preserved from the controller ledger
+
+The following cross-task decisions and their costs are retained so future changes do not silently broaden the contract:
+
+1. Store omitted statement counts once per selected median-run variant/case on the existing metrics row, defaulting to zero. Omission belongs to the whole run even when no statement rows remain; storing it elsewhere risks duplication and would require a schema/reader/API change.
+2. Reconciliation of an empty statement list returns an empty status list, not a synthetic sentinel. Consumers derive unavailable attribution from absent evidence. If this is wrong, explicit batch-status schema/API metadata and downstream no-plan tests will be needed.
+3. A single-run measure statement uses status `measured`, puts values in after fields, leaves before fields null and change empty, and reports attribution separately. If this shared-row shape is wrong, the API/UI vocabulary must change.
+4. Missing runtime IO metadata is neutral only for an object-free `Compute Scalar` when all object counters reconcile. Root executions remain independently nullable; positive unidentified IO or object-operator gaps remain incomplete. The cost of an unforeseen scalar IO shape is false confirmation and a narrower rule/rework.
+5. That neutral-metadata rule also covers object-free `Nested Loops` because the captured children own reconciled IO and the loop reports executions only. Positive unidentified IO, object-bearing gaps, spools, and TVFs remain incomplete. The bounded risk is unseen internal loop IO.
+6. The same rule covers object-free `Stream Aggregate` because the captured aggregate folds its child stream and owns no object IO. The whitelist is exactly `Compute Scalar`, `Nested Loops`, and `Stream Aggregate`; positive IO and all unlisted operators stay fail-closed. The bounded risk is unseen aggregate-internal IO.
+
+The captured fixture tests verify the real plans become confirmed after reconciliation, while negative tests keep unknown object-free operators, positive unidentified IO, and spool/TVF uncertainty partial.
+
+## Task 2 evidence correction
+
+The original failing test `Statement_metrics_hash_uses_the_paired_full_executed_span` was meaningful compatibility coverage, not stale-test noise. It compares the journal's legacy full executed-span `StatementHash` with the full artifact span hash; it does not compare the new normalized `StatementKey`. The builder had restored the old hash only when `StatementId` was present, although the retained fixture had valid per-document statement spans without IDs. The fix resolves the exact retained `PlanDocumentOrdinal` and `PlanStatementIndex`, then uses only an existing, bounded, valid `StatementSpanPairer` span; it does not guess when pairing is absent and retains the plan-text fallback. A no-pair regression test preserves that boundary. The broad extractor/reconciler/builder suite then passed 48/48.

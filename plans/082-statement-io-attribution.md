@@ -22,7 +22,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `760f7d6`. Depends on 079, 080, 081 and 087 (measure observations in the comparer).
+- Implementation and Task 5 evidence complete on `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34`; final Sol low whole-branch review is pending. Planning base `760f7d6`. Depends on 079, 080, 081 and 087 (measure observations in the comparer).
 - Priority P2; effort L; risk MEDIUM (verdict basis changes what reviewers see).
 
 ## Global Constraints
@@ -113,7 +113,7 @@
 
 ### Task 5: Documentation and verification
 
-- [ ] **Step 1:** README dashboard section (views, verdict basis, attribution statuses, hidden work); `plans/README.md`.
-- [ ] **Step 2:** `just verify` → exit 0; record revision/result.
-- [ ] **Step 3 (operator-authorized):** UAT measure/compare of an op-203-like batch; confirm reconciliation `confirmed` and the focused verdict; record without business data.
-- [ ] **Step 4:** Queue → history; commit `docs(082): record plan 082 evidence`.
+- [x] **Step 1:** README dashboard section (views, verdict basis, attribution statuses, hidden work); `plans/README.md` and `plans/history.md` updated.
+- [x] **Step 2:** `just verify` exited 0 on exact product revision `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34`; durable results in [verification evidence](082-verification-evidence.md).
+- [x] **Step 3 (operator-authorized):** UAT measure/compare of an op-203-like batch on the authorized `civiclens-dev` SQL Server target; plan counters reconciled `confirmed` and the focused verdict was better; recorded without business data.
+- [x] **Step 4:** Archived the implementation evidence in plan history; commit `docs(082): record plan 082 evidence`.
