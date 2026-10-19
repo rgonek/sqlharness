@@ -75,4 +75,4 @@
 - [x] `npm --prefix src/SqlHarness.Dashboard/ui test` FAIL → implement → PASS; build. Full suite passed 61 files / 319 tests; standalone Vite build passed. See Task 5 report. Commit `feat(084): agent sessions in the dashboard`.
 
 ### Task 6: Documentation and verification
-- [ ] README (agent sessions, membership, matching latency, subagents), `plans/README.md`; `just verify`; queue → history; commit `docs(084): record plan 084 evidence`.
+- [x] README documents agent sessions, membership, matching latency, subagents, annotation lifecycle, and Optimization label finality; `plans/README.md` and evidence are updated. The Windows gate and branch formatter pass on the final feature tree; Linux is explicitly skipped. The bounded agent-detail cap has a parked limitation with reviewer dissent, so integration remains an explicit decision. See [084 verification evidence](084-verification-evidence.md).

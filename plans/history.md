@@ -2,6 +2,10 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 084 implementation verified on feature branch — 2026-10-19
+
+Plan [084](084-agent-sessions.md) implements event-driven matching, exact/inferred/unassigned operation membership, agent-session annotations, exact-member Optimization history with frozen labels, and dashboard views. Task 6 documentation, the final Windows gate, and branch formatting are complete on feature branch `plan-084`; tested product revision `3f115253b8cd002d3bf0fb4125e123c375b6a1da` has tree `64e363d635fe2364b2b21a2773357fd04457c9f2`. A bounded newest-500 detail limitation remains: 500 newer unassigned operations can displace an older exact operation from returned agent details while its exact count remains. The controller parked this limitation for an explicit integration decision; the final Sol review retains dissent and considers merge readiness blocked. No local integration or push occurred. Linux and browser visual inspection remain unverified; see [verification evidence](084-verification-evidence.md).
+
 ## Plan 082 DONE — locally integrated
 
 Plan [082](082-statement-io-attribution.md) implements per-statement IO attribution, reconciliation, Optimization views, and hidden-work reporting. All task reviews are approved. The final Sol low whole-branch review found two Important breakdown issues; both were fixed and approved by the scoped re-review. Product revision `b9f60924d09cdfa13f07106662549fcca8ee1f56` passed branch formatting and the Windows gate (Core 4,509 passed, MCP 435 passed, UI 313 passed; 15 .NET tests skipped). Authorized synthetic UAT confirmed attribution and the focused verdict. Local merge `dd375124d6ca442ea03dadb7cda90cb9489034b8` preserves the verified product tree, so no redundant integrated-tree gate was run. Linux was explicitly skipped; no push was made. See [verification evidence](082-verification-evidence.md).
