@@ -343,7 +343,7 @@ test.each([
     ? { planParameterSet: "", planCase: "0", planVariant: "measure" }
     : { planParameterSetNull: true, planCase: "0", planVariant: "measure" })
 
-  const tabs = await screen.findAllByRole("tab", { name: "measure", exact: true })
+  const tabs = await screen.findAllByRole("tab", { name: "measure" })
   expect(tabs.findIndex(tab => tab.getAttribute("data-active") !== null)).toBe(Number(expectedTab))
   await screen.findByRole("region", { name: "Plans" })
   expect(calls).toContain(parameterSet === ""
