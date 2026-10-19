@@ -51,8 +51,10 @@
 
 ### Task 0: Drift check and post-081 spike
 
-- [ ] **Step 1:** Confirm 079/080/081 merged; drift check; `just verify` baseline.
-- [ ] **Step 2 (operator-authorized UAT, read-only):** measure a batch with a `WHILE` loop doing `INSERT @t SELECT …` (5 iterations), a local cursor over a `SELECT`, a `CREATE INDEX` on `#temp`, and a query producing a worktable/spool with reads. Record: plan documents per loop iteration vs per statement, `ActualExecutions`, reconciliation per object. Adapt Task 1's identity/aggregation to what SQL Server emits; record findings here without business data.
+- [x] **Step 1:** Confirm 079/080/081/087 merged; drift check; `just verify` baseline. The existing baseline record covers the unchanged revision and predecessor implementation evidence; the passing gate was not rerun for the spike.
+- [x] **Step 2 (operator-authorized UAT, read-only):** measured the five-iteration table-variable loop, local cursor, `CREATE INDEX` on a uniquely named `#temp`, and recursive spool query on the explicitly authorized SQL Server `civiclens-dev` profile. Recorded plan identity, executions, per-object reads, and unresolved Worktable reconciliation in [spike evidence](082-spike-evidence.md), with synthetic plan XML under the Task 0 scratch directory.
+
+**Task 0 findings (2026-10-19):** The unchanged baseline was not rerun. The rebuilt worktree CLI/MCP passed the synthetic batch's offline validation. The first authorized local-playground attempt timed out before SQL execution; following user steering, the live spike used the exact `civiclens-dev` SQL Server profile after a successful read-only identity query confirmed `CivicLens` on SQL Server 2025. Loop-expanded plan documents share `StatementCompId` and have one root execution apiece, while explicit same-text source statements have distinct `StatementCompId` values. Table-variable and named-temp logical reads reconcile; Worktable reads do not, so the affected attribution must fail closed. Synthetic plan XML is retained in the Task 0 scratch directory for Task 1 fixture capture; durable findings are in [spike evidence](082-spike-evidence.md).
 
 ### Task 1: Extract per-statement object counters
 
