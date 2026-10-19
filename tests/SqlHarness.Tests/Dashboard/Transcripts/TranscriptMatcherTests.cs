@@ -172,9 +172,16 @@ public sealed class TranscriptMatcherTests
         await matcher.RunTargetedAsync([newOperationId], CancellationToken.None);
 
         old = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "old-thread");
-        Assert.Equal("Older title", old["title"]);
+        Assert.Null(old["title"]);
+        Assert.Equal(1, matcher.LastCodexLookupIdentityCount);
         var current = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "new-thread");
         Assert.Equal("New title", current["title"]);
+
+        File.Delete(paddingPath);
+        matcher.RunCycle(enabled: true);
+
+        old = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "old-thread");
+        Assert.Equal("Older title", old["title"]);
     }
 
     [Fact]

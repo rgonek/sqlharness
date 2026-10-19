@@ -85,3 +85,37 @@ dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~TranscriptMatche
 ```
 
 Final output: `Passed! - Failed: 0, Passed: 34, Skipped: 0, Duration: 7 s`. This includes `Targeted_codex_cycle_does_not_expand_lookup_to_other_attempted_titles`, `A_targeted_codex_backfill_keeps_other_unresolved_titles_in_scope`, and the matcher/housekeeping coverage. `pwsh ./scripts/format-changed.ps1 -Mode working-tree` returned `format: OK`; `git diff --check` passed. Full `just verify` remains reserved for Task 6.
+
+## Round 3 fix report
+
+The targeted Codex index lookup now adds pending/attempted backfill identities only for full sweeps. A targeted cycle still queries its selected operation identities, and it leaves unresolved full-sweep backfill entries queued. Completion of a full sweep is now the only event that marks remaining pending identities attempted, clears that queue, and resets the restart flag. This preserves interrupted backfill completion while unrelated titles wait for the next periodic full sweep (up to 60 seconds), as confirmed by the controller.
+
+The interrupted-backfill regression now proves both sides of the behavior: after a Claude read-budget interruption, a targeted cycle looks up only the new selected identity (`LastCodexLookupIdentityCount == 1`) and leaves the unrelated title unresolved; a later completed full sweep backfills that title. The existing attempted-title scoping regression remains in place.
+
+RED command:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~A_targeted_codex_backfill_keeps_other_unresolved_titles_in_scope" --no-restore
+```
+
+The strengthened regression failed before the fix as expected: `Assert.Null() Failure: Value is not null; Expected: null; Actual: "Older title"`. Output: `Failed: 1, Passed: 0, Skipped: 0`.
+
+GREEN focused regression command:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~A_targeted_codex_backfill_keeps_other_unresolved_titles_in_scope|FullyQualifiedName~Targeted_codex_cycle_does_not_expand_lookup_to_other_attempted_titles" --no-restore
+```
+
+Output: `Passed: 2, Failed: 0, Skipped: 0`.
+
+GREEN matcher and housekeeping command:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~TranscriptMatcher|FullyQualifiedName~DashboardHousekeeping" --no-restore
+```
+
+Output: `Passed: 34, Failed: 0, Skipped: 0, Duration: 7 s`.
+
+`pwsh ./scripts/format-changed.ps1 -Mode working-tree -Fix` and the subsequent `pwsh ./scripts/format-changed.ps1 -Mode working-tree` both returned `format: OK`; `git diff --check` passed. Full `just verify` remains reserved for Task 6.
+
+Files changed in this round: `src/SqlHarness.Dashboard/Transcripts/TranscriptMatcher.cs`, `tests/SqlHarness.Tests/Dashboard/Transcripts/TranscriptMatcherTests.cs`, and this report.

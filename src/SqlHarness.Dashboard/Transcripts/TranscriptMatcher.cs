@@ -318,10 +318,11 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                 _restartCodexTitleBackfill = true;
         }
 
-        foreach (var key in fullSweep
-                     ? _codexTitleBackfillPending.Concat(_codexTitleBackfillAttempted)
-                     : _codexTitleBackfillPending)
-            AddWanted(key.Id, key.Kind);
+        if (fullSweep)
+        {
+            foreach (var key in _codexTitleBackfillPending.Concat(_codexTitleBackfillAttempted))
+                AddWanted(key.Id, key.Kind);
+        }
 
         LastCodexLookupIdentityCount = wanted.Count;
 
@@ -332,7 +333,6 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
         try
         {
             var cursor = _restartCodexTitleBackfill ? null : LoadCursor(connection, path);
-            _restartCodexTitleBackfill = false;
             var result = IncrementalTail.Read(path, cursor, budget, line =>
             {
                 var entry = TranscriptLines.ParseCodexIndex(line);
@@ -342,7 +342,7 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                         batch.AddConversation(kind, entry.Id, entry.Title);
                 }
             });
-            if (result.Completed && _codexTitleBackfillPending.Count > 0)
+            if (fullSweep && result.Completed)
             {
                 foreach (var key in _codexTitleBackfillPending)
                 {
@@ -352,6 +352,7 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                         _codexTitleBackfillAttempted.Add(key);
                 }
                 _codexTitleBackfillPending.Clear();
+                _restartCodexTitleBackfill = false;
             }
             batch.Cursors[path] = result.Cursor;
             return budget - result.BytesRead;
