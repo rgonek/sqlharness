@@ -217,9 +217,22 @@ public static partial class DashboardServer
                 : !TryArchived(archived, out var archivedFilter)
                     ? BadRequest("archived must be true, false or any.")
                 : TryWindow(from, to, out var window)
-                    ? Results.Json(reader.Sessions(new SessionQuery(agent, transport, window.From, window.To, cursor,
-                        limit ?? JournalReader.DefaultLimit, archivedFilter, starred, string.IsNullOrWhiteSpace(q) ? null : q.Trim(), hasCompare)), Json)
+                    ? Results.Json(ToSessionList(reader.Sessions(new SessionQuery(agent, transport, window.From, window.To, cursor,
+                        limit ?? JournalReader.DefaultLimit, archivedFilter, starred, string.IsNullOrWhiteSpace(q) ? null : q.Trim(), hasCompare)),
+                        TranscriptsEnabled(options.ConfigPath)), Json)
                     : BadRequest("from/to must be ISO-8601 timestamps."));
+        MapRead(api, "/agent-sessions", (string? archived, bool? starred, long? cursor, int? limit) =>
+            !TranscriptsEnabled(options.ConfigPath)
+                ? Results.NotFound()
+                : !TryArchived(archived, out var archivedFilter)
+                    ? BadRequest("archived must be true, false or any.")
+                    : Results.Json(reader.AgentSessions(archivedFilter, starred, cursor, limit), Json));
+        MapRead(api, "/agent-sessions/{kind}/{id}", (string kind, string id) =>
+            !TranscriptsEnabled(options.ConfigPath)
+                ? Results.NotFound()
+                : kind is not ("claude" or "codex" or "opencode") || id.Length is 0 or > 512
+                    ? BadRequest("kind or id is invalid.")
+                    : reader.AgentSession(new AgentSessionKey(kind, id)) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
         MapRead(api, "/sessions/{id:long}", (long id) =>
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
         MapRead(api, "/sessions/{id:long}/optimization", (long id) =>
@@ -303,7 +316,7 @@ public static partial class DashboardServer
         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
         MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
         MapRead(api, "/transcripts", () => Results.Json(matcher.Status(TranscriptsEnabled(options.ConfigPath)), Json));
-        // The five guarded writes (PUT settings, POST prices refresh, PATCH session annotation, POST transcript clear, POST shutdown); DashboardSecurity admits only these, with its extra checks.
+        // Guarded writes (settings, prices, session annotations, transcript clear, shutdown); DashboardSecurity admits only these, with its extra checks.
         api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
         MapRead(api, "/prices", () => Results.Json(DashboardPrices.Describe(options.PricesPath), Json));
         api.MapMethods("/prices/refresh", [HttpMethods.Post], (Delegate)((HttpContext context) =>
@@ -311,6 +324,13 @@ public static partial class DashboardServer
         var annotationWriter = new SessionAnnotationWriter(options.DatabasePath, options.Time);
         api.MapMethods("/sessions/{id:long}/annotation", [HttpMethods.Patch], (Delegate)((HttpContext context, long id) =>
             SessionAnnotations.PatchAsync(context, id, annotationWriter, Json)));
+        var agentSessionAnnotationWriter = new AgentSessionAnnotationWriter(options.DatabasePath, options.Time);
+        api.MapMethods("/agent-sessions/{kind}/{id}/annotation", [HttpMethods.Patch], (Delegate)(async (HttpContext context, string kind, string id) =>
+        {
+            if (!TranscriptsEnabled(options.ConfigPath))
+                return Results.NotFound();
+            return await AgentSessionAnnotations.PatchAsync(context, kind, id, agentSessionAnnotationWriter, Json);
+        }));
         api.MapMethods("/shutdown", ReadMethods, (Delegate)((HttpContext context) =>
         {
             context.Response.Headers.Allow = HttpMethods.Post;
@@ -470,6 +490,9 @@ public static partial class DashboardServer
 
     private static void MapRead(IEndpointRouteBuilder routes, string pattern, Delegate handler) =>
         routes.MapMethods(pattern, ReadMethods, handler);
+
+    private static SessionListPage ToSessionList(Page<SessionSummary> page, bool matching) =>
+        new(page.Items, page.NextCursor, matching);
 
     private static bool MatchesExpectedShutdownIdentity(HttpRequest request, IProcessInfo processes)
     {

@@ -7,6 +7,8 @@ namespace SqlHarness.Dashboard;
 
 public sealed record Page<T>(IReadOnlyList<T> Items, long? NextCursor);
 
+public sealed record SessionListPage(IReadOnlyList<SessionSummary> Items, long? NextCursor, bool Matching);
+
 public sealed record MutationRequestSummary(
     long Id, string RequestId, string SessionKey, string Profile, string Engine, string Server, string Database,
     string Tier, string Mode, string Digest, string? Sql, string? ParametersJson, string State, string? Status,
@@ -68,6 +70,17 @@ public sealed record AgentCall(
     string? ConversationTitle = null);
 
 public sealed record AgentConversation(string AgentKind, string ConversationId, string? Title, int Operations);
+
+public sealed record AgentSessionChild(SessionSummary Session, int Exact, int Inferred, int Unassigned);
+
+public sealed record AgentSessionSummary(
+    AgentSessionKey Key, string? Title, string? ConversationTitle, string? OwnerTitle, string? NotePreview,
+    bool Starred, bool Archived, int Exact, int Inferred, int Unassigned, string LastSeen,
+    IReadOnlyList<AgentSessionChild> Children);
+
+public sealed record AgentSessionOperation(OperationSummary Operation, string Membership);
+
+public sealed record AgentSessionDetail(AgentSessionSummary AgentSession, IReadOnlyList<AgentSessionOperation> Operations);
 
 public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations,
     IReadOnlyList<CompareSubjectSummary> CompareSubjects, int UnassignedCompareCount, string? Note,

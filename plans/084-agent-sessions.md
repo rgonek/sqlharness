@@ -60,8 +60,8 @@
 ### Task 3: Agent-session annotations and API
 **Files:** `src/SqlHarness.Core/Journal/JournalSchema.cs` (step `agent_session_annotations(agent_kind, conversation_id, title, note, starred, archived, updated_at, PRIMARY KEY(agent_kind, conversation_id))`, `compare_version_labels(context_kind, context_key, subject, scope, sql_hash, label, PRIMARY KEY(...))`; next free version per 079), `src/SqlHarness.Dashboard/SessionAnnotations.cs` patterns, `DashboardServer.cs` (routes before `/{**rest}`), `DashboardModels.cs`; tests `JournalContractTests.cs`, `DashboardServerTests.cs`, `SessionAnnotationsTests.cs`.
 **Interfaces:** `GET /api/agent-sessions?…` (list with children and counts), `GET /api/agent-sessions/{kind}/{id}`, `PATCH /api/agent-sessions/{kind}/{id}/annotation`; `GET /api/sessions` gains `matching: bool` to tell the UI which list to render.
-- [ ] Failing tests: list shape with children; title order owner → conversation → newest child; `Clear_matched_keeps_agent_annotations`; retention deletes annotations with the last operation; PATCH validation mirrors session annotations.
-- [ ] FAIL → implement → PASS. Commit `feat(084): agent-session annotations and API`.
+- [x] Failing tests: list shape with children; title order owner → conversation → newest child; `Clear_matched_keeps_agent_annotations`; retention deletes annotations with the last operation; PATCH validation mirrors session annotations. Added shared-child unassigned duplication and subagent fallback coverage.
+- [x] FAIL → implement → PASS. Focused API tests passed 6/6 and journal contract test passed; commit `feat(084): agent-session annotations and API`.
 
 ### Task 4: Optimization per agent session with frozen labels
 **Files:** `src/SqlHarness.Dashboard/CompareHistoryBuilder.cs` (scope-key parameter), 080's `OptimizationSummaryBuilder.cs`/`OptimizationComparer.cs`, matcher freeze step in `TranscriptMatcher.cs`; tests `CompareHistoryBuilderTests.cs`, `OptimizationSummaryBuilderTests.cs`.

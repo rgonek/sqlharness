@@ -281,7 +281,7 @@ test("enables transcript reading, shows status, and confirms clearing matched da
   expect(await screen.findByText("Matched 3 · Unmatched 1 · Read errors 0")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Clear matched data" }))
   const dialog = await screen.findByRole("dialog")
-  expect(dialog).toHaveTextContent("Removes matched titles, models and conversations. Your session titles and notes are kept.")
+  expect(dialog).toHaveTextContent("Removes matched titles, models, conversations and frozen version labels. Session and agent-session annotations are kept.")
   expect(posts).toHaveLength(0)
   await userEvent.click(within(dialog).getByRole("button", { name: "Clear matched data" }))
   await waitFor(() => expect(posts).toEqual([{ body: {}, header: "1" }]))

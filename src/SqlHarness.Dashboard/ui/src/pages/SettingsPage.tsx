@@ -186,7 +186,7 @@ function AgentTranscriptsStatus() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Clear matched data?</DialogTitle>
-            <DialogDescription>Removes matched titles, models and conversations. Your session titles and notes are kept.</DialogDescription>
+            <DialogDescription>Removes matched titles, models, conversations and frozen version labels. Session and agent-session annotations are kept.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirming(false)}>Cancel</Button>

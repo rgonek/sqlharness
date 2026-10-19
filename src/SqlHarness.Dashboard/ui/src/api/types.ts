@@ -1,5 +1,5 @@
 // Mirrors src/SqlHarness.Dashboard/DashboardModels.cs (JSON camelCase). Pinned by DashboardContractTests.
-export type Page<T> = { items: T[]; nextCursor: number | null }
+export type Page<T> = { items: T[]; nextCursor: number | null; matching?: boolean }
 
 export type OperationStatus = "running" | "succeeded" | "failed" | "rejected" | "abandoned"
 
@@ -95,6 +95,29 @@ export type AgentCall = {
 }
 
 export type AgentConversation = { agentKind: string; conversationId: string; title: string | null; operations: number }
+
+export type AgentSessionKey = {
+  agentKind: string
+  conversationId: string
+}
+export type AgentSessionChild = {
+  session: SessionSummary
+  exact: number
+  inferred: number
+  unassigned: number
+}
+export type AgentSessionSummary = {
+  key: AgentSessionKey; title: string | null; conversationTitle: string | null; ownerTitle: string | null; notePreview: string | null
+  starred: boolean; archived: boolean; exact: number; inferred: number; unassigned: number; lastSeen: string; children: AgentSessionChild[]
+}
+export type AgentSessionOperation = {
+  operation: OperationSummary
+  membership: "exact" | "inferred" | "unassigned"
+}
+export type AgentSessionDetail = {
+  agentSession: AgentSessionSummary
+  operations: AgentSessionOperation[]
+}
 
 export type CompareAttemptSummary = {
   operationId: number

@@ -29,7 +29,7 @@ public sealed class MutationJournalTests
 
         Open(temp);
 
-        Assert.Equal(19, JournalSchema.CurrentVersion);
+        Assert.Equal(20, JournalSchema.CurrentVersion);
         var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "activity.db.v12-*.bak"));
         Assert.Single(JournalDb.Rows(backup, "SELECT id FROM old_rows"));
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);

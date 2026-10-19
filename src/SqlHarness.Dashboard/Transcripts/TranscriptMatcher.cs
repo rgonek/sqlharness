@@ -151,7 +151,7 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                 Execute(connection, "BEGIN IMMEDIATE;");
                 try
                 {
-                    Execute(connection, "DELETE FROM operation_agent_links; DELETE FROM agent_tool_calls; DELETE FROM agent_conversations; DELETE FROM transcript_cursors;");
+                    Execute(connection, "DELETE FROM operation_agent_links; DELETE FROM agent_tool_calls; DELETE FROM agent_conversations; DELETE FROM transcript_cursors; DELETE FROM compare_version_labels;");
                     Execute(connection, "COMMIT;");
                     _codexTitleBackfillPending.Clear();
                     _codexTitleBackfillAttempted.Clear();

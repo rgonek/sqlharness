@@ -114,10 +114,10 @@ internal static class SessionAnnotations
         }
     }
 
-    private static IResult Error(string message, int status, JsonSerializerOptions json) =>
+    internal static IResult Error(string message, int status, JsonSerializerOptions json) =>
         Results.Json(new { error = message }, json, statusCode: status);
 
-    private static async Task<byte[]?> ReadBodyAsync(HttpRequest request, CancellationToken ct)
+    internal static async Task<byte[]?> ReadBodyAsync(HttpRequest request, CancellationToken ct)
     {
         using var buffer = new MemoryStream();
         var chunk = new byte[8192];

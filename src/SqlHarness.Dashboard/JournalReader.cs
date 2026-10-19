@@ -224,6 +224,120 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         return AgentSessionMembership.Resolve(operations, links);
     }
 
+    public Page<AgentSessionSummary> AgentSessions(bool? archived = false, bool? starred = null, long? cursor = null, int? limit = null)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return new Page<AgentSessionSummary>([], null);
+        var memberships = ReadAgentMemberships(connection);
+        var keys = Query(connection, """
+            SELECT c.agent_kind, c.conversation_id, c.title, c.id FROM agent_conversations c
+            UNION SELECT a.agent_kind, a.conversation_id, NULL, NULL FROM agent_session_annotations a
+            UNION SELECT s.agent_kind, o.agent_session_id, NULL, NULL FROM operations o JOIN sessions s ON s.id = o.session_id
+                  WHERE o.agent_session_id IS NOT NULL
+            ORDER BY 1, 2;
+            """, [], r => new AgentSessionKey(r.GetString(0), r.GetString(1))).Distinct().ToArray();
+        var rows = new List<AgentSessionSummary>();
+        foreach (var key in keys)
+        {
+            var annotation = Query(connection, "SELECT title, note, starred, archived FROM agent_session_annotations WHERE agent_kind = $kind AND conversation_id = $id;",
+                [("$kind", key.AgentKind), ("$id", key.ConversationId)], r => new SessionAnnotation(
+                    NullableString(r, 0), NullableString(r, 1), r.GetInt64(2) != 0, r.GetInt64(3) != 0)).FirstOrDefault()
+                ?? new SessionAnnotation(null, null, false, false);
+            if (archived is { } archivedValue && annotation.Archived != archivedValue || starred is { } starredValue && annotation.Starred != starredValue)
+                continue;
+            var relevant = memberships.Where(item => item.Key == key).ToArray();
+            var sessionIds = relevant.Select(item => item.SessionId).Distinct().ToHashSet();
+            var childCounts = sessionIds.ToDictionary(id => id, id => (
+                Exact: relevant.Count(item => item.SessionId == id && item.Membership == Membership.Exact),
+                Inferred: relevant.Count(item => item.SessionId == id && item.Membership == Membership.Inferred),
+                Unassigned: memberships.Count(item => item.SessionId == id && item.Membership == Membership.Unassigned)));
+            var children = sessionIds.Select(id => Query(connection, $"SELECT {SessionColumns} FROM sessions s WHERE s.id = $id;",
+                    [("$id", id)], ReadSessionRow).FirstOrDefault())
+                .Where(session => session is not null).Select(session =>
+                {
+                    var counts = childCounts[session!.Id];
+                    return new AgentSessionChild(session, counts.Exact, counts.Inferred, counts.Unassigned);
+                }).OrderByDescending(child => child.Session.LastSeen, StringComparer.Ordinal).ToArray();
+            var conversation = Query(connection, "SELECT title FROM agent_conversations WHERE agent_kind = $kind AND conversation_id = $id;",
+                [("$kind", key.AgentKind), ("$id", key.ConversationId)], r => NullableString(r, 0)).FirstOrDefault();
+            var newestChildTitle = children.Select(child => child.Session.Title ?? child.Session.ClientTitle).FirstOrDefault(title => !string.IsNullOrWhiteSpace(title));
+            var sourceIsSubagent = Scalar<long>(connection, """
+                SELECT COUNT(*) FROM operations o JOIN sessions s ON s.id = o.session_id
+                WHERE s.agent_kind = $kind AND o.agent_session_id = $id AND lower(COALESCE(o.agent_thread_source, '')) = 'subagent';
+                """, [("$kind", key.AgentKind), ("$id", key.ConversationId)]) > 0;
+            var title = annotation.Title ?? conversation ?? newestChildTitle ?? (sourceIsSubagent ? "subagent of unknown parent" : null);
+            var lastSeen = children.Select(child => child.Session.LastSeen).OrderByDescending(value => value, StringComparer.Ordinal).FirstOrDefault() ?? "";
+            rows.Add(new AgentSessionSummary(key, title, conversation, annotation.Title,
+                PreviewNote(annotation.Note), annotation.Starred, annotation.Archived,
+                relevant.Count(item => item.Membership == Membership.Exact),
+                relevant.Count(item => item.Membership == Membership.Inferred),
+                sessionIds.Sum(id => memberships.Count(item => item.SessionId == id && item.Membership == Membership.Unassigned)), lastSeen, children));
+        }
+        var ordered = rows.OrderByDescending(row => row.LastSeen, StringComparer.Ordinal).ThenBy(row => row.Key.AgentKind, StringComparer.Ordinal)
+            .ThenBy(row => row.Key.ConversationId, StringComparer.Ordinal).ToArray();
+        var pageLimit = Clamp(limit ?? DefaultLimit);
+        var offset = (int)Math.Clamp(cursor ?? 0, 0, ordered.Length);
+        var page = ordered.Skip(offset).Take(pageLimit + 1).ToArray();
+        return new Page<AgentSessionSummary>(page.Take(pageLimit).ToArray(), page.Length > pageLimit ? offset + pageLimit : null);
+    }
+
+    public AgentSessionDetail? AgentSession(AgentSessionKey key)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return null;
+        var memberships = ReadAgentMemberships(connection);
+        var matching = memberships.Where(item => item.Key == key).ToArray();
+        var childIds = matching.Select(item => item.SessionId).Distinct().ToHashSet();
+        var allRows = new List<AgentSessionOperation>();
+        var children = new List<AgentSessionChild>();
+        foreach (var childId in childIds)
+        {
+            var detail = Session(childId);
+            if (detail is null)
+                continue;
+            var byId = memberships.Where(item => item.SessionId == childId
+                && (item.Key == key || item.Membership == Membership.Unassigned)).ToDictionary(item => item.OperationId);
+            var displayed = detail.Operations.Where(operation => byId.ContainsKey(operation.Id))
+                .Select(operation => new AgentSessionOperation(operation,
+                    byId[operation.Id].Membership.ToString().ToLowerInvariant())).ToArray();
+            allRows.AddRange(displayed);
+            var counts = byId.Values.GroupBy(item => item.Membership).ToDictionary(group => group.Key, group => group.Count());
+            children.Add(new AgentSessionChild(detail.Session,
+                counts.GetValueOrDefault(Membership.Exact), counts.GetValueOrDefault(Membership.Inferred),
+                counts.GetValueOrDefault(Membership.Unassigned)));
+        }
+        var summary = AgentSessions(archived: null).Items.FirstOrDefault(item => item.Key == key);
+        if (summary is null)
+            return null;
+        return new AgentSessionDetail(summary with { Children = children.OrderByDescending(child => child.Session.LastSeen, StringComparer.Ordinal).ToArray() },
+            allRows.OrderByDescending(row => row.Operation.Id).ToArray());
+    }
+
+    private static IReadOnlyList<OperationMembership> ReadAgentMemberships(SqliteConnection connection)
+    {
+        var operations = Query(connection, """
+            SELECT o.id, o.session_id, s.agent_kind, s.transport, s.agent_pid, s.agent_started_at,
+                   o.started_at, o.agent_session_id, o.agent_thread_source
+            FROM operations o JOIN sessions s ON s.id = o.session_id ORDER BY o.id;
+            """, [], reader => new OperationIdentityRow(reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2),
+                reader.GetString(3), NullableLong(reader, 4), NullableString(reader, 5), reader.GetString(6),
+                NullableString(reader, 7), NullableString(reader, 8)));
+        var links = Query(connection, """
+            SELECT l.operation_id, c.agent_kind, c.conversation_id FROM operation_agent_links l
+            JOIN agent_conversations c ON c.id = l.conversation ORDER BY l.operation_id;
+            """, [], reader => new LinkRow(reader.GetInt64(0), reader.GetString(1), reader.GetString(2)));
+        return AgentSessionMembership.Resolve(operations, links);
+    }
+
+    private static string? PreviewNote(string? note)
+    {
+        if (note is null) return null;
+        var line = note.Split(['\r', '\n'], 2)[0].Trim();
+        return line.Length > 120 ? line[..120] : line;
+    }
+
     public SessionDetail? Session(long id)
     {
         using var connection = OpenSnapshot();

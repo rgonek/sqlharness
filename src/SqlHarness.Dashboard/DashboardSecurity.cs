@@ -25,6 +25,8 @@ internal static class DashboardSecurity
     internal const string MutationsPath = "/api/mutations";
     private static readonly System.Text.RegularExpressions.Regex AnnotationPath =
         new(@"^/api/sessions/[0-9]{1,19}/annotation\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    private static readonly System.Text.RegularExpressions.Regex AgentSessionAnnotationPath =
+        new(@"^/api/agent-sessions/(?:claude|codex|opencode)/[^/]{1,512}/annotation\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     internal static readonly TimeSpan CookieMaxAge = TimeSpan.FromDays(400);
     private const string TokenQuery = "t";
 
@@ -88,7 +90,8 @@ internal static class DashboardSecurity
         var isTranscriptsClear = HttpMethods.IsPost(context.Request.Method)
             && string.Equals(context.Request.Path.Value, TranscriptsClearPath, StringComparison.Ordinal);
         var isAnnotationWrite = HttpMethods.IsPatch(context.Request.Method)
-            && AnnotationPath.IsMatch(context.Request.Path.Value ?? string.Empty);
+            && (AnnotationPath.IsMatch(context.Request.Path.Value ?? string.Empty)
+                || AgentSessionAnnotationPath.IsMatch(context.Request.Path.Value ?? string.Empty));
         var isMutationSubmit = HttpMethods.IsPost(context.Request.Method)
             && string.Equals(context.Request.Path.Value, MutationsPath, StringComparison.Ordinal);
         var isMutationDecision = HttpMethods.IsPost(context.Request.Method)

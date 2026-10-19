@@ -185,6 +185,15 @@ public static class JournalRetention
     /// <summary>Deletes unreferenced plan documents, then empty sessions, each in batches of at most <paramref name="batchSize"/> rows.</summary>
     private static void DeleteOrphans(SqliteConnection connection, string? cutoff, int batchSize, Totals totals)
     {
+        DeleteInBatches(connection, null, _ => { }, batchSize, """
+            DELETE FROM agent_session_annotations AS a
+            WHERE NOT EXISTS (SELECT 1 FROM agent_session_annotation_operations x
+                              WHERE x.agent_kind = a.agent_kind AND x.conversation_id = a.conversation_id)
+              AND NOT EXISTS (SELECT 1 FROM operations o JOIN sessions s ON s.id = o.session_id
+                              WHERE s.agent_kind = a.agent_kind AND o.agent_session_id = a.conversation_id)
+              AND NOT EXISTS (SELECT 1 FROM agent_conversations c JOIN operation_agent_links l ON l.conversation = c.id
+                              WHERE c.agent_kind = a.agent_kind AND c.conversation_id = a.conversation_id);
+            """);
         DeleteInBatches(connection, null, totals.CommittedPlans, batchSize, $"""
             DELETE FROM plan_documents WHERE rowid IN (
                 SELECT rowid FROM plan_documents

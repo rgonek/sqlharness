@@ -46,6 +46,13 @@ public sealed class DashboardContractTests
 
         Assert.Equal(["session", "operations", "compareSubjects", "unassignedCompareCount", "note", "conversations"],
             Names(new SessionDetail(session, [], [], 0, null, [])));
+        AssertTypescriptFieldsMatch("AgentSessionSummary", new AgentSessionSummary(new AgentSessionKey("codex", "t"), null, null, null,
+            null, false, false, 0, 0, 0, "t", []));
+        AssertTypescriptFieldsMatch("AgentSessionChild", new AgentSessionChild(session, 0, 0, 0));
+        AssertTypescriptFieldsMatch("AgentSessionOperation", new AgentSessionOperation(
+            new OperationSummary(1, 2, "codex", "query", "succeeded", 0, null, "t", "t", null, 1, null, null, null, null,
+                false, null, null, null, false, false, false, null, null, null, null, null), "exact"));
+        Assert.Equal(["items", "nextCursor", "matching"], Names(new SessionListPage([], null, true)));
         Assert.Equal(["operationId", "subject", "scope", "baselineHash", "candidateHash", "baselineVersion",
                 "candidateVersion", "status", "startedAt", "regression", "cases", "conditions", "summary"],
             Names(new CompareAttemptSummary(1, "orders", "whole", null, null, null, null, "running", "t", null, null, null, null)));
@@ -96,6 +103,10 @@ public sealed class DashboardContractTests
             Names(new AgentCall(null, null, null, null, null, null, null, null, null, null)));
         Assert.Equal(["agentKind", "conversationId", "title", "operations"],
             Names(new AgentConversation("claude", "conversation", null, 0)));
+        Assert.Equal(["agentKind", "conversationId"], Names(new AgentSessionKey("claude", "conversation")));
+        Assert.Equal(["agentSession", "operations"], Names(new AgentSessionDetail(
+            new AgentSessionSummary(new AgentSessionKey("claude", "conversation"), null, null, null, null,
+                false, false, 0, 0, 0, "t", []), [])));
         Assert.Equal(["key", "count"], Names(new KeyCount("claude", 1)));
         Assert.Equal(["uri", "name"], Names(new SessionRoot("file:///w", null)));
     }
