@@ -402,6 +402,30 @@ public sealed class McpToolHandlers(
             return await module.ExecuteAsync(operation, token);
         }, ct, maxCellChars);
 
+    public Task<CallToolResult> AnnotateAsync(
+        RequestContext<CallToolRequestParams> ctx,
+        [Description("One to twenty journal operation references to annotate.")]
+        [MinLength(1), MaxLength(20)] AnnotationItemArgument[] items,
+        CancellationToken ct = default)
+    {
+        ThrowIfUnknown(ctx, ["items"]);
+        if (!_operationAnnotationsEnabled)
+            return Task.FromResult(Fail(SqlHarnessExitCode.Safety, "Operation annotations are disabled.", "sqlharness_annotate"));
+
+        return RunAsync("sqlharness_annotate", ctx, async token =>
+        {
+            AnnotateHandler.Validate(items);
+            var metadata = McpCallMetadata.Read(ctx?.Params?.Meta);
+            return await module.ExecuteAsync(new SqlHarnessAnnotationOperation(async annotationToken =>
+            {
+                var matchingOn = AnnotateHandler.LoadMatchingFlag(SqlHarnessPaths.ConfigFile);
+                var annotated = await AnnotateHandler.ApplyAsync(SqlHarnessPaths.ActivityDatabase,
+                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken);
+                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, annotated, null);
+            }), token);
+        }, ct);
+    }
+
     /// <summary>
     /// Rejects unknown argument keys before any mapping or execution. Keys
     /// compare case-insensitively (matching binder behavior); the rejection
@@ -650,6 +674,8 @@ public static class McpToolCatalog
     public const string QueryDescription = "A query duration is one execution's elapsed time, not benchmark evidence. Estimated plan rows are optimizer estimates; actualRows are observed rows and executions is the operator count. Dry-run reports validation: passed and execution: not-run.";
     public const string PlanDescription = "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only. Clipped nodes report omittedChildCount and omittedSubtreeCount.";
     public const string RepetitionDescription = "Measured repetition for section=plan; default is the identified last measured run. A run without a saved plan reports missing evidence, never an earlier plan.";
+    private const string AnnotationToolName = "sqlharness_annotate";
+    private const string AnnotationToolDescription = "Apply an optional plain-text label and keep flag to one to twenty eligible journaled operations by operationRef. Unknown, expired, foreign, and out-of-scope references have the same per-item result. The call is journaled without an operationRef and does not create an annotation target.";
 
     public static readonly IReadOnlyList<string> ToolNames =
     [
@@ -693,8 +719,11 @@ public static class McpToolCatalog
             factory.Tool(ToolNames[7], nameof(McpRequestToolHandlers.PlanAsync), PlanDescription, true, false, true, false),
             factory.Tool(ToolNames[8], nameof(McpRequestToolHandlers.ArtifactAsync), ArtifactDescription + " Against the supplied request scope.", true, false, true, false),
         };
-        if (tools.Count != McpLimits.MaxToolsWithoutOperationAnnotations)
-            throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxToolsWithoutOperationAnnotations} tools until the annotation tool is registered.");
+        if (process.Config.Journal.OperationAnnotations)
+            tools.Add(factory.Tool(AnnotationToolName, nameof(McpRequestToolHandlers.AnnotateAsync), AnnotationToolDescription, false, false, true, false));
+        var expectedCount = process.Config.Journal.OperationAnnotations ? McpLimits.MaxToolsWithOperationAnnotations : McpLimits.MaxToolsWithoutOperationAnnotations;
+        if (tools.Count != expectedCount)
+            throw new InvalidOperationException($"The MCP catalog must serve exactly {expectedCount} tools for the configured annotation mode.");
         return tools;
     }
 
@@ -742,8 +771,11 @@ public static class McpToolCatalog
             factory.Tool(ToolNames[7], nameof(McpToolHandlers.PlanAsync), PlanDescription, true, false, true, false),
             factory.Tool(ToolNames[8], nameof(McpToolHandlers.ArtifactAsync), ArtifactDescription + " Sections: summary, metrics, operators, statements, matrix-cells, and plan.", true, false, true, false),
         };
-        if (tools.Count != McpLimits.MaxToolsWithoutOperationAnnotations)
-            throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxToolsWithoutOperationAnnotations} tools until the annotation tool is registered.");
+        if (operationAnnotationsEnabled)
+            tools.Add(factory.Tool(AnnotationToolName, nameof(McpToolHandlers.AnnotateAsync), AnnotationToolDescription, false, false, true, false));
+        var expectedCount = operationAnnotationsEnabled ? McpLimits.MaxToolsWithOperationAnnotations : McpLimits.MaxToolsWithoutOperationAnnotations;
+        if (tools.Count != expectedCount)
+            throw new InvalidOperationException($"The MCP catalog must serve exactly {expectedCount} tools for the configured annotation mode.");
         return tools;
     }
 

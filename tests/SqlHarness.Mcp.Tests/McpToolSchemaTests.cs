@@ -326,6 +326,14 @@ public sealed class McpToolSchemaTests : IDisposable
             () => scope.Profiles, config: enabledConfig);
         await using var on = await ServedCatalog.CreateAsync(onProcess);
         var onTools = await on.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        var annotationTool = onTools.Single(tool => tool.Name == "sqlharness_annotate");
+        var annotationSchema = Properties(ServedSchema(annotationTool));
+        Assert.Contains("items", annotationSchema.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(1, annotationSchema.GetProperty("items").GetProperty("minItems").GetInt32());
+        Assert.Equal(20, annotationSchema.GetProperty("items").GetProperty("maxItems").GetInt32());
+        var itemProperties = Properties(annotationSchema.GetProperty("items").GetProperty("items"));
+        Assert.Contains("operationRef", itemProperties.EnumerateObject().Select(property => property.Name));
+        Assert.Contains("journaled", annotationTool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         foreach (var name in new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot" })
         {
             var schema = ServedSchema(onTools.Single(tool => tool.Name == name));
@@ -342,6 +350,7 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.False(Properties(schema).TryGetProperty("keep", out _), name);
         }
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(onTools.Select(tool => tool.ProtocolTool).ToArray()));
+        Assert.Equal(McpLimits.MaxToolsWithOperationAnnotations, onTools.Count());
         Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"annotation-enabled tools/list is {bytes} bytes.");
         var onCapabilities = await on.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
         Assert.True(ServedEnvelope(onCapabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("operationAnnotations").GetBoolean());

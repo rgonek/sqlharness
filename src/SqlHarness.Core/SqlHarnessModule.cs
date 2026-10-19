@@ -149,6 +149,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         ArgumentNullException.ThrowIfNull(operation);
 
+        if (operation is SqlHarnessAnnotationOperation annotation)
+            return annotation.Run is null
+                ? new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null)
+                : await annotation.Run(ct);
+
         if (operation is SqlHarnessArtifactReadOperation artifactRead)
             return Checked(artifactRead, ExecuteArtifactRead(artifactRead));
 

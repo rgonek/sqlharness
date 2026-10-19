@@ -16,6 +16,7 @@ internal static class OperationReportContract
         new Dictionary<Type, IReadOnlySet<Type>>
         {
             [typeof(SqlHarnessArtifactReadOperation)] = new HashSet<Type> { typeof(SqlHarnessArtifactReadReport) },
+            [typeof(SqlHarnessAnnotationOperation)] = new HashSet<Type>(),
             [typeof(SqlHarnessQueryOperation)] = new HashSet<Type> { typeof(SqlHarnessQueryReport), typeof(SqlHarnessDryRunReport) },
             [typeof(SqlHarnessMutationOperation)] = new HashSet<Type>
             {

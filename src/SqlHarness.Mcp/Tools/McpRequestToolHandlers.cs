@@ -202,6 +202,29 @@ public sealed class McpRequestToolHandlers(
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_artifact", target, ["target", "id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText", "maxCellChars"], handler => handler.ArtifactAsync(ctx, id, section, cursor, variant, statement, parameterSet, repetition, includeText, maxCellChars, ct));
 
+    public Task<CallToolResult> AnnotateAsync(RequestContext<CallToolRequestParams> ctx,
+        [Description("One to twenty journal operation references to annotate.")]
+        [MinLength(1), MaxLength(20)] AnnotationItemArgument[] items,
+        CancellationToken ct = default)
+    {
+        ThrowUnknown(ctx, ["items"]);
+        if (!process.Config.Journal.OperationAnnotations)
+            return Task.FromResult(Failure("Operation annotations are disabled.", "sqlharness_annotate", process.MaxResultBytes));
+
+        return RunAsync("sqlharness_annotate", ctx, ct, async token =>
+        {
+            AnnotateHandler.Validate(items);
+            var metadata = McpCallMetadata.Read(ctx?.Params?.Meta);
+            return await process.CreateModule().ExecuteAsync(new SqlHarnessAnnotationOperation(async annotationToken =>
+            {
+                var matchingOn = AnnotateHandler.LoadMatchingFlag(SqlHarnessPaths.ConfigFile);
+                var annotated = await AnnotateHandler.ApplyAsync(SqlHarnessPaths.ActivityDatabase,
+                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken);
+                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, annotated, null);
+            }), token);
+        });
+    }
+
     private Task<CallToolResult> Invoke(RequestContext<CallToolRequestParams> ctx, string command, McpRequestScopeArgument target,
         string[] knownArguments,
         Func<McpToolHandlers, Task<CallToolResult>> invoke)

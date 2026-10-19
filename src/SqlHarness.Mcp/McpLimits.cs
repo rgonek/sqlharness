@@ -30,6 +30,7 @@ public static class McpLimits
 
     /// <summary>Catalog size while the optional operation annotation tool is disabled.</summary>
     public const int MaxToolsWithoutOperationAnnotations = 9;
+    public const int MaxToolsWithOperationAnnotations = 10;
 
     /// <summary>Budget for the whole tools/list catalog (schemas and descriptions) in UTF-8 bytes.</summary>
     public const long ToolsListBudgetBytes = 32L * 1024;

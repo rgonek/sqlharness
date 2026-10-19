@@ -58,7 +58,7 @@ public sealed record SqlHarnessArtifactReadReport(object Section, string? Produc
 internal static class SqlHarnessOperationReferences
 {
     internal static SqlHarnessOperation Ensure(SqlHarnessOperation operation) =>
-        string.IsNullOrWhiteSpace(operation.OperationRef)
+        operation is not SqlHarnessAnnotationOperation && string.IsNullOrWhiteSpace(operation.OperationRef)
             ? operation with { OperationRef = Guid.NewGuid().ToString("N") }
             : operation;
 }
@@ -323,6 +323,10 @@ public sealed record SqlHarnessDryRunReport(
 }
 
 public sealed record SqlHarnessPlanOperation(string ShowplanXml, OutputFootprint RawFootprint) : SqlHarnessOperation;
+
+/// <summary>A target-free journal entry for post-hoc agent operation annotations.</summary>
+public sealed record SqlHarnessAnnotationOperation(
+    Func<CancellationToken, Task<SqlHarnessOutcome>>? Run = null) : SqlHarnessOperation;
 
 public sealed record SqlHarnessWatchOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
