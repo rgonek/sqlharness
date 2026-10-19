@@ -21,7 +21,7 @@ An earlier integrated Windows gate tested product revision `7f98ef99f731af5fbc2b
 
 The feature branch included main baseline `ca4c8b8` through merge commit `5bfa9f3` before final verification. The user-authorized local merge into `main` is `dd375124d6ca442ea03dadb7cda90cb9489034b8`. Its complete tree matched the reviewed feature head, and a separate product-path comparison against verified revision `b9f6092` was empty. Consequently no redundant integrated-tree gate was run; subsequent changes are documentation only. No push was made.
 
-Raw log paths below identify temporary verification locations. The completed plan's SDD workspace is cleaned after integration; this committed evidence and the synthetic plan fixtures preserve the results and reproduction context.
+Raw log paths below identify temporary verification locations. Automatic execution policy rejected the final scratch/worktree cleanup with `blocked by policy`, so `D:/Dev/sqlharness/.worktrees/plan-082` and its plan-specific SDD workspace remain in place. This affects cleanup only; the merge and verified product tree are unchanged. This committed evidence and the synthetic plan fixtures also preserve the results and reproduction context.
 
 ## Earlier integrated verification (7f98ef9)
 
