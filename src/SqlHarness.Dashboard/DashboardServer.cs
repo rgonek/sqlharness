@@ -229,6 +229,19 @@ public static partial class DashboardServer
                 : q is { Length: > JournalReader.MaximumSearchLength }
                     ? BadRequest($"q must be at most {JournalReader.MaximumSearchLength} characters.")
                     : Results.Json(reader.AgentSessions(archivedFilter, starred, cursor, limit, agent, q, hasCompare), Json));
+        MapRead(api, "/agent-sessions/unmatched", (string? agent, string? transport, string? from, string? to, long? cursor, int? limit,
+            string? archived, bool? starred, string? q, bool? hasCompare) =>
+            !TranscriptsEnabled(options.ConfigPath)
+                ? Results.NotFound()
+                : q is { Length: > JournalReader.MaximumSearchLength }
+                    ? BadRequest($"q must be at most {JournalReader.MaximumSearchLength} characters.")
+                : !TryArchived(archived, out var archivedFilter)
+                    ? BadRequest("archived must be true, false or any.")
+                : TryWindow(from, to, out var window)
+                    ? Results.Json(ToSessionList(reader.UnmatchedAgentSessions(new SessionQuery(agent, transport, window.From, window.To,
+                        cursor, limit ?? JournalReader.DefaultLimit, archivedFilter, starred, string.IsNullOrWhiteSpace(q) ? null : q.Trim(), hasCompare)),
+                        matching: true), Json)
+                    : BadRequest("from/to must be ISO-8601 timestamps."));
         MapRead(api, "/agent-sessions/{kind}/{id}", (string kind, string id) =>
             !TranscriptsEnabled(options.ConfigPath)
                 ? Results.NotFound()

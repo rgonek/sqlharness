@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import type { OperationDetail } from "@/api/types"
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
+import type { AgentSessionKey } from "@/api/types"
 import { useOperation, useOperationOptimization } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { FlagBadges } from "@/components/FlagBadges"
@@ -129,6 +130,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
   const op = detail.operation
   if (op.operation === "compare") return <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
   const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
+  const returnAgent = agentReturnKey(returnSearch)
   const hasPlanParameterSet = returnSearch.planParameterSetNull === true || returnSearch.planParameterSet !== undefined
   const planTarget = hasPlanParameterSet && returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
     && returnSearch.planDocument !== undefined && returnSearch.planStatement !== undefined
@@ -153,6 +155,8 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
             <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined}>
               {detail.session.sessionKey}
             </Link>
+              {returnAgent && <Link className="ml-3 underline" to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }}
+                search={sessionSearchFromOperation(returnSearch)}>Back to agent session</Link>}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -278,6 +282,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
   const view = returnSearch.view ?? "changed"
   const comparison = useOperationOptimization(id, selectedCase, aggregate, view)
   const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
+  const returnAgent = agentReturnKey(returnSearch)
   const title = detail.session.title ?? detail.session.clientTitle ?? detail.session.sessionKey
   if (comparison.error) return <ErrorState error={comparison.error} />
   return <main className="space-y-4">
@@ -288,11 +293,13 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
       <span className="text-sm">{op.database ?? "Unknown database"}</span>
       <time className="text-sm" dateTime={op.startedAt}>{formatTimestamp(op.startedAt)}</time>
       <StatusBadge operation={op} />
-      <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined} className="ml-auto text-sm underline">Back to {title}</Link>
+      {returnAgent
+        ? <Link to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)} className="ml-auto text-sm underline">Back to agent session</Link>
+        : <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined} className="ml-auto text-sm underline">Back to {title}</Link>}
     </header>
     {detail.vars && <div className="flex flex-wrap gap-2" aria-label="Variables">{Object.entries(detail.vars).map(([key, value]) => <Badge key={key} variant="outline">{key}=<span>{value}</span></Badge>)}</div>}
     {comparison.isPending ? <Skeleton className="h-64 w-full" /> : comparison.data ? <>
-      <ComparisonPanel comparison={comparison.data} sessionId={op.sessionId} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector
+      <ComparisonPanel comparison={comparison.data} sessionId={op.sessionId} agentSessionKey={returnAgent} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector
         searchState={{ case: selectedCase, agg: aggregate, view }} sessionSearch={sessionSearchFromOperation(returnSearch)}
         onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }) }) }} />
       <CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data.selectedCase : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }) }) }} />
@@ -310,4 +317,10 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
       </CardContent></Card>}
     </div></details>
   </main>
+}
+
+function agentReturnKey(search: OperationDetailSearch): AgentSessionKey | undefined {
+  return search.returnAgentKind && search.returnAgentId
+    ? { agentKind: search.returnAgentKind, conversationId: search.returnAgentId }
+    : undefined
 }

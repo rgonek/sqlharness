@@ -87,6 +87,20 @@ export function useAgentSessions(filters: { archived?: boolean; starred?: boolea
   })
 }
 
+export function useUnmatchedAgentSessions(filters: SessionFilters, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: ["agent-session-unmatched", filters],
+    queryFn: ({ pageParam }) => getJson<Page<SessionSummary>>("/api/agent-sessions/unmatched", {
+      agent: filters.agent, transport: filters.transport, archived: flag(filters.archived), starred: flag(filters.starred), q: filters.q,
+      hasCompare: flag(filters.hasCompare), cursor: pageParam, limit: 50,
+    }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: page => page.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+    enabled,
+  })
+}
+
 export function useAgentSession(key: AgentSessionKey, enabled = true) {
   return useQuery({ queryKey: ["agent-session", key], queryFn: () => getJson<AgentSessionDetail>(`/api/agent-sessions/${encodeURIComponent(key.agentKind)}/${encodeURIComponent(key.conversationId)}`), enabled })
 }

@@ -1,8 +1,11 @@
+import type { AgentSessionKey } from "@/api/types"
 import type { OperationDetailSearch, SessionSearch } from "@/router"
 
-export function operationReturnSearch(sessionId: number, search: SessionSearch): OperationDetailSearch {
+export function operationReturnSearch(sessionId: number, search: SessionSearch, agentSessionKey?: AgentSessionKey): OperationDetailSearch {
   return {
     returnSession: sessionId,
+    returnAgentKind: agentSessionKey?.agentKind as OperationDetailSearch["returnAgentKind"],
+    returnAgentId: agentSessionKey?.conversationId,
     returnSubject: search.subject,
     returnDb: search.db,
     returnGroup: search.group,

@@ -165,12 +165,52 @@ test("matching on lists expandable agent rows and leaves unmatched sessions at t
       ownerTitle: null, notePreview: null, starred: false, archived: false, exact: 2, inferred: 1, unassigned: 0,
       lastSeen: "2026-10-07T09:05:00.000Z", children: [{ session: session({ id: 8, sessionKey: "mcp:child", transport: "mcp" }), exact: 2, inferred: 1, unassigned: 0 }],
     }], nextCursor: null },
+    "/api/agent-sessions/unmatched?archived=false&starred=true&limit=50": { items: [], nextCursor: null, matching: true },
+    "/api/agent-sessions/unmatched?archived=false&starred=false&limit=50": { items: [session({ id: 9, sessionKey: "cli:unmatched" })], nextCursor: null, matching: true },
   })
   renderApp("/sessions")
   expect(await screen.findByRole("link", { name: "Optimize orders" })).toBeInTheDocument()
   expect(screen.getByText("not matched")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: /Expand.*Optimize orders/i }))
   expect(await screen.findByRole("link", { name: "mcp:child" })).toBeInTheDocument()
+})
+
+test("agent search preserves matches on child session titles", async () => {
+  stubFetch({
+    "/api/agents": [],
+    "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null, matching: true },
+    "/api/sessions?archived=false&starred=false&limit=50": { items: [], nextCursor: null, matching: true },
+    "/api/agent-sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
+    "/api/agent-sessions?archived=false&starred=false&limit=50": { items: [{
+      key: { agentKind: "claude", conversationId: "child-title-search" }, title: "Conversation", conversationTitle: null,
+      ownerTitle: null, notePreview: null, starred: false, archived: false, exact: 1, inferred: 0, unassigned: 0,
+      lastSeen: "2026-10-07T09:05:00.000Z", children: [{ session: session({ id: 21, sessionKey: "mcp:child-title-search", title: "Distinct child title" }), exact: 1, inferred: 0, unassigned: 0 }],
+    }], nextCursor: null },
+    "/api/agent-sessions/unmatched?archived=false&starred=true&limit=50": { items: [], nextCursor: null, matching: true },
+    "/api/agent-sessions/unmatched?archived=false&starred=false&limit=50": { items: [], nextCursor: null, matching: true },
+  })
+  renderApp("/sessions")
+  await userEvent.type(await screen.findByRole("searchbox", { name: "Search sessions" }), "Distinct child title")
+  expect(await screen.findByRole("link", { name: "Conversation" })).toBeInTheDocument()
+})
+
+test("does not label a matched child not matched when its agent row is on a later page", async () => {
+  stubFetch({
+    "/api/agents": [],
+    "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null, matching: true },
+    "/api/sessions?archived=false&starred=false&limit=50": { items: [session({ id: 22, sessionKey: "mcp:later-page-child" })], nextCursor: 22, matching: true },
+    "/api/agent-sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
+    "/api/agent-sessions?archived=false&starred=false&limit=50": { items: [{
+      key: { agentKind: "claude", conversationId: "first-page" }, title: "First conversation", conversationTitle: null,
+      ownerTitle: null, notePreview: null, starred: false, archived: false, exact: 1, inferred: 0, unassigned: 0,
+      lastSeen: "2026-10-07T09:05:00.000Z", children: [],
+    }], nextCursor: 1 },
+    "/api/agent-sessions/unmatched?archived=false&starred=true&limit=50": { items: [], nextCursor: null, matching: true },
+    "/api/agent-sessions/unmatched?archived=false&starred=false&limit=50": { items: [], nextCursor: null, matching: true },
+  })
+  renderApp("/sessions")
+  expect(await screen.findByRole("link", { name: "First conversation" })).toBeInTheDocument()
+  expect(screen.queryByText("not matched")).not.toBeInTheDocument()
 })
 
 test("matching off returns immediately to per-session rows even when agent rows are cached", async () => {
@@ -183,6 +223,7 @@ test("matching off returns immediately to per-session rows even when agent rows 
       key: { agentKind: "codex", conversationId: "cached" }, title: "stale agent row", conversationTitle: null, ownerTitle: null, notePreview: null,
       starred: false, archived: false, exact: 0, inferred: 0, unassigned: 0, lastSeen: "2026-10-07T09:05:00.000Z", children: [],
     }], nextCursor: null }), { status: 200 }),
+    "/api/agent-sessions/unmatched": { items: [], nextCursor: null, matching: true },
     "/api/settings": (_url: URL, init?: RequestInit) => {
       if (init?.method === "PUT") { enabled = false; matching = false }
       return new Response(JSON.stringify({ status: "valid", path: "config.json", settings: {

@@ -86,6 +86,52 @@ public sealed class AgentSessionsTests
     }
 
     [Fact]
+    public async Task Agent_session_search_matches_child_client_title()
+    {
+        using var home = new TempHome();
+        var session = JournalSeed.Session("claude:client-title", "claude") with
+        {
+            Transport = JournalTransport.Mcp,
+            ClientTitle = "Only this child has the client title",
+        };
+        var operation = new JournalSeed(home.DatabasePath).Operation(session);
+        JournalSeed.Link(home.DatabasePath, operation.OperationId, "claude", "conversation-client-title", null);
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync("/api/agent-sessions?archived=any&q=Only%20this%20child%20has%20the%20client%20title");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Unmatched_sessions_exclude_children_from_agent_rows_beyond_the_first_agent_page()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var targetSession = JournalSeed.Session("claude:older-child", "claude") with { Transport = JournalTransport.Mcp };
+        var targetOperation = seed.Operation(targetSession);
+        JournalSeed.Link(home.DatabasePath, targetOperation.OperationId, "claude", "older-conversation", null);
+        seed.Operation(JournalSeed.Session("claude:truly-unmatched", "claude"));
+        for (var i = 0; i < 50; i++)
+            seed.Operation(JournalSeed.Session($"codex:later-{i:D2}", "codex"), agent: new AgentCallMetadata(null, null, null, $"later-conversation-{i:D2}", null, null, null));
+
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+        using var agentPage = JsonDocument.Parse(await client.GetStringAsync("/api/agent-sessions?archived=false&starred=false&limit=50"));
+        Assert.DoesNotContain(agentPage.RootElement.GetProperty("items").EnumerateArray(), item =>
+            item.GetProperty("key").GetProperty("conversationId").GetString() == "older-conversation");
+
+        using var response = await client.GetAsync("/api/agent-sessions/unmatched?archived=false&starred=false&limit=50");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var unmatched = json.RootElement.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Contains(unmatched, item => item.GetProperty("sessionKey").GetString() == "claude:truly-unmatched");
+        Assert.DoesNotContain(unmatched, item => item.GetProperty("sessionKey").GetString() == "claude:older-child");
+    }
+
+    [Fact]
     public async Task Agent_session_detail_and_annotation_resolve_keys_after_the_first_list_page()
     {
         using var home = new TempHome();

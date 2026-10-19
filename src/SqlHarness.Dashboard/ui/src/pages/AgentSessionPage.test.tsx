@@ -75,3 +75,35 @@ test("agent comparison SQL versions use the agent-session route", async () => {
   expect(calls).toContain("/api/agent-sessions/codex/conversation-1/sql?hash=hash-1")
   expect(calls.some(url => url.startsWith("/api/sessions/7/sql"))).toBe(false)
 })
+
+test("aggregate measure from a second MCP child keeps the agent-session return route", async () => {
+  const calls = stubFetch({
+    "/api/settings": settings,
+    "/api/agent-sessions/claude/conversation-1": { agentSession: { ...summary, children: [
+      { session: session({ id: 7, sessionKey: "mcp:first-child", hasCompare: true }), exact: 1, inferred: 0, unassigned: 0 },
+      { session: session({ id: 8, sessionKey: "mcp:second-child", hasCompare: true }), exact: 1, inferred: 0, unassigned: 0 },
+    ] }, operations: [] },
+    "/api/agent-sessions/claude/conversation-1/optimization": { subjects: [{
+      subject: "orders", database: "db", engine: "sqlserver", groups: [{ fingerprint: "fp", label: "default", subject: "orders", database: "db", defaultA: "v0", defaultB: "v1", scopes: [{
+        scope: "whole", defaultA: "v0", defaultB: "v1", versions: [
+          { version: "v0", hash: "sha256:0000000000000000", logicalReadsSum: 10, logicalReadsMean: 10, scansSum: 1, elapsedMedianMs: 10, caseOutcome: "same", measuredIn: [21], latestOperationId: 21, verdictBasis: "whole batch" },
+          { version: "v1", hash: "sha256:1111111111111111", logicalReadsSum: 5, logicalReadsMean: 5, scansSum: 1, elapsedMedianMs: 8, caseOutcome: "same", measuredIn: [22], latestOperationId: 22, verdictBasis: "whole batch" },
+        ],
+      }] }],
+    }], unassigned: [] },
+    "/api/agent-sessions/claude/conversation-1/optimization/compare": {
+      a: "v0", b: "v1", basis: "DifferentRunsSameConditions", operationId: null, equivalenceLabel: "equivalent", cases: [{ id: "0", label: "Case 1", outcome: "same" }],
+      selectedCase: "all", aggregate: "sum", coverageLabel: "1 of 1 cases", mixed: null, tables: [], collapsed: null,
+      elapsed: { beforeMs: 10, afterMs: 8, policyVerdict: null, differentRun: true },
+      beforeAction: { operationId: 21, side: "baseline", caseIds: ["0"] }, afterAction: { operationId: 22, side: "measure", caseIds: ["0"] },
+    },
+  })
+  renderApp("/agent-sessions/claude/conversation-1")
+  const measure = await screen.findByRole("link", { name: "Measure for v1" })
+  const target = new URL(measure.getAttribute("href")!, "http://dashboard")
+  expect(target.pathname).toBe("/operations/22")
+  expect(target.searchParams.get("returnSession")).toBe("7")
+  expect(target.searchParams.get("returnAgentKind")).toBe("claude")
+  expect(target.searchParams.get("returnAgentId")).toBe("conversation-1")
+  expect(calls.some(url => url.startsWith("/api/sessions/7/optimization/compare"))).toBe(false)
+})

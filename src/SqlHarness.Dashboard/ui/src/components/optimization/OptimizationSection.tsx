@@ -32,7 +32,7 @@ export function OptimizationSection({ sessionId, agentSessionKey }: { sessionId:
     {!!section.unassigned.length && <details className="rounded-lg border p-3">
       <summary className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</summary>
       <p className="mt-2 text-sm text-muted-foreground">These compares do not have a complete subject and scope, so they are not included in version comparisons.</p>
-      <ol className="divide-y">{section.unassigned.map(item => <li key={item.operationId} className="flex flex-wrap gap-3 py-2"><Link to="/operations/$id" params={{ id: String(item.operationId) }} search={operationReturnSearch(sessionId, { ...search, unassigned: true })}>Compare #{item.operationId}</Link><span>{item.status}</span><time className="text-muted-foreground">{item.startedAt}</time></li>)}</ol>
+      <ol className="divide-y">{section.unassigned.map(item => <li key={item.operationId} className="flex flex-wrap gap-3 py-2"><Link to="/operations/$id" params={{ id: String(item.operationId) }} search={operationReturnSearch(sessionId, { ...search, unassigned: true }, agentSessionKey)}>Compare #{item.operationId}</Link><span>{item.status}</span><time className="text-muted-foreground">{item.startedAt}</time></li>)}</ol>
     </details>}
   </section>
 }
@@ -84,7 +84,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject }: { sessionI
     </label>}
     {group && scope ? <>
       <p className="text-sm font-medium">{scope.scope}</p>
-      {versions.length > 0 ? <VersionTable subject={`${subject.subject}-${subject.database}`} sessionId={sessionId} sessionSearch={selectedSearch}
+      {versions.length > 0 ? <VersionTable subject={`${subject.subject}-${subject.database}`} sessionId={sessionId} agentSessionKey={agentSessionKey} sessionSearch={selectedSearch}
         versions={versions} selectedA={selectedA} selectedB={selectedB || null}
         onSelect={(side, version) => update({ a: selectedA, b: selectedB || undefined, [side]: version })} /> : <p className="text-sm text-muted-foreground">No retained versions for this scope.</p>}
       {!selectedB && <p className="text-sm text-muted-foreground">Select a version for B to compare it with {selectedA}.</p>}

@@ -28,15 +28,15 @@ function actionCase(action: OptimizationActionReference | null | undefined, sele
   return action.caseIds.includes(selectedCase) ? selectedCase : action.caseIds[0]
 }
 
-function VersionAction({ label, action, selectedCase, sessionId, sessionSearch }: {
-  label: string; action: OptimizationActionReference | null | undefined; selectedCase: string; sessionId: number; sessionSearch: SessionSearch
+function VersionAction({ label, action, selectedCase, sessionId, sessionSearch, agentSessionKey }: {
+  label: string; action: OptimizationActionReference | null | undefined; selectedCase: string; sessionId: number; sessionSearch: SessionSearch; agentSessionKey?: AgentSessionKey
 }) {
   const caseId = actionCase(action, selectedCase)
   if (!action || !caseId) return null
   return <section className="space-y-1" aria-label={`${label} actions`}>
     <h3 className="text-sm font-medium">{label} · {action.side}</h3>
     <div className="flex flex-wrap items-center gap-2">
-      <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">{action.side === "measure" ? `Measure for ${label}` : `Plans for ${label}`}</Link>
+      <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="text-sm underline">{action.side === "measure" ? `Measure for ${label}` : `Plans for ${label}`}</Link>
       <ReproScriptButtons operationId={action.operationId} side={action.side === "measure" ? "query" : action.side} caseId={caseId} />
     </div>
   </section>
@@ -116,13 +116,13 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
         {optimizationMetricRows(comparison).map(row => <Fragment key={row.label}><dt className="font-medium">{row.label}</dt><dd>{row.before} → {row.after}</dd></Fragment>)}
       </dl>
     </>}
-    {comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">Operation #{comparison.operationId}</Link>
-      : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} /></div>}
-    <div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} /></div>
+    {comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="text-sm underline">Operation #{comparison.operationId}</Link>
+      : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></div>}
+    <div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></div>
     {showDiff && sqlOptions.length > 1 && <SessionVersionDiff key={`${comparison.a}:${comparison.b}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} />}
   </section>
 }
 
-function VersionOperationLink({ action, sessionId, sessionSearch }: { action: OptimizationActionReference | null | undefined; sessionId: number; sessionSearch: SessionSearch }) {
-  return action ? <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">Operation #{action.operationId}</Link> : null
+function VersionOperationLink({ action, sessionId, sessionSearch, agentSessionKey }: { action: OptimizationActionReference | null | undefined; sessionId: number; sessionSearch: SessionSearch; agentSessionKey?: AgentSessionKey }) {
+  return action ? <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="text-sm underline">Operation #{action.operationId}</Link> : null
 }

@@ -14,7 +14,7 @@ import { StatsPage } from "@/pages/StatsPage"
 
 export type OptimizationView = "changed" | "whole" | "statements"
 export type SessionSearch = { subject?: string; db?: string; group?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; view?: OptimizationView; unassigned?: boolean }
-export type OperationDetailSearch = { case?: string; agg?: string; view?: OptimizationView; planCase?: string; planVariant?: string; planParameterSet?: string; planParameterSetNull?: boolean; planRepetition?: number; planDocument?: number; planStatement?: number; returnSession?: number; returnSubject?: string; returnDb?: string; returnGroup?: string; returnScope?: string; returnA?: string; returnB?: string; returnCase?: string; returnAgg?: string; returnView?: OptimizationView; returnUnassigned?: boolean }
+export type OperationDetailSearch = { case?: string; agg?: string; view?: OptimizationView; planCase?: string; planVariant?: string; planParameterSet?: string; planParameterSetNull?: boolean; planRepetition?: number; planDocument?: number; planStatement?: number; returnSession?: number; returnAgentKind?: "claude" | "codex" | "opencode"; returnAgentId?: string; returnSubject?: string; returnDb?: string; returnGroup?: string; returnScope?: string; returnA?: string; returnB?: string; returnCase?: string; returnAgg?: string; returnView?: OptimizationView; returnUnassigned?: boolean }
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
@@ -64,6 +64,8 @@ const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/op
     planStatement: typeof search.planStatement === "number" && Number.isSafeInteger(search.planStatement) && search.planStatement >= 0 ? search.planStatement : undefined,
     returnSession: typeof search.returnSession === "number" && Number.isSafeInteger(search.returnSession) && search.returnSession > 0 ? search.returnSession
       : typeof search.returnSession === "string" && /^\d+$/.test(search.returnSession) && Number.isSafeInteger(Number(search.returnSession)) ? Number(search.returnSession) : undefined,
+    returnAgentKind: search.returnAgentKind === "claude" || search.returnAgentKind === "codex" || search.returnAgentKind === "opencode" ? search.returnAgentKind : undefined,
+    returnAgentId: typeof search.returnAgentId === "string" && search.returnAgentId.length > 0 && search.returnAgentId.length <= 512 ? search.returnAgentId : undefined,
     returnSubject: typeof search.returnSubject === "string" && search.returnSubject.length <= 64 ? search.returnSubject : undefined,
     returnDb: typeof search.returnDb === "string" && search.returnDb.length <= 128 ? search.returnDb : undefined,
     returnGroup: typeof search.returnGroup === "string" && search.returnGroup.length <= 256 ? search.returnGroup : undefined,

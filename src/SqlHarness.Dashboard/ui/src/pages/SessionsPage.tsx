@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useAgentKinds, useAgentSessions, useSessions, useSettings } from "@/api/queries"
+import { useAgentKinds, useAgentSessions, useSessions, useSettings, useUnmatchedAgentSessions } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { AgentSessionTable, SessionTable } from "@/components/SessionTable"
 import { Button } from "@/components/ui/button"
@@ -38,20 +38,17 @@ export function SessionsPage() {
   const agentFilters = { archived: view === "archived", agent: selected === "all" ? undefined : selected, q: q || undefined, hasCompare: hasOptimization || undefined }
   const agentPinned = useAgentSessions({ ...agentFilters, starred: true }, matching)
   const agentSessions = useAgentSessions({ ...agentFilters, starred: false }, matching)
-  const failure = pinned.error ?? sessions.error ?? (matching ? agentPinned.error ?? agentSessions.error : null)
+  const unmatchedPinned = useUnmatchedAgentSessions({ ...base, starred: true }, matching)
+  const unmatchedSessions = useUnmatchedAgentSessions({ ...base, starred: false }, matching)
+  const failure = pinned.error ?? sessions.error ?? (matching ? agentPinned.error ?? agentSessions.error ?? unmatchedPinned.error ?? unmatchedSessions.error : null)
   const pinnedItems = pinned.data?.pages.flatMap(page => page.items) ?? []
   const items = sessions.data?.pages.flatMap(page => page.items) ?? []
   const agentPinnedItems = agentPinned.data?.pages.flatMap(page => page.items) ?? []
   const agentItems = agentSessions.data?.pages.flatMap(page => page.items) ?? []
-  const agentFilter = (item: typeof agentItems[number]) =>
-    (selected === "all" || item.key.agentKind === selected) &&
-    (!q || `${item.title ?? ""} ${item.key.conversationId} ${item.notePreview ?? ""} ${item.children.map(child => `${child.session.sessionKey} ${child.session.cwd ?? ""}`).join(" ")}`.toLocaleLowerCase().includes(q.toLocaleLowerCase())) &&
-    (!hasOptimization || item.children.some(child => child.session.hasCompare))
-  const visiblePinned = agentPinnedItems.filter(agentFilter)
+  const visiblePinned = agentPinnedItems
   const pinnedKeys = new Set(visiblePinned.map(item => `${item.key.agentKind}:${item.key.conversationId}`))
-  const visibleAgents = agentItems.filter(item => agentFilter(item) && !pinnedKeys.has(`${item.key.agentKind}:${item.key.conversationId}`))
-  const linkedIds = new Set([...agentPinnedItems, ...agentItems].flatMap(item => item.children.map(child => child.session.id)))
-  const unmatched = [...new Map([...pinnedItems, ...items].map(item => [item.id, item])).values()].filter(item => !linkedIds.has(item.id) && (selected === "all" || item.agentKind === selected))
+  const visibleAgents = agentItems.filter(item => !pinnedKeys.has(`${item.key.agentKind}:${item.key.conversationId}`))
+  const unmatched = [...(unmatchedPinned.data?.pages.flatMap(page => page.items) ?? []), ...(unmatchedSessions.data?.pages.flatMap(page => page.items) ?? [])]
 
   return (
     <div className="space-y-4">
@@ -83,7 +80,7 @@ export function SessionsPage() {
         <CardContent className="space-y-4">
           {failure ? (
             <ErrorState error={failure} />
-          ) : pinned.isPending || sessions.isPending || (matching && (agentPinned.isPending || agentSessions.isPending)) ? (
+          ) : pinned.isPending || sessions.isPending || (matching && (agentPinned.isPending || agentSessions.isPending || unmatchedPinned.isPending || unmatchedSessions.isPending)) ? (
             <Skeleton className="h-32 w-full" />
           ) : matching ? visiblePinned.length === 0 && visibleAgents.length === 0 && unmatched.length === 0 ? (
             <p className="text-muted-foreground">{q ? "No sessions match the search" : "No sessions"}</p>
@@ -94,20 +91,22 @@ export function SessionsPage() {
           ) : (
             <SessionTable pinned={pinnedItems} sessions={items} now={now} />
           )}
-          {matching ? agentPinned.hasNextPage && (
-            <Button variant="outline" onClick={() => void agentPinned.fetchNextPage()} disabled={agentPinned.isFetchingNextPage}>Load more pinned</Button>
+          {matching ? unmatchedPinned.hasNextPage && (
+            <Button variant="outline" onClick={() => void unmatchedPinned.fetchNextPage()} disabled={unmatchedPinned.isFetchingNextPage}>Load more unmatched pinned</Button>
           ) : pinned.hasNextPage && (
             <Button variant="outline" onClick={() => void pinned.fetchNextPage()} disabled={pinned.isFetchingNextPage}>
               Load more pinned
             </Button>
           )}
-          {matching ? agentSessions.hasNextPage && (
-            <Button variant="outline" onClick={() => void agentSessions.fetchNextPage()} disabled={agentSessions.isFetchingNextPage}>Load more</Button>
+          {matching ? unmatchedSessions.hasNextPage && (
+            <Button variant="outline" onClick={() => void unmatchedSessions.fetchNextPage()} disabled={unmatchedSessions.isFetchingNextPage}>Load more unmatched</Button>
           ) : sessions.hasNextPage && (
             <Button variant="outline" onClick={() => void sessions.fetchNextPage()} disabled={sessions.isFetchingNextPage}>
               Load more
             </Button>
           )}
+          {matching && agentPinned.hasNextPage && <Button variant="outline" onClick={() => void agentPinned.fetchNextPage()} disabled={agentPinned.isFetchingNextPage}>Load more pinned agent sessions</Button>}
+          {matching && agentSessions.hasNextPage && <Button variant="outline" onClick={() => void agentSessions.fetchNextPage()} disabled={agentSessions.isFetchingNextPage}>Load more agent sessions</Button>}
         </CardContent>
       </Card>
     </div>

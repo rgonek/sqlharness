@@ -150,11 +150,21 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             r => new KeyCount(r.GetString(0), r.GetInt32(1)));
     }
 
-    public Page<SessionSummary> Sessions(SessionQuery query)
+    public Page<SessionSummary> Sessions(SessionQuery query) => ReadSessions(query, unmatchedAgentSessionsOnly: false);
+
+    public Page<SessionSummary> UnmatchedAgentSessions(SessionQuery query) => ReadSessions(query, unmatchedAgentSessionsOnly: true);
+
+    private Page<SessionSummary> ReadSessions(SessionQuery query, bool unmatchedAgentSessionsOnly)
     {
         using var connection = OpenSnapshot();
         if (connection is null)
             return new Page<SessionSummary>([], null);
+        var matchedSessionIds = unmatchedAgentSessionsOnly
+            ? ReadAgentMemberships(connection).Where(item => item.Key is not null && item.Membership is Membership.Exact or Membership.Inferred)
+                .Select(item => item.SessionId).ToHashSet()
+            : null;
+        if (matchedSessionIds is not null)
+            connection.CreateFunction<long, bool>("sqlh_agent_session_matched", id => matchedSessionIds.Contains(id), isDeterministic: true);
         // SQLite resolves the name when the statement is prepared, including when $q is null.
         connection.CreateFunction<string?, string?>("sqlh_fold", FoldForSearch, isDeterministic: true);
         var limit = Clamp(query.Limit);
@@ -172,6 +182,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             ("$q", query.Search is null ? null : "%" + EscapeLike(FoldForSearch(query.Search)!) + "%"),
         ];
         var order = query.Starred is null ? "starred DESC, s.id DESC" : "s.id DESC";
+        var unmatchedOnlyFilter = unmatchedAgentSessionsOnly ? "AND sqlh_agent_session_matched(s.id) = 0" : "";
         var rows = Query(connection, $"""
             SELECT {SessionColumns} FROM sessions s
             WHERE ($agent IS NULL OR s.agent_kind = $agent)
@@ -184,6 +195,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
               AND ($hasCompare IS NULL OR EXISTS (SELECT 1 FROM operations compare_op WHERE compare_op.session_id = s.id
                   AND (compare_op.operation = 'compare' OR (compare_op.operation = 'measure'
                       AND compare_op.compare_subject IS NOT NULL AND compare_op.compare_scope IS NOT NULL))) = $hasCompare)
+              {unmatchedOnlyFilter}
               AND ($q IS NULL
                    OR sqlh_fold(s.session_key) LIKE $q ESCAPE '\' OR sqlh_fold(s.cwd) LIKE $q ESCAPE '\'
                    OR sqlh_fold(s.client_title) LIKE $q ESCAPE '\'

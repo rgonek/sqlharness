@@ -28,6 +28,16 @@ test("compare operation returns to its session with the originating subject and 
   expect(target.searchParams.get("scope")).toBe("history")
 })
 
+test("aggregate measure from a different MCP child returns to the typed agent session", async () => {
+  stubOperationFetch({ "/api/operations/22": operationDetail({ operation: operation({ id: 22, sessionId: 8, operation: "measure" }), session: session({ id: 8, sessionKey: "mcp:second-child" }) }) })
+  renderApp("/operations/22?returnSession=7&returnAgentKind=claude&returnAgentId=conversation-1&returnSubject=orders&returnScope=whole&returnA=v1&returnB=v2")
+
+  const back = await screen.findByRole("link", { name: "Back to agent session" })
+  const target = new URL(back.getAttribute("href")!, "http://dashboard")
+  expect(target.pathname).toBe("/agent-sessions/claude/conversation-1")
+  expect(Object.fromEntries(target.searchParams)).toMatchObject({ subject: "orders", scope: "whole", a: "v1", b: "v2" })
+})
+
 test("compare operation restores every optimization search selection on return", async () => {
   stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnSubject=orders&returnDb=shop&returnGroup=fp-2&returnScope=fragment%3Acustomer&returnA=v1&returnB=v2&returnCase=customer-9001&returnAgg=mean")
