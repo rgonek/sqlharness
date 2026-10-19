@@ -51,6 +51,15 @@ public sealed record MutationsConfig
     public int ApprovalTimeoutSeconds { get; init; } = 120;
 }
 
+public sealed record ConnectionConfig
+{
+    public const int MinimumTimeoutSeconds = 1;
+    public const int MaximumTimeoutSeconds = 300;
+    public const int DefaultTimeoutSeconds = 30;
+
+    public int TimeoutSeconds { get; init; } = DefaultTimeoutSeconds;
+}
+
 /// <summary>Operator settings from <c>~/.sqlharness/config.json</c>; tool behavior only, never targets.</summary>
 public sealed record SqlHarnessConfig
 {
@@ -59,6 +68,7 @@ public sealed record SqlHarnessConfig
     public CompareConfig Compare { get; init; } = new();
     public DiagnosticsConfig Diagnostics { get; init; } = new();
     public MutationsConfig Mutations { get; init; } = new();
+    public ConnectionConfig Connection { get; init; } = new();
 
     public static SqlHarnessConfig Default { get; } = new();
 }
@@ -142,7 +152,7 @@ public static class SqlHarnessConfigLoader
         }
 
         if (config is null || !IsComplete(config))
-            return Failed("$", "The journal, journal.retention, dashboard, dashboard.agentTranscripts, compare and diagnostics sections must be objects.");
+            return Failed("$", "The journal, journal.retention, dashboard, dashboard.agentTranscripts, compare, diagnostics, mutations and connection sections must be objects.");
 
         var errors = new List<SqlHarnessConfigFieldError>();
         if (config.Journal.Retention.MaxAgeDays is < 1 or > 3650)
@@ -159,6 +169,8 @@ public static class SqlHarnessConfigLoader
             errors.Add(new("mutations.verification", "Unsupported verification; click is the only supported value."));
         if (config.Mutations.ApprovalTimeoutSeconds is < 30 or > 600)
             errors.Add(new("mutations.approvalTimeoutSeconds", "Must be between 30 and 600."));
+        if (config.Connection.TimeoutSeconds is < ConnectionConfig.MinimumTimeoutSeconds or > ConnectionConfig.MaximumTimeoutSeconds)
+            errors.Add(new("connection.timeoutSeconds", $"Must be between {ConnectionConfig.MinimumTimeoutSeconds} and {ConnectionConfig.MaximumTimeoutSeconds}."));
         return errors.Count == 0 ? new(config, []) : new(null, errors);
     }
 
@@ -170,5 +182,6 @@ public static class SqlHarnessConfigLoader
     // Explicit JSON nulls bypass initializers; treat them as invalid.
     private static bool IsComplete(SqlHarnessConfig config) =>
         config.Journal is not null && config.Journal.Retention is not null && config.Dashboard is not null &&
-        config.Dashboard.AgentTranscripts is not null && config.Compare is not null && config.Diagnostics is not null && config.Mutations is not null;
+        config.Dashboard.AgentTranscripts is not null && config.Compare is not null && config.Diagnostics is not null &&
+        config.Mutations is not null && config.Connection is not null;
 }

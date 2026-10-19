@@ -215,7 +215,7 @@ public sealed class McpProcessContext
     public ISqlHarnessModule Decorate(ISqlHarnessModule module) => _decorator(module);
 
     /// <summary>Composition for target-free tools; it performs no connection.</summary>
-    public ISqlHarnessModule CreateModule() => Decorate(new SqlHarnessModule(() => Profiles, CompareConfig));
+    public ISqlHarnessModule CreateModule() => Decorate(new SqlHarnessModule(() => Profiles, CompareConfig, Config.Connection));
 
     private McpStartupException ProfileResolutionFailure(string profileName, string reason, Exception? inner = null)
     {

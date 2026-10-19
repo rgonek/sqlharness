@@ -610,7 +610,7 @@ public static class McpToolCatalog
 {
     /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
     public const string CapabilitiesDescription =
-        "Runtime configuration of this server: scopeMode, active compareContext policy, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
+        "Runtime configuration of this server: scopeMode, active compareContext policy, connectionTimeoutSeconds, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. connectionTimeoutSeconds is the effective SQL connection/authentication timeout; Azure CLI token acquisition has a separate existing budget. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     /// <summary>Common setup text; each catalog appends its engine's setup guidance.</summary>
@@ -658,7 +658,7 @@ public static class McpToolCatalog
     {
         ArgumentNullException.ThrowIfNull(process);
         if (!process.RequestScope)
-            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule(process.CompareConfig)), clock, hostShutdown, process.CompareConfig, mutationBroker, mutationSessionKey ?? process.MutationSessionKey);
+            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule(process.CompareConfig, process.Config.Connection)), clock, hostShutdown, process.CompareConfig, mutationBroker, mutationSessionKey ?? process.MutationSessionKey);
         var factory = new ToolFactory(new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory, mutationBroker, mutationSessionKey ?? process.MutationSessionKey), RequestScopeEngine);
         var tools = new List<McpServerTool>(ToolNames.Count)
         {

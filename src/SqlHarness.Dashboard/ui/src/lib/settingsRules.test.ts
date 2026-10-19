@@ -6,6 +6,7 @@ const make = (enabled: boolean, maxAgeDays = 30, maxSizeMb = 500): Settings => (
   journal: { enabled: true, storeSensitive: false, retention: { enabled, maxAgeDays, maxSizeMb } },
   dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled: false } },
   compare: { requireContext: true },
+  connection: { timeoutSeconds: 30 },
   diagnostics: { enabled: false },
   mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
 })

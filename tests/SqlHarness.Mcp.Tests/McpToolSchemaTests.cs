@@ -600,6 +600,7 @@ public sealed class McpToolSchemaTests : IDisposable
         var capabilityDocument = JsonDocument.Parse(Assert.Single(capabilities.Content.OfType<TextContentBlock>()).Text);
         var capability = capabilityDocument.RootElement.GetProperty("result");
         Assert.Equal("request", capability.GetProperty("scopeMode").GetString());
+        Assert.Equal(30, capability.GetProperty("connectionTimeoutSeconds").GetInt32());
         Assert.Equal(new[] { ProfileName, "sample-b" }, capability.GetProperty("allowedProfiles").EnumerateArray().Select(value => value.GetString()));
         Assert.DoesNotContain("frozen", capabilityDocument.RootElement.GetRawText(), StringComparison.Ordinal);
 

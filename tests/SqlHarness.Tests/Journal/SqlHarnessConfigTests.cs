@@ -24,6 +24,7 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.False(result.Config.Dashboard.AutoStart);
         Assert.Equal(47800, result.Config.Dashboard.Port);
         Assert.False(result.Config.Dashboard.SafetyNotifications);
+        Assert.Equal(30, result.Config.Connection.TimeoutSeconds);
         Assert.True(System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(result.Config)).RootElement
             .GetProperty("compare").GetProperty("requireContext").GetBoolean());
     }
@@ -38,6 +39,50 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.Equal(SqlHarnessConfigStatus.Invalid, result.Status);
         Assert.NotNull(result.Warning);
         Assert.Equal(SqlHarnessConfig.Default, result.Config);
+    }
+
+    [Fact]
+    public void Connection_timeout_defaults_and_custom_value_round_trips()
+    {
+        var defaults = SqlHarnessConfigLoader.Parse("{}"u8.ToArray()).Config!;
+        var parsed = SqlHarnessConfigLoader.Parse("""{ "connection": { "timeoutSeconds": 47 } }"""u8.ToArray());
+
+        Assert.Equal(30, defaults.Connection.TimeoutSeconds);
+        Assert.Empty(parsed.Errors);
+        Assert.Equal(47, parsed.Config!.Connection.TimeoutSeconds);
+        Assert.Equal(47, System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(parsed.Config))
+            .RootElement.GetProperty("connection").GetProperty("timeoutSeconds").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(300)]
+    public void Connection_timeout_accepts_inclusive_bounds(int seconds)
+    {
+        var parsed = SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes($"{{ \"connection\": {{ \"timeoutSeconds\": {seconds} }} }}"));
+
+        Assert.Empty(parsed.Errors);
+        Assert.Equal(seconds, parsed.Config!.Connection.TimeoutSeconds);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(301)]
+    public void Connection_timeout_rejects_out_of_range_values(int seconds)
+    {
+        var parsed = SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes($"{{ \"connection\": {{ \"timeoutSeconds\": {seconds} }} }}"));
+
+        Assert.Null(parsed.Config);
+        Assert.Contains(parsed.Errors, error => error.Field == "connection.timeoutSeconds");
+    }
+
+    [Theory]
+    [InlineData("{ \"connection\": null }")]
+    [InlineData("{ \"connection\": { \"timeoutSeconds\": \"30\" } }")]
+    [InlineData("{ \"connection\": { \"unknown\": 30 } }")]
+    public void Connection_settings_reject_null_section_wrong_type_and_unknown_fields(string json)
+    {
+        Assert.NotEmpty(SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes(json)).Errors);
     }
 
     [Fact]
@@ -245,6 +290,7 @@ public sealed class SqlHarnessConfigTests : IDisposable
             Journal = new JournalConfig { StoreSensitive = true, Retention = new JournalRetentionConfig { Enabled = true, MaxAgeDays = 7 } },
             Dashboard = new DashboardConfig { AutoStart = true, IdleShutdownHours = 2 },
             Diagnostics = new DiagnosticsConfig { Enabled = true },
+            Connection = new ConnectionConfig { TimeoutSeconds = 87 },
         };
 
         SqlHarnessConfigWriter.Write(ConfigPath, config);

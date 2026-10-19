@@ -186,7 +186,7 @@ public static partial class DashboardServer
         var loadConfig = () => loadConfigResult().Config;
         var loadProfiles = () => ProfileStore.Load(options.TargetsPath);
         var initialConfig = loadConfig();
-        var module = options.MutationModule ?? new SqlHarnessModule(loadProfiles, initialConfig.Compare);
+        var module = options.MutationModule ?? new SqlHarnessModule(loadProfiles, initialConfig.Compare, initialConfig.Connection);
         var journal = options.MutationJournal ?? NullActivityJournal.Instance;
         var executor = new MutationExecutor(module, loadProfiles, loadConfig, journal, options.Time);
         var mutationBroker = new MutationBroker(options.Time,

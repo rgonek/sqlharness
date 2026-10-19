@@ -76,7 +76,7 @@ internal sealed partial class ArtifactDirectoryPublisher
         {
             Directory.CreateDirectory(staging);
             writeStaging(staging, directory);
-            _moveDirectory(staging, directory);
+            PublishStaging(staging, directory);
         }
         catch (Exception primary)
         {
@@ -87,6 +87,29 @@ internal sealed partial class ArtifactDirectoryPublisher
         }
 
         return directory;
+    }
+
+    private void PublishStaging(string staging, string directory)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                _moveDirectory(staging, directory);
+                return;
+            }
+            catch (IOException exception) when (
+                OperatingSystem.IsWindows()
+                && exception.HResult == unchecked((int)0x80070005)
+                && attempt < 3
+                && Directory.Exists(staging)
+                && !Directory.Exists(directory))
+            {
+                // Windows can briefly deny a directory rename while another process inspects newly written files.
+                // Retry only the atomic publish; never rerun artifact writes or hide a persistent denial.
+                Thread.Sleep(100);
+            }
+        }
     }
 
     internal void CheckStorage() => new ArtifactStoragePreflight(

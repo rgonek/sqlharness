@@ -10,7 +10,6 @@ namespace SqlHarness.Core.Postgres;
 
 internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
 {
-    private const int MaximumConnectTimeoutSeconds = 30;
     private readonly int _connectTimeoutSeconds;
 
     // Once per process, before the first connection. Npgsql 10 reads date/time as
@@ -24,9 +23,9 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
 #pragma warning restore CS0618, NPG9001
     }
 
-    internal NpgsqlSessionFactory(int connectTimeoutSeconds = 15)
+    internal NpgsqlSessionFactory(int connectTimeoutSeconds = ConnectionConfig.DefaultTimeoutSeconds)
     {
-        if (connectTimeoutSeconds is < 1 or > MaximumConnectTimeoutSeconds)
+        if (connectTimeoutSeconds is < ConnectionConfig.MinimumTimeoutSeconds or > ConnectionConfig.MaximumTimeoutSeconds)
             throw new ArgumentOutOfRangeException(nameof(connectTimeoutSeconds));
         _connectTimeoutSeconds = connectTimeoutSeconds;
     }

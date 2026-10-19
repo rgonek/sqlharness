@@ -58,7 +58,7 @@ function NumberField({ id, label, value, min, max, error, onCommit }: { id: stri
   )
 }
 
-type CardKey = "journal" | "dashboard" | "compare" | "diagnostics" | "mutations"
+type CardKey = "journal" | "dashboard" | "compare" | "diagnostics" | "mutations" | "connection"
 type Status = { state: "saving" } | { state: "saved" } | { state: "error"; message: string }
 
 function StatusLine({ status }: { status?: Status }) {
@@ -223,6 +223,7 @@ export function SettingsPage() {
   const setCompare = (next: Partial<Settings["compare"]>) => commit({ ...draft, compare: { ...draft.compare, ...next } }, "compare")
   const setDiagnostics = (next: Partial<Settings["diagnostics"]>) => commit({ ...draft, diagnostics: { ...draft.diagnostics, ...next } }, "diagnostics")
   const setMutations = (next: Partial<Settings["mutations"]>) => commit({ ...draft, mutations: { ...draft.mutations, ...next } }, "mutations")
+  const setConnection = (next: Partial<Settings["connection"]>) => commit({ ...draft, connection: { ...draft.connection, ...next } }, "connection")
 
   function apply(next: Settings, card: CardKey) {
     setEdited(next)
@@ -273,6 +274,13 @@ export function SettingsPage() {
         </Alert>
       )}
       <p className="text-sm text-muted-foreground">Changes save as you make them. New processes use these settings; restart running <code>mcp serve</code> sessions to apply them.</p>
+      <Card>
+        <CardHeader><CardTitle>Database connection</CardTitle><CardDescription>Maximum time to establish a SQL Server or PostgreSQL connection, including driver-managed authentication. Azure CLI token acquisition has its own existing time budget.</CardDescription></CardHeader>
+        <CardContent className="grid gap-4">
+          <NumberField id="connection-timeout" label="Connection timeout (seconds)" value={draft.connection.timeoutSeconds} min={1} max={300} error={fieldErrors["connection.timeoutSeconds"]} onCommit={value => setConnection({ timeoutSeconds: value })} />
+          <StatusLine status={status.connection} />
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Activity journal</CardTitle>

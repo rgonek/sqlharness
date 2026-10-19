@@ -9,6 +9,7 @@ const initial = {
     journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
     dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled: false } },
     compare: { requireContext: true }, diagnostics: { enabled: false },
+    connection: { timeoutSeconds: 30 },
     mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
   },
 }

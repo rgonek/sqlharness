@@ -25,7 +25,8 @@ operation-annotation scope (plan 085) follows it. When matching is off, everythi
 
 1. **Operation membership** in an agent session keyed `(agent_kind, conversation_id)`, with evidence:
    `exact` (per-operation link from a transcript tool-use id or a client conversation id), `inferred` (unlinked
-   operation in an MCP/CLI session whose linked operations all point to exactly one conversation; CLI sessions via a
+   operation in an MCP/CLI session whose linked operations all point to exactly one conversation and which lies
+   between two exact links to it, because `/new` or `/clear` reuses the MCP session for a new conversation; CLI sessions via a
    shared `agent_pid` + `agent_started_at` with an MCP session that maps to exactly one conversation), or
    `unassigned`. Inferred membership is shown (marked) but never used for authorization (plan 085) or for
    Optimization version history.

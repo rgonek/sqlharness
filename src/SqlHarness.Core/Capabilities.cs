@@ -52,7 +52,7 @@ public static class SqlHarnessCapabilitiesProvider
     // 3: report the active compare-context requirement and version/history semantics.
     // 4: add the persistent mutation command and remove query mutation switches.
     // 6: report whether plan documents are available through the sensitive journal gate.
-    public const int ContractVersion = 6;
+    public const int ContractVersion = 7;
 
     public static SqlHarnessCompareContextCapability CompareContextPolicy(CompareConfig? config = null)
     {
@@ -123,14 +123,15 @@ public static class SqlHarnessCapabilitiesProvider
 
     /// <summary>Engine-neutral document: commands, active compare-context policy, modes, shared limits and engine summaries.</summary>
     public static SqlHarnessCapabilities Get(CompareConfig? compareConfig = null, MutationsConfig? mutationsConfig = null,
-        bool dashboardReachable = false, JournalConfig? journalConfig = null) =>
+        bool dashboardReachable = false, JournalConfig? journalConfig = null, ConnectionConfig? connectionConfig = null) =>
         Build(Details.Select(d => new SqlHarnessEngineSummary(d.Name, d.Summary)).ToList(), null, null, null, null, compareConfig,
-            mutationCapability: MutationCapability(mutationsConfig, dashboardReachable), journalConfig: journalConfig);
+            mutationCapability: MutationCapability(mutationsConfig, dashboardReachable), journalConfig: journalConfig,
+            connectionConfig: connectionConfig);
 
     /// <summary>Document scoped to one engine; the profile name is echoed back. Offline, no connection.</summary>
     public static SqlHarnessCapabilities Get(SqlEngine engine, string profileName, CompareConfig? compareConfig = null,
         TargetProfile? targetProfile = null, MutationsConfig? mutationsConfig = null, bool dashboardReachable = false,
-        JournalConfig? journalConfig = null)
+        JournalConfig? journalConfig = null, ConnectionConfig? connectionConfig = null)
     {
         var detail = DetailFor(engine);
         return Build(
@@ -144,14 +145,15 @@ public static class SqlHarnessCapabilitiesProvider
             detail.Guidance,
             detail.TargetServer,
             MutationCapability(mutationsConfig, dashboardReachable),
-            journalConfig);
+            journalConfig,
+            connectionConfig);
     }
 
     /// <summary>Scoped document for a profile's declared engine string (null or empty means sqlserver).</summary>
     public static SqlHarnessCapabilities Get(string profileName, string? profileEngine, CompareConfig? compareConfig = null,
         TargetProfile? targetProfile = null, MutationsConfig? mutationsConfig = null, bool dashboardReachable = false,
-        JournalConfig? journalConfig = null) =>
-        Get(SqlEngineNames.Parse(profileEngine), profileName, compareConfig, targetProfile, mutationsConfig, dashboardReachable, journalConfig);
+        JournalConfig? journalConfig = null, ConnectionConfig? connectionConfig = null) =>
+        Get(SqlEngineNames.Parse(profileEngine), profileName, compareConfig, targetProfile, mutationsConfig, dashboardReachable, journalConfig, connectionConfig);
 
     public static SqlHarnessMutationCapability MutationCapability(MutationsConfig? config, bool dashboardReachable) =>
         new(config?.DefaultMode ?? "never", config?.Verification ?? "click", config?.ApprovalTimeoutSeconds ?? 120, dashboardReachable);
@@ -179,7 +181,8 @@ public static class SqlHarnessCapabilitiesProvider
         SqlHarnessEngineGuidance? guidance = null,
         string targetServer = DefaultTargetServer,
         SqlHarnessMutationCapability? mutationCapability = null,
-        JournalConfig? journalConfig = null)
+        JournalConfig? journalConfig = null,
+        ConnectionConfig? connectionConfig = null)
     {
         var assembly = typeof(SqlHarnessCapabilitiesProvider).Assembly;
         var version = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -187,6 +190,7 @@ public static class SqlHarnessCapabilitiesProvider
         var limits = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["queryTimeoutSeconds"] = new { min = OperationLimits.QueryTimeoutSecondsMin, max = OperationLimits.QueryTimeoutSecondsMax },
+            ["connectionTimeoutSeconds"] = (connectionConfig ?? SqlHarnessConfig.Default.Connection).TimeoutSeconds,
             ["queryMaxRows"] = new { min = OperationLimits.MaxRowsMin, max = OperationLimits.MaxRowsMax },
             ["comparisonRowCapPerRun"] = new { min = 0, max = CanonicalComparisonAccumulator.MaximumComparedRows },
             ["comparisonUniqueFingerprintBudgetPerCell"] = new { min = 0, max = ComparisonBudget.DefaultMaxUniqueFingerprints },

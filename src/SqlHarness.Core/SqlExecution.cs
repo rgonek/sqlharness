@@ -232,24 +232,23 @@ internal static class SqlExecution
 
 internal sealed class SqlClientSessionFactory : ISqlSessionFactory
 {
-    private const int MaximumConnectTimeoutSeconds = 30;
     private static readonly IReadOnlyList<string> AccessTokenArguments =
         ["account", "get-access-token", "--resource", "https://database.windows.net/"];
     private readonly IAzureCli _azureCli;
     private readonly Func<string, string?, CancellationToken, Task<ISqlSession>> _connector;
     private readonly int _connectTimeoutSeconds;
 
-    internal SqlClientSessionFactory(IAzureCli azureCli, int connectTimeoutSeconds = 15)
+    internal SqlClientSessionFactory(IAzureCli azureCli, int connectTimeoutSeconds = ConnectionConfig.DefaultTimeoutSeconds)
         : this(azureCli, ConnectSqlClientAsync, connectTimeoutSeconds) { }
 
     internal SqlClientSessionFactory(
         IAzureCli azureCli,
         Func<string, string?, CancellationToken, Task<ISqlSession>> connector,
-        int connectTimeoutSeconds = 15)
+        int connectTimeoutSeconds = ConnectionConfig.DefaultTimeoutSeconds)
     {
         ArgumentNullException.ThrowIfNull(azureCli);
         ArgumentNullException.ThrowIfNull(connector);
-        if (connectTimeoutSeconds is < 1 or > MaximumConnectTimeoutSeconds)
+        if (connectTimeoutSeconds is < ConnectionConfig.MinimumTimeoutSeconds or > ConnectionConfig.MaximumTimeoutSeconds)
             throw new ArgumentOutOfRangeException(nameof(connectTimeoutSeconds));
         _azureCli = azureCli;
         _connector = connector;
