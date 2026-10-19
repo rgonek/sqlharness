@@ -65,3 +65,23 @@ Review findings and regression coverage:
 The restarted backfill now includes all pending and unresolved null-title identities in its wanted set, and marks only identities considered by a completed scan. Successful and retained-away identities are pruned from the unresolved bookkeeping. The host samples `data_version` before and after the pending-operation snapshot; a change at either boundary refreshes idle activity and starts the debounce before retention advances the observer baseline. A test hook makes that snapshot window deterministic in housekeeping tests.
 
 No other Task 1 behavior changed; the full `just verify` gate remains reserved for Task 6.
+
+## Round 2 review fix
+
+The targeted Codex path no longer queries every persisted null-title identity or adds all previously attempted identities to its index lookup. Full sweeps retain that history housekeeping; targeted cycles use only their selected operation identities and the resumable pending set. Pending backfill identities are capped at 500, keeping a cursor restart's extra selection bounded while preserving the interrupted-backfill behavior covered by `A_targeted_codex_backfill_keeps_other_unresolved_titles_in_scope`.
+
+RED command:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Targeted_codex_cycle_does_not_expand_lookup_to_other_attempted_titles" --no-restore
+```
+
+The new test failed as expected: targeted selection contained 25 identities instead of 1 after a full sweep had recorded 24 unrelated unresolved identities as attempted.
+
+GREEN focused command:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~TranscriptMatcher|FullyQualifiedName~DashboardHousekeeping" --no-restore
+```
+
+Final output: `Passed! - Failed: 0, Passed: 34, Skipped: 0, Duration: 7 s`. This includes `Targeted_codex_cycle_does_not_expand_lookup_to_other_attempted_titles`, `A_targeted_codex_backfill_keeps_other_unresolved_titles_in_scope`, and the matcher/housekeeping coverage. `pwsh ./scripts/format-changed.ps1 -Mode working-tree` returned `format: OK`; `git diff --check` passed. Full `just verify` remains reserved for Task 6.

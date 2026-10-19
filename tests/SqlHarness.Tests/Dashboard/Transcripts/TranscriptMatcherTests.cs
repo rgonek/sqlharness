@@ -178,6 +178,29 @@ public sealed class TranscriptMatcherTests
     }
 
     [Fact]
+    public async Task Targeted_codex_cycle_does_not_expand_lookup_to_other_attempted_titles()
+    {
+        using var f = new Fixture();
+        for (var i = 0; i < 24; i++)
+            f.Seed.Operation(JournalSeed.Session($"mcp:old-{i}", "codex"), agent: Call($"exec-old-{i}", sessionId: $"old-thread-{i}"));
+        f.CodexIndex("""{"id":"unrelated-index-entry","thread_name":"Unrelated","updated_at":"t"}""");
+
+        var matcher = f.Matcher();
+        matcher.RunCycle(enabled: true);
+
+        f.Seed.Operation(JournalSeed.Session("mcp:target", "codex"), agent: Call("exec-target", sessionId: "target-thread"));
+        f.CodexIndex("""{"id":"target-thread","thread_name":"Target title","updated_at":"t2"}""");
+        var targetOperationId = Convert.ToInt64(Journal.JournalDb.Rows(f.Home.DatabasePath,
+            "SELECT id FROM operations WHERE agent_session_id = 'target-thread'").Single()["id"]);
+
+        await matcher.RunTargetedAsync([targetOperationId], CancellationToken.None);
+
+        Assert.Equal(1, matcher.LastCodexLookupIdentityCount);
+        var link = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "target-thread");
+        Assert.Equal("Target title", link["title"]);
+    }
+
+    [Fact]
     public async Task Clear_waits_for_an_inflight_cycle_before_removing_its_rows()
     {
         using var f = new Fixture();

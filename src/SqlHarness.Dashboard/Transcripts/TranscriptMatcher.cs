@@ -15,6 +15,7 @@ internal sealed record TranscriptStatus(bool Enabled, int Matched, int Unmatched
 internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, TimeProvider time)
 {
     internal const long CycleBudgetBytes = 32L * 1024 * 1024;
+    private const int MaxPendingCodexTitleBackfills = 500;
     private const int SqliteBusy = 5;
     private const int SqliteLocked = 6;
     private static readonly TimeSpan MtimeSlack = TimeSpan.FromDays(1);
@@ -28,6 +29,7 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
     private string? _lastCycleAt;
 
     internal Func<string, bool> DirectoryExists { get; init; } = Directory.Exists;
+    internal int LastCodexLookupIdentityCount { get; private set; }
 
     /// <summary>Opens an existing journal for the host's shared idle observer and matcher transactions.</summary>
     internal SqliteConnection? OpenJournalConnection() => Open();
@@ -286,15 +288,22 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
         foreach (var key in batch.Conversations.Keys.Where(key => key.Kind is "codex" or "opencode"))
             AddWanted(key.Id, key.Kind);
 
-        var existingNullTitles = NullTitleConversationIds(connection).ToHashSet();
-        _codexTitleBackfillAttempted.RemoveWhere(key => !existingNullTitles.Contains(key));
-        var unresolvedTitles = existingNullTitles.Concat(batch.Conversations
-                .Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is null)
-                .Select(pair => pair.Key))
-            .ToHashSet();
-        _codexTitleBackfillPending.RemoveWhere(key => !unresolvedTitles.Contains(key));
+        var fullSweep = operationIds is null;
+        var existingNullTitles = fullSweep ? NullTitleConversationIds(connection).ToHashSet() : [];
+        if (fullSweep)
+        {
+            _codexTitleBackfillAttempted.RemoveWhere(key => !existingNullTitles.Contains(key));
+            var unresolvedTitles = existingNullTitles.Concat(batch.Conversations
+                    .Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is null)
+                    .Select(pair => pair.Key))
+                .ToHashSet();
+            _codexTitleBackfillPending.RemoveWhere(key => !unresolvedTitles.Contains(key));
+        }
         foreach (var key in batch.Conversations.Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is not null).Select(pair => pair.Key))
+        {
             _codexTitleBackfillAttempted.Remove(key);
+            _codexTitleBackfillPending.Remove(key);
+        }
 
         var missingTitles = (operationIds is null ? existingNullTitles : [])
             .Concat(batch.Conversations
@@ -305,12 +314,16 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
             .ToArray();
         foreach (var key in missingTitles)
         {
-            if (_codexTitleBackfillPending.Add(key))
+            if (_codexTitleBackfillPending.Count < MaxPendingCodexTitleBackfills && _codexTitleBackfillPending.Add(key))
                 _restartCodexTitleBackfill = true;
         }
 
-        foreach (var key in _codexTitleBackfillPending.Concat(_codexTitleBackfillAttempted))
+        foreach (var key in fullSweep
+                     ? _codexTitleBackfillPending.Concat(_codexTitleBackfillAttempted)
+                     : _codexTitleBackfillPending)
             AddWanted(key.Id, key.Kind);
+
+        LastCodexLookupIdentityCount = wanted.Count;
 
         if (wanted.Count == 0 || budget <= 0 || !File.Exists(homes.CodexSessionIndex))
             return budget;
