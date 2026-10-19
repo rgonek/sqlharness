@@ -114,6 +114,66 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
+    public void Object_free_non_io_operators_without_runtime_counters_do_not_block_object_reconciliation()
+    {
+        var cases = new[]
+        {
+            (
+                new[]
+                {
+                    ReadPlanFixture("082-scalar-baseline-setup.sqlplan"),
+                    ReadPlanFixture("082-scalar-baseline.sqlplan"),
+                },
+                new[]
+                {
+                    new TableIoCounters("table variables", 2, 6029, 0, 0, 0, 0, 0, 0),
+                    new TableIoCounters("#p082_seed_1019", 1, 3000, 0, 0, 0, 0, 0, 0),
+                }),
+            (
+                new[]
+                {
+                    ReadPlanFixture("082-scalar-candidate-setup.sqlplan"),
+                    ReadPlanFixture("082-scalar-candidate.sqlplan"),
+                },
+                new[]
+                {
+                    new TableIoCounters("table variables", 1, 6019, 0, 0, 0, 0, 0, 0),
+                    new TableIoCounters("#p082_seed_1019", 1, 3000, 0, 0, 0, 0, 0, 0),
+                }),
+        };
+
+        foreach (var (plans, observed) in cases)
+        {
+            var statements = JournalStatementMetricsExtractor.Extract(plans, out var omitted);
+
+            Assert.Equal(0, omitted);
+            Assert.Equal([StatementStatus.Confirmed, StatementStatus.Confirmed],
+                StatementReconciler.Reconcile(statements, observed));
+        }
+    }
+
+    [Fact]
+    public void Missing_io_counters_on_other_object_free_operators_remain_incomplete()
+    {
+        var statement = Assert.Single(JournalStatementMetricsExtractor.Extract(
+            [NoObjectPlan("Filter", "ActualExecutions=\"1\"")], out _));
+
+        Assert.False(statement.CountersComplete);
+    }
+
+    [Theory]
+    [InlineData("Compute Scalar")]
+    [InlineData("Nested Loops")]
+    [InlineData("Stream Aggregate")]
+    public void Positive_io_on_whitelisted_object_free_operators_remains_incomplete(string physicalOp)
+    {
+        var statement = Assert.Single(JournalStatementMetricsExtractor.Extract(
+            [NoObjectPlan(physicalOp, "ActualExecutions=\"1\" ActualLogicalReads=\"1\" ActualLobLogicalReads=\"0\" ActualScans=\"0\"")], out _));
+
+        Assert.False(statement.CountersComplete);
+    }
+
+    [Fact]
     public void Journal_extraction_does_not_group_missing_or_conflicting_compiled_identities()
     {
         var sql = "SELECT * FROM [dbo].[T]";
@@ -322,6 +382,23 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
+    public void Journal_statement_hash_keeps_plan_text_when_executed_span_is_unmatched()
+    {
+        var planText = "SELECT 1";
+        var run = new CompareRunArtifact(
+            "baseline", 1, 10, 11, 1, new Dictionary<string, long>(), "h",
+            [JournalPlan(planText, 1, 1, "0x01", 0, 1)], 0)
+        {
+            ExecutedSql = "SELECT 2",
+        };
+
+        var journalStatement = Assert.Single(JournalBenchmarkBuilder.Build([run]).Statements);
+
+        Assert.Equal(PlanIdentity.StatementSha256(planText), journalStatement.StatementHash);
+        Assert.NotEqual(PlanIdentity.StatementSha256(run.ExecutedSql), journalStatement.StatementHash);
+    }
+
+    [Fact]
     public void Postgres_explain_json_is_readable_without_node_ids()
     {
         var json = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "seq-scan.explain.json"));
@@ -389,6 +466,20 @@ public sealed class StatementMetricsTests
 
     private static string ReadPlanFixture(string name) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Plans", name));
+
+    private static string NoObjectPlan(string physicalOp, string counterAttributes) => $"""
+        <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+          <BatchSequence><Batch><Statements>
+            <StmtSimple StatementText="SELECT 1" StatementId="1" StatementCompId="1" QueryPlanHash="0x01">
+              <QueryPlan>
+                <RelOp NodeId="0" PhysicalOp="{SecurityElement.Escape(physicalOp)}" LogicalOp="{SecurityElement.Escape(physicalOp)}">
+                  <RunTimeInformation><RunTimeCountersPerThread Thread="0" {counterAttributes} /></RunTimeInformation>
+                </RelOp>
+              </QueryPlan>
+            </StmtSimple>
+          </Statements></Batch></BatchSequence>
+        </ShowPlanXML>
+        """;
 
     private static string JournalPlan(
         string text,

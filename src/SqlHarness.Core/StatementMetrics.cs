@@ -295,10 +295,18 @@ internal static class JournalStatementMetricsExtractor
             var reads = SumCounters(runtime, "ActualLogicalReads");
             var lobReads = SumCounters(runtime, "ActualLobLogicalReads");
             var scans = SumCounters(runtime, "ActualScans");
+            var physicalOp = Attribute(relOp, "PhysicalOp") ?? string.Empty;
             if (table is null)
             {
-                if (!reads.Complete || !lobReads.Complete || !scans.Complete
-                    || reads.Value.GetValueOrDefault() > 0 || lobReads.Value.GetValueOrDefault() > 0 || scans.Value.GetValueOrDefault() > 0)
+                var hasUnattributedIo = reads.Value.GetValueOrDefault() > 0
+                    || lobReads.Value.GetValueOrDefault() > 0
+                    || scans.Value.GetValueOrDefault() > 0;
+                var missingRuntimeIo = !reads.Complete || !lobReads.Complete || !scans.Complete;
+                // These object-free operators can omit their own IO counters; child objects carry their IO.
+                var objectFreeOperatorHasNoIoCounters = physicalOp.Equals("Compute Scalar", StringComparison.OrdinalIgnoreCase)
+                    || physicalOp.Equals("Nested Loops", StringComparison.OrdinalIgnoreCase)
+                    || physicalOp.Equals("Stream Aggregate", StringComparison.OrdinalIgnoreCase);
+                if (hasUnattributedIo || missingRuntimeIo && !objectFreeOperatorHasNoIoCounters)
                     countersComplete = false;
             }
             else
@@ -313,7 +321,6 @@ internal static class JournalStatementMetricsExtractor
                 counters.Add(reads.Value, lobReads.Value, scans.Value, reads.Complete && lobReads.Complete && scans.Complete);
             }
 
-            var physicalOp = Attribute(relOp, "PhysicalOp") ?? string.Empty;
             var logicalOp = Attribute(relOp, "LogicalOp") ?? string.Empty;
             if (physicalOp.Contains("table-valued function", StringComparison.OrdinalIgnoreCase)
                 || logicalOp.Contains("table-valued function", StringComparison.OrdinalIgnoreCase))

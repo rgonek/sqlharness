@@ -71,15 +71,16 @@ internal static class JournalBenchmarkBuilder
             {
                 var metric = metrics[index];
                 var statementHash = metric.StatementHash;
-                if (run.ExecutedSql is not null && metric.DocumentOrdinal >= 0
-                    && metric.DocumentOrdinal < pairsByDocument.Count
-                    && metric.StatementId.HasValue)
+                if (run.ExecutedSql is { } executedSql
+                    && metric.PlanDocumentOrdinal is int documentOrdinal
+                    && documentOrdinal >= 0 && documentOrdinal < pairsByDocument.Count
+                    && metric.PlanStatementIndex is int statementIndex
+                    && statementIndex >= 0 && statementIndex < pairsByDocument[documentOrdinal].Count)
                 {
-                    var pair = pairsByDocument[metric.DocumentOrdinal]
-                        .FirstOrDefault(item => item.StatementId == metric.StatementId
-                            && item.StatementCompId == metric.StatementCompId);
-                    if (pair is { SpanStart: int start, SpanLength: int length })
-                        statementHash = PlanIdentity.StatementSha256(run.ExecutedSql.Substring(start, length));
+                    var pair = pairsByDocument[documentOrdinal][statementIndex];
+                    if (pair is { SpanStart: int start, SpanLength: int length }
+                        && start >= 0 && length > 0 && start <= executedSql.Length - length)
+                        statementHash = PlanIdentity.StatementSha256(executedSql.Substring(start, length));
                 }
                 output.Add(new JournalStatementMetrics(
                     run.Variant,
