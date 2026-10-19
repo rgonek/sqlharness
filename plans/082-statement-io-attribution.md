@@ -22,7 +22,7 @@
 
 ## Status and dependencies
 
-- Implementation and Task 5 evidence complete on `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34`; final Sol low whole-branch review is pending. Planning base `760f7d6`. Depends on 079, 080, 081 and 087 (measure observations in the comparer).
+- Implementation, Task 5 evidence, and both final-review fixes are complete on product revision `b9f60924d09cdfa13f07106662549fcca8ee1f56`; the final Sol low whole-branch re-review is pending. Planning base `760f7d6`. Depends on 079, 080, 081 and 087 (measure observations in the comparer).
 - Priority P2; effort L; risk MEDIUM (verdict basis changes what reviewers see).
 
 ## Global Constraints
@@ -117,3 +117,9 @@
 - [x] **Step 2:** `just verify` exited 0 on exact product revision `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34`; durable results in [verification evidence](082-verification-evidence.md).
 - [x] **Step 3 (operator-authorized):** UAT measure/compare of an op-203-like batch on the authorized `civiclens-dev` SQL Server target; plan counters reconciled `confirmed` and the focused verdict was better; recorded without business data.
 - [x] **Step 4:** Archived the implementation evidence in plan history; commit `docs(082): record plan 082 evidence`.
+
+### Final whole-branch review fix wave
+
+- [x] Joined comparison object rows by object identity and aggregated each side across selected cases; confirmed absences contribute zero for sum/mean while unavailable attribution stays null.
+- [x] Added comparer, endpoint API, and UI regressions. Focused checks, branch formatting, and the required Windows gate passed on `b9f6092`; see [final fix report](../.superpowers/sdd/082-statement-io-attribution/final-fix-report.md) and [verification evidence](082-verification-evidence.md).
+- [ ] Final Sol low whole-branch re-review remains pending before marking Plan 082 done or integrating it into `main`.
