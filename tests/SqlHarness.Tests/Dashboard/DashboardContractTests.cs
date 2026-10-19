@@ -121,7 +121,7 @@ public sealed class DashboardContractTests
         Assert.Equal(["operation", "session", "vars", "candidateSqlHash", "sqlText", "candidateSqlText", "rawTokens",
                 "emittedTokens", "artifactDirectory", "summary", "variants", "dimensions", "agent", "rawBytes", "emittedBytes",
                 "tokenEstimationMethod", "compareSubject", "compareScope", "baselineVersion", "candidateVersion",
-                "compareRegression", "compareCases", "compareConditions", "phases", "setupSqlText", "conditions", "statements"],
+                "compareRegression", "compareCases", "compareConditions", "phases", "setupSqlText", "conditions", "statements", "omittedStatements", "statementAttribution"],
             Names(new OperationDetail(default!, default!, null, null, null, null, null, null, null, null, [], default!, null)));
     }
 
