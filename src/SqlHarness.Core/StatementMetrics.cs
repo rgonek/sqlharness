@@ -274,8 +274,8 @@ internal static class JournalStatementMetricsExtractor
         var root = queryPlan?.Element(Showplan + "RelOp");
         var rootCounters = root?.DescendantsAndSelf().Where(element => element.Name == Showplan + "RunTimeCountersPerThread"
             && (element == root || element.Ancestors(Showplan + "RelOp").FirstOrDefault() == root)).ToArray() ?? [];
-        var (executions, executionComplete) = SumCounters(rootCounters, "ActualExecutions");
-        var countersComplete = executionComplete;
+        var (executions, _) = SumCounters(rootCounters, "ActualExecutions");
+        var countersComplete = root is not null;
         var objectValues = new Dictionary<string, MutableObjectCounters>(StringComparer.Ordinal);
         var tvfValues = new Dictionary<string, long?>(StringComparer.Ordinal);
         foreach (var relOp in queryPlan?.Descendants(Showplan + "RelOp") ?? [])

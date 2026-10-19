@@ -67,6 +67,23 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
+    public void Missing_root_execution_count_does_not_make_complete_object_io_incomplete()
+    {
+        var xml = JournalPlan("SELECT * FROM [dbo].[T]", 1, 1, "0x01", reads: 7, executions: 1)
+            .Replace(
+                "ActualRows=\"1\" ActualExecutions=\"1\" />",
+                "ActualRows=\"1\" ActualLogicalReads=\"0\" ActualLobLogicalReads=\"0\" ActualScans=\"0\" />",
+                StringComparison.Ordinal);
+
+        var statement = Assert.Single(JournalStatementMetricsExtractor.Extract([xml], out _));
+
+        Assert.Null(statement.Executions);
+        Assert.True(statement.CountersComplete);
+        var counters = Assert.Single(statement.Objects!);
+        Assert.Equal(7, counters.LogicalReads);
+    }
+
+    [Fact]
     public void Table_variable_names_come_from_plan()
     {
         var xml = JournalPlan("SELECT * FROM @P JOIN @R ON 1 = 1", 1, 1, "0x01", 0, 1,
