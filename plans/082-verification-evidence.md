@@ -4,7 +4,7 @@
 
 The implementation and operator-authorized synthetic UAT are complete. Tasks 0–4 have clean scoped task reviews; the final Sol low whole-branch review is still pending. Do not treat this as the whole-branch approval or as merged into `main`.
 
-The final Windows gate tested product revision `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34` (`7f98ef9`) after integrating current `main` baseline `ca4c8b8` into the feature branch as `5bfa9f3`. Product changes after that integration are `dd0544d` (narrow IO attribution and legacy hash fixes), `c60b1b6` (hand-corrected branch C# formatting), `c7bd3d7` (TypeScript test query type fix), and `7f98ef9` (contract expectations for schema/API/fallback). Documentation edits follow the green product gate and do not change the tested product tree.
+The final Windows gate tested product revision `7f98ef99f731af5fbc2ba37f8bb6e0d453cd6c34` (`7f98ef9`). Feature commits `dd0544d` (narrow IO attribution and legacy hash fixes) and `c60b1b6` (hand-corrected branch C# formatting) preceded integration of current `main` baseline `ca4c8b8` into the feature branch as `5bfa9f3`. The post-integration fixes are `c7bd3d7` (TypeScript test query type fix) and `7f98ef9` (contract expectations for schema/API/fallback). Documentation edits follow the green product gate and do not change the tested product tree.
 
 ## Task review ledger
 
@@ -12,7 +12,7 @@ The final Windows gate tested product revision `7f98ef99f731af5fbc2ba37f8bb6e0d4
 |---|---|---|
 | 0 | `9dc73f6..03716f8` | Clean spec and quality review; spike evidence is separate from Task 5 UAT. |
 | 1 | `03716f8..8e9ca2b` | Clean scoped review; root executions remain independent from object IO completeness. |
-| 2 | `8e9ca2b..fca7755` | Clean spec and quality review; median-total-run reconciliation, omission persistence, and empty statement sets were reviewed. The earlier report's stale-test diagnosis was corrected below. |
+| 2 | `8e9ca2b..fca7755` | Clean spec and quality review; median-total-run reconciliation, omission persistence, and empty statement sets were reviewed. The 45/45 focused run was pre-final-edit working-tree evidence, not verification of committed `fca7755`; see the Task 2/3 correction below. |
 | 3 | `fca7755..a06e7e5` | Clean scoped review after mean additivity, measured-row semantics, and badge-basis fixes. |
 | 4 | `a06e7e5..14518e8` | Clean scoped review after parameter-set plan identity, PostgreSQL Markdown wording, migration coverage, and sort coverage fixes. |
 | 5 | `14518e8..7f98ef9` | Task 5 work and test corrections are recorded here. Final whole-branch Sol low review is pending. |
@@ -71,6 +71,10 @@ The following cross-task decisions and their costs are retained so future change
 
 The captured fixture tests verify the real plans become confirmed after reconciliation, while negative tests keep unknown object-free operators, positive unidentified IO, and spool/TVF uncertainty partial.
 
-## Task 2 evidence correction
+## Task 2 and Task 3 evidence correction
 
-The original failing test `Statement_metrics_hash_uses_the_paired_full_executed_span` was meaningful compatibility coverage, not stale-test noise. It compares the journal's legacy full executed-span `StatementHash` with the full artifact span hash; it does not compare the new normalized `StatementKey`. The builder had restored the old hash only when `StatementId` was present, although the retained fixture had valid per-document statement spans without IDs. The fix resolves the exact retained `PlanDocumentOrdinal` and `PlanStatementIndex`, then uses only an existing, bounded, valid `StatementSpanPairer` span; it does not guess when pairing is absent and retains the plan-text fallback. A no-pair regression test preserves that boundary. The broad extractor/reconciler/builder suite then passed 48/48.
+Task 2's report records a focused 45/45 test run, but the final edit narrowing `JournalStatementMetrics.UdfElapsedMilliseconds` from `double?` to `long?` happened after that run. The edit left `JournalBenchmarkBuilder` assigning a `double?` value to a `long?` property, so committed revision `fca77555843cfe67277b092401ec57a0c26238a3` did not compile and was not verified by the 45/45 result. Task 3 commit `d966484` fixed the precision mismatch by preserving fractional milliseconds as `double?` and SQLite `REAL`, then reran the impacted suites: comparer/reader 47 passed, journal/endpoint 47 passed, and contract/fractional-UDF tests 9 passed. Follow-up Task 3 fixes are in `a06e7e5`. The Task 2 review approval does not convert the earlier working-tree test result into committed-tree evidence.
+
+## Task 5 legacy-hash compatibility correction
+
+The later failing test `Statement_metrics_hash_uses_the_paired_full_executed_span` was meaningful compatibility coverage, not stale-test noise. It compares the journal's legacy full executed-span `StatementHash` with the full artifact span hash; it does not compare the new normalized `StatementKey`. The builder had restored the old hash only when `StatementId` was present, although the retained fixture had valid per-document statement spans without IDs. The Task 5 fix resolves the exact retained `PlanDocumentOrdinal` and `PlanStatementIndex`, then uses only an existing, bounded, valid `StatementSpanPairer` span; it does not guess when pairing is absent and retains the plan-text fallback. A no-pair regression test preserves that boundary. The broad extractor/reconciler/builder suite then passed 48/48.
