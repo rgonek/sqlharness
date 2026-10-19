@@ -326,6 +326,71 @@ public sealed class DashboardHousekeepingTests
     }
 
     [Fact]
+    public async Task Journal_change_triggers_targeted_cycle_within_debounce()
+    {
+        using var home = new TempHome();
+        using var agents = new TempHome();
+        var homes = new AgentHomes(Path.Combine(agents.Path, "claude"), Path.Combine(agents.Path, "codex"));
+        var seed = new JournalSeed(home.DatabasePath);
+        var project = homes.ClaudeProjectDirectory("/work");
+        Directory.CreateDirectory(project);
+        File.WriteAllLines(Path.Combine(project, "conv-event.jsonl"), [ClaudeFixtures.Assistant("conv-event", "model", null, ("toolu_event", "mcp__sqlharness__query"))]);
+        var config = SqlHarnessConfig.Default with
+        {
+            Dashboard = SqlHarnessConfig.Default.Dashboard with { AgentTranscripts = new AgentTranscriptsConfig { Enabled = true } },
+        };
+        var clock = Clock();
+        var passes = new Passes();
+        using var cts = new CancellationTokenSource();
+        var run = DashboardHost.RunAsync(Options(home, idle: null, clock, passes, config) with { AgentHomes = homes }, cts.Token);
+        await passes.MoreAsync();
+
+        seed.Operation(JournalSeed.Session("mcp:event", "claude"), agent: new AgentCallMetadata("toolu_event", null, null, null, null, null, null));
+        await passes.MoreAsync();
+        Assert.Empty(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await passes.MoreAsync();
+        Assert.Empty(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
+
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        await WaitForAsync(() => Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links").Count == 1);
+        cts.Cancel();
+        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+    }
+
+    [Fact]
+    public async Task Sweep_still_runs_every_60s()
+    {
+        using var home = new TempHome();
+        using var agents = new TempHome();
+        var homes = new AgentHomes(Path.Combine(agents.Path, "claude"), Path.Combine(agents.Path, "codex"));
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("mcp:sweep", "claude"), agent: new AgentCallMetadata("toolu_sweep", null, null, null, null, null, null));
+        var config = SqlHarnessConfig.Default with
+        {
+            Dashboard = SqlHarnessConfig.Default.Dashboard with { AgentTranscripts = new AgentTranscriptsConfig { Enabled = true } },
+        };
+        var clock = Clock();
+        var passes = new Passes();
+        using var cts = new CancellationTokenSource();
+        var run = DashboardHost.RunAsync(Options(home, idle: null, clock, passes, config) with { AgentHomes = homes }, cts.Token);
+        await passes.MoreAsync();
+
+        var project = homes.ClaudeProjectDirectory("/work");
+        Directory.CreateDirectory(project);
+        File.WriteAllLines(Path.Combine(project, "conv-sweep.jsonl"), [ClaudeFixtures.Assistant("conv-sweep", "model", null, ("toolu_sweep", "mcp__sqlharness__query"))]);
+        clock.Advance(TimeSpan.FromSeconds(59));
+        await passes.MoreAsync();
+        Assert.Empty(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await WaitForAsync(() => Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links").Count == 1);
+        cts.Cancel();
+        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+    }
+
+    [Fact]
     public async Task Matcher_commits_do_not_keep_an_idle_dashboard_up()
     {
         using var home = new TempHome();

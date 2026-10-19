@@ -61,6 +61,9 @@ public static class DashboardHost
 {
     /// <summary>Default budget for another dashboard of the same home to publish its address.</summary>
     public static readonly TimeSpan ExistingInstanceWait = TimeSpan.FromSeconds(5);
+    internal static readonly TimeSpan TranscriptChangePollInterval = TimeSpan.FromMilliseconds(250);
+    internal static readonly TimeSpan TranscriptChangeDebounce = TimeSpan.FromMilliseconds(1500);
+    internal static readonly TimeSpan TranscriptSweepInterval = TimeSpan.FromSeconds(60);
 
     public static async Task<int> RunAsync(DashboardHostOptions options, CancellationToken ct)
     {
@@ -228,6 +231,8 @@ public static class DashboardHost
     private static async Task HousekeepAsync(DashboardHostOptions options, DashboardActivity activity, RunningDashboard running, CancellationToken ct)
     {
         DateTimeOffset? lastRetention = null;
+        DateTimeOffset? lastSweep = null;
+        DateTimeOffset? targetedCycleAt = null;
         var lastJournalChange = options.Time.GetUtcNow();
         long? lastVersion = null;
         SqliteConnection? watch = null;
@@ -241,9 +246,7 @@ public static class DashboardHost
                 watch ??= running.Transcripts.OpenJournalConnection();
                 if (watch is null)
                     return null;
-                using var command = watch.CreateCommand();
-                command.CommandText = "PRAGMA data_version;";
-                return (long)command.ExecuteScalar()!;
+                return JournalDataVersion.Read(watch);
             }
             catch (SqliteException)
             {
@@ -261,38 +264,67 @@ public static class DashboardHost
                 var now = options.Time.GetUtcNow();
                 // Settings saved from the settings page apply from the next pass; an invalid file means defaults.
                 var config = options.ConfigPath is null ? options.Config.Config : SqlHarnessConfigLoader.Load(options.ConfigPath).Config;
+                var matchingEnabled = config.Dashboard.AgentTranscripts.Enabled;
+                var beforeWork = ReadVersion();
+                if (beforeWork is not null && lastVersion is not null && beforeWork != lastVersion)
+                {
+                    lastJournalChange = now;
+                    targetedCycleAt = matchingEnabled ? now + TranscriptChangeDebounce : null;
+                }
+
                 if (lastRetention is not { } last || now - last >= options.RetentionInterval)
                 {
                     lastRetention = now;
                     var journal = config.Journal;
                     if (journal.Enabled && journal.Retention.Enabled)
                     {
-                        // Agent commits since the last check would be hidden by the post-retention
-                        // baseline: count them before retention runs.
-                        var before = ReadVersion();
-                        if (before is not null && lastVersion is not null && before != lastVersion)
-                            lastJournalChange = now;
+                        var pendingBeforeRetention = matchingEnabled && watch is not null
+                            ? running.Transcripts.PendingOperationIds(watch).ToHashSet()
+                            : [];
                         // Never throws; a failed pass is retried at the next interval. Ctrl+C waits for an
                         // in-flight pass, which its short delete batches keep brief.
                         await Task.Run(() => JournalRetention.Run(options.DatabasePath, journal, options.Processes, options.Time), ct);
                         // Retention's own commits are not activity: take the version after it as the baseline.
-                        lastVersion = ReadVersion();
+                        beforeWork = ReadVersion();
+                        if (matchingEnabled && watch is not null && beforeWork is not null && lastVersion is not null && beforeWork != lastVersion)
+                        {
+                            var pendingAfterRetention = running.Transcripts.PendingOperationIds(watch);
+                            if (pendingAfterRetention.Any(id => !pendingBeforeRetention.Contains(id)))
+                            {
+                                lastJournalChange = now;
+                                targetedCycleAt = now + TranscriptChangeDebounce;
+                            }
+                        }
+                        lastVersion = beforeWork;
                     }
                 }
 
-                if (config.Dashboard.AgentTranscripts.Enabled)
+                if (matchingEnabled)
                 {
-                    // Count agent commits since the last check before the matcher's own commits hide them.
-                    var beforeMatching = ReadVersion();
-                    if (beforeMatching is not null && lastVersion is not null && beforeMatching != lastVersion)
-                        lastJournalChange = now;
-                    if (watch is not null)
-                        await Task.Run(() => running.Transcripts.RunCycle(enabled: true, journalConnection: watch), ct);
+                    if (lastSweep is not { } sweep || now - sweep >= TranscriptSweepInterval)
+                    {
+                        if (watch is not null)
+                            await Task.Run(() => running.Transcripts.RunCycle(enabled: true, journalConnection: watch), ct);
+                        lastSweep = now;
+                        targetedCycleAt = null;
+                    }
+                    else if (targetedCycleAt is { } due && now >= due && watch is not null)
+                    {
+                        var operationIds = running.Transcripts.PendingOperationIds(watch);
+                        await Task.Run(() => running.Transcripts.RunTargetedAsync(operationIds, ct, watch), ct);
+                        targetedCycleAt = null;
+                    }
                 }
+                else
+                    targetedCycleAt = null;
 
                 var version = ReadVersion();
                 if (version is not null && lastVersion is not null && version != lastVersion)
+                {
                     lastJournalChange = now;
+                    if (matchingEnabled)
+                        targetedCycleAt = now + TranscriptChangeDebounce;
+                }
                 lastVersion = version;
 
                 if (options.IdleShutdown is { } idle && activity.OpenStreams == 0)
@@ -303,7 +335,10 @@ public static class DashboardHost
                 }
 
                 options.Housekept?.Invoke();
-                await Task.Delay(options.HousekeepingInterval, options.Time, ct);
+                var pollInterval = matchingEnabled && TranscriptChangePollInterval < options.HousekeepingInterval
+                    ? TranscriptChangePollInterval
+                    : options.HousekeepingInterval;
+                await Task.Delay(pollInterval, options.Time, ct);
             }
         }
         finally

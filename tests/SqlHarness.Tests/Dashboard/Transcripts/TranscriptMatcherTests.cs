@@ -215,6 +215,31 @@ public sealed class TranscriptMatcherTests
     }
 
     [Fact]
+    public void Codex_links_without_index_timing()
+    {
+        using var f = new Fixture();
+        f.Seed.Operation(JournalSeed.Session("mcp:x", "codex"), agent: Call("exec-known", sessionId: "known"));
+        f.CodexIndex(
+            """{"id":"late-operation","thread_name":"Already indexed","updated_at":"t"}""",
+            """{"id":"known","thread_name":"Known thread","updated_at":"t"}""");
+
+        var matcher = f.Matcher();
+        matcher.RunCycle(enabled: true);
+        Assert.Contains(f.Links(), row => (string)row["conversation_id"]! == "known");
+
+        f.Seed.Operation(JournalSeed.Session("mcp:open", "opencode"), agent: Call("exec-open", sessionId: "open-operation"));
+        matcher.RunCycle(enabled: true);
+        var open = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "open-operation");
+        Assert.Equal("opencode", open["agent_kind"]);
+
+        f.Seed.Operation(JournalSeed.Session("mcp:y", "codex"), agent: Call("exec-late", sessionId: "late-operation"));
+        matcher.RunCycle(enabled: true);
+
+        var late = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "late-operation");
+        Assert.Equal("Already indexed", late["title"]);
+    }
+
+    [Fact]
     public void Subagent_transcripts_are_scanned_and_one_session_can_link_several_conversations()
     {
         using var f = new Fixture();

@@ -47,9 +47,9 @@
 ### Task 1: Matcher fixes and event-driven cycles
 **Files:** `src/SqlHarness.Dashboard/Transcripts/TranscriptMatcher.cs` (~`:232-313`), `src/SqlHarness.Dashboard/DashboardHost.cs` (~`:225-291`, housekeeping loop), `src/SqlHarness.Dashboard/LiveFeed.cs` (shared `data_version` signal); tests `tests/SqlHarness.Tests/Dashboard/TranscriptMatcherTests.cs` (create if absent), `DashboardHousekeepingTests.cs`.
 **Interfaces:** `TranscriptMatcher.RunTargetedAsync(IReadOnlyCollection<long> operationIds, CancellationToken ct)`; Codex upsert `agent_conversations(agent_kind='codex'|'opencode', conversation_id=agent_session_id)` with null title, title filled by the index scan later.
-- [ ] Failing tests: `Codex_links_without_index_timing`; `Journal_change_triggers_targeted_cycle_within_debounce` (fake clock, 1.5 s); `Sweep_still_runs_every_60s`; read budget respected.
-- [ ] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~TranscriptMatcher|FullyQualifiedName~DashboardHousekeeping"` → FAIL; implement; → PASS.
-- [ ] Commit `feat(084): link Codex immediately and match Claude on journal changes`.
+- [x] Failing test: `Codex_links_without_index_timing` reproduced the skipped Codex thread after the session-index cursor had advanced; focused matcher/housekeeping tests then passed. Added fake-clock `Journal_change_triggers_targeted_cycle_within_debounce` (1.5 s), `Sweep_still_runs_every_60s`, and verified the existing read-budget test.
+- [x] `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~TranscriptMatcher|FullyQualifiedName~DashboardHousekeeping"` → RED (28 passed, 1 failed on the new cursor regression) → GREEN (31 passed).
+- [x] Commit `feat(084): link Codex immediately and match Claude on journal changes`.
 
 ### Task 2: Membership model
 **Files:** create `src/SqlHarness.Dashboard/AgentSessions/AgentSessionMembership.cs`; modify `src/SqlHarness.Dashboard/JournalReader.cs`; tests `tests/SqlHarness.Tests/Dashboard/AgentSessionMembershipTests.cs`.

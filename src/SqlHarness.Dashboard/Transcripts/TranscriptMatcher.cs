@@ -21,6 +21,9 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
     private static readonly TimeSpan StagingLifetime = TimeSpan.FromDays(7);
 
     private readonly object _gate = new();
+    private readonly HashSet<(string Kind, string Id)> _codexTitleBackfillPending = [];
+    private readonly HashSet<(string Kind, string Id)> _codexTitleBackfillAttempted = [];
+    private bool _restartCodexTitleBackfill;
     private int _readErrors;
     private string? _lastCycleAt;
 
@@ -29,9 +32,43 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
     /// <summary>Opens an existing journal for the host's shared idle observer and matcher transactions.</summary>
     internal SqliteConnection? OpenJournalConnection() => Open();
 
-    internal void RunCycle(bool enabled, SqliteConnection? journalConnection = null)
+    internal IReadOnlyCollection<long> PendingOperationIds(SqliteConnection connection)
     {
-        if (!enabled)
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT o.id FROM operations o JOIN sessions s ON s.id = o.session_id
+            WHERE (s.agent_kind = 'claude' AND o.client_call_id IS NOT NULL
+                     AND NOT EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.operation_id = o.id))
+               OR (s.agent_kind IN ('codex', 'opencode') AND o.agent_session_id IS NOT NULL
+                     AND NOT EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.operation_id = o.id))
+            ORDER BY o.id LIMIT 500;
+            """;
+        using var reader = command.ExecuteReader();
+        var ids = new List<long>();
+        while (reader.Read())
+            ids.Add(reader.GetInt64(0));
+        return ids;
+    }
+
+    internal void RunCycle(bool enabled, SqliteConnection? journalConnection = null)
+        => Run(enabled, journalConnection, operationIds: null, CancellationToken.None);
+
+    internal Task RunTargetedAsync(IReadOnlyCollection<long> operationIds, CancellationToken ct)
+        => RunTargetedAsync(operationIds, ct, journalConnection: null);
+
+    internal Task RunTargetedAsync(IReadOnlyCollection<long> operationIds, CancellationToken ct, SqliteConnection? journalConnection)
+    {
+        ArgumentNullException.ThrowIfNull(operationIds);
+        if (operationIds.Count == 0)
+            return Task.CompletedTask;
+
+        Run(enabled: true, journalConnection, operationIds.Take(500).ToArray(), ct);
+        return Task.CompletedTask;
+    }
+
+    private void Run(bool enabled, SqliteConnection? journalConnection, IReadOnlyCollection<long>? operationIds, CancellationToken ct)
+    {
+        if (!enabled || ct.IsCancellationRequested)
             return;
 
         lock (_gate)
@@ -45,8 +82,9 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                     return;
 
                 var batch = new Batch();
-                var budget = ScanClaude(connection, batch, CycleBudgetBytes);
-                ScanCodex(connection, batch, budget);
+                AddCodexIdentities(connection, batch, operationIds);
+                var budget = ScanClaude(connection, batch, CycleBudgetBytes, operationIds);
+                ScanCodex(connection, batch, budget, operationIds);
                 Commit(connection, batch);
             }
             catch
@@ -77,7 +115,7 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                           (SELECT COUNT(*) FROM operation_agent_links),
                           (SELECT COUNT(*) FROM operations o JOIN sessions s ON s.id = o.session_id
                            WHERE ((s.agent_kind = 'claude' AND o.client_call_id IS NOT NULL)
-                               OR (s.agent_kind = 'codex' AND o.agent_session_id IS NOT NULL))
+                               OR (s.agent_kind IN ('codex', 'opencode') AND o.agent_session_id IS NOT NULL))
                              AND NOT EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.operation_id = o.id));
                         """;
                     using var reader = command.ExecuteReader();
@@ -159,15 +197,18 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
     private static bool SchemaMatches(SqliteConnection connection) =>
         Convert.ToInt64(Scalar(connection, "PRAGMA user_version;"), CultureInfo.InvariantCulture) == JournalSchema.CurrentVersion;
 
-    private long ScanClaude(SqliteConnection connection, Batch batch, long budget)
+    private long ScanClaude(SqliteConnection connection, Batch batch, long budget, IReadOnlyCollection<long>? operationIds)
     {
         using var command = connection.CreateCommand();
+        var idFilter = operationIds is null ? string.Empty : " AND o.id IN (" + string.Join(",", operationIds.Select((_, i) => "$id" + i)) + ")";
         command.CommandText = """
             SELECT s.cwd, MIN(o.started_at) FROM operations o JOIN sessions s ON s.id = o.session_id
             WHERE s.agent_kind = 'claude' AND o.client_call_id IS NOT NULL AND s.cwd IS NOT NULL
               AND NOT EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.operation_id = o.id)
-            GROUP BY s.cwd;
-            """;
+            """ + idFilter + " GROUP BY s.cwd;";
+        if (operationIds is not null)
+            for (var i = 0; i < operationIds.Count; i++)
+                command.Parameters.AddWithValue("$id" + i, operationIds.ElementAt(i));
         var pending = new List<(string Cwd, DateTimeOffset Oldest)>();
         using (var reader = command.ExecuteReader())
         {
@@ -222,35 +263,64 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
         return budget;
     }
 
-    private long ScanCodex(SqliteConnection connection, Batch batch, long budget)
+    private long ScanCodex(SqliteConnection connection, Batch batch, long budget, IReadOnlyCollection<long>? operationIds)
     {
-        if (budget <= 0)
-            return budget;
-
         using var command = connection.CreateCommand();
+        var idFilter = operationIds is null ? string.Empty : " AND o.id IN (" + string.Join(",", operationIds.Select((_, i) => "$id" + i)) + ")";
         command.CommandText = """
-            SELECT DISTINCT o.agent_session_id FROM operations o JOIN sessions s ON s.id = o.session_id
-            WHERE s.agent_kind = 'codex' AND o.agent_session_id IS NOT NULL;
-            """;
-        var wanted = new HashSet<string>(StringComparer.Ordinal);
+            SELECT DISTINCT s.agent_kind, o.agent_session_id FROM operations o JOIN sessions s ON s.id = o.session_id
+            WHERE s.agent_kind IN ('codex', 'opencode') AND o.agent_session_id IS NOT NULL
+            """ + idFilter + ";";
+        if (operationIds is not null)
+        {
+            for (var i = 0; i < operationIds.Count; i++)
+                command.Parameters.AddWithValue("$id" + i, operationIds.ElementAt(i));
+        }
+        var wanted = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read())
-                wanted.Add(reader.GetString(0));
+                AddWanted(reader.GetString(1), reader.GetString(0));
         }
 
-        if (wanted.Count == 0 || !File.Exists(homes.CodexSessionIndex))
+        foreach (var key in batch.Conversations.Keys.Where(key => key.Kind is "codex" or "opencode"))
+            AddWanted(key.Id, key.Kind);
+
+        var missingTitles = (operationIds is null ? NullTitleConversationIds(connection) : [])
+            .Concat(batch.Conversations
+                .Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is null)
+                .Select(pair => pair.Key))
+            .Distinct()
+            .Where(key => !_codexTitleBackfillAttempted.Contains(key))
+            .ToArray();
+        foreach (var key in missingTitles)
+        {
+            if (_codexTitleBackfillPending.Add(key))
+                _restartCodexTitleBackfill = true;
+        }
+
+        if (wanted.Count == 0 || budget <= 0 || !File.Exists(homes.CodexSessionIndex))
             return budget;
 
         var path = homes.CodexSessionIndex;
         try
         {
-            var result = IncrementalTail.Read(path, LoadCursor(connection, path), budget, line =>
+            var cursor = _restartCodexTitleBackfill ? null : LoadCursor(connection, path);
+            _restartCodexTitleBackfill = false;
+            var result = IncrementalTail.Read(path, cursor, budget, line =>
             {
                 var entry = TranscriptLines.ParseCodexIndex(line);
-                if (entry is not null && wanted.Contains(entry.Id))
-                    batch.AddConversation("codex", entry.Id, entry.Title);
+                if (entry is not null && wanted.TryGetValue(entry.Id, out var kinds))
+                {
+                    foreach (var kind in kinds)
+                        batch.AddConversation(kind, entry.Id, entry.Title);
+                }
             });
+            if (result.Completed && _codexTitleBackfillPending.Count > 0)
+            {
+                _codexTitleBackfillAttempted.UnionWith(_codexTitleBackfillPending);
+                _codexTitleBackfillPending.Clear();
+            }
             batch.Cursors[path] = result.Cursor;
             return budget - result.BytesRead;
         }
@@ -259,6 +329,39 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
             _readErrors++;
             return budget;
         }
+
+        void AddWanted(string id, string kind)
+        {
+            if (!wanted.TryGetValue(id, out var kinds))
+                wanted[id] = kinds = new HashSet<string>(StringComparer.Ordinal);
+            kinds.Add(kind);
+        }
+    }
+
+    private static void AddCodexIdentities(SqliteConnection connection, Batch batch, IReadOnlyCollection<long>? operationIds)
+    {
+        using var command = connection.CreateCommand();
+        var idFilter = operationIds is null ? string.Empty : " AND o.id IN (" + string.Join(",", operationIds.Select((_, i) => "$id" + i)) + ")";
+        command.CommandText = "SELECT DISTINCT s.agent_kind, o.agent_session_id FROM operations o JOIN sessions s ON s.id = o.session_id WHERE s.agent_kind IN ('codex', 'opencode') AND o.agent_session_id IS NOT NULL" + idFilter + ";";
+        if (operationIds is not null)
+            for (var i = 0; i < operationIds.Count; i++)
+                command.Parameters.AddWithValue("$id" + i, operationIds.ElementAt(i));
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var kind = reader.GetString(0);
+            var id = reader.GetString(1);
+            batch.AddConversation(kind, id, null);
+        }
+    }
+
+    private static IEnumerable<(string Kind, string Id)> NullTitleConversationIds(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT agent_kind, conversation_id FROM agent_conversations WHERE agent_kind IN ('codex', 'opencode') AND title IS NULL;";
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            yield return (reader.GetString(0), reader.GetString(1));
     }
 
     private static void Collect(Batch batch, ClaudeLine? line)
@@ -309,8 +412,9 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
                 INSERT INTO operation_agent_links (operation_id, conversation)
                 SELECT o.id, c.id
                 FROM operations o JOIN sessions s ON s.id = o.session_id
-                JOIN agent_conversations c ON c.agent_kind = 'codex' AND c.conversation_id = o.agent_session_id
-                WHERE s.agent_kind = 'codex' AND NOT EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.operation_id = o.id);
+                JOIN agent_conversations c ON c.agent_kind = s.agent_kind AND c.conversation_id = o.agent_session_id
+                WHERE s.agent_kind IN ('codex', 'opencode')
+                  AND NOT EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.operation_id = o.id);
                 DELETE FROM agent_tool_calls WHERE agent_kind = 'claude' AND (
                     EXISTS (SELECT 1 FROM operations o JOIN sessions s ON s.id = o.session_id
                             JOIN operation_agent_links l ON l.operation_id = o.id

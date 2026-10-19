@@ -149,7 +149,7 @@ internal static class LiveFeed
         private void Read(List<(string, string)>? events)
         {
             var connection = _connection!;
-            var version = DataVersion(connection);
+            var version = JournalDataVersion.Read(connection);
             if (version != _lastVersion)
             {
                 _lastVersion = version;
@@ -269,13 +269,6 @@ internal static class LiveFeed
             if (string.CompareOrdinal(row.Timestamp, floor) < 0 && keep?.Contains(id) != true)
                 sent.Remove(id);
         }
-    }
-
-    private static long DataVersion(SqliteConnection connection)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA data_version;";
-        return (long)command.ExecuteScalar()!;
     }
 
     private static void Execute(SqliteConnection connection, string sql)
