@@ -44,6 +44,24 @@ public sealed class OptimizationSummaryBuilderTests
     }
 
     [Fact]
+    public void Provisional_labels_reserve_ordinals_for_frozen_hashes_absent_from_retained_evidence()
+    {
+        var frozen = new Dictionary<(string Subject, string Scope, string Hash), string>
+        {
+            [("orders", "whole", "expired-hash-4")] = "v4",
+            [("orders", "whole", "expired-hash-5")] = "v5",
+        };
+
+        var section = OptimizationSummaryBuilder.Build([
+            Compare(1, "orders", "whole", "db", "f", "new-hash", "new-hash"),
+        ], ContextKey.AgentSession("claude", "conversation"), frozen, provisional: true);
+
+        var versions = Assert.Single(Assert.Single(Assert.Single(section.Subjects).Groups).Scopes).Versions;
+        Assert.Equal("v6", Assert.Single(versions).Version);
+        Assert.Equal("new-hash", Assert.Single(versions).Hash);
+    }
+
+    [Fact]
     public void Version_in_two_groups_is_listed_in_each_with_that_groups_numbers()
     {
         var section = OptimizationSummaryBuilder.Build([

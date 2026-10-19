@@ -24,6 +24,11 @@ public static class OptimizationSummaryBuilder
             .ThenBy(compare => compare.OperationId).ToArray();
         var versionMaps = new Dictionary<(string Subject, string Scope), Dictionary<string, string>>();
         var nextVersion = new Dictionary<(string Subject, string Scope), int>();
+        if (frozenLabels is not null)
+        {
+            foreach (var group in frozenLabels.GroupBy(pair => (pair.Key.Subject, pair.Key.Scope)))
+                nextVersion[group.Key] = group.Select(pair => FrozenVersionOrdinal(pair.Value) + 1).DefaultIfEmpty(0).Max();
+        }
         var versioned = ordered.Select(compare => new VersionedCompare(compare,
             Version(compare.Subject, compare.Scope, compare.BaselineHash),
             Version(compare.Subject, compare.Scope, compare.CandidateHash))).ToArray();

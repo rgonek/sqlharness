@@ -145,6 +145,63 @@ public sealed class TranscriptMatcherTests
     }
 
     [Fact]
+    public void Pending_call_in_another_mcp_child_blocks_but_no_id_and_cli_rows_do_not()
+    {
+        using var f = new Fixture();
+        var contextSession = JournalSeed.Session("mcp:context", "claude") with { Transport = JournalTransport.Mcp };
+        var otherSession = JournalSeed.Session("mcp:other-child", "claude") with { Transport = JournalTransport.Mcp };
+        var cliSession = JournalSeed.Session("cli:other", "claude");
+        var noId = f.Seed.Operation(contextSession);
+        var cliPending = f.Seed.Operation(cliSession, agent: Call("cli-call"));
+        var mcpPending = f.Seed.Operation(otherSession, agent: Call("mcp-call"));
+        var compare = f.Seed.Compare(contextSession, "orders", "whole", "sha256:h0", "sha256:h1");
+        JournalSeed.Link(f.Home.DatabasePath, compare.OperationId, "claude", "conversation", null);
+        using (var connection = new SqliteConnection($"Data Source={f.Home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE operations SET started_at = CASE id WHEN $noId THEN '2026-01-01T00:00:00.000Z' WHEN $cli THEN '2026-01-01T00:00:01.000Z' WHEN $pending THEN '2026-01-02T00:00:00.000Z' WHEN $compare THEN '2026-01-03T00:00:00.000Z' END;";
+            update.Parameters.AddWithValue("$noId", noId.OperationId);
+            update.Parameters.AddWithValue("$cli", cliPending.OperationId);
+            update.Parameters.AddWithValue("$pending", mcpPending.OperationId);
+            update.Parameters.AddWithValue("$compare", compare.OperationId);
+            update.ExecuteNonQuery();
+        }
+
+        var matcher = f.Matcher();
+        matcher.RunCycle(enabled: true);
+        Assert.Empty(Journal.JournalDb.Rows(f.Home.DatabasePath, "SELECT * FROM compare_version_labels"));
+
+        JournalSeed.Link(f.Home.DatabasePath, mcpPending.OperationId, "claude", "conversation", null);
+        matcher.RunCycle(enabled: true);
+        Assert.Equal(new[] { ("sha256:h0", "v0"), ("sha256:h1", "v1") },
+            Journal.JournalDb.Rows(f.Home.DatabasePath, "SELECT sql_hash, label FROM compare_version_labels ORDER BY label")
+                .Select(row => ((string)row["sql_hash"]!, (string)row["label"]!)).ToArray());
+    }
+
+    [Fact]
+    public void Matcher_assigns_after_highest_persisted_label_when_older_hashes_are_no_longer_retained()
+    {
+        using var f = new Fixture();
+        var session = JournalSeed.Session("mcp:retained-labels", "claude") with { Transport = JournalTransport.Mcp };
+        var compare = f.Seed.Compare(session, "orders", "whole", "sha256:new0", "sha256:new1");
+        JournalSeed.Link(f.Home.DatabasePath, compare.OperationId, "claude", "conversation", null);
+        using (var connection = new SqliteConnection($"Data Source={f.Home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO compare_version_labels (context_kind, context_key, subject, scope, sql_hash, label) VALUES ('agent:claude', 'conversation', 'orders', 'whole', 'expired-hash-4', 'v4'), ('agent:claude', 'conversation', 'orders', 'whole', 'expired-hash-5', 'v5');";
+            insert.ExecuteNonQuery();
+        }
+
+        f.Matcher().RunCycle(enabled: true);
+
+        Assert.Equal(new[] { ("sha256:new0", "v6"), ("sha256:new1", "v7") },
+            Journal.JournalDb.Rows(f.Home.DatabasePath, "SELECT sql_hash, label FROM compare_version_labels WHERE sql_hash LIKE 'sha256:%' ORDER BY label")
+                .Select(row => ((string)row["sql_hash"]!, (string)row["label"]!)).ToArray());
+    }
+
+    [Fact]
     public void Shared_observer_connection_ignores_matcher_commits_but_sees_external_commits()
     {
         using var f = new Fixture();

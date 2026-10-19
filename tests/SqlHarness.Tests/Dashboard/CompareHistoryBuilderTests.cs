@@ -51,6 +51,22 @@ public sealed class CompareHistoryBuilderTests
     }
 
     [Fact]
+    public void Context_scoped_build_reserves_ordinals_for_frozen_hashes_absent_from_retained_rows()
+    {
+        var frozen = new Dictionary<(string Subject, string Scope, string Hash), string>
+        {
+            [("orders", "whole", "expired-hash-4")] = "v4",
+            [("orders", "whole", "expired-hash-5")] = "v5",
+        };
+
+        var history = CompareHistoryBuilder.Build([
+            Row(1, 10, "orders", "whole", "new-hash", null),
+        ], ContextKey.AgentSession("claude", "conversation"), frozen);
+
+        Assert.Equal(("v6", null), Pair(history, 1));
+    }
+
+    [Fact]
     public void Missing_hashes_and_context_remain_unassigned_and_cases_are_projected()
     {
         var summary = JsonDocument.Parse("""{"regression":{"verdict":"improved"},"cases":[{"index":0,"equivalence":{"status":"equal"},"regression":{"verdict":"regression"} }]}""").RootElement.Clone();

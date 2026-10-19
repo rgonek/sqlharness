@@ -54,6 +54,13 @@ public static class CompareHistoryBuilder
         var source = rows.OrderBy(row => row.StartedAt, StringComparer.Ordinal).ThenBy(row => row.OperationId).ToArray();
         var versions = new Dictionary<(string Context, string Subject, string Scope), Dictionary<string, string>>();
         var next = new Dictionary<(string Context, string Subject, string Scope), int>();
+        if (context is not null && frozenLabels is not null)
+        {
+            var contextValue = ContextNamespace(context);
+            foreach (var group in frozenLabels.GroupBy(pair => (pair.Key.Subject, pair.Key.Scope)))
+                next[(contextValue, group.Key.Subject, group.Key.Scope)] = group
+                    .Select(pair => VersionOrdinal(pair.Value) + 1).DefaultIfEmpty(0).Max();
+        }
         var attempts = new List<CompareAttemptSummary>(source.Length);
         foreach (var row in source)
         {
@@ -61,7 +68,7 @@ public static class CompareHistoryBuilder
             string? candidateVersion = null;
             if (row.Subject is not null && row.Scope is not null)
             {
-                var key = (context is null ? $"mcp:{row.SessionId.ToString(System.Globalization.CultureInfo.InvariantCulture)}" : $"{context.Kind.Length}:{context.Kind}{context.Key.Length}:{context.Key}", row.Subject, row.Scope);
+                var key = (context is null ? $"mcp:{row.SessionId.ToString(System.Globalization.CultureInfo.InvariantCulture)}" : ContextNamespace(context), row.Subject, row.Scope);
                 if (!versions.TryGetValue(key, out var map))
                     versions.Add(key, map = new Dictionary<string, string>(StringComparer.Ordinal));
                 baselineVersion = Version(row.BaselineHash);
@@ -74,10 +81,7 @@ public static class CompareHistoryBuilder
                     if (frozenLabels is not null && frozenLabels.TryGetValue((row.Subject, row.Scope, hash), out var frozen))
                     {
                         map[hash] = frozen;
-                        if (frozen.Length > 1 && frozen[0] == 'v'
-                            && int.TryParse(frozen.AsSpan(1), System.Globalization.NumberStyles.None,
-                                System.Globalization.CultureInfo.InvariantCulture, out var frozenOrdinal))
-                            next[key] = Math.Max(next.GetValueOrDefault(key), frozenOrdinal + 1);
+                        next[key] = Math.Max(next.GetValueOrDefault(key), VersionOrdinal(frozen) + 1);
                         return frozen;
                     }
                     if (!map.TryGetValue(hash, out var version))
@@ -97,6 +101,13 @@ public static class CompareHistoryBuilder
         }
         return attempts;
     }
+
+    private static string ContextNamespace(ContextKey context) =>
+        $"{context.Kind.Length}:{context.Kind}{context.Key.Length}:{context.Key}";
+
+    private static int VersionOrdinal(string version) => version.Length > 1 && version[0] == 'v'
+        && int.TryParse(version.AsSpan(1), System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var ordinal) ? ordinal : -1;
 
     public static CompareAttemptSummary WithEvidence(
         CompareAttemptSummary attempt, JsonElement? summary, JsonElement? conditions)

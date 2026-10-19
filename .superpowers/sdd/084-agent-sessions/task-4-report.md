@@ -48,3 +48,12 @@ The UI should show `versionLabelNote` when `versionLabelsProvisional` is true. T
 - Frozen labels are written only within the transcript matcher write transaction; read paths use a read-only journal snapshot.
 - The whole retained-journal barrier is intentionally conservative. If an earlier unmatched MCP call never gains an exact link and remains retained, later versions can remain provisional. The UI note makes this state explicit.
 - The integrated `just verify` gate remains Task 6's responsibility.
+
+## Review fix 1: preserve ordinals across retention gaps
+
+- RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter "FullyQualifiedName~Context_scoped_build_reserves_ordinals|FullyQualifiedName~Pending_call_in_another_mcp_child" -p:IsTestProject=true` — 1 passed and 1 failed as expected; the context-scoped builder returned `v0` instead of `v6` when only persisted `v4`/`v5` labels remained.
+- RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter "FullyQualifiedName~Provisional_labels_reserve_ordinals_for_frozen_hashes_absent" -p:IsTestProject=true` — failed as expected; OptimizationSummaryBuilder returned `v0` instead of `v6`.
+- GREEN: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter "FullyQualifiedName~Context_scoped_build_reserves_ordinals|FullyQualifiedName~Provisional_labels_reserve_ordinals|FullyQualifiedName~Matcher_assigns_after_highest_persisted_label|FullyQualifiedName~Pending_call_in_another_mcp_child" -p:IsTestProject=true` — 4 passed, 0 failed, 0 skipped.
+- Focused classes: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter "FullyQualifiedName~CompareHistoryBuilderTests|FullyQualifiedName~OptimizationSummaryBuilderTests|FullyQualifiedName~TranscriptMatcherTests" -p:IsTestProject=true` — 48 passed, 0 failed, 0 skipped.
+- The builders now seed each subject/scope counter from every frozen label, even when its hash no longer appears in retained evidence. Added matcher coverage confirms persisted `v4`/`v5` labels reserve those ordinals when old operations are absent. Added cross-child coverage confirms an earlier pending same-kind MCP call blocks freeze, while no-ID and CLI rows do not.
+- `just fix` — `format: 5 changed C# file(s) (working-tree)`; `git diff --check` — no whitespace errors.
