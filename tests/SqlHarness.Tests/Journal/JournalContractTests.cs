@@ -25,14 +25,14 @@ public sealed class JournalContractTests : IDisposable
     };
 
     [Fact]
-    public void Journal_v20_pins_agent_session_annotations_and_version_labels()
+    public void Journal_v21_pins_agent_session_annotations_and_operation_annotations()
     {
         var path = Path.Combine(_temp.Path, "data", "activity.db");
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
         Assert.Equal(18, JournalSchema.FirstRetainedVersion);
-        Assert.Equal(20, JournalSchema.CurrentVersion);
+        Assert.Equal(21, JournalSchema.CurrentVersion);
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         var operationColumns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operations')")
             .Select(row => (string)row["name"]!).ToArray();
@@ -75,7 +75,7 @@ public sealed class JournalContractTests : IDisposable
     }
 
     [Fact]
-    public void Journal_v18_migrates_in_place_to_v20_agent_session_annotations()
+    public void Journal_v18_migrates_in_place_to_v21_operation_annotations()
     {
         var path = Path.Combine(_temp.Path, "data", "activity.db");
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
@@ -84,14 +84,14 @@ public sealed class JournalContractTests : IDisposable
         {
             connection.Open();
             using var downgrade = connection.CreateCommand();
-            downgrade.CommandText = "DROP TRIGGER anchor_agent_session_link_insert; DROP TRIGGER anchor_agent_session_direct_operation; DROP TRIGGER anchor_agent_session_annotation_insert; DROP TABLE agent_session_annotation_operations; DROP TABLE agent_session_annotations; DROP TABLE compare_version_labels; ALTER TABLE operation_statements DROP COLUMN plan_statement_index; ALTER TABLE operation_statements DROP COLUMN plan_document_ordinal; ALTER TABLE operation_statements DROP COLUMN plan_repetition; PRAGMA user_version = 18;";
+            downgrade.CommandText = "DROP TRIGGER anchor_agent_session_link_insert; DROP TRIGGER anchor_agent_session_direct_operation; DROP TRIGGER anchor_agent_session_annotation_insert; DROP TABLE operation_annotations; DROP TABLE agent_session_annotation_operations; DROP TABLE agent_session_annotations; DROP TABLE compare_version_labels; ALTER TABLE operation_statements DROP COLUMN plan_statement_index; ALTER TABLE operation_statements DROP COLUMN plan_document_ordinal; ALTER TABLE operation_statements DROP COLUMN plan_repetition; PRAGMA user_version = 18;";
             downgrade.ExecuteNonQuery();
         }
 
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(20L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(21L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         var columns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_statements')")
             .Select(row => (string)row["name"]!).ToArray();
         Assert.Contains("plan_repetition", columns);
@@ -115,7 +115,7 @@ public sealed class JournalContractTests : IDisposable
 
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null, new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(20L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(21L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         Assert.Empty(JournalDb.Rows(path, "SELECT id FROM sessions"));
         var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "activity.db.v16-*.bak"));
         Assert.Single(JournalDb.Rows(backup, "SELECT session_key FROM sessions WHERE session_key = 'old'"));
@@ -139,7 +139,7 @@ public sealed class JournalContractTests : IDisposable
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(20L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(21L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "activity.db.v15-*.bak"));
     }
 

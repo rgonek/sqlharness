@@ -7,15 +7,16 @@ namespace SqlHarness.Mcp;
 /// <summary>
 /// MCP agent envelope v3. Required fields are <c>schemaVersion</c>,
 /// <c>status</c>, and <c>result</c>. <c>error</c> and <c>truncation</c> are
-/// omitted when empty. CLI envelope fields (<c>command</c>, <c>exitCode</c>,
-/// <c>operationRef</c>, <c>parentOperationRef</c>) stay off the model text.
+/// omitted when empty. <c>operationRef</c> is present only for journaled,
+/// annotation-enabled eligible calls; CLI fields stay off the model text.
 /// </summary>
 public sealed record McpAgentEnvelope(
     int SchemaVersion,
     string Status,
     object? Result,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] object? Error = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] McpTruncationInfo? Truncation = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] McpTruncationInfo? Truncation = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OperationRef = null)
 {
     /// <summary>MCP envelope schema version. Independent of the CLI envelope.</summary>
     public const int Version = 3;

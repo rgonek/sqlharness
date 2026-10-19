@@ -32,6 +32,15 @@ public abstract record SqlHarnessOperation
     public string? OperationRef { get; init; }
 
     [JsonIgnore]
+    public string? AgentLabel { get; init; }
+
+    [JsonIgnore]
+    public bool? AgentKeep { get; init; }
+
+    [JsonIgnore]
+    public bool OperationAnnotationsEnabled { get; init; }
+
+    [JsonIgnore]
     internal Action<ConditionsModel>? RecordConditions { get; init; }
 }
 
@@ -504,6 +513,13 @@ public sealed record SqlHarnessOutcome(
 
     [JsonIgnore]
     public string? OperationRef { get; init; }
+
+    /// <summary>True when this outcome has a corresponding activity-journal operation row.</summary>
+    [JsonIgnore]
+    public bool Journaled { get; init; }
+
+    [JsonIgnore]
+    public bool OperationRefEligible { get; init; }
 
     [JsonIgnore]
     public string? ParentOperationRef { get; init; }

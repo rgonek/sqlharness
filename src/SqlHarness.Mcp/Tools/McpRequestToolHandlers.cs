@@ -51,7 +51,7 @@ public sealed class McpRequestToolHandlers(
         CancellationToken ct = default,
         [Description(McpToolCatalog.OperationLabelDescription)] string? label = null,
         [Description(McpToolCatalog.OperationKeepDescription)] bool? keep = null) =>
-        Invoke(ctx, "sqlharness_query", target, ["target", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"], handler => handler.QueryAsync(ctx, sql, file, parameters, timeout, maxRows, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct));
+        Invoke(ctx, "sqlharness_query", target, ["target", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"], handler => handler.QueryAsync(ctx, sql, file, parameters, timeout, maxRows, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct, label, keep));
 
     public Task<CallToolResult> MutationAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Request target.")] McpRequestScopeArgument target,
@@ -89,7 +89,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Optional optimization scope; provide together with subject.")] string? scope = null,
         [Description(McpToolCatalog.OperationLabelDescription)] string? label = null,
         [Description(McpToolCatalog.OperationKeepDescription)] bool? keep = null) =>
-        Invoke(ctx, "sqlharness_measure", target, ["target", "query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", "subject", "scope"], handler => handler.MeasureAsync(ctx, query, setup, parameters, parameterSetFiles, parameterSets, matrix, repeat, timeout, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct, subject, scope));
+        Invoke(ctx, "sqlharness_measure", target, ["target", "query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", "subject", "scope"], handler => handler.MeasureAsync(ctx, query, setup, parameters, parameterSetFiles, parameterSets, matrix, repeat, timeout, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct, subject, scope, label, keep));
 
     public Task<CallToolResult> CompareAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Baseline source.")] McpSqlSourceArgument baseline,
@@ -113,7 +113,7 @@ public sealed class McpRequestToolHandlers(
         CancellationToken ct = default,
         [Description(McpToolCatalog.OperationLabelDescription)] string? label = null,
         [Description(McpToolCatalog.OperationKeepDescription)] bool? keep = null) =>
-        Invoke(ctx, "sqlharness_compare", target, ["target", "baseline", "candidate", "subject", "scope", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "parameterSets", "parameterSetFiles", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"], handler => handler.CompareAsync(ctx, baseline, candidate, subject, scope, setup, parameters, repeat, timeout, compareResults, matrix, parameterSets, parameterSetFiles, compareNullability, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct));
+        Invoke(ctx, "sqlharness_compare", target, ["target", "baseline", "candidate", "subject", "scope", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "parameterSets", "parameterSetFiles", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"], handler => handler.CompareAsync(ctx, baseline, candidate, subject, scope, setup, parameters, repeat, timeout, compareResults, matrix, parameterSets, parameterSetFiles, compareNullability, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct, label, keep));
 
     public Task<CallToolResult> CompareWithoutContextAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Baseline source.")] McpSqlSourceArgument baseline,
@@ -135,7 +135,7 @@ public sealed class McpRequestToolHandlers(
         CancellationToken ct = default,
         [Description(McpToolCatalog.OperationLabelDescription)] string? label = null,
         [Description(McpToolCatalog.OperationKeepDescription)] bool? keep = null) =>
-        Invoke(ctx, "sqlharness_compare", target, ["target", "baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "parameterSets", "parameterSetFiles", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"], handler => handler.CompareWithoutContextAsync(ctx, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, parameterSets, parameterSetFiles, compareNullability, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct));
+        Invoke(ctx, "sqlharness_compare", target, ["target", "baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "parameterSets", "parameterSetFiles", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"], handler => handler.CompareWithoutContextAsync(ctx, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, parameterSets, parameterSetFiles, compareNullability, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct, label, keep));
 
     public Task<CallToolResult> WatchAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Request target.")] McpRequestScopeArgument target,
@@ -154,7 +154,7 @@ public sealed class McpRequestToolHandlers(
         CancellationToken ct = default,
         [Description(McpToolCatalog.OperationLabelDescription)] string? label = null,
         [Description(McpToolCatalog.OperationKeepDescription)] bool? keep = null) =>
-        Invoke(ctx, "sqlharness_watch", target, ["target", "sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxCellChars", "maxOperationSeconds"], handler => handler.WatchAsync(ctx, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, maxResultBytes, maxCellChars, maxOperationSeconds, ct));
+        Invoke(ctx, "sqlharness_watch", target, ["target", "sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxCellChars", "maxOperationSeconds"], handler => handler.WatchAsync(ctx, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, maxResultBytes, maxCellChars, maxOperationSeconds, ct, label, keep));
 
     public Task<CallToolResult> SnapshotAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("capture stores (never overwrites); diff compares without printing cell values.")][AllowedValues("capture", "diff")] string action,
@@ -171,7 +171,7 @@ public sealed class McpRequestToolHandlers(
         CancellationToken ct = default,
         [Description(McpToolCatalog.OperationLabelDescription)] string? label = null,
         [Description(McpToolCatalog.OperationKeepDescription)] bool? keep = null) =>
-        Invoke(ctx, "sqlharness_snapshot", target, ["target", "action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds"], handler => handler.SnapshotAsync(ctx, action, name, sql, file, parameters, timeout, maxRows, maxResultBytes, maxCellChars, maxOperationSeconds, ct));
+        Invoke(ctx, "sqlharness_snapshot", target, ["target", "action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds"], handler => handler.SnapshotAsync(ctx, action, name, sql, file, parameters, timeout, maxRows, maxResultBytes, maxCellChars, maxOperationSeconds, ct, label, keep));
 
     public Task<CallToolResult> PlanAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Inline plan document.")] string? content = null,

@@ -100,6 +100,51 @@ public sealed class JournalingModuleTests
     }
 
     [Fact]
+    public async Task Call_time_annotation_is_inserted_atomically_with_the_operation_row()
+    {
+        var (module, temp) = Create(new FakeModule((_, _) =>
+            Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))));
+        using (temp)
+        {
+            var operation = Query() with
+            {
+                AgentLabel = "🧪 plan",
+                AgentKeep = true,
+                OperationAnnotationsEnabled = true,
+            };
+
+            var outcome = await module.ExecuteAsync(operation);
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT a.agent_label_initial, a.agent_label, a.agent_keep FROM operations o JOIN operation_annotations a ON a.operation_id = o.id").Single();
+
+            Assert.True(outcome.Journaled);
+            Assert.Equal("🧪 plan", row["agent_label_initial"]);
+            Assert.Equal("🧪 plan", row["agent_label"]);
+            Assert.Equal(1L, row["agent_keep"]);
+        }
+    }
+
+    [Fact]
+    public async Task Dry_run_has_a_journal_row_but_no_agent_annotation_or_ref_eligibility()
+    {
+        var (module, temp) = Create(new FakeModule((_, _) =>
+            Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))));
+        using (temp)
+        {
+            var outcome = await module.ExecuteAsync(Query() with
+            {
+                DryRun = true,
+                AgentLabel = "dry run",
+                AgentKeep = true,
+                OperationAnnotationsEnabled = true,
+            });
+
+            Assert.True(outcome.Journaled);
+            Assert.False(outcome.OperationRefEligible);
+            Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT operation_id FROM operation_annotations"));
+        }
+    }
+
+    [Fact]
     public async Task Artifact_read_journals_exact_owner_checked_parent_reference()
     {
         using var artifacts = new JournalTempDirectory();

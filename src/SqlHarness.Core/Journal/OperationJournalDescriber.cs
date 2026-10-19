@@ -48,7 +48,14 @@ internal static class OperationJournalDescriber
             },
             _ => start,
         };
-        return start with { OperationRef = operation.OperationRef, DryRun = IsDryRun(operation) };
+        return start with
+        {
+            OperationRef = operation.OperationRef,
+            DryRun = IsDryRun(operation),
+            AgentLabel = operation.AgentLabel,
+            AgentKeep = operation.AgentKeep,
+            CreateAnnotation = operation.OperationAnnotationsEnabled,
+        };
     }
 
     private static bool IsDryRun(SqlHarnessOperation operation) => operation switch

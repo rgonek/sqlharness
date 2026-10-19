@@ -123,6 +123,17 @@ public sealed class ActivityJournal : IActivityJournal
             insert.Parameters.AddWithValue("$compareConditions", DBNull.Value);
             insert.Parameters.AddWithValue("$setupSqlText", _storeSensitive ? (object?)start.SetupSqlText ?? DBNull.Value : DBNull.Value);
             var id = (long)insert.ExecuteScalar()!;
+            if (start.CreateAnnotation && !start.DryRun)
+            {
+                using var annotation = connection.CreateCommand();
+                annotation.Transaction = transaction;
+                annotation.CommandText = "INSERT INTO operation_annotations (operation_id, agent_label_initial, agent_label, agent_keep, updated_at) VALUES ($id, $label, $label, $keep, $now);";
+                annotation.Parameters.AddWithValue("$id", id);
+                annotation.Parameters.AddWithValue("$label", (object?)start.AgentLabel ?? DBNull.Value);
+                annotation.Parameters.AddWithValue("$keep", start.AgentKeep is null ? DBNull.Value : start.AgentKeep.Value ? 1 : 0);
+                annotation.Parameters.AddWithValue("$now", now);
+                annotation.ExecuteNonQuery();
+            }
             transaction.Commit();
             return new JournalHandle(id);
         }

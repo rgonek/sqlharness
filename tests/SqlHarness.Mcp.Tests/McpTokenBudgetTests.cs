@@ -135,6 +135,73 @@ public sealed class McpTokenBudgetTests
         Assert.False(document.RootElement.TryGetProperty("truncation", out _));
     }
 
+    [Fact]
+    public void Operation_ref_survives_minimum_budget_and_is_never_clipped()
+    {
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null)
+        {
+            OperationRef = "0123456789abcdef0123456789abcdef",
+            Journaled = true,
+        };
+
+        var result = McpResultAdapter.Adapt(outcome, "query", new McpResultBudget(McpLimits.MinCallToolResultBudgetBytes), includeOperationRef: true);
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+
+        Assert.Equal(outcome.OperationRef, document.RootElement.GetProperty("operationRef").GetString());
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.MinCallToolResultBudgetBytes);
+    }
+
+    [Fact]
+    public void Minimal_error_fallback_keeps_operation_ref_inside_budget()
+    {
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, new string('x', 20_000))
+        {
+            OperationRef = "0123456789abcdef0123456789abcdef",
+            Journaled = true,
+        };
+
+        var result = McpResultAdapter.Adapt(outcome, "query", new McpResultBudget(McpLimits.MinCallToolResultBudgetBytes), includeOperationRef: true);
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+
+        Assert.Equal(outcome.OperationRef, document.RootElement.GetProperty("operationRef").GetString());
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.MinCallToolResultBudgetBytes);
+    }
+
+    [Theory]
+    [InlineData(false, "sqlharness_query")]
+    [InlineData(true, "sqlharness_plan")]
+    public void Operation_ref_is_omitted_without_a_journal_row_or_for_other_tools(bool journaled, string command)
+    {
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null)
+        {
+            OperationRef = "0123456789abcdef0123456789abcdef",
+            Journaled = journaled,
+        };
+
+        var result = McpResultAdapter.Adapt(outcome, command, includeOperationRef: true);
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+
+        Assert.False(document.RootElement.TryGetProperty("operationRef", out _));
+    }
+
+    [Fact]
+    public void Dry_run_operation_ref_is_not_eligible_even_when_a_journal_row_exists()
+    {
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null)
+        {
+            OperationRef = "0123456789abcdef0123456789abcdef",
+            Journaled = true,
+            OperationRefEligible = false,
+        };
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+
+        Assert.False(document.RootElement.TryGetProperty("operationRef", out _));
+    }
+
     [Theory]
     [InlineData(null, 262144, 65536)]
     [InlineData(131072, 262144, 131072)]

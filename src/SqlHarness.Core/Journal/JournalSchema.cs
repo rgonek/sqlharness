@@ -5,7 +5,7 @@ namespace SqlHarness.Core;
 internal static class JournalSchema
 {
     internal const int FirstRetainedVersion = 18;
-    internal const int CurrentVersion = 20;
+    internal const int CurrentVersion = 21;
 
     internal static readonly IReadOnlyDictionary<int, string> Migrations = new Dictionary<int, string>
     {
@@ -13,6 +13,8 @@ internal static class JournalSchema
         [16] = "ALTER TABLE operations ADD COLUMN warnings_json TEXT NOT NULL DEFAULT '[]';",
         [19] = "ALTER TABLE operation_statements ADD COLUMN plan_repetition INTEGER; ALTER TABLE operation_statements ADD COLUMN plan_document_ordinal INTEGER; ALTER TABLE operation_statements ADD COLUMN plan_statement_index INTEGER;",
         [20] = "CREATE TABLE agent_session_annotations (agent_kind TEXT NOT NULL, conversation_id TEXT NOT NULL, title TEXT, note TEXT, starred INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY(agent_kind, conversation_id)); CREATE TABLE agent_session_annotation_operations (agent_kind TEXT NOT NULL, conversation_id TEXT NOT NULL, operation_id INTEGER NOT NULL REFERENCES operations(id) ON DELETE CASCADE, PRIMARY KEY(agent_kind, conversation_id, operation_id), FOREIGN KEY(agent_kind, conversation_id) REFERENCES agent_session_annotations(agent_kind, conversation_id) ON DELETE CASCADE); CREATE TRIGGER anchor_agent_session_annotation_insert AFTER INSERT ON agent_session_annotations BEGIN INSERT OR IGNORE INTO agent_session_annotation_operations SELECT NEW.agent_kind, NEW.conversation_id, o.id FROM operations o JOIN sessions s ON s.id = o.session_id WHERE s.agent_kind = NEW.agent_kind AND o.agent_session_id = NEW.conversation_id; INSERT OR IGNORE INTO agent_session_annotation_operations SELECT NEW.agent_kind, NEW.conversation_id, l.operation_id FROM agent_conversations c JOIN operation_agent_links l ON l.conversation = c.id WHERE c.agent_kind = NEW.agent_kind AND c.conversation_id = NEW.conversation_id; END; CREATE TRIGGER anchor_agent_session_direct_operation AFTER INSERT ON operations WHEN NEW.agent_session_id IS NOT NULL BEGIN INSERT OR IGNORE INTO agent_session_annotation_operations SELECT s.agent_kind, NEW.agent_session_id, NEW.id FROM sessions s JOIN agent_session_annotations a ON a.agent_kind = s.agent_kind AND a.conversation_id = NEW.agent_session_id WHERE s.id = NEW.session_id; END; CREATE TRIGGER anchor_agent_session_link_insert AFTER INSERT ON operation_agent_links BEGIN INSERT OR IGNORE INTO agent_session_annotation_operations SELECT c.agent_kind, c.conversation_id, NEW.operation_id FROM agent_conversations c JOIN agent_session_annotations a ON a.agent_kind = c.agent_kind AND a.conversation_id = c.conversation_id WHERE c.id = NEW.conversation; END; CREATE TABLE compare_version_labels (context_kind TEXT NOT NULL, context_key TEXT NOT NULL, subject TEXT NOT NULL, scope TEXT NOT NULL, sql_hash TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY(context_kind, context_key, subject, scope, sql_hash));",
+        [20] = "CREATE TABLE agent_session_annotations (agent_kind TEXT NOT NULL, conversation_id TEXT NOT NULL, title TEXT, note TEXT, starred INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY(agent_kind, conversation_id)); CREATE TABLE agent_session_annotation_operations (agent_kind TEXT NOT NULL, conversation_id TEXT NOT NULL, operation_id INTEGER NOT NULL REFERENCES operations(id) ON DELETE CASCADE, PRIMARY KEY(agent_kind, conversation_id, operation_id), FOREIGN KEY(agent_kind, conversation_id) REFERENCES agent_session_annotations(agent_kind, conversation_id) ON DELETE CASCADE); CREATE TRIGGER anchor_agent_session_annotation_insert AFTER INSERT ON agent_session_annotations BEGIN INSERT OR IGNORE INTO agent_session_annotation_operations SELECT NEW.agent_kind, NEW.conversation_id, o.id FROM operations o JOIN sessions s ON s.id = o.session_id WHERE s.agent_kind = NEW.agent_kind AND o.agent_session_id = NEW.conversation_id; INSERT OR IGNORE INTO agent_session_annotation_operations SELECT NEW.agent_kind, NEW.conversation_id, l.operation_id FROM agent_conversations c JOIN operation_agent_links l ON l.conversation = c.id WHERE c.agent_kind = NEW.agent_kind AND c.conversation_id = NEW.conversation_id; END; CREATE TRIGGER anchor_agent_session_direct_operation AFTER INSERT ON operations WHEN NEW.agent_session_id IS NOT NULL BEGIN INSERT OR IGNORE INTO agent_session_annotation_operations SELECT s.agent_kind, NEW.agent_session_id, NEW.id FROM sessions s JOIN agent_session_annotations a ON a.agent_kind = s.agent_kind AND a.conversation_id = NEW.agent_session_id WHERE s.id = NEW.session_id; END; CREATE TRIGGER anchor_agent_session_link_insert AFTER INSERT ON operation_agent_links BEGIN INSERT OR IGNORE INTO agent_session_annotation_operations SELECT c.agent_kind, c.conversation_id, NEW.operation_id FROM agent_conversations c JOIN agent_session_annotations a ON a.agent_kind = c.agent_kind AND a.conversation_id = c.conversation_id WHERE c.id = NEW.conversation; END; CREATE TABLE compare_version_labels (context_kind TEXT NOT NULL, context_key TEXT NOT NULL, subject TEXT NOT NULL, scope TEXT NOT NULL, sql_hash TEXT NOT NULL, PRIMARY KEY(context_kind, context_key, subject, scope, sql_hash));",
+        [21] = "CREATE TABLE operation_annotations (operation_id INTEGER PRIMARY KEY REFERENCES operations(id) ON DELETE CASCADE, agent_label_initial TEXT, agent_label TEXT, agent_keep INTEGER, owner_starred INTEGER NOT NULL DEFAULT 0, owner_note TEXT, updated_at TEXT NOT NULL);",
     };
 
     internal const string Current = """
@@ -181,6 +183,15 @@ internal static class JournalSchema
         );
         CREATE INDEX ix_operation_statements_operation ON operation_statements(operation_id, ordinal);
         CREATE INDEX ix_operation_statements_hash ON operation_statements(statement_hash);
+        CREATE TABLE operation_annotations (
+            operation_id INTEGER PRIMARY KEY REFERENCES operations(id) ON DELETE CASCADE,
+            agent_label_initial TEXT,
+            agent_label TEXT,
+            agent_keep INTEGER,
+            owner_starred INTEGER NOT NULL DEFAULT 0,
+            owner_note TEXT,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE operation_statement_objects (
             statement_id INTEGER NOT NULL REFERENCES operation_statements(id) ON DELETE CASCADE,
             object TEXT NOT NULL,

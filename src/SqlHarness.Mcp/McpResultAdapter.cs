@@ -115,7 +115,8 @@ public static class McpResultAdapter
         SqlHarnessOutcome outcome,
         string command,
         McpResultBudget? budget = null,
-        IReadOnlyList<string>? knownSecrets = null)
+        IReadOnlyList<string>? knownSecrets = null,
+        bool includeOperationRef = false)
     {
         ArgumentNullException.ThrowIfNull(outcome);
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
@@ -124,6 +125,9 @@ public static class McpResultAdapter
         var secrets = knownSecrets ?? [];
         var maximumBytes = active.MaximumBytes;
         var maximumCellCharacters = active.MaximumCellCharacters;
+        var operationRef = (includeOperationRef || outcome.OperationRefEligible) && outcome.Journaled && IsAnnotatableCommand(command) && !string.IsNullOrWhiteSpace(outcome.OperationRef)
+            ? outcome.OperationRef
+            : null;
 
         var error = ToMcpError(RedactError(outcome.MachineError, secrets, maximumCellCharacters, out var errorOmitted));
         var status = StatusFor(outcome, error);
@@ -148,14 +152,14 @@ public static class McpResultAdapter
             // validation) travel raw when they fit, instead of degrading to a
             // bounded placeholder while bytes remain.
             if (projected is AgentBoundedOutput && report is not null &&
-                TryEnvelopeBytes(status, report, error, null, out var rawBytes) &&
+                TryEnvelopeBytes(status, report, error, null, operationRef, out var rawBytes) &&
                 TryBuildWithinBudget(rawBytes, isError, maximumBytes, out var rawResult))
                 return rawResult;
 
             var truncation = totalOmitted > 0
                 ? new McpTruncationInfo(totalOmitted, maximumCellCharacters)
                 : null;
-            if (TryEnvelopeBytes(status, projected, error, truncation, out var envelopeBytes) &&
+            if (TryEnvelopeBytes(status, projected, error, truncation, operationRef, out var envelopeBytes) &&
                 TryBuildWithinBudget(envelopeBytes, isError, maximumBytes, out var built))
                 return built;
         }
@@ -168,16 +172,19 @@ public static class McpResultAdapter
                 "output_budget_too_small",
                 "render",
                 "The minimum agent response does not fit the configured byte budget."),
-            new McpTruncationInfo(1, maximumCellCharacters));
+            new McpTruncationInfo(1, maximumCellCharacters),
+            operationRef);
         var minimalBytes = JsonSerializer.SerializeToUtf8Bytes(minimal, Json);
         if (TryBuildWithinBudget(minimalBytes, isError: true, maximumBytes, out var minimalResult))
             return minimalResult;
 
         // Defensive only: the minimum budget (4096) always fits the envelope
         // above, so reaching here means misconfiguration, not content size.
-        var fallback =
-            /*lang=json*/ $"{{\"schemaVersion\":{SchemaVersion},\"status\":\"error\",\"result\":null,\"error\":{{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"}}}}";
-        return Build(Encoding.UTF8.GetBytes(fallback), isError: true);
+        var fallback = JsonSerializer.SerializeToUtf8Bytes(new McpAgentEnvelope(
+            SchemaVersion, "error", null,
+            new McpAgentError("output_budget_too_small", "render", "Agent output unavailable."),
+            OperationRef: operationRef), Json);
+        return Build(fallback, isError: true);
     }
 
     /// <summary>
@@ -198,7 +205,7 @@ public static class McpResultAdapter
     internal static bool FitsRawSuccess(object report, string command, int maximumBytes)
     {
         ArgumentNullException.ThrowIfNull(report);
-        TryEnvelopeBytes("success", report, null, null, out var bytes);
+        TryEnvelopeBytes("success", report, null, null, null, out var bytes);
         return TryBuildWithinBudget(bytes, isError: false, maximumBytes, out _);
     }
 
@@ -233,9 +240,10 @@ public static class McpResultAdapter
     internal static async Task<CallToolResult> AdaptAndCompleteAsync(
         SqlHarnessOutcome outcome,
         string command,
-        McpResultBudget? budget = null)
+        McpResultBudget? budget = null,
+        bool includeOperationRef = false)
     {
-        var result = Adapt(outcome, command, budget);
+        var result = Adapt(outcome, command, budget, includeOperationRef: includeOperationRef);
         if (outcome.EmissionReceipt is { } receipt)
             await receipt.CompleteAsync(EmittedFootprint(result), CancellationToken.None).ConfigureAwait(false);
         return result;
@@ -257,11 +265,14 @@ public static class McpResultAdapter
         Check(envelope, "status", JsonValueKind.String, violations);
         if (!envelope.TryGetProperty("result", out _))
             violations.Add("missing required property 'result'");
-        foreach (var removed in new[] { "command", "exitCode", "operationRef", "parentOperationRef" })
+        foreach (var removed in new[] { "command", "exitCode", "parentOperationRef" })
         {
             if (envelope.TryGetProperty(removed, out _))
                 violations.Add($"MCP v3 envelope must not include '{removed}'");
         }
+        if (envelope.TryGetProperty("operationRef", out var operationRef) &&
+            (operationRef.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(operationRef.GetString())))
+            violations.Add("property 'operationRef' must be a non-empty string");
 
         if (envelope.TryGetProperty("schemaVersion", out var version) &&
             (version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var versionNumber) || versionNumber != SchemaVersion))
@@ -327,6 +338,13 @@ public static class McpResultAdapter
                     : "error",
         };
     }
+
+    private static bool IsAnnotatableCommand(string command) => command is
+        "query" or "sqlharness_query" or
+        "measure" or "sqlharness_measure" or
+        "compare" or "sqlharness_compare" or
+        "watch" or "sqlharness_watch" or
+        "snapshot" or "sqlharness_snapshot";
 
     private static SqlHarnessError? RedactError(
         SqlHarnessError? error,
@@ -417,9 +435,10 @@ public static class McpResultAdapter
         object? result,
         object? error,
         McpTruncationInfo? truncation,
+        string? operationRef,
         out byte[] bytes)
     {
-        var envelope = new McpAgentEnvelope(SchemaVersion, status, result, error, truncation);
+        var envelope = new McpAgentEnvelope(SchemaVersion, status, result, error, truncation, operationRef);
         bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, Json);
         return true;
     }

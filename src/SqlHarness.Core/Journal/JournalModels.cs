@@ -44,6 +44,9 @@ public sealed record OperationStart(
 {
     public CompareContext? Context { get; init; }
     public string? SetupSqlText { get; init; }
+    public string? AgentLabel { get; init; }
+    public bool? AgentKeep { get; init; }
+    public bool CreateAnnotation { get; init; }
 }
 
 /// <summary>Allowlisted, client-supplied labels from tools/call _meta; never verified, never content.</summary>

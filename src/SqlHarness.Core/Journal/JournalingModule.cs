@@ -107,7 +107,7 @@ public sealed class JournalingModule : ISqlHarnessModule
             if (ct.IsCancellationRequested && IsCancellableFailure(outcome.ExitCode))
             {
                 Complete(journal, handle, phaseRecorder, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct), outcome.SessionWarnings));
-                return outcome with { OperationRef = operation.OperationRef };
+                return outcome with { OperationRef = operation.OperationRef, Journaled = handle is not null, OperationRefEligible = EligibleRef(operation) };
             }
 
             var completed = Complete(journal, handle, phaseRecorder,
@@ -118,7 +118,7 @@ public sealed class JournalingModule : ISqlHarnessModule
             // A failed completion (busy or broken journal) skips the emission write, so one
             // operation never waits on a locked journal a second time.
             if (!completed || journal is null || handle is null || outcome.EmissionReceipt is not { } inner)
-                return outcome with { OperationRef = operation.OperationRef };
+                return outcome with { OperationRef = operation.OperationRef, Journaled = handle is not null, OperationRefEligible = EligibleRef(operation) };
 
             var wrapped = new SqlHarnessEmissionReceipt(async (emitted, ct) =>
             {
@@ -137,13 +137,23 @@ public sealed class JournalingModule : ISqlHarnessModule
             {
                 RawFootprint = inner.RawFootprint,
             };
-            return outcome with { EmissionReceipt = wrapped, OperationRef = operation.OperationRef };
+            return outcome with { EmissionReceipt = wrapped, OperationRef = operation.OperationRef, Journaled = handle is not null, OperationRefEligible = EligibleRef(operation) };
         }
         finally
         {
             phaseRecording?.Dispose();
         }
     }
+
+    private static bool EligibleRef(SqlHarnessOperation operation) => operation.OperationAnnotationsEnabled && operation switch
+    {
+        SqlHarnessQueryOperation query => !query.DryRun,
+        SqlHarnessMeasureOperation measure => !measure.DryRun,
+        SqlHarnessCompareOperation compare => !compare.DryRun,
+        SqlHarnessCompareMatrixOperation matrix => !matrix.DryRun,
+        SqlHarnessWatchOperation or SqlHarnessSnapshotOperation => true,
+        _ => false,
+    };
 
     private JournalHandle? Begin(IActivityJournal? journal, SqlHarnessOperation operation, CancellationToken ct)
     {

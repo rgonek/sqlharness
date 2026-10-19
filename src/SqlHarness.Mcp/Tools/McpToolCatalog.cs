@@ -104,9 +104,8 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", .. AnnotationArgumentNames()]);
-            return await module.ExecuteAsync(
-                await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token, dryRun),
-                token);
+            var operation = await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token, dryRun);
+            return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
     public Task<CallToolResult> MutationAsync(
@@ -202,9 +201,8 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", "subject", "scope", .. AnnotationArgumentNames()]);
-            return await module.ExecuteAsync(
-                await McpOperationMapper.MapMeasureAsync(this.scope, query, setup, parameters, parameterSetFiles, repeat, timeout, token, dryRun, parameterSets, matrix, subject, scope),
-                token);
+            var operation = await McpOperationMapper.MapMeasureAsync(this.scope, query, setup, parameters, parameterSetFiles, repeat, timeout, token, dryRun, parameterSets, matrix, subject, scope);
+            return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
     public Task<CallToolResult> CompareAsync(
@@ -249,9 +247,8 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["baseline", "candidate", "subject", "scope", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", .. AnnotationArgumentNames()]);
-            return await module.ExecuteAsync(
-                await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, subject, scope, _compareConfig),
-                token);
+            var operation = await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, subject, scope, _compareConfig);
+            return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
     public Task<CallToolResult> CompareWithoutContextAsync(
@@ -278,9 +275,8 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", .. AnnotationArgumentNames()]);
-            return await module.ExecuteAsync(
-                await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, compareConfig: new CompareConfig { RequireContext = false }),
-                token);
+            var operation = await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, compareConfig: new CompareConfig { RequireContext = false });
+            return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
     public Task<CallToolResult> WatchAsync(
@@ -316,6 +312,7 @@ public sealed class McpToolHandlers(
         {
             ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxCellChars", "maxOperationSeconds", .. AnnotationArgumentNames()]);
             var operation = await McpOperationMapper.MapWatchAsync(scope, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, token);
+            operation = McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled);
             // The watch deadline is bounded by the remaining request budget, so
             // a natural max-duration stop stays a controlled exit 7 inside it.
             if (operation.MaxDuration > remaining)
@@ -352,9 +349,8 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_snapshot", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", .. AnnotationArgumentNames()]);
-            return await module.ExecuteAsync(
-                await McpOperationMapper.MapSnapshotAsync(scope, action, name, sql, file, parameters, timeout, maxRows, token),
-                token);
+            var operation = await McpOperationMapper.MapSnapshotAsync(scope, action, name, sql, file, parameters, timeout, maxRows, token);
+            return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
     public Task<CallToolResult> PlanAsync(
