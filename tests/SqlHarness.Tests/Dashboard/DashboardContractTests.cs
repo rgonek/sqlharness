@@ -104,7 +104,7 @@ public sealed class DashboardContractTests
         Assert.Equal(["agentKind", "conversationId", "title", "operations"],
             Names(new AgentConversation("claude", "conversation", null, 0)));
         Assert.Equal(["agentKind", "conversationId"], Names(new AgentSessionKey("claude", "conversation")));
-        Assert.Equal(["agentSession", "operations"], Names(new AgentSessionDetail(
+        Assert.Equal(["agentSession", "operations", "note"], Names(new AgentSessionDetail(
             new AgentSessionSummary(new AgentSessionKey("claude", "conversation"), null, null, null, null,
                 false, false, 0, 0, 0, "t", []), [])));
         Assert.Equal(["key", "count"], Names(new KeyCount("claude", 1)));
