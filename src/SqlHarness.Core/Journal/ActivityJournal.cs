@@ -541,9 +541,12 @@ public sealed class ActivityJournal : IActivityJournal
                 var identity = ResolveCaseIdentity(statement.MatrixCell, caseIdentities, caseCount, statement.CaseId, statement.CaseLabel);
                 using var insert = Command(connection, transaction, """
                     INSERT INTO operation_statements (operation_id, ordinal, variant, parameter_set, matrix_cell,
-                        case_id, case_label, statement_ordinal, statement_hash, cpu_ms, elapsed_ms, dop, operators_json)
+                        case_id, case_label, statement_ordinal, statement_hash, statement_key, occurrence, statement_text,
+                        executions, plan_hash, status, cpu_ms, elapsed_ms, dop, operators_json, udf_elapsed_ms, hidden_work_json)
                     VALUES ($operation, $ordinal, $variant, $set, $cell, $caseId, $caseLabel,
-                        $statementOrdinal, $hash, $cpu, $elapsed, $dop, $operators);
+                        $statementOrdinal, $hash, $statementKey, $occurrence, $text,
+                        $executions, $planHash, $status, $cpu, $elapsed, $dop, $operators, $udfElapsed, $hiddenWork)
+                    RETURNING id;
                     """);
                 insert.Parameters.AddWithValue("$operation", handle.OperationId);
                 insert.Parameters.AddWithValue("$ordinal", ordinal);
@@ -554,11 +557,35 @@ public sealed class ActivityJournal : IActivityJournal
                 insert.Parameters.AddWithValue("$caseLabel", identity.Label);
                 insert.Parameters.AddWithValue("$statementOrdinal", statement.StatementOrdinal);
                 insert.Parameters.AddWithValue("$hash", statement.StatementHash);
+                insert.Parameters.AddWithValue("$statementKey", statement.StatementKey);
+                insert.Parameters.AddWithValue("$occurrence", statement.Occurrence);
+                var fallbackText = $"statement {statement.StatementOrdinal + 1} ({statement.StatementHash[..Math.Min(8, statement.StatementHash.Length)]})";
+                insert.Parameters.AddWithValue("$text", (object?)(_storeSensitive ? statement.Text : fallbackText) ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$executions", (object?)statement.Executions ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$planHash", (object?)statement.PlanHash ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$status", statement.Status.ToString().ToLowerInvariant());
                 insert.Parameters.AddWithValue("$cpu", (object?)statement.CpuMilliseconds ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$elapsed", (object?)statement.ElapsedMilliseconds ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$dop", (object?)statement.DegreeOfParallelism ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$operators", JsonSerializer.Serialize(statement.TopOperators, WaitJson));
-                insert.ExecuteNonQuery();
+                insert.Parameters.AddWithValue("$udfElapsed", (object?)statement.UdfElapsedMilliseconds ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$hiddenWork", JsonSerializer.Serialize(statement.HiddenWork, WaitJson));
+                var statementId = (long)insert.ExecuteScalar()!;
+                foreach (var counters in statement.Objects)
+                {
+                    using var objectInsert = Command(connection, transaction, """
+                        INSERT INTO operation_statement_objects
+                            (statement_id, object, kind, logical_reads, lob_logical_reads, scans)
+                        VALUES ($statement, $object, $kind, $logical, $lob, $scans);
+                        """);
+                    objectInsert.Parameters.AddWithValue("$statement", statementId);
+                    objectInsert.Parameters.AddWithValue("$object", counters.Object);
+                    objectInsert.Parameters.AddWithValue("$kind", counters.Kind);
+                    objectInsert.Parameters.AddWithValue("$logical", counters.LogicalReads);
+                    objectInsert.Parameters.AddWithValue("$lob", counters.LobLogicalReads);
+                    objectInsert.Parameters.AddWithValue("$scans", counters.Scans);
+                    objectInsert.ExecuteNonQuery();
+                }
             }
 
             if (_storeSensitive)
@@ -1121,12 +1148,14 @@ public sealed class ActivityJournal : IActivityJournal
                 logical_reads_min, logical_reads_median, logical_reads_max,
                 grant_requested_kb, grant_granted_kb, grant_max_used_kb, dop, compile_time_ms, compile_cpu_ms,
                 spill_count, has_warnings, has_implicit_conversion, missing_index_count, waits_json,
-                pg_shared_hit, pg_shared_read, pg_shared_dirtied, pg_shared_written, pg_temp_read, pg_temp_written)
+                pg_shared_hit, pg_shared_read, pg_shared_dirtied, pg_shared_written, pg_temp_read, pg_temp_written,
+                omitted_statements)
             VALUES ($operation, $ordinal, $variant, $set, $cell, $caseId, $caseLabel, $runs,
                 $eMin, $eMed, $eMax, $cMin, $cMed, $cMax, $rMin, $rMed, $rMax,
                 $gReq, $gGrant, $gUsed, $dop, $compileTime, $compileCpu,
                 $spills, $warnings, $implicit, $missing, $waits,
-                $pgHit, $pgRead, $pgDirtied, $pgWritten, $pgTempRead, $pgTempWritten)
+                $pgHit, $pgRead, $pgDirtied, $pgWritten, $pgTempRead, $pgTempWritten,
+                $omittedStatements)
             RETURNING id;
             """);
         insert.Parameters.AddWithValue("$operation", operationId);
@@ -1157,6 +1186,7 @@ public sealed class ActivityJournal : IActivityJournal
         insert.Parameters.AddWithValue("$pgWritten", (object?)v.Postgres?.SharedWritten ?? DBNull.Value);
         insert.Parameters.AddWithValue("$pgTempRead", (object?)v.Postgres?.TempRead ?? DBNull.Value);
         insert.Parameters.AddWithValue("$pgTempWritten", (object?)v.Postgres?.TempWritten ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$omittedStatements", v.OmittedStatements);
         return (long)insert.ExecuteScalar()!;
     }
 

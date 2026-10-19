@@ -14,7 +14,7 @@
 
 ## Review amendments (2026-10-16, cross-plan review) — these override task text below
 
-1. **No per-run table; reconcile at build time (Task 2).** In `JournalBenchmarkBuilder`, per (variant, case): pick the median-total run (lower median), reconcile that run's plan counters against its `CompareRunArtifact.TableIo`, and journal only that run's statement objects and statuses. Drop `operation_runs.median_total_run`. Status of a statement = its status in the median-total run.
+1. **No per-run table; reconcile at build time (Task 2).** In `JournalBenchmarkBuilder`, per (variant, case): pick the median-total run (lower median), reconcile that run's plan counters against its `CompareRunArtifact.TableIo`, and journal only that run's statement objects and statuses. Do not add `operation_runs.median_total_run`. Status of a statement = its status in the median-total run. Omission counts live on the existing per-variant/case `operation_metrics` row. With no plan statements, the statement row set is empty; readers interpret that as unavailable at statement grain.
 2. **Journal version.** Declare a new step (`VersionN`, next free at execution; follows 079's `FirstRetainedVersion` rule) for `operation_statement_objects` and new `operation_statements` columns; pin in `JournalContractTests`.
 3. **Statement cap stays artifact-neutral (Task 1).** Do not change `StatementMetricsExtractor.MaximumStatements` (it shapes 077's artifact `statements` section). Add a journal-only extraction path with a byte bound. Put extractor tests in 077's `StatementMetricsTests.cs` (not `PlanMetricsExtractorTests`, which tests another class).
 4. **Statement text.** Text comes only from plan XML (`storeSensitive`); without it `StatementRow.Text` = `statement {ordinal} ({shortHash})`.
@@ -73,15 +73,15 @@
 
 **Files:**
 - Create: `src/SqlHarness.Core/Journal/StatementReconciler.cs`
-- Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs` (`operation_statement_objects(statement_id, object, kind, logical_reads, lob_logical_reads, scans)`; `operation_statements.statement_key`, `occurrence`, `executions`, `plan_hash`, `status`, `udf_elapsed_ms`, `hidden_work_json`; `operation_runs.median_total_run INTEGER` flag), `JournalBenchmarkBuilder.cs`, `ActivityJournal.cs`
+- Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs` (`operation_statement_objects(statement_id, object, kind, logical_reads, lob_logical_reads, scans)`; `operation_statements.statement_key`, `occurrence`, `statement_text`, `executions`, `plan_hash`, `status`, `udf_elapsed_ms`, `hidden_work_json`; `operation_metrics.omitted_statements`), `JournalBenchmarkBuilder.cs`, `ActivityJournal.cs`
 - Test: create `tests/SqlHarness.Tests/Journal/StatementReconcilerTests.cs`; `JournalBenchmarkBuilderTests.cs`
 
 **Interfaces:**
 - Produces: `static IReadOnlyList<StatementStatus> StatementReconciler.Reconcile(IReadOnlyList<StatementMetrics> statements, IReadOnlyList<TableIoCounters> observed)`; `enum StatementStatus { Confirmed, Partial, Unavailable }`; journal marks the median-total run per (operation, variant, case).
 
-- [ ] **Step 1: Failing tests:** all objects reconcile → all `Confirmed`; one object off by 3 pages → every statement touching it `Partial`, others `Confirmed`; table variables reconcile by group sum; no plans → `Unavailable`; median-total run chosen (lower median for even count).
-- [ ] **Step 2:** → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(082): reconcile and journal statement attribution`.
+- [x] **Step 1: Failing tests:** all objects reconcile → all `Confirmed`; one object off by 3 pages → every statement touching it `Partial`, others `Confirmed`; table variables reconcile by group sum; no plan statements produce no rows (unavailable at statement grain); median-total run chosen (lower median for even count); omitted statements fail closed.
+- [x] **Step 2:** Focused filter → FAIL because `StatementReconciler`, `StatementStatus`, and new journal attribution fields were absent. **Step 3:** Implemented reconciliation, lower-median selected-run extraction, v18 persistence, and omission metadata. **Step 4:** Focused journal filter → PASS (45 passed, 0 failed).
+- [x] **Step 5:** Commit `feat(082): reconcile and journal statement attribution` (see Task 2 report for revision and evidence).
 
 ### Task 3: Comparer: statement classes and verdict basis
 

@@ -328,6 +328,7 @@ internal static class JournalStatementMetricsExtractor
             .Select(value => value!.Value)
             .ToArray();
         long? udfElapsed = udfValues.Length == 0 ? null : udfValues.Aggregate(0L, SaturatingAdd);
+        var cpu = LongValue(Attribute(queryPlan?.Element(Showplan + "QueryTimeStats"), "CpuTime"));
         var elapsed = LongValue(Attribute(queryPlan?.Element(Showplan + "QueryTimeStats"), "ElapsedTime"));
         double? udfShare = udfElapsed.HasValue && elapsed.HasValue && elapsed.Value > 0
             ? Math.Round(udfElapsed.Value * 100d / elapsed.Value, 1)
@@ -352,6 +353,7 @@ internal static class JournalStatementMetricsExtractor
             executions,
             countersComplete,
             objectValues,
+            cpu,
             udfElapsed,
             elapsed,
             hidden);
@@ -378,6 +380,9 @@ internal static class JournalStatementMetricsExtractor
         long? executions = group.All(item => item.Executions.HasValue)
             ? group.Select(item => item.Executions!.Value).Aggregate(0L, SaturatingAdd)
             : null;
+        long? cpu = group.All(item => item.Cpu.HasValue)
+            ? group.Select(item => item.Cpu!.Value).Aggregate(0L, SaturatingAdd)
+            : null;
         long? udfElapsed = group.All(item => item.UdfElapsed.HasValue)
             ? group.Select(item => item.UdfElapsed!.Value).Aggregate(0L, SaturatingAdd)
             : null;
@@ -400,7 +405,7 @@ internal static class JournalStatementMetricsExtractor
         return new StatementMetrics(
             ordinal,
             PlanIdentity.StatementSha256(first.Text),
-            null,
+            cpu,
             elapsed,
             first.DegreeOfParallelism,
             [])
@@ -465,6 +470,7 @@ internal static class JournalStatementMetricsExtractor
         long? Executions,
         bool CountersComplete,
         Dictionary<string, MutableObjectCounters> Objects,
+        long? Cpu,
         long? UdfElapsed,
         long? Elapsed,
         IReadOnlyList<HiddenWork> Hidden)

@@ -34,6 +34,57 @@ public sealed class JournalBenchmarkBuilderTests
     }
 
     [Fact]
+    public void Statement_attribution_uses_the_lower_median_total_run_and_its_io()
+    {
+        static string Plan(long reads) => $"""
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements>
+            <StmtSimple StatementText="SELECT Value FROM dbo.Orders" StatementCompId="1" QueryPlanHash="0x01"><QueryPlan><RelOp NodeId="0" PhysicalOp="Table Scan"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualExecutions="2" ActualLogicalReads="{reads}" ActualLobLogicalReads="0" ActualScans="3"/></RunTimeInformation><TableScan><Object Table="[dbo].[Orders]"/></TableScan></RelOp></QueryPlan></StmtSimple>
+            </Statements></Batch></BatchSequence></ShowPlanXML>
+            """;
+
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            Run("measure", 1, 1, 10, 10, plans: [Plan(10)], io: [new TableIoCounters("Orders", 3, 10, 0, 0, 0, 0, 0, 0)]),
+            Run("measure", 2, 1, 20, 20, plans: [Plan(20)], io: [new TableIoCounters("Orders", 3, 20, 0, 0, 0, 0, 0, 0)]),
+            Run("measure", 3, 1, 30, 30, plans: [Plan(30)], io: [new TableIoCounters("Orders", 3, 30, 0, 0, 0, 0, 0, 0)]),
+            Run("measure", 4, 1, 40, 40, plans: [Plan(40)], io: [new TableIoCounters("Orders", 3, 40, 0, 0, 0, 0, 0, 0)]),
+        ]);
+
+        var statement = Assert.Single(record.Statements);
+        Assert.Equal(20, Assert.Single(statement.Objects!).LogicalReads);
+        Assert.Equal(2, statement.Executions);
+        Assert.Equal(StatementStatus.Confirmed, statement.Status);
+    }
+
+    [Fact]
+    public void Omitted_statement_count_is_journaled_and_retained_status_fails_closed()
+    {
+        var oversized = new string('x', JournalStatementMetricsExtractor.MaximumBytes + 1);
+        var plan = $"""
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements>
+            <StmtSimple StatementText="{oversized}" />
+            <StmtSimple StatementText="SELECT Value FROM dbo.Orders" StatementCompId="1" QueryPlanHash="0x01"><QueryPlan><RelOp NodeId="0" PhysicalOp="Table Scan"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualExecutions="1" ActualLogicalReads="10" ActualLobLogicalReads="0" ActualScans="1"/></RunTimeInformation><TableScan><Object Table="Orders"/></TableScan></RelOp></QueryPlan></StmtSimple>
+            </Statements></Batch></BatchSequence></ShowPlanXML>
+            """;
+        var record = JournalBenchmarkBuilder.Build(
+            [Run("measure", 1, 1, 10, 10, plans: [plan], io: [new TableIoCounters("Orders", 1, 10, 0, 0, 0, 0, 0, 0)])]);
+
+        var statement = Assert.Single(record.Statements);
+        Assert.Equal(1, record.Variants.Single().OmittedStatements);
+        Assert.Equal(StatementStatus.Partial, statement.Status);
+    }
+
+    [Fact]
+    public void Run_without_plan_statements_has_no_statement_rows_to_confirm()
+    {
+        var record = JournalBenchmarkBuilder.Build(
+            [Run("measure", 1, 1, 10, 10, plans: [], io: [new TableIoCounters("Orders", 1, 10, 0, 0, 0, 0, 0, 0)])]);
+
+        Assert.Empty(record.Statements);
+        Assert.Equal(0, record.Variants.Single().OmittedStatements);
+    }
+
+    [Fact]
     public void Table_io_is_median_per_counter_with_cold_run_count()
     {
         var record = JournalBenchmarkBuilder.Build(
