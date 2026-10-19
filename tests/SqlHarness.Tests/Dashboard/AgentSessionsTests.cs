@@ -56,10 +56,19 @@ public sealed class AgentSessionsTests
         Assert.Equal(0, session.GetProperty("unassigned").GetInt32());
         Assert.Equal(2, session.GetProperty("children").GetArrayLength());
 
-        using var patch = await client.SendAsync(Patch("/api/agent-sessions/codex/thread-1/annotation", "{\"title\":\"Owner title\"}"));
+        using var filteredResponse = await client.GetAsync("/api/agent-sessions?archived=any&agent=codex&q=Conversation%20title&hasCompare=false");
+        using var filtered = JsonDocument.Parse(await filteredResponse.Content.ReadAsStringAsync());
+        Assert.Single(filtered.RootElement.GetProperty("items").EnumerateArray());
+        using var noMatchResponse = await client.GetAsync("/api/agent-sessions?archived=any&q=missing");
+        using var noMatch = JsonDocument.Parse(await noMatchResponse.Content.ReadAsStringAsync());
+        Assert.Empty(noMatch.RootElement.GetProperty("items").EnumerateArray());
+
+        using var patch = await client.SendAsync(Patch("/api/agent-sessions/codex/thread-1/annotation", "{\"title\":\"Owner title\",\"note\":\"A private note\"}"));
         Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
         using var after = JsonDocument.Parse(await client.GetStringAsync("/api/agent-sessions?archived=any"));
         Assert.Equal("Owner title", Assert.Single(after.RootElement.GetProperty("items").EnumerateArray()).GetProperty("title").GetString());
+        using var detail = JsonDocument.Parse(await client.GetStringAsync("/api/agent-sessions/codex/thread-1"));
+        Assert.Equal("A private note", detail.RootElement.GetProperty("note").GetString());
     }
 
     [Fact]

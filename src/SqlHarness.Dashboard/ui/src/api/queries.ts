@@ -1,6 +1,6 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, HttpStatusError, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
-import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, KeyCount, MutationRequestSummary, OperationDetail, OperationPlanManifest, OperationSummary, OptimizationComparison, OptimizationSection, Page, PlanGraphBuildResult, PlanGraphPropertyResult, PlanSourceMapResponse, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
+import type { AgentSessionAnnotation, AgentSessionDetail, AgentSessionKey, AgentSessionSummary, AnnotationPatch, CompareAttemptSummary, DashboardStats, KeyCount, MutationRequestSummary, OperationDetail, OperationPlanManifest, OperationSummary, OptimizationComparison, OptimizationSection, Page, PlanGraphBuildResult, PlanGraphPropertyResult, PlanSourceMapResponse, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string; hasCompare?: boolean }
 
@@ -70,6 +70,50 @@ export function useSessions(filters: SessionFilters) {
     getNextPageParam: last => last.nextCursor ?? undefined,
     // A search or view change keeps the current table until the new list arrives.
     placeholderData: keepPreviousData,
+  })
+}
+
+export function useAgentSessions(filters: { archived?: boolean; starred?: boolean; agent?: string; q?: string; hasCompare?: boolean }, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: ["agent-sessions", filters],
+    queryFn: ({ pageParam }) => getJson<Page<AgentSessionSummary>>("/api/agent-sessions", {
+      archived: flag(filters.archived), starred: flag(filters.starred), agent: filters.agent, q: filters.q,
+      hasCompare: flag(filters.hasCompare), cursor: pageParam, limit: 50,
+    }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: page => page.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+    enabled,
+  })
+}
+
+export function useAgentSession(key: AgentSessionKey, enabled = true) {
+  return useQuery({ queryKey: ["agent-session", key], queryFn: () => getJson<AgentSessionDetail>(`/api/agent-sessions/${encodeURIComponent(key.agentKind)}/${encodeURIComponent(key.conversationId)}`), enabled })
+}
+
+export function useUpdateAgentSessionAnnotation(key: AgentSessionKey) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: AnnotationPatch) => patchJson<AgentSessionAnnotation>(`/api/agent-sessions/${encodeURIComponent(key.agentKind)}/${encodeURIComponent(key.conversationId)}/annotation`, patch),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: ["agent-sessions"] })
+      void client.invalidateQueries({ queryKey: ["agent-session", key] })
+    },
+  })
+}
+
+export function useAgentSessionOptimization(key: AgentSessionKey, enabled = true) {
+  return useQuery({ queryKey: ["agent-session-optimization", key], queryFn: () => getJson<OptimizationSection>(`/api/agent-sessions/${encodeURIComponent(key.agentKind)}/${encodeURIComponent(key.conversationId)}/optimization`), enabled })
+}
+
+export function useAgentSessionOptimizationComparison(key: AgentSessionKey, params: OptimizationCompareParams | null) {
+  return useQuery({
+    queryKey: ["agent-session-optimization-comparison", key, params],
+    queryFn: () => getJson<OptimizationComparison>(`/api/agent-sessions/${encodeURIComponent(key.agentKind)}/${encodeURIComponent(key.conversationId)}/optimization/compare`, {
+      subject: params!.subject, database: params!.database, group: params!.group, scope: params!.scope,
+      a: params!.a, b: params!.b, case: params!.case, aggregate: params!.aggregate, view: params!.view ?? "changed",
+    }),
+    enabled: params !== null,
   })
 }
 
@@ -149,10 +193,12 @@ export function useOperationOptimization(id: number, selectedCase = "all", aggre
   })
 }
 
-export function useSessionSqlText(sessionId: number, hash: string | null) {
+export function useSessionSqlText(sessionId: number, hash: string | null, agentSessionKey?: AgentSessionKey) {
   return useQuery({
-    queryKey: ["session-sql", sessionId, hash],
-    queryFn: () => getJson<SqlVersionText>(`/api/sessions/${sessionId}/sql`, { hash }),
+    queryKey: agentSessionKey ? ["agent-session-sql", agentSessionKey, hash] : ["session-sql", sessionId, hash],
+    queryFn: () => agentSessionKey
+      ? getJson<SqlVersionText>(`/api/agent-sessions/${encodeURIComponent(agentSessionKey.agentKind)}/${encodeURIComponent(agentSessionKey.conversationId)}/sql`, { hash })
+      : getJson<SqlVersionText>(`/api/sessions/${sessionId}/sql`, { hash }),
     enabled: hash !== null,
     staleTime: Infinity,
   })
@@ -279,7 +325,17 @@ export function useSaveSettings() {
   return useMutation({
     mutationFn: ({ settings, overwriteInvalid }: { settings: Settings; overwriteInvalid?: boolean }) =>
       putJson<SettingsResponse>("/api/settings", settings, overwriteInvalid ? { overwriteInvalid: "true" } : undefined),
-    onSuccess: data => client.setQueryData(queryKeys.settings(), data),
+    onSuccess: data => {
+      client.setQueryData(queryKeys.settings(), data)
+      void client.invalidateQueries({ queryKey: ["sessions"] })
+      void client.invalidateQueries({ queryKey: ["agent-sessions"] })
+      if (!data.settings.dashboard.agentTranscripts.enabled) {
+        client.removeQueries({ queryKey: ["agent-session"] })
+        client.removeQueries({ queryKey: ["agent-session-optimization"] })
+        client.removeQueries({ queryKey: ["agent-session-optimization-comparison"] })
+        client.removeQueries({ queryKey: ["agent-session-sql"] })
+      }
+    },
     // 409: the file became invalid after the page loaded; refetch so the page shows its invalid-file state.
     onError: error => { if (error instanceof ConflictError) void client.invalidateQueries({ queryKey: queryKeys.settings() }) },
   })

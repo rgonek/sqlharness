@@ -80,7 +80,7 @@ public sealed record AgentSessionSummary(
 
 public sealed record AgentSessionOperation(OperationSummary Operation, string Membership);
 
-public sealed record AgentSessionDetail(AgentSessionSummary AgentSession, IReadOnlyList<AgentSessionOperation> Operations);
+public sealed record AgentSessionDetail(AgentSessionSummary AgentSession, IReadOnlyList<AgentSessionOperation> Operations, string? Note = null);
 
 public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations,
     IReadOnlyList<CompareSubjectSummary> CompareSubjects, int UnassignedCompareCount, string? Note,

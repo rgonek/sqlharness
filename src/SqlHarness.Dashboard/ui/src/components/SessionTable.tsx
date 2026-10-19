@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router"
-import { Archive, ArchiveRestore, Star, StickyNote, TriangleAlert } from "lucide-react"
-import type { SessionSummary } from "@/api/types"
-import { useUpdateSessionAnnotation } from "@/api/queries"
+import { useState } from "react"
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, Star, StickyNote, TriangleAlert } from "lucide-react"
+import type { AgentSessionSummary, SessionSummary } from "@/api/types"
+import { useUpdateAgentSessionAnnotation, useUpdateSessionAnnotation } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -104,4 +105,46 @@ export function SessionTable({ pinned, sessions, now }: { pinned: SessionSummary
       </Table>
     </div>
   )
+}
+
+function AgentSessionRow({ agentSession, now }: { agentSession: AgentSessionSummary; now: number }) {
+  const [expanded, setExpanded] = useState(false)
+  const update = useUpdateAgentSessionAnnotation(agentSession.key)
+  const title = agentSession.title || `${agentSession.key.agentKind}:${agentSession.key.conversationId}`
+  const children = agentSession.children
+  return <>
+    <TableRow>
+      <TableCell><Button variant="ghost" size="icon" disabled={update.isPending} aria-label={`${agentSession.starred ? "Unstar" : "Star"} agent session ${title}`} aria-pressed={agentSession.starred}
+        onClick={() => update.mutate({ starred: !agentSession.starred })}><Star className={agentSession.starred ? "fill-current" : undefined} /></Button></TableCell>
+      <TableCell><div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? <ChevronDown /> : <ChevronRight />}</Button>
+        <Link to="/agent-sessions/$kind/$id" params={{ kind: agentSession.key.agentKind, id: agentSession.key.conversationId }}>{title}</Link>
+        {agentSession.notePreview && <Tooltip><TooltipTrigger aria-label={`Note: ${agentSession.notePreview}`}><StickyNote className="size-4 text-muted-foreground" /></TooltipTrigger><TooltipContent>{agentSession.notePreview}</TooltipContent></Tooltip>}
+      </div><div className="ml-9 text-sm text-muted-foreground">{agentSession.exact} exact · {agentSession.inferred} inferred · {agentSession.unassigned} unassigned</div></TableCell>
+      <TableCell>{agentSession.key.agentKind}</TableCell><TableCell>Agent session</TableCell><TableCell>—</TableCell>
+      <TableCell>—</TableCell><TableCell className="whitespace-nowrap">{formatAge(agentSession.lastSeen, now)}</TableCell>
+      <TableCell className="text-right">{agentSession.exact + agentSession.inferred + agentSession.unassigned}</TableCell><TableCell>—</TableCell><TableCell>—</TableCell>
+      <TableCell><Button variant="ghost" size="icon" disabled={update.isPending} aria-label={`${agentSession.archived ? "Unarchive" : "Archive"} agent session ${title}`} onClick={() => update.mutate({ archived: !agentSession.archived })}>{agentSession.archived ? <ArchiveRestore /> : <Archive />}</Button></TableCell>
+    </TableRow>
+    {expanded && children.map(child => <TableRow key={child.session.id}>
+      <TableCell />
+      <TableCell className="pl-12"><Link to="/sessions/$id" params={{ id: String(child.session.id) }}>{sessionDisplayName(child.session)}</Link>
+        <div className="text-sm text-muted-foreground">{child.exact} exact · {child.inferred} inferred · {child.unassigned} unassigned</div>
+      </TableCell><TableCell>{agentLabel(child.session.agentKind)}</TableCell><TableCell>{child.session.transport}{child.session.mcpMode ? ` (${child.session.mcpMode})` : ""}</TableCell>
+      <TableCell>{child.session.cwd ? child.session.cwd.split(/[\\/]/).filter(Boolean).at(-1) : "—"}</TableCell><TableCell>{formatTimestamp(child.session.firstSeen)}</TableCell>
+      <TableCell>{formatAge(child.session.lastSeen, now)}</TableCell><TableCell className="text-right">{child.session.operations}</TableCell>
+      <TableCell>{child.session.hasCompare && <Link to="/sessions/$id" params={{ id: String(child.session.id) }}>Optimization</Link>}</TableCell><TableCell>—</TableCell><TableCell /></TableRow>)}
+    {update.error && <TableRow><TableCell colSpan={11}><span role="alert">{update.error.message}</span></TableCell></TableRow>}
+  </>
+}
+
+export function AgentSessionTable({ pinned, sessions, unmatched, now }: { pinned: AgentSessionSummary[]; sessions: AgentSessionSummary[]; unmatched: SessionSummary[]; now: number }) {
+  return <div className="overflow-x-auto"><Table>
+    <TableHeader><TableRow><TableHead className="w-8"><span className="sr-only">Star</span></TableHead><TableHead>Session</TableHead><TableHead>Agent</TableHead><TableHead>Transport</TableHead><TableHead>Working directory</TableHead><TableHead>First seen</TableHead><TableHead>Last seen</TableHead><TableHead className="text-right">Operations</TableHead><TableHead>Optimization</TableHead><TableHead>State</TableHead><TableHead className="w-8"><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
+    <TableBody>
+      {pinned.map(item => <AgentSessionRow key={`${item.key.agentKind}:${item.key.conversationId}`} agentSession={item} now={now} />)}
+      {sessions.map(item => <AgentSessionRow key={`${item.key.agentKind}:${item.key.conversationId}`} agentSession={item} now={now} />)}
+      {unmatched.map(item => <TableRow key={`unmatched:${item.id}`}><TableCell /><TableCell><Link to="/sessions/$id" params={{ id: String(item.id) }}>{sessionDisplayName(item)}</Link><div className="text-sm text-muted-foreground">not matched</div></TableCell><TableCell>{agentLabel(item.agentKind)}</TableCell><TableCell>{item.transport}</TableCell><TableCell>{item.cwd ?? "—"}</TableCell><TableCell>{formatTimestamp(item.firstSeen)}</TableCell><TableCell>{formatAge(item.lastSeen, now)}</TableCell><TableCell className="text-right">{item.operations}</TableCell><TableCell>—</TableCell><TableCell>—</TableCell><TableCell /></TableRow>)}
+    </TableBody>
+  </Table></div>
 }

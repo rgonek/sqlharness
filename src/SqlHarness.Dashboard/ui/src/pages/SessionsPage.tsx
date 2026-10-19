@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
-import { useAgentKinds, useSessions } from "@/api/queries"
+import { useAgentKinds, useAgentSessions, useSessions, useSettings } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
-import { SessionTable } from "@/components/SessionTable"
+import { AgentSessionTable, SessionTable } from "@/components/SessionTable"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -27,14 +27,31 @@ export function SessionsPage() {
   const q = useDebounced(search.trim(), 300)
   const now = useNow(30_000)
   const agentKinds = useAgentKinds()
+  const settings = useSettings()
   const tabs = agentTabs((agentKinds.data ?? []).map(item => item.key))
   const selected = tabs.some(tab => tab.value === agent) ? agent : "all"
   const base = { ...(selected === "all" ? {} : { agent: selected }), archived: view === "archived", q: q || undefined, hasCompare: hasOptimization || undefined }
   const pinned = useSessions({ ...base, starred: true })
   const sessions = useSessions({ ...base, starred: false })
-  const failure = pinned.error ?? sessions.error
+  const apiMatching = pinned.data?.pages[0]?.matching ?? sessions.data?.pages[0]?.matching ?? false
+  const matching = settings.data ? settings.data.settings.dashboard.agentTranscripts.enabled && apiMatching : apiMatching
+  const agentFilters = { archived: view === "archived", agent: selected === "all" ? undefined : selected, q: q || undefined, hasCompare: hasOptimization || undefined }
+  const agentPinned = useAgentSessions({ ...agentFilters, starred: true }, matching)
+  const agentSessions = useAgentSessions({ ...agentFilters, starred: false }, matching)
+  const failure = pinned.error ?? sessions.error ?? (matching ? agentPinned.error ?? agentSessions.error : null)
   const pinnedItems = pinned.data?.pages.flatMap(page => page.items) ?? []
   const items = sessions.data?.pages.flatMap(page => page.items) ?? []
+  const agentPinnedItems = agentPinned.data?.pages.flatMap(page => page.items) ?? []
+  const agentItems = agentSessions.data?.pages.flatMap(page => page.items) ?? []
+  const agentFilter = (item: typeof agentItems[number]) =>
+    (selected === "all" || item.key.agentKind === selected) &&
+    (!q || `${item.title ?? ""} ${item.key.conversationId} ${item.notePreview ?? ""} ${item.children.map(child => `${child.session.sessionKey} ${child.session.cwd ?? ""}`).join(" ")}`.toLocaleLowerCase().includes(q.toLocaleLowerCase())) &&
+    (!hasOptimization || item.children.some(child => child.session.hasCompare))
+  const visiblePinned = agentPinnedItems.filter(agentFilter)
+  const pinnedKeys = new Set(visiblePinned.map(item => `${item.key.agentKind}:${item.key.conversationId}`))
+  const visibleAgents = agentItems.filter(item => agentFilter(item) && !pinnedKeys.has(`${item.key.agentKind}:${item.key.conversationId}`))
+  const linkedIds = new Set([...agentPinnedItems, ...agentItems].flatMap(item => item.children.map(child => child.session.id)))
+  const unmatched = [...new Map([...pinnedItems, ...items].map(item => [item.id, item])).values()].filter(item => !linkedIds.has(item.id) && (selected === "all" || item.agentKind === selected))
 
   return (
     <div className="space-y-4">
@@ -66,19 +83,27 @@ export function SessionsPage() {
         <CardContent className="space-y-4">
           {failure ? (
             <ErrorState error={failure} />
-          ) : pinned.isPending || sessions.isPending ? (
+          ) : pinned.isPending || sessions.isPending || (matching && (agentPinned.isPending || agentSessions.isPending)) ? (
             <Skeleton className="h-32 w-full" />
+          ) : matching ? visiblePinned.length === 0 && visibleAgents.length === 0 && unmatched.length === 0 ? (
+            <p className="text-muted-foreground">{q ? "No sessions match the search" : "No sessions"}</p>
+          ) : (
+            <AgentSessionTable pinned={visiblePinned} sessions={visibleAgents} unmatched={unmatched} now={now} />
           ) : pinnedItems.length === 0 && items.length === 0 ? (
             <p className="text-muted-foreground">{q ? "No sessions match the search" : "No sessions"}</p>
           ) : (
             <SessionTable pinned={pinnedItems} sessions={items} now={now} />
           )}
-          {pinned.hasNextPage && (
+          {matching ? agentPinned.hasNextPage && (
+            <Button variant="outline" onClick={() => void agentPinned.fetchNextPage()} disabled={agentPinned.isFetchingNextPage}>Load more pinned</Button>
+          ) : pinned.hasNextPage && (
             <Button variant="outline" onClick={() => void pinned.fetchNextPage()} disabled={pinned.isFetchingNextPage}>
               Load more pinned
             </Button>
           )}
-          {sessions.hasNextPage && (
+          {matching ? agentSessions.hasNextPage && (
+            <Button variant="outline" onClick={() => void agentSessions.fetchNextPage()} disabled={agentSessions.isFetchingNextPage}>Load more</Button>
+          ) : sessions.hasNextPage && (
             <Button variant="outline" onClick={() => void sessions.fetchNextPage()} disabled={sessions.isFetchingNextPage}>
               Load more
             </Button>

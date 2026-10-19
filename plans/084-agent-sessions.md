@@ -71,8 +71,8 @@
 
 ### Task 5: Dashboard UI
 **Files:** `ui/src/pages/SessionsPage.tsx`, `ui/src/components/SessionTable.tsx`, `ui/src/pages/SessionPage.tsx` (agent-session variant), router, `ui/src/api/*`, Settings coverage panel in `ui/src/pages/SettingsPage.tsx`; tests alongside.
-- [ ] Failing tests: matching on → agent rows expandable to MCP/CLI children, `not matched` rows; agent page header counts text; membership markers; `Matching_off_restores_session_view`; Settings coverage counts by agent kind and transport and last cycle time.
-- [ ] `npm --prefix src/SqlHarness.Dashboard/ui test` FAIL → implement → PASS; build. Commit `feat(084): agent sessions in the dashboard`.
+- [x] Failing tests: matching on → agent rows expandable to MCP/CLI children, `not matched` rows; agent page header counts text; membership markers; `Matching_off_restores_session_view`; Settings coverage counts by agent kind and transport and last cycle time. Added a matching-off route/cache regression and an agent-context SQL version route test.
+- [x] `npm --prefix src/SqlHarness.Dashboard/ui test` FAIL → implement → PASS; build. Full suite passed 61 files / 319 tests; standalone Vite build passed. See Task 5 report. Commit `feat(084): agent sessions in the dashboard`.
 
 ### Task 6: Documentation and verification
 - [ ] README (agent sessions, membership, matching latency, subagents), `plans/README.md`; `just verify`; queue → history; commit `docs(084): record plan 084 evidence`.

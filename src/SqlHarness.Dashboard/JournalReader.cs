@@ -7,6 +7,7 @@ using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core;
+using SqlHarness.Dashboard.Transcripts;
 
 namespace SqlHarness.Dashboard;
 
@@ -224,7 +225,24 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         return AgentSessionMembership.Resolve(operations, links);
     }
 
-    public Page<AgentSessionSummary> AgentSessions(bool? archived = false, bool? starred = null, long? cursor = null, int? limit = null)
+    internal IReadOnlyList<TranscriptCoverage> AgentSessionCoverage()
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return [];
+        var memberships = ReadAgentMemberships(connection).ToDictionary(item => item.OperationId);
+        var rows = Query(connection, "SELECT o.id, s.agent_kind, s.transport FROM operations o JOIN sessions s ON s.id = o.session_id;", [],
+            reader => (Id: reader.GetInt64(0), Kind: reader.GetString(1), Transport: reader.GetString(2)));
+        return rows.GroupBy(row => (row.Kind, row.Transport))
+            .Select(group => new TranscriptCoverage(group.Key.Kind, group.Key.Transport,
+                group.Count(row => memberships.TryGetValue(row.Id, out var membership) && membership.Membership == Membership.Exact),
+                group.Count(row => memberships.TryGetValue(row.Id, out var membership) && membership.Membership == Membership.Inferred),
+                group.Count(row => memberships.TryGetValue(row.Id, out var membership) && membership.Membership == Membership.Unassigned)))
+            .OrderBy(row => row.AgentKind, StringComparer.Ordinal).ThenBy(row => row.Transport, StringComparer.Ordinal).ToArray();
+    }
+
+    public Page<AgentSessionSummary> AgentSessions(bool? archived = false, bool? starred = null, long? cursor = null, int? limit = null,
+        string? agent = null, string? q = null, bool? hasCompare = null)
     {
         using var connection = OpenSnapshot();
         if (connection is null)
@@ -243,6 +261,19 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             var summary = BuildAgentSessionSummary(connection, memberships, key);
             if (archived is { } archivedValue && summary.Archived != archivedValue || starred is { } starredValue && summary.Starred != starredValue)
                 continue;
+            if (!string.IsNullOrWhiteSpace(agent) && !string.Equals(summary.Key.AgentKind, agent, StringComparison.Ordinal))
+                continue;
+            if (hasCompare is { } compareFilter && summary.Children.Any(child => child.Session.HasCompare) != compareFilter)
+                continue;
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var term = q.Trim();
+                var found = new[] { summary.Title, summary.Key.ConversationId, summary.NotePreview }
+                    .Concat(summary.Children.SelectMany(child => new[] { child.Session.SessionKey, child.Session.Title, child.Session.ClientTitle, child.Session.Cwd }))
+                    .Any(value => value?.Contains(term, StringComparison.OrdinalIgnoreCase) == true);
+                if (!found)
+                    continue;
+            }
             rows.Add(summary);
         }
         var ordered = rows.OrderByDescending(row => row.LastSeen, StringComparer.Ordinal).ThenBy(row => row.Key.AgentKind, StringComparer.Ordinal)
@@ -288,8 +319,10 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 counts.GetValueOrDefault(Membership.Unassigned)));
         }
         var summary = BuildAgentSessionSummary(connection, memberships, key);
+        var note = Query(connection, "SELECT note FROM agent_session_annotations WHERE agent_kind = $kind AND conversation_id = $id;",
+            [("$kind", key.AgentKind), ("$id", key.ConversationId)], r => NullableString(r, 0)).FirstOrDefault();
         return new AgentSessionDetail(summary with { Children = children.OrderByDescending(child => child.Session.LastSeen, StringComparer.Ordinal).ToArray() },
-            allRows.OrderByDescending(row => row.Operation.Id).ToArray());
+            allRows.OrderByDescending(row => row.Operation.Id).ToArray(), note);
     }
 
     private static AgentSessionSummary BuildAgentSessionSummary(SqliteConnection connection,
@@ -658,6 +691,19 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         if (rows.Count == 0)
             return null;
         return new SqlVersionText(hash, rows[0].Text, rows[0].TooLarge);
+    }
+
+    public SqlVersionText? AgentSessionSqlText(AgentSessionKey key, string hash)
+    {
+        var sessionIds = AgentSessionMemberships().Where(item => item.Key == key && item.Membership == Membership.Exact)
+            .Select(item => item.SessionId).Distinct().OrderByDescending(id => id);
+        foreach (var sessionId in sessionIds)
+        {
+            var text = SessionSqlText(sessionId, hash);
+            if (text is not null)
+                return text;
+        }
+        return null;
     }
 
     /// <summary>Full retained compare history is versioned before applying the endpoint page.</summary>

@@ -1,6 +1,7 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import type { OptimizationSubject, ScopeVersions } from "@/api/types"
-import { useSessionOptimization, useSessionOptimizationComparison } from "@/api/queries"
+import type { AgentSessionKey } from "@/api/types"
+import { useAgentSessionOptimization, useAgentSessionOptimizationComparison, useSessionOptimization, useSessionOptimizationComparison } from "@/api/queries"
 import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
 import { VersionTable } from "@/components/optimization/VersionTable"
 import { Button } from "@/components/ui/button"
@@ -15,16 +16,19 @@ function scopeOrder(scope: ScopeVersions): number {
   return scope.scope === "whole query" ? 0 : 1
 }
 
-export function OptimizationSection({ sessionId }: { sessionId: number }) {
-  const search = useSearch({ from: "/sessions/$id" })
-  const query = useSessionOptimization(sessionId)
-  if (query.isPending) return <section aria-labelledby="optimization-heading" className="space-y-3"><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><p role="status">Loading optimization history…</p></section>
-  if (query.error) return <section aria-labelledby="optimization-heading" className="space-y-3"><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><div role="alert" className="flex flex-wrap items-center gap-3"><span>Could not load optimization history: {query.error.message}</span><Button variant="outline" onClick={() => void query.refetch()}>Retry</Button></div></section>
+export function OptimizationSection({ sessionId, agentSessionKey }: { sessionId: number; agentSessionKey?: AgentSessionKey }) {
+  const search = useSearch({ strict: false }) as SessionSearch
+  const query = useSessionOptimization(sessionId, !agentSessionKey)
+  const agentQuery = useAgentSessionOptimization(agentSessionKey ?? { agentKind: "", conversationId: "" }, !!agentSessionKey)
+  const activeQuery = agentSessionKey ? agentQuery : query
+  if (activeQuery.isPending) return <section aria-labelledby="optimization-heading" className="space-y-3"><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><p role="status">Loading optimization history…</p></section>
+  if (activeQuery.error) return <section aria-labelledby="optimization-heading" className="space-y-3"><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><div role="alert" className="flex flex-wrap items-center gap-3"><span>Could not load optimization history: {activeQuery.error.message}</span><Button variant="outline" onClick={() => void activeQuery.refetch()}>Retry</Button></div></section>
 
-  const section = query.data
+  const section = activeQuery.data
+  if (!section) return null
   return <section aria-labelledby="optimization-heading" className="space-y-4">
     <div><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><p className="text-sm text-muted-foreground">Compare retained SQL versions and review measurements within their conditions and scope.</p></div>
-    {section.subjects.map(subject => <SubjectCard key={subjectKey(subject)} sessionId={sessionId} subject={subject} />)}
+    {section.subjects.map(subject => <SubjectCard key={subjectKey(subject)} sessionId={sessionId} agentSessionKey={agentSessionKey} search={search} subject={subject} />)}
     {!!section.unassigned.length && <details className="rounded-lg border p-3">
       <summary className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</summary>
       <p className="mt-2 text-sm text-muted-foreground">These compares do not have a complete subject and scope, so they are not included in version comparisons.</p>
@@ -33,9 +37,8 @@ export function OptimizationSection({ sessionId }: { sessionId: number }) {
   </section>
 }
 
-function SubjectCard({ sessionId, subject }: { sessionId: number; subject: OptimizationSubject }) {
-  const search = useSearch({ from: "/sessions/$id" })
-  const navigate = useNavigate({ from: "/sessions/$id" })
+function SubjectCard({ sessionId, agentSessionKey, search, subject }: { sessionId: number; agentSessionKey?: AgentSessionKey; search: SessionSearch; subject: OptimizationSubject }) {
+  const navigate = useNavigate({ from: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id" } as never)
   const matchesSubject = search.subject === subject.subject && (search.db ?? "") === subject.database
   const groups = subject.groups
   const group = (matchesSubject && groups.find(item => item.fingerprint === search.group)) || groups[0]
@@ -50,13 +53,16 @@ function SubjectCard({ sessionId, subject }: { sessionId: number; subject: Optim
   const aggregate = matchesCard ? search.agg ?? "sum" : "sum"
   const view = matchesCard ? search.view ?? "changed" : "changed"
   const selectedSearch: SessionSearch = { subject: subject.subject, db: subject.database, group: group?.fingerprint, scope: scope?.scope, a: selectedA || undefined, b: selectedB || undefined, case: caseId, agg: aggregate, view }
-  const compareQuery = useSessionOptimizationComparison(sessionId, group && scope && selectedA && selectedB ? {
+  const compareParams = group && scope && selectedA && selectedB ? {
     subject: subject.subject, database: subject.database, group: group.fingerprint, scope: scope.scope,
     a: selectedA, b: selectedB, case: caseId, aggregate, view,
-  } : null)
+  } : null
+  const compareQuery = useSessionOptimizationComparison(sessionId, agentSessionKey ? null : compareParams)
+  const agentCompareQuery = useAgentSessionOptimizationComparison(agentSessionKey ?? { agentKind: "", conversationId: "" }, agentSessionKey ? compareParams : null)
+  const activeCompareQuery = agentSessionKey ? agentCompareQuery : compareQuery
 
   function update(patch: Record<string, string | undefined>, reset = false) {
-    void navigate({ search: current => ({ ...current, subject: subject.subject, db: subject.database, group: group?.fingerprint,
+    void navigate({ to: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id", params: agentSessionKey ? { kind: agentSessionKey.agentKind, id: agentSessionKey.conversationId } : { id: String(sessionId) }, search: (current: Record<string, unknown>) => ({ ...current, subject: subject.subject, db: subject.database, group: group?.fingerprint,
       scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined } : {}), ...patch }), replace: false })
   }
 
@@ -82,9 +88,9 @@ function SubjectCard({ sessionId, subject }: { sessionId: number; subject: Optim
         versions={versions} selectedA={selectedA} selectedB={selectedB || null}
         onSelect={(side, version) => update({ a: selectedA, b: selectedB || undefined, [side]: version })} /> : <p className="text-sm text-muted-foreground">No retained versions for this scope.</p>}
       {!selectedB && <p className="text-sm text-muted-foreground">Select a version for B to compare it with {selectedA}.</p>}
-      {compareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
-      {compareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {compareQuery.error.message}</p>}
-      {compareQuery.data && <div className="mt-4"><ComparisonPanel comparison={compareQuery.data} sessionId={sessionId} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
+      {activeCompareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
+      {activeCompareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {activeCompareQuery.error.message}</p>}
+      {activeCompareQuery.data && <div className="mt-4"><ComparisonPanel comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
         sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={patch => update(patch)} /></div>}
     </> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
   </article>

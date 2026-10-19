@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react"
 import { Link } from "@tanstack/react-router"
-import type { OptimizationActionReference, OptimizationComparison, ScopeVersions } from "@/api/types"
+import type { AgentSessionKey, OptimizationActionReference, OptimizationComparison, ScopeVersions } from "@/api/types"
 import { CopyButton } from "@/components/CopyButton"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { SessionVersionDiff } from "@/components/SessionVersionDiff"
@@ -42,9 +42,10 @@ function VersionAction({ label, action, selectedCase, sessionId, sessionSearch }
   </section>
 }
 
-export function ComparisonPanel({ comparison, sessionId, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange, hideCaseSelector = false }: {
+export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange, hideCaseSelector = false }: {
   comparison: OptimizationComparison
   sessionId: number
+  agentSessionKey?: AgentSessionKey
   subject: string
   scope: string
   versions?: ScopeVersions["versions"]
@@ -101,6 +102,7 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
       <Button type="button" size="sm" variant={activeAggregate === "mean" ? "secondary" : "outline"} aria-pressed={activeAggregate === "mean"} onClick={() => updateSearch({ agg: "mean" })}>Mean</Button>
     </div>
     {comparison.coverageLabel && <p className="text-sm text-muted-foreground">{comparison.coverageLabel}</p>}
+    {comparison.versionLabelsProvisional && comparison.versionLabelNote && <p role="note" className="text-sm text-muted-foreground">{comparison.versionLabelNote}</p>}
     {comparison.mixed && <p data-tier={badgeTier("mixed")} className="text-sm text-amber-700 dark:text-amber-300">Mixed: {comparison.mixed.better} better, {comparison.mixed.worse} worse — {comparison.mixed.worstCaseLabel}: logical reads {comparison.mixed.worstChangePercent > 0 ? "+" : ""}{Math.round(comparison.mixed.worstChangePercent)}%</p>}
     {comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <>
       {activeView === "statements" || activeView === "changed"
@@ -117,7 +119,7 @@ export function ComparisonPanel({ comparison, sessionId, subject, scope, version
     {comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="text-sm underline">Operation #{comparison.operationId}</Link>
       : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} /></div>}
     <div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} /></div>
-    {showDiff && sqlOptions.length > 1 && <SessionVersionDiff key={`${comparison.a}:${comparison.b}`} sessionId={sessionId} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} />}
+    {showDiff && sqlOptions.length > 1 && <SessionVersionDiff key={`${comparison.a}:${comparison.b}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} />}
   </section>
 }
 

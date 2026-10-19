@@ -177,6 +177,11 @@ function AgentTranscriptsStatus() {
     <div className="grid gap-2">
       {status.data && <p>Matched {status.data.matched} · Unmatched {status.data.unmatched} · Read errors {status.data.readErrors}</p>}
       {status.data?.lastCycleAt && <p className="text-sm text-muted-foreground">Last cycle: {status.data.lastCycleAt}</p>}
+      {!!status.data?.coverage?.length && <div className="overflow-x-auto">
+        <table className="w-full text-sm" aria-label="Agent session matching coverage"><thead><tr className="border-b text-left"><th className="py-1 pr-3">Agent</th><th className="px-3 py-1">Transport</th><th className="px-3 py-1">Exact</th><th className="px-3 py-1">Inferred</th><th className="px-3 py-1">Unassigned</th></tr></thead>
+          <tbody>{status.data.coverage.map(row => <tr key={`${row.agentKind}:${row.transport}`} className="border-b"><th scope="row" className="py-1 pr-3 text-left">{row.agentKind}</th><td className="px-3 py-1">{row.transport}</td><td className="px-3 py-1">{row.exact}</td><td className="px-3 py-1">{row.inferred}</td><td className="px-3 py-1">{row.unassigned}</td></tr>)}</tbody>
+        </table>
+      </div>}
       {status.error && <p role="alert" className="text-sm text-destructive">{status.error.message}</p>}
       <div>
         <Button variant="outline" disabled={clear.isPending} onClick={() => setConfirming(true)}>Clear matched data</Button>

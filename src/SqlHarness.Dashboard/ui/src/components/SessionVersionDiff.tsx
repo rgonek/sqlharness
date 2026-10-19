@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { NotFoundError } from "@/api/client"
 import { useSessionSqlText } from "@/api/queries"
+import type { AgentSessionKey } from "@/api/types"
 import { CopyButton } from "@/components/CopyButton"
 import { DiffControls } from "@/components/SqlDiff"
 import { LazySqlMergeView, loadUnifiedDiffText } from "@/components/SqlEditors"
@@ -27,8 +28,9 @@ function sideState(version: string, query: ReturnType<typeof useSessionSqlText>)
   return null
 }
 
-export function SessionVersionDiff({ sessionId, engine, options, initialFrom, initialTo }: {
+export function SessionVersionDiff({ sessionId, engine, options, initialFrom, initialTo, agentSessionKey }: {
   sessionId: number
+  agentSessionKey?: AgentSessionKey
   engine: string | null
   options: SqlVersionOption[]
   initialFrom?: string
@@ -38,8 +40,8 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
   const [toSelection, setToSelection] = useState<string | null>(() => keyOf(options.find(option => option.version === initialTo) ?? options.at(-1)))
   const fromOption = selectedOption(options, fromSelection) ?? options[0]
   const toOption = selectedOption(options, toSelection) ?? options.at(-1)
-  const fromQuery = useSessionSqlText(sessionId, fromOption?.hash ?? null)
-  const toQuery = useSessionSqlText(sessionId, toOption?.hash ?? null)
+  const fromQuery = useSessionSqlText(sessionId, fromOption?.hash ?? null, agentSessionKey)
+  const toQuery = useSessionSqlText(sessionId, toOption?.hash ?? null, agentSessionKey)
   const [mode, setMode] = useState<DiffMode>(() => readPreference(MODE_KEY, ["side-by-side", "unified"], "side-by-side"))
   const [ignoreFormatting, setIgnoreFormatting] = useState(() => readPreference(FORMATTING_KEY, ["true", "false"], "false") === "true")
 

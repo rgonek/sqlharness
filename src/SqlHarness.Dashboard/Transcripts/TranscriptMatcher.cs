@@ -6,7 +6,9 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Dashboard.Transcripts;
 
-internal sealed record TranscriptStatus(bool Enabled, int Matched, int Unmatched, int ReadErrors, string? LastCycleAt);
+internal sealed record TranscriptCoverage(string AgentKind, string Transport, int Exact, int Inferred, int Unassigned);
+internal sealed record TranscriptStatus(bool Enabled, int Matched, int Unmatched, int ReadErrors, string? LastCycleAt,
+    IReadOnlyList<TranscriptCoverage>? Coverage = null);
 
 /// <summary>
 /// Opt-in, bounded, incremental matching of journal operations to local agent transcripts.

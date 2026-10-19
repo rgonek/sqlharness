@@ -153,3 +153,52 @@ test("a failed save shows the server message and re-enables the button", async (
   expect(await screen.findByRole("alert")).toHaveTextContent("The journal is busy; try again.")
   expect(screen.getByRole("button", { name: "Star session cli:busy" })).toBeEnabled()
 })
+
+test("matching on lists expandable agent rows and leaves unmatched sessions at the top level", async () => {
+  stubFetch({
+    "/api/agents": [],
+    "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null, matching: true },
+    "/api/sessions?archived=false&starred=false&limit=50": { items: [session({ id: 9, sessionKey: "cli:unmatched" })], nextCursor: null, matching: true },
+    "/api/agent-sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
+    "/api/agent-sessions?archived=false&starred=false&limit=50": { items: [{
+      key: { agentKind: "claude", conversationId: "conversation-1" }, title: "Optimize orders", conversationTitle: "Optimize orders",
+      ownerTitle: null, notePreview: null, starred: false, archived: false, exact: 2, inferred: 1, unassigned: 0,
+      lastSeen: "2026-10-07T09:05:00.000Z", children: [{ session: session({ id: 8, sessionKey: "mcp:child", transport: "mcp" }), exact: 2, inferred: 1, unassigned: 0 }],
+    }], nextCursor: null },
+  })
+  renderApp("/sessions")
+  expect(await screen.findByRole("link", { name: "Optimize orders" })).toBeInTheDocument()
+  expect(screen.getByText("not matched")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: /Expand.*Optimize orders/i }))
+  expect(await screen.findByRole("link", { name: "mcp:child" })).toBeInTheDocument()
+})
+
+test("matching off returns immediately to per-session rows even when agent rows are cached", async () => {
+  let matching = true
+  let enabled = true
+  const calls = stubFetch({
+    "/api/agents": [],
+    "/api/sessions": (url: URL) => new Response(JSON.stringify({ items: url.searchParams.get("starred") === "true" ? [] : [session({ id: 2, sessionKey: "mcp:plain" })], nextCursor: null, matching }), { status: 200 }),
+    "/api/agent-sessions": (url: URL) => new Response(JSON.stringify({ items: url.searchParams.get("starred") === "true" ? [] : [{
+      key: { agentKind: "codex", conversationId: "cached" }, title: "stale agent row", conversationTitle: null, ownerTitle: null, notePreview: null,
+      starred: false, archived: false, exact: 0, inferred: 0, unassigned: 0, lastSeen: "2026-10-07T09:05:00.000Z", children: [],
+    }], nextCursor: null }), { status: 200 }),
+    "/api/settings": (_url: URL, init?: RequestInit) => {
+      if (init?.method === "PUT") { enabled = false; matching = false }
+      return new Response(JSON.stringify({ status: "valid", path: "config.json", settings: {
+        journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
+        dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled } },
+        compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 },
+      } }), { status: 200 })
+    },
+  })
+  renderApp("/sessions")
+  expect(await screen.findByText("stale agent row")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("link", { name: "Settings" }))
+  await userEvent.click(await screen.findByRole("switch", { name: "Read agent transcripts" }))
+  await waitFor(() => expect(enabled).toBe(false))
+  await userEvent.click(screen.getByRole("link", { name: "Sessions" }))
+  expect((await screen.findAllByText("mcp:plain")).length).toBe(1)
+  expect(screen.queryByText("stale agent row")).not.toBeInTheDocument()
+  expect(calls).toContain("/api/sessions?archived=false&starred=false&limit=50")
+})

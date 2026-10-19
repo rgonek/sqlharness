@@ -117,7 +117,9 @@ export type AgentSessionOperation = {
 export type AgentSessionDetail = {
   agentSession: AgentSessionSummary
   operations: AgentSessionOperation[]
+  note?: string | null
 }
+export type AgentSessionAnnotation = { title: string | null; note: string | null; starred: boolean; archived: boolean }
 
 export type CompareAttemptSummary = {
   operationId: number
@@ -150,7 +152,7 @@ export type CompareScopeVersions = {
   versions: CompareSqlVersion[]
 }
 
-export type OptimizationSection = { subjects: OptimizationSubject[]; unassigned: UnassignedCompare[] }
+export type OptimizationSection = { subjects: OptimizationSubject[]; unassigned: UnassignedCompare[]; versionLabelsProvisional?: boolean; versionLabelNote?: string | null }
 export type OptimizationSubject = { subject: string; database: string; engine: string; groups: ConditionsGroup[] }
 export type ConditionsGroup = {
   fingerprint: string; label: string; scopes: ScopeVersions[]; defaultA: string; defaultB: string | null
@@ -177,6 +179,7 @@ export type OptimizationComparison = {
   a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql"
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]
   selectedCase: string; aggregate: string; coverageLabel: string
+  versionLabelsProvisional?: boolean; versionLabelNote?: string | null
   mixed: { better: number; worse: number; worstCaseLabel: string; worstChangePercent: number } | null
   tables: { table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
   collapsed: { count: number; label: string } | null
@@ -504,7 +507,8 @@ export type Settings = { journal: JournalSettings; dashboard: DashboardSettings;
 export type SettingsFileStatus = "missing" | "valid" | "invalid"
 export type SettingsResponse = { status: SettingsFileStatus; path: string; settings: Settings }
 export type FieldError = { field: string; message: string }
-export type TranscriptStatus = { enabled: boolean; matched: number; unmatched: number; readErrors: number; lastCycleAt: string | null }
+export type TranscriptCoverage = { agentKind: string; transport: string; exact: number; inferred: number; unassigned: number }
+export type TranscriptStatus = { enabled: boolean; matched: number; unmatched: number; readErrors: number; lastCycleAt: string | null; coverage?: TranscriptCoverage[] }
 
 export type ProfileVariable = { name: string; rule: string }
 export type ProfileView = {

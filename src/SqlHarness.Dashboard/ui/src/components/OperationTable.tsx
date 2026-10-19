@@ -8,7 +8,7 @@ import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
 import { isInternalOperation } from "@/lib/internalOperations"
 
 /** Live elapsed time for running rows when `now` is given; recorded duration otherwise. */
-export function OperationTable({ operations, now, showInternal }: { operations: OperationSummary[]; now?: number; showInternal: boolean }) {
+export function OperationTable({ operations, now, showInternal, membership }: { operations: OperationSummary[]; now?: number; showInternal: boolean; membership?: Record<number, string> }) {
   const visibleOperations = showInternal ? operations : operations.filter(operation => !isInternalOperation(operation))
   return (
     <div className="overflow-x-auto">
@@ -20,6 +20,7 @@ export function OperationTable({ operations, now, showInternal }: { operations: 
             <TableHead>Session / subject</TableHead>
             <TableHead>Agent</TableHead>
             <TableHead>Operation</TableHead>
+            {membership && <TableHead>Membership</TableHead>}
             <TableHead>Status</TableHead>
             <TableHead>Target</TableHead>
             <TableHead className="text-right">Duration</TableHead>
@@ -48,6 +49,7 @@ export function OperationTable({ operations, now, showInternal }: { operations: 
                 {operation.progress && <div className="text-sm text-muted-foreground">{operation.progress.polls} polls</div>}
                 {operation.versionPair && <div className="text-sm text-muted-foreground">{operation.versionPair} · {formatNumber(operation.readsBefore)} → {formatNumber(operation.readsAfter)}</div>}
               </TableCell>
+              {membership && <TableCell><span className="rounded border px-1.5 py-0.5 text-xs">{membership[operation.id] ?? "unassigned"}</span></TableCell>}
               <TableCell>
                 <StatusBadge operation={operation} />
               </TableCell>

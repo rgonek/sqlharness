@@ -268,7 +268,10 @@ test("enables transcript reading, shows status, and confirms clearing matched da
       }
       return new Response(JSON.stringify(response()), { status: 200 })
     },
-    "/api/transcripts": { enabled: false, matched: 3, unmatched: 1, readErrors: 0, lastCycleAt: null },
+    "/api/transcripts": { enabled: false, matched: 3, unmatched: 1, readErrors: 0, lastCycleAt: "2026-10-07T09:05:00.000Z", coverage: [
+      { agentKind: "claude", transport: "mcp", exact: 3, inferred: 1, unassigned: 2 },
+      { agentKind: "codex", transport: "cli", exact: 0, inferred: 0, unassigned: 4 },
+    ] },
     "/api/transcripts/clear": (_url: URL, init?: RequestInit) => {
       posts.push({ body: JSON.parse(String(init?.body)), header: new Headers(init?.headers).get("X-SqlHarness-Dashboard") })
       return new Response(JSON.stringify({ enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null }), { status: 200 })
@@ -279,6 +282,12 @@ test("enables transcript reading, shows status, and confirms clearing matched da
   await waitFor(() => expect(puts).toHaveLength(1))
   expect((puts[0].body as { dashboard: { agentTranscripts: { enabled: boolean } } }).dashboard.agentTranscripts.enabled).toBe(true)
   expect(await screen.findByText("Matched 3 · Unmatched 1 · Read errors 0")).toBeInTheDocument()
+  expect(screen.getByText("Last cycle: 2026-10-07T09:05:00.000Z")).toBeInTheDocument()
+  const coverage = screen.getByRole("table", { name: "Agent session matching coverage" })
+  expect(coverage).toHaveTextContent("claude")
+  expect(coverage).toHaveTextContent("mcp")
+  expect(coverage).toHaveTextContent("3")
+  expect(coverage).toHaveTextContent("Inferred")
   await userEvent.click(screen.getByRole("button", { name: "Clear matched data" }))
   const dialog = await screen.findByRole("dialog")
   expect(dialog).toHaveTextContent("Removes matched titles, models, conversations and frozen version labels. Session and agent-session annotations are kept.")

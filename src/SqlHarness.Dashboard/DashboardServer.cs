@@ -221,12 +221,14 @@ public static partial class DashboardServer
                         limit ?? JournalReader.DefaultLimit, archivedFilter, starred, string.IsNullOrWhiteSpace(q) ? null : q.Trim(), hasCompare)),
                         TranscriptsEnabled(options.ConfigPath)), Json)
                     : BadRequest("from/to must be ISO-8601 timestamps."));
-        MapRead(api, "/agent-sessions", (string? archived, bool? starred, long? cursor, int? limit) =>
+        MapRead(api, "/agent-sessions", (string? archived, bool? starred, long? cursor, int? limit, string? agent, string? q, bool? hasCompare) =>
             !TranscriptsEnabled(options.ConfigPath)
                 ? Results.NotFound()
                 : !TryArchived(archived, out var archivedFilter)
                     ? BadRequest("archived must be true, false or any.")
-                    : Results.Json(reader.AgentSessions(archivedFilter, starred, cursor, limit), Json));
+                : q is { Length: > JournalReader.MaximumSearchLength }
+                    ? BadRequest($"q must be at most {JournalReader.MaximumSearchLength} characters.")
+                    : Results.Json(reader.AgentSessions(archivedFilter, starred, cursor, limit, agent, q, hasCompare), Json));
         MapRead(api, "/agent-sessions/{kind}/{id}", (string kind, string id) =>
             !TranscriptsEnabled(options.ConfigPath)
                 ? Results.NotFound()
@@ -249,6 +251,14 @@ public static partial class DashboardServer
                     ? BadRequest("kind or id is invalid.")
                     : AgentSessionOptimizationCompare(reader, new AgentSessionKey(kind, id), subject, database, group, scope,
                         a, b, @case, aggregate, view, loadConfig().Journal.StoreSensitive, Json));
+        MapRead(api, "/agent-sessions/{kind}/{id}/sql", (string kind, string id, string? hash) =>
+            !TranscriptsEnabled(options.ConfigPath)
+                ? Results.NotFound()
+                : kind is not ("claude" or "codex" or "opencode") || id.Length is 0 or > 512
+                    ? BadRequest("kind or id is invalid.")
+                : hash is null || !SqlHashPattern().IsMatch(hash)
+                    ? BadRequest("hash must be sha256:<64 lowercase hex>.")
+                    : reader.AgentSessionSqlText(new AgentSessionKey(kind, id), hash) is { } text ? Results.Json(text, Json) : Results.NotFound());
         MapRead(api, "/sessions/{id:long}", (long id) =>
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
         MapRead(api, "/sessions/{id:long}/optimization", (long id) =>
@@ -331,7 +341,10 @@ public static partial class DashboardServer
         });
         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
         MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
-        MapRead(api, "/transcripts", () => Results.Json(matcher.Status(TranscriptsEnabled(options.ConfigPath)), Json));
+        MapRead(api, "/transcripts", () => Results.Json(matcher.Status(TranscriptsEnabled(options.ConfigPath)) with
+        {
+            Coverage = reader.AgentSessionCoverage(),
+        }, Json));
         // Guarded writes (settings, prices, session annotations, transcript clear, shutdown); DashboardSecurity admits only these, with its extra checks.
         api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
         MapRead(api, "/prices", () => Results.Json(DashboardPrices.Describe(options.PricesPath), Json));
@@ -366,7 +379,10 @@ public static partial class DashboardServer
         }));
         api.MapMethods("/transcripts/clear", [HttpMethods.Post], (Delegate)(() =>
             matcher.Clear()
-                ? Results.Json(matcher.Status(TranscriptsEnabled(options.ConfigPath)), Json)
+                ? Results.Json(matcher.Status(TranscriptsEnabled(options.ConfigPath)) with
+                {
+                    Coverage = reader.AgentSessionCoverage(),
+                }, Json)
                 : Results.Json(new { error = "The journal is busy; try again." }, Json, statusCode: StatusCodes.Status503ServiceUnavailable)));
         MapRead(api, "/{**rest}", () => Results.NotFound());
 

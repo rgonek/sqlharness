@@ -404,12 +404,32 @@ public sealed class DashboardServerTests
                 AgentTranscripts = new AgentTranscriptsConfig { Enabled = true },
             },
         });
-        _ = new JournalSeed(home.DatabasePath);
+        var journal = new JournalSeed(home.DatabasePath);
+        var mcpSession = JournalSeed.Session("coverage-mcp", "claude") with { Transport = SqlHarness.Core.JournalTransport.Mcp };
+        var first = journal.Operation(mcpSession);
+        journal.Operation(mcpSession);
+        var last = journal.Operation(mcpSession);
+        journal.Operation(JournalSeed.Session("coverage-cli", "claude"));
+        JournalSeed.Link(home.DatabasePath, first.OperationId, "claude", "coverage-thread", "Coverage");
+        JournalSeed.Link(home.DatabasePath, last.OperationId, "claude", "coverage-thread", "Coverage");
         await using var dashboard = await StartAuthenticated(home, options => options with { ConfigPath = configPath });
         var (_, client) = dashboard;
 
         using var status = JsonDocument.Parse(await client.GetStringAsync("/api/transcripts"));
         Assert.True(status.RootElement.GetProperty("enabled").GetBoolean());
+        var coverageRows = status.RootElement.GetProperty("coverage").EnumerateArray().ToArray();
+        Assert.Equal(2, coverageRows.Length);
+        var coverage = coverageRows.Single(row => row.GetProperty("transport").GetString() == "mcp");
+        Assert.Equal("claude", coverage.GetProperty("agentKind").GetString());
+        Assert.Equal("mcp", coverage.GetProperty("transport").GetString());
+        Assert.Equal(2, coverage.GetProperty("exact").GetInt32());
+        Assert.Equal(1, coverage.GetProperty("inferred").GetInt32());
+        Assert.Equal(0, coverage.GetProperty("unassigned").GetInt32());
+        Assert.Equal(3, coverage.GetProperty("exact").GetInt32() + coverage.GetProperty("inferred").GetInt32() + coverage.GetProperty("unassigned").GetInt32());
+        var cliCoverage = coverageRows.Single(row => row.GetProperty("transport").GetString() == "cli");
+        Assert.Equal(0, cliCoverage.GetProperty("exact").GetInt32());
+        Assert.Equal(0, cliCoverage.GetProperty("inferred").GetInt32());
+        Assert.Equal(1, cliCoverage.GetProperty("unassigned").GetInt32());
 
         using var noHeader = new HttpRequestMessage(HttpMethod.Post, "/api/transcripts/clear") { Content = JsonContent.Create(new { }) };
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(noHeader)).StatusCode);
@@ -420,6 +440,7 @@ public sealed class DashboardServerTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var cleared = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.True(cleared.RootElement.GetProperty("enabled").GetBoolean());
+        Assert.Equal(2, cleared.RootElement.GetProperty("coverage").EnumerateArray().Count());
     }
 
     [Fact]

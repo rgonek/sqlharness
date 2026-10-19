@@ -7,6 +7,7 @@ import { OperationPage } from "@/pages/OperationPage"
 import { OperationsPage, type OperationListSearch } from "@/pages/OperationsPage"
 import { ProfilesPage } from "@/pages/ProfilesPage"
 import { SessionPage } from "@/pages/SessionPage"
+import { AgentSessionPage } from "@/pages/AgentSessionPage"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { StatsPage } from "@/pages/StatsPage"
@@ -29,6 +30,19 @@ const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sess
     b: typeof search.b === "string" && search.b.length <= 64 ? search.b : undefined,
     case: typeof search.case === "string" && search.case.length <= 256 ? search.case
       : typeof search.case === "number" && Number.isSafeInteger(search.case) ? String(search.case) : undefined,
+    agg: search.agg === "mean" ? "mean" : search.agg === "sum" ? "sum" : undefined,
+    view: search.view === "whole" || search.view === "statements" ? search.view : search.view === "changed" ? "changed" : undefined,
+    unassigned: search.unassigned === true || search.unassigned === "true",
+  }) })
+const agentSessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/agent-sessions/$kind/$id", component: AgentSessionPage,
+  validateSearch: (search: Record<string, unknown>): SessionSearch => ({
+    subject: typeof search.subject === "string" && search.subject.length <= 64 ? search.subject : undefined,
+    db: typeof search.db === "string" && search.db.length <= 128 ? search.db : undefined,
+    group: typeof search.group === "string" && search.group.length <= 256 ? search.group : undefined,
+    scope: typeof search.scope === "string" && search.scope.length <= 64 ? search.scope : undefined,
+    a: typeof search.a === "string" && search.a.length <= 64 ? search.a : undefined,
+    b: typeof search.b === "string" && search.b.length <= 64 ? search.b : undefined,
+    case: typeof search.case === "string" && search.case.length <= 256 ? search.case : undefined,
     agg: search.agg === "mean" ? "mean" : search.agg === "sum" ? "sum" : undefined,
     view: search.view === "whole" || search.view === "statements" ? search.view : search.view === "changed" ? "changed" : undefined,
     unassigned: search.unassigned === true || search.unassigned === "true",
@@ -76,7 +90,7 @@ const profilesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/pro
 const mutationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/mutations", component: MutationsPage })
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage })
 
-export const routeTree = rootRoute.addChildren([liveRoute, sessionsRoute, sessionRoute, operationRoute, operationsRoute, statsRoute, profilesRoute, mutationsRoute, settingsRoute])
+export const routeTree = rootRoute.addChildren([liveRoute, sessionsRoute, sessionRoute, agentSessionRoute, operationRoute, operationsRoute, statsRoute, profilesRoute, mutationsRoute, settingsRoute])
 
 /** Browser history in the app; tests pass a memory history. */
 export function createAppRouter(history?: RouterHistory) {
