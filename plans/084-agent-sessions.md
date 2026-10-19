@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `6c37cd7`. Depends on 079 (journal floor), 080 (Optimization) and 087 (measure observations; treat them like compare observations in agent-session history and frozen labels). Plan 085 depends on this plan.
+- IMPLEMENTATION VERIFIED; owner authorized local integration on 2026-10-19 with the detail-cap limitation tracked by Plan 089 and deferred Minors by Plans 090/091. Sol dissent is preserved; this is not clean whole-branch approval. Planning base `6c37cd7`. Depends on 079 (journal floor), 080 (Optimization) and 087 (measure observations; treat them like compare observations in agent-session history and frozen labels). Plan 085 depends on this plan.
 - Priority P2; effort L; risk MEDIUM.
 
 ## Global Constraints
