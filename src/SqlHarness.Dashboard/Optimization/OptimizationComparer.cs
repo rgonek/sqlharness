@@ -126,7 +126,8 @@ public static class OptimizationComparer
         var wholeBatch = new WholeBatchLine(batchBefore, batchAfter, sharedBefore,
             batchBefore is { } wb && batchAfter is { } wa && sharedBefore is { } sh
                 ? $"whole batch: {wb.ToString(CultureInfo.InvariantCulture)} → {wa.ToString(CultureInfo.InvariantCulture)} reads (shared statements: {sh.ToString(CultureInfo.InvariantCulture)})"
-                : "whole batch: reads unavailable") { SharedBefore = sharedBefore, SharedAfter = sharedAfter };
+                : "whole batch: reads unavailable")
+        { SharedBefore = sharedBefore, SharedAfter = sharedAfter };
         wholeBatch = wholeBatch with
         {
             ChangedBefore = allCasesConfirmed && batchBefore.HasValue && sharedBefore.HasValue

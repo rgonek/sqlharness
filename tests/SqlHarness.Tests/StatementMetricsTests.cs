@@ -1,5 +1,5 @@
-using System.Text.Json;
 using System.Security;
+using System.Text.Json;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Postgres;
