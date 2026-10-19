@@ -41,8 +41,8 @@
 ---
 
 ### Task 0: Drift check and Codex subagent spike
-- [ ] Confirm 079/080 merged; drift check; `just verify` baseline.
-- [ ] Spike (local, read-only, journal counts and one Codex subagent run by the owner): does `agent_thread_source` or any captured metadata carry a parent thread id? Record the answer here; if yes, add a fold rule to Task 2.
+- [x] Confirm 079/080/087 merged; drift check; `just verify` baseline. Evidence: 079, 080, and 087 commits and required `FirstRetainedVersion` (18), `CompareHistoryBuilder`, and `OptimizationSummaryBuilder` are present on `main`; drift from planning base `6c37cd7` is 114 changed journal/dashboard files (8,128 insertions, 1,488 deletions), with no conflicting required interface. Baseline passed on `63fd52faf15aad531e5163268f8f50f15327bdd1`.
+- [x] Spike (local, read-only, journal counts and one Codex subagent run by the owner): does `agent_thread_source` or any captured metadata carry a parent thread id? Result: unknown-parent evidence unavailable. The local journal has 11 operations, 0 with `agent_session_id` or `agent_thread_source`; the capture allowlist stores `thread_source` but no parent-thread identifier, and the operations schema has no parent-thread column (`parent_operation_ref` is an operation reference). Use the specified `subagent of unknown parent` fallback; no additional fold rule for Task 2. See `.superpowers/sdd/084-agent-sessions/task-0-report.md`.
 
 ### Task 1: Matcher fixes and event-driven cycles
 **Files:** `src/SqlHarness.Dashboard/Transcripts/TranscriptMatcher.cs` (~`:232-313`), `src/SqlHarness.Dashboard/DashboardHost.cs` (~`:225-291`, housekeeping loop), `src/SqlHarness.Dashboard/LiveFeed.cs` (shared `data_version` signal); tests `tests/SqlHarness.Tests/Dashboard/TranscriptMatcherTests.cs` (create if absent), `DashboardHousekeepingTests.cs`.
