@@ -120,7 +120,7 @@ export function useSessionCompares(id: number) {
 }
 
 export type OptimizationCompareParams = {
-  subject: string; database: string; group: string; scope?: string; a: string; b: string; case: string; aggregate: string
+  subject: string; database: string; group: string; scope?: string; a: string; b: string; case: string; aggregate: string; view?: "changed" | "whole" | "statements"
 }
 
 export function useSessionOptimization(id: number, enabled = true) {
@@ -136,16 +136,16 @@ export function useSessionOptimizationComparison(id: number, params: Optimizatio
     queryKey: params ? queryKeys.optimizationComparison(id, params) : ["session-optimization-comparison", id, null],
     queryFn: () => getJson<OptimizationComparison>(`/api/sessions/${id}/optimization/compare`, {
       subject: params!.subject, database: params!.database, group: params!.group, scope: params!.scope,
-      a: params!.a, b: params!.b, case: params!.case, aggregate: params!.aggregate,
+      a: params!.a, b: params!.b, case: params!.case, aggregate: params!.aggregate, view: params!.view ?? "changed",
     }),
     enabled: params !== null,
   })
 }
 
-export function useOperationOptimization(id: number, selectedCase = "all", aggregate = "sum") {
+export function useOperationOptimization(id: number, selectedCase = "all", aggregate = "sum", view: "changed" | "whole" | "statements" = "changed") {
   return useQuery({
-    queryKey: ["operation-optimization", id, selectedCase, aggregate],
-    queryFn: () => getJson<OptimizationComparison>(`/api/operations/${id}/optimization`, { case: selectedCase, aggregate }),
+    queryKey: ["operation-optimization", id, selectedCase, aggregate, view],
+    queryFn: () => getJson<OptimizationComparison>(`/api/operations/${id}/optimization`, { case: selectedCase, aggregate, view }),
   })
 }
 

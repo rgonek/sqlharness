@@ -16,7 +16,7 @@ export function VersionTable({ subject, sessionId, sessionSearch, versions, sele
       <tbody>{versions.map(version => <tr key={`${version.version}:${version.hash}`} className="border-b">
         <th scope="row" className="py-2 pr-3 text-left font-medium">{version.version}</th>
         <td className="px-3 py-2">{metric(version.logicalReadsSum)}</td><td className="px-3 py-2">{metric(version.scansSum)}</td>
-        <td className="px-3 py-2">{metric(version.elapsedMedianMs)}</td><td className="px-3 py-2">{version.caseOutcome}</td>
+        <td className="px-3 py-2">{metric(version.elapsedMedianMs)}</td><td className="px-3 py-2"><span>{version.caseOutcome}</span><span className="ml-1 text-xs text-muted-foreground" title={`Verdict basis: ${version.verdictBasis}`}>basis: {version.verdictBasis}</span></td>
         <td className="px-3 py-2"><div className="flex flex-wrap gap-x-2">{version.measuredIn.map(operationId => <Link key={operationId} to="/operations/$id" params={{ id: String(operationId) }} search={operationReturnSearch(sessionId, sessionSearch)} className="underline">Operation #{operationId}</Link>)}</div></td>
         <td className="px-3 py-2"><label className="flex items-center gap-1"><input type="radio" name={`${subject}-a`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} />A</label></td>
         <td className="px-3 py-2"><label className="flex items-center gap-1"><input type="radio" name={`${subject}-b`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} />B</label></td>

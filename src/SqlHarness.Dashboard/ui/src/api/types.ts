@@ -370,6 +370,8 @@ export type OperationDetail = {
   events?: OperationEventSummary[]
   conditions: ConditionsModel | null
   statements?: StatementRow[]
+  omittedStatements?: number
+  statementAttribution?: "confirmed" | "partial" | "unavailable" | string
 }
 
 export type OperationPhaseSummary = { phase: string; count: number; totalMs: number; maxMs: number }

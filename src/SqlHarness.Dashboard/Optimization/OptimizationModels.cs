@@ -102,6 +102,7 @@ public sealed record CompareStatementEvidence(
     IReadOnlyList<TableRow> Objects)
 {
     public double? UdfElapsedMilliseconds { get; init; }
+    public string? PlanLink { get; init; }
 }
 
 public enum PairBasis { MeasuredTogether, DifferentRunsSameConditions, ConditionsDiffer, SameSql }

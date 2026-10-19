@@ -23,6 +23,21 @@ function bufferSummary(value: NonNullable<OptimizationComparison["buffersBefore"
   return fields.map(([label, count]) => `${label} ${number(count)}`).join(", ")
 }
 
+function viewLabel(view: OptimizationComparison["view"]): string {
+  switch (view) {
+    case "whole": return "Whole batch"
+    case "statements": return "By statement"
+    default: return "Changed statements"
+  }
+}
+
+function hiddenWorkLabel(item: NonNullable<OptimizationComparison["statements"]>[number]["hiddenWork"][number]): string | null {
+  if (item.kind === "scalar-udf" && item.sharePercent !== null) return `UDF time ${item.sharePercent}% of statement`
+  if (item.kind === "multi-statement-tvf" && item.executions !== null)
+    return `multi-statement function: internal reads not visible (${item.executions} executions)`
+  return null
+}
+
 export function optimizationMetricRows(comparison: OptimizationComparison): { label: string; before: string; after: string }[] {
   const rows: { label: string; before: string; after: string }[] = []
   if (comparison.cpuBeforeMs != null || comparison.cpuAfterMs != null)
@@ -40,9 +55,22 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
     `# ${subject} — ${scope} — ${comparison.a} → ${comparison.b}`,
     `Case: ${caseLabel} (${aggregateLabel})${comparison.coverageLabel ? ` — ${comparison.coverageLabel}` : ""}`,
     `Basis: ${basisLabel(comparison)}`,
+    `View: ${viewLabel(comparison.view)}`,
+    `basis: ${comparison.verdictBasis ?? "whole batch"}`,
     `Equivalence: ${comparison.equivalenceLabel}`,
     "",
   ]
+
+  if (comparison.wholeBatch?.label) lines.push(comparison.wholeBatch.label)
+  for (const text of [
+    (comparison.omittedStatementsBefore ?? 0) > 0 ? `omitted statements: ${comparison.omittedStatementsBefore} (their reads remain in the batch total)` : null,
+    (comparison.omittedStatementsAfter ?? 0) > 0 ? `omitted statements: ${comparison.omittedStatementsAfter} (their reads remain in the batch total)` : null,
+  ]) if (text) lines.push(text)
+  const hidden = [...new Set((comparison.statements ?? []).flatMap(row => row.hiddenWork.map(hiddenWorkLabel).filter((label): label is string => label !== null)))]
+  if (hidden.length) lines.push(...hidden)
+  if (comparison.fallbackNote) lines.push(comparison.fallbackNote)
+  if (comparison.wholeBatch?.label || hidden.length || comparison.fallbackNote
+    || comparison.omittedStatementsBefore || comparison.omittedStatementsAfter) lines.push("")
 
   if (comparison.mixed) {
     const percent = Math.round(comparison.mixed.worstChangePercent)
@@ -51,6 +79,15 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
 
   if (comparison.basis === "ConditionsDiffer") {
     lines.push(conditionsDifferMessage)
+    return lines.join("\n")
+  }
+
+  if (comparison.view === "statements" || comparison.view === "changed") {
+    lines.push(
+      "| Statement | Status | Executions | Reads before | Reads after | Change |",
+      "| --- | --- | ---: | ---: | ---: | --- |",
+      ...(comparison.statements ?? []).map(row => `| ${row.text.replaceAll("|", "\\|").replaceAll("\n", " ")} | ${row.status} | ${number(row.executions)} | ${number(row.readsBefore)} | ${number(row.readsAfter)} | ${row.change} |`),
+    )
     return lines.join("\n")
   }
 

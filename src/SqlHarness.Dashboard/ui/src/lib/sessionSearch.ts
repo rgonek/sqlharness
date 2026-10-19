@@ -11,6 +11,7 @@ export function operationReturnSearch(sessionId: number, search: SessionSearch):
     returnB: search.b,
     returnCase: search.case,
     returnAgg: search.agg,
+    returnView: search.view,
     returnUnassigned: search.unassigned,
   }
 }
@@ -25,6 +26,7 @@ export function sessionSearchFromOperation(search: OperationDetailSearch): Sessi
     b: search.returnB,
     case: search.returnCase,
     agg: search.returnAgg,
+    view: search.returnView,
     unassigned: search.returnUnassigned,
   }
 }

@@ -167,10 +167,17 @@ public sealed class JournalReaderTests
         var omitted = seed.Compare(session, "orders", "whole", "h0", "h3");
         seed.CompareEvidence(omitted, JournalSeed.ReproConditions(), """{"kind":"compare","cases":[{"caseId":"0","caseLabel":"case 0"}]}""",
             new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2) with { OmittedStatements = 1 }, OptimizationMetric("candidate", 80, 8, 1)], []));
-        var measure = seed.Operation(session, operation: "measure", benchmark: new BenchmarkJournalRecord(
-            [new JournalVariantMetrics("measure", null, null, 1, null, null, new CompareDistribution(40, 40, 40), null, null, null,
-                null, null, null, 0, false, false, 0, [], null, [], [])], [])
-            { Statements = [StoredStatement("measure", "SELECT secret measure", "measure-plan")] });
+        var measured = JournalSeed.Benchmark() with
+        {
+            Variants = [JournalSeed.Benchmark().Variants[0] with { OmittedStatements = 2 }],
+            Statements = [StoredStatement("measure", "SELECT secret measure", "measure-plan") with
+            {
+                PlanRepetition = 1,
+                PlanDocumentOrdinal = 0,
+                PlanStatementIndex = 0,
+            }],
+        };
+        var measure = seed.Operation(session, operation: "measure", benchmark: measured);
 
         using (var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
         {
@@ -191,6 +198,8 @@ public sealed class JournalReaderTests
         Assert.Equal(1, Assert.Single(evidence.Single(item => item.OperationId == omitted.OperationId).Metrics, item => item.Variant == "baseline").OmittedStatements);
         Assert.Equal("partial", Assert.Single(evidence.Single(item => item.OperationId == omitted.OperationId).Metrics, item => item.Variant == "baseline").StatementAttribution);
         var detail = reader.Operation(measure.OperationId, storeSensitive: false)!;
+        Assert.Equal(2, detail.OmittedStatements);
+        Assert.Equal("partial", detail.StatementAttribution);
         Assert.Equal("statement 1 (01234567)", Assert.Single(detail.Statements!).Text);
         var measuredStatement = Assert.Single(detail.Statements!);
         Assert.Equal("measured", measuredStatement.Status);
@@ -208,6 +217,9 @@ public sealed class JournalReaderTests
         Assert.Null(measuredObject.ScansBefore);
         Assert.Equal(2, measuredObject.ScansAfter);
         Assert.Equal(string.Empty, measuredObject.Change);
+        var sensitiveStatement = Assert.Single(Reader(home).Operation(measure.OperationId, storeSensitive: true)!.Statements!);
+        Assert.Equal("/operations/" + measure.OperationId + "?planCase=0&planVariant=measure&planRepetition=1&planDocument=0&planStatement=0",
+            sensitiveStatement.PlanLinkAfter);
     }
 
     [Fact]

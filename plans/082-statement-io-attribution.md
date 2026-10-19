@@ -105,9 +105,11 @@
 - Create: `ui/src/components/optimization/StatementRows.tsx`, `HiddenWorkFlag.tsx`
 - Test: `ComparisonPanel.test.tsx`, `lib/optimizationMarkdown.test.ts`, create `StatementRows.test.tsx`, `OperationPage.test.tsx` (measure)
 
-- [ ] **Step 1: Failing tests:** toggle `Changed statements | Whole batch | By statement` (URL param `view`), default `Changed statements`; headline line text exact; verdict shows `basis: changed statements`; fallback note shown and toggle defaults to `Whole batch`; by-statement rows sorted by absolute change, status labels, execution count, plan link per statement, expandable objects; hidden-work flag texts exact, also next to the reads headline; omission text; Markdown states the view and basis and includes the headline line; measure operation page shows by-statement rows and flags; PostgreSQL message.
-- [ ] **Step 2:** `npm --prefix src/SqlHarness.Dashboard/ui test` → FAIL. **Step 3:** Implement. **Step 4:** → PASS; build.
-- [ ] **Step 5:** Commit `feat(082): per-statement views and hidden-work flags`.
+- [x] **Step 1: Failing tests:** RED observed for the missing view controls, fallback note and Markdown view/basis lines; the named tests cover URL `view`, fallback behavior, sorted status-bearing rows, execution counts, exact retained-plan destinations, expandable objects, both hidden-work forms, batch headline, omissions, Markdown, measure-only values and PostgreSQL wording.
+- [x] **Step 2:** Focused UI suite → PASS (53 passed). Targeted backend schema, provenance, reader, and incomplete-attribution fallback filter → PASS (4 passed). UI production build passed with the Vite large-chunk warning; see ignored `.superpowers/sdd/082-statement-io-attribution/task-4-report.md` for exact commands/output.
+- [x] **Step 3:** Added URL/query view wiring, comparison and measured statement views, copy evidence, basis labels/tooltips, and selected-run retained plan links. Operation detail now includes omission count and attribution summary.
+- [x] **Step 4:** UI check/build and focused evidence are recorded in the Task 4 report; full `just verify` remains Task 5.
+- [x] **Step 5:** Commit `feat(082): per-statement views and hidden-work flags`.
 
 ### Task 5: Documentation and verification
 

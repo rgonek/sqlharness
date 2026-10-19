@@ -41,8 +41,13 @@ public sealed class OptimizationComparerTests
 
         Assert.Equal("whole batch", result.VerdictBasis);
         Assert.Equal("per-statement attribution incomplete", result.FallbackNote);
+        Assert.Equal("whole", result.View);
         Assert.Contains(result.Statements, row => row.Key == "prep");
         Assert.Equal("same", Assert.Single(result.Cases).Outcome);
+
+        var defaultView = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "sum", "changed");
+        Assert.Equal("whole", defaultView.View);
+        Assert.Equal("whole batch", defaultView.VerdictBasis);
     }
 
     [Fact]

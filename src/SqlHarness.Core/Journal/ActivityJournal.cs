@@ -542,10 +542,12 @@ public sealed class ActivityJournal : IActivityJournal
                 using var insert = Command(connection, transaction, """
                     INSERT INTO operation_statements (operation_id, ordinal, variant, parameter_set, matrix_cell,
                         case_id, case_label, statement_ordinal, statement_hash, statement_key, occurrence, statement_text,
-                        executions, plan_hash, status, cpu_ms, elapsed_ms, dop, operators_json, udf_elapsed_ms, hidden_work_json)
+                        executions, plan_hash, plan_repetition, plan_document_ordinal, plan_statement_index,
+                        status, cpu_ms, elapsed_ms, dop, operators_json, udf_elapsed_ms, hidden_work_json)
                     VALUES ($operation, $ordinal, $variant, $set, $cell, $caseId, $caseLabel,
                         $statementOrdinal, $hash, $statementKey, $occurrence, $text,
-                        $executions, $planHash, $status, $cpu, $elapsed, $dop, $operators, $udfElapsed, $hiddenWork)
+                        $executions, $planHash, $planRepetition, $planDocumentOrdinal, $planStatementIndex,
+                        $status, $cpu, $elapsed, $dop, $operators, $udfElapsed, $hiddenWork)
                     RETURNING id;
                     """);
                 insert.Parameters.AddWithValue("$operation", handle.OperationId);
@@ -563,6 +565,9 @@ public sealed class ActivityJournal : IActivityJournal
                 insert.Parameters.AddWithValue("$text", (object?)(_storeSensitive ? statement.Text : fallbackText) ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$executions", (object?)statement.Executions ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$planHash", (object?)statement.PlanHash ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$planRepetition", (object?)statement.PlanRepetition ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$planDocumentOrdinal", (object?)statement.PlanDocumentOrdinal ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$planStatementIndex", (object?)statement.PlanStatementIndex ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$status", statement.Status.ToString().ToLowerInvariant());
                 insert.Parameters.AddWithValue("$cpu", (object?)statement.CpuMilliseconds ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$elapsed", (object?)statement.ElapsedMilliseconds ?? DBNull.Value);

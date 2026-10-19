@@ -58,13 +58,14 @@ test("shows concise working directories and optimization badges without clipping
     "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
     "/api/sessions?archived=false&starred=false&limit=50": { items: [session({
       cwd: "C:\\work\\sqlharness", hasCompare: true,
-      optimization: [{ subject: "orders-by-customer", change: "−94%", warning: true }],
+      optimization: [{ subject: "orders-by-customer", change: "−94%", warning: true, verdictBasis: "changed statements" }],
       running: 2, failed: 1, rejected: 1, abandoned: 1,
     })], nextCursor: null },
   })
   renderApp("/sessions")
   expect(await screen.findByText("sqlharness")).toHaveAttribute("title", "C:\\work\\sqlharness")
   expect(screen.getByText("orders-by-customer −94%")).toBeInTheDocument()
+  expect(screen.getByText("orders-by-customer −94%")).toHaveAttribute("title", "Verdict basis: changed statements")
   expect(screen.getByLabelText("Warning")).toBeInTheDocument()
   const states = screen.getByText("2 running").parentElement!
   expect(states).toHaveTextContent("1 failed")

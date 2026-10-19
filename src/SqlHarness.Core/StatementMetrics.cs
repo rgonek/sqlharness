@@ -45,6 +45,12 @@ public sealed record StatementMetrics(
     public string? PlanHash { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? PlanDocumentOrdinal { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? PlanStatementIndex { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<StatementObjectCounters>? Objects { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -187,8 +193,9 @@ internal static class JournalStatementMetricsExtractor
         var documentOrdinal = 0;
         foreach (var document in documents)
         {
-            foreach (var statement in ReadStatements(document ?? string.Empty))
-                parsed.Add(Parse(statement, documentOrdinal) with { PlanOrdinal = parsed.Count });
+            var statements = ReadStatements(document ?? string.Empty);
+            for (var statementIndex = 0; statementIndex < statements.Length; statementIndex++)
+                parsed.Add(Parse(statements[statementIndex], documentOrdinal, statementIndex) with { PlanOrdinal = parsed.Count });
             documentOrdinal++;
         }
 
@@ -266,7 +273,7 @@ internal static class JournalStatementMetricsExtractor
         }
     }
 
-    private static ParsedStatement Parse(XElement statement, int documentOrdinal)
+    private static ParsedStatement Parse(XElement statement, int documentOrdinal, int statementIndex)
     {
         var queryPlan = statement.Element(Showplan + "QueryPlan");
         var text = Attribute(statement, "StatementText") ?? string.Empty;
@@ -344,6 +351,7 @@ internal static class JournalStatementMetricsExtractor
         hidden.AddRange(tvfValues.Select(value => new HiddenWork("multi-statement-tvf", value.Key, value.Value, null)));
         return new ParsedStatement(
             documentOrdinal,
+            statementIndex,
             text,
             normalizedText,
             ParseInt(Attribute(statement, "StatementId")),
@@ -422,6 +430,8 @@ internal static class JournalStatementMetricsExtractor
                 && (group.Count == 1 || group.Select(item => item.DocumentOrdinal).Distinct().Count() == group.Count),
             Text = first.Text,
             DocumentOrdinal = first.DocumentOrdinal,
+            PlanDocumentOrdinal = first.DocumentOrdinal,
+            PlanStatementIndex = first.StatementIndex,
             StatementId = first.StatementId,
             StatementCompId = first.StatementCompId,
         };
@@ -461,6 +471,7 @@ internal static class JournalStatementMetricsExtractor
 
     private sealed record ParsedStatement(
         int DocumentOrdinal,
+        int StatementIndex,
         string Text,
         string NormalizedText,
         int? StatementId,

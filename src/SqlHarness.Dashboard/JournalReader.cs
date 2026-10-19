@@ -28,7 +28,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     private sealed record StoredStatement(long Id, long OperationId, string Variant, string CaseId, int Ordinal, string Key,
         int Occurrence, string Hash, string? Text, long? Executions, string? PlanHash, string Status,
         double? UdfElapsedMs, string HiddenWorkJson, string? ObjectName, string? ObjectKind,
-        long? ObjectReads, long? ObjectLobReads, long? ObjectScans, int OmittedStatements);
+        long? ObjectReads, long? ObjectLobReads, long? ObjectScans, int OmittedStatements,
+        int? PlanRepetition, int? PlanDocumentOrdinal, int? PlanStatementIndex);
 
     private static readonly JsonSerializerOptions ConditionsJsonOptions = new(JsonSerializerDefaults.Web);
     public const int DefaultLimit = 50;
@@ -316,7 +317,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                         return new CompareStatementEvidence(row.Key, row.Occurrence, text, row.PlanHash,
                             row.Status, reads, scansForStatement,
                             row.Executions, hiddenWork, objectRows)
-                        { UdfElapsedMilliseconds = row.UdfElapsedMs };
+                        { UdfElapsedMilliseconds = row.UdfElapsedMs, PlanLink = PlanLink(row) };
                     }).ToArray();
                     var omittedStatements = samples.Select(row => row.OmittedStatements).DefaultIfEmpty(0).Max();
                     var attribution = statements.Length > 0 && omittedStatements == 0 && statements.All(row => row.Status == "confirmed")
@@ -353,38 +354,57 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         IEnumerable<long> operationIds, bool storeSensitive)
     {
         var ids = operationIds.Distinct().ToArray();
-        if (ids.Length == 0 || Scalar<long>(connection, "PRAGMA user_version;", []) < 18)
+        if (ids.Length == 0 || Scalar<long>(connection, "PRAGMA user_version;", []) < 19)
             return [];
         var result = new List<StoredStatement>();
         foreach (var batch in ids.Chunk(200))
         {
             var parameters = batch.Select((id, index) => ($"$id{index}", (object?)id)).ToArray();
             var placeholders = string.Join(",", parameters.Select(item => item.Item1));
+            var queryParameters = parameters.Append(("$storeSensitive", (object?)(storeSensitive ? 1 : 0))).ToArray();
             result.AddRange(Query(connection, $"""
                 SELECT s.id, s.operation_id, s.variant, s.case_id, s.statement_ordinal, s.statement_key,
                        s.occurrence, s.statement_hash, s.statement_text, s.executions, s.plan_hash, s.status,
                        s.udf_elapsed_ms, s.hidden_work_json, o.object, o.kind, o.logical_reads, o.lob_logical_reads,
-                       o.scans, COALESCE(m.omitted_statements, 0)
+                       o.scans, COALESCE(m.omitted_statements, 0),
+                       CASE WHEN $storeSensitive = 1 AND p.document_sha IS NOT NULL THEN p.repetition END,
+                       CASE WHEN $storeSensitive = 1 AND p.document_sha IS NOT NULL THEN p.document_ordinal END,
+                       CASE WHEN $storeSensitive = 1 AND p.document_sha IS NOT NULL THEN p.statement_index END
                 FROM operation_statements s
                 LEFT JOIN operation_statement_objects o ON o.statement_id = s.id
                 LEFT JOIN operation_metrics m ON m.operation_id = s.operation_id AND m.variant = s.variant AND m.case_id = s.case_id
+                LEFT JOIN operation_metrics pm ON pm.operation_id = s.operation_id AND lower(pm.variant) = lower(s.variant)
+                    AND pm.parameter_set IS s.parameter_set AND pm.case_id = s.case_id
+                LEFT JOIN plan_occurrences p ON p.metric_id = pm.id AND p.repetition = s.plan_repetition
+                    AND p.document_ordinal = s.plan_document_ordinal AND p.statement_index = s.plan_statement_index
+                    AND p.omitted = 0 AND p.document_sha IS NOT NULL
+                    AND EXISTS (SELECT 1 FROM plan_documents d WHERE d.sha256 = p.document_sha)
                 WHERE s.operation_id IN ({placeholders})
                 ORDER BY s.operation_id, s.ordinal, o.object;
-                """, parameters, r => new StoredStatement(r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetString(3),
+                """, queryParameters, r => new StoredStatement(r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetString(3),
                 r.GetInt32(4), r.GetString(5), r.GetInt32(6), r.GetString(7),
                 storeSensitive ? NullableString(r, 8) : null, NullableLong(r, 9), NullableString(r, 10),
                 r.GetString(11), NullableDouble(r, 12), r.GetString(13),
                 NullableString(r, 14), NullableString(r, 15), NullableLong(r, 16), NullableLong(r, 17),
-                NullableLong(r, 18), r.GetInt32(19))));
+                NullableLong(r, 18), r.GetInt32(19), NullableInt(r, 20), NullableInt(r, 21), NullableInt(r, 22))));
         }
         return result;
     }
 
-    private static IReadOnlyList<StatementRow> OperationStatements(SqliteConnection connection, long operationId,
+    private sealed record OperationStatementEvidenceResult(IReadOnlyList<StatementRow> Rows, int OmittedStatements, string Attribution);
+
+    private static OperationStatementEvidenceResult OperationStatements(SqliteConnection connection, long operationId,
         bool storeSensitive)
     {
         var statements = LoadStoredStatements(connection, [operationId], storeSensitive);
-        return statements.GroupBy(row => row.Id).Select(group =>
+        var coverage = Query(connection, """
+            SELECT COALESCE(MAX(m.omitted_statements), 0), COUNT(DISTINCT s.id),
+                   COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND s.status <> 'confirmed' THEN 1 ELSE 0 END), 0)
+            FROM operation_metrics m LEFT JOIN operation_statements s ON s.operation_id = m.operation_id
+            WHERE m.operation_id = $id;
+            """, [("$id", (object?)operationId)], row => (Omitted: row.GetInt32(0), Count: row.GetInt32(1), Unconfirmed: row.GetInt32(2))).FirstOrDefault();
+        var omitted = coverage.Omitted;
+        var rows = statements.GroupBy(row => row.Id).Select(group =>
         {
             var row = group.First();
             var objects = group.Where(item => item.ObjectName is not null).Select(item => new TableRow(
@@ -404,10 +424,20 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             {
                 Occurrence = row.Occurrence,
                 PlanHashAfter = row.PlanHash,
+                PlanLinkAfter = PlanLink(row),
                 UdfElapsedMilliseconds = row.UdfElapsedMs,
             };
         }).ToArray();
+        var attribution = coverage.Count > 0 && omitted == 0 && coverage.Unconfirmed == 0
+            ? "confirmed" : coverage.Count == 0 && omitted == 0 ? "unavailable" : "partial";
+        return new OperationStatementEvidenceResult(rows, omitted, attribution);
     }
+
+    private static string? PlanLink(StoredStatement statement) =>
+        statement.PlanRepetition is { } repetition && statement.PlanDocumentOrdinal is { } document
+            && statement.PlanStatementIndex is { } index
+            ? $"/operations/{statement.OperationId}?planCase={Uri.EscapeDataString(statement.CaseId)}&planVariant={Uri.EscapeDataString(statement.Variant)}&planRepetition={repetition.ToString(CultureInfo.InvariantCulture)}&planDocument={document.ToString(CultureInfo.InvariantCulture)}&planStatement={index.ToString(CultureInfo.InvariantCulture)}"
+            : null;
 
     public SqlVersionText? SessionSqlText(long sessionId, string hash)
     {
@@ -672,6 +702,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             : null;
         if (compareVersion is not null)
             compareVersion = CompareHistoryBuilder.WithEvidence(compareVersion, extra.Summary, extra.CompareConditions);
+        var statementEvidence = OperationStatements(connection, id, storeSensitive);
         return new OperationDetail(
             summary,
             WithRunning(connection, [session])[0],
@@ -699,7 +730,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             Events: events.Count == 0 ? null : events,
             SetupSqlText: extra.SetupSqlText,
             Conditions: extra.CompareConditions,
-            Statements: OperationStatements(connection, id, storeSensitive));
+            Statements: statementEvidence.Rows)
+        {
+            OmittedStatements = statementEvidence.OmittedStatements,
+            StatementAttribution = statementEvidence.Attribution,
+        };
     }
 
     public ReproScript? Reproduction(long operationId, string side, string caseId, ReproScriptForm form)
@@ -1574,6 +1609,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     }
 
     private static long? NullableLong(SqliteDataReader r, int index) => r.IsDBNull(index) ? null : r.GetInt64(index);
+    private static int? NullableInt(SqliteDataReader r, int index) => r.IsDBNull(index) ? null : r.GetInt32(index);
     private static double? NullableDouble(SqliteDataReader r, int index) => r.IsDBNull(index) ? null : r.GetDouble(index);
     private static long SaturatingAdd(long a, long b) => b > long.MaxValue - a ? long.MaxValue : a + b;
 

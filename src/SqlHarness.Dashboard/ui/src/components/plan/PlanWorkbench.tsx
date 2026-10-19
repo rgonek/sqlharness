@@ -64,12 +64,12 @@ function matchingOccurrences(occurrences: PlanOccurrenceManifest[], variant: Var
   return occurrences.filter(occurrence => occurrence.variant === variant.variant && occurrence.parameterSet === variant.parameterSet)
 }
 
-export function PlanWorkbench({ operationId, variant, engine }: { operationId: number; variant: VariantDetail; engine: string | null }) {
+export function PlanWorkbench({ operationId, variant, engine, initialTarget }: { operationId: number; variant: VariantDetail; engine: string | null; initialTarget?: { caseId: string; repetition: number; documentOrdinal: number; statementIndex: number } }) {
   const manifest = useOperationPlans(operationId)
-  const [selectedCase, setSelectedCase] = useState(variant.caseId)
-  const [selectedRepetition, setSelectedRepetition] = useState<number | null>(null)
-  const [selectedDocumentKey, setSelectedDocumentKey] = useState<string | "all">("all")
-  const [selectedStatementIndex, setSelectedStatementIndex] = useState<number | null>(null)
+  const [selectedCase, setSelectedCase] = useState(initialTarget?.caseId ?? variant.caseId)
+  const [selectedRepetition, setSelectedRepetition] = useState<number | null>(initialTarget?.repetition ?? null)
+  const [selectedDocumentKey, setSelectedDocumentKey] = useState<string | "all" | "target">(initialTarget ? "target" : "all")
+  const [selectedStatementIndex, setSelectedStatementIndex] = useState<number | null>(initialTarget?.statementIndex ?? null)
   const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null)
   const [sqlSelection, setSqlSelection] = useState<SqlSourceSelection>(null)
   const [revealSpan, setRevealSpan] = useState<SqlSourceSpan | null>(null)
@@ -80,14 +80,20 @@ export function PlanWorkbench({ operationId, variant, engine }: { operationId: n
   const caseOccurrences = useMemo(() => variantOccurrences.filter(occurrence => occurrence.caseId === caseId), [caseId, variantOccurrences])
   const repetitions = useMemo(() => [...new Set(caseOccurrences.map(occurrence => occurrence.repetition))].sort((left, right) => left - right), [caseOccurrences])
   const defaultRepetition = repetitions.length ? repetitions[repetitions.length - 1] : null
-  const repetition = selectedRepetition !== null && repetitions.includes(selectedRepetition) ? selectedRepetition : defaultRepetition
+  const repetition = selectedRepetition !== null && repetitions.includes(selectedRepetition) ? selectedRepetition
+    : initialTarget && repetitions.includes(initialTarget.repetition) ? initialTarget.repetition : defaultRepetition
   const occurrences = useMemo(() => uniqueOccurrences(caseOccurrences.filter(occurrence => occurrence.repetition === repetition)), [caseOccurrences, repetition])
   const statementOptions = useMemo(() => [...new Set(occurrences.map(occurrence => occurrence.statementIndex))].sort((left, right) => left - right), [occurrences])
-  const statementIndex = selectedStatementIndex !== null && statementOptions.includes(selectedStatementIndex) ? selectedStatementIndex : statementOptions[0] ?? null
+  const statementIndex = selectedStatementIndex !== null && statementOptions.includes(selectedStatementIndex) ? selectedStatementIndex
+    : initialTarget && statementOptions.includes(initialTarget.statementIndex) ? initialTarget.statementIndex : statementOptions[0] ?? null
   const documentOptions = useMemo(() => uniqueDocuments(occurrences), [occurrences])
-  const documentSelection = selectedDocumentKey === "all" || documentOptions.some(option => documentKey(option) === selectedDocumentKey)
-    ? selectedDocumentKey
-    : "all"
+  const targetOccurrence = initialTarget ? occurrences.find(occurrence => occurrence.documentOrdinal === initialTarget.documentOrdinal
+    && occurrence.statementIndex === initialTarget.statementIndex && occurrence.repetition === initialTarget.repetition
+    && occurrence.caseId === initialTarget.caseId) : undefined
+  const targetDocumentKey = targetOccurrence?.documentSha256 ? `${targetOccurrence.documentSha256}:${targetOccurrence.documentOrdinal}` : null
+  const documentSelection = selectedDocumentKey === "target" ? targetDocumentKey ?? "all"
+    : selectedDocumentKey === "all" || documentOptions.some(option => documentKey(option) === selectedDocumentKey)
+      ? selectedDocumentKey : "all"
   const sourceSelection: PlanSourceMapParams | null = repetition === null || !caseId
     ? null
     : { variant: variant.variant, parameterSet: variant.parameterSet, repetition, caseId }

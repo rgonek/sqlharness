@@ -5,12 +5,13 @@ namespace SqlHarness.Core;
 internal static class JournalSchema
 {
     internal const int FirstRetainedVersion = 18;
-    internal const int CurrentVersion = 18;
+    internal const int CurrentVersion = 19;
 
     internal static readonly IReadOnlyDictionary<int, string> Migrations = new Dictionary<int, string>
     {
         [15] = "ALTER TABLE operations ADD COLUMN measurement_fingerprint TEXT;",
         [16] = "ALTER TABLE operations ADD COLUMN warnings_json TEXT NOT NULL DEFAULT '[]';",
+        [19] = "ALTER TABLE operation_statements ADD COLUMN plan_repetition INTEGER; ALTER TABLE operation_statements ADD COLUMN plan_document_ordinal INTEGER; ALTER TABLE operation_statements ADD COLUMN plan_statement_index INTEGER;",
     };
 
     internal const string Current = """
@@ -166,6 +167,9 @@ internal static class JournalSchema
             statement_text TEXT,
             executions INTEGER,
             plan_hash TEXT,
+            plan_repetition INTEGER,
+            plan_document_ordinal INTEGER,
+            plan_statement_index INTEGER,
             status TEXT NOT NULL,
             cpu_ms INTEGER,
             elapsed_ms INTEGER,

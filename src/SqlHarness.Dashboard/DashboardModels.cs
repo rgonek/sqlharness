@@ -115,7 +115,11 @@ public sealed record OperationDetail(
     IReadOnlyList<OperationPhaseSummary>? Phases = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<OperationEventSummary>? Events = null,
     string? SetupSqlText = null, JsonElement? Conditions = null,
-    IReadOnlyList<StatementRow>? Statements = null);
+    IReadOnlyList<StatementRow>? Statements = null)
+{
+    public int OmittedStatements { get; init; }
+    public string StatementAttribution { get; init; } = "unavailable";
+}
 
 public sealed record OperationPhaseSummary(string Phase, int Count, long TotalMs, long MaxMs);
 

@@ -11,7 +11,7 @@ const spread = (value: { min: number; median: number; max: number } | null, unit
   value ? `${formatNumber(value.median)}${unit}` : "—"
 const range = (value: { min: number; max: number } | null) => (value ? `${formatNumber(value.min)}–${formatNumber(value.max)}` : undefined)
 
-export function VariantPanel({ operationId, variant, engine, compareMetrics = false }: { operationId: number; variant: VariantDetail; engine: string | null; compareMetrics?: boolean }) {
+export function VariantPanel({ operationId, variant, engine, compareMetrics = false, planTarget }: { operationId: number; variant: VariantDetail; engine: string | null; compareMetrics?: boolean; planTarget?: { caseId: string; repetition: number; documentOrdinal: number; statementIndex: number } }) {
   const sqlServer = !compareMetrics || engine?.toLowerCase() === "sqlserver" || engine?.toLowerCase() === "sql-server"
   const tableIoRows = tableIoDelta(variant.tableIo, []).rows.flatMap(row => row.baseline ? [row.baseline] : [])
   return (
@@ -107,7 +107,7 @@ export function VariantPanel({ operationId, variant, engine, compareMetrics = fa
           </CardContent>
         </Card>
       )}
-      <PlanWorkbench operationId={operationId} variant={variant} engine={engine} />
+      <PlanWorkbench operationId={operationId} variant={variant} engine={engine} initialTarget={planTarget} />
     </div>
   )
 }

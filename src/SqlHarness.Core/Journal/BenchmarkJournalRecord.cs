@@ -80,6 +80,9 @@ public sealed record JournalStatementMetrics(
     public int Occurrence { get; init; }
     public long? Executions { get; init; }
     public string? PlanHash { get; init; }
+    public int? PlanRepetition { get; init; }
+    public int? PlanDocumentOrdinal { get; init; }
+    public int? PlanStatementIndex { get; init; }
     public StatementStatus Status { get; init; } = StatementStatus.Unavailable;
     public double? UdfElapsedMilliseconds { get; init; }
     public IReadOnlyList<HiddenWork> HiddenWork { get; init; } = [];

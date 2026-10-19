@@ -23,6 +23,7 @@ import { parseRouteId } from "@/lib/routeId"
 import { sessionSearchFromOperation } from "@/lib/sessionSearch"
 import type { OperationDetailSearch } from "@/router"
 import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
+import { StatementRows } from "@/components/optimization/StatementRows"
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -128,6 +129,13 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
   const op = detail.operation
   if (op.operation === "compare") return <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
   const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
+  const planTarget = returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
+    && returnSearch.planDocument !== undefined && returnSearch.planStatement !== undefined
+    ? { caseId: returnSearch.planCase, repetition: returnSearch.planRepetition, documentOrdinal: returnSearch.planDocument, statementIndex: returnSearch.planStatement }
+    : undefined
+  const targetVariant = planTarget ? detail.variants.find(variant => variant.caseId === planTarget.caseId
+    && variant.variant === returnSearch.planVariant) : undefined
+  const tabVariant = targetVariant ?? detail.variants[0]
   return (
     <div className="space-y-4">
       <Card>
@@ -187,13 +195,22 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
         </CardContent>
       </Card>
 
-      {detail.variants.length === 1 && <VariantPanel operationId={op.id} variant={detail.variants[0]} engine={op.engine} />}
+      {op.operation === "measure" && <Card>
+        <CardHeader><CardTitle>Statement IO</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-muted-foreground">statement attribution: {detail.statementAttribution ?? "unavailable"}</p>
+          {(detail.omittedStatements ?? 0) > 0 && <p className="text-sm text-muted-foreground">omitted statements: {detail.omittedStatements} (their reads remain in the batch total)</p>}
+          <StatementRows rows={detail.statements ?? []} measured postgres={op.engine?.toLowerCase() === "postgresql" || op.engine?.toLowerCase() === "postgres"} />
+        </CardContent>
+      </Card>}
+
+      {detail.variants.length === 1 && <VariantPanel operationId={op.id} variant={detail.variants[0]} engine={op.engine} planTarget={targetVariant ? planTarget : undefined} />}
       {detail.variants.length > 1 && (
-        <Tabs defaultValue={String(detail.variants[0].ordinal)}>
+        <Tabs defaultValue={String(tabVariant.ordinal)}>
           <TabsList>
             {detail.variants.map(v => <TabsTrigger key={v.ordinal} value={String(v.ordinal)}>{variantLabel(v)}</TabsTrigger>)}
           </TabsList>
-          {detail.variants.map(v => <TabsContent key={v.ordinal} value={String(v.ordinal)}><VariantPanel operationId={op.id} variant={v} engine={op.engine} /></TabsContent>)}
+          {detail.variants.map(v => <TabsContent key={v.ordinal} value={String(v.ordinal)}><VariantPanel operationId={op.id} variant={v} engine={op.engine} planTarget={v === targetVariant ? planTarget : undefined} /></TabsContent>)}
         </Tabs>
       )}
       <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Run diagnostics</summary><div className="mt-4 space-y-4">
@@ -257,7 +274,8 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
   const navigate = useNavigate({ from: "/operations/$id" })
   const selectedCase = returnSearch.case ?? "all"
   const aggregate = returnSearch.agg ?? "sum"
-  const comparison = useOperationOptimization(id, selectedCase, aggregate)
+  const view = returnSearch.view ?? "changed"
+  const comparison = useOperationOptimization(id, selectedCase, aggregate, view)
   const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
   const title = detail.session.title ?? detail.session.clientTitle ?? detail.session.sessionKey
   if (comparison.error) return <ErrorState error={comparison.error} />
@@ -274,7 +292,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
     {detail.vars && <div className="flex flex-wrap gap-2" aria-label="Variables">{Object.entries(detail.vars).map(([key, value]) => <Badge key={key} variant="outline">{key}=<span>{value}</span></Badge>)}</div>}
     {comparison.isPending ? <Skeleton className="h-64 w-full" /> : comparison.data ? <>
       <ComparisonPanel comparison={comparison.data} sessionId={op.sessionId} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector
-        searchState={{ case: selectedCase, agg: aggregate }} sessionSearch={sessionSearchFromOperation(returnSearch)}
+        searchState={{ case: selectedCase, agg: aggregate, view }} sessionSearch={sessionSearchFromOperation(returnSearch)}
         onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }) }) }} />
       <CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data.selectedCase : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }) }) }} />
     </> : null}

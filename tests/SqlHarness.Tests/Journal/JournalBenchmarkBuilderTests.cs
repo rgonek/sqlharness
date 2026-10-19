@@ -54,6 +54,9 @@ public sealed class JournalBenchmarkBuilderTests
         Assert.Equal(20, Assert.Single(statement.Objects!).LogicalReads);
         Assert.Equal(2, statement.Executions);
         Assert.Equal(StatementStatus.Confirmed, statement.Status);
+        Assert.Equal(2, statement.PlanRepetition);
+        Assert.Equal(0, statement.PlanDocumentOrdinal);
+        Assert.Equal(0, statement.PlanStatementIndex);
     }
 
     [Fact]

@@ -11,8 +11,9 @@ import { SessionsPage } from "@/pages/SessionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { StatsPage } from "@/pages/StatsPage"
 
-export type SessionSearch = { subject?: string; db?: string; group?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; unassigned?: boolean }
-export type OperationDetailSearch = { case?: string; agg?: string; returnSession?: number; returnSubject?: string; returnDb?: string; returnGroup?: string; returnScope?: string; returnA?: string; returnB?: string; returnCase?: string; returnAgg?: string; returnUnassigned?: boolean }
+export type OptimizationView = "changed" | "whole" | "statements"
+export type SessionSearch = { subject?: string; db?: string; group?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; view?: OptimizationView; unassigned?: boolean }
+export type OperationDetailSearch = { case?: string; agg?: string; view?: OptimizationView; planCase?: string; planVariant?: string; planRepetition?: number; planDocument?: number; planStatement?: number; returnSession?: number; returnSubject?: string; returnDb?: string; returnGroup?: string; returnScope?: string; returnA?: string; returnB?: string; returnCase?: string; returnAgg?: string; returnView?: OptimizationView; returnUnassigned?: boolean }
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
@@ -29,6 +30,7 @@ const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sess
     case: typeof search.case === "string" && search.case.length <= 256 ? search.case
       : typeof search.case === "number" && Number.isSafeInteger(search.case) ? String(search.case) : undefined,
     agg: search.agg === "mean" ? "mean" : search.agg === "sum" ? "sum" : undefined,
+    view: search.view === "whole" || search.view === "statements" ? search.view : search.view === "changed" ? "changed" : undefined,
     unassigned: search.unassigned === true || search.unassigned === "true",
   }) })
 const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: OperationPage,
@@ -36,6 +38,12 @@ const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/op
     case: typeof search.case === "string" && search.case.length <= 256 ? search.case
       : typeof search.case === "number" && Number.isSafeInteger(search.case) ? String(search.case) : undefined,
     agg: search.agg === "mean" ? "mean" : search.agg === "sum" ? "sum" : undefined,
+    view: search.view === "whole" || search.view === "statements" ? search.view : search.view === "changed" ? "changed" : undefined,
+    planCase: typeof search.planCase === "string" && search.planCase.length <= 256 ? search.planCase : undefined,
+    planVariant: typeof search.planVariant === "string" && search.planVariant.length <= 64 ? search.planVariant : undefined,
+    planRepetition: typeof search.planRepetition === "number" && Number.isSafeInteger(search.planRepetition) && search.planRepetition >= 0 ? search.planRepetition : undefined,
+    planDocument: typeof search.planDocument === "number" && Number.isSafeInteger(search.planDocument) && search.planDocument >= 0 ? search.planDocument : undefined,
+    planStatement: typeof search.planStatement === "number" && Number.isSafeInteger(search.planStatement) && search.planStatement >= 0 ? search.planStatement : undefined,
     returnSession: typeof search.returnSession === "number" && Number.isSafeInteger(search.returnSession) && search.returnSession > 0 ? search.returnSession
       : typeof search.returnSession === "string" && /^\d+$/.test(search.returnSession) && Number.isSafeInteger(Number(search.returnSession)) ? Number(search.returnSession) : undefined,
     returnSubject: typeof search.returnSubject === "string" && search.returnSubject.length <= 64 ? search.returnSubject : undefined,
@@ -46,6 +54,7 @@ const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/op
     returnB: typeof search.returnB === "string" && search.returnB.length <= 64 ? search.returnB : undefined,
     returnCase: typeof search.returnCase === "string" && search.returnCase.length <= 256 ? search.returnCase : undefined,
     returnAgg: search.returnAgg === "mean" ? "mean" : search.returnAgg === "sum" ? "sum" : undefined,
+    returnView: search.returnView === "whole" || search.returnView === "statements" ? search.returnView : search.returnView === "changed" ? "changed" : undefined,
     returnUnassigned: search.returnUnassigned === true || search.returnUnassigned === "true",
   }) })
 const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations", component: OperationsPage,

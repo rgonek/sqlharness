@@ -98,10 +98,12 @@ public static class OptimizationComparer
         var allCasesConfirmed = selectedIds.Length > 0 && selectedIds.All(id => caseComparisons.TryGetValue(id, out var item)
             && item.VerdictBasis == "changed statements");
         var verdictBasis = allCasesConfirmed ? "changed statements" : "whole batch";
+        var requestedView = view is "whole" or "statements" ? view : "changed";
+        var effectiveView = !allCasesConfirmed && requestedView != "statements" ? "whole" : requestedView;
         var tableIoUnavailable = postgresMetrics;
         var tableRows = tableIoUnavailable
             ? []
-            : allCasesConfirmed && view is not "whole"
+            : allCasesConfirmed && effectiveView is not "whole"
                 ? BuildStatementTableRows(before.Metrics, after.Metrics, selectedIds, caseComparisons, normalizedAggregate)
                 : BuildTableRows(before, after, selectedIds, normalizedAggregate);
         var collapsed = tableIoUnavailable ? null : Collapse(tableRows);
@@ -114,7 +116,7 @@ public static class OptimizationComparer
         var buffersAfter = AggregateBuffers(after.Metrics, selectedIds, normalizedAggregate);
         var mixed = Mixed(caseOptions, before.Metrics, after.Metrics, caseComparisons);
         var allStatementRows = BuildStatementRows(before.Metrics, after.Metrics, selectedIds, caseComparisons);
-        var statementRows = view == "changed" && allCasesConfirmed
+        var statementRows = effectiveView == "changed"
             ? allStatementRows.Where(row => row.Status != "shared").ToArray()
             : allStatementRows;
         var sharedBefore = ReduceNullable(selectedIds.Select(id => caseComparisons.GetValueOrDefault(id).SharedBefore), normalizedAggregate);
@@ -145,7 +147,7 @@ public static class OptimizationComparer
             BuffersBefore = buffersBefore,
             BuffersAfter = buffersAfter,
             VerdictBasis = verdictBasis,
-            View = view is "whole" or "statements" ? view : "changed",
+            View = effectiveView,
             WholeBatch = wholeBatch,
             Statements = statementRows,
             FallbackNote = allCasesConfirmed ? null : "per-statement attribution incomplete",
@@ -248,6 +250,8 @@ public static class OptimizationComparer
                 Occurrence = key.Occurrence,
                 PlanHashBefore = l.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
                 PlanHashAfter = r.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
+                PlanLinkBefore = l.Select(row => row.PlanLink).FirstOrDefault(value => value is not null),
+                PlanLinkAfter = r.Select(row => row.PlanLink).FirstOrDefault(value => value is not null),
                 UdfElapsedMilliseconds = l.Concat(r).Select(row => row.UdfElapsedMilliseconds).FirstOrDefault(value => value.HasValue),
             };
         }).OrderBy(row => row.Status == "shared" ? 1 : 0)
