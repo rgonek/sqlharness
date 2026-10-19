@@ -59,15 +59,15 @@
 ### Task 1: Extract per-statement object counters
 
 **Files:**
-- Modify: `src/SqlHarness.Core/StatementMetrics.cs:9-104` (raise `MaximumStatements` → byte bound, add object counters, UDF times, TVF flags, normalized key), `src/SqlHarness.Core/Dialect/SqlServerDialect.cs` (pass engine IO per object to reconciliation)
-- Test: `tests/SqlHarness.Tests/Journal/PlanMetricsExtractorTests.cs`; fixtures under `tests/SqlHarness.Tests/Fixtures/Plans/` (synthetic XML shaped like the spike: table variables `[@P]`/`[@R]`, `#F`, DOP-2 scan with three thread counters, scalar UDF with `UdfElapsedTime`, MSTVF)
+- Modify: `src/SqlHarness.Core/StatementMetrics.cs` (add journal-only extraction with a byte bound, object counters, UDF times, TVF flags and normalized keys; keep the artifact `MaximumStatements` cap and wire shape unchanged)
+- Test: `tests/SqlHarness.Tests/StatementMetricsTests.cs`; fixtures under `tests/SqlHarness.Tests/Fixtures/Plans/` (spike-captured cursor and recursive spool XML plus synthetic counters for `[@P]`/`[@R]`, `#F`, DOP-2 parallel scan, scalar UDF and MSTVF)
 
 **Interfaces:**
 - Produces: `sealed record StatementObjectCounters(string Object /* "[@P]", "[#F]", "[dbo].[T]" */, string Kind /* "table" | "temp" | "table-variable" | "worktable" */, long LogicalReads, long LobLogicalReads, long Scans)`; `StatementMetrics` gains `string Key`, `int Occurrence`, `long? Executions`, `string? PlanHash`, `IReadOnlyList<StatementObjectCounters> Objects`, `double? UdfElapsedMs`, `IReadOnlyList<HiddenWork> HiddenWork`; `sealed record HiddenWork(string Kind /* "scalar-udf" | "multi-statement-tvf" */, string Name, long? Executions, double? SharePercent)`; `static StatementKey.Normalize(string text) : string`.
 
-- [ ] **Step 1: Failing tests:** `Counters_sum_operators_per_object` (insert into `[@P]` 1001 + scans 2 + 2 across statements → per statement values); `Parallel_counters_sum_over_threads` (41,943 + 42,810 + 2 = 84,755; scans 3); `Table_variable_names_come_from_plan`; `Scalar_udf_share` (`UdfElapsedTime` 28 of 29 → 96.6%); `Multi_statement_tvf_flagged` (executions from operator); `Normalized_key_ignores_comments_and_whitespace`; `Occurrence_distinguishes_repeated_text`; `Large_batch_reports_omissions` (300 statements, byte bound hit → `omittedStatements > 0`).
-- [ ] **Step 2:** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~PlanMetricsExtractor"` → FAIL. **Step 3:** Implement. **Step 4:** → PASS.
-- [ ] **Step 5:** Commit `feat(082): extract per-statement object counters from actual plans`.
+- [x] **Step 1: Failing tests:** `Counters_sum_operators_per_object`; `Parallel_counters_sum_over_threads`; `Table_variable_names_come_from_plan`; `Scalar_udf_share`; `Multi_statement_tvf_flagged`; `Normalized_key_ignores_comments_and_whitespace`; `Occurrence_distinguishes_repeated_text`; `Large_batch_reports_omissions`; captured cursor/spool shapes; legacy artifact cap and wire shape.
+- [x] **Step 2:** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~StatementMetricsTests" --no-restore` → FAIL because `JournalStatementMetricsExtractor` and `StatementKey` were missing. **Step 3:** Implemented. **Step 4:** Same command → PASS (18 passed, 0 failed).
+- [x] **Step 5:** Commit `feat(082): extract per-statement object counters from actual plans` (`4c42914`).
 
 ### Task 2: Reconcile and journal
 
