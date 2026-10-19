@@ -68,6 +68,19 @@ public sealed class AgentSessionMembershipTests
     }
 
     [Fact]
+    public void Cli_session_with_conflicting_exact_link_does_not_infer_process_consensus()
+    {
+        var operations = Ops(
+            Op(1, 10, "01", transport: "mcp"), Op(2, 10, "06", transport: "mcp"),
+            Op(3, 20, "02", transport: "cli"), Op(4, 21, "05", transport: "cli"),
+            Op(5, 21, "04", transport: "cli"));
+        var result = Resolve(operations,
+            Link(1, "claude", "consensus"), Link(2, "claude", "consensus"), Link(5, "claude", "other"));
+
+        Assert.Equal(Membership.Unassigned, result.Single(item => item.OperationId == 4).Membership);
+    }
+
+    [Fact]
     public void Codex_membership_uses_agent_session_id_and_keeps_subagent_thread_separate()
     {
         var operations = Ops(

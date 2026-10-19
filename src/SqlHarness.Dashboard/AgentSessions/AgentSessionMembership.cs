@@ -119,6 +119,11 @@ public static class AgentSessionMembership
 
             var ordered = processOperations.OrderBy(operation => operation.StartedAt, StringComparer.Ordinal)
                 .ThenBy(operation => operation.OperationId).ToArray();
+            var eligibleCliSessions = processOperations.Where(operation => operation.Transport == "cli")
+                .Select(operation => operation.SessionId).Distinct()
+                .Where(sessionId => !exactBySession.TryGetValue(sessionId, out var keys)
+                    || keys.Length == 1 && keys[0] == consensus)
+                .ToHashSet();
             var linkedIndexes = ordered.Select((operation, index) => (operation, index))
                 .Where(item => exactByOperation.TryGetValue(item.operation.OperationId, out var linked) && linked == consensus)
                 .Select(item => item.index).ToArray();
@@ -128,7 +133,8 @@ public static class AgentSessionMembership
             for (var index = linkedIndexes[0] + 1; index < linkedIndexes[^1]; index++)
             {
                 var operation = ordered[index];
-                if (operation.Transport == "cli" && !exactByOperation.ContainsKey(operation.OperationId))
+                if (operation.Transport == "cli" && eligibleCliSessions.Contains(operation.SessionId)
+                    && !exactByOperation.ContainsKey(operation.OperationId))
                     inferred[operation.OperationId] = consensus;
             }
         }
