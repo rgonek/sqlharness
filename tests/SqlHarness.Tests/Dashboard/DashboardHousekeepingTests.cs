@@ -391,6 +391,64 @@ public sealed class DashboardHousekeepingTests
     }
 
     [Fact]
+    public async Task Journal_commit_between_version_sample_and_retention_snapshot_is_matched_and_refreshes_idle()
+    {
+        using var home = new TempHome();
+        using var agents = new TempHome();
+        var homes = new AgentHomes(Path.Combine(agents.Path, "claude"), Path.Combine(agents.Path, "codex"));
+        var seed = new JournalSeed(home.DatabasePath);
+        const string call = "toolu_retention_window";
+        var project = homes.ClaudeProjectDirectory("/work");
+        Directory.CreateDirectory(project);
+        File.WriteAllLines(Path.Combine(project, "conv-retention-window.jsonl"),
+            [ClaudeFixtures.Assistant("conv-retention-window", "model", null, (call, "mcp__sqlharness__query"))]);
+        var config = SqlHarnessConfig.Default with
+        {
+            Dashboard = SqlHarnessConfig.Default.Dashboard with { AgentTranscripts = new AgentTranscriptsConfig { Enabled = true } },
+            Journal = new JournalConfig { Retention = new JournalRetentionConfig { Enabled = true, MaxAgeDays = 1 } },
+        };
+        var clock = Clock();
+        var passes = new Passes();
+        Action? armed = null;
+        var wrote = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cts = new CancellationTokenSource();
+        var run = DashboardHost.RunAsync(
+            Options(home, TimeSpan.FromSeconds(55), clock, passes, config) with
+            {
+                AgentHomes = homes,
+                RetentionInterval = TimeSpan.FromSeconds(30),
+                BeforeRetentionSnapshot = () => Interlocked.Exchange(ref armed, null)?.Invoke(),
+            },
+            cts.Token);
+
+        try
+        {
+            await passes.MoreAsync();
+            Volatile.Write(ref armed, () =>
+            {
+                seed.Operation(JournalSeed.Session("mcp:retention-window", "claude"),
+                    agent: new AgentCallMetadata(call, null, null, null, null, null, null));
+                wrote.TrySetResult();
+            });
+            clock.Advance(TimeSpan.FromSeconds(50));
+            await wrote.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            await passes.MoreAsync();
+            Assert.Empty(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
+
+            clock.Advance(TimeSpan.FromMilliseconds(1500));
+            await WaitForAsync(() => Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links").Count == 1);
+            clock.Advance(TimeSpan.FromSeconds(4));
+            await passes.MoreAsync();
+            Assert.False(run.IsCompleted, "the commit during the snapshot window refreshes the idle deadline");
+        }
+        finally
+        {
+            cts.Cancel();
+            await run.WaitAsync(TimeSpan.FromSeconds(20));
+        }
+    }
+
+    [Fact]
     public async Task Matcher_commits_do_not_keep_an_idle_dashboard_up()
     {
         using var home = new TempHome();

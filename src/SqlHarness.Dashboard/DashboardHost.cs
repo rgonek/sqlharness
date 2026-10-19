@@ -46,6 +46,9 @@ public sealed record DashboardHostOptions(
     /// <summary>Test hook invoked after each housekeeping pass that did not end the dashboard.</summary>
     internal Action? Housekept { get; init; }
 
+    /// <summary>Test hook between the first data-version sample and the pending-operation retention snapshot.</summary>
+    internal Action? BeforeRetentionSnapshot { get; init; }
+
     internal AgentHomes? AgentHomes { get; init; }
 
     internal Func<string, bool>? AgentDirectoryProbe { get; init; }
@@ -257,6 +260,16 @@ public static class DashboardHost
             }
         }
 
+        void ObserveExternalChange(long? before, long? after, DateTimeOffset at, bool matchingEnabled)
+        {
+            if (before is null || after is null || before == after)
+                return;
+
+            lastJournalChange = at;
+            if (matchingEnabled)
+                targetedCycleAt = at + TranscriptChangeDebounce;
+        }
+
         try
         {
             while (true)
@@ -266,11 +279,7 @@ public static class DashboardHost
                 var config = options.ConfigPath is null ? options.Config.Config : SqlHarnessConfigLoader.Load(options.ConfigPath).Config;
                 var matchingEnabled = config.Dashboard.AgentTranscripts.Enabled;
                 var beforeWork = ReadVersion();
-                if (beforeWork is not null && lastVersion is not null && beforeWork != lastVersion)
-                {
-                    lastJournalChange = now;
-                    targetedCycleAt = matchingEnabled ? now + TranscriptChangeDebounce : null;
-                }
+                ObserveExternalChange(lastVersion, beforeWork, now, matchingEnabled);
 
                 if (lastRetention is not { } last || now - last >= options.RetentionInterval)
                 {
@@ -278,15 +287,20 @@ public static class DashboardHost
                     var journal = config.Journal;
                     if (journal.Enabled && journal.Retention.Enabled)
                     {
+                        options.BeforeRetentionSnapshot?.Invoke();
+                        var beforePendingSnapshot = ReadVersion();
+                        ObserveExternalChange(beforeWork, beforePendingSnapshot, now, matchingEnabled);
                         var pendingBeforeRetention = matchingEnabled && watch is not null
                             ? running.Transcripts.PendingOperationIds(watch).ToHashSet()
                             : [];
+                        var afterPendingSnapshot = ReadVersion();
+                        ObserveExternalChange(beforePendingSnapshot, afterPendingSnapshot, now, matchingEnabled);
                         // Never throws; a failed pass is retried at the next interval. Ctrl+C waits for an
                         // in-flight pass, which its short delete batches keep brief.
                         await Task.Run(() => JournalRetention.Run(options.DatabasePath, journal, options.Processes, options.Time), ct);
                         // Retention's own commits are not activity: take the version after it as the baseline.
-                        beforeWork = ReadVersion();
-                        if (matchingEnabled && watch is not null && beforeWork is not null && lastVersion is not null && beforeWork != lastVersion)
+                        var afterRetention = ReadVersion();
+                        if (matchingEnabled && watch is not null && afterRetention is not null && afterPendingSnapshot is not null && afterRetention != afterPendingSnapshot)
                         {
                             var pendingAfterRetention = running.Transcripts.PendingOperationIds(watch);
                             if (pendingAfterRetention.Any(id => !pendingBeforeRetention.Contains(id)))
@@ -295,7 +309,7 @@ public static class DashboardHost
                                 targetedCycleAt = now + TranscriptChangeDebounce;
                             }
                         }
-                        lastVersion = beforeWork;
+                        lastVersion = afterRetention;
                     }
                 }
 
@@ -319,12 +333,7 @@ public static class DashboardHost
                     targetedCycleAt = null;
 
                 var version = ReadVersion();
-                if (version is not null && lastVersion is not null && version != lastVersion)
-                {
-                    lastJournalChange = now;
-                    if (matchingEnabled)
-                        targetedCycleAt = now + TranscriptChangeDebounce;
-                }
+                ObserveExternalChange(lastVersion, version, now, matchingEnabled);
                 lastVersion = version;
 
                 if (options.IdleShutdown is { } idle && activity.OpenStreams == 0)

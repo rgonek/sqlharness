@@ -286,7 +286,17 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
         foreach (var key in batch.Conversations.Keys.Where(key => key.Kind is "codex" or "opencode"))
             AddWanted(key.Id, key.Kind);
 
-        var missingTitles = (operationIds is null ? NullTitleConversationIds(connection) : [])
+        var existingNullTitles = NullTitleConversationIds(connection).ToHashSet();
+        _codexTitleBackfillAttempted.RemoveWhere(key => !existingNullTitles.Contains(key));
+        var unresolvedTitles = existingNullTitles.Concat(batch.Conversations
+                .Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is null)
+                .Select(pair => pair.Key))
+            .ToHashSet();
+        _codexTitleBackfillPending.RemoveWhere(key => !unresolvedTitles.Contains(key));
+        foreach (var key in batch.Conversations.Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is not null).Select(pair => pair.Key))
+            _codexTitleBackfillAttempted.Remove(key);
+
+        var missingTitles = (operationIds is null ? existingNullTitles : [])
             .Concat(batch.Conversations
                 .Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is null)
                 .Select(pair => pair.Key))
@@ -298,6 +308,9 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
             if (_codexTitleBackfillPending.Add(key))
                 _restartCodexTitleBackfill = true;
         }
+
+        foreach (var key in _codexTitleBackfillPending.Concat(_codexTitleBackfillAttempted))
+            AddWanted(key.Id, key.Kind);
 
         if (wanted.Count == 0 || budget <= 0 || !File.Exists(homes.CodexSessionIndex))
             return budget;
@@ -318,7 +331,13 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
             });
             if (result.Completed && _codexTitleBackfillPending.Count > 0)
             {
-                _codexTitleBackfillAttempted.UnionWith(_codexTitleBackfillPending);
+                foreach (var key in _codexTitleBackfillPending)
+                {
+                    if (batch.Conversations.TryGetValue(key, out var title) && title is not null)
+                        _codexTitleBackfillAttempted.Remove(key);
+                    else
+                        _codexTitleBackfillAttempted.Add(key);
+                }
                 _codexTitleBackfillPending.Clear();
             }
             batch.Cursors[path] = result.Cursor;

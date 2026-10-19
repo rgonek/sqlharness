@@ -150,6 +150,34 @@ public sealed class TranscriptMatcherTests
     }
 
     [Fact]
+    public async Task A_targeted_codex_backfill_keeps_other_unresolved_titles_in_scope()
+    {
+        using var f = new Fixture();
+        f.Seed.Operation(JournalSeed.Session("mcp:claude-budget", "claude"), agent: Call("toolu_budget"));
+        f.Seed.Operation(JournalSeed.Session("mcp:old-codex", "codex"), agent: Call("exec-old", sessionId: "old-thread"));
+        var paddingPath = Path.Combine(f.Homes.ClaudeProjectDirectory("/work"), "budget.jsonl");
+        Directory.CreateDirectory(Path.GetDirectoryName(paddingPath)!);
+        File.WriteAllText(paddingPath, new string('x', (int)TranscriptMatcher.CycleBudgetBytes));
+        f.CodexIndex("""{"id":"old-thread","thread_name":"Older title","updated_at":"t"}""");
+
+        var matcher = f.Matcher();
+        matcher.RunCycle(enabled: true);
+        var old = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "old-thread");
+        Assert.Null(old["title"]);
+
+        f.Seed.Operation(JournalSeed.Session("mcp:new-codex", "codex"), agent: Call("exec-new", sessionId: "new-thread"));
+        f.CodexIndex("""{"id":"new-thread","thread_name":"New title","updated_at":"t2"}""");
+        var newOperationId = Convert.ToInt64(Journal.JournalDb.Rows(f.Home.DatabasePath,
+            "SELECT id FROM operations WHERE agent_session_id = 'new-thread'").Single()["id"]);
+        await matcher.RunTargetedAsync([newOperationId], CancellationToken.None);
+
+        old = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "old-thread");
+        Assert.Equal("Older title", old["title"]);
+        var current = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "new-thread");
+        Assert.Equal("New title", current["title"]);
+    }
+
+    [Fact]
     public async Task Clear_waits_for_an_inflight_cycle_before_removing_its_rows()
     {
         using var f = new Fixture();

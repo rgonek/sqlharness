@@ -53,3 +53,15 @@ The fake-clock housekeeping tests confirm no targeted link at 1.0 seconds, a lin
 ## Self-review and concerns
 
 The implementation keeps matcher writes on the host's observer connection, scopes targeted Claude reads to the pending operations' cwds, bounds targeted IDs at 500, and leaves periodic full scans in place for recovery and title refresh. Existing idle-shutdown and retention tests pass. No unresolved concerns identified. No merge, push, or live database mutation was performed.
+
+## Round 1 review fixes
+
+Review findings and regression coverage:
+
+- RED: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~A_targeted_codex_backfill|FullyQualifiedName~Journal_commit_between_version_sample"` failed both regressions. The backfill test expected `Older title` but got null after a budget-exhausted cycle followed by a targeted cursor restart. The retention-window test timed out waiting for the targeted link after a journal commit between the initial data-version sample and pending-operation snapshot.
+- GREEN: the same two-test filter passed `2/2` after the fixes.
+- Final focused command: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~TranscriptMatcher|FullyQualifiedName~DashboardHousekeeping"` passed `33/33`, 0 skipped, duration 7 seconds.
+
+The restarted backfill now includes all pending and unresolved null-title identities in its wanted set, and marks only identities considered by a completed scan. Successful and retained-away identities are pruned from the unresolved bookkeeping. The host samples `data_version` before and after the pending-operation snapshot; a change at either boundary refreshes idle activity and starts the debounce before retention advances the observer baseline. A test hook makes that snapshot window deterministic in housekeeping tests.
+
+No other Task 1 behavior changed; the full `just verify` gate remains reserved for Task 6.
