@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml;
 using System.Xml.Linq;
@@ -27,7 +29,470 @@ public sealed record StatementMetrics(
     long? CpuTimeMilliseconds,
     long? ElapsedTimeMilliseconds,
     int? DegreeOfParallelism,
-    IReadOnlyList<StatementOperatorSummary> TopOperators);
+    IReadOnlyList<StatementOperatorSummary> TopOperators)
+{
+    // Journal-only fields stay absent from the existing artifact wire projection.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Key { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Occurrence { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? Executions { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PlanHash { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<StatementObjectCounters>? Objects { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? UdfElapsedMs { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<HiddenWork>? HiddenWork { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? CountersComplete { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IdentityComplete { get; init; }
+
+    [JsonIgnore]
+    public string? Text { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int DocumentOrdinal { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? StatementId { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? StatementCompId { get; init; }
+}
+
+public sealed record StatementObjectCounters(
+    string Object,
+    string Kind,
+    long LogicalReads,
+    long LobLogicalReads,
+    long Scans);
+
+public sealed record HiddenWork(string Kind, string Name, long? Executions, double? SharePercent);
+
+/// <summary>Normalizes SQL text for stable statement identity while preserving quoted content.</summary>
+internal static class StatementKey
+{
+    internal static string Normalize(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var output = new StringBuilder(text.Length);
+        var pendingSpace = false;
+        var index = 0;
+        while (index < text.Length)
+        {
+            var current = text[index];
+            if (char.IsWhiteSpace(current))
+            {
+                pendingSpace = output.Length > 0;
+                index++;
+                continue;
+            }
+
+            if (current == '-' && index + 1 < text.Length && text[index + 1] == '-')
+            {
+                index += 2;
+                while (index < text.Length && text[index] is not '\r' and not '\n')
+                    index++;
+                pendingSpace = output.Length > 0;
+                continue;
+            }
+
+            if (current == '/' && index + 1 < text.Length && text[index + 1] == '*')
+            {
+                index += 2;
+                var depth = 1;
+                while (index < text.Length && depth > 0)
+                {
+                    if (index + 1 < text.Length && text[index] == '/' && text[index + 1] == '*')
+                    {
+                        depth++;
+                        index += 2;
+                    }
+                    else if (index + 1 < text.Length && text[index] == '*' && text[index + 1] == '/')
+                    {
+                        depth--;
+                        index += 2;
+                    }
+                    else
+                    {
+                        index++;
+                    }
+                }
+                pendingSpace = output.Length > 0;
+                continue;
+            }
+
+            if (pendingSpace && output.Length > 0)
+                output.Append(' ');
+            pendingSpace = false;
+
+            if (current is '\'' or '"' or '[')
+            {
+                var close = current == '[' ? ']' : current;
+                output.Append(current);
+                index++;
+                while (index < text.Length)
+                {
+                    var quoted = text[index++];
+                    output.Append(quoted);
+                    if (quoted != close)
+                        continue;
+                    if (index < text.Length && text[index] == close && current != '[')
+                    {
+                        output.Append(text[index++]);
+                        continue;
+                    }
+                    if (current == '[' && index < text.Length && text[index] == ']')
+                    {
+                        output.Append(text[index++]);
+                        continue;
+                    }
+                    break;
+                }
+                continue;
+            }
+
+            output.Append(current);
+            index++;
+        }
+
+        return output.ToString().Trim();
+    }
+}
+
+/// <summary>Journal-specific extraction; deliberately independent of the legacy capped artifact projection.</summary>
+internal static class JournalStatementMetricsExtractor
+{
+    internal const int MaximumBytes = 4 * 1024 * 1024;
+
+    private static readonly XNamespace Showplan = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
+
+    internal static IReadOnlyList<StatementMetrics> Extract(IReadOnlyList<string> documents, out int omittedStatements)
+    {
+        ArgumentNullException.ThrowIfNull(documents);
+        omittedStatements = 0;
+        var parsed = new List<ParsedStatement>();
+        var documentOrdinal = 0;
+        foreach (var document in documents)
+        {
+            foreach (var statement in ReadStatements(document ?? string.Empty))
+                parsed.Add(Parse(statement, documentOrdinal) with { PlanOrdinal = parsed.Count });
+            documentOrdinal++;
+        }
+
+        var aggregateGroups = new List<List<ParsedStatement>>();
+        foreach (var compGroup in parsed.Where(item => item.StatementCompId is > 0)
+                     .GroupBy(item => item.StatementCompId!.Value))
+        {
+            var entries = compGroup.ToArray();
+            var safe = entries.Length > 0
+                && entries.All(item => item.PlanHash is not null)
+                && entries.Select(item => item.NormalizedText).Distinct(StringComparer.Ordinal).Count() == 1
+                && entries.Select(item => item.PlanHash).Distinct(StringComparer.Ordinal).Count() == 1
+                && entries.Select(item => item.DocumentOrdinal).Distinct().Count() == entries.Length;
+            if (safe)
+                aggregateGroups.Add(entries.ToList());
+            else
+                aggregateGroups.AddRange(entries.Select(item => new List<ParsedStatement> { item with { IdentityConflicted = true } }));
+        }
+
+        var assigned = parsed.Where(item => item.StatementCompId is not > 0)
+            .Select(item => new List<ParsedStatement> { item });
+        var orderedGroups = aggregateGroups.Concat(assigned)
+            .OrderBy(group => group.Min(item => item.PlanOrdinal))
+            .ToArray();
+        var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+        var output = new List<StatementMetrics>(orderedGroups.Length);
+        var consumedBytes = 0;
+        for (var groupIndex = 0; groupIndex < orderedGroups.Length; groupIndex++)
+        {
+            var group = orderedGroups[groupIndex];
+            var first = group.OrderBy(item => item.PlanOrdinal).First();
+            var key = PlanIdentity.StatementSha256(first.NormalizedText);
+            occurrences.TryGetValue(key, out var occurrence);
+            occurrences[key] = occurrence + 1;
+            var metric = ToMetrics(group, groupIndex, key, occurrence);
+            var metricBytes = JsonSerializer.SerializeToUtf8Bytes(metric).Length
+                + Encoding.UTF8.GetByteCount(metric.Text ?? string.Empty)
+                + 2;
+            if (metricBytes > MaximumBytes - consumedBytes)
+            {
+                omittedStatements++;
+                continue;
+            }
+
+            consumedBytes += metricBytes;
+            output.Add(metric);
+        }
+
+        return output;
+    }
+
+    private static XElement[] ReadStatements(string document)
+    {
+        if (string.IsNullOrWhiteSpace(document) || document.AsSpan().TrimStart()[0] is '{' or '[')
+            return [];
+        try
+        {
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                MaxCharactersInDocument = 16 * 1024 * 1024,
+                MaxCharactersFromEntities = 0,
+            };
+            using var text = new StringReader(document);
+            using var reader = XmlReader.Create(text, settings);
+            var xml = XDocument.Load(reader, LoadOptions.None);
+            return xml.Root?.Name == Showplan + "ShowPlanXML"
+                ? xml.Descendants(Showplan + "StmtSimple").ToArray()
+                : [];
+        }
+        catch (Exception exception) when (exception is XmlException or InvalidOperationException or FormatException or OverflowException)
+        {
+            return [];
+        }
+    }
+
+    private static ParsedStatement Parse(XElement statement, int documentOrdinal)
+    {
+        var queryPlan = statement.Element(Showplan + "QueryPlan");
+        var text = Attribute(statement, "StatementText") ?? string.Empty;
+        var normalizedText = StatementKey.Normalize(text);
+        var root = queryPlan?.Element(Showplan + "RelOp");
+        var rootCounters = root?.DescendantsAndSelf().Where(element => element.Name == Showplan + "RunTimeCountersPerThread"
+            && (element == root || element.Ancestors(Showplan + "RelOp").FirstOrDefault() == root)).ToArray() ?? [];
+        var (executions, executionComplete) = SumCounters(rootCounters, "ActualExecutions");
+        var countersComplete = executionComplete;
+        var objectValues = new Dictionary<string, MutableObjectCounters>(StringComparer.Ordinal);
+        var tvfValues = new Dictionary<string, long?>(StringComparer.Ordinal);
+        foreach (var relOp in queryPlan?.Descendants(Showplan + "RelOp") ?? [])
+        {
+            var own = relOp.DescendantsAndSelf().Where(element => element == relOp
+                || element.Ancestors(Showplan + "RelOp").FirstOrDefault() == relOp).ToArray();
+            var objectElement = own.FirstOrDefault(element => element.Name == Showplan + "Object");
+            var table = Attribute(objectElement, "Table");
+            var runtime = own.Where(element => element.Name == Showplan + "RunTimeCountersPerThread").ToArray();
+            var reads = SumCounters(runtime, "ActualLogicalReads");
+            var lobReads = SumCounters(runtime, "ActualLobLogicalReads");
+            var scans = SumCounters(runtime, "ActualScans");
+            if (table is null)
+            {
+                if (!reads.Complete || !lobReads.Complete || !scans.Complete
+                    || reads.Value.GetValueOrDefault() > 0 || lobReads.Value.GetValueOrDefault() > 0 || scans.Value.GetValueOrDefault() > 0)
+                    countersComplete = false;
+            }
+            else
+            {
+                if (!reads.Complete || !lobReads.Complete || !scans.Complete)
+                    countersComplete = false;
+                if (!objectValues.TryGetValue(table, out var counters))
+                {
+                    counters = new MutableObjectCounters(table, Kind(table));
+                    objectValues.Add(table, counters);
+                }
+                counters.Add(reads.Value, lobReads.Value, scans.Value, reads.Complete && lobReads.Complete && scans.Complete);
+            }
+
+            var physicalOp = Attribute(relOp, "PhysicalOp") ?? string.Empty;
+            var logicalOp = Attribute(relOp, "LogicalOp") ?? string.Empty;
+            if (physicalOp.Contains("table-valued function", StringComparison.OrdinalIgnoreCase)
+                || logicalOp.Contains("table-valued function", StringComparison.OrdinalIgnoreCase))
+            {
+                var name = table ?? physicalOp;
+                var (tvfExecutions, tvfComplete) = SumCounters(runtime, "ActualExecutions");
+                if (!tvfComplete)
+                    countersComplete = false;
+                var priorExecutions = tvfValues.TryGetValue(name, out var foundExecutions) ? foundExecutions : 0L;
+                tvfValues[name] = priorExecutions.HasValue && tvfExecutions.HasValue
+                    ? SaturatingAdd(priorExecutions.Value, tvfExecutions.Value)
+                    : null;
+            }
+        }
+
+        var udfValues = statement.DescendantsAndSelf()
+            .Select(element => LongValue(Attribute(element, "UdfElapsedTime")))
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .ToArray();
+        long? udfElapsed = udfValues.Length == 0 ? null : udfValues.Aggregate(0L, SaturatingAdd);
+        var elapsed = LongValue(Attribute(queryPlan?.Element(Showplan + "QueryTimeStats"), "ElapsedTime"));
+        double? udfShare = udfElapsed.HasValue && elapsed.HasValue && elapsed.Value > 0
+            ? Math.Round(udfElapsed.Value * 100d / elapsed.Value, 1)
+            : null;
+        var hidden = new List<HiddenWork>();
+        if (udfElapsed is > 0)
+        {
+            var name = statement.DescendantsAndSelf()
+                .Select(element => Attribute(element, "FunctionName"))
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "scalar UDF";
+            hidden.Add(new HiddenWork("scalar-udf", name, null, udfShare));
+        }
+        hidden.AddRange(tvfValues.Select(value => new HiddenWork("multi-statement-tvf", value.Key, value.Value, null)));
+        return new ParsedStatement(
+            documentOrdinal,
+            text,
+            normalizedText,
+            ParseInt(Attribute(statement, "StatementId")),
+            ParseInt(Attribute(statement, "StatementCompId")),
+            Attribute(statement, "QueryPlanHash"),
+            ParseInt(Attribute(queryPlan, "DegreeOfParallelism")),
+            executions,
+            countersComplete,
+            objectValues,
+            udfElapsed,
+            elapsed,
+            hidden);
+    }
+
+    private static StatementMetrics ToMetrics(IReadOnlyList<ParsedStatement> group, int ordinal, string key, int occurrence)
+    {
+        var first = group[0];
+        var complete = group.All(item => item.CountersComplete);
+        var objects = new Dictionary<string, MutableObjectCounters>(StringComparer.Ordinal);
+        foreach (var item in group)
+        {
+            foreach (var source in item.Objects.Values)
+            {
+                if (!objects.TryGetValue(source.Object, out var target))
+                {
+                    target = new MutableObjectCounters(source.Object, source.Kind);
+                    objects.Add(source.Object, target);
+                }
+                target.Add(source.LogicalReads, source.LobLogicalReads, source.Scans, source.Complete);
+            }
+        }
+
+        long? executions = group.All(item => item.Executions.HasValue)
+            ? group.Select(item => item.Executions!.Value).Aggregate(0L, SaturatingAdd)
+            : null;
+        long? udfElapsed = group.All(item => item.UdfElapsed.HasValue)
+            ? group.Select(item => item.UdfElapsed!.Value).Aggregate(0L, SaturatingAdd)
+            : null;
+        long? elapsed = group.All(item => item.Elapsed.HasValue)
+            ? group.Select(item => item.Elapsed!.Value).Aggregate(0L, SaturatingAdd)
+            : null;
+        var hidden = new List<HiddenWork>();
+        if (udfElapsed is > 0)
+            hidden.Add(new HiddenWork("scalar-udf", first.Hidden.FirstOrDefault(work => work.Kind == "scalar-udf")?.Name ?? "scalar UDF", null,
+                elapsed is > 0 ? Math.Round(udfElapsed.Value * 100d / elapsed.Value, 1) : null));
+        foreach (var tvf in group.SelectMany(item => item.Hidden.Where(work => work.Kind == "multi-statement-tvf"))
+                     .GroupBy(work => work.Name, StringComparer.Ordinal))
+        {
+            var values = tvf.Select(work => work.Executions).ToArray();
+            hidden.Add(new HiddenWork("multi-statement-tvf", tvf.Key,
+                values.All(value => value.HasValue) ? values.Select(value => value!.Value).Aggregate(0L, SaturatingAdd) : null,
+                null));
+        }
+
+        return new StatementMetrics(
+            ordinal,
+            PlanIdentity.StatementSha256(first.Text),
+            null,
+            elapsed,
+            first.DegreeOfParallelism,
+            [])
+        {
+            Key = key,
+            Occurrence = occurrence,
+            Executions = executions,
+            PlanHash = first.PlanHash,
+            Objects = objects.Values.Select(item => item.ToRecord()).ToArray(),
+            UdfElapsedMs = udfElapsed,
+            HiddenWork = hidden,
+            CountersComplete = complete && objects.Values.All(item => item.Complete),
+            IdentityComplete = group.All(item => item.StatementCompId is > 0 && item.PlanHash is not null && !item.IdentityConflicted)
+                && (group.Count == 1 || group.Select(item => item.DocumentOrdinal).Distinct().Count() == group.Count),
+            Text = first.Text,
+            DocumentOrdinal = first.DocumentOrdinal,
+            StatementId = first.StatementId,
+            StatementCompId = first.StatementCompId,
+        };
+    }
+
+    private static (long? Value, bool Complete) SumCounters(IReadOnlyList<XElement> elements, string name)
+    {
+        if (elements.Count == 0)
+            return (null, false);
+        long total = 0;
+        foreach (var element in elements)
+        {
+            var value = LongValue(Attribute(element, name));
+            if (!value.HasValue)
+                return (null, false);
+            total = SaturatingAdd(total, value.Value);
+        }
+        return (total, true);
+    }
+
+    private static string? Attribute(XElement? element, string name) => element?.Attribute(name)?.Value;
+
+    private static int? ParseInt(string? text) => int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value >= 0 ? value : null;
+
+    private static long? LongValue(string? text) => long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value >= 0 ? value : null;
+
+    private static string Kind(string table) => table.Equals("Worktable", StringComparison.OrdinalIgnoreCase)
+        || table.Equals("[Worktable]", StringComparison.OrdinalIgnoreCase)
+        || table.Equals("Workfile", StringComparison.OrdinalIgnoreCase)
+        || table.Equals("[Workfile]", StringComparison.OrdinalIgnoreCase)
+            ? "worktable"
+            : table.StartsWith("[@", StringComparison.Ordinal) ? "table-variable"
+            : table.StartsWith("[#", StringComparison.Ordinal) ? "temp"
+            : "table";
+
+    private static long SaturatingAdd(long left, long right) => left > long.MaxValue - right ? long.MaxValue : left + right;
+
+    private sealed record ParsedStatement(
+        int DocumentOrdinal,
+        string Text,
+        string NormalizedText,
+        int? StatementId,
+        int? StatementCompId,
+        string? PlanHash,
+        int? DegreeOfParallelism,
+        long? Executions,
+        bool CountersComplete,
+        Dictionary<string, MutableObjectCounters> Objects,
+        long? UdfElapsed,
+        long? Elapsed,
+        IReadOnlyList<HiddenWork> Hidden)
+    {
+        public int PlanOrdinal { get; init; }
+        public bool IdentityConflicted { get; init; }
+    }
+
+    private sealed class MutableObjectCounters(string objectName, string kind)
+    {
+        public string Object { get; } = objectName;
+        public string Kind { get; } = kind;
+        public long LogicalReads { get; private set; }
+        public long LobLogicalReads { get; private set; }
+        public long Scans { get; private set; }
+        public bool Complete { get; private set; } = true;
+
+        public void Add(long? reads, long? lobReads, long? scans, bool complete)
+        {
+            LogicalReads = SaturatingAdd(LogicalReads, reads.GetValueOrDefault());
+            LobLogicalReads = SaturatingAdd(LobLogicalReads, lobReads.GetValueOrDefault());
+            Scans = SaturatingAdd(Scans, scans.GetValueOrDefault());
+            Complete &= complete;
+        }
+
+        public StatementObjectCounters ToRecord() => new(Object, Kind, LogicalReads, LobLogicalReads, Scans);
+    }
+}
 
 /// <summary>Extracts bounded per-statement diagnostics from an actual SQL Server showplan.</summary>
 internal static class StatementMetricsExtractor

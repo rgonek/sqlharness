@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Postgres;
@@ -7,6 +8,189 @@ namespace SqlHarness.Tests;
 
 public sealed class StatementMetricsTests
 {
+    [Fact]
+    public void Occurrence_distinguishes_repeated_text()
+    {
+        var sql = "INSERT INTO @P SELECT 1";
+        var documents = new[]
+        {
+            JournalPlan(sql, statementId: 1, statementCompId: 4, queryPlanHash: "0x01", reads: 1, executions: 1),
+            JournalPlan(sql, statementId: 2, statementCompId: 4, queryPlanHash: "0x01", reads: 1, executions: 1),
+            JournalPlan(sql, statementId: 3, statementCompId: 5, queryPlanHash: "0x01", reads: 3, executions: 1),
+        };
+
+        var statements = JournalStatementMetricsExtractor.Extract(documents, out var omitted);
+
+        Assert.Equal(0, omitted);
+        Assert.Equal(2, statements.Count);
+        Assert.Equal([2L, 1L], statements.Select(statement => statement.Executions).ToArray());
+        Assert.Equal([0, 1], statements.Select(statement => statement.Occurrence).ToArray());
+        Assert.Equal([2L, 3L], statements.Select(statement => Assert.Single(statement.Objects!).LogicalReads).ToArray());
+        Assert.Equal(PlanIdentity.StatementSha256(StatementKey.Normalize(sql)), statements[0].Key);
+        Assert.Equal(statements[0].Key, statements[1].Key);
+    }
+
+    [Fact]
+    public void Counters_sum_operators_per_object()
+    {
+        var xml = JournalPlan("SELECT * FROM @P", 1, 1, "0x01", reads: 0, executions: 1,
+            operators: [
+                ("Table Insert", "[@P]", [(1001L, 0L, 0L)]),
+                ("Table Scan", "[@P]", [(0L, 0L, 2L)]),
+                ("Table Scan", "[@R]", [(4L, 2L, 1L)]),
+                ("Table Scan", "[#F]", [(0L, 0L, 2L)])]);
+
+        var statement = Assert.Single(JournalStatementMetricsExtractor.Extract([xml], out _));
+
+        var tableVariable = Assert.Single(statement.Objects!, item => item.Object == "[@P]");
+        Assert.Equal((1001L, 0L, 2L), (tableVariable.LogicalReads, tableVariable.LobLogicalReads, tableVariable.Scans));
+        Assert.Equal(2, Assert.Single(statement.Objects!, item => item.Object == "[#F]").Scans);
+        var secondTableVariable = Assert.Single(statement.Objects!, item => item.Object == "[@R]");
+        Assert.Equal("table-variable", secondTableVariable.Kind);
+        Assert.Equal((4L, 2L, 1L), (secondTableVariable.LogicalReads, secondTableVariable.LobLogicalReads, secondTableVariable.Scans));
+        Assert.Equal("temp", Assert.Single(statement.Objects!, item => item.Object == "[#F]").Kind);
+
+    }
+
+    [Fact]
+    public void Parallel_counters_sum_over_threads()
+    {
+        var parallel = JournalPlan("SELECT * FROM [dbo].[T]", 1, 1, "0x02", 0, 1,
+            operators: [("Index Scan", "[dbo].[T]", [(41943L, 2L, 1L), (42810L, 3L, 1L), (2L, 4L, 1L)])]);
+
+        var parallelStatement = Assert.Single(JournalStatementMetricsExtractor.Extract([parallel], out _));
+        var objectCounters = Assert.Single(parallelStatement.Objects!);
+        Assert.Equal(84755, objectCounters.LogicalReads);
+        Assert.Equal(9, objectCounters.LobLogicalReads);
+        Assert.Equal(3, objectCounters.Scans);
+        Assert.Equal(2, parallelStatement.DegreeOfParallelism);
+    }
+
+    [Fact]
+    public void Table_variable_names_come_from_plan()
+    {
+        var xml = JournalPlan("SELECT * FROM @P JOIN @R ON 1 = 1", 1, 1, "0x01", 0, 1,
+            operators: [("Table Scan", "[@P]", [(1L, 0L, 1L)]), ("Table Scan", "[@R]", [(2L, 0L, 1L)])]);
+
+        var statement = Assert.Single(JournalStatementMetricsExtractor.Extract([xml], out _));
+
+        Assert.Equal(["[@P]", "[@R]"], statement.Objects!.Select(item => item.Object).ToArray());
+        Assert.All(statement.Objects!, item => Assert.Equal("table-variable", item.Kind));
+    }
+
+    [Fact]
+    public void Journal_extraction_preserves_actual_cursor_and_spool_document_shapes()
+    {
+        var cursorOpen = ReadPlanFixture("082-cursor-open.sqlplan");
+        var cursorFetch = ReadPlanFixture("082-cursor-fetch.sqlplan");
+        var spool = ReadPlanFixture("082-recursive-spool.sqlplan");
+
+        var statements = JournalStatementMetricsExtractor.Extract([cursorOpen, cursorFetch, spool], out _);
+
+        Assert.Equal(3, statements.Count);
+        Assert.Equal(1, statements[0].Executions);
+        Assert.Equal(1, statements[1].Executions);
+        Assert.Equal(1, statements[2].Executions);
+        Assert.Contains(statements[0].Objects!, item => item.Object == "[@t]");
+        Assert.Empty(statements[2].Objects!);
+        Assert.False(statements[2].CountersComplete);
+    }
+
+    [Fact]
+    public void Journal_extraction_does_not_group_missing_or_conflicting_compiled_identities()
+    {
+        var sql = "SELECT * FROM [dbo].[T]";
+        var documents = new[]
+        {
+            JournalPlan(sql, 1, 0, "0x01", 1, 1),
+            JournalPlan(sql, 2, 0, "0x01", 1, 1),
+            JournalPlan(sql, 3, 7, "0x01", 1, 1),
+            JournalPlan(sql, 4, 7, "0x02", 1, 1),
+        };
+
+        var statements = JournalStatementMetricsExtractor.Extract(documents, out _);
+
+        Assert.Equal(4, statements.Count);
+        Assert.All(statements, statement => Assert.Equal(1, statement.Executions));
+        Assert.All(statements, statement => Assert.False(statement.IdentityComplete));
+        Assert.Equal([0, 1, 2, 3], statements.Select(statement => statement.Occurrence).ToArray());
+    }
+
+    [Fact]
+    public void Scalar_udf_share()
+    {
+        var udf = JournalPlan("SELECT dbo.fn_scalar()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 28, elapsedTime: 29,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)])]);
+        var statement = Assert.Single(JournalStatementMetricsExtractor.Extract([udf], out _));
+
+        Assert.Equal(28, statement.UdfElapsedMs);
+        var scalarUdf = Assert.Single(statement.HiddenWork!);
+        Assert.Equal("scalar-udf", scalarUdf.Kind);
+        Assert.Equal(96.6, scalarUdf.SharePercent!.Value, precision: 1);
+    }
+
+    [Fact]
+    public void Multi_statement_tvf_flagged()
+    {
+        var tvf = JournalPlan("SELECT * FROM dbo.fn_multi()", 2, 2, "0x02", 0, 1,
+            operators: [("Table-valued function", "[dbo].[fn_multi]", [(0L, 0L, 0L)])]);
+
+        var statement = Assert.Single(JournalStatementMetricsExtractor.Extract([tvf], out _));
+
+        var hidden = Assert.Single(statement.HiddenWork!);
+        Assert.Equal("multi-statement-tvf", hidden.Kind);
+        Assert.Equal("[dbo].[fn_multi]", hidden.Name);
+        Assert.Equal(1, hidden.Executions);
+    }
+
+    [Fact]
+    public void Normalized_key_ignores_comments_and_whitespace()
+    {
+        Assert.Equal(
+            "SELECT 'a  -- b' FROM [dbo].[T]",
+            StatementKey.Normalize("  SELECT  'a  -- b' /* removable */\r\n FROM [dbo].[T] -- trailing\n"));
+        Assert.Equal(
+            StatementKey.Normalize("SELECT 'x  y'"),
+            StatementKey.Normalize("SELECT 'x  y' -- comment"));
+        Assert.NotEqual(StatementKey.Normalize("SELECT 'x  y'"), StatementKey.Normalize("SELECT 'x y'"));
+    }
+
+    [Fact]
+    public void Large_batch_reports_omissions()
+    {
+        var largeText = new string('x', 20_000);
+        var documents = Enumerable.Range(1, 300)
+            .Select(index => JournalPlan($"SELECT '{largeText}' AS value_{index}", index, index, $"0x{index:X}", 0, 1))
+            .ToArray();
+
+        var statements = JournalStatementMetricsExtractor.Extract(documents, out var omitted);
+
+        Assert.InRange(statements.Count, 1, 299);
+        Assert.True(omitted > 0);
+        Assert.Equal(300, statements.Count + omitted);
+    }
+
+    [Fact]
+    public void Legacy_artifact_statement_cap_and_wire_shape_remain_unchanged()
+    {
+        var statementsXml = string.Join("", Enumerable.Range(0, 300)
+            .Select(index => $"<StmtSimple StatementText=\"SELECT {index}\"><QueryPlan /></StmtSimple>"));
+        var xml = $"<ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><BatchSequence><Batch><Statements>{statementsXml}</Statements></Batch></BatchSequence></ShowPlanXML>";
+
+        var artifactStatements = StatementMetricsExtractor.Extract(xml, out var artifactOmitted);
+        var oneMetricJson = JsonSerializer.Serialize(
+            Assert.Single(StatementMetricsExtractor.Extract(JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1), out _)),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal(128, StatementMetricsExtractor.MaximumStatements);
+        Assert.Equal(128, artifactStatements.Count);
+        Assert.Equal(172, artifactOmitted);
+        Assert.DoesNotContain("\"key\"", oneMetricJson);
+        Assert.DoesNotContain("\"objects\"", oneMetricJson);
+        Assert.DoesNotContain("\"hiddenWork\"", oneMetricJson);
+    }
+
     [Fact]
     public void Extract_keeps_colliding_node_ids_on_separate_statements_with_preorder_paths()
     {
@@ -185,4 +369,46 @@ public sealed class StatementMetricsTests
           </Statements></Batch></BatchSequence>
         </ShowPlanXML>
         """;
+
+    private static string ReadPlanFixture(string name) =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Plans", name));
+
+    private static string JournalPlan(
+        string text,
+        int statementId,
+        int statementCompId,
+        string queryPlanHash,
+        long reads,
+        long executions,
+        long? udfElapsedTime = null,
+        long elapsedTime = 29,
+        (string PhysicalOp, string Table, (long Reads, long LobReads, long Scans)[] Threads)[]? operators = null)
+    {
+        operators ??= [("Table Scan", "[@P]", [(reads, 0L, 0L)])];
+        var escapedText = SecurityElement.Escape(text);
+        var operatorsXml = string.Join("", operators.Select((op, index) => $"""
+            <RelOp NodeId="{index}" PhysicalOp="{SecurityElement.Escape(op.PhysicalOp)}" LogicalOp="{SecurityElement.Escape(op.PhysicalOp)}" EstimateRows="1">
+              <RunTimeInformation>{string.Join("", op.Threads.Select((thread, threadId) => $"""
+                <RunTimeCountersPerThread Thread="{threadId}" ActualRows="1" ActualExecutions="{executions}" ActualLogicalReads="{thread.Reads}" ActualLobLogicalReads="{thread.LobReads}" ActualScans="{thread.Scans}" />
+              """))}</RunTimeInformation>
+              <TableScan><Object Table="{SecurityElement.Escape(op.Table)}" /></TableScan>
+            </RelOp>
+            """));
+        var udfAttribute = udfElapsedTime is null ? string.Empty : $" UdfElapsedTime=\"{udfElapsedTime.Value}\"";
+        var rootExecutions = executions;
+        return $"""
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><Statements>
+                <StmtSimple StatementText="{escapedText}" StatementId="{statementId}" StatementCompId="{statementCompId}" StatementType="SELECT" QueryHash="0x01" QueryPlanHash="{queryPlanHash}">
+                  <QueryPlan DegreeOfParallelism="2"><QueryTimeStats CpuTime="1" ElapsedTime="{elapsedTime}"{udfAttribute} />
+                    <RelOp NodeId="0" PhysicalOp="Nested Loops" LogicalOp="Inner Join" EstimateRows="1">
+                      <RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="1" ActualExecutions="{rootExecutions}" /></RunTimeInformation>
+                      <NestedLoops>{operatorsXml}</NestedLoops>
+                    </RelOp>
+                  </QueryPlan>
+                </StmtSimple>
+              </Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+    }
 }
