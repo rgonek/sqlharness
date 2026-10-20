@@ -125,11 +125,13 @@ test("selects a profile and shows filtered, searchable dimension matrix totals",
   expect(screen.getByText(/Full-scope total: 3 \(3 operations\)/)).toBeInTheDocument()
 
   const projectFilter = screen.getByRole("combobox", { name: "project" })
-  await userEvent.selectOptions(projectFilter, "value:alpha")
+  await userEvent.click(projectFilter)
+  await userEvent.click(await screen.findByRole("option", { name: "alpha" }))
   expect(await screen.findByText("Active filters:")).toBeInTheDocument()
   expect(calls.some(call => call.includes("dimensions=%7B%22project%22%3A%22alpha%22%7D"))).toBe(true)
   await waitFor(() => expect(screen.queryByRole("button", { name: "Filter component to web" })).not.toBeInTheDocument())
-  await userEvent.selectOptions(projectFilter, "value:beta")
+  await userEvent.click(projectFilter)
+  await userEvent.click(await screen.findByRole("option", { name: "beta" }))
   expect(calls.some(call => call.includes("dimensions=%7B%22project%22%3A%22beta%22%7D"))).toBe(true)
 
   await userEvent.click(profile)
@@ -199,9 +201,11 @@ test("switching from a profile named unprofiled to no-profile resets matrix cont
   const profile = await screen.findByRole("combobox", { name: "Statistics profile" })
   await screen.findByText(/Showing 25 of 30 row values/)
   expect(profile).toHaveTextContent("unprofiled")
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Metric" }), "failed")
+  await userEvent.click(screen.getByRole("combobox", { name: "Metric" }))
+  await userEvent.click(await screen.findByRole("option", { name: "Failed operations" }))
   setMatrixSearch("profile-value-29")
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Display limit per axis" }), "10")
+  await userEvent.click(screen.getByRole("combobox", { name: "Display limit per axis" }))
+  await userEvent.click(await screen.findByRole("option", { name: "10" }))
 
   await userEvent.click(profile)
   await userEvent.click(screen.getByRole("option", { name: /^No profile$/ }))
@@ -209,9 +213,9 @@ test("switching from a profile named unprofiled to no-profile resets matrix cont
   await waitFor(() => expect(profile).toHaveTextContent("No profile"))
   await waitFor(() => expect(calls.some(call => call.startsWith("/api/stats?") && call.includes("unprofiled=true"))).toBe(true))
   expect(await screen.findByRole("combobox", { name: "region" })).toBeInTheDocument()
-  expect(screen.getByRole("combobox", { name: "Metric" })).toHaveValue("operations")
+  expect(screen.getByRole("combobox", { name: "Metric" })).toHaveTextContent("Operations")
   expect(screen.getByRole("textbox", { name: "Search row and column values" })).toHaveValue("")
-  expect(screen.getByRole("combobox", { name: "Display limit per axis" })).toHaveValue("25")
+  expect(screen.getByRole("combobox", { name: "Display limit per axis" })).toHaveTextContent("25")
   expect(screen.getByText(/Showing 25 of 30 row values/)).toBeInTheDocument()
 })
 
@@ -285,7 +289,8 @@ test("preserves a non-axis filter in cell scope across a time-range change", asy
 
   const profile = await screen.findByRole("combobox", { name: "Statistics profile" })
   expect(await screen.findByRole("combobox", { name: "region" })).toBeInTheDocument()
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "region" }), "value:west")
+  await userEvent.click(screen.getByRole("combobox", { name: "region" }))
+  await userEvent.click(await screen.findByRole("option", { name: "west" }))
   const matrixCell = await screen.findByRole("button", { name: /component api, project alpha:/ })
   await userEvent.click(matrixCell)
   const firstScopedUrl = new URL(`http://local${calls.find(call => call.startsWith("/api/stats?") && call.includes("profile=app"))}`)
@@ -297,7 +302,7 @@ test("preserves a non-axis filter in cell scope across a time-range change", asy
 
   await userEvent.click(screen.getByRole("tab", { name: "All time" }))
   await waitFor(() => expect(profile).toHaveTextContent("app"))
-  await waitFor(() => expect(screen.getByRole("combobox", { name: "region" })).toHaveValue("value:west"))
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "region" })).toHaveTextContent("west"))
   await userEvent.click(await screen.findByRole("button", { name: /component api, project alpha:/ }))
   const latestScopedUrl = new URL(`http://local${calls.filter(call => call.startsWith("/api/stats?") && call.includes("profile=app")).at(-1)}`)
   expect(onCellSelect).toHaveBeenLastCalledWith({ profile: "app", unprofiled: false, range: "all",
@@ -305,6 +310,61 @@ test("preserves a non-axis filter in cell scope across a time-range change", asy
     dimensions: { region: "west", component: "api", project: "alpha" } })
   expect(calls.some(call => !call.includes("from=") && call.includes("dimensions=%7B%22region%22%3A%22west%22%7D")
     && call.includes("rowDimension=component") && call.includes("columnDimension=project"))).toBe(true)
+})
+
+test("dimension filter keeps All, missing, empty and ordinary values distinct in requests", async () => {
+  const calls = stubFetch({ "/api/stats": (url: URL) => jsonResponse(filteredProfileStats(url)), "/api/profiles": profilesResponse() })
+  renderApp("/stats")
+  await screen.findByRole("button", { name: /component api, project alpha:/ })
+  const region = screen.getByRole("combobox", { name: "region" })
+
+  await userEvent.click(region)
+  await userEvent.click(await screen.findByRole("option", { name: "east" }))
+  await waitFor(() => expect(calls.some(call => call.includes('dimensions=%7B%22region%22%3A%22east%22%7D'))).toBe(true))
+
+  await userEvent.click(region)
+  await userEvent.click(await screen.findByRole("option", { name: "Unknown (missing)" }))
+  await waitFor(() => expect(calls.some(call => call.includes('dimensions=%7B%22region%22%3Anull%7D'))).toBe(true))
+
+  await userEvent.click(region)
+  await userEvent.click(await screen.findByRole("option", { name: "(empty)" }))
+  await waitFor(() => expect(calls.some(call => call.includes('dimensions=%7B%22region%22%3A%22%22%7D'))).toBe(true))
+
+  await userEvent.click(region)
+  await userEvent.click(await screen.findByRole("option", { name: "All values" }))
+  expect(region).toHaveTextContent("All values")
+  expect(calls.some(call => call.startsWith("/api/stats?") && !call.includes("dimensions="))).toBe(true)
+})
+
+test("matrix selects keep axes distinct, ignore disabled choices and update the metric", async () => {
+  const calls = stubFetch({ "/api/stats": (url: URL) => jsonResponse(filteredProfileStats(url)), "/api/profiles": profilesResponse() })
+  renderApp("/stats")
+  await screen.findByRole("button", { name: /component api, project alpha:/ })
+  const rows = screen.getByRole("combobox", { name: "Rows" })
+  const columns = screen.getByRole("combobox", { name: "Columns" })
+
+  await userEvent.click(columns)
+  const disabledRow = await screen.findByRole("option", { name: "component" })
+  expect(disabledRow).toHaveAttribute("aria-disabled", "true")
+  fireEvent.click(disabledRow)
+  await userEvent.keyboard("{ArrowUp}{Enter}{Escape}")
+  expect(columns).toHaveTextContent("project")
+
+  await userEvent.click(columns)
+  await userEvent.click(await screen.findByRole("option", { name: "region" }))
+  await waitFor(() => expect(calls.some(call => call.includes("rowDimension=component") && call.includes("columnDimension=region"))).toBe(true))
+
+  await userEvent.click(rows)
+  await userEvent.click(await screen.findByRole("option", { name: "region" }))
+  await waitFor(() => expect(calls.some(call => call.includes("rowDimension=region") && call.includes("columnDimension=component"))).toBe(true))
+
+  await userEvent.click(rows)
+  await userEvent.click(await screen.findByRole("option", { name: "project" }))
+  await waitFor(() => expect(calls.some(call => call.includes("rowDimension=project") && call.includes("columnDimension=component"))).toBe(true))
+
+  await userEvent.click(screen.getByRole("combobox", { name: "Metric" }))
+  await userEvent.click(await screen.findByRole("option", { name: "Failed operations" }))
+  expect(screen.getByText(/Visible total: 1 \(3 operations\)/)).toBeInTheDocument()
 })
 
 test("cell navigation keeps the exact stats window across a minute boundary", async () => {
@@ -381,7 +441,8 @@ function profileStats(profile: string | null) {
       dimensions: [
         { name: "component", values: [api, web] },
         { name: "project", values: [alpha, beta] },
-        { name: "region", values: [dimensionValue("region", "west", 2, 20), dimensionValue("region", "east", 1, 10)] },
+        { name: "region", values: [dimensionValue("region", "west", 2, 20), dimensionValue("region", "east", 1, 10),
+          dimensionValue("region", "", 1, 10), { ...dimensionValue("region", "", 0, null), isUnknown: true }] },
       ],
       targets: [{ profile: "app", database: "alpha.api", engine: "sqlserver", server: "server-eu", count: 3 }],
       targetCount: 1,

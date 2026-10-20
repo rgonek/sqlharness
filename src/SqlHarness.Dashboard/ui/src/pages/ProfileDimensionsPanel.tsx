@@ -6,6 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDuration, formatNumber, formatPercent } from "@/lib/format"
 
@@ -73,20 +74,29 @@ function DimensionFilter({
   selected: string | null | undefined
   onSelect: (value: string | null | undefined) => void
 }) {
+  const options = [
+    { value: "all:", label: "All values" },
+    ...dimension.values.map(value => ({
+      value: valueOption(value),
+      label: value.isUnknown ? "Unknown (missing)" : value.value === "" ? "(empty)" : dimensionLabel(value),
+    })),
+  ]
   return (
     <div className="grid min-w-40 flex-1 gap-1.5">
       <Label htmlFor={`dimension-filter-${dimension.name}`}>{dimension.name}</Label>
-      <select
-        id={`dimension-filter-${dimension.name}`}
-        className="h-8 min-w-0 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted"
-        value={selected === undefined ? "" : selected === null ? "missing:" : `value:${selected}`}
-        onChange={event => onSelect(event.target.value === "" ? undefined : parseValueOption(event.target.value))}
-      >
-        <option value="">All values</option>
-        {dimension.values.map(value => (
-          <option key={identityKey(value)} value={valueOption(value)}>{dimensionLabel(value)}</option>
-        ))}
-      </select>
+      <Select items={options} value={selected === undefined ? "all:" : selected === null ? "missing:" : `value:${selected}`}
+        onValueChange={value => {
+          if (value === null) return
+          onSelect(value === "all:" ? undefined : parseValueOption(value))
+        }}>
+        <SelectTrigger id={`dimension-filter-${dimension.name}`} aria-label={dimension.name} className="w-full min-w-0"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all:">All values</SelectItem>
+          {dimension.values.map(value => (
+            <SelectItem key={identityKey(value)} value={valueOption(value)}>{value.isUnknown ? "Unknown (missing)" : value.value === "" ? "(empty)" : dimensionLabel(value)}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   )
 }
@@ -218,9 +228,11 @@ export function Matrix({
         </div>
         <div className="grid min-w-36 gap-1.5">
           <Label htmlFor="matrix-limit">Display limit per axis</Label>
-          <select id="matrix-limit" className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted" value={limit} onChange={event => setLimit(Number(event.target.value))}>
-            {[10, 25, 50, 100].map(value => <option key={value} value={value}>{value}</option>)}
-          </select>
+          <Select items={[10, 25, 50, 100].map(value => ({ value: String(value), label: String(value) }))}
+            value={String(limit)} onValueChange={value => { if (value !== null) setLimit(Number(value)) }}>
+            <SelectTrigger id="matrix-limit" aria-label="Display limit per axis" className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>{[10, 25, 50, 100].map(value => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
       </div>
       <p className="text-sm text-muted-foreground" aria-live="polite">
@@ -368,23 +380,33 @@ export function ProfileDimensionsPanel({
             <div className="flex flex-wrap items-end gap-3">
               <div className="grid min-w-40 flex-1 gap-1.5">
                 <Label htmlFor="matrix-row">Rows</Label>
-                <select id="matrix-row" className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted" value={axes.row} onChange={event => {
-                  const row = event.target.value
+                <Select items={names.map(name => ({ value: name, label: name }))} value={axes.row} onValueChange={value => {
+                  if (value === null) return
+                  const row = value
                   chooseAxes({ row, column: axes.column === row ? names.find(name => name !== row) ?? "" : axes.column })
-                }}>{names.map(name => <option key={name} value={name}>{name}</option>)}</select>
+                }}>
+                  <SelectTrigger id="matrix-row" aria-label="Rows" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{names.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="grid min-w-40 flex-1 gap-1.5">
                 <Label htmlFor="matrix-column">Columns</Label>
-                <select id="matrix-column" className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted" value={axes.column} onChange={event => {
-                  const column = event.target.value
+                <Select items={names.map(name => ({ value: name, label: name }))} value={axes.column} onValueChange={value => {
+                  if (value === null) return
+                  const column = value
                   chooseAxes({ row: axes.row === column ? names.find(name => name !== column) ?? "" : axes.row, column })
-                }}>{names.map(name => <option key={name} value={name} disabled={name === axes.row}>{name}</option>)}</select>
+                }}>
+                  <SelectTrigger id="matrix-column" aria-label="Columns" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{names.map(name => <SelectItem key={name} value={name} disabled={name === axes.row}>{name}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="grid min-w-48 flex-1 gap-1.5">
                 <Label htmlFor="matrix-metric">Metric</Label>
-                <select id="matrix-metric" className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted" value={metric} onChange={event => setMetric(event.target.value as Metric)}>
-                  {(Object.entries(metricLabels) as [Metric, string][]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                <Select items={(Object.entries(metricLabels) as [Metric, string][]).map(([value, label]) => ({ value, label }))}
+                  value={metric} onValueChange={value => { if (value !== null) setMetric(value as Metric) }}>
+                  <SelectTrigger id="matrix-metric" aria-label="Metric" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{(Object.entries(metricLabels) as [Metric, string][]).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
             </div>
             {matrix && <Matrix cells={matrix.cells} totals={matrix.totals} rowName={matrix.rowDimension} columnName={matrix.columnDimension} metric={metric}

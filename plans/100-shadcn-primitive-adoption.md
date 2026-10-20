@@ -88,12 +88,12 @@
 **Tests:** src/pages/StatsPage.test.tsx (add a dedicated src/pages/ProfileDimensionsPanel.test.tsx only if isolating callbacks makes these assertions clearer).
 **Interfaces:** Five Select sites; domain selected: string | null | undefined and onSelect retain their meanings; matrix axis/limit/metric contracts unchanged.
 
-- [ ] Convert the dimension filter with explicit UI sentinel "all:" for undefined. Missing stays "missing:"; concrete stays "value:<value>", including empty concrete string "value:". Keep valueOption/parseValueOption; map only "all:" back to undefined. Domain null must not be used as both missing and unselected.
-- [ ] Keep dynamic dimension labels and unique IDs; show All values/missing/value labels before first opening.
-- [ ] Test selecting concrete value, missing, concrete empty string and All values produces four distinct domain outcomes/requests. Pin controlled callback behavior without weakening request assertions.
-- [ ] Convert matrix limit, row, column and metric. Preserve numeric limit conversion, disabled column choice matching current row and both axis-swap/reset paths.
-- [ ] Test disabled options cannot be selected by pointer/keyboard; test both axis changes and matrix metric results. Keep filter changes and matrix-cell selections working.
-- [ ] Run focused suites/typecheck/lint, verify narrow layout, review and commit.
+  - [x] Convert the dimension filter with explicit UI sentinel "all:" for undefined. Missing stays "missing:"; concrete stays "value:<value>", including empty concrete string "value:". Keep valueOption/parseValueOption; map only "all:" back to undefined. Domain null must not be used as both missing and unselected.
+  - [x] Keep dynamic dimension labels and unique IDs; show All values/missing/value labels before first opening.
+  - [x] Test selecting concrete value, missing, concrete empty string and All values produces four distinct domain outcomes/requests. Pin controlled callback behavior without weakening request assertions.
+  - [x] Convert matrix limit, row, column and metric. Preserve numeric limit conversion, disabled column choice matching current row and both axis-swap/reset paths.
+  - [x] Test disabled options cannot be selected by pointer/keyboard; test both axis changes and matrix metric results. Keep filter changes and matrix-cell selections working.
+  - [x] Run focused suites/typecheck/lint, verify narrow layout, review and commit.
 
 ### Task 6: Optimization group and scope Selects
 
