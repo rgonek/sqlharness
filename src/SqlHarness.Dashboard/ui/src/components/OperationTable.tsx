@@ -6,6 +6,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { agentLabel } from "@/lib/agents"
 import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
 import { isInternalOperation } from "@/lib/internalOperations"
+import { useUpdateOperationAnnotation } from "@/api/queries"
+import { Button } from "@/components/ui/button"
+
+function OwnerStarButton({ operation }: { operation: OperationSummary }) {
+  const update = useUpdateOperationAnnotation(operation.id)
+  return <Button variant="ghost" size="sm" aria-label={operation.ownerStarred ? "Unstar operation" : "Star operation"}
+    aria-pressed={operation.ownerStarred} disabled={update.isPending}
+    onClick={() => update.mutate({ starred: !operation.ownerStarred })}>
+    {operation.ownerStarred ? "★" : "☆"}
+  </Button>
+}
 
 /** Live elapsed time for running rows when `now` is given; recorded duration otherwise. */
 export function OperationTable({ operations, now, showInternal, membership }: { operations: OperationSummary[]; now?: number; showInternal: boolean; membership?: Record<number, string> }) {
@@ -16,6 +27,8 @@ export function OperationTable({ operations, now, showInternal, membership }: { 
         <TableHeader>
           <TableRow>
             <TableHead>#</TableHead>
+            <TableHead>Owner</TableHead>
+            <TableHead>Label</TableHead>
             <TableHead>Started</TableHead>
             <TableHead>Session / subject</TableHead>
             <TableHead>Agent</TableHead>
@@ -36,6 +49,8 @@ export function OperationTable({ operations, now, showInternal, membership }: { 
                   {operation.id}
                 </Link>
               </TableCell>
+              <TableCell><div className="flex items-center gap-1"><OwnerStarButton operation={operation} />{operation.agentKeep && <span className="rounded border px-1.5 py-0.5 text-xs" title="Kept by agent">Agent keep</span>}</div></TableCell>
+              <TableCell>{operation.agentLabel ?? "—"}</TableCell>
               <TableCell className="whitespace-nowrap">{formatTimestamp(operation.startedAt)}</TableCell>
               <TableCell>
                 <Link to="/sessions/$id" params={{ id: String(operation.sessionId) }} className="underline">Session #{operation.sessionId}</Link>

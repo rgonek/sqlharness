@@ -26,7 +26,8 @@ public sealed class DashboardContractTests
             ["id", "sessionId", "agentKind", "operation", "status", "exitCode", "errorKind", "startedAt", "updatedAt",
              "finishedAt", "durationMs", "profile", "engine", "server", "database", "mutationRequested", "sqlHash",
              "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage", "cancelReason", "agentModel", "agentReasoningEffort",
-             "operationRef", "parentOperationRef", "dryRun", "agentModelSource", "subject", "versionPair", "readsBefore", "readsAfter", "safetyNotices"],
+             "operationRef", "parentOperationRef", "dryRun", "agentModelSource", "subject", "versionPair", "readsBefore", "readsAfter", "safetyNotices",
+             "agentLabelInitial", "agentLabel", "agentKeep", "ownerStarred", "ownerNote"],
             Names(summary));
         AssertTypescriptFieldsMatch("OperationSummary", summary);
     }

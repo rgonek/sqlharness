@@ -148,6 +148,50 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Operation_annotations_are_available_and_named_operations_search_across_sessions()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var first = seed.Operation(JournalSeed.Session("cli:first"), operation: "query", sql: "SELECT 1");
+        var second = seed.Operation(JournalSeed.Session("cli:second"), operation: "measure", sql: "SELECT 2");
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={home.DatabasePath}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "INSERT INTO operation_annotations(operation_id, agent_label_initial, agent_label, agent_keep, updated_at) VALUES ($id, 'initial', 'kept query', 1, '2026-10-20T00:00:00.000Z');";
+            command.Parameters.AddWithValue("$id", first.OperationId);
+            command.ExecuteNonQuery();
+        }
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var unguarded = new HttpRequestMessage(HttpMethod.Patch, $"/api/operations/{second.OperationId}/annotation")
+        { Content = JsonContent.Create(new { starred = true }) };
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(unguarded)).StatusCode);
+        using var patch = new HttpRequestMessage(HttpMethod.Patch, $"/api/operations/{second.OperationId}/annotation")
+        { Content = JsonContent.Create(new { starred = true, note = "Across sessions" }) };
+        patch.Headers.Add(DashboardSecurity.WriteHeader, "1");
+        using var patched = await client.SendAsync(patch);
+        Assert.Equal(HttpStatusCode.OK, patched.StatusCode);
+        using var page = await client.GetAsync("/api/named-operations?q=across&limit=1");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        using var document = JsonDocument.Parse(await page.Content.ReadAsStringAsync());
+        var item = Assert.Single(document.RootElement.GetProperty("items").EnumerateArray());
+        Assert.Equal(second.OperationId, item.GetProperty("id").GetInt64());
+        Assert.True(item.GetProperty("ownerStarred").GetBoolean());
+        Assert.Equal("Across sessions", item.GetProperty("ownerNote").GetString());
+        using var partial = new HttpRequestMessage(HttpMethod.Patch, $"/api/operations/{second.OperationId}/annotation")
+        { Content = JsonContent.Create(new { starred = false }) };
+        partial.Headers.Add(DashboardSecurity.WriteHeader, "1");
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(partial)).StatusCode);
+        using var nextPage = JsonDocument.Parse(await (await client.GetAsync($"/api/named-operations?cursor={second.OperationId}&limit=1")).Content.ReadAsStringAsync());
+        var kept = nextPage.RootElement.GetProperty("items")[0];
+        Assert.Equal(first.OperationId, kept.GetProperty("id").GetInt64());
+        Assert.Equal("kept query", kept.GetProperty("agentLabel").GetString());
+        Assert.True(kept.GetProperty("agentKeep").GetBoolean());
+    }
+
+    [Fact]
     public async Task Repro_endpoint_without_sensitive_storage_is_unavailable()
     {
         using var home = new TempHome();
@@ -368,13 +412,15 @@ public sealed class DashboardServerTests
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
         var writes = server.Endpoints.Where(endpoint => endpoint.Methods.Any(method => method is not "GET" and not "HEAD")).ToArray();
-        Assert.Equal(9, writes.Length);
+        Assert.Equal(10, writes.Length);
         var settingsPut = Assert.Single(writes, endpoint => endpoint.Route == "/api/settings");
         Assert.Equal(["PUT"], settingsPut.Methods);
         var pricesRefresh = Assert.Single(writes, endpoint => endpoint.Route == "/api/prices/refresh");
         Assert.Equal(["POST"], pricesRefresh.Methods);
         var annotationPatch = Assert.Single(writes, endpoint => endpoint.Route == "/api/sessions/{id:long}/annotation");
         Assert.Equal(["PATCH"], annotationPatch.Methods);
+        var operationAnnotationPatch = Assert.Single(writes, endpoint => endpoint.Route == "/api/operations/{id:long}/annotation");
+        Assert.Equal(["PATCH"], operationAnnotationPatch.Methods);
         var agentAnnotationPatch = Assert.Single(writes, endpoint => endpoint.Route == "/api/agent-sessions/{kind}/{id}/annotation");
         Assert.Equal(["PATCH"], agentAnnotationPatch.Methods);
         var shutdown = Assert.Single(writes, endpoint => endpoint.Route == "/api/shutdown");

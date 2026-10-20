@@ -62,7 +62,14 @@ public sealed record OperationSummary(
     string? Subject = null, string? VersionPair = null, long? ReadsBefore = null, long? ReadsAfter = null)
 {
     public IReadOnlyList<string> SafetyNotices { get; init; } = [];
+    public string? AgentLabelInitial { get; init; }
+    public string? AgentLabel { get; init; }
+    public bool AgentKeep { get; init; }
+    public bool OwnerStarred { get; init; }
+    public string? OwnerNote { get; init; }
 }
+
+public sealed record OperationAnnotation(string? AgentLabel, bool AgentKeep, bool OwnerStarred, string? OwnerNote);
 
 public sealed record AgentCall(
     string? CallId, string? Model, string? ReasoningEffort, string? SessionId, string? TurnId,

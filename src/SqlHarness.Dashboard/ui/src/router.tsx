@@ -11,6 +11,7 @@ import { AgentSessionPage } from "@/pages/AgentSessionPage"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { StatsPage } from "@/pages/StatsPage"
+import { NamedOperationsPage } from "@/pages/NamedOperationsPage"
 
 export type OptimizationView = "changed" | "whole" | "statements"
 export type SessionSearch = { subject?: string; db?: string; group?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; view?: OptimizationView; unassigned?: boolean }
@@ -87,12 +88,13 @@ const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/o
       : search.dimensions !== null && typeof search.dimensions === "object" && !Array.isArray(search.dimensions)
         ? JSON.stringify(search.dimensions) : undefined,
   }) })
+const namedOperationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/named-operations", component: NamedOperationsPage })
 const statsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/stats", component: StatsPage })
 const profilesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/profiles", component: ProfilesPage })
 const mutationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/mutations", component: MutationsPage })
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage })
 
-export const routeTree = rootRoute.addChildren([liveRoute, sessionsRoute, sessionRoute, agentSessionRoute, operationRoute, operationsRoute, statsRoute, profilesRoute, mutationsRoute, settingsRoute])
+export const routeTree = rootRoute.addChildren([liveRoute, sessionsRoute, sessionRoute, agentSessionRoute, operationRoute, operationsRoute, namedOperationsRoute, statsRoute, profilesRoute, mutationsRoute, settingsRoute])
 
 /** Browser history in the app; tests pass a memory history. */
 export function createAppRouter(history?: RouterHistory) {

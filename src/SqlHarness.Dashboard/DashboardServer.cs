@@ -293,6 +293,13 @@ public static partial class DashboardServer
                     ? BadRequest("dimensions must be a JSON object with string or null values.")
                     : Results.Json(reader.Operations(new OperationQuery(session, status, operation, window.From, window.To, cursor,
                         limit ?? JournalReader.DefaultLimit, profile, dimensionFilters, unprofiled ?? false)), Json));
+        MapRead(api, "/named-operations", (string? q, long? cursor, int? limit) =>
+            q is { Length: > JournalReader.MaximumSearchLength }
+                ? BadRequest($"q must be at most {JournalReader.MaximumSearchLength} characters.")
+                : cursor is <= 0
+                    ? BadRequest("cursor must be positive.")
+                    : Results.Json(reader.NamedOperations(string.IsNullOrWhiteSpace(q) ? null : q, cursor,
+                        limit ?? JournalReader.DefaultLimit), Json));
         MapRead(api, "/operations/{id:long}", (long id) =>
             reader.Operation(id, DashboardProfiles.DimensionNames(options.TargetsPath), loadConfig().Journal.StoreSensitive) is { } detail
                 ? Results.Json(detail, Json)
@@ -366,6 +373,9 @@ public static partial class DashboardServer
         var annotationWriter = new SessionAnnotationWriter(options.DatabasePath, options.Time);
         api.MapMethods("/sessions/{id:long}/annotation", [HttpMethods.Patch], (Delegate)((HttpContext context, long id) =>
             SessionAnnotations.PatchAsync(context, id, annotationWriter, Json)));
+        var operationAnnotationWriter = new OperationAnnotationWriter(options.DatabasePath, options.Time);
+        api.MapMethods("/operations/{id:long}/annotation", [HttpMethods.Patch], (Delegate)((HttpContext context, long id) =>
+            OperationAnnotations.PatchAsync(context, id, operationAnnotationWriter, Json)));
         var agentSessionAnnotationWriter = new AgentSessionAnnotationWriter(options.DatabasePath, options.Time);
         api.MapMethods("/agent-sessions/{kind}/{id}/annotation", [HttpMethods.Patch], (Delegate)(async (HttpContext context, string kind, string id) =>
         {

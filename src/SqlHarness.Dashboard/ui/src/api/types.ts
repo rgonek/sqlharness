@@ -85,7 +85,14 @@ export type OperationSummary = {
   readsBefore: number | null
   readsAfter: number | null
   safetyNotices: string[]
+  agentLabelInitial: string | null
+  agentLabel: string | null
+  agentKeep: boolean
+  ownerStarred: boolean
+  ownerNote: string | null
 }
+export type OperationAnnotation = { agentLabel: string | null; agentKeep: boolean; ownerStarred: boolean; ownerNote: string | null }
+export type OperationAnnotationPatch = { starred?: boolean; note?: string | null }
 
 /** Allowlisted, client-supplied labels from tools/call _meta; never verified, never content. */
 export type AgentCall = {

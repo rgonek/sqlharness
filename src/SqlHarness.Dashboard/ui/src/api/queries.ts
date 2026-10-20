@@ -1,6 +1,6 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, HttpStatusError, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
-import type { AgentSessionAnnotation, AgentSessionDetail, AgentSessionKey, AgentSessionSummary, AnnotationPatch, CompareAttemptSummary, DashboardStats, KeyCount, MutationRequestSummary, OperationDetail, OperationPlanManifest, OperationSummary, OptimizationComparison, OptimizationSection, Page, PlanGraphBuildResult, PlanGraphPropertyResult, PlanSourceMapResponse, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
+import type { AgentSessionAnnotation, AgentSessionDetail, AgentSessionKey, AgentSessionSummary, AnnotationPatch, CompareAttemptSummary, DashboardStats, KeyCount, MutationRequestSummary, OperationAnnotation, OperationAnnotationPatch, OperationDetail, OperationPlanManifest, OperationSummary, OptimizationComparison, OptimizationSection, Page, PlanGraphBuildResult, PlanGraphPropertyResult, PlanSourceMapResponse, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string; hasCompare?: boolean }
 
@@ -220,6 +220,28 @@ export function useSessionSqlText(sessionId: number, hash: string | null, agentS
 
 export function useOperation(id: number) {
   return useQuery({ queryKey: queryKeys.operation(id), queryFn: () => getJson<OperationDetail>(`/api/operations/${id}`) })
+}
+
+export function useNamedOperations(search?: string) {
+  return useInfiniteQuery({
+    queryKey: ["named-operations", search],
+    queryFn: ({ pageParam }) => getJson<Page<OperationSummary>>("/api/named-operations", { q: search, cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: page => page.nextCursor ?? undefined,
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useUpdateOperationAnnotation(id: number) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: OperationAnnotationPatch) => patchJson<OperationAnnotation>(`/api/operations/${id}/annotation`, patch),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: ["named-operations"] })
+      void client.invalidateQueries({ queryKey: ["operations"] })
+      void client.invalidateQueries({ queryKey: queryKeys.operation(id) })
+    },
+  })
 }
 
 export type PlanSourceMapParams = { variant: string; parameterSet?: string | null; repetition: number; caseId: string }

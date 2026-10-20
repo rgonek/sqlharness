@@ -70,7 +70,12 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         o.compare_subject,
         (SELECT SUM(m.logical_reads_median) FROM operation_metrics m WHERE m.operation_id = o.id AND lower(m.variant) = 'baseline') AS reads_before,
         (SELECT SUM(m.logical_reads_median) FROM operation_metrics m WHERE m.operation_id = o.id AND lower(m.variant) = 'candidate') AS reads_after,
-        o.warnings_json
+        o.warnings_json,
+        (SELECT agent_label_initial FROM operation_annotations a WHERE a.operation_id = o.id) AS agent_label_initial,
+        (SELECT agent_label FROM operation_annotations a WHERE a.operation_id = o.id) AS agent_label,
+        COALESCE((SELECT agent_keep FROM operation_annotations a WHERE a.operation_id = o.id), 0) AS agent_keep,
+        COALESCE((SELECT owner_starred FROM operation_annotations a WHERE a.operation_id = o.id), 0) AS owner_starred,
+        (SELECT owner_note FROM operation_annotations a WHERE a.operation_id = o.id) AS owner_note
         """;
 
     private const string SessionColumns = """
@@ -861,7 +866,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 """,
                 parameters,
                 reader => (Operation: ReadOperation(reader, liveness),
-                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 37))));
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 42))));
             var filteredRows = rows.Where(row => !variableFiltered
                 || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
             matches.AddRange(liveFiltered
@@ -885,6 +890,34 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             : item).ToArray();
         var next = matches.Count > limit ? page[^1].Id : (long?)null;
         return new Page<OperationSummary>(page, next);
+    }
+
+    public Page<OperationSummary> NamedOperations(string? search = null, long? cursor = null, int limit = DefaultLimit)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return new Page<OperationSummary>([], null);
+        connection.CreateFunction<string?, string?>("sqlh_fold", FoldForSearch, isDeterministic: true);
+        var folded = FoldForSearch(search?.Trim());
+        var escaped = folded is null ? null : $"%{EscapeLike(folded)}%";
+        var boundedLimit = Clamp(limit);
+        var liveness = new ProcessLiveness(processes, _dead);
+        var rows = Query(connection, $"""
+            SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
+            WHERE ($cursor IS NULL OR o.id < $cursor)
+              AND (COALESCE((SELECT agent_keep FROM operation_annotations a WHERE a.operation_id = o.id), 0) = 1
+                   OR NULLIF((SELECT agent_label FROM operation_annotations a WHERE a.operation_id = o.id), '') IS NOT NULL
+                   OR COALESCE((SELECT owner_starred FROM operation_annotations a WHERE a.operation_id = o.id), 0) = 1)
+              AND ($search IS NULL OR
+                   sqlh_fold(COALESCE((SELECT agent_label FROM operation_annotations a WHERE a.operation_id = o.id), '')) LIKE $search ESCAPE '\' OR
+                   sqlh_fold(COALESCE((SELECT owner_note FROM operation_annotations a WHERE a.operation_id = o.id), '')) LIKE $search ESCAPE '\' OR
+                   sqlh_fold(o.operation) LIKE $search ESCAPE '\' OR sqlh_fold(s.session_key) LIKE $search ESCAPE '\' OR
+                   sqlh_fold(COALESCE(o.profile, '')) LIKE $search ESCAPE '\' OR sqlh_fold(COALESCE(o.database, '')) LIKE $search ESCAPE '\')
+            ORDER BY o.id DESC LIMIT $limit;
+            """, [("$cursor", cursor), ("$search", escaped), ("$limit", boundedLimit + 1)],
+            reader => ReadOperation(reader, liveness));
+        var page = rows.Take(boundedLimit).ToArray();
+        return new Page<OperationSummary>(page, rows.Count > boundedLimit ? page[^1].Id : null);
     }
 
     public OperationDetail? Operation(
@@ -1679,6 +1712,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         NullableString(r, 33), null, NullableLong(r, 34), NullableLong(r, 35))
     {
         SafetyNotices = StringArray(NullableString(r, 36)),
+        AgentLabelInitial = NullableString(r, 37),
+        AgentLabel = NullableString(r, 38),
+        AgentKeep = r.GetInt64(39) != 0,
+        OwnerStarred = r.GetInt64(40) != 0,
+        OwnerNote = NullableString(r, 41),
     };
 
     private static IReadOnlyList<string> StringArray(string? text)

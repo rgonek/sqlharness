@@ -116,6 +116,26 @@ test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", a
   expect(screen.queryByRole("link", { name: "Download plan" })).not.toBeInTheDocument()
 })
 
+test("operation detail renders labels as text and exposes owner annotations and unavailable SQL reuse", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({
+    operation: operation({ agentLabel: "<img src=x onerror=alert(1)>", agentKeep: true, ownerStarred: true, ownerNote: "review" }),
+  }) })
+  renderApp("/operations/10")
+
+  expect(await screen.findByText("<img src=x onerror=alert(1)>")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "★ Owner starred" })).toHaveAttribute("aria-pressed", "true")
+  expect(screen.getByText("Agent keep")).toBeInTheDocument()
+  expect(screen.getAllByText("SQL not stored").length).toBeGreaterThan(0)
+  expect(document.querySelector("img[src='x']")).toBeNull()
+})
+
+test("operation detail offers SQL reuse only when SQL was stored", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ sqlText: "SELECT 42", operation: operation({ id: 10 }) }) })
+  renderApp("/operations/10")
+  expect(await screen.findByRole("button", { name: "Copy stored SQL to reuse" })).toBeInTheDocument()
+  expect(screen.queryByText("SQL not stored")).not.toBeInTheDocument()
+})
+
 test("operation details show phase timing shares and expandable connection diagnostics", async () => {
   stubOperationFetch({ "/api/operations/10": operationDetail({
     operation: operation({ durationMs: 100 }),

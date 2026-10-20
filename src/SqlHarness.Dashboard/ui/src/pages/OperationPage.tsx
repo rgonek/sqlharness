@@ -1,9 +1,9 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import type { OperationDetail } from "@/api/types"
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
 import type { AgentSessionKey } from "@/api/types"
-import { useOperation, useOperationOptimization } from "@/api/queries"
+import { useOperation, useOperationOptimization, useUpdateOperationAnnotation } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { FlagBadges } from "@/components/FlagBadges"
 import { SqlBlock } from "@/components/SqlBlock"
@@ -14,6 +14,7 @@ import { ConditionsList } from "@/components/ConditionsList"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { displayCaseLabel } from "@/lib/caseLabel"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -57,6 +58,28 @@ function SummaryFacts({ summary }: { summary: Record<string, unknown> }) {
       {typeof summary.cells === "number" && <span className="text-sm">{summary.equivalentCells as number}/{summary.cells} cells equivalent</span>}
     </div>
   )
+}
+
+function OperationOwnerAnnotations({ operation }: { operation: OperationDetail["operation"] }) {
+  const update = useUpdateOperationAnnotation(operation.id)
+  const [note, setNote] = useState(operation.ownerNote ?? "")
+  return <section className="flex flex-wrap items-center gap-2" aria-label="Operation annotations">
+    <Button variant="outline" size="sm" aria-pressed={operation.ownerStarred}
+      onClick={() => update.mutate({ starred: !operation.ownerStarred })}>{operation.ownerStarred ? "★ Owner starred" : "☆ Star operation"}</Button>
+    {operation.agentKeep && <Badge variant="secondary">Agent keep</Badge>}
+    {operation.agentLabel && <span className="rounded border px-2 py-1 text-sm">{operation.agentLabel}</span>}
+    <label className="flex items-center gap-2 text-sm">Owner note
+      <input className="rounded-md border bg-background px-2 py-1" value={note} onChange={event => setNote(event.currentTarget.value)} />
+    </label>
+    <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ note })}>Save note</Button>
+  </section>
+}
+
+function StoredSqlReuse({ detail }: { detail: OperationDetail }) {
+  const sql = detail.sqlText ?? detail.candidateSqlText
+  return sql
+    ? <Button variant="outline" size="sm" onClick={() => void navigator.clipboard?.writeText(sql).catch(() => {})}>Copy stored SQL to reuse</Button>
+    : <p className="text-sm text-muted-foreground">SQL not stored</p>
 }
 
 function OperationTimings({ detail }: { detail: OperationDetail }) {
@@ -150,6 +173,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
             <StatusBadge operation={op} />
             <FlagBadges operation={op} />
           </div>
+          <OperationOwnerAnnotations operation={op} />
           <CardDescription>
             {op.operation} by {agentLabel(op.agentKind)} in{" "}
             <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined}>
@@ -270,6 +294,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
           )}
         </CardContent>
       </Card>}
+      <StoredSqlReuse detail={detail} />
     </div>
   )
 }
@@ -297,6 +322,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
         ? <Link to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)} className="ml-auto text-sm underline">Back to agent session</Link>
         : <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined} className="ml-auto text-sm underline">Back to {title}</Link>}
     </header>
+    <StoredSqlReuse detail={detail} />
     {detail.vars && <div className="flex flex-wrap gap-2" aria-label="Variables">{Object.entries(detail.vars).map(([key, value]) => <Badge key={key} variant="outline">{key}=<span>{value}</span></Badge>)}</div>}
     {comparison.isPending ? <Skeleton className="h-64 w-full" /> : comparison.data ? <>
       <ComparisonPanel comparison={comparison.data} sessionId={op.sessionId} agentSessionKey={returnAgent} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector
