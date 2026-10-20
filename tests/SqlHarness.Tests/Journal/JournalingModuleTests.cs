@@ -124,6 +124,29 @@ public sealed class JournalingModuleTests
     }
 
     [Fact]
+    public async Task Post_hoc_annotation_call_is_journaled_without_target_or_reference()
+    {
+        var (module, temp) = Create(new FakeModule((_, _) =>
+            Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))));
+        using (temp)
+        {
+            var outcome = await module.ExecuteAsync(new SqlHarnessAnnotationOperation(_ =>
+                Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, Array.Empty<object>(), null))));
+
+            var row = JournalDb.Rows(temp.DatabasePath,
+                "SELECT operation, operation_ref, profile, server, database FROM operations").Single();
+
+            Assert.True(outcome.Journaled);
+            Assert.Null(outcome.OperationRef);
+            Assert.Equal("annotation", row["operation"]);
+            Assert.Null(row["operation_ref"]);
+            Assert.Null(row["profile"]);
+            Assert.Null(row["server"]);
+            Assert.Null(row["database"]);
+        }
+    }
+
+    [Fact]
     public async Task Dry_run_has_a_journal_row_but_no_agent_annotation_or_ref_eligibility()
     {
         var (module, temp) = Create(new FakeModule((_, _) =>

@@ -309,7 +309,8 @@ public sealed class AgentOptimizationWorkflowTests
     {
         var result = await session.Call(tool, arguments);
         var text = Normalize(Text(result), session.Home);
-        var visible = Encoding.UTF8.GetByteCount(text);
+        var storedText = text.TrimEnd();
+        var visible = Encoding.UTF8.GetByteCount(storedText);
         Assert.InRange(visible, 1, budget);
         var continuation = Continuation(Envelope(result));
         calls.Add(new Dictionary<string, object?>
@@ -318,7 +319,7 @@ public sealed class AgentOptimizationWorkflowTests
             ["arguments"] = StripSql(arguments),
             ["isError"] = result.IsError == true,
             ["modelVisibleUtf8Bytes"] = visible,
-            ["text"] = text.TrimEnd(),
+            ["text"] = storedText,
             ["omittedItems"] = Omitted(Envelope(result)),
             ["continuation"] = continuation,
             ["terminal"] = result.IsError == true ? "error" : continuation is null ? "complete" : "continuation",

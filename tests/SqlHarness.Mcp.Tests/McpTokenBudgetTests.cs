@@ -89,6 +89,38 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
+    public void Query_result_byte_measurements_are_recorded_with_annotations_off_and_on()
+    {
+        var resultSet = new SqlHarnessResultSetReport(
+            [new SqlHarnessColumnReport(0, "value", "text", true)], [["synthetic result"]], 1, 0);
+        var report = new SqlHarnessQueryReport(Target, "read-only", [resultSet], [], 0, 1,
+            "synthetic-hash", new OutputFootprint(32, 1));
+        var off = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+        var on = off with
+        {
+            OperationRef = "0123456789abcdef0123456789abcdef",
+            Journaled = true,
+            OperationRefEligible = true,
+        };
+
+        foreach (var budget in new[] { 4096, 65536 })
+        {
+            var offResult = McpResultAdapter.Adapt(off, "sqlharness_query", new McpResultBudget(budget));
+            var onResult = McpResultAdapter.Adapt(on, "sqlharness_query", new McpResultBudget(budget));
+            var offText = Assert.Single(offResult.Content.OfType<TextContentBlock>()).Text;
+            var onText = Assert.Single(onResult.Content.OfType<TextContentBlock>()).Text;
+            using var offJson = JsonDocument.Parse(offText);
+            using var onJson = JsonDocument.Parse(onText);
+
+            Assert.False(offJson.RootElement.TryGetProperty("operationRef", out _));
+            Assert.Equal("0123456789abcdef0123456789abcdef", onJson.RootElement.GetProperty("operationRef").GetString());
+            Assert.InRange(McpResultAdapter.MeasureBytes(offResult), 1, budget);
+            Assert.InRange(McpResultAdapter.MeasureBytes(onResult), 1, budget);
+            _output.WriteLine($"query result @{budget}: off={McpResultAdapter.MeasureBytes(offResult)} on={McpResultAdapter.MeasureBytes(onResult)} UTF-8 bytes");
+        }
+    }
+
+    [Fact]
     public void Results_carry_one_text_block_and_no_structured_content()
     {
         var outcome = new SqlHarnessOutcome(
