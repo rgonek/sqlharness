@@ -45,6 +45,15 @@ public sealed class AnnotationScopeTests
     }
 
     [Fact]
+    public void Same_conversation_id_from_another_agent_kind_is_not_available()
+    {
+        var caller = new CallerIdentity(10, "codex", "same-id");
+        var target = new TargetRow(2, 20, "ref-2", "query", "opencode", "same-id", true, true);
+
+        Assert.False(AnnotationScope.Decide(caller, target, new MembershipView([]), matchingOn: true).Available);
+    }
+
+    [Fact]
     public void Claude_caller_resolves_from_one_conversation_linked_in_own_session()
     {
         var caller = new CallerIdentity(10, "claude", null);

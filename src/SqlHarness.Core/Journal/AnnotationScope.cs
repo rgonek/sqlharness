@@ -25,6 +25,8 @@ public sealed record ScopeDecision(bool Available);
 /// <summary>Conservative journal-only access rules for agent operation annotations.</summary>
 public static class AnnotationScope
 {
+    private readonly record struct AgentConversationKey(string AgentKind, string ConversationId);
+
     private static readonly HashSet<string> AnnotatableTools = new(StringComparer.Ordinal)
     {
         "query", "measure", "compare", "watch", "snapshot",
@@ -63,26 +65,28 @@ public static class AnnotationScope
         return new ScopeDecision(target.SessionId == caller.SessionId && targetConversation is null);
     }
 
-    private static string? CallerConversation(CallerIdentity caller, IReadOnlyList<ExactOperationLink> links)
+    private static AgentConversationKey? CallerConversation(CallerIdentity caller, IReadOnlyList<ExactOperationLink> links)
     {
         if (caller.AgentKind is "codex" or "opencode")
-            return string.IsNullOrWhiteSpace(caller.AgentSessionId) ? null : caller.AgentSessionId;
+            return string.IsNullOrWhiteSpace(caller.AgentSessionId)
+                ? null
+                : new AgentConversationKey(caller.AgentKind, caller.AgentSessionId);
 
         if (caller.AgentKind != "claude")
             return null;
 
         var conversations = links.Where(link => link.SessionId == caller.SessionId && link.AgentKind == caller.AgentKind)
-            .Select(link => link.ConversationId).Distinct(StringComparer.Ordinal).Take(2).ToArray();
+            .Select(link => new AgentConversationKey(link.AgentKind, link.ConversationId)).Distinct().Take(2).ToArray();
         return conversations.Length == 1 ? conversations[0] : null;
     }
 
-    private static (string? Conversation, bool Ambiguous) ExactConversation(string agentKind, string? agentSessionId, IReadOnlyList<ExactOperationLink> links)
+    private static (AgentConversationKey? Conversation, bool Ambiguous) ExactConversation(string agentKind, string? agentSessionId, IReadOnlyList<ExactOperationLink> links)
     {
         var conversations = links.Where(link => link.AgentKind == agentKind)
-            .Select(link => link.ConversationId).ToList();
+            .Select(link => new AgentConversationKey(link.AgentKind, link.ConversationId)).ToList();
         if (agentKind is "codex" or "opencode" && !string.IsNullOrWhiteSpace(agentSessionId))
-            conversations.Add(agentSessionId);
-        var distinct = conversations.Distinct(StringComparer.Ordinal).Take(2).ToArray();
+            conversations.Add(new AgentConversationKey(agentKind, agentSessionId));
+        var distinct = conversations.Distinct().Take(2).ToArray();
         return distinct.Length == 1 ? (distinct[0], false) : (null, distinct.Length > 1);
     }
 }

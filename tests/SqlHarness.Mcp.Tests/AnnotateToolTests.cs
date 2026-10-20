@@ -93,6 +93,20 @@ public sealed class AnnotateToolTests
     }
 
     [Fact]
+    public async Task Matching_on_does_not_authorize_a_foreign_agent_with_the_same_conversation_id()
+    {
+        using var journal = new TestJournal();
+        journal.AddOperation(1, "mcp:opencode-foreign", "opencode", "query", Ref1, agentSessionId: "same-id");
+
+        var result = await AnnotateHandler.ApplyAsync(journal.Path, CallerKey, "same-id",
+            [new AnnotationItemArgument(Ref1, "new label")], matchingOn: true, default);
+
+        Assert.Equal("operation_not_available", result[0].Status);
+        Assert.Null(result[0].Tool);
+        Assert.Null(result[0].Label);
+    }
+
+    [Fact]
     public void Matching_flag_is_read_again_from_configuration()
     {
         var configPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "sqlharness-annotate-config-" + Guid.NewGuid().ToString("N") + ".json");
@@ -143,6 +157,7 @@ public sealed class AnnotateToolTests
                 CREATE TABLE operation_annotations(operation_id INTEGER PRIMARY KEY, agent_label_initial TEXT, agent_label TEXT, agent_keep INTEGER, owner_starred INTEGER NOT NULL DEFAULT 0, owner_note TEXT, updated_at TEXT NOT NULL);
                 INSERT INTO sessions(id, session_key, agent_kind, transport) VALUES(1, 'mcp:caller', 'codex', 'mcp');
                 INSERT INTO sessions(id, session_key, agent_kind, transport) VALUES(2, 'mcp:foreign', 'codex', 'mcp');
+                INSERT INTO sessions(id, session_key, agent_kind, transport) VALUES(3, 'mcp:opencode-foreign', 'opencode', 'mcp');
                 """;
             command.ExecuteNonQuery();
         }
