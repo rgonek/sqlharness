@@ -384,7 +384,7 @@ public static class AgentOutputProjection
                         {
                             Name = Clip(variant.Name)!,
                             LogicalReadsByTable = Take(BySignificance(variant.LogicalReadsByTable).ToArray()).ToDictionary(
-                                pair => Clip(pair.Key)!, pair => pair.Value, StringComparer.Ordinal),
+                                pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
                             Warnings = Take(variant.Warnings).Select(warning => Clip(warning)!).ToArray(),
                         }).ToArray();
                         omissions += clippedItems;
@@ -567,7 +567,7 @@ public static class AgentOutputProjection
 
         BenchmarkVariantSummary ClipVariant(BenchmarkVariantSummary variant)
         {
-            var reads = Take(BySignificance(variant.LogicalReadsByTable).ToArray()).ToDictionary(p => Clip(p.Key)!, p => p.Value, StringComparer.Ordinal);
+            var reads = Take(BySignificance(variant.LogicalReadsByTable).ToArray()).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
             var warnings = Take(variant.Warnings).Select(w => Clip(w)!).ToArray();
             return variant with { LogicalReadsByTable = reads, Warnings = warnings };
         }

@@ -786,18 +786,24 @@ public sealed class McpTokenBudgetTests
         var source = BuildCompareReport();
         var compare = source with
         {
-            Baseline = source.Baseline with { LogicalReadsByTable = reads },
-            Candidate = source.Candidate with { LogicalReadsByTable = reads },
+            Baseline = source.Baseline with { LogicalReadsByTable = reads, Warnings = ["ordinary display text"] },
+            Candidate = source.Candidate with { LogicalReadsByTable = reads, Warnings = ["ordinary display text"] },
         };
 
         var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, compare, null),
             "sqlharness_compare", new McpResultBudget(4096, maximumCellCharacters));
 
-        ResultTextBytes(result, 4096);
+        var responseBytes = ResultTextBytes(result, 4096);
+        _output.WriteLine($"MCP compare identity fixture (maxCellChars {maximumCellCharacters}): {responseBytes} UTF-8 bytes (budget 4096).");
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         var projected = document.RootElement.GetProperty("result");
         AssertTableReadValues(projected.GetProperty("baseline").GetProperty("logicalReadsByTable"), firstName, secondName);
         AssertTableReadValues(projected.GetProperty("candidate").GetProperty("logicalReadsByTable"), firstName, secondName);
+        if (maximumCellCharacters == 0)
+        {
+            Assert.Equal("", projected.GetProperty("baseline").GetProperty("warnings")[0].GetString());
+            Assert.Equal("", projected.GetProperty("candidate").GetProperty("warnings")[0].GetString());
+        }
     }
 
     [Fact]
@@ -819,7 +825,8 @@ public sealed class McpTokenBudgetTests
         var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, compare, null),
             "sqlharness_compare", new McpResultBudget(4096, 2048));
 
-        ResultTextBytes(result, 4096);
+        var responseBytes = ResultTextBytes(result, 4096);
+        _output.WriteLine($"MCP long identity omission fixture: {responseBytes} UTF-8 bytes (budget 4096).");
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         var truncation = document.RootElement.GetProperty("truncation");
         var projectedLongPrefix = longName[..2048];

@@ -952,10 +952,34 @@ public sealed class AgentOutputTests
         var (firstName, secondName, reads) = CollidingTableReads(maximumCellCharacters);
         var artifactMetrics = new ArtifactMetricsSection("artifact", "measure",
             [new ArtifactNamedMetrics("query", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
-                new CompareDistribution(7, 8, 9), reads, [])]);
+                new CompareDistribution(7, 8, 9), reads, ["ordinary display text"])]);
         var artifactJson = RenderAgentResult(artifactMetrics, "artifact", new AgentOutputOptions(65536, maximumCellCharacters));
-        AssertTableReadValues(artifactJson.RootElement.GetProperty("result").GetProperty("variants")[0]
-            .GetProperty("logicalReadsByTable"), firstName, secondName);
+        var variant = artifactJson.RootElement.GetProperty("result").GetProperty("variants")[0];
+        AssertTableReadValues(variant.GetProperty("logicalReadsByTable"), firstName, secondName);
+        if (maximumCellCharacters == 0)
+            Assert.Equal("", variant.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void Agent_normal_metric_map_keeps_existing_envelope_schema_and_fields()
+    {
+        var reads = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+        {
+            ["dbo.Orders"] = new(1, 2, 3),
+        };
+        var report = new SqlHarnessMeasureReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            3, 3, true, VariantWithTableReads("query", reads), null);
+
+        using var json = RenderAgentResult(report, "measure", new AgentOutputOptions(65536, 2048));
+
+        Assert.Equal(AgentEnvelopeSchema.Version, json.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(
+            ["schemaVersion", "command", "status", "exitCode", "result", "error", "truncation"],
+            json.RootElement.EnumerateObject().Select(property => property.Name).ToArray());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("truncation").ValueKind);
+        var readsJson = json.RootElement.GetProperty("result").GetProperty("query").GetProperty("logicalReadsByTable");
+        Assert.Equal(["dbo.Orders"], readsJson.EnumerateObject().Select(property => property.Name).ToArray());
     }
 
     [Fact]
@@ -1006,12 +1030,16 @@ public sealed class AgentOutputTests
             LogicalReadsByTable = reads,
         };
 
-    private static JsonDocument RenderAgentResult(object report, string command, AgentOutputOptions options)
+    private JsonDocument RenderAgentResult(object report, string command, AgentOutputOptions options)
     {
         var output = new StringWriter();
         new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), command,
             new OutputCaptureWriter(output), options);
-        return JsonDocument.Parse(output.ToString());
+        var rendered = output.ToString();
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(rendered);
+        _testOutput.WriteLine($"Agent {command} response: {bytes} UTF-8 bytes (budget {options.MaximumBytes}).");
+        Assert.InRange(bytes, 1, options.MaximumBytes);
+        return JsonDocument.Parse(rendered);
     }
 
     private static void AssertTableReadValues(JsonElement reads, string firstName, string secondName)
