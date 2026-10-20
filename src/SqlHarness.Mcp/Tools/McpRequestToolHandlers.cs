@@ -205,24 +205,35 @@ public sealed class McpRequestToolHandlers(
     public Task<CallToolResult> AnnotateAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("One to twenty journal operation references to annotate.")]
         [MinLength(1), MaxLength(20)] AnnotationItemArgument[] items,
+        [Description("Response detail: receipt (default) or full, which includes resulting labels.")]
+        [AllowedValues("receipt", "full")]
+        string responseDetail = "receipt",
+        [Description("Maximum result bytes, 4096..1048576, capped by the process limit.")]
+        [Range(McpLimits.MinCallToolResultBudgetBytes, McpLimits.MaxCallToolResultBudgetBytes)]
+        int? maxResultBytes = null,
         CancellationToken ct = default)
     {
-        ThrowUnknown(ctx, ["items"]);
+        ThrowUnknown(ctx, ["items", "responseDetail", "maxResultBytes", "target"]);
         if (!process.Config.Journal.OperationAnnotations)
             return Task.FromResult(Failure("Operation annotations are disabled.", "sqlharness_annotate", process.MaxResultBytes));
 
+        McpResultBudget budget;
+        try { budget = McpResultBudget.Resolve(process.MaxResultBytes, maxResultBytes); }
+        catch (ArgumentOutOfRangeException exception)
+        { return Task.FromResult(Failure(exception.Message, "sqlharness_annotate", process.MaxResultBytes)); }
+
         return RunAsync("sqlharness_annotate", ctx, ct, async token =>
         {
-            AnnotateHandler.Validate(items);
             var metadata = McpCallMetadata.Read(ctx?.Params?.Meta);
             return await process.CreateModule().ExecuteAsync(new SqlHarnessAnnotationOperation(async annotationToken =>
             {
                 var matchingOn = AnnotateHandler.LoadMatchingFlag(SqlHarnessPaths.ConfigFile);
-                var annotated = await AnnotateHandler.ApplyAsync(SqlHarnessPaths.ActivityDatabase,
-                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken, process.MaxResultBytes);
+                var annotated = await AnnotateHandler.ApplyForToolAsync(SqlHarnessPaths.ActivityDatabase,
+                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken, budget, responseDetail,
+                    process.MaxResultBytes);
                 return new SqlHarnessOutcome(SqlHarnessExitCode.Success, annotated, null);
             }), token);
-        });
+        }, resolvedBudget: budget);
     }
 
     private Task<CallToolResult> Invoke(RequestContext<CallToolRequestParams> ctx, string command, McpRequestScopeArgument target,
@@ -256,12 +267,13 @@ public sealed class McpRequestToolHandlers(
         Func<CancellationToken, Task<SqlHarnessOutcome>> run, int? maxCellChars = null) => RunAsync(command, context, ct, run, maxCellChars);
 
     private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, CancellationToken ct,
-        Func<CancellationToken, Task<SqlHarnessOutcome>> run, int? maxCellChars = null)
+        Func<CancellationToken, Task<SqlHarnessOutcome>> run, int? maxCellChars = null, McpResultBudget? resolvedBudget = null)
     {
         McpResultBudget budget;
         try
         {
-            budget = McpResultBudget.Resolve(process.MaxResultBytes, null, maxCellChars, McpLimits.MaxCellCharactersLimit);
+            budget = resolvedBudget ?? McpResultBudget.Resolve(process.MaxResultBytes, null, maxCellChars, McpLimits.MaxCellCharactersLimit);
+            budget.Validate();
         }
         catch (ArgumentOutOfRangeException exception)
         {
@@ -282,8 +294,8 @@ public sealed class McpRequestToolHandlers(
         }
         catch (OperationCanceledException) { return McpCallOutcome.CancelledResult(command, budget); }
         catch (Exception exception) when (exception is McpMappingException or McpInputException or ParameterSetFileException)
-        { return Failure(exception.Message, command, process.MaxResultBytes); }
-        catch (Exception) { return InternalFailure(command, process.MaxResultBytes); }
+        { return McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, exception.Message), command, budget); }
+        catch (Exception) { return McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, McpAgentError.InternalMessage, Error: McpAgentError.InternalOutcomeError()), command, budget); }
     }
 
     private static McpRequestScope ParseTarget(RequestContext<CallToolRequestParams> ctx, McpRequestScopeArgument target)

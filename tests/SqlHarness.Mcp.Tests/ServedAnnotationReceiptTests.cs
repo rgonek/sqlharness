@@ -48,7 +48,7 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
     public async Task Served_receipt_fits_minimum_budget_and_persists_twenty_multibyte_labels(bool requestScope)
     {
         await using var fixture = await Fixture.CreateAsync(requestScope, 4096);
-        Seed(fixture.Process.MutationSessionKey, 20, "query");
+        Seed(fixture.Process.MutationSessionKey, 20, "snapshot");
         var items = Enumerable.Range(1, 20).Select(index => Item(Ref(index), new string('界', 120), true)).ToArray();
 
         var response = await fixture.AnnotateAsync(items, new Dictionary<string, object?> { ["maxResultBytes"] = 65536 });
@@ -62,7 +62,7 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
         {
             Assert.Equal(4, outcome.EnumerateObject().Count());
             Assert.Equal("success", outcome.GetProperty("status").GetString());
-            Assert.Equal("query", outcome.GetProperty("tool").GetString());
+            Assert.Equal("snapshot", outcome.GetProperty("tool").GetString());
             Assert.True(outcome.GetProperty("keep").GetBoolean());
             Assert.False(outcome.TryGetProperty("label", out _));
         });
@@ -146,8 +146,11 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
             Assert.Equal("operation_not_available", outcome.GetProperty("status").GetString());
             Assert.Equal(2, outcome.EnumerateObject().Count());
         });
-        Assert.Equal(JsonSerializer.Serialize(unavailable[0]), JsonSerializer.Serialize(unavailable[1]));
-        Assert.Equal(JsonSerializer.Serialize(unavailable[1]), JsonSerializer.Serialize(unavailable[2]));
+        Assert.All(unavailable, outcome =>
+        {
+            Assert.Equal(new[] { "operationRef", "status" }, outcome.EnumerateObject().Select(property => property.Name).OrderBy(name => name, StringComparer.Ordinal));
+            Assert.Equal("operation_not_available", outcome.GetProperty("status").GetString());
+        });
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(Text(response)) <= 4096);
         Assert.Equal("second", ReadLabel(1));
     }

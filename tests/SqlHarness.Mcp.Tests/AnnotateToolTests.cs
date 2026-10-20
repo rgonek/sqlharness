@@ -65,7 +65,8 @@ public sealed class AnnotateToolTests
         var error = await Assert.ThrowsAsync<McpMappingException>(() => AnnotateHandler.ApplyAsync(
             journal.Path, CallerKey, null, items, matchingOn: false, default, 4096));
 
-        Assert.Contains("raise the budget or split the batch", error.Message, StringComparison.Ordinal);
+        Assert.Contains("effective 4096-byte", error.Message, StringComparison.Ordinal);
+        Assert.Contains("receipt", error.Message, StringComparison.OrdinalIgnoreCase);
         using var connection = new SqliteConnection($"Data Source={journal.Path};Pooling=False");
         connection.Open();
         using var command = connection.CreateCommand();
@@ -86,6 +87,35 @@ public sealed class AnnotateToolTests
 
         Assert.Equal("success", results[0].Status);
         Assert.All(results.Skip(1), result => Assert.Equal("operation_not_available", result.Status));
+    }
+
+    [Fact]
+    public async Task Empty_label_clears_label_omitted_keep_is_preserved_and_repeating_is_idempotent()
+    {
+        using var journal = new TestJournal();
+        journal.AddOperation(1, CallerKey, "codex", "query", Ref1);
+        using (var connection = new SqliteConnection($"Data Source={journal.Path};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "INSERT INTO operation_annotations(operation_id, agent_label_initial, agent_label, agent_keep, updated_at) VALUES(1, 'initial', 'prior', 1, 'before');";
+            command.ExecuteNonQuery();
+        }
+
+        var clear = new[] { new AnnotationItemArgument(Ref1, string.Empty) };
+        var first = await AnnotateHandler.ApplyAsync(journal.Path, CallerKey, null, clear, matchingOn: false, default);
+        var second = await AnnotateHandler.ApplyAsync(journal.Path, CallerKey, null, clear, matchingOn: false, default);
+
+        Assert.Equal("success", Assert.Single(first).Status);
+        Assert.Equal("success", Assert.Single(second).Status);
+        using var verify = new SqliteConnection($"Data Source={journal.Path};Pooling=False");
+        verify.Open();
+        using var verifyCommand = verify.CreateCommand();
+        verifyCommand.CommandText = "SELECT agent_label, agent_keep FROM operation_annotations WHERE operation_id = 1;";
+        using var reader = verifyCommand.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(string.Empty, reader.GetString(0));
+        Assert.Equal(1L, reader.GetInt64(1));
     }
 
     [Fact]

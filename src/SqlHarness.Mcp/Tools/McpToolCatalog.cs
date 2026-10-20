@@ -406,24 +406,40 @@ public sealed class McpToolHandlers(
         RequestContext<CallToolRequestParams> ctx,
         [Description("One to twenty journal operation references to annotate.")]
         [MinLength(1), MaxLength(20)] AnnotationItemArgument[] items,
+        [Description("Response detail: receipt (default) or full, which includes resulting labels.")]
+        [AllowedValues("receipt", "full")]
+        string responseDetail = "receipt",
+        [Description("Maximum result bytes, 4096..1048576, capped by the process limit.")]
+        [Range(McpLimits.MinCallToolResultBudgetBytes, McpLimits.MaxCallToolResultBudgetBytes)]
+        int? maxResultBytes = null,
         CancellationToken ct = default)
     {
-        ThrowIfUnknown(ctx, ["items"]);
+        ThrowIfUnknown(ctx, ["items", "responseDetail", "maxResultBytes"]);
         if (!_operationAnnotationsEnabled)
             return Task.FromResult(Fail(SqlHarnessExitCode.Safety, "Operation annotations are disabled.", "sqlharness_annotate"));
 
+        McpResultBudget budget;
+        try
+        {
+            budget = McpResultBudget.Resolve(scope.MaxResultBytes, maxResultBytes);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            return Task.FromResult(Fail(SqlHarnessExitCode.Safety, exception.Message, "sqlharness_annotate"));
+        }
+
         return RunAsync("sqlharness_annotate", ctx, async token =>
         {
-            AnnotateHandler.Validate(items);
             var metadata = McpCallMetadata.Read(ctx?.Params?.Meta);
             return await module.ExecuteAsync(new SqlHarnessAnnotationOperation(async annotationToken =>
             {
                 var matchingOn = AnnotateHandler.LoadMatchingFlag(SqlHarnessPaths.ConfigFile);
-                var annotated = await AnnotateHandler.ApplyAsync(SqlHarnessPaths.ActivityDatabase,
-                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken, scope.MaxResultBytes);
+                var annotated = await AnnotateHandler.ApplyForToolAsync(SqlHarnessPaths.ActivityDatabase,
+                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken, budget, responseDetail,
+                    scope.MaxResultBytes);
                 return new SqlHarnessOutcome(SqlHarnessExitCode.Success, annotated, null);
             }), token);
-        }, ct);
+        }, ct, resolvedBudget: budget);
     }
 
     /// <summary>
@@ -459,12 +475,13 @@ public sealed class McpToolHandlers(
     private string[] AnnotationArgumentNames() =>
         _operationAnnotationsEnabled ? McpToolCatalog.OperationAnnotationArguments : [];
 
-    private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct, int? maxCellChars = null)
+    private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct, int? maxCellChars = null, McpResultBudget? resolvedBudget = null)
     {
         McpResultBudget budget;
         try
         {
-            budget = McpResultBudget.Resolve(scope.MaxResultBytes, null, maxCellChars, McpLimits.MaxCellCharactersLimit);
+            budget = resolvedBudget ?? McpResultBudget.Resolve(scope.MaxResultBytes, null, maxCellChars, McpLimits.MaxCellCharactersLimit);
+            budget.Validate();
         }
         catch (ArgumentOutOfRangeException exception)
         {
@@ -675,7 +692,7 @@ public static class McpToolCatalog
     public const string PlanDescription = "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only. Clipped nodes report omittedChildCount and omittedSubtreeCount.";
     public const string RepetitionDescription = "Measured repetition for section=plan; default is the identified last measured run. A run without a saved plan reports missing evidence, never an earlier plan.";
     private const string AnnotationToolName = "sqlharness_annotate";
-    private const string AnnotationToolDescription = "Apply an optional plain-text label and keep flag to one to twenty eligible journaled operations by operationRef. Unknown, expired, foreign, and out-of-scope references have the same per-item result. The call is journaled without an operationRef and does not create an annotation target.";
+    private const string AnnotationToolDescription = "Apply an optional plain-text label and keep flag to one to twenty eligible journaled operations by operationRef. responseDetail defaults to receipt (operationRef, status, tool, keep; no label); full returns resulting labels. maxResultBytes is capped by the process limit. Unknown, expired, foreign, and out-of-scope references share one per-item result. An oversized full response rolls back the batch. The call is journaled without an operationRef.";
 
     public static readonly IReadOnlyList<string> ToolNames =
     [

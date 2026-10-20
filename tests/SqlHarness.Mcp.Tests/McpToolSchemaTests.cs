@@ -334,6 +334,9 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Contains("responseDetail", annotationSchema.EnumerateObject().Select(property => property.Name));
         Assert.Contains("maxResultBytes", annotationSchema.EnumerateObject().Select(property => property.Name));
         Assert.Equal("receipt", annotationSchema.GetProperty("responseDetail").GetProperty("default").GetString());
+        Assert.Equal(new[] { "receipt", "full" }, annotationSchema.GetProperty("responseDetail").GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(McpLimits.MinCallToolResultBudgetBytes, annotationSchema.GetProperty("maxResultBytes").GetProperty("minimum").GetInt32());
+        Assert.Equal(McpLimits.MaxCallToolResultBudgetBytes, annotationSchema.GetProperty("maxResultBytes").GetProperty("maximum").GetInt32());
         Assert.Equal(1, annotationSchema.GetProperty("items").GetProperty("minItems").GetInt32());
         Assert.Equal(20, annotationSchema.GetProperty("items").GetProperty("maxItems").GetInt32());
         var itemProperties = Properties(annotationSchema.GetProperty("items").GetProperty("items"));
