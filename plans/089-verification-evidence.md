@@ -15,6 +15,7 @@ This is a draft for feature branch `plan-089`. Task 1 backend paging is implemen
 - UI RED: `npm --prefix src/SqlHarness.Dashboard/ui run test -- src/pages/AgentSessionPage.test.tsx` failed as expected with 6/7 tests passing; the new test could not find row 503 while the endpoint hook was absent. Retained in `task2-red.log`.
 - UI GREEN: the same focused command passed 7/7 after the hook and UI were implemented. Retained in `task2-focused-green.log`.
 - `npm --prefix src/SqlHarness.Dashboard/ui run check` passed typecheck, lint, and all 347 tests in 63 files (Vitest duration 546.13 seconds); retained in `task2-check.log`. Vitest printed a refused localhost:3000 connection diagnostic while reporting all tests passed. A later focused rerun after strengthening ordering and matching-off assertions again passed 7/7.
+- Task 2 review fix round added an explicit full 500-row first page of newer unassigned operations followed by an older exact operation. With cursor continuation temporarily disabled, that test failed because Load more was absent; restored code passed the AgentSessionPage suite 8/8. A separate settings-save test seeds the operation-page cache and verifies it is removed after transcript matching is disabled; with cache removal temporarily omitted it failed because the entry remained, and restored code passed 1/1. See the Task 2 report and `task2-red-exact-cursor.log`, `task2-red-cache-invalidation.log`, `task2-green-agent-session.log`, and `task2-green-cache-invalidation.log` in local SDD evidence.
 
 ## Remaining evidence
 

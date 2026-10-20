@@ -100,6 +100,37 @@ test("agent operation pages load older rows, retain rows on retry, and filter in
   expect(calls.filter(url => url.includes("/operations?")).map(url => new URL(url, "http://dashboard").searchParams.get("cursor"))).toEqual([null, "501", "501"])
 })
 
+test("an exact operation after 500 newer unassigned rows remains reachable", async () => {
+  const agentSession = { ...summary, exact: 1, inferred: 0, unassigned: 500, children: summary.children.map(child => ({ ...child, exact: 1, inferred: 0, unassigned: 500 })) }
+  const firstPage = Array.from({ length: 500 }, (_, index) => ({
+    operation: operation({ id: 1000 - index }),
+    membership: "unassigned" as const,
+  }))
+  stubFetch({
+    "/api/settings": settings,
+    "/api/agent-sessions/codex/conversation-1": { agentSession, note: null, operations: firstPage },
+    "/api/agent-sessions/codex/conversation-1/optimization": { subjects: [], unassigned: [] },
+    "/api/agent-sessions/codex/conversation-1/operations": (url: URL) => {
+      const cursor = url.searchParams.get("cursor")
+      const page = cursor === null
+        ? { items: firstPage, nextCursor: 501 }
+        : { items: [{ operation: operation({ id: 500 }), membership: "exact" }], nextCursor: null }
+      return new Response(JSON.stringify(page), { status: 200, headers: { "Content-Type": "application/json" } })
+    },
+  })
+  renderApp("/agent-sessions/codex/conversation-1")
+
+  expect(await screen.findByRole("link", { name: "1000" })).toBeInTheDocument()
+  expect(screen.getByText(/Loaded 500 of 501 operations\./)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Load more" }))
+
+  const olderExactLink = await screen.findByRole("link", { name: "500", exact: true })
+  expect(within(olderExactLink.closest("tr")!).getByText("exact")).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "1000" })).toBeInTheDocument()
+  expect(screen.getByText(/Loaded 501 of 501 operations\./)).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument()
+}, 60_000)
+
 test("agent session note drafts cancel cleanly and save the current value after a retry", async () => {
   let savedNote = "full owner note"
   const patches: unknown[] = []

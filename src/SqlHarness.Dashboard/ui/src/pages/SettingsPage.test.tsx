@@ -296,3 +296,17 @@ test("enables transcript reading, shows status, and confirms clearing matched da
   await userEvent.click(within(dialog).getByRole("button", { name: "Clear matched data" }))
   await waitFor(() => expect(posts).toEqual([{ body: {}, header: "1" }]))
 })
+
+test("disabling transcript matching clears cached agent operation pages after settings save", async () => {
+  const enabled = response({ settings: { ...response().settings, dashboard: { ...response().settings.dashboard, agentTranscripts: { enabled: true } } } })
+  const puts = stubSettings(enabled)
+  const { client } = renderApp("/settings")
+  const queryKey = ["agent-session-operations", { agentKind: "codex", conversationId: "conversation-1" }] as const
+  client.setQueryData(queryKey, { pages: [{ items: [], nextCursor: null }], pageParams: [undefined] })
+  expect(client.getQueryData(queryKey)).toBeDefined()
+
+  await userEvent.click(await screen.findByRole("switch", { name: "Read agent transcripts" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  await waitFor(() => expect(client.getQueryData(queryKey)).toBeUndefined())
+  expect((puts[0].body as { dashboard: { agentTranscripts: { enabled: boolean } } }).dashboard.agentTranscripts.enabled).toBe(false)
+})
