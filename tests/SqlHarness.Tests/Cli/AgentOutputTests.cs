@@ -982,6 +982,62 @@ public sealed class AgentOutputTests
         Assert.Equal(["dbo.Orders"], readsJson.EnumerateObject().Select(property => property.Name).ToArray());
     }
 
+    [Theory]
+    [InlineData(3000)]
+    [InlineData(3500)]
+    [InlineData(5000)]
+    public void Agent_compare_keeps_fitting_table_after_oversized_highest_ranked_identity(int longNameLength)
+    {
+        var longName = new string('x', longNameLength) + "table";
+        var reads = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+        {
+            [longName] = new(80, 99, 120),
+            ["dbo.short"] = new(2, 29, 39),
+        };
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var compare = new SqlHarnessCompareReport(target, 3, 3, true,
+            VariantWithTableReads("baseline", reads), VariantWithTableReads("candidate", reads), null);
+
+        using var json = RenderAgentResult(compare, "compare", new AgentOutputOptions(4096, 2048));
+
+        Assert.Equal("success", json.RootElement.GetProperty("status").GetString());
+        var truncation = json.RootElement.GetProperty("truncation");
+        Assert.Equal(2, truncation.GetProperty("omittedItems").GetInt32());
+        var result = json.RootElement.GetProperty("result");
+        foreach (var side in new[] { "baseline", "candidate" })
+        {
+            var tableReads = result.GetProperty(side).GetProperty("logicalReadsByTable");
+            var retained = Assert.Single(tableReads.EnumerateObject());
+            Assert.Equal("dbo.short", retained.Name);
+            Assert.Equal(29, retained.Value.GetProperty("median").GetInt64());
+        }
+    }
+
+    [Theory]
+    [InlineData(3500)]
+    [InlineData(5000)]
+    public void Agent_artifact_metrics_keep_fitting_table_after_oversized_highest_ranked_identity(int longNameLength)
+    {
+        var longName = new string('x', longNameLength) + "table";
+        var reads = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+        {
+            [longName] = new(80, 99, 120),
+            ["dbo.short"] = new(2, 29, 39),
+        };
+        var metrics = new ArtifactMetricsSection("artifact", "measure",
+            [new ArtifactNamedMetrics("query", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
+                new CompareDistribution(7, 8, 9), reads, [])]);
+
+        using var json = RenderAgentResult(metrics, "artifact", new AgentOutputOptions(4096, 2048));
+
+        Assert.Equal("success", json.RootElement.GetProperty("status").GetString());
+        Assert.Equal(1, json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
+        var tableReads = json.RootElement.GetProperty("result").GetProperty("variants")[0].GetProperty("logicalReadsByTable");
+        var retained = Assert.Single(tableReads.EnumerateObject());
+        Assert.Equal("dbo.short", retained.Name);
+        Assert.Equal(29, retained.Value.GetProperty("median").GetInt64());
+    }
+
     [Fact]
     public void Measure_set_summary_retains_each_requested_set()
     {

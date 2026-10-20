@@ -806,14 +806,17 @@ public sealed class McpTokenBudgetTests
         }
     }
 
-    [Fact]
-    public void Compare_omits_unfittable_long_table_identity_truthfully_within_minimum_budget()
+    [Theory]
+    [InlineData(3000)]
+    [InlineData(3500)]
+    [InlineData(5000)]
+    public void Compare_omits_unfittable_long_table_identity_truthfully_within_minimum_budget(int longNameLength)
     {
-        var longName = new string('x', 5000) + "table";
+        var longName = new string('x', longNameLength) + "table";
         var source = BuildCompareReport();
         var reads = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
         {
-            [longName] = new(1, 11, 21),
+            [longName] = new(80, 99, 120),
             ["dbo.short"] = new(2, 29, 39),
         };
         var compare = source with
