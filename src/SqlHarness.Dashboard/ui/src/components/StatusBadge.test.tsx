@@ -47,6 +47,45 @@ test("hover shows the error kind in a tooltip", async () => {
   expect(await screen.findByText(/database returned an error/)).toBeInTheDocument()
 })
 
+test("focus shows the tooltip and Enter opens the dialog, Escape returns focus", async () => {
+  const user = userEvent.setup()
+  render(<StatusBadge operation={operation({ status: "failed", exitCode: 5, errorKind: "sql_execution_failed" })} />)
+  const trigger = screen.getByRole("button", { name: /failed/ })
+
+  await user.tab()
+  expect(trigger).toHaveFocus()
+  expect(await screen.findByText(/database returned an error/)).toBeInTheDocument()
+
+  await user.keyboard("{Enter}")
+  const dialog = await screen.findByRole("dialog")
+  expect(trigger).toHaveAttribute("aria-controls", dialog.id)
+  await user.keyboard("{Escape}")
+
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  expect(trigger).toHaveFocus()
+})
+
+test("each error badge opens its own dialog from one effective button", async () => {
+  const user = userEvent.setup()
+  render(
+    <>
+      <StatusBadge operation={operation({ status: "failed", errorMessage: "first failure" })} />
+      <StatusBadge operation={operation({ status: "rejected", errorMessage: "second rejection" })} />
+    </>
+  )
+
+  const triggers = screen.getAllByRole("button")
+  expect(triggers).toHaveLength(2)
+  expect(triggers.every((trigger) => trigger.querySelector("button") === null)).toBe(true)
+
+  await user.click(screen.getByRole("button", { name: /rejected/ }))
+  expect(await screen.findByRole("dialog")).toHaveTextContent("second rejection")
+  await user.keyboard("{Escape}")
+
+  await user.click(screen.getByRole("button", { name: /failed/ }))
+  expect(await screen.findByRole("dialog")).toHaveTextContent("first failure")
+})
+
 test("a cancellation names who cancelled", async () => {
   render(<StatusBadge operation={operation({ status: "failed", exitCode: -1, errorKind: "cancelled", cancelReason: "client" })} />)
   await userEvent.click(screen.getByRole("button", { name: /failed/ }))
