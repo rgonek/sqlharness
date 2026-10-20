@@ -248,6 +248,15 @@ public static partial class DashboardServer
                 : kind is not ("claude" or "codex" or "opencode") || id.Length is 0 or > 512
                     ? BadRequest("kind or id is invalid.")
                     : reader.AgentSession(new AgentSessionKey(kind, id)) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
+        MapRead(api, "/agent-sessions/{kind}/{id}/operations", (string kind, string id, int? limit, long? cursor) =>
+            !TranscriptsEnabled(options.ConfigPath)
+                ? Results.NotFound()
+                : kind is not ("claude" or "codex" or "opencode") || id.Length is 0 or > 512
+                    ? BadRequest("kind or id is invalid.")
+                : cursor is <= 0
+                    ? BadRequest("cursor must be a positive operation ID.")
+                    : reader.AgentSessionOperations(new AgentSessionKey(kind, id), limit, cursor) is { } page
+                        ? Results.Json(page, Json) : Results.NotFound());
         MapRead(api, "/agent-sessions/{kind}/{id}/optimization", (string kind, string id) =>
             !TranscriptsEnabled(options.ConfigPath)
                 ? Results.NotFound()
