@@ -2,7 +2,7 @@
 
 **Tested product revision:** `3caacc332c43e2a1707f79df80e6368112ab5ab8` on branch `plan-100`.
 
-Plan 100 is DONE on feature branch `plan-100`: the product tree at `3caacc3` passed the Windows gate, all Task 1–11 reviews are approved, and the Sol low whole-branch review found no Critical or Important findings and marked it ready to merge. The branch remains unmerged and unpushed; no Linux gate or live database action was performed.
+Plan 100 is DONE and integrated into `main`: the product tree at `3caacc3` passed the Windows gate, all Task 1–11 reviews are approved, and the Sol low whole-branch review found no Critical or Important findings and marked it ready to merge. Local fast-forward integration at `74f248c` was followed by the documentation-only `origin/main` merge `7b8e040` and push. The verified product tree is unchanged; no Linux gate or live database action was performed.
 
 ## Inventory and exceptions
 
