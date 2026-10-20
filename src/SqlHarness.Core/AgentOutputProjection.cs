@@ -149,6 +149,26 @@ public static class AgentOutputProjection
             .ThenBy(pair => pair.Key, StringComparer.Ordinal);
 
     public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 65_536, AgentProjectionProfile profile = AgentProjectionProfile.Cli)
+        => ProjectCore(report, maximumCellCharacters, detailLimit, out omittedItems, maximumBytes, profile, null);
+
+    internal static object? ProjectForTesting(
+        object? report,
+        int maximumCellCharacters,
+        int detailLimit,
+        out int omittedItems,
+        int maximumBytes,
+        AgentProjectionProfile profile,
+        Action<long> tableSelectionAccounting)
+        => ProjectCore(report, maximumCellCharacters, detailLimit, out omittedItems, maximumBytes, profile, tableSelectionAccounting);
+
+    private static object? ProjectCore(
+        object? report,
+        int maximumCellCharacters,
+        int detailLimit,
+        out int omittedItems,
+        int maximumBytes,
+        AgentProjectionProfile profile,
+        Action<long>? tableSelectionAccounting)
     {
         omittedItems = 0;
         var omissions = 0;
@@ -294,13 +314,13 @@ public static class AgentOutputProjection
                         : matrixSummary;
                 case SqlHarnessCompareReport compare:
                     {
-                        var nestedProjection = Project(BenchmarkSummaryProjector.Project(compare), maximumCellCharacters, detailLimit, out var compareSummaryOmitted, maximumBytes, profile);
+                        var nestedProjection = ProjectCore(BenchmarkSummaryProjector.Project(compare), maximumCellCharacters, detailLimit, out var compareSummaryOmitted, maximumBytes, profile, tableSelectionAccounting);
                         omissions += compareSummaryOmitted;
                         return nestedProjection;
                     }
                 case SqlHarnessMeasureReport measure:
                     {
-                        var nestedProjection = Project(BenchmarkSummaryProjector.Project(measure), maximumCellCharacters, detailLimit, out var measureSummaryOmitted, maximumBytes, profile);
+                        var nestedProjection = ProjectCore(BenchmarkSummaryProjector.Project(measure), maximumCellCharacters, detailLimit, out var measureSummaryOmitted, maximumBytes, profile, tableSelectionAccounting);
                         omissions += measureSummaryOmitted;
                         return nestedProjection;
                     }
@@ -315,20 +335,19 @@ public static class AgentOutputProjection
                             NoteworthyOperators = Take(summary.NoteworthyOperators.Take(10).ToArray()).Select(op => op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) }).ToArray(),
                             ArtifactDirectory = profile == AgentProjectionProfile.Mcp ? summary.ArtifactDirectory : Clip(summary.ArtifactDirectory),
                         };
+                        var emptyCompareSummary = compareShell with
+                        {
+                            Baseline = baseline with { LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal) },
+                            Candidate = candidate with { LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal) },
+                        };
+                        object fittedEmptyCompare = profile == AgentProjectionProfile.Mcp
+                            ? AgentBenchmarkProjection.Compare(emptyCompareSummary)
+                            : emptyCompareSummary;
+                        var compareFixedBytes = SerializedLength(fittedEmptyCompare);
+                        tableSelectionAccounting?.Invoke(compareFixedBytes);
                         var compareMaps = SelectTableReadMaps(
                             [summary.Baseline.LogicalReadsByTable, summary.Candidate.LogicalReadsByTable],
-                            maps =>
-                            {
-                                var candidateSummary = compareShell with
-                                {
-                                    Baseline = baseline with { LogicalReadsByTable = maps[0] },
-                                    Candidate = candidate with { LogicalReadsByTable = maps[1] },
-                                };
-                                object fitted = profile == AgentProjectionProfile.Mcp
-                                    ? AgentBenchmarkProjection.Compare(candidateSummary)
-                                    : candidateSummary;
-                                return SerializedLength(fitted) + 384 <= maximumBytes;
-                            });
+                            selectedBytes => compareFixedBytes + selectedBytes + 384 <= maximumBytes);
                         var compareProjection = compareShell with
                         {
                             Baseline = baseline with { LogicalReadsByTable = compareMaps[0] },
@@ -348,19 +367,18 @@ public static class AgentOutputProjection
                             NoteworthyOperators = Take(summary.NoteworthyOperators.Take(10).ToArray()).Select(op => op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) }).ToArray(),
                             ArtifactDirectory = profile == AgentProjectionProfile.Mcp ? summary.ArtifactDirectory : Clip(summary.ArtifactDirectory),
                         };
+                        var emptyMeasureSummary = measureShell with
+                        {
+                            Query = query with { LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal) },
+                        };
+                        object fittedEmptyMeasure = profile == AgentProjectionProfile.Mcp
+                            ? AgentBenchmarkProjection.Measure(emptyMeasureSummary)
+                            : emptyMeasureSummary;
+                        var measureFixedBytes = SerializedLength(fittedEmptyMeasure);
+                        tableSelectionAccounting?.Invoke(measureFixedBytes);
                         var queryMaps = SelectTableReadMaps(
                             [summary.Query.LogicalReadsByTable],
-                            maps =>
-                            {
-                                var candidateSummary = measureShell with
-                                {
-                                    Query = query with { LogicalReadsByTable = maps[0] },
-                                };
-                                object fitted = profile == AgentProjectionProfile.Mcp
-                                    ? AgentBenchmarkProjection.Measure(candidateSummary)
-                                    : candidateSummary;
-                                return SerializedLength(fitted) + 384 <= maximumBytes;
-                            });
+                            selectedBytes => measureFixedBytes + selectedBytes + 384 <= maximumBytes);
                         var measureProjection = measureShell with
                         {
                             Query = query with { LogicalReadsByTable = queryMaps[0] },
@@ -430,19 +448,18 @@ public static class AgentOutputProjection
                             LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal),
                             Warnings = Take(variant.Warnings).Select(warning => Clip(warning)!).ToArray(),
                         }).ToArray();
+                        var emptyMetrics = metrics with
+                        {
+                            Variants = variantsShell.Select(variant => variant with
+                            {
+                                LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal),
+                            }).ToArray(),
+                        };
+                        var metricsFixedBytes = SerializedLength(emptyMetrics);
+                        tableSelectionAccounting?.Invoke(metricsFixedBytes);
                         var variantMaps = SelectTableReadMaps(
                             sourceVariants.Select(variant => variant.LogicalReadsByTable).ToArray(),
-                            maps =>
-                            {
-                                var candidateMetrics = metrics with
-                                {
-                                    Variants = variantsShell.Select((variant, index) => variant with
-                                    {
-                                        LogicalReadsByTable = maps[index],
-                                    }).ToArray(),
-                                };
-                                return SerializedLength(candidateMetrics) + 384 <= maximumBytes;
-                            });
+                            selectedBytes => metricsFixedBytes + selectedBytes + 384 <= maximumBytes);
                         var variants = variantsShell.Select((variant, index) => variant with
                         {
                             LogicalReadsByTable = variantMaps[index],
@@ -627,11 +644,16 @@ public static class AgentOutputProjection
 
         IReadOnlyList<IReadOnlyDictionary<string, CompareDistribution>> SelectTableReadMaps(
             IReadOnlyList<IReadOnlyDictionary<string, CompareDistribution>> sources,
-            Func<IReadOnlyList<IReadOnlyDictionary<string, CompareDistribution>>, bool> fits)
+            Func<long, bool> fits)
         {
             var ordered = sources.Select(reads => BySignificance(reads).ToArray()).ToArray();
+            var entryCosts = ordered.Select(entries => entries.Select(pair => SerializedLength(
+                new Dictionary<string, CompareDistribution>(StringComparer.Ordinal) { [pair.Key] = pair.Value }) - 2).ToArray()).ToArray();
+            tableSelectionAccounting?.Invoke(entryCosts.SelectMany(costs => costs).Sum());
             var selected = sources.Select(_ => new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)).ToArray();
             var indexes = new int[sources.Count];
+            var selectedBytes = 0L;
+            var selectedCounts = new int[sources.Count];
             var progressed = true;
             while (progressed)
             {
@@ -647,14 +669,20 @@ public static class AgentOutputProjection
                         continue;
 
                     progressed = true;
-                    var pair = ordered[mapIndex][indexes[mapIndex]++];
+                    var entryIndex = indexes[mapIndex]++;
+                    var pair = ordered[mapIndex][entryIndex];
                     selected[mapIndex].Add(pair.Key, pair.Value);
-                    var candidates = selected.Cast<IReadOnlyDictionary<string, CompareDistribution>>().ToArray();
+                    var additionalBytes = entryCosts[mapIndex][entryIndex] + (selectedCounts[mapIndex] > 0 ? 1 : 0);
                     // Fit each complete entry in the enclosing projection, leaving
                     // room for its response envelope. A rejected identity does not
                     // consume a detail slot, so later complete entries can still fit.
-                    if (!fits(candidates))
+                    if (!fits(selectedBytes + additionalBytes))
                         selected[mapIndex].Remove(pair.Key);
+                    else
+                    {
+                        selectedBytes += additionalBytes;
+                        selectedCounts[mapIndex]++;
+                    }
                 }
             }
 

@@ -911,6 +911,111 @@ public sealed class AgentOutputTests
     }
 
     [Theory]
+    [InlineData("measure")]
+    [InlineData("compare")]
+    [InlineData("artifact")]
+    public void High_cardinality_table_selection_stress(string shape)
+    {
+        const int cardinality = 128;
+        var reads = Enumerable.Range(0, cardinality).ToDictionary(
+            index => $"[dbo].[table-{index:D4}-\\\\\"\u0001-é]",
+            index => new CompareDistribution(cardinality - index, cardinality - index, cardinality - index));
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        object report = shape switch
+        {
+            "compare" => new SqlHarnessCompareReport(target, 3, 3, true,
+                VariantWithTableReads("baseline", reads), VariantWithTableReads("candidate", reads), null),
+            "artifact" => new ArtifactMetricsSection("artifact", "measure",
+                [new ArtifactNamedMetrics("query", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
+                    new CompareDistribution(7, 8, 9), reads, [])]),
+            _ => new SqlHarnessMeasureReport(target, 3, 3, true, VariantWithTableReads("query", reads), null),
+        };
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var timer = Stopwatch.StartNew();
+        using var json = RenderAgentResult(report, shape, new AgentOutputOptions(1_048_576, 2048));
+        timer.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var responseBytes = System.Text.Encoding.UTF8.GetByteCount(json.RootElement.GetRawText());
+        var inputMapBytes = JsonSerializer.SerializeToUtf8Bytes(reads, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length;
+        _testOutput.WriteLine($"stress shape={shape} entries={cardinality} inputMapBytes={inputMapBytes} allocatedBytes={allocated} elapsedMs={timer.Elapsed.TotalMilliseconds:F2} responseJsonBytes={responseBytes}");
+        Assert.True(allocated < 1_500_000, $"Selection allocated {allocated} bytes for {cardinality} source entries.");
+        var map = shape switch
+        {
+            "compare" => json.RootElement.GetProperty("result").GetProperty("baseline").GetProperty("logicalReadsByTable"),
+            "artifact" => json.RootElement.GetProperty("result").GetProperty("variants")[0].GetProperty("logicalReadsByTable"),
+            _ => json.RootElement.GetProperty("result").GetProperty("query").GetProperty("logicalReadsByTable"),
+        };
+        Assert.Equal(cardinality, map.EnumerateObject().Count());
+    }
+
+    [Fact]
+    public void Table_identity_selection_accounts_fixed_shell_and_each_source_entry_once()
+    {
+        const int cardinality = 128;
+        var reads = Enumerable.Range(0, cardinality).ToDictionary(
+            index => $"[dbo].[table-{index:D4}-\\\\\"\u0001-é]",
+            index => new CompareDistribution(cardinality - index, cardinality - index, cardinality - index));
+        var report = new SqlHarnessMeasureReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            3, 3, true, VariantWithTableReads("query", reads), null);
+        var accounting = new List<long>();
+
+        var projection = AgentOutputProjection.ProjectForTesting(report, 2048, cardinality, out var omitted, 65_536,
+            AgentProjectionProfile.Cli, accounting.Add);
+
+        var expectedEntryBytes = reads.Sum(pair => System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            new Dictionary<string, CompareDistribution> { [pair.Key] = pair.Value },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length - 2);
+        Assert.Equal(0, omitted);
+        Assert.Equal(cardinality, Assert.IsType<MeasureBenchmarkSummary>(projection).Query.LogicalReadsByTable.Count);
+        Assert.Equal(expectedEntryBytes, Assert.Single(accounting.Skip(1)));
+        Assert.Equal(2, accounting.Count);
+    }
+
+    [Fact]
+    public void Table_identity_selection_skips_oversized_entries_and_keeps_later_fitting_entries()
+    {
+        const int cardinality = 128;
+        var reads = Enumerable.Range(0, cardinality).ToDictionary(
+            index => index < 16
+                ? $"[dbo].[{index:D3}-{new string('L', 5000)}]"
+                : $"[dbo].[table-{index:D3}-\\\\\"\u0001-é]",
+            index => new CompareDistribution(cardinality - index, cardinality - index, cardinality - index));
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var baseline = VariantWithTableReads("baseline", reads);
+        var candidate = VariantWithTableReads("candidate", reads);
+        var compare = new SqlHarnessCompareReport(target, 3, 3, true, baseline, candidate, null);
+
+        using var compareJson = RenderAgentResult(compare, "compare", new AgentOutputOptions(4096, 2048));
+        var compareResult = compareJson.RootElement.GetProperty("result");
+        var baselineMap = compareResult.GetProperty("baseline").GetProperty("logicalReadsByTable");
+        var candidateMap = compareResult.GetProperty("candidate").GetProperty("logicalReadsByTable");
+        Assert.NotEmpty(baselineMap.EnumerateObject());
+        Assert.Equal(baselineMap.EnumerateObject().Select(property => property.Name),
+            candidateMap.EnumerateObject().Select(property => property.Name));
+        Assert.DoesNotContain(baselineMap.EnumerateObject(), property => property.Name.Contains(new string('L', 100), StringComparison.Ordinal));
+        Assert.Equal(2 * (cardinality - baselineMap.EnumerateObject().Count()),
+            compareJson.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
+        Assert.Contains(baselineMap.EnumerateObject(), property => property.Name.Contains("\\\\\"\u0001-é", StringComparison.Ordinal));
+
+        var metrics = new ArtifactMetricsSection("artifact", "measure",
+            [new ArtifactNamedMetrics("query", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
+                new CompareDistribution(7, 8, 9), reads, [])]);
+        using var metricsJson = RenderAgentResult(metrics, "artifact", new AgentOutputOptions(4096, 2048));
+        var metricsMap = metricsJson.RootElement.GetProperty("result").GetProperty("variants")[0].GetProperty("logicalReadsByTable");
+        Assert.NotEmpty(metricsMap.EnumerateObject());
+        Assert.DoesNotContain(metricsMap.EnumerateObject(), property => property.Name.Contains(new string('L', 100), StringComparison.Ordinal));
+        Assert.Equal(cardinality - metricsMap.EnumerateObject().Count(),
+            metricsJson.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(compareJson.RootElement.GetRawText()), 1, 4096);
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(metricsJson.RootElement.GetRawText()), 1, 4096);
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(4)]
     [InlineData(2048)]
