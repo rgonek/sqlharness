@@ -19,6 +19,8 @@ Commands were run in `src/SqlHarness.Dashboard/ui` unless noted:
 - `npm run lint` — exit 0. Raw output: `scratch/task-3/lint.log`.
 - `npm test` — exit 0, 62 files / 335 tests. Raw output: `scratch/task-3/full-ui-tests.log`. Test output included non-failing `ECONNREFUSED` diagnostics to localhost:3000 from unrelated UI tests; no tests failed.
 - `git diff --check` — passed.
+- Task 3 review fix: `npm exec -- vitest run src/components/CompareDetail.test.tsx` — passed, 1 file / 7 tests. The reopen test now selects Unified mode, clears saved tab/mode preferences before closing, then verifies the Diff tab, checked radio, and rendered unified diff remain after reopening. Raw output: `scratch/task-3/round1-compare-test.log` (the initial test-only mock setup failure is preserved as `scratch/task-3/round1-first-attempt.log`).
+- Follow-up `npm run typecheck` — exit 0, raw output `scratch/task-3/round1-typecheck.log`; `npm run lint` — exit 0, raw output `scratch/task-3/round1-lint.log`.
 
 ## Browser checks
 

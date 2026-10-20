@@ -6,6 +6,16 @@ import { CompareDetail } from "./CompareDetail"
 import { conditions, operation, operationDetail, variant } from "@/test/fixtures"
 import { stubFetch } from "@/test/render"
 
+vi.mock("@/components/SqlEditors", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/components/SqlEditors")>()
+  return {
+    ...actual,
+    LazySqlViewer: ({ sql }: { sql: string }) => <pre aria-label="SQL viewer">{sql}</pre>,
+    LazySqlMergeView: ({ baseline, candidate, mode }: { baseline: string; candidate: string; mode: string }) =>
+      <pre aria-label={`merge ${mode}`}>{baseline}|{candidate}</pre>,
+  }
+})
+
 const renderCompare = (detail: ReturnType<typeof operationDetail>, routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)> = {}) => {
   const calls = stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" }, ...routes })
   return { ...render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>), calls }
@@ -107,7 +117,7 @@ test("SQL, conditions, and plans stay within their disclosures", async () => {
   expect(within(screen.getByRole("region", { name: "compare table IO" })).getAllByRole("table")).toHaveLength(2)
 })
 
-test("SQL diff mode survives closing and reopening its compare panel", async () => {
+test("SQL tab and diff mode survive closing and reopening their compare panel", async () => {
   const detail = operationDetail({
     operation: operation({ operation: "compare" }),
     sqlText: "SELECT id FROM Orders", candidateSqlText: "SELECT id FROM Orders WHERE id > 0",
@@ -118,10 +128,27 @@ test("SQL diff mode survives closing and reopening its compare panel", async () 
   await userEvent.click(trigger)
   await userEvent.click(await screen.findByRole("tab", { name: "Baseline" }))
   expect(screen.getByRole("tab", { name: "Baseline" })).toHaveAttribute("aria-selected", "true")
+  localStorage.removeItem("sqlharness.sqlDiff.tab")
   await userEvent.click(trigger)
   expect(screen.queryByRole("tab", { name: "Baseline" })).not.toBeInTheDocument()
   await userEvent.click(trigger)
   expect(screen.getByRole("tab", { name: "Baseline" })).toHaveAttribute("aria-selected", "true")
+
+  await userEvent.click(screen.getByRole("tab", { name: "Diff" }))
+  const unified = screen.getByRole("radio", { name: "Unified" })
+  expect(screen.getByRole("radio", { name: "Side by side" })).toBeChecked()
+  await userEvent.click(unified)
+  expect(unified).toBeChecked()
+  expect(screen.getByLabelText("merge unified")).toBeInTheDocument()
+  localStorage.removeItem("sqlharness.sqlDiff.tab")
+  localStorage.removeItem("sqlharness.sqlDiff.mode")
+
+  await userEvent.click(trigger)
+  expect(screen.queryByRole("radio", { name: "Unified" })).not.toBeInTheDocument()
+  await userEvent.click(trigger)
+  expect(screen.getByRole("tab", { name: "Diff" })).toHaveAttribute("aria-selected", "true")
+  expect(screen.getByRole("radio", { name: "Unified" })).toBeChecked()
+  expect(screen.getByLabelText("merge unified")).toBeInTheDocument()
 })
 
 test("plans and reproduction scripts use the selected operation's actual baseline and candidate variants", async () => {
