@@ -7,7 +7,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
-| [093](093-identity-safe-output-clipping.md) | Preserve complete metric identity keys under cell clipping within existing output budgets | Existing projection | IMPLEMENTED, REVIEW BLOCKED on `plan-093`; final Windows gate failed on dashboard matcher test; performance Important deferred to [102](102-bounded-table-identity-selection.md) ([evidence](093-verification-evidence.md)) |
 
 ## Pending
 
@@ -27,7 +26,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | TODO — P2, plan only |
 | [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | Coordinate 089; no membership changes | TODO — P2, plan only |
 | [101](101-dashboard-operation-annotations-setting.md) | Enable or disable agent operation annotations in Dashboard Settings; valid paired journal saves and MCP restart guidance | 085 merged; coordinate 092 | TODO — plan only |
-| [102](102-bounded-table-identity-selection.md) | Bound complete table-identity selection work with incremental byte accounting while retaining later fitting entries and final envelope authority | 093 implemented; review-blocked performance finding | TODO — follow-up plan queued; implementation not authorized here |
 
 ## Limit-economics execution notes (2026-10-20)
 
@@ -45,6 +43,12 @@ Plan 082 is DONE and locally merged into `main` at `dd37512`. All task reviews a
 Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up plans 089, 090 and 091 cover the parked detail limit and both deferred Minors. See [084 evidence](084-verification-evidence.md) and [history](history.md).
 
 ## History
+
+| Plan | Scope | Branch status |
+|---|---|---|
+| [093](093-identity-safe-output-clipping.md) | Complete metric identities within response budgets | DONE on `plan-093` with 102; final Windows gate/direct formatting and all reviews approved; not merged or pushed ([evidence](102-verification-evidence.md)) |
+| [102](102-bounded-table-identity-selection.md) | Linear entry accounting and deterministic dashboard idle test | DONE on `plan-093`; final product `76ebb0d`, gate exit 0; not merged or pushed ([evidence](102-verification-evidence.md)) |
+
 
 | Plan | Scope | Branch status |
 |---|---|---|

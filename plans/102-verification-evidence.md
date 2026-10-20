@@ -2,7 +2,7 @@
 
 ## State
 
-Implementation continues on isolated branch `plan-093`, based at `1266881c3e340ac3e4d5e2abeebd5725100145f9` for this remediation. The combined branch base is `fab299f2abfc76b5f8b2eee2b07c91735bbf7059`. No integration, push, live database or paid-provider trial is authorized or performed here. Final verification and combined whole-branch review are pending; this document does not supersede the historical failed gate until the final result is appended.
+Implementation continues on isolated branch `plan-093`, based at `1266881c3e340ac3e4d5e2abeebd5725100145f9` for this remediation. The combined branch base is `fab299f2abfc76b5f8b2eee2b07c91735bbf7059`. No integration, push, live database or paid-provider trial is authorized or performed here. Plans 093 and 102 are DONE on this feature branch. Both task reviews, the combined whole-branch review and final scoped re-review are approved with no open findings. Final direct formatting and Windows gate exited 0 on `76ebb0d`; the successful final result below supersedes earlier failed/interrupted runs. Not merged or pushed.
 
 ## Reviewed implementation
 
@@ -40,4 +40,14 @@ The first revised test exposed repeated title appends (`title-3` instead of `tit
 
 ## Final delivery checks
 
-Pending: combined branch formatting with saved base, final Windows `just verify` using unique log directory `D:/temp/sqlharness-plan102-verify`, and Sol low review of the entire combined 093/102 branch. Linux verification is not requested and remains unverified. Historical Plan 093 gate failures remain documented in [093 evidence](093-verification-evidence.md).
+- Tested revision: `76ebb0d6f4cc39ebad84064cd148a219bb898c20`; full git tree: `10e85e28a48fc1462c66150e56fdcea045cb31ba`. Later closure changes are documentation only.
+- Branch formatting base: `fab299f2abfc76b5f8b2eee2b07c91735bbf7059`. Final `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <base> -Fix` exited 0; exact formatter EOF output committed. Final direct check without `-Fix` exited 0 (`format: OK`); log `D:/temp/sqlharness-plan102-final-format-check.log`.
+- `just verify -LogDirectory D:/temp/sqlharness-plan102-final-verify`: direct exit 0, `verify: OK stages=5 13m00s`. UI install skipped because lockfile unchanged; build 1m04s, UI check 9m52s, .NET tests 3m07s, gate formatter skipped committed unchanged files (separate branch check above covers them).
+- Gate CLI project: 4583 passed, 11 skipped, 0 failed (4594 total); MCP: 467 passed, 4 skipped, 0 failed (471 total). Logs: `D:/temp/sqlharness-plan102-final-verify/test-SqlHarness.Tests.log` and `test-SqlHarness.Mcp.Tests.log`; console `D:/temp/sqlharness-plan102-final-verify-console.log`.
+- Superseded `cabecd4` gate at `D:/temp/sqlharness-plan102-verify` was interrupted after its build when review identified the remaining test race. It is not passing final evidence. Historical Plan 093 failed gates remain in [093 evidence](093-verification-evidence.md).
+- Sol low combined review closed the original repeated-serialization finding and raised only the second-title append race. Scoped final re-review of `cabecd4..ec21e6a` marked that race ADDRESSED, with no new breakage or remaining findings. The final formatter added only an EOF change beyond that reviewed behavioral tree.
+- Out-of-scope review classes (provider usage/live DB, Linux, integration/push) are accepted evidence boundaries, not deferred product findings. Linux remains unverified; zero real DB/provider calls claimed only for the synthetic fixtures.
+
+## Ruling retained for delivery
+
+Accept the measured pre-fix baseline limited to measure/compare, retaining deterministic work-bound and correctness coverage for artifact/rejected-entry cases rather than rebuilding the old tree solely for their missing measurements. Reason: meaningful RED and exact once-per-entry accounting establish the defect and fix. Cost if wrong: artifact/rejected-entry before/after performance savings remain unquantified; none are claimed.

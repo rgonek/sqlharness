@@ -12,7 +12,7 @@
 
 ## Status and provenance
 
-- TODO, P1; follow-up to the Sol low scoped review of `600f8b9..e7eadde`.
+- DONE on feature branch `plan-093`, 2026-10-20. Both original Plan 093 blockers are resolved, task/combined reviews are approved, and final Windows gate/direct formatting passed on `76ebb0d`. Not merged or pushed; see [evidence](102-verification-evidence.md).
 - Start from Plan 093 implementation `e7eaddec15fdac850ae4b00d714b59b932c9e8a8` or a verified successor containing it. Plan 093 is review-blocked; it does not need to merge first. Work on that feature branch or an isolated descendant, never silently assume main contains it.
 - Finding: `SelectTableReadMaps` calls callbacks that serialize the entire containing compare/measure/artifact projection for every candidate. Large maps repeatedly serialize retained entries and can allocate near-budget responses for every rejected candidate.
 - Existing correctness tests cover zero/four/2048 cell clipping and first-ranked identities at 3000/3500/5000 characters. Preserve those tests.
@@ -42,19 +42,19 @@
 
 ### Task 1: Reproduce and bound selection work
 
-- [ ] Read repository instructions, plan index and verification contract; record exact branch base. Verify the reviewed selector still exists and reconcile drift.
-- [ ] Freeze deterministic fixture measurements on the current implementation: high-cardinality unique maps, both mostly fitting and mostly rejected entries, paired compare and artifact metrics. No database/provider calls. Record wall time, allocated bytes, input cardinality and complete response size; measurements are not token usage.
-- [ ] Add a deterministic regression for cumulative serialization work. Use existing internal test access if available; otherwise introduce the narrowest internal accounting seam alongside the fix, without a public setting or runtime output field. Assert bounded accounting bytes/work per source entry rather than a machine-dependent elapsed-time threshold.
-- [ ] Include escaped quotes/backslashes/control characters and multibyte identities. Require exact identity/value attribution, truthful omission counts, later short-entry retention, valid JSON and final byte ceilings.
-- [ ] Demonstrate meaningful RED for the work bound on the reviewed implementation, then implement fixed-shell plus per-entry byte accounting. Derive dictionary comma costs from retained counts and apply both compare-map additions against one containing-shell budget.
-- [ ] Run existing identity suites plus the new work-bound tests GREEN. Repeat the same stress measurement once, report both results and limits, self-review and commit. Task review must assess correctness and the claimed work bound.
+- [x] Read repository instructions, plan index and verification contract; record exact branch base. Verify the reviewed selector still exists and reconcile drift.
+- [x] Freeze high-cardinality measure/compare baseline measurements. Evidence ruling: artifact and mostly-rejected pre-fix measurements were not captured; final deterministic work-bound/correctness coverage is retained, with no before/after savings claim for those shapes. Record wall time, allocation, cardinality and response bytes; these are not token usage.
+- [x] Add a deterministic regression for cumulative serialization work. Use existing internal test access if available; otherwise introduce the narrowest internal accounting seam alongside the fix, without a public setting or runtime output field. Assert bounded accounting bytes/work per source entry rather than a machine-dependent elapsed-time threshold.
+- [x] Include escaped quotes/backslashes/control characters and multibyte identities. Require exact identity/value attribution, truthful omission counts, later short-entry retention, valid JSON and final byte ceilings.
+- [x] Demonstrate meaningful RED for the work bound on the reviewed implementation, then implement fixed-shell plus per-entry byte accounting. Derive dictionary comma costs from retained counts and apply both compare-map additions against one containing-shell budget.
+- [x] Run existing identity suites plus the new work-bound tests GREEN. Repeat the same stress measurement once, report both results and limits, self-review and commit. Task review must assess correctness and the claimed work bound.
 
 ### Task 2: Verify and close the blocked review
 
-- [ ] Run scoped branch formatter `-Fix`, commit its output, then direct branch formatter with saved base/log/exit. Do not manually alter EOF bytes afterward.
-- [ ] Run final Windows `just verify -LogDirectory D:/temp/sqlharness-plan102-verify`; inspect any failed-stage logs. Linux remains unverified unless requested.
-- [ ] Obtain independent whole-branch review of the combined Plan 093+102 range, including the previous Sol dissent and performance evidence. A scoped review of accounting alone does not replace the combined review.
-- [ ] Update both plans, evidence and index/history only after review and gate results are known. Close Plan 093's remaining Important explicitly; do not infer approval from passing functional tests.
+- [x] Run scoped branch formatter `-Fix`, commit its output, then direct branch formatter with saved base/log/exit. Do not manually alter EOF bytes afterward.
+- [x] Run final Windows `just verify -LogDirectory D:/temp/sqlharness-plan102-final-verify`; inspect any failed-stage logs. Linux remains unverified unless requested.
+- [x] Obtain independent whole-branch review of the combined Plan 093+102 range, including the previous Sol dissent and performance evidence. A scoped review of accounting alone does not replace the combined review.
+- [x] Update both plans, evidence and index/history only after review and gate results are known. Close Plan 093's remaining Important explicitly; do not infer approval from passing functional tests.
 
 ## Delivery limits
 

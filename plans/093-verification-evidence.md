@@ -1,6 +1,10 @@
 # Plan 093 verification evidence
 
-## Status
+## Current closure
+
+The prior blockers below are historical and now resolved by Plan 102. Combined review/scoped re-review approved, direct formatting exit 0, and final Windows gate exit 0 on `76ebb0d` (13m00s). Plans 093/102 are DONE on the feature branch; not merged or pushed. See [final evidence](102-verification-evidence.md).
+
+## Historical blocked status
 
 Plan 093 is **IMPLEMENTED, REVIEW BLOCKED** on branch `plan-093`. Current product revision is `e7eaddec15fdac850ae4b00d714b59b932c9e8a8`. The Task 2 specification/quality review approved the earlier implementation before the final fix wave (`task-2-review.md`). Scoped Sol re-review marked the original starvation finding ADDRESSED but found a new Important performance issue in the fix. Under the one-final-fix-wave ruling, that finding is deferred to [Plan 102](102-bounded-table-identity-selection.md); this branch is not DONE or merge-ready. The final Windows gate failed at its CLI test stage, as detailed below.
 

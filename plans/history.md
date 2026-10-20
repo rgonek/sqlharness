@@ -1,8 +1,12 @@
 # Plan history
 
+## Plans 093 and 102 DONE — feature branch verified — 2026-10-20
+
+Plans [093](093-identity-safe-output-clipping.md) and [102](102-bounded-table-identity-selection.md) are complete on `plan-093`. Complete table identities retain their metrics; exact incremental byte accounting removes repeated whole-projection serialization; the dashboard test now synchronizes transcript appends before sweep deadlines. Luna xhigh task reviews and Sol low combined whole-branch/scoped re-review are approved with no open findings. Final Windows `just verify -LogDirectory D:/temp/sqlharness-plan102-final-verify` exited 0 (`verify: OK stages=5 13m00s`) on `76ebb0d6f4cc39ebad84064cd148a219bb898c20`, tree `10e85e28a48fc1462c66150e56fdcea045cb31ba`. CLI 4583 passed/11 skipped; MCP 467 passed/4 skipped. Direct combined-branch formatting exited 0. Closure commits change documentation only. No merge, push, live DB or paid provider trial; Linux unverified. See [final evidence](102-verification-evidence.md). The earlier blocked checkpoint below is retained as history.
+
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
-## Plan 093 implementation in progress — 2026-10-20
+## Plan 093 historical blocked checkpoint — 2026-10-20 (superseded above)
 
 Plan [093](093-identity-safe-output-clipping.md) is implemented on feature branch `plan-093`; current product revision `e7eaddec15fdac850ae4b00d714b59b932c9e8a8`. The initial whole-branch Important about oversized identities starving later fitting entries was fixed and scoped re-review approved that correction. The same re-review found a new Important: repeated full-projection serialization scales poorly with high-cardinality metric maps. Status is REVIEW BLOCKED, not DONE or merge-ready; bounded incremental selection is specified in [Plan 102](102-bounded-table-identity-selection.md). Affected suites: MCP 467 passed/4 skipped; full CLI 4,583 passed/29 skipped/1 failed, with the dashboard matcher test also failing in the final Windows gate and passing once in isolation (root cause unproven). Final `just verify -LogDirectory D:/temp/sqlharness-plan093-final-verify` failed at test stage in 7m39s; see the stage logs and [verification evidence](093-verification-evidence.md).
 

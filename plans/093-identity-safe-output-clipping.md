@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IMPLEMENTED, REVIEW BLOCKED — Tasks 1–2 are implemented; the original starvation finding is addressed. Scoped final re-review found an Important performance issue in repeated full-projection serialization, deferred to [Plan 102](102-bounded-table-identity-selection.md). Final Windows gate failed in the CLI test stage on the dashboard matcher test; its isolated rerun passed, but root cause is unproven. This plan is not DONE or ready to merge. Planned at `32adaa7`, 2026-10-20.
+- DONE on feature branch `plan-093`, together with Plan 102. Both review blockers are resolved; the combined Sol low review/scoped re-review is approved. Final Windows gate and direct branch formatting passed on `76ebb0d`. Not merged or pushed; see [102 final evidence](102-verification-evidence.md).
 - Priority P1; effort S; implementation risk MED; category bug.
 - Dependencies: The existing benchmark/artifact projection must be present. No new-plan predecessor.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -51,7 +51,7 @@ Out of scope: annotation receipt design, numeric budget defaults, SQL execution,
 - [x] Keep actual retained-entry omission accounting correct across rejected fit attempts; do not count an omitted display clip on a key now emitted in full.
 - [x] Add assertions that output is valid JSON, stays within budget, and never reports success with wrong table-to-metric attribution.
 - [x] Add a normal-input regression demonstrating no new response fields or schema bump.
-- **Verify:** focused commands and both affected suites have been run. MCP passed; CLI and the final Windows gate failed on `DashboardHousekeepingTests.Matcher_commits_do_not_keep_an_idle_dashboard_up`, while one isolated rerun passed. Root cause is unproven. Direct branch formatting passed. Scoped final review has a new Important performance finding; see [verification evidence](093-verification-evidence.md) and follow-up [Plan 102](102-bounded-table-identity-selection.md).
+- **Verify:** final combined Windows gate passed on `76ebb0d`: CLI 4583 passed/11 skipped, MCP 467 passed/4 skipped. Direct branch formatting passed. Earlier failures and their resolution are preserved in [evidence](102-verification-evidence.md).
 
 ## Maintenance notes
 
@@ -73,8 +73,8 @@ Report a concrete design blocker if the live interfaces invalidate the Fix contr
 
 ## Done criteria
 
-- [ ] All task-specific regressions below pass and each task has spec/quality review.
-- [ ] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
-- [ ] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
-- [ ] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
-- [ ] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.
+- [x] All task-specific regressions below pass and each task has spec/quality review.
+- [x] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
+- [x] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
+- [x] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
+- [x] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.
