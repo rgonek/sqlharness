@@ -65,7 +65,7 @@ function Cases({ detail, selectedCase, onCaseChange }: { detail: OperationDetail
     <div className="flex flex-wrap items-center gap-3">
       <label className="grid min-w-0 gap-1 text-sm">Case
         <Select items={selectableCards.map(item => ({ value: item.pair!.baseline.caseId, label: item.label }))}
-          value={card?.pair?.baseline.caseId ?? selectedCase} onValueChange={value => { if (value !== null) onCaseChange?.(value) }}>
+          value={selectableCards.length > 0 ? card?.pair?.baseline.caseId ?? selectedCase : null} onValueChange={value => { if (value !== null) onCaseChange?.(value) }}>
           <SelectTrigger aria-label="Case" className="w-full min-w-0"><SelectValue placeholder="No cases available" /></SelectTrigger>
           <SelectContent>{selectableCards.map(item => <SelectItem key={item.pair!.baseline.caseId} value={item.pair!.baseline.caseId} aria-label={accessibleLabel(item)}>{item.label}</SelectItem>)}</SelectContent>
         </Select>

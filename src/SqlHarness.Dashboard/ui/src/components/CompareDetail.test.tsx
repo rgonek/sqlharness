@@ -121,6 +121,36 @@ test("cases with duplicate visible labels remain selectable by case identity", a
   expect(onCaseChange).toHaveBeenCalledWith("0")
 })
 
+test("clears the case value when complete options disappear", async () => {
+  const complete = operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareCases: [{ index: 0 }],
+    variants: [
+      variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 }),
+      variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0 }),
+    ],
+  })
+  const incomplete = operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareCases: [{ index: 0 }],
+    variants: [variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 })],
+  })
+  const view = render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <CompareDetail detail={complete} selectedCase="0" />
+  </QueryClientProvider>)
+  await userEvent.click(screen.getByRole("button", { name: "Per-case & per-run details" }))
+  const caseSelect = screen.getByRole("combobox", { name: "Case" })
+  expect(caseSelect).toHaveTextContent("Case 0")
+
+  view.rerender(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <CompareDetail detail={incomplete} selectedCase="0" />
+  </QueryClientProvider>)
+
+  expect(caseSelect).toHaveTextContent("No cases available")
+  expect(screen.queryByRole("option")).not.toBeInTheDocument()
+  expect(screen.getByText("No complete baseline/candidate pair is available for this case.")).toBeInTheDocument()
+})
+
 test("SQL, conditions, and plans stay within their disclosures", async () => {
   const detail = operationDetail({
     operation: operation({ operation: "compare" }),

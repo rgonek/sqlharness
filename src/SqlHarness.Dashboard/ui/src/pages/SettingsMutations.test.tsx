@@ -81,6 +81,7 @@ test("sound selection offers previews, mute, and an inline IndexedDB persistence
   await userEvent.click(select)
   await userEvent.click(screen.getByRole("option", { name: /^Glass drop$/ }))
   expect(select).toHaveTextContent("Glass drop")
+  expect(sound.saveSoundPreferences).toHaveBeenCalledWith(expect.objectContaining({ selection: "glass-drop" }))
   expect(await screen.findByRole("alert")).toHaveTextContent(/active for this page.*could not be saved for reload/i)
   expect(screen.queryByRole("status")).not.toBeInTheDocument()
 })
