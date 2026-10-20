@@ -1,6 +1,6 @@
 # Plan 089 verification evidence
 
-Implemented and Windows-verified on feature branch `plan-089`, based on `fab299f2abfc76b5f8b2eee2b07c91735bbf7059`. Final tested revision: `75d841d983645f189fea38c362165701ca3b8010`. Completion documentation changes no product files. No local integration or push was performed.
+Implemented and Windows-verified on feature branch `plan-089`, based on `fab299f2abfc76b5f8b2eee2b07c91735bbf7059`. Final tested revision: `75d841d983645f189fea38c362165701ca3b8010`. Completion documentation changes no product files. Authorized local integration is recorded below; no push was performed.
 
 ## Result and bounds
 
@@ -62,3 +62,17 @@ Existing diagnostics remain disclosed: baseline Vite chunk-size warning, Node DE
 - Annotation/Optimization requests, authorization, mutation policy and journal schema were not changed.
 - No discretionary scope rulings or parked blocking findings. The single remaining Minor is described above.
 - Raw baseline/RED/GREEN/format/gate logs, direct exits, revision files, review packages, task reports, reviews and ledger are archived at `D:/temp/sqlharness-plan089-20261020-214305`. The plan-specific SDD scratch directory is removed after completion; sibling plans are untouched.
+
+## Authorized local integration — 2026-10-20
+
+The owner selected local merge. `main` had advanced to `eee0bda` with Plans 093/102, including the deterministic housekeeping test correction. Plan 089 merged locally as `a0ecabbfded8885daeac2a217d2919057de42a27`.
+
+The sole textual conflict was `plans/README.md`; resolution retained entries 089, 093 and 102 in one history table, removing a duplicate table header. Product files merged without conflicts. Both histories were retained.
+
+Before committing the merge, the resolved integrated tree `a00ff9d7f80184e8a0340c471d572adee778044d` passed:
+
+`just verify -LogDirectory D:/temp/sqlharness-plan089-integration-20261020`
+
+Direct exit: **0**, `verify: OK`, 5 stages, 10m21s. UI install passed (35.0s); build passed (43.1s); UI check passed (4m54s, 63 files / 349 tests); .NET tests passed (Core 4588 / 11 skipped, MCP 467 / 4 skipped); formatting passed for all three staged C# files (1m18s). Logs, direct exit and console summary remain at `D:/temp/sqlharness-plan089-integration-20261020`, `.exit` and `.log`.
+
+The merge commit's complete tree equals the tested tree exactly. The integration-record commit changes only plan documentation; no redundant gate was run after that documentation-only update. Linux, browser visual and live-DB coverage remain unclaimed. No push was performed.

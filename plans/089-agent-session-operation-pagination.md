@@ -12,8 +12,8 @@
 
 ## Status and dependencies
 
-- DONE on feature branch `plan-089`; Windows gate passed on `75d841d983645f189fea38c362165701ca3b8010`, with all task and whole-branch reviews approved. Not merged or pushed. See [verification evidence](089-verification-evidence.md). Plan 084 dependency is integrated at `67bdd6b`.
-- Implementation is authorized; local merge and push are not. Priority P1.
+- DONE on feature branch `plan-089`; Windows gate passed on `75d841d983645f189fea38c362165701ca3b8010`, with all task and whole-branch reviews approved. Locally integrated at `a0ecabb`; integrated Windows gate passed on the exact merge tree. No push. See [verification evidence](089-verification-evidence.md). Plan 084 dependency is integrated at `67bdd6b`.
+- Implementation and local merge were authorized; push was not. Priority P1.
 
 ## Fix contract
 

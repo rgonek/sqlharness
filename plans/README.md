@@ -45,7 +45,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
-| [089](089-agent-session-operation-pagination.md) | Bounded agent-session operation pages and Load more; old exact members remain reachable | DONE; local integration in progress; feature Windows verified at `75d841d` ([evidence](089-verification-evidence.md)) |
+| [089](089-agent-session-operation-pagination.md) | Bounded agent-session operation pages and Load more; old exact members remain reachable | DONE; locally integrated into `main` at `a0ecabb`; integrated Windows gate passed ([evidence](089-verification-evidence.md)) |
 | [093](093-identity-safe-output-clipping.md) | Complete metric identities within response budgets | DONE with 102; locally integrated into `main` at `6f07792`; verified product unchanged; not pushed ([evidence](102-verification-evidence.md)) |
 | [102](102-bounded-table-identity-selection.md) | Linear entry accounting and deterministic dashboard idle test | DONE; locally integrated into `main` at `6f07792`; final product `76ebb0d` unchanged, gate exit 0; not pushed ([evidence](102-verification-evidence.md)) |
 | [099](099-shadcn-cli-restoration.md) | Stable shadcn CLI devDependency, supported stylesheet import and contributor workflow | DONE; locally integrated into `main` at `c479210`; Windows-verified product unchanged; all reviews approved ([evidence](099-verification-evidence.md)) |
