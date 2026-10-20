@@ -15,3 +15,9 @@ Synthetic distinct table names share exactly the configured clipping prefix and 
 ## Self-review and concerns
 
 The RED is caused by projection-key collisions in real CLI/MCP response renderers, not malformed fixture data. The tests do not change product code and do not claim full-gate verification. The long-key test permits either retention or omission of the short sibling, but requires the long identity to be absent and the response to report omissions; the output byte ceiling is asserted. No additional concern found.
+
+## Review follow-up: long-key omission oracle
+
+The Important review finding identified that the original 4096-byte test only rejected the complete long name, so a clipped prefix or unrelated omission could satisfy it. The test now rejects both the complete name and its 2048-character clipped prefix, requires the sole emitted entry on each compare side to be `dbo.short` with median 29, and requires exactly two omitted items for the two long entries.
+
+Verification: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~Compare_omits_unfittable_long_table_identity_truthfully_within_minimum_budget` passed 1/1. The unchanged product already omits both long entries intact under the 4096-byte budget, so this focused test is green. Self-review confirms the byte ceiling remains asserted and the oracle ties omission accounting to the expected two omitted map entries; no product code changed.

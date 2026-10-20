@@ -821,15 +821,19 @@ public sealed class McpTokenBudgetTests
 
         ResultTextBytes(result, 4096);
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
-        Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+        var truncation = document.RootElement.GetProperty("truncation");
+        var projectedLongPrefix = longName[..2048];
         var projected = document.RootElement.GetProperty("result");
         foreach (var side in new[] { "baseline", "candidate" })
         {
             var tableReads = projected.GetProperty(side).GetProperty("logicalReadsByTable");
             Assert.False(tableReads.TryGetProperty(longName, out _));
-            if (tableReads.TryGetProperty("dbo.short", out var shortReads))
-                Assert.Equal(29, shortReads.GetProperty("median").GetInt64());
+            Assert.False(tableReads.TryGetProperty(projectedLongPrefix, out _));
+            var shortReads = Assert.Single(tableReads.EnumerateObject());
+            Assert.Equal("dbo.short", shortReads.Name);
+            Assert.Equal(29, shortReads.Value.GetProperty("median").GetInt64());
         }
+        Assert.Equal(2, truncation.GetProperty("omittedItems").GetInt32());
     }
 
     private static void AssertTableReadValues(JsonElement reads, string firstName, string secondName)
