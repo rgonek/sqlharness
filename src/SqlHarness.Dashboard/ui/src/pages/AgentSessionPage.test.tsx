@@ -124,7 +124,7 @@ test("an exact operation after 500 newer unassigned rows remains reachable", asy
   expect(screen.getByText(/Loaded 500 of 501 operations\./)).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Load more" }))
 
-  const olderExactLink = await screen.findByRole("link", { name: "500", exact: true })
+  const olderExactLink = await screen.findByRole("link", { name: /^500$/ })
   expect(within(olderExactLink.closest("tr")!).getByText("exact")).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "1000" })).toBeInTheDocument()
   expect(screen.getByText(/Loaded 501 of 501 operations\./)).toBeInTheDocument()
