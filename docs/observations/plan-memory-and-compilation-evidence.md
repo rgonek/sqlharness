@@ -60,3 +60,35 @@ reachable only through the journal or dashboard, not through any `artifact` sect
 This supports the question above: whether a bounded artifact section should expose these fields. Batch-level
 values also mix fill statements with the statement under test. Statement-level grants were not checked.
 See also [statement metrics](statement-metrics-and-local-object-noise.md).
+
+## Follow-up 2026-10-20
+
+Recorded against repository HEAD `32adaa78`. Status: collecting observations, not approved for
+implementation. Earlier observations above remain unchanged.
+
+A separate current-source optimization investigation rejected an existence-check candidate. Three
+successful compare operations covered nine parameter cases; two artifact reads retrieved complete
+plan trees for both variants of one case only. Neither response required a continuation. The final
+report used that pair to explain changed work order. A later retro clarification explicitly limited
+that interpretation to the selected case and stated that grants and compilation remained unreviewed.
+The other case plans were not read. The [report observation](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-20--current-source-existence-check-candidate-rejected)
+retains report provenance, workflow counts and the separate median-range clarification.
+
+Classification: agent slip in evidence-review completeness and reporting coverage, not a demonstrated
+new tool defect. Confidence is high in what the transcript shows was reviewed. Successful complete
+node retrieval establishes coverage of the selected trees, not complete performance evidence or the
+absence of grant, spill or compilation concerns. The earlier surface-gap observation is relevant
+coverage, but actual availability of grant and compilation fields for these operations was not checked;
+this follow-up does not establish that the installed tool could not supply them.
+
+Two bounded read-only journal queries during the retro inspected emission counters and aggregate
+operation phases, not memory-grant or compilation metrics. Connection work dominated the initial
+successful target check, and the available connection event recorded success. The cause remains
+unknown; these records do not distinguish authentication, network and server effects. No live benchmark
+was repeated. Exact installed-build correspondence to the inspected HEAD was not established.
+
+The cheapest useful next check is offline: inspect saved or journal-backed grant and compilation
+availability for the existing operations and enumerate which cases and statements remain unreviewed.
+Missing fields must remain distinct from zero. For later synthesis, ask whether explicit review coverage
+alongside a rejection decision is sufficient or whether an existing evidence surface needs improvement.
+This entry chooses neither a safeguard nor an API change and authorizes no plan or implementation.

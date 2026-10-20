@@ -55,6 +55,7 @@ the tool. Keep workload values out.
 | 2026-10-15 historical query experiment (unmapped) | optimization | partial | 1 | variant × case table, plans, limits, later correction | ~6 / ~9 | yes (source/Git applicability) | 1 | external context required; no API change |
 | 2026-10-15 current-source history query (unmapped) | optimization | partial | 1 | variant × case table, source context, outcome, limits, evidence links | ~8 / ~12 | yes (calling conditions, candidate rationale, deferred implementation) | 1 clarification | external context and review coverage; no API decision |
 | 2026-10-15 sync-key selection query (unmapped) | optimization | partial | 1 | pre-measurement source context, path × case table, plan comparison, limits, unmeasured side findings, follow-up offer | ~16 / ~24 | yes (source/caller context, Query Store prioritization, unmeasured write-path proposals, deferral) | 1 (unlabeled inference) | external context, unmeasurable side findings, partial evidence; no API decision |
+| 2026-10-20 current-source existence-check candidate (unmapped) | optimization | reject | 1 | source context, variant x case table, plan interpretation, limits | not recorded | yes (source applicability, callers, candidate rationale) | 2 clarifications | external context and explicit review coverage; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -594,3 +595,59 @@ A separate session from the two 2026-10-15 entries above; the label is not asser
 - **Operator decision:** Record observations for table-valued parameters, write-path and index
   maintenance evidence, statement metrics and partial-run journal coverage. Plan the partial-run
   journal fix ([plan 076](../../../plans/076-partial-matrix-journal-runs.md)); no implementation authorized.
+
+### 2026-10-20 — current-source existence-check candidate rejected
+
+`Kind:` optimization · `Outcome:` reject · `Scopes:` 1 · `System label:` unmapped.
+Recorded against repository HEAD `32adaa78`. Status: collecting observations, not approved for
+implementation. The system label is not asserted to match earlier entries.
+
+- **Actual report:** The operator required a query from current application source and an account of
+  file, method, callers, SQL composition and parameters before measurement. The agent supplied that
+  context, compared a correlated existence-check rewrite, and rejected the candidate because repeated
+  measurements showed no stable benefit and additional reads in several cases. No application or
+  database change was made. Historical query telemetry was not needed.
+- **Report blocks:** Source and calling context; variant x case results table; rejection decision;
+  interpretation of one selected plan pair; limits concerning dates and tied history rows. No human
+  question or follow-up offer appeared in the final investigation report. Retro clarifications followed.
+- **Evidence and interpretation:** Three successful compare operations covered nine parameter cases
+  with five repetitions each and observed multiset equality. Four query operations supplied target
+  confirmation, bounded sample selection and catalog/parameter context. Two artifact reads returned
+  complete last-measured plan trees for both variants of one case, without continuation or clipped
+  nodes. The plan pair supported an explanation of changed work order in that case only. Formal
+  two-direction EXCEPT validation and a complete review of plans, grants and compilation were not
+  performed. Equality in measured cases does not establish full domain equivalence.
+- **Content provenance:** The results table, repetition count, case count and observed equality came
+  from journal-backed compare metrics; target confirmation came from query rows; the access-pattern
+  explanation came from artifact nodes and agent interpretation. Source location, caller conditions,
+  SQL composition and the rationale for the candidate came from application code outside journal
+  operations. Numeric values were manually transcribed into chat. A normalized count of numeric report
+  statements and total prose statements is not recorded. The source-applicability and candidate
+  rationale decisions cannot be reconstructed from journal metrics alone.
+- **Corrections:** Two retro clarifications: plan review covered one case and both variants, rather
+  than the entire evidence set; the short reported elapsed range described medians rather than all
+  executions. Cause: insufficiently explicit review coverage and aggregation wording in the agent's
+  report, not a demonstrated tool defect. Grants and compilation remained unreviewed.
+- **Dashboard usefulness:** Preserve the rejected candidate, source context, decision, review limits
+  and later clarifications alongside the evidence. Actual dashboard use, usability benefit and
+  reconstruction effort are not recorded.
+- **Observed workflow cost:** capabilities x1, query x4, compare x3, artifact x2: eleven investigation
+  calls. All succeeded; no obstructive SQLHarness response clipping or failed-call retry was observed.
+  The negative optimization result was useful evidence, not friction. Retro added two bounded local
+  read-only journal queries; repository and discovery reads are separate.
+- **Cost coverage:** Journal emission byte counters and estimated-token counters were inspected for
+  the nine journaled investigation operations; capabilities and tool-catalog overhead were outside
+  that total. These counters do not establish what every model received. Arguments, source reads,
+  final-chat duplication and complete workflow token use were not measured. No savings baseline or
+  modeled replacement workflow is recorded. Real workload output totals are intentionally omitted.
+- **Diagnostic qualification:** Existing aggregate phases were inspected for the relevant operations.
+  Connection work dominated the initial successful target check; an available connection event recorded
+  success. These records do not identify authentication, network or server as the cause. Detailed
+  event payloads were not inspected, and no live query was rerun. Exact installed-build correspondence
+  to repository HEAD was not established.
+- **Optional API implications:** Another report needs authored source context and explicit evidence
+  review coverage beyond journal metrics. This does not select an API or establish readiness or token
+  savings. The related [grant/compilation follow-up](../../observations/plan-memory-and-compilation-evidence.md#follow-up-2026-10-20)
+  records the review limitation without treating it as a new tool defect.
+- **Operator decision:** Record this report observation and the related review-coverage follow-up
+  only. No implementation plan, code, skill edit or publication is authorized by this record.
