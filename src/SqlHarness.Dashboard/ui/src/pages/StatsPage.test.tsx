@@ -313,27 +313,44 @@ test("preserves a non-axis filter in cell scope across a time-range change", asy
 })
 
 test("dimension filter keeps All, missing, empty and ordinary values distinct in requests", async () => {
-  const calls = stubFetch({ "/api/stats": (url: URL) => jsonResponse(filteredProfileStats(url)), "/api/profiles": profilesResponse() })
-  renderApp("/stats")
-  await screen.findByRole("button", { name: /component api, project alpha:/ })
+  const calls = stubFetch({ "/api/stats": (url: URL) => jsonResponse(filteredProfileStats(url)) })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } })
+  const window = { from: "2026-10-01T00:00:00.000Z", to: "2026-10-08T00:00:00.000Z" }
+  const scope = profileStats("app").profileDimensions
+  let filters: Record<string, string | null> = {}
+  let view: ReturnType<typeof render> | undefined
+  const onFiltersChange = vi.fn((next: Record<string, string | null>) => {
+    filters = next
+    view?.rerender(<QueryClientProvider client={client}><ProfileDimensionsPanel range="7d" window={window} unprofiled={false}
+      profile="app" profileName="app" databaseTemplate={undefined} profileDefinitionAvailable dimensions={scope.dimensions} targets={scope.targets}
+      dimensionFilters={filters} onDimensionFiltersChange={onFiltersChange} axisChoice={null} onAxisChoiceChange={vi.fn()} /></QueryClientProvider>)
+  })
+  view = render(<QueryClientProvider client={client}><ProfileDimensionsPanel range="7d" window={window} unprofiled={false}
+    profile="app" profileName="app" databaseTemplate={undefined} profileDefinitionAvailable dimensions={scope.dimensions} targets={scope.targets}
+    dimensionFilters={filters} onDimensionFiltersChange={onFiltersChange} axisChoice={null} onAxisChoiceChange={vi.fn()} /></QueryClientProvider>)
   const region = screen.getByRole("combobox", { name: "region" })
 
   await userEvent.click(region)
   await userEvent.click(await screen.findByRole("option", { name: "east" }))
+  expect(onFiltersChange).toHaveBeenLastCalledWith({ region: "east" })
   await waitFor(() => expect(calls.some(call => call.includes('dimensions=%7B%22region%22%3A%22east%22%7D'))).toBe(true))
 
   await userEvent.click(region)
   await userEvent.click(await screen.findByRole("option", { name: "Unknown (missing)" }))
+  expect(onFiltersChange).toHaveBeenLastCalledWith({ region: null })
   await waitFor(() => expect(calls.some(call => call.includes('dimensions=%7B%22region%22%3Anull%7D'))).toBe(true))
 
   await userEvent.click(region)
   await userEvent.click(await screen.findByRole("option", { name: "(empty)" }))
+  expect(onFiltersChange).toHaveBeenLastCalledWith({ region: "" })
   await waitFor(() => expect(calls.some(call => call.includes('dimensions=%7B%22region%22%3A%22%22%7D'))).toBe(true))
 
+  const requestCountBeforeClear = calls.length
   await userEvent.click(region)
   await userEvent.click(await screen.findByRole("option", { name: "All values" }))
+  expect(onFiltersChange).toHaveBeenLastCalledWith({})
   expect(region).toHaveTextContent("All values")
-  expect(calls.some(call => call.startsWith("/api/stats?") && !call.includes("dimensions="))).toBe(true)
+  await waitFor(() => expect(calls.slice(requestCountBeforeClear).some(call => call.startsWith("/api/stats?") && !call.includes("dimensions="))).toBe(true))
 })
 
 test("matrix selects keep axes distinct, ignore disabled choices and update the metric", async () => {
