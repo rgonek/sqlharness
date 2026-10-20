@@ -1,0 +1,14 @@
+- Resolving items.
+┌ shadcn add accordion (dry run)
+│
+├ Files (1) +1 new
+│ + src\components\ui\accordion.tsx  create
+│
+├ Dependencies (1)
+│ + cn
+│
+│ 1 file, 1 dep
+│
+│ Run with --diff to view changes.
+│ Run with --view to view file contents.
+└ Run without --dry-run to apply.

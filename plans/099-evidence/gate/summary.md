@@ -2,7 +2,7 @@
 
 Command: `just verify -LogDirectory D:\Dev\sqlharness\.worktrees\plan-099\.superpowers\sdd\099-shadcn-cli-restoration\scratch\final-gate`
 Product revision: `dd8b9e93` (`ui: restore shadcn stylesheet export`)
-Result: exit 0; all five configured stages passed. The gate ran while documentation at `79d4ead8` was present; no product changes followed `dd8b9e93`.
+Result: exit 0; all required stages passed. Formatting was skipped because zero C# files changed. The gate ran while documentation at `79d4ead8` was present; no product changes followed `dd8b9e93`.
 
 | Stage | Result | Duration |
 | --- | --- | ---: |

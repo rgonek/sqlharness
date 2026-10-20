@@ -9,7 +9,7 @@ Documentation revision present during verification: `79d4ead8` (`docs: restore s
 
 The controller ran `just verify -LogDirectory D:\Dev\sqlharness\.worktrees\plan-099\.superpowers\sdd\099-shadcn-cli-restoration\scratch\final-gate` from the repository root. It exited 0 on the product tree at `dd8b9e93`. No product code changed after that revision; subsequent changes are documentation and retained evidence. Per [verification guidance](../docs/agents/verification.md), the gate was not repeated for those documentation-only edits.
 
-All five configured stages passed: `ui-install` (25.8 s), `build` (1m25s), `ui-check` (4m08s), `test` (2m26s), and `format` (skipped because zero changed C# files). The UI check reported 62/62 test files and 331/331 tests passing. The MCP test project passed 462, skipped 4, failed 0; the main test project passed 4,562, skipped 11, failed 0. The build reported zero warnings and zero errors from .NET; Vite retained its existing large JavaScript chunk warning. UI test output included the existing `DEP0190` warning and refused requests to `::1:3000` and `127.0.0.1:3000`; the stage nevertheless exited 0. The test logs identify skipped live database, platform-specific, and Unix-permission tests. Stage logs are retained under [gate evidence](099-evidence/gate/).
+All required stages passed: `ui-install` (25.8 s), `build` (1m25s), `ui-check` (4m08s), and both .NET test projects (2m26s); formatting was skipped because zero changed C# files. The UI check reported 62/62 test files and 331/331 tests passing. The MCP test project passed 462, skipped 4, failed 0; the main test project passed 4,562, skipped 11, failed 0. The build reported zero warnings and zero errors from .NET; Vite retained its existing large JavaScript chunk warning. UI test output included the existing `DEP0190` warning and refused requests to `::1:3000` and `127.0.0.1:3000`; the stage nevertheless exited 0. The test logs identify skipped live database, platform-specific, and Unix-permission tests. The raw gate logs are tracked as text artifacts under [gate evidence](099-evidence/gate/): `ui-install.txt`, `build.txt`, `ui-check.txt`, `test-SqlHarness.Mcp.Tests.txt`, and `test-SqlHarness.Tests.txt`.
 
 This is feature-branch verification, not verification of an integrated tree. `just verify-linux` was not run. No live database or SQL test was performed.
 
@@ -23,11 +23,11 @@ Disposition: keep the exact current stable CLI version required by the plan and 
 
 The registry returned `latest: 4.22.1` on 2026-10-20; prerelease tags were excluded. The installed devDependency is exact `shadcn@4.22.1`. The lockfile resolves `https://registry.npmjs.org/shadcn/-/shadcn-4.22.1.tgz` with integrity `sha512-LbB4Lro+b0qSVki/tgL5edtKylEnXe1ppxMJC12d7NHPgaT+eSgJGMQULwP72V7X9tbiUq7xfx3VDAfB7jdGoA==`, and `npm ls shadcn --all` showed the single root installation. The dependency comparison recorded 288 new lock entries, no removals, and no version changes to pre-existing packages; `tslib@2.8.1` changed from optional to required through the CLI's `recast` dependency. The retained new-package lifecycle review found no added `hasInstallScript` entries.
 
-The saved dry run `npm.cmd exec -- shadcn add accordion --dry-run` exited 0 and proposed one new file, `src/components/ui/accordion.tsx`, and one dependency entry, `cn`; it proposed no stylesheet or other source edits and applied nothing. `cn` already exists in the manifest. Registry-generated component output remains independent of the pinned CLI tarball. The exact preview and registry provenance are in [CLI evidence](099-evidence/cli/).
+The saved dry run `npm.cmd exec -- shadcn add accordion --dry-run` exited 0 and proposed one new file, `src/components/ui/accordion.tsx`, and one dependency entry, `cn`; it proposed no stylesheet or other source edits and applied nothing. `cn` already exists in the manifest. Registry-generated component output remains independent of the pinned CLI tarball. The exact output is tracked in [accordion-dry-run.txt](099-evidence/cli/accordion-dry-run.txt); registry provenance is in [CLI evidence](099-evidence/cli/).
 
 ## CSS and browser evidence
 
-The app's three production CSS assets were byte-identical to the Task 1 baseline after switching to the package export. Their byte sizes and SHA-256 values are retained in [CSS evidence](099-evidence/css/css-sha256.txt); the production build log is alongside it. Task 2 reviewed the installed export and emitted representative checked/unchecked, disabled, open/closed, active-tab, and horizontal/vertical selectors.
+The app's three production CSS assets were byte-identical to the Task 1 baseline after switching to the package export. Their byte sizes and SHA-256 values are retained in [CSS evidence](099-evidence/css/css-sha256.txt); tracked Task 2 logs are [task2-build.txt](099-evidence/css/task2-build.txt) and [task2-check.txt](099-evidence/css/task2-check.txt). Task 2 reviewed the installed export and emitted representative checked/unchecked, disabled, open/closed, active-tab, and horizontal/vertical selectors.
 
 Browser inspection used an isolated disposable dashboard home/backend, with no live database or SQL connection. The real Settings page was checked in light and dark themes, including checked and unchecked switches, the theme menu, and an unconfirmed dialog. A synthetic session response enabled tab, keyboard focus, separator, and tooltip inspection; other API calls remained on the disposable backend. Screenshots are retained under [browser evidence](099-evidence/browser/).
 
@@ -35,7 +35,7 @@ Coverage limits: the Settings page had no disabled switch and the app had no ver
 
 ## Reviews and status
 
-Task 1, Task 2, and Task 3 independent reviews approved their changes; reports and review notes are retained in [task review evidence](099-evidence/task-reports/). The Task 4 review and independent whole-branch review are pending and will be recorded after this evidence commit. Plan 099 is implemented and Windows-verified on `plan-099`; it is not integrated. Plan 100 still requires Plan 099's implementation to be integrated before execution. No merge, push, publication, or live database operation is authorized by this evidence.
+Task 1, Task 2, and Task 3 independent reviews approved their changes; reports and review notes are retained in [task review evidence](099-evidence/task-reports/). The initial Task 4 review identified missing tracked raw logs and a wording issue; the review and fix report are archived there, and the fixes are committed for re-review. Task 4 re-review and the independent whole-branch review remain pending. Plan 099 is implemented and Windows-verified on `plan-099`; it is not integrated. Plan 100 still requires Plan 099's implementation to be integrated before execution. No merge, push, publication, or live database operation is authorized by this evidence.
 
 ## Evidence index
 
@@ -43,5 +43,5 @@ Task 1, Task 2, and Task 3 independent reviews approved their changes; reports a
 - [CLI](099-evidence/cli/): stable tag, package integrity, local version/tree, lock additions, lifecycle metadata, and exact dry-run output.
 - [CSS](099-evidence/css/): Task 2 UI check/build logs and CSS hashes/byte sizes.
 - [Browser](099-evidence/browser/): Task 2 screenshots from the disposable dashboard fixture.
-- [Gate](099-evidence/gate/): five stage logs from `just verify`.
+- [Gate](099-evidence/gate/): four required-stage logs from `just verify`; formatting was skipped because no C# files changed.
 - [Task reports and reviews](099-evidence/task-reports/): implementation evidence and independent approvals for Tasks 1–3.
