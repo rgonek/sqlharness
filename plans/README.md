@@ -7,7 +7,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
-| [085](085-operation-annotations.md) | Opt-in agent operation labels/keep at call time + post-hoc annotation tool by operationRef scoped to the agent session; owner operation star/note and Named operations view | 077, 079, 084 merged | Final review fixes implemented; final Windows gate and whole-branch re-review pending — see [evidence](085-verification-evidence.md) |
+| [085](085-operation-annotations.md) | Opt-in agent operation labels/keep at call time + post-hoc annotation tool by operationRef scoped to the agent session; owner operation star/note and Named operations view | 077, 079, 084 merged | Reviews approved; local integration into `main` authorized and pending; no push — see [evidence](085-verification-evidence.md) |
 
 ## Pending
 
