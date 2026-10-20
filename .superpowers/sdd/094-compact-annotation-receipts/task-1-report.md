@@ -46,3 +46,24 @@ The served schema test fails at `responseDetail` missing from the enabled annota
 ## Self-review and concerns
 
 `git diff --check` is clean. The fixture uses the actual `McpToolCatalog.Wire` process path for both scope modes and seeds the same journal database used by served calls. The red tests are contract assertions, not compile failures. The minimal-budget full-detail cases currently stop at the new-argument rejection in the pre-Task-2 product; after implementation they will exercise response-size rollback and its error text. No additional gate was run because this task adds intentionally failing regression tests only.
+
+## Fix round 1 (review findings)
+
+### Changes
+
+- The 20-item minimum-budget receipt call now omits `responseDetail`, exercising the runtime default while retaining a requested 65536-byte call budget against a 4096-byte process ceiling.
+- The 20-item receipt asserts refs in input order and all four successful fields (`operationRef`, `status`, `tool`, `keep`), with labels omitted. It compares all persisted labels to the submitted 120-code-point values.
+- The repeated-ref receipt case now verifies each success item has the four contract fields, has no `label`, and preserves the two input refs in order with their respective keep values. The final persisted label is still checked independently.
+- Off-mode checks now run before the enabled-schema RED assertion. They verify that the annotation tool is absent and every off-mode schema excludes `responseDetail`; this proves schema absence directly. The previous query-error-only assertion was removed.
+
+### Verification
+
+Command:
+
+```powershell
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -p:IsTestProject=true --filter "FullyQualifiedName~AnnotateToolTests|FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpOperationAnnotationWiringTests|FullyQualifiedName~ServedAnnotationReceiptTests"
+```
+
+Build and discovery succeeded. Expected RED: `Failed! - Failed: 9, Passed: 66, Skipped: 0, Total: 75, Duration: 7 s`. The fixed/request receipt and full-detail calls still encounter the missing Task 2 inputs. The mixed receipt case now also fails on the current product's extra `label` field, confirming that the test enforces label omission rather than the old full-detail shape. The enabled served schema fails on missing `responseDetail`; the preceding off-mode schema assertions pass. Captured output is in `task-1-review-fix-round-1-output.txt`.
+
+`git diff --check` passed. No production code changed. Cross-task verification of effective-budget precommit rollback remains for Task 2 GREEN, as requested by the review.

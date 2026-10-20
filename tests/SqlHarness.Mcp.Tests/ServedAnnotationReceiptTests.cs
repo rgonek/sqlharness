@@ -51,23 +51,23 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
         Seed(fixture.Process.MutationSessionKey, 20, "query");
         var items = Enumerable.Range(1, 20).Select(index => Item(Ref(index), new string('界', 120), true)).ToArray();
 
-        var response = await fixture.AnnotateAsync(items, new Dictionary<string, object?>
-        {
-            ["responseDetail"] = "receipt",
-            ["maxResultBytes"] = 65536,
-        });
+        var response = await fixture.AnnotateAsync(items, new Dictionary<string, object?> { ["maxResultBytes"] = 65536 });
 
         Assert.False(response.IsError == true, Text(response));
         var payload = Result(response);
         var outcomes = payload.GetProperty("result").EnumerateArray().ToArray();
         Assert.Equal(20, outcomes.Length);
+        Assert.Equal(items.Select(item => (string)item["operationRef"]!), outcomes.Select(outcome => outcome.GetProperty("operationRef").GetString()));
         Assert.All(outcomes, outcome =>
         {
+            Assert.Equal(4, outcome.EnumerateObject().Count());
             Assert.Equal("success", outcome.GetProperty("status").GetString());
+            Assert.Equal("query", outcome.GetProperty("tool").GetString());
+            Assert.True(outcome.GetProperty("keep").GetBoolean());
             Assert.False(outcome.TryGetProperty("label", out _));
         });
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(Text(response)) <= 4096);
-        Assert.Equal(20, ReadLabelCount());
+        Assert.Equal(Enumerable.Repeat(new string('界', 120), 20), ReadLabels());
     }
 
     [Theory]
@@ -128,14 +128,18 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
             Item(Ref(2), "foreign", true),
             Item(Ref(3), "expired", true),
             Item(Ref(99), "unknown", true),
-        ], new Dictionary<string, object?> { ["responseDetail"] = "receipt" });
+        ], new Dictionary<string, object?>());
 
         Assert.False(response.IsError == true, Text(response));
         var outcomes = Result(response).GetProperty("result").EnumerateArray().ToArray();
         Assert.Equal(5, outcomes.Length);
-        Assert.Equal(Ref(1), outcomes[0].GetProperty("operationRef").GetString());
-        Assert.Equal(Ref(1), outcomes[1].GetProperty("operationRef").GetString());
-        Assert.Equal("second", outcomes[1].GetProperty("label").GetString());
+        Assert.Equal(new[] { Ref(1), Ref(1), Ref(2), Ref(3), Ref(99) }, outcomes.Select(outcome => outcome.GetProperty("operationRef").GetString()));
+        AssertReceiptSuccess(outcomes[0], Ref(1), "snapshot", true);
+        AssertReceiptSuccess(outcomes[1], Ref(1), "snapshot", false);
+        Assert.Equal(4, outcomes[0].EnumerateObject().Count());
+        Assert.Equal(4, outcomes[1].EnumerateObject().Count());
+        Assert.False(outcomes[0].TryGetProperty("label", out _));
+        Assert.False(outcomes[1].TryGetProperty("label", out _));
         var unavailable = outcomes.Skip(2).ToArray();
         Assert.All(unavailable, outcome =>
         {
@@ -176,6 +180,14 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
         ["label"] = label,
         ["keep"] = keep,
     };
+
+    private static void AssertReceiptSuccess(JsonElement outcome, string operationRef, string tool, bool keep)
+    {
+        Assert.Equal(operationRef, outcome.GetProperty("operationRef").GetString());
+        Assert.Equal("success", outcome.GetProperty("status").GetString());
+        Assert.Equal(tool, outcome.GetProperty("tool").GetString());
+        Assert.Equal(keep, outcome.GetProperty("keep").GetBoolean());
+    }
 
     private static string Ref(int id) => id.ToString("x32", System.Globalization.CultureInfo.InvariantCulture);
 
@@ -257,6 +269,16 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
         command.CommandText = "SELECT agent_label FROM operation_annotations WHERE operation_id = $id;";
         command.Parameters.AddWithValue("$id", id);
         return command.ExecuteScalar() as string;
+    }
+    private IReadOnlyList<string?> ReadLabels()
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT agent_label FROM operation_annotations ORDER BY operation_id;";
+        using var reader = command.ExecuteReader();
+        var labels = new List<string?>();
+        while (reader.Read()) labels.Add(reader.IsDBNull(0) ? null : reader.GetString(0));
+        return labels;
     }
     private long Scalar(string sql)
     {

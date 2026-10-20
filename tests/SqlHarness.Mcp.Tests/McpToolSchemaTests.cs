@@ -308,11 +308,13 @@ public sealed class McpToolSchemaTests : IDisposable
             () => scope.Profiles);
         await using var off = await ServedCatalog.CreateAsync(offProcess);
         var offTools = await off.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        Assert.DoesNotContain(offTools, tool => tool.Name == "sqlharness_annotate");
         foreach (var tool in offTools)
         {
             var properties = Properties(ServedSchema(tool));
             Assert.False(properties.TryGetProperty("label", out _), tool.Name);
             Assert.False(properties.TryGetProperty("keep", out _), tool.Name);
+            Assert.False(properties.TryGetProperty("responseDetail", out _), tool.Name);
             Assert.DoesNotContain("annotation", tool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
         var offCapabilities = await off.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
@@ -374,12 +376,6 @@ public sealed class McpToolSchemaTests : IDisposable
             ["label"] = "hidden when off",
         }, cancellationToken: CancellationToken.None);
         Assert.True(rejected.IsError == true);
-        var responseDetailWhenOff = await off.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
-        {
-            ["sql"] = "SELECT 1",
-            ["responseDetail"] = "receipt",
-        }, cancellationToken: CancellationToken.None);
-        Assert.True(responseDetailWhenOff.IsError == true);
     }
 
     [Fact]
