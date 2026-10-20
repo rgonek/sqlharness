@@ -219,7 +219,7 @@ public sealed class McpRequestToolHandlers(
             {
                 var matchingOn = AnnotateHandler.LoadMatchingFlag(SqlHarnessPaths.ConfigFile);
                 var annotated = await AnnotateHandler.ApplyAsync(SqlHarnessPaths.ActivityDatabase,
-                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken);
+                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken, process.MaxResultBytes);
                 return new SqlHarnessOutcome(SqlHarnessExitCode.Success, annotated, null);
             }), token);
         });

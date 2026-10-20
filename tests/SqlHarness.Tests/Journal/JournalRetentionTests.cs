@@ -340,4 +340,30 @@ public sealed class JournalRetentionTests
             "SELECT s.session_key FROM session_annotations a JOIN sessions s ON s.id = a.session_id").Single();
         Assert.Equal("cli:new", remaining["session_key"]);
     }
+
+    [Fact]
+    public void Normal_retention_expires_kept_and_unkept_operation_annotations()
+    {
+        using var temp = new JournalTempDirectory();
+        Seed(temp, Now.AddDays(-40), key: "cli:old-kept");
+        Seed(temp, Now.AddDays(-40), key: "cli:old-ordinary");
+        Seed(temp, Now.AddDays(-1), key: "cli:new-kept");
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO operation_annotations (operation_id, agent_label_initial, agent_label, agent_keep, updated_at)
+                SELECT operations.id, NULL, session_key, CASE WHEN session_key LIKE '%kept' THEN 1 ELSE 0 END, 't'
+                FROM operations JOIN sessions ON sessions.id = operations.session_id;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(), new FixedTimeProvider(Now));
+
+        var remaining = JournalDb.Rows(temp.DatabasePath, "SELECT agent_keep FROM operation_annotations");
+        Assert.Single(remaining);
+        Assert.Equal(1L, remaining[0]["agent_keep"]);
+    }
 }

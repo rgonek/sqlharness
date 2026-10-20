@@ -136,6 +136,28 @@ test("operation detail offers SQL reuse only when SQL was stored", async () => {
   expect(screen.queryByText("SQL not stored")).not.toBeInTheDocument()
 })
 
+test("operation detail shows owner annotation save failures", async () => {
+  stubOperationFetch({
+    "/api/operations/10": operationDetail({ operation: operation({ id: 10 }) }),
+    "/api/operations/10/annotation": () => new Response(JSON.stringify({ message: "write denied" }), { status: 500 }),
+  })
+  renderApp("/operations/10")
+
+  await userEvent.click(await screen.findByRole("button", { name: "☆ Star operation" }))
+
+  expect(await screen.findByText(/Could not save operation annotations/)).toBeInTheDocument()
+})
+
+test("operation detail shows clipboard rejection", async () => {
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.reject(new Error("denied")) } })
+  stubOperationFetch({ "/api/operations/10": operationDetail({ sqlText: "SELECT 42", operation: operation({ id: 10 }) }) })
+  renderApp("/operations/10")
+
+  await userEvent.click(await screen.findByRole("button", { name: "Copy stored SQL to reuse" }))
+
+  expect(await screen.findByText("Could not copy stored SQL to the clipboard.")).toBeInTheDocument()
+})
+
 test("owner note editor follows the operation when cached detail navigation reuses the page", async () => {
   stubOperationFetch({
     "/api/operations/10": operationDetail({ operation: operation({ id: 10, ownerNote: "note for 10" }) }),

@@ -53,6 +53,42 @@ public sealed class AnnotateToolTests
     }
 
     [Fact]
+    public async Task Oversized_complete_response_rolls_back_annotation_batch_at_minimum_budget()
+    {
+        using var journal = new TestJournal();
+        var items = Enumerable.Range(1, 20).Select(index =>
+        {
+            journal.AddOperation(index, CallerKey, "codex", "query", Reference(index));
+            return new AnnotationItemArgument(Reference(index), new string('界', 120));
+        }).ToArray();
+
+        var error = await Assert.ThrowsAsync<McpMappingException>(() => AnnotateHandler.ApplyAsync(
+            journal.Path, CallerKey, null, items, matchingOn: false, default, 4096));
+
+        Assert.Contains("raise the budget or split the batch", error.Message, StringComparison.Ordinal);
+        using var connection = new SqliteConnection($"Data Source={journal.Path};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM operation_annotations";
+        Assert.Equal(0L, command.ExecuteScalar());
+    }
+
+    [Fact]
+    public async Task Complete_response_fits_with_adequate_budget_and_preserves_mixed_statuses()
+    {
+        using var journal = new TestJournal();
+        journal.AddOperation(1, CallerKey, "codex", "query", Ref1);
+        var items = Enumerable.Range(1, 20).Select(index =>
+            new AnnotationItemArgument(Reference(index), index == 1 ? new string('界', 120) : null)).ToArray();
+
+        var results = await AnnotateHandler.ApplyAsync(journal.Path, CallerKey, null, items,
+            matchingOn: false, default, 65536);
+
+        Assert.Equal("success", results[0].Status);
+        Assert.All(results.Skip(1), result => Assert.Equal("operation_not_available", result.Status));
+    }
+
+    [Fact]
     public async Task Unknown_and_foreign_references_have_byte_identical_results()
     {
         using var unknownJournal = new TestJournal();

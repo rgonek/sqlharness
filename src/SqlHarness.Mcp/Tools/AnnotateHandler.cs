@@ -51,7 +51,8 @@ internal static class AnnotateHandler
         string? currentAgentSessionId,
         IReadOnlyList<AnnotationItemArgument> items,
         bool matchingOn,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int responseBudgetBytes = McpLimits.MaxCallToolResultBudgetBytes)
     {
         cancellationToken.ThrowIfCancellationRequested();
         Validate(items);
@@ -104,6 +105,10 @@ internal static class AnnotateHandler
             var annotation = await ReadAnnotationAsync(connection, transaction, target.OperationId, cancellationToken);
             results.Add(new AnnotationItemResult(item.OperationRef, "success", target.Tool, annotation.Label, annotation.Keep));
         }
+
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, results, null);
+        if (!McpResultAdapter.FitsCompleteResult(outcome, "sqlharness_annotate", new McpResultBudget(responseBudgetBytes)))
+            throw new McpMappingException("The complete annotation response exceeds the result byte budget; raise the budget or split the batch. No annotations were changed.");
 
         transaction.Commit();
         return results;

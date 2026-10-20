@@ -420,7 +420,7 @@ public sealed class McpToolHandlers(
             {
                 var matchingOn = AnnotateHandler.LoadMatchingFlag(SqlHarnessPaths.ConfigFile);
                 var annotated = await AnnotateHandler.ApplyAsync(SqlHarnessPaths.ActivityDatabase,
-                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken);
+                    _mutationSessionKey, metadata?.SessionId, items, matchingOn, annotationToken, scope.MaxResultBytes);
                 return new SqlHarnessOutcome(SqlHarnessExitCode.Success, annotated, null);
             }), token);
         }, ct);
@@ -654,7 +654,7 @@ public static class McpToolCatalog
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     public const string OperationLabelDescription = "Optional plain-text label for this operation (up to 120 Unicode code points).";
-    public const string OperationKeepDescription = "Keep this operation in the local journal after normal retention.";
+    public const string OperationKeepDescription = "Mark this operation as useful. The marker and operation can expire under normal journal retention.";
     private const string OperationAnnotationToolDescription = " Optional label and keep flag are stored with the local journal entry.";
     /// <summary>Common setup text; each catalog appends its engine's setup guidance.</summary>
     private const string SetupParameterName = "setup";

@@ -107,6 +107,20 @@ public static class McpResultAdapter
         return options;
     }
 
+    internal static bool FitsCompleteResult(SqlHarnessOutcome outcome, string command, McpResultBudget budget)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        budget.Validate();
+        var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead ? artifactRead.Section : outcome.Report;
+        var error = ToMcpError(RedactError(outcome.MachineError, [], budget.MaximumCellCharacters, out _));
+        var status = StatusFor(outcome, error);
+        var operationRef = outcome.OperationRefEligible && outcome.Journaled && IsAnnotatableCommand(command) && !string.IsNullOrWhiteSpace(outcome.OperationRef)
+            ? outcome.OperationRef : null;
+        return TryEnvelopeBytes(status, report, error, null, operationRef, out var bytes) &&
+            TryBuildWithinBudget(bytes, outcome.ExitCode is not (SqlHarnessExitCode.Success or SqlHarnessExitCode.WatchMaxDuration or SqlHarnessExitCode.SnapshotDifferences), budget.MaximumBytes, out _);
+    }
+
     /// <summary>
     /// Adapts one outcome to a budgeted SDK result. The returned content is
     /// one text block; <c>IsError</c> is true only for failures.

@@ -72,13 +72,18 @@ function OperationOwnerAnnotations({ operation }: { operation: OperationDetail["
       <input className="rounded-md border bg-background px-2 py-1" value={note} onChange={event => setNote(event.currentTarget.value)} />
     </label>
     <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ note })}>Save note</Button>
+    {update.error && <p role="alert" className="text-sm text-destructive">Could not save operation annotations: {update.error.message}</p>}
   </section>
 }
 
 function StoredSqlReuse({ detail }: { detail: OperationDetail }) {
   const sql = detail.sqlText ?? detail.candidateSqlText
+  const [copyError, setCopyError] = useState(false)
   return sql
-    ? <Button variant="outline" size="sm" onClick={() => void navigator.clipboard?.writeText(sql).catch(() => {})}>Copy stored SQL to reuse</Button>
+    ? <><Button variant="outline" size="sm" onClick={() => {
+      if (!navigator.clipboard) { setCopyError(true); return }
+      void navigator.clipboard.writeText(sql).then(() => setCopyError(false), () => setCopyError(true))
+    }}>Copy stored SQL to reuse</Button>{copyError && <p role="alert" className="text-sm text-destructive">Could not copy stored SQL to the clipboard.</p>}</>
     : <p className="text-sm text-muted-foreground">SQL not stored</p>
 }
 
