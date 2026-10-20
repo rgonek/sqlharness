@@ -93,8 +93,8 @@ test("SQL diff starts at the selected non-default A/B pair", async () => {
   const versions = ["v0", "v1", "v2", "v3"].map((version, index) => ({ version, hash: `h${index}`, logicalReadsSum: 10, logicalReadsMean: 10, scansSum: 1, elapsedMedianMs: 1, caseOutcome: "ok", measuredIn: [214], latestOperationId: 214 }))
   renderPanel({ ...comparison, a: "v1", b: "v2" }, versions, "/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v1&b=v2&case=all&agg=sum")
   await userEvent.click(await screen.findByRole("button", { name: "SQL diff" }))
-  expect(await screen.findByRole("combobox", { name: "From version" })).toHaveValue(JSON.stringify(["v1", "h1"]))
-  expect(screen.getByRole("combobox", { name: "To version" })).toHaveValue(JSON.stringify(["v2", "h2"]))
+  expect(await screen.findByRole("combobox", { name: "From version" })).toHaveTextContent("v1")
+  expect(screen.getByRole("combobox", { name: "To version" })).toHaveTextContent("v2")
 })
 
 test("reproduction actions resolve a selected fingerprint to each side's raw case ID", async () => {

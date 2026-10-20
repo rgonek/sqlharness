@@ -1,4 +1,5 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router"
+import { useId } from "react"
 import type { OptimizationSubject, ScopeVersions } from "@/api/types"
 import type { AgentSessionKey } from "@/api/types"
 import { useAgentSessionOptimization, useAgentSessionOptimizationComparison, useSessionOptimization, useSessionOptimizationComparison } from "@/api/queries"
@@ -6,6 +7,8 @@ import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
 import { VersionTable } from "@/components/optimization/VersionTable"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SessionSearch } from "@/router"
 
@@ -40,6 +43,7 @@ export function OptimizationSection({ sessionId, agentSessionKey }: { sessionId:
 
 function SubjectCard({ sessionId, agentSessionKey, search, subject }: { sessionId: number; agentSessionKey?: AgentSessionKey; search: SessionSearch; subject: OptimizationSubject }) {
   const navigate = useNavigate({ from: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id" } as never)
+  const controlId = useId()
   const matchesSubject = search.subject === subject.subject && (search.db ?? "") === subject.database
   const groups = subject.groups
   const group = (matchesSubject && groups.find(item => item.fingerprint === search.group)) || groups[0]
@@ -71,18 +75,30 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject }: { sessionI
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-medium">{subject.subject}</h3><p className="text-sm text-muted-foreground">{subject.database || "(no database)"} · {subject.engine}</p></div>
       {!matchesCard && <Button type="button" variant="outline" size="sm" onClick={() => update({ a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })}>Select comparison</Button>}
     </div>
-    {groups.length > 1 && group && <label className="grid max-w-xl gap-1 text-sm">Conditions group
-      <select aria-label={`${subject.subject} conditions group`} value={group.fingerprint} onChange={event => {
-        const next = groups.find(item => item.fingerprint === event.target.value)
+    {groups.length > 1 && group && <div className="grid max-w-xl gap-1 text-sm">
+      <Label htmlFor={`${controlId}-group`}>Conditions group</Label>
+      <Select items={groups.map(item => ({ value: item.fingerprint, label: item.label }))} value={group.fingerprint} onValueChange={fingerprint => {
+        const next = groups.find(item => item.fingerprint === fingerprint)
         if (next) update({ group: next.fingerprint, scope: [...next.scopes].sort((left, right) => scopeOrder(left) - scopeOrder(right))[0]?.scope }, true)
-      }}>{groups.map(item => <option key={item.fingerprint} value={item.fingerprint}>{item.label}</option>)}</select>
-    </label>}
-    {scopes.length > 1 && group && scope && <label className="grid max-w-md gap-1 text-sm">Scope
-      <select aria-label={`${subject.subject} scope`} value={scope.scope} onChange={event => {
-        const next = scopes.find(item => item.scope === event.target.value)
+      }}>
+        <SelectTrigger id={`${controlId}-group`} aria-label={`${subject.subject} conditions group`} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>{groups.map(item => <SelectItem key={item.fingerprint} value={item.fingerprint}>{item.label}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>}
+    {scopes.length > 1 && group && scope && <div className="grid max-w-md gap-1 text-sm">
+      <Label htmlFor={`${controlId}-scope`}>Scope</Label>
+      <Select items={scopes.map(item => ({ value: item.scope, label: item.scope }))} value={scope.scope} onValueChange={selectedScope => {
+        const next = scopes.find(item => item.scope === selectedScope)
         if (next) update({ scope: next.scope }, true)
-      }}>{scopes.map(item => <option key={item.scope} value={item.scope}>{item.scope}</option>)}</select>
-    </label>}
+      }}>
+        <SelectTrigger id={`${controlId}-scope`} aria-label={`${subject.subject} scope`} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>{scopes.map(item => <SelectItem key={item.scope} value={item.scope}>{item.scope}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>}
     {group && scope ? <>
       <p className="text-sm font-medium">{scope.scope}</p>
       {versions.length > 0 ? <VersionTable subject={`${subject.subject}-${subject.database}`} sessionId={sessionId} agentSessionKey={agentSessionKey} sessionSearch={selectedSearch}

@@ -79,6 +79,9 @@ test("renders forty versions and updates the URL when a version picker changes",
   await userEvent.click(within(table).getByRole("radio", { name: "A v1" }))
   await screen.findByRole("radio", { name: "A v1", checked: true })
   expect(router.state.location.search).toMatchObject({ a: "v1", b: "v39", subject: "Orders", db: "shop", group: "fp-1" })
+  await userEvent.click(within(table).getByRole("radio", { name: "B v2" }))
+  expect(within(table).getByRole("radio", { name: "A v1" })).toBeChecked()
+  expect(within(table).getByRole("radio", { name: "B v2" })).toBeChecked()
 })
 
 test("version table shows measure-only outcomes and unverified comparison label", async () => {
@@ -105,16 +108,68 @@ test("shows group and scope selectors only when the selected group has choices",
     "/api/sessions/7/optimization": sectionWithChoices,
     "/api/sessions/7/optimization/compare": comparison,
   })
-  const { router } = renderApp("/sessions/7?subject=Orders&db=shop&group=fp-2")
-  const group = await screen.findByRole("combobox", { name: "Orders conditions group" })
-  await userEvent.selectOptions(group, "fp-2")
-  expect(router.state.location.search.group).toBe("fp-2")
+  const { router } = renderApp("/sessions/7?subject=Orders&db=shop&group=fp-2&scope=fragment%20A&a=v4&b=v9&case=case-1&agg=mean&view=whole")
+  expect(await screen.findByRole("combobox", { name: "Orders conditions group" })).toBeInTheDocument()
   const scope = await screen.findByRole("combobox", { name: "Orders scope" })
-  await userEvent.selectOptions(scope, "whole query")
+  await userEvent.click(scope)
+  await userEvent.click(await screen.findByRole("option", { name: "whole query" }))
   expect(router.state.location.search).toMatchObject({ group: "fp-2", scope: "whole query" })
-  expect(router.state.location.search).not.toHaveProperty("a")
-  expect(router.state.location.search).not.toHaveProperty("b")
+  expect(screen.getByRole("combobox", { name: "Orders scope" })).toHaveTextContent("whole query")
+  for (const key of ["a", "b", "case", "agg", "view"]) {
+    expect(router.state.location.search).not.toHaveProperty(key)
+  }
   expect(await screen.findByRole("radio", { name: "A v0" })).toBeChecked()
+  expect(screen.getByRole("radio", { name: "B v39" })).toBeChecked()
+})
+
+test("changing conditions group selects its first scope and clears all dependent selections", async () => {
+  stubFetch({
+    "/api/sessions/7": sessionWithCompare(true),
+    "/api/sessions/7/optimization": sectionWithChoices,
+    "/api/sessions/7/optimization/compare": comparison,
+  })
+  const { router } = renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v1&b=v2&case=case-1&agg=mean&view=whole")
+
+  const group = await screen.findByRole("combobox", { name: "Orders conditions group" })
+  await userEvent.click(group)
+  await userEvent.click(await screen.findByRole("option", { name: "2 cases" }))
+
+  expect(router.state.location.search).toMatchObject({ group: "fp-2", scope: "whole query" })
+  expect(group).toHaveTextContent("2 cases")
+  expect(screen.getByRole("combobox", { name: "Orders scope" })).toHaveTextContent("whole query")
+  for (const key of ["a", "b", "case", "agg", "view"]) {
+    expect(router.state.location.search).not.toHaveProperty(key)
+  }
+  expect(await screen.findByRole("radio", { name: "A v0" })).toBeChecked()
+  expect(screen.getByRole("radio", { name: "B v39" })).toBeChecked()
+  expect(screen.getByRole("button", { name: "All cases" })).toHaveAttribute("aria-pressed", "true")
+})
+
+test("hides one-option controls and gives each subject its own accessible selector names", async () => {
+  const multiple = {
+    ...sectionWithChoices,
+    subjects: [
+      sectionWithChoices.subjects[0]!,
+      {
+        ...sectionWithChoices.subjects[0]!, subject: "Customers", database: "crm",
+        groups: [...sectionWithChoices.subjects[0]!.groups].reverse().map((item, index) => ({
+          ...item, fingerprint: `customers-${index}`, subject: "Customers", database: "crm",
+        })),
+      },
+      {
+        ...section.subjects[0]!, subject: "Products", database: "catalog",
+      },
+    ],
+  }
+  stubFetch({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": multiple })
+  renderApp("/sessions/7?subject=Orders&db=shop&group=fp-2")
+
+  expect(await screen.findByRole("combobox", { name: "Orders conditions group" })).toBeInTheDocument()
+  expect(screen.getByRole("combobox", { name: "Orders scope" })).toBeInTheDocument()
+  expect(screen.getByRole("combobox", { name: "Customers conditions group" })).toBeInTheDocument()
+  expect(screen.getByRole("combobox", { name: "Customers scope" })).toBeInTheDocument()
+  expect(screen.queryByRole("combobox", { name: "Products conditions group" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("combobox", { name: "Products scope" })).not.toBeInTheDocument()
 })
 
 test("keeps B unset when the selected scope has no qualified default", async () => {
