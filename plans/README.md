@@ -26,8 +26,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | TODO — P2, plan only |
 | [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | TODO — P2, plan only |
 | [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | Coordinate 089; no membership changes | TODO — P2, plan only |
-| [099](099-shadcn-cli-restoration.md) | Stable shadcn CLI devDependency, supported stylesheet import and contributor workflow | None | IMPLEMENTED and Windows-verified on `plan-099`; Important docs finding fixed, final Sol low scoped re-review pending, not integrated ([evidence](099-verification-evidence.md)) |
-| [100](100-shadcn-primitive-adoption.md) | Complete dashboard control inventory, accessible shadcn composition, disclosures and standard tables | Plan 099 implementation integrated | TODO — plan only |
+| [100](100-shadcn-primitive-adoption.md) | Complete dashboard control inventory, accessible shadcn composition, disclosures and standard tables | Plan 099 implementation integrated | BLOCKED — Plan 099 implementation is not integrated; TODO when predecessor lands |
 
 ## Limit-economics execution notes (2026-10-20)
 
@@ -45,6 +44,10 @@ Plan 082 is DONE and locally merged into `main` at `dd37512`. All task reviews a
 Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up plans 089, 090 and 091 cover the parked detail limit and both deferred Minors. See [084 evidence](084-verification-evidence.md) and [history](history.md).
 
 ## History
+
+| Plan | Scope | Branch status |
+|---|---|---|
+| [099](099-shadcn-cli-restoration.md) | Stable shadcn CLI devDependency, supported stylesheet import and contributor workflow | IMPLEMENTED; Windows-verified; all reviews approved on `plan-099`; not integrated ([evidence](099-verification-evidence.md)) |
 
 Evidence from completed plans, former queues, rejected proposals and audit decisions are in the [history](history.md). Read it when investigating earlier decisions or evidence, not before every task.
 

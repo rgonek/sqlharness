@@ -397,11 +397,15 @@ Framing: in CLI mode the agent shares the shell's environment, so closed profile
 
 Kept as right: T-SQL classifier and its closed bypass shapes, typed parameter binding, exact `--confirm-database`, MCP budgets and busy gate (the busy gate was later removed by 060), dashboard host/cookie/origin/CSP, owner-only journal files, exits 7/8, offline validate.
 
-## Calendar dates
+## Plan 099 branch completion — 2026-10-20
+
+Plan [099](099-shadcn-cli-restoration.md) is DONE on feature branch `plan-099`: the stable shadcn CLI dependency, supported stylesheet import, and contributor workflow are implemented; the Windows repository gate passed on product revision `dd8b9e93`; and all task, whole-branch, and final Sol low scoped reviews are approved. The final review confirmed the PowerShell command documentation fix at `19e82a3`; the documentation/evidence-only follow-up did not change product code, so the gate was not repeated. The branch is not integrated. Plan [100](100-shadcn-primitive-adoption.md) remains blocked until Plan 099's implementation is actually integrated. Linux and live database behavior remain unverified; no merge or push occurred. See [Plan 099 verification evidence](099-verification-evidence.md) and the [final scoped review](099-evidence/task-reports/final-rereview-19e82a3.md).
 
 ## Plan 085 branch record, 2026-10-20
 
 DONE — locally integrated into `main` at `e41c990` (2026-10-20). Verified product tree `9adc27d` passed the final Windows gate; the docs-only Plan 092 merge has no changes in `src`, `tests`, `scripts`, or `justfile`, so no integrated-tree gate was rerun. All task reviews, whole-branch Sol review, and final scoped Sol re-review are approved. The controller accepted the historical capabilities exact-byte oracle limitation and the absence of an outer MCP response-path test as a Minor coverage gap; shared-handler rollback coverage and fixed/request budget wiring were accepted. No push. See [085 verification evidence](085-verification-evidence.md).
+
+## Calendar dates
 
 - 2026-11-10: .NET 8 and .NET 9 end of support (plan 022).
 - About 2027-11: next LTS move (.NET 12).
