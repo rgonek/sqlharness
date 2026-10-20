@@ -1,6 +1,6 @@
 # Plan 085 implementation evidence
 
-**Status:** All task reviews, whole-branch Sol review, and final scoped Sol re-review are approved on branch `plan-085`. Verified product tree `9adc27d` passed the final Windows gate. Local integration into `main` is authorized and pending; no push is authorized.
+**Status:** DONE — locally integrated into `main` at `e41c990` (2026-10-20). All task reviews, whole-branch Sol review, and final scoped Sol re-review are approved. Verified product tree `9adc27d` passed the final Windows gate. The Plan 092 integration changed documentation only; `src`, `tests`, `scripts`, and `justfile` match `9adc27d` exactly, so no integrated-tree gate was rerun. No push.
 
 ## MCP byte measurements
 
@@ -44,7 +44,7 @@ The operation page now shows owner annotation request failures and clipboard cop
 
 Focused validation before the final gate: `AnnotateToolTests` 10/10; `Normal_retention_expires_kept_and_unkept_operation_annotations` 1/1; `OperationPage.test.tsx` 28/28. Final direct branch formatting passed on committed code tree `9adc27d` with `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 3702ce1`; it checked 40 branch C# files.
 
-The first final gate attempt (`D:/temp/sqlharness-plan085-finalwave2`) passed build and UI but hit the existing timing-sensitive `DashboardHousekeepingTests.Matcher_commits_do_not_keep_an_idle_dashboard_up` assertion (null title). Its focused rerun passed 1/1. No code changed; the full gate was rerun with fresh logs. `just verify -LogDirectory D:/temp/sqlharness-plan085-finalwave3` passed all five stages on tree `9adc27d8cc1c935968ece5a4023acff8313f50a1`: build 0 warnings / 0 errors; UI 62 files / 331 tests passed; Core 4,562 passed / 11 skipped; MCP 462 passed / 4 skipped. Working-tree formatting was skipped because there were zero changed C# files; direct branch formatting above passed. The UI log has non-failing localhost connection refusals. Linux and live database checks were not run. The whole-branch and final scoped reviews are approved; local integration is authorized and pending.
+The first final gate attempt (`D:/temp/sqlharness-plan085-finalwave2`) passed build and UI but hit the existing timing-sensitive `DashboardHousekeepingTests.Matcher_commits_do_not_keep_an_idle_dashboard_up` assertion (null title). Its focused rerun passed 1/1. No code changed; the full gate was rerun with fresh logs. `just verify -LogDirectory D:/temp/sqlharness-plan085-finalwave3` passed all five stages on tree `9adc27d8cc1c935968ece5a4023acff8313f50a1`: build 0 warnings / 0 errors; UI 62 files / 331 tests passed; Core 4,562 passed / 11 skipped; MCP 462 passed / 4 skipped. Working-tree formatting was skipped because there were zero changed C# files; direct branch formatting above passed. The UI log has non-failing localhost connection refusals. Linux and live database checks were not run. The whole-branch and final scoped reviews are approved; local integration completed at `e41c990` with the verified product unchanged.
 
 ## Final SDD rulings and review disposition
 
@@ -58,4 +58,4 @@ The following seven rulings are copied in order from the Plan 085 SDD ledger. Ea
 6. Ruling: Historical capabilities exact-byte oracle remains a nonblocking evidence limitation — current off-member omission, unchanged MCP mapping and other goldens/measurements pass, final Sol agrees — if wrong a capabilities-only byte regression may remain undetected. The controller and final Sol accept this as a nonblocking evidence Minor.
 7. Ruling: Accept shared-handler maximum-batch rollback regression without an outer MCP response-path test — exact adapter serializer helper and both tool paths share budget wiring, full gate passes, final Sol marks test gap Minor — if wrong a transport-wrapper budget regression could escape this focused test. The controller accepts this as a Minor coverage gap.
 
-Final scoped Sol review: all Important findings, owner feedback, and scope documentation are addressed; no Critical or Important findings remain. The two documented evidence/test Minors are parked with the accepted rulings above. Local integration into `main` is authorized and pending; no push is authorized.
+Final scoped Sol review: all Important findings, owner feedback, and scope documentation are addressed; no Critical or Important findings remain. The two documented evidence/test Minors are parked with the accepted rulings above. Local integration into `main` completed at `e41c990`; no push.

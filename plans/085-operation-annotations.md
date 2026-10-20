@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- IMPLEMENTED on branch `plan-085`; verified product tree `9adc27d`; all task reviews, whole-branch Sol review, and final scoped Sol re-review approved. Local integration into `main` is authorized and pending; no push authorized. Planning base `6c37cd7`. Depends on 077, 079, 084.
+- DONE — locally integrated into `main` at `e41c990`. Verified product tree `9adc27d`; all task reviews, whole-branch Sol review, and final scoped Sol re-review approved. The integration only adds Plan 092 documentation to the already verified product; `src`, `tests`, `scripts`, and `justfile` match `9adc27d`, so no integrated-tree gate was rerun. No push. Planning base `6c37cd7`. Depends on 077, 079, 084.
 - Priority P2; effort M–L; risk MEDIUM (MCP contract; scope rule).
 
 ## Global Constraints
@@ -39,30 +39,30 @@
 ---
 
 ### Task 0: Drift check and baseline
-- [ ] Confirm 077/079/084 merged; drift check; `just verify`; record base. Capture 077 golden tools/list and representative results for the off-mode tests.
+- [x] Confirm 077/079/084 merged; drift check; `just verify`; record base. Capture 077 golden tools/list and representative results for the off-mode tests.
 
 ### Task 1: Config, schema members and descriptions
 **Files:** `src/SqlHarness.Core/SqlHarnessConfig.cs` (`JournalConfig.OperationAnnotations`), `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs` (schema member removal via the factory's schema options and allowlist gating, not handler duplication), `McpToolArguments.cs`, `src/SqlHarness.Core/Capabilities.cs` (nullable `operationAnnotations` member omitted when off; bump `ContractVersion`), `src/SqlHarness.Mcp/McpLimits.cs`; tests `tests/SqlHarness.Mcp.Tests/McpTokenBudgetTests.cs`, catalog/startup tests.
-- [ ] Failing tests: `Off_output_is_byte_identical`; on → members present only on the five tools with descriptions ≤ 1 line; unknown `label` when off → rejected; tools/list on ≤ 32 KiB; startup rejects on + journal disabled.
-- [ ] FAIL → implement → PASS. Commit `feat(085): gate annotation members behind config`.
+- [x] Failing tests: `Off_output_is_byte_identical`; on → members present only on the five tools with descriptions ≤ 1 line; unknown `label` when off → rejected; tools/list on ≤ 32 KiB; startup rejects on + journal disabled.
+- [x] FAIL → implement → PASS. Commit `feat(085): gate annotation members behind config`.
 
 ### Task 2: operationRef in results and call-time annotations
 **Files:** 077's `McpAgentEnvelope`/`McpResultAdapter.cs` (optional field, budget reservation), `src/SqlHarness.Core/Journal/JournalingModule.cs` (`Journaled` flag on outcome), `JournalSchema.cs` step (`operation_annotations(operation_id PK, agent_label_initial, agent_label, agent_keep, owner_starred, owner_note, updated_at)`), `ActivityJournal.cs`; tests `McpResultAdapterTests`, `McpTokenBudgetTests`, journal tests.
-- [ ] Failing tests: ref only when journaled and on; `Ref_survives_minimum_budget`; ref present in minimal error fallback; call-time `label`/`keep` stored (initial and current); label validation errors.
-- [ ] FAIL → implement → PASS. Commit `feat(085): return operation refs and store call-time annotations`.
+- [x] Failing tests: ref only when journaled and on; `Ref_survives_minimum_budget`; ref present in minimal error fallback; call-time `label`/`keep` stored (initial and current); label validation errors.
+- [x] FAIL → implement → PASS. Commit `feat(085): return operation refs and store call-time annotations`.
 
 ### Task 3: Annotation tool and scope resolver
 **Files:** create `src/SqlHarness.Core/Journal/AnnotationScope.cs`, `src/SqlHarness.Mcp/Tools/AnnotateHandler.cs`; register in `McpToolCatalog.cs` only when on; tests `tests/SqlHarness.Tests/Journal/AnnotationScopeTests.cs`, `tests/SqlHarness.Mcp.Tests/AnnotateToolTests.cs`.
 **Interfaces:** `static ScopeDecision AnnotationScope.Decide(CallerIdentity caller, TargetRow target, MembershipView links, bool matchingOn)`.
-- [ ] Failing tests: `Fresh_unlinked_target_in_own_session_is_allowed`; `Other_conversation_target_is_not_available`; cross-MCP-session target in the same Codex conversation allowed; Claude caller with single-conversation session resolves, two-conversation session unresolved; inferred never authorizes; `Not_available_is_uniform` (byte comparison); malformed ref validation; batch of 20 mixed; echo `{operationRef, tool, label, keep}`; mutation/artifact refs not annotatable; matching flag change between calls takes effect.
-- [ ] FAIL → implement → PASS. Commit `feat(085): annotate operations within the agent session`.
+- [x] Failing tests: `Fresh_unlinked_target_in_own_session_is_allowed`; `Other_conversation_target_is_not_available`; cross-MCP-session target in the same Codex conversation allowed; Claude caller with single-conversation session resolves, two-conversation session unresolved; inferred never authorizes; `Not_available_is_uniform` (byte comparison); malformed ref validation; batch of 20 mixed; echo `{operationRef, tool, label, keep}`; mutation/artifact refs not annotatable; matching flag change between calls takes effect.
+- [x] FAIL → implement → PASS. Commit `feat(085): annotate operations within the agent session`.
 
 ### Task 4: Dashboard owner annotations and Named operations
 **Files:** `src/SqlHarness.Dashboard/DashboardServer.cs` (`PATCH /api/operations/{id}/annotation` owner star/note; `GET /api/named-operations?q=&cursor=`), `JournalReader.cs`; UI `ui/src/pages/NamedOperationsPage.tsx` (new nav item), `OperationPage.tsx` and `OperationTable.tsx` (owner star, agent keep marker distinct, label column); tests alongside.
-- [ ] Failing tests: owner star/note independent of the switch; agent keep visually distinct; named view lists labelled, kept or owner-starred operations with search across sessions; reuse actions only with stored SQL, else `SQL not stored`; labels as plain text.
-- [ ] FAIL → implement → PASS; build. Commit `feat(085): owner operation annotations and named operations view`.
+- [x] Failing tests: owner star/note independent of the switch; agent keep visually distinct; named view lists labelled, kept or owner-starred operations with search across sessions; reuse actions only with stored SQL, else `SQL not stored`; labels as plain text.
+- [x] FAIL → implement → PASS; build. Commit `feat(085): owner operation annotations and named operations view`.
 
 ### Task 5: Contract docs, 077 D1 amendment, verification
-- [ ] Document the conditional `operationRef` in 077's contract docs (D1 amendment note), `docs/mcp.md`, README (switch, privacy: labels stored when on regardless of `storeSensitive`), capabilities docs. No skill change unless optional trials show under-labelling.
-- [ ] Byte measurements recorded: tools/list on/off, representative results on/off. Optional (operator-authorized): paired agent trials and second-session reuse trial vs work-folder baseline.
-- [ ] `just verify`; queue → history; commit `docs(085): record plan 085 evidence`.
+- [x] Document the conditional `operationRef` in 077's contract docs (D1 amendment note), `docs/mcp.md`, README (switch, privacy: labels stored when on regardless of `storeSensitive`), capabilities docs. No skill change unless optional trials show under-labelling.
+- [x] Byte measurements recorded: tools/list on/off, representative results on/off. Optional paired agent trials and second-session reuse trial vs work-folder baseline were not run; they were not authorized.
+- [x] `just verify`; queue → history; commit `docs(085): record plan 085 evidence`.

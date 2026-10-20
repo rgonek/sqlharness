@@ -401,7 +401,7 @@ Kept as right: T-SQL classifier and its closed bypass shapes, typed parameter bi
 
 ## Plan 085 branch record, 2026-10-20
 
-Implementation and final review fixes are committed on `plan-085`; verified product tree `9adc27d` passed the final Windows gate. All task reviews, the whole-branch Sol review, and final scoped Sol re-review are approved. Local integration into `main` is authorized and pending; no push is authorized. The controller accepted the historical capabilities exact-byte oracle limitation and the absence of an outer MCP response-path test as a Minor coverage gap; the shared-handler rollback test and both fixed/request budget wiring were accepted. See [085 verification evidence](085-verification-evidence.md).
+DONE — locally integrated into `main` at `e41c990` (2026-10-20). Verified product tree `9adc27d` passed the final Windows gate; the docs-only Plan 092 merge has no changes in `src`, `tests`, `scripts`, or `justfile`, so no integrated-tree gate was rerun. All task reviews, whole-branch Sol review, and final scoped Sol re-review are approved. The controller accepted the historical capabilities exact-byte oracle limitation and the absence of an outer MCP response-path test as a Minor coverage gap; shared-handler rollback coverage and fixed/request budget wiring were accepted. No push. See [085 verification evidence](085-verification-evidence.md).
 
 - 2026-11-10: .NET 8 and .NET 9 end of support (plan 022).
 - About 2027-11: next LTS move (.NET 12).
