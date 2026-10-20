@@ -26,9 +26,9 @@ The internal accounting regression checks one fixed-shell serialization and exac
 
 ## Dashboard gate repair
 
-`03cdd6c` changes only `DashboardHousekeepingTests.Matcher_commits_do_not_keep_an_idle_dashboard_up`. Housekeeping callbacks are not evidence of a matcher sweep: polling is 250 ms, while sweeps use 60 seconds of injected-clock time. The test previously appended titles after matching and used callback counts to infer consumption. The repair explicitly observes initial linking, arms one title append per phase, advances to an eligible sweep, observes committed `title-1`, arms the second append, and verifies `title-2` with shutdown at the original two-minute idle deadline. Cancellation/await cleanup runs in `finally`. Product matcher and idle policy are unchanged.
+`03cdd6c` and final correction `ec21e6a` change only `DashboardHousekeepingTests.Matcher_commits_do_not_keep_an_idle_dashboard_up`. Housekeeping callbacks are not evidence of a matcher sweep: polling is 250 ms, while sweeps use 60 seconds of injected-clock time. The test previously appended titles after matching and used callback counts to infer consumption. The final repair observes the initial matcher cycle, appends `title-1`, advances to an eligible sweep and observes its commit, then appends `title-2` synchronously before advancing to the original two-minute idle deadline. It verifies the second commit and shutdown. Cancellation/await cleanup runs in `finally`. Product matcher and idle policy are unchanged.
 
-The first revised test exposed repeated title appends (`title-3` instead of `title-2`); arming each append once corrected that fixture race. Final focused `DashboardHousekeepingTests` passed 17/17. Luna xhigh dashboard task review approved specification and quality with no findings.
+The first revised test exposed repeated title appends (`title-3` instead of `title-2`). Luna xhigh approved the first task repair, but Sol's whole-branch review found a remaining callback-count race before the second append. `ec21e6a` removes that dependency by appending synchronously. Final focused `DashboardHousekeepingTests` passed 17/17 in 11.7861 seconds. Sol scoped re-review marked its Important ADDRESSED with no new findings; all product and test review findings are closed, subject to actual final format/gate results.
 
 ## Focused verification
 
