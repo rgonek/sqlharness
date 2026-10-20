@@ -60,3 +60,69 @@ reachable only through the journal or dashboard, not through any `artifact` sect
 This supports the question above: whether a bounded artifact section should expose these fields. Batch-level
 values also mix fill statements with the statement under test. Statement-level grants were not checked.
 See also [statement metrics](statement-metrics-and-local-object-noise.md).
+
+## Follow-up 2026-10-20
+
+Recorded against repository HEAD `32adaa78`. Status: collecting observations, not approved for
+implementation. Earlier observations above remain unchanged.
+
+A separate current-source optimization investigation rejected an existence-check candidate. Three
+successful compare operations covered nine parameter cases; two artifact reads retrieved complete
+plan trees for both variants of one case only. Neither response required a continuation. The final
+report used that pair to explain changed work order. A later retro clarification explicitly limited
+that interpretation to the selected case and stated that grants and compilation remained unreviewed.
+The other case plans were not read. The [report observation](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-20--current-source-existence-check-candidate-rejected)
+retains report provenance, workflow counts and the separate median-range clarification.
+
+Classification: agent slip in evidence-review completeness and reporting coverage, not a demonstrated
+new tool defect. Confidence is high in what the transcript shows was reviewed. Successful complete
+node retrieval establishes coverage of the selected trees, not complete performance evidence or the
+absence of grant, spill or compilation concerns. The earlier surface-gap observation is relevant
+coverage, but actual availability of grant and compilation fields for these operations was not checked;
+this follow-up does not establish that the installed tool could not supply them.
+
+Two bounded read-only journal queries during the retro inspected emission counters and aggregate
+operation phases, not memory-grant or compilation metrics. Connection work dominated the initial
+successful target check, and the available connection event recorded success. The cause remains
+unknown; these records do not distinguish authentication, network and server effects. No live benchmark
+was repeated. Exact installed-build correspondence to the inspected HEAD was not established.
+
+The cheapest useful next check is offline: inspect saved or journal-backed grant and compilation
+availability for the existing operations and enumerate which cases and statements remain unreviewed.
+Missing fields must remain distinct from zero. For later synthesis, ask whether explicit review coverage
+alongside a rejection decision is sufficient or whether an existing evidence surface needs improvement.
+This entry chooses neither a safeguard nor an API change and authorizes no plan or implementation.
+
+## Follow-up 2026-10-20 — static-list aggregation
+
+Recorded against repository HEAD `6f39a292`. Status: collecting observations, not approved for
+implementation. Earlier observations remain unchanged. This is a separate session from the
+existence-check follow-up above.
+
+Two comparisons and four artifact-plan reads reviewed both variants of a static-list query and its
+metadata-preserving revision. Complete last-measured operator trees fit without clipping or
+continuation. The final report used them to explain eliminated repeated lookups. A retro clarification
+narrowed the wording: complete operator trees were reviewed, but memory grants and compilation were
+not. See the [report entry](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-20--static-list-aggregation-lower-reads-with-preserved-metadata)
+for provenance, call counts and the interim metadata correction.
+
+Classification: agent slip in review/report coverage; the existing evidence-surface UX gap is relevant,
+not newly demonstrated. Confidence is high in the observed review limit. Current source defines grant
+and compilation fields in `src/SqlHarness.Core/Journal/PlanMetricsExtractor.cs:14-28`; the safe artifact
+models in `src/SqlHarness.Core/ArtifactReader.cs:43-103` expose metrics and operator trees separately.
+Actual grant/compilation availability for these retained operations was not checked. Exact installed
+binary correspondence to the inspected HEAD was not established. Successful full tree retrieval does
+not prove full diagnostic review, unavailable fields, or zero grant/compilation cost.
+
+Two bounded local read-only journal invocations inspected schema, operation output counters, phase
+aggregates and event summaries. Initial target confirmation was dominated by connection work;
+subsequent connections were smaller. Connection and artifact event summaries showed success. Detailed
+event payloads were not inspected; authentication, network and server causes remain unknown. The sole
+rejected offline dry run had a parse error from agent-authored SQL and no connection work. No live SQL
+was rerun during the retro. Output counters exclude discovery, inputs, source reads and final prose;
+no complete token-cost or savings claim follows.
+
+The cheapest next check is offline availability inspection of retained grant and compilation metrics,
+keeping missing values distinct from zero. For later synthesis: is explicit review-coverage wording
+sufficient while the existing surface question remains open? This follow-up selects no API or safeguard
+and authorizes no plan, implementation or publication.

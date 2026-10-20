@@ -55,6 +55,10 @@ the tool. Keep workload values out.
 | 2026-10-15 historical query experiment (unmapped) | optimization | partial | 1 | variant × case table, plans, limits, later correction | ~6 / ~9 | yes (source/Git applicability) | 1 | external context required; no API change |
 | 2026-10-15 current-source history query (unmapped) | optimization | partial | 1 | variant × case table, source context, outcome, limits, evidence links | ~8 / ~12 | yes (calling conditions, candidate rationale, deferred implementation) | 1 clarification | external context and review coverage; no API decision |
 | 2026-10-15 sync-key selection query (unmapped) | optimization | partial | 1 | pre-measurement source context, path × case table, plan comparison, limits, unmeasured side findings, follow-up offer | ~16 / ~24 | yes (source/caller context, Query Store prioritization, unmeasured write-path proposals, deferral) | 1 (unlabeled inference) | external context, unmeasurable side findings, partial evidence; no API decision |
+| 2026-10-20 current-source existence-check candidate (unmapped) | optimization | reject | 1 | source context, variant x case table, plan interpretation, limits | not recorded | yes (source applicability, callers, candidate rationale) | 2 clarifications | external context and explicit review coverage; no API decision |
+| 2026-10-20 sync-range batch with lookup join (unmapped) | optimization | reject | 1 | pre-measurement source context, case x metric table (baseline only), read-attribution explanation, rejected candidates (1 measured, 2 reasoned), unmeasured out-of-SQL lever, unexplained telemetry gap, evidence links | ~9 / ~22 | yes (selection via historical telemetry plus source match, index and join-shape rejection by reasoning, stopping decision) | 2 (overstated text match; inference presented as measurement) | external context; explicit measured vs inferred labeling; no API decision |
+| 2026-10-20 multi-statement read batch, function replaced by ranked CTE (unmapped) | optimization | adopt (proposed, not applied) | 1 | pre-measurement source context with parameter type table, bottleneck explanation, change description, case x metric table (before → after, equality), plan check, limits and uncovered branches, question for a human | ~15 / ~20 | yes (source context, equivalence reasoning for branches without data, untrusted-constraint risk) | 3 clarifications (overstated review coverage x2; unlabeled hypothesis) | external context; explicit review coverage; tool-known hidden work not on agent path; no API decision |
+| 2026-10-20 static-list aggregation (unmapped) | optimization | adopt (proposed, not applied) | 1 | source context, variant x metric table, equality, plans, limits, evidence links | ~7 / ~10 | yes (source applicability, callers, rewrite rationale, deferral) | 1 clarification; 1 interim metadata revision | external context and review coverage; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -594,3 +598,245 @@ A separate session from the two 2026-10-15 entries above; the label is not asser
 - **Operator decision:** Record observations for table-valued parameters, write-path and index
   maintenance evidence, statement metrics and partial-run journal coverage. Plan the partial-run
   journal fix ([plan 076](../../../plans/076-partial-matrix-journal-runs.md)); no implementation authorized.
+
+### 2026-10-20 — current-source existence-check candidate rejected
+
+`Kind:` optimization · `Outcome:` reject · `Scopes:` 1 · `System label:` unmapped.
+Recorded against repository HEAD `32adaa78`. Status: collecting observations, not approved for
+implementation. The system label is not asserted to match earlier entries.
+
+- **Actual report:** The operator required a query from current application source and an account of
+  file, method, callers, SQL composition and parameters before measurement. The agent supplied that
+  context, compared a correlated existence-check rewrite, and rejected the candidate because repeated
+  measurements showed no stable benefit and additional reads in several cases. No application or
+  database change was made. Historical query telemetry was not needed.
+- **Report blocks:** Source and calling context; variant x case results table; rejection decision;
+  interpretation of one selected plan pair; limits concerning dates and tied history rows. No human
+  question or follow-up offer appeared in the final investigation report. Retro clarifications followed.
+- **Evidence and interpretation:** Three successful compare operations covered nine parameter cases
+  with five repetitions each and observed multiset equality. Four query operations supplied target
+  confirmation, bounded sample selection and catalog/parameter context. Two artifact reads returned
+  complete last-measured plan trees for both variants of one case, without continuation or clipped
+  nodes. The plan pair supported an explanation of changed work order in that case only. Formal
+  two-direction EXCEPT validation and a complete review of plans, grants and compilation were not
+  performed. Equality in measured cases does not establish full domain equivalence.
+- **Content provenance:** The results table, repetition count, case count and observed equality came
+  from journal-backed compare metrics; target confirmation came from query rows; the access-pattern
+  explanation came from artifact nodes and agent interpretation. Source location, caller conditions,
+  SQL composition and the rationale for the candidate came from application code outside journal
+  operations. Numeric values were manually transcribed into chat. A normalized count of numeric report
+  statements and total prose statements is not recorded. The source-applicability and candidate
+  rationale decisions cannot be reconstructed from journal metrics alone.
+- **Corrections:** Two retro clarifications: plan review covered one case and both variants, rather
+  than the entire evidence set; the short reported elapsed range described medians rather than all
+  executions. Cause: insufficiently explicit review coverage and aggregation wording in the agent's
+  report, not a demonstrated tool defect. Grants and compilation remained unreviewed.
+- **Dashboard usefulness:** Preserve the rejected candidate, source context, decision, review limits
+  and later clarifications alongside the evidence. Actual dashboard use, usability benefit and
+  reconstruction effort are not recorded.
+- **Observed workflow cost:** capabilities x1, query x4, compare x3, artifact x2: eleven investigation
+  calls. All succeeded; no obstructive SQLHarness response clipping or failed-call retry was observed.
+  The negative optimization result was useful evidence, not friction. Retro added two bounded local
+  read-only journal queries; repository and discovery reads are separate.
+- **Cost coverage:** Journal emission byte counters and estimated-token counters were inspected for
+  the nine journaled investigation operations; capabilities and tool-catalog overhead were outside
+  that total. These counters do not establish what every model received. Arguments, source reads,
+  final-chat duplication and complete workflow token use were not measured. No savings baseline or
+  modeled replacement workflow is recorded. Real workload output totals are intentionally omitted.
+- **Diagnostic qualification:** Existing aggregate phases were inspected for the relevant operations.
+  Connection work dominated the initial successful target check; an available connection event recorded
+  success. These records do not identify authentication, network or server as the cause. Detailed
+  event payloads were not inspected, and no live query was rerun. Exact installed-build correspondence
+  to repository HEAD was not established.
+- **Optional API implications:** Another report needs authored source context and explicit evidence
+  review coverage beyond journal metrics. This does not select an API or establish readiness or token
+  savings. The related [grant/compilation follow-up](../../observations/plan-memory-and-compilation-evidence.md#follow-up-2026-10-20)
+  records the review limitation without treating it as a new tool defect.
+- **Operator decision:** Record this report observation and the related review-coverage follow-up
+  only. No implementation plan, code, skill edit or publication is authorized by this record.
+
+### 2026-10-20 — sync-range batch with lookup join, no better shape found
+
+`Kind:` optimization · `Outcome:` reject · `Scopes:` 1 · `System label:` unmapped.
+Recorded against repository HEAD `f928da0d`. Status: collecting observations, not approved for
+implementation. The system label is not asserted to match earlier entries.
+
+- **Actual report:** The operator required a query from current application source, with historical
+  query telemetry used only after confirming it matched that source, and an account of file, method,
+  calling conditions, SQL composition and parameters before measurement. The agent used telemetry to
+  rank candidates, chose a static multi-statement range-read batch whose main statement joins a lookup
+  table, gave the source context, measured the batch on three parameter sets (two full batches, one
+  empty), and compared one equivalent join-predicate variant. It concluded that no rewrite of the SQL
+  helps: nearly all work is one clustered-index seek per returned row into the lookup table. It
+  dismissed a range-restricted hash/merge shape based on a catalog query showing the per-batch key range
+  spans nearly the whole lookup table, and dismissed a narrower covering index because it would have the
+  same index depth. It named a data-model change outside SQL as the only real lever, unmeasured. No
+  application or database change was made.
+- **Report blocks:** Pre-measurement source context; case x metric table (baseline only); explanation of
+  where the reads go; list of rejected candidates (one measured, two reasoned only); out-of-SQL lever
+  marked unmeasured; an unexplained gap between historical telemetry and measured values; artifact
+  identifiers. No human question. Retro corrections followed.
+- **Evidence and interpretation:** One measure operation (three parameter sets, seven repetitions)
+  and one compare (two sets, seven repetitions, multiset equality) supplied the metrics. One artifact
+  `statements` read supplied operator executions per statement. Seven query operations supplied target
+  confirmation, telemetry ranking and source-match text, index and table catalog data, index depth and
+  key-range distribution; one of them failed with an agent SQL error and was corrected in the next
+  call. A telemetry plan document was clipped at the cell limit and abandoned in favour of the measured
+  actual plan. Per-table reads were available in the saved artifact `metrics` section but were not read.
+- **Content provenance:** Of roughly 22 numeric report statements, about 9 came from journal-backed
+  measure/compare metrics, about 7 from `query` rows (telemetry and catalog), about 1 from artifact
+  operator counts and about 4 were agent inference (read split between tables, share of work, product of
+  seeks and depth). All were transcribed by hand. Candidate selection (telemetry ranking plus source
+  match), the index and join-shape rejections, and the decision to stop have no journal operation.
+- **Stopping rationale (asked by the operator in the retro):** After one compare the agent stopped on a
+  lower-bound argument: the plan already performed roughly one seek per row that needs the lookup, and
+  distinct lookup keys almost equalled returned rows, so deduplication, APPLY or reordering could not
+  reduce logical reads materially. The hash/merge rejection rested on a catalog query and page-count
+  arithmetic, not on a measured variant. The tool did not stop the work; the candidates were left
+  unmeasured by agent judgement. Whether a measured hint variant would have been worth its cost as
+  evidence is a question for later synthesis.
+- **Corrections:** Two, delivered in the retro. (1) The report said the telemetry text matched the
+  source exactly; the comparison was visual, without hashing or line-ending normalization. Cause:
+  overstated claim. (2) The per-table read split and share of work were presented like measurements but
+  were inferred from operator executions and index depth, although measured per-table reads existed in
+  the artifact `metrics` section. Cause: unlabeled inference; see the
+  [statement-metrics follow-up](../../observations/statement-metrics-and-local-object-noise.md#follow-up-2026-10-20).
+- **Dashboard usefulness:** Preserve the source context, the measured baseline, the rejected candidates
+  with whether each was measured or reasoned, the stopping rationale and the corrections. Actual dashboard
+  use and reconstruction effort are not recorded.
+- **Observed workflow cost:** capabilities x1, query x7 (one agent SQL error), measure x1, artifact x1,
+  compare x1: eleven investigation calls. One cell clipped (telemetry plan document). No SQLHarness
+  rejection, timeout or retry of a tool failure. The negative result was useful evidence, not friction.
+- **Cost coverage:** Journal byte and token counters were not inspected. Arguments, source reads,
+  discovery overhead, final-chat duplication and complete workflow token use were not measured. No
+  savings baseline or modeled workflow is recorded.
+- **Diagnostic qualification:** Not applicable; there were no timeouts, failures or unstable calls
+  warranting phase review. Phase aggregates were not inspected.
+- **Optional API implications:** Another report whose decisive content (source match, candidate
+  selection, reasoned rejections, stopping) lies outside journal operations, and where the measured and
+  inferred status of each number matters. No API is selected and no readiness or savings follow.
+  Related: [telemetry plan clipping](../../observations/query-store-plan-cell-clipping.md).
+- **Operator decision:** Record this entry, the statement-metrics follow-up and the telemetry plan
+  clipping observation only. No plan, code, skill edit or publication is authorized.
+
+### 2026-10-20 — multi-statement read batch, function replaced by ranked CTE
+
+`Kind:` optimization · `Outcome:` adopt (proposed, not applied) · `Scopes:` 1 · `System label:` unmapped.
+Recorded against repository HEAD `a063e75c`. Status: collecting observations, not approved for
+implementation. The system label is not asserted to match earlier entries.
+
+- **Actual report:** The operator required a query from current application source, historical query
+  telemetry only after confirming it matched that source, and an account of file, method, calling
+  conditions, SQL composition and parameters before measurement. The agent selected a static
+  multi-statement read batch from source and gave that context, including a parameter type table derived
+  from the data-access library's mapping. Two access failures interrupted the work (see diagnostics).
+  Telemetry held no trace of the batch, so it was not used. The agent measured the baseline on four
+  parameter sets and found that one statement, which joins a multi-statement table-valued function
+  computing data for a much larger entity set than needed, dominated CPU. It replaced the function with a
+  ranked CTE restricted to the needed rows, compared both batches, and recommended the change without
+  applying it to the code. A question about applying it and adding tests ended the report.
+- **Report blocks:** Pre-measurement source context; bottleneck explanation; change description; case x
+  metric table (before → after, observed equality); plan check of the candidate; limits (branches without
+  data, untrusted foreign keys, reads not visible inside the function); question for a human. Retro
+  corrections followed.
+- **Evidence and interpretation:** One measure (four sets) and one compare (four sets, five repetitions,
+  multiset equality) supplied the metrics. Two artifact reads supplied per-statement metrics (partial
+  coverage, continuation not followed) and one candidate plan tree. Five successful query operations
+  supplied target confirmation, an empty telemetry search, cardinalities, case selection, index and
+  constraint catalog data, and an empty edge-case search. Equivalence for two fallback branches rests on
+  reading the function's source, not on data. Domain equivalence was not established beyond the measured
+  cases; grants and compilation were not reviewed.
+- **Content provenance:** Of roughly 20 numeric report statements, about 15 came from journal-backed
+  measure/compare metrics, about 3 from artifact sections and about 3 from `query` rows; one ("baseline
+  reads probably understated") was agent inference at the time. All were transcribed by hand. Source
+  location, caller conditions, parameter mapping, the equivalence argument and the risk assessment have
+  no journal operation.
+- **Corrections:** Three, delivered in the retro. (1) "Other statements cost about zero" covered two of
+  four sets; cause: unfollowed artifact continuation. (2) "Estimates close to actuals" was based on a plan
+  in which every actual row count was zero; cause: overstated review coverage. (3) "Reads probably
+  understated" was an unlabeled hypothesis; the journal had already recorded the function's hidden work
+  (see the [statement-metrics follow-up](../../observations/statement-metrics-and-local-object-noise.md#follow-up-2026-10-20-hidden-work-and-attribution-status-on-the-agent-path)).
+  The hypothesis was correct; the cause was evidence missing on the agent path.
+- **Dashboard usefulness:** Preserve the source context, the per-case results with equality, the
+  uncovered branches and the corrections. The dashboard already shows the hidden-work flag that the agent
+  lacked. Actual dashboard use and reconstruction effort are not recorded.
+- **Observed workflow cost:** capabilities x1, query x7 (two failed with authentication errors), measure
+  x1, artifact x2, compare x1: twelve investigation calls. Both failures had their error text clipped by
+  the caller's cell limit ([error message clipping](../../observations/error-message-cell-clipping.md)).
+  No tool rejection or retry of a tool failure; one query was re-issued after the operator restored
+  access. Empty telemetry and edge-case searches were useful checks, not friction.
+- **Cost coverage:** Journal emitted-byte and estimated-token counters were inspected for the eleven
+  journaled investigation operations; capabilities and catalog overhead are outside that total. The one
+  `statements` artifact read was slightly over half of those bytes. Arguments, source reads, final-chat
+  duplication and complete workflow token use were not measured. No savings baseline or modeled
+  replacement workflow is recorded. Workload values are intentionally omitted.
+- **Diagnostic qualification:** Existing phase aggregates and connection events were inspected for the
+  two failed operations and the first two successful ones (bounded local read-only journal access). Both
+  failures ended in the connect phase with a failed connection event; the second ran about as long as the
+  configured connection timeout. Connect time also dominated the first successful call and was small on
+  the next. These records do not identify network, authentication or server as the cause; the operator
+  resolved both outside the tool. No live query was rerun.
+- **Optional API implications:** Another report whose decisive content (source context, branch
+  equivalence argument, risk) lies outside journal operations, and where evidence the tool computes was
+  missing from the agent's responses. No API is selected and no readiness or savings follow.
+- **Operator decision:** Record this entry, the statement-metrics follow-up and the error-message
+  clipping observation only. No plan, code, skill edit or publication is authorized.
+
+### 2026-10-20 — static-list aggregation, lower reads with preserved metadata
+
+Recorded against repository HEAD `6f39a292`. Status: collecting observations, not approved for implementation.
+
+`Kind:` optimization · `Outcome:` adopt (proposed, not applied) · `Scopes:` 1 · `System label:` unmapped.
+
+- **Actual report:** Current-source query selected; source file, method, caller authorization,
+  static SQL construction and absence of parameters stated before measurement. Final response
+  contains variant x metric table, read-reduction conclusion, equivalence checks, operator
+  explanation, uncovered zero-assignment case, candidate file and artifact reference. Product
+  implementation deferred because the purpose was testing the tool. No human question or follow-up
+  offer.
+- **Report blocks:** source context; variant x metric table; rewrite explanation; equality and plan
+  review; limit; evidence links; no application changes.
+- **Evidence and interpretation:** Two comparisons with five repeats each; four complete
+  artifact-plan reads. First comparison used multiset equality and exposed a metadata nullability
+  difference without failing default equality. Revised candidate preserved nullability; second
+  comparison used ordered strict-nullability equality. Query rows supplied target, schema/index
+  context, two-way EXCEPT validation and absence of the uncovered case. Plans supported elimination
+  of repeated lookups. No historical telemetry used.
+- **Content provenance:** Approximately seven of ten numeric report statements came from compare
+  metrics, two from query rows and one from artifact nodes; approximate statement counts exclude
+  paths and opaque evidence identifiers. Values manually transcribed. Source location, calling
+  conditions, SQL construction, candidate rationale and deferral have no journal operation. Exact
+  total prose statement count: not recorded.
+- **Corrections:** One retro clarification: complete operator trees were reviewed, but grants and
+  compilation were not. Cause: imprecise coverage wording, not a demonstrated tool defect. One
+  interim candidate revision corrected metadata nullability; it was disclosed before final reporting
+  and is not a retraction of final equality. Initial conservative timing interpretation was updated
+  after the second successful comparison.
+- **Dashboard usefulness:** Preserve selected source context, deferred adoption, equivalence policy
+  revision, result table and uncovered data case. Dashboard was not used. Reconstruction effort and
+  actual usability benefit: not recorded.
+- **Observed workflow cost:** capabilities x1, query x5 (four successful executions, one rejected
+  offline dryRun), compare x2, artifact plan x4: twelve investigation calls. The rejection was
+  safety_rejected / ParseError from agent-authored nested CTE syntax; corrected within unchanged
+  read-only scope. No clipped SQLHarness response or continuation needed. Retro: two bounded
+  read-only journal invocations (schema inspection, then operation phases/cost counters/event
+  summaries), plus source/discovery reads; no live SQL rerun.
+- **Cost coverage:** Journal emitted-byte and estimated-token counters inspected for eleven
+  journaled calls; capabilities excluded. Approximate tokens are byte-derived estimates, not model
+  tokenization. Input/catalog overhead, repository reads, final-chat/document duplication and
+  whole-workflow cost unmeasured. No savings baseline or modeled replacement.
+- **Diagnostic qualification:** Phase aggregates covered the journaled calls. Connection dominated
+  initial target confirmation; subsequent connections were smaller. Compare time included execute,
+  artifact and other phases. Connection and artifact event summaries showed success; detailed
+  payloads not read because aggregates did not warrant causal diagnosis. Parse rejection had only
+  other-phase time. Authentication/network/server cause remains unknown. No timing noise attributed
+  to infrastructure.
+- **Optional API implications:** Authored source applicability and explicit review coverage
+  complement journal metrics. No API readiness, implementation decision or savings conclusion
+  follows.
+- **Operator decision:** Record O1 and O2 only. Private investigation report saved separately; no
+  plan, code, skill edit, commit or publication authorized.
+- **Related coverage and question:** See the [review-coverage
+  follow-up](../../observations/plan-memory-and-compilation-evidence.md#follow-up-2026-10-20--static-list-aggregation).
+  Should later synthesis distinguish interim metadata revisions from corrections to a delivered
+  final report? Cheapest check: compare this entry with the existing template; no new benchmark.

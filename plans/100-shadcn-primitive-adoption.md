@@ -7,7 +7,7 @@
 **Tech Stack:** React, TypeScript, Tailwind v4, shadcn/base-nova, Base UI, Vitest/Testing Library and userEvent.
 **Spec:** [revised design](../docs/superpowers/specs/2026-10-18-shadcn-cli-and-primitive-adoption-design.md).
 **Depends on:** [CLI restoration implementation](099-shadcn-cli-restoration.md) actually integrated, not merely its plan or branch ancestry.
-**Status:** DONE — implementation and Windows verification passed on product revision `3caacc3`; all task reviews and whole-branch review approved. Branch `plan-100` remains unmerged and unpushed.
+**Status:** DONE — implementation and Windows verification passed on product revision `3caacc3`; all task reviews and whole-branch review approved. Locally integrated into `main` at `74f248c`; the verified product tree is unchanged.
 
 ## Global constraints and working convention
 
@@ -142,7 +142,7 @@
 - [x] Reuse behavior tests for load-more/retry/pending, matrix selection, fit-selection disabled and subtree toggles. Add a test only for a previously uncovered behavioral hazard, not each mechanical Button substitution.
 - [x] Run focused tests/typecheck/lint; browser-check React Flow pointer/keyboard interactions and dense/narrow layouts. Review and commit.
 
-Task 9 implementation evidence is in [the task report](../.superpowers/sdd/100-shadcn-primitive-adoption/scratch/task-9-report.md); raw browser fixture and output are in the ignored plan scratch directory.
+Task 9 implementation evidence is in [the task report](100-evidence/task-reports/task-9-report.md); browser fixtures and output are retained in the tracked Plan 100 evidence archive.
 
 ### Task 10: Ordinary tables; preserve semantic matrix and radio groups
 

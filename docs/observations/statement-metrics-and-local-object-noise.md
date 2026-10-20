@@ -76,3 +76,89 @@ Questions for later synthesis: should the agent path expose per-operator or per-
 (artifact `plan`/`statements` sections) once 082 extracts them, and within which output budget?
 Confidence: high for the observed match on these shapes; loops, cursors, spools and procedures were not
 measurable (rejected by the classifier at this HEAD).
+
+## Follow-up 2026-10-20
+
+Status: collecting observations, not approved for implementation. Recorded against repository HEAD
+`f928da0d`.
+
+Observed in an optimization session (unmapped system label) on a static four-statement read batch.
+One `measure` call with three parameter sets returned per-set batch totals for CPU, elapsed time and
+logical reads, plus noteworthy operators, but no per-table reads. One artifact `statements` read gave
+per-statement operators and executions, again without reads. The agent attributed the batch reads to
+tables by multiplying operator executions by index depth (from a separate catalog `query`) and
+reported the split and the share of work as if measured. The saved artifact `metrics` section carries
+measured per-table reads, but the agent did not read it; nothing in the `measure` response points there.
+The attribution was corrected in the retro.
+
+Verified source:
+
+- `src/SqlHarness.Core/AgentBenchmarkOutput.cs:67-83` (`AgentMeasureSetItem`) and `:238-260` (`Set`)
+  project CPU, elapsed and total logical reads per parameter set; there is no per-table field.
+- `src/SqlHarness.Core/ArtifactReader.cs:43-53` (`ArtifactNamedMetrics`) carries
+  `LogicalReadsByTable` for the `metrics` section, so the evidence existed in the saved artifact.
+
+Classification: ux gap (discoverability for parameter-set measurements) plus agent slip (the
+`metrics` section was available). Confidence: high for the missing response field; whether a pointer or
+the field itself would have prevented the inference is a hypothesis. Token cost was not measured.
+
+Questions for later synthesis:
+
+- Should the parameter-set `measure` response carry per-table reads like single measurements, or name
+  the artifact section that holds them?
+- Across sessions, how often is a read split inferred from operator counts instead of read from saved
+  evidence? This is one occurrence.
+
+Cheapest next check: project one existing parameter-set artifact through the agent output path and
+compare its fields with the `metrics` section of the same artifact.
+
+## Follow-up 2026-10-20: hidden work and attribution status on the agent path
+
+Status: collecting observations, not approved for implementation. Recorded against repository HEAD
+`a063e75c`.
+
+Observed in an optimization session (unmapped system label) on a static multi-statement read batch
+whose dominant statement joins a multi-statement table-valued function. One `measure` (four parameter
+sets) and one `compare` (four sets) succeeded. Their responses listed the function operator among
+noteworthy operators and an implicit-conversion warning, but nothing said that the function's internal
+work was missing from the reported logical reads. The batch showed low reads with comparatively high
+CPU. The agent told the user that baseline reads were "probably understated" as an unlabeled hypothesis.
+During the retro, a bounded read-only journal check showed that SQLHarness had already recorded this:
+for the dominant statement, every measured set and every baseline case has `hidden_work_json` of kind
+`multi-statement-tvf`, and all journaled statements of both operations have attribution status
+`partial`. The dashboard renders this as `multi-statement function: internal reads not visible`; the
+MCP responses did not carry it.
+
+To find the dominant statement the agent also read the artifact `statements` section once. That one
+response was the largest of the investigation, slightly over half of the emitted bytes of all journaled
+investigation calls. It returned top operators for every statement of the first sets and omitted the
+remaining statements behind a continuation, which the agent did not follow. The decision needed only
+per-statement CPU/elapsed across sets. As a result, one later claim ("the other statements cost about
+zero") covered two of the four sets; it was corrected in the retro.
+
+Verified source:
+
+- `src/SqlHarness.Core/StatementMetrics.cs:350-358` builds `HiddenWork` entries (`scalar-udf`,
+  `multi-statement-tvf`); `src/SqlHarness.Core/Journal/ActivityJournal.cs:561-588` stores them.
+- `src/SqlHarness.Core/ArtifactReader.cs:103-112` (`ArtifactStatementMetric`) has CPU, elapsed, DOP and
+  top operators only: no hidden work, attribution status or reads.
+- Dashboard only: `src/SqlHarness.Dashboard/ui/src/components/optimization/HiddenWorkFlag.tsx`.
+
+Classification: ux gap (agent-path parity with evidence the tool already computes), plus agent slip for
+the unfollowed continuation. Confidence: high for the missing fields and the journal records; whether a
+flag in the `measure`/`compare` response would have replaced the hypothesis and the large artifact read
+is a hypothesis. Recurrence: first observation of hidden work on the agent path; the 2026-10-16 spike
+above saw the same invisibility at engine level.
+
+Existing coverage: plan 082 (journal/dashboard only, DONE); plan 095 (artifact page budgets, TODO) and
+plan 077 (lean JSON) address response size, not these fields.
+
+Questions for later synthesis:
+
+- Should `measure`/`compare` responses carry a compact hidden-work flag and attribution status per
+  statement, or only when the batch total is `partial`?
+- Is a per-statement CPU/elapsed summary across sets (without operators) a recurring need in
+  multi-statement batches, compared with the current `statements` page?
+
+Cheapest next check: render the `statements` section and the agent `measure` output for one synthetic
+artifact with a multi-statement TVF fixture (plan 082 fixtures) and compare which fields reach the agent.
