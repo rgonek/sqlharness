@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 
 using Microsoft.Data.Sqlite;
+
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 

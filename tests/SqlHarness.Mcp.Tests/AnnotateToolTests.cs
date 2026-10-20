@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using Microsoft.Data.Sqlite;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Journal;
 using SqlHarness.Mcp.Tools;
