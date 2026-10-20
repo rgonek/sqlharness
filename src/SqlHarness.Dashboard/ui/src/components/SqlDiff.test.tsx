@@ -26,10 +26,28 @@ test("tabs show each side and the diff; mode and ignore formatting are remembere
   await userEvent.click(screen.getByRole("radio", { name: "Unified" }))
   expect(await screen.findByLabelText("merge unified")).toBeInTheDocument()
   expect(localStorage.getItem("sqlharness.sqlDiff.mode")).toBe("unified")
-  await userEvent.click(screen.getByRole("checkbox", { name: "Ignore formatting" }))
+  await userEvent.click(screen.getByText("Ignore formatting"))
+  expect(screen.getByRole("checkbox", { name: "Ignore formatting" })).toBeChecked()
   expect((await screen.findByLabelText("merge unified")).textContent).toContain("\n")
   await userEvent.click(screen.getByRole("tab", { name: "Baseline" }))
   expect(screen.getByLabelText("SQL viewer")).toHaveTextContent("select a from t")
+})
+
+test("diff radio groups stay independent when multiple comparisons are rendered", async () => {
+  render(<>
+    <SqlDiff baseline="SELECT 1" candidate="SELECT 2" engine={null} />
+    <SqlDiff baseline="SELECT 3" candidate="SELECT 4" engine={null} />
+  </>)
+  const [firstSideBySide, secondSideBySide] = screen.getAllByRole("radio", { name: "Side by side" })
+  const [firstUnified, secondUnified] = screen.getAllByRole("radio", { name: "Unified" })
+
+  firstSideBySide.focus()
+  await userEvent.keyboard("{ArrowRight}")
+
+  expect(firstUnified).toBeChecked()
+  expect(secondSideBySide).toBeChecked()
+  expect(secondUnified).not.toBeChecked()
+  expect(localStorage.getItem("sqlharness.sqlDiff.mode")).toBe("unified")
 })
 
 test("without stored text there is no diff tab", () => {
@@ -56,7 +74,7 @@ test("copying the diff gives a unified text diff", async () => {
 test("formatted expansion over the limit never reaches the merge editor", async () => {
   const baseline = `SELECT ${Array.from({ length: 5000 }, (_, index) => `column_${index}`).join(", ")}`
   render(<SqlDiff baseline={baseline} candidate={`${baseline} WHERE id = 1`} engine="postgres" />)
-  await userEvent.click(screen.getByRole("checkbox", { name: "Ignore formatting" }))
+  await userEvent.click(screen.getByText("Ignore formatting"))
   expect(await screen.findByText(/exceeds the 256 KiB or 4,000 line limit/)).toBeInTheDocument()
   expect(screen.queryByLabelText(/merge /)).not.toBeInTheDocument()
 })

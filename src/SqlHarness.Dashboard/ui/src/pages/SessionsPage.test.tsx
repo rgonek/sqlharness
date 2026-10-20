@@ -92,7 +92,8 @@ test("contains optimization filters both starred and unstarred session queries",
     "/api/sessions": { items: [], nextCursor: null },
   })
   renderApp("/sessions")
-  await userEvent.click(await screen.findByRole("checkbox", { name: "Contains optimization" }))
+  await userEvent.click(await screen.findByText("Contains optimization"))
+  expect(screen.getByRole("checkbox", { name: "Contains optimization" })).toBeChecked()
   await waitFor(() => {
     expect(calls).toContain("/api/sessions?archived=false&starred=true&hasCompare=true&limit=50")
     expect(calls).toContain("/api/sessions?archived=false&starred=false&hasCompare=true&limit=50")

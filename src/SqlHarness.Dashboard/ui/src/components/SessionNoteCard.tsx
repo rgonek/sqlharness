@@ -3,6 +3,7 @@ import { useUpdateSessionAnnotation } from "@/api/queries"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
 
 const maximumNoteLength = 10_000
 
@@ -27,10 +28,9 @@ export function SessionNoteCard({ sessionId, note }: { sessionId: number; note: 
           </>
         ) : (
           <>
-            <textarea
+            <Textarea
               aria-label="Session note" maxLength={maximumNoteLength} value={draft} rows={6}
               onChange={event => setDraft(event.target.value)}
-              className="w-full min-w-0 rounded-lg border border-input bg-transparent p-2.5 text-base outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
             />
             <div className="flex items-center gap-2">
               <Button size="sm" aria-label="Save note" disabled={update.isPending}

@@ -40,7 +40,7 @@ test("internal-operation visibility starts hidden and persists when enabled", as
   expect(screen.getByText("orders")).toBeInTheDocument()
   expect(screen.getByText("v0 → v3 · 48,210 → 3,115")).toBeInTheDocument()
   expect(screen.getByText("Claude Code")).toHaveAttribute("title", "gpt-6-sol")
-  await userEvent.click(screen.getByRole("checkbox", { name: "Show internal operations" }))
+  await userEvent.click(screen.getByText("Show internal operations"))
   expect(await screen.findByRole("link", { name: "22" })).toBeInTheDocument()
   expect(localStorage.getItem("sqlharness.showInternalOperations")).toBe("true")
   first.unmount()

@@ -16,6 +16,8 @@ import { displayCaseLabel } from "@/lib/caseLabel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { variantLabel } from "@/lib/compare"
@@ -68,9 +70,10 @@ function OperationOwnerAnnotations({ operation }: { operation: OperationDetail["
       onClick={() => update.mutate({ starred: !operation.ownerStarred })}>{operation.ownerStarred ? "★ Owner starred" : "☆ Star operation"}</Button>
     {operation.agentKeep && <Badge variant="secondary">Agent keep</Badge>}
     {operation.agentLabel && <span className="rounded border px-2 py-1 text-sm">{operation.agentLabel}</span>}
-    <label className="flex items-center gap-2 text-sm">Owner note
-      <input className="rounded-md border bg-background px-2 py-1" value={note} onChange={event => setNote(event.currentTarget.value)} />
-    </label>
+    <div className="flex items-center gap-2 text-sm">
+      <Label htmlFor="operation-owner-note">Owner note</Label>
+      <Input id="operation-owner-note" value={note} onChange={event => setNote(event.currentTarget.value)} />
+    </div>
     <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ note })}>Save note</Button>
     {update.error && <p role="alert" className="text-sm text-destructive">Could not save operation annotations: {update.error.message}</p>}
   </section>

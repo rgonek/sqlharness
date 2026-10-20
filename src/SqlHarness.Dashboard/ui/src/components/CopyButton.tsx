@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { Check, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
 
 export function CopyButton({ label, getText }: { label: string; getText: () => string | Promise<string> }) {
   const [copied, setCopied] = useState(false)
@@ -46,7 +47,7 @@ export function CopyButton({ label, getText }: { label: string; getText: () => s
     <Dialog open={manualText !== null} onOpenChange={open => { if (!open) setManualText(null) }}>
       <DialogContent>
         <DialogHeader><DialogTitle>Copy manually</DialogTitle></DialogHeader>
-        <textarea ref={textarea} aria-label="Text to copy" readOnly value={manualText ?? ""} onFocus={event => event.currentTarget.select()} className="min-h-40 w-full rounded border bg-background p-2 font-mono text-xs" />
+        <Textarea ref={textarea} aria-label="Text to copy" readOnly value={manualText ?? ""} onFocus={event => event.currentTarget.select()} className="min-h-40 w-full rounded border bg-background p-2 font-mono text-xs" />
       </DialogContent>
     </Dialog>
   </>

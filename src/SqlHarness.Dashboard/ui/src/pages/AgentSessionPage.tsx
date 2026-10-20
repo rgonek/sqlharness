@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Textarea } from "@/components/ui/textarea"
 import { useShowInternalOperations } from "@/lib/internalOperations"
 
 export function AgentSessionPage() {
@@ -60,7 +61,7 @@ export function AgentSessionPage() {
       <CardContent className="space-y-3">
         {noteDraft === null ? <><p className="whitespace-pre-wrap">{detail.data.note ?? "No note"}</p>
           <Button size="sm" variant="outline" onClick={() => setNoteDraft(detail.data.note ?? "")}>{detail.data.note ? "Edit note" : "Add note"}</Button></>
-          : <><textarea aria-label="Agent session note" maxLength={10_000} rows={5} className="w-full rounded border p-2" value={noteDraft} onChange={event => setNoteDraft(event.target.value)} />
+          : <><Textarea aria-label="Agent session note" maxLength={10_000} rows={5} className="w-full rounded border p-2" value={noteDraft} onChange={event => setNoteDraft(event.target.value)} />
             <Button size="sm" disabled={update.isPending} onClick={() => update.mutate({ note: noteDraft.trim() || null }, { onSuccess: () => setNoteDraft(null) })}>Save note</Button>
             <Button size="sm" variant="ghost" onClick={() => setNoteDraft(null)}>Cancel</Button></>}
         {update.error && <p role="alert">{update.error.message}</p>}

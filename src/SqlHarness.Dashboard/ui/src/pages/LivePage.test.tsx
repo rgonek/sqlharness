@@ -169,7 +169,7 @@ test("artifact-only running rows share the empty state and remain revealable", a
   const running = await screen.findByRole("region", { name: "Running" })
   expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
   expect(within(running).queryByText("sqlharness_artifact")).not.toBeInTheDocument()
-  await userEvent.click(within(running).getByRole("checkbox", { name: "Show internal operations" }))
+  await userEvent.click(within(running).getByText("Show internal operations"))
   expect(await within(running).findByText("sqlharness_artifact")).toBeInTheDocument()
   expect(screen.queryByText("Nothing running · no active sessions")).not.toBeInTheDocument()
 })

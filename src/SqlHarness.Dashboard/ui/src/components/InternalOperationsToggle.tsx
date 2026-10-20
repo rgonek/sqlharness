@@ -1,3 +1,11 @@
+import { useId } from "react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+
 export function InternalOperationsToggle({ showInternal, onChange }: { showInternal: boolean; onChange: (show: boolean) => void }) {
-  return <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showInternal} onChange={event => onChange(event.target.checked)} />Show internal operations</label>
+  const id = useId()
+  return <div className="flex items-center gap-2 text-sm">
+    <Checkbox id={id} checked={showInternal} onCheckedChange={onChange} />
+    <Label htmlFor={id}>Show internal operations</Label>
+  </div>
 }

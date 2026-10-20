@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 import { useAgentKinds, useAgentSessions, useSessions, useSettings, useUnmatchedAgentSessions } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { AgentSessionTable, SessionTable } from "@/components/SessionTable"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { agentTabs } from "@/lib/agents"
@@ -20,6 +22,7 @@ function useDebounced<T>(value: T, ms: number): T {
 }
 
 export function SessionsPage() {
+  const optimizationFilterId = useId()
   const [agent, setAgent] = useState("all")
   const [view, setView] = useState<"active" | "archived">("active")
   const [search, setSearch] = useState("")
@@ -56,7 +59,10 @@ export function SessionsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Input type="search" aria-label="Search sessions" placeholder="Search title, note, directory, key"
           value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={hasOptimization} onChange={e => setHasOptimization(e.target.checked)} />Contains optimization</label>
+        <div className="flex items-center gap-2 text-sm">
+          <Checkbox id={optimizationFilterId} checked={hasOptimization} onCheckedChange={setHasOptimization} />
+          <Label htmlFor={optimizationFilterId}>Contains optimization</Label>
+        </div>
         <Tabs value={view} onValueChange={v => setView(v as "active" | "archived")}>
           <TabsList>
             <TabsTrigger value="active">Active</TabsTrigger>

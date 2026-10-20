@@ -1,6 +1,9 @@
 import { useId, useState } from "react"
 import { CopyButton } from "@/components/CopyButton"
 import { LazySqlMergeView, LazySqlViewer, loadUnifiedDiffText } from "@/components/SqlEditors"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { boundedPreview, diffTooLarge, dialectOf, MAX_DIFF_BYTES, normalizeForDiff, readPreference, utf8BytesWithin, writePreference, type DiffMode, type SqlTab } from "@/lib/sqlDiff"
 
@@ -14,14 +17,27 @@ export function DiffControls({ mode, onModeChange, ignoreFormatting, onIgnoreFor
   ignoreFormatting: boolean
   onIgnoreFormattingChange: (value: boolean) => void
 }) {
-  const radioName = useId()
+  const id = useId()
+  const sideBySideId = `${id}-side-by-side`
+  const unifiedId = `${id}-unified`
+  const ignoreFormattingId = `${id}-ignore-formatting`
   return <div className="flex flex-wrap items-center gap-3">
-    <fieldset role="radiogroup" aria-label="Diff mode" className="flex gap-2">
-      <legend className="sr-only">Diff mode</legend>
-      <label className="flex items-center gap-1"><input type="radio" name={radioName} value="side-by-side" checked={mode === "side-by-side"} onChange={() => onModeChange("side-by-side")} />Side by side</label>
-      <label className="flex items-center gap-1"><input type="radio" name={radioName} value="unified" checked={mode === "unified"} onChange={() => onModeChange("unified")} />Unified</label>
-    </fieldset>
-    <label className="flex items-center gap-2"><input type="checkbox" checked={ignoreFormatting} onChange={event => onIgnoreFormattingChange(event.target.checked)} />Ignore formatting</label>
+    <RadioGroup aria-label="Diff mode" className="flex gap-2" value={mode} onValueChange={value => {
+      if (value === "side-by-side" || value === "unified") onModeChange(value)
+    }}>
+      <div className="flex items-center gap-1">
+        <RadioGroupItem id={sideBySideId} value="side-by-side" />
+        <Label htmlFor={sideBySideId}>Side by side</Label>
+      </div>
+      <div className="flex items-center gap-1">
+        <RadioGroupItem id={unifiedId} value="unified" />
+        <Label htmlFor={unifiedId}>Unified</Label>
+      </div>
+    </RadioGroup>
+    <div className="flex items-center gap-2">
+      <Checkbox id={ignoreFormattingId} checked={ignoreFormatting} onCheckedChange={onIgnoreFormattingChange} />
+      <Label htmlFor={ignoreFormattingId}>Ignore formatting</Label>
+    </div>
   </div>
 }
 

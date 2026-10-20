@@ -15,7 +15,7 @@ test("named operations searches across sessions and separates owner stars from a
   expect(await screen.findByText("<b>weekly check</b>")).toBeInTheDocument()
   expect(screen.getByText("Agent keep")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Unstar operation" })).toHaveAttribute("aria-pressed", "true")
-  await userEvent.type(screen.getByRole("textbox", { name: "Search named operations" }), "weekly")
+  await userEvent.type(screen.getByRole("searchbox", { name: "Search named operations" }), "weekly")
   expect(await screen.findByText("<b>weekly check</b>")).toBeInTheDocument()
   expect(requests.some(url => url.searchParams.get("q") === "weekly")).toBe(true)
 })
