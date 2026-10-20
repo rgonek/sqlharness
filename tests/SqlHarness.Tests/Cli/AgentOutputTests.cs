@@ -943,13 +943,24 @@ public sealed class AgentOutputTests
         var inputMapBytes = JsonSerializer.SerializeToUtf8Bytes(reads, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length;
         _testOutput.WriteLine($"stress shape={shape} entries={cardinality} inputMapBytes={inputMapBytes} allocatedBytes={allocated} elapsedMs={timer.Elapsed.TotalMilliseconds:F2} responseJsonBytes={responseBytes}");
         Assert.True(allocated < 1_500_000, $"Selection allocated {allocated} bytes for {cardinality} source entries.");
-        var map = shape switch
+        var result = json.RootElement.GetProperty("result");
+        if (shape == "compare")
         {
-            "compare" => json.RootElement.GetProperty("result").GetProperty("baseline").GetProperty("logicalReadsByTable"),
-            "artifact" => json.RootElement.GetProperty("result").GetProperty("variants")[0].GetProperty("logicalReadsByTable"),
-            _ => json.RootElement.GetProperty("result").GetProperty("query").GetProperty("logicalReadsByTable"),
-        };
-        Assert.Equal(cardinality, map.EnumerateObject().Count());
+            var baselineMap = result.GetProperty("baseline").GetProperty("logicalReadsByTable");
+            var candidateMap = result.GetProperty("candidate").GetProperty("logicalReadsByTable");
+            Assert.Equal(cardinality, baselineMap.EnumerateObject().Count());
+            Assert.Equal(cardinality, candidateMap.EnumerateObject().Count());
+            AssertTableReadEntriesMatchSource(baselineMap, reads);
+            AssertTableReadEntriesMatchSource(candidateMap, reads);
+        }
+        else
+        {
+            var map = shape == "artifact"
+                ? result.GetProperty("variants")[0].GetProperty("logicalReadsByTable")
+                : result.GetProperty("query").GetProperty("logicalReadsByTable");
+            Assert.Equal(cardinality, map.EnumerateObject().Count());
+            AssertTableReadEntriesMatchSource(map, reads);
+        }
     }
 
     [Fact]
@@ -994,6 +1005,8 @@ public sealed class AgentOutputTests
         var compareResult = compareJson.RootElement.GetProperty("result");
         var baselineMap = compareResult.GetProperty("baseline").GetProperty("logicalReadsByTable");
         var candidateMap = compareResult.GetProperty("candidate").GetProperty("logicalReadsByTable");
+        AssertTableReadEntriesMatchSource(baselineMap, reads);
+        AssertTableReadEntriesMatchSource(candidateMap, reads);
         Assert.NotEmpty(baselineMap.EnumerateObject());
         Assert.Equal(baselineMap.EnumerateObject().Select(property => property.Name),
             candidateMap.EnumerateObject().Select(property => property.Name));
@@ -1007,6 +1020,7 @@ public sealed class AgentOutputTests
                 new CompareDistribution(7, 8, 9), reads, [])]);
         using var metricsJson = RenderAgentResult(metrics, "artifact", new AgentOutputOptions(4096, 2048));
         var metricsMap = metricsJson.RootElement.GetProperty("result").GetProperty("variants")[0].GetProperty("logicalReadsByTable");
+        AssertTableReadEntriesMatchSource(metricsMap, reads);
         Assert.NotEmpty(metricsMap.EnumerateObject());
         Assert.DoesNotContain(metricsMap.EnumerateObject(), property => property.Name.Contains(new string('L', 100), StringComparison.Ordinal));
         Assert.Equal(cardinality - metricsMap.EnumerateObject().Count(),
@@ -1208,6 +1222,19 @@ public sealed class AgentOutputTests
         Assert.Equal(2, reads.EnumerateObject().Count());
         Assert.Equal(11, reads.GetProperty(firstName).GetProperty("median").GetInt64());
         Assert.Equal(29, reads.GetProperty(secondName).GetProperty("median").GetInt64());
+    }
+
+    private static void AssertTableReadEntriesMatchSource(
+        JsonElement reads,
+        IReadOnlyDictionary<string, CompareDistribution> source)
+    {
+        foreach (var property in reads.EnumerateObject())
+        {
+            Assert.True(source.TryGetValue(property.Name, out var expected), $"Unexpected table identity '{property.Name}'.");
+            Assert.Equal(expected.Min, property.Value.GetProperty("min").GetInt64());
+            Assert.Equal(expected.Median, property.Value.GetProperty("median").GetInt64());
+            Assert.Equal(expected.Max, property.Value.GetProperty("max").GetInt64());
+        }
     }
 
     [Fact]

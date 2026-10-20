@@ -42,3 +42,13 @@ Passed:
 - `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-restore --filter FullyQualifiedName~McpTokenBudgetTests --logger "console;verbosity=minimal"` — 45 passed.
 
 The full Windows gate was intentionally not run; the controller will coordinate it after the separate dashboard matcher repair. No database or provider calls were made.
+
+## Review round 1/5 follow-up
+
+Added per-entry source attribution assertions for every retained table identity. The all-fitting high-cardinality measure and artifact fixtures validate each emitted key and its min/median/max against the source. The paired compare fixture validates all entries on both sides. The mostly-rejected compare and artifact fixtures validate every retained key/value pair against the source while retaining their omission and budget assertions.
+
+Focused command:
+
+`dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter "FullyQualifiedName~High_cardinality_table_selection_stress|FullyQualifiedName~Table_identity_selection_skips_oversized_entries_and_keeps_later_fitting_entries|FullyQualifiedName~Table_identity_selection_accounts_fixed_shell_and_each_source_entry_once" --logger "console;verbosity=minimal"`
+
+Result: passed, 5/5 tests, 0 failed, 0 skipped (564 ms).
