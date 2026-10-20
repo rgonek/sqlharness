@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- TODO — plan only. Planned at `32adaa7`, 2026-10-20.
+- IN PROGRESS — Tasks 1–2 implemented; Task 2 specification and quality reviews approved. Windows gate and whole-branch review pending. Planned at `32adaa7`, 2026-10-20.
 - Priority P1; effort S; implementation risk MED; category bug.
 - Dependencies: The existing benchmark/artifact projection must be present. No new-plan predecessor.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -40,18 +40,18 @@ Out of scope: annotation receipt design, numeric budget defaults, SQL execution,
 
 ### Task 1: Reproduce identity collisions through real response renderers
 
-- [ ] Add regressions for two distinct table names sharing a prefix, maxCellChars 0 and 4, and ordinary 2048. Cover measure, both compare sides, measure-set summaries and artifact metrics where those shapes expose table maps.
-- [ ] Use real `CompareDistribution` values with different medians; assert full original names retain their own values. Test a long name under a 4096-byte response, with truthful omission if necessary.
-- [ ] Confirm the pre-fix failure is duplicate-key/projection failure, not a malformed fixture.
+- [x] Add regressions for two distinct table names sharing a prefix, maxCellChars 0 and 4, and ordinary 2048. Cover measure, both compare sides, measure-set summaries and artifact metrics where those shapes expose table maps.
+- [x] Use real `CompareDistribution` values with different medians; assert full original names retain their own values. Test a long name under a 4096-byte response, with truthful omission if necessary.
+- [x] Confirm the pre-fix failure is duplicate-key/projection failure, not a malformed fixture.
 - **Verify:** `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~AgentOutputTests|FullyQualifiedName~ArtifactReaderTests"` and `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~McpTokenBudgetTests` produce the intended RED before implementation.
 
 ### Task 2: Keep identity keys intact and prove bounded rendering
 
-- [ ] Replace both clipped-key dictionary constructions with complete-key selection, reusing significance ordering.
-- [ ] Keep actual retained-entry omission accounting correct across rejected fit attempts; do not count an omitted display clip on a key now emitted in full.
-- [ ] Add assertions that output is valid JSON, stays within budget, and never reports success with wrong table-to-metric attribution.
-- [ ] Add a normal-input regression demonstrating no new response fields or schema bump.
-- **Verify:** rerun both Task 1 commands GREEN, then follow Common verification.
+- [x] Replace both clipped-key dictionary constructions with complete-key selection, reusing significance ordering.
+- [x] Keep actual retained-entry omission accounting correct across rejected fit attempts; do not count an omitted display clip on a key now emitted in full.
+- [x] Add assertions that output is valid JSON, stays within budget, and never reports success with wrong table-to-metric attribution.
+- [x] Add a normal-input regression demonstrating no new response fields or schema bump.
+- **Verify:** focused commands and both affected suites are GREEN; direct branch formatting passed. Final Windows gate and reviews remain pending; see [verification evidence](093-verification-evidence.md).
 
 ## Maintenance notes
 

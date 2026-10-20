@@ -7,6 +7,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
+| [093](093-identity-safe-output-clipping.md) | Preserve complete metric identity keys under cell clipping within existing output budgets | Existing projection | IMPLEMENTED on `plan-093`; Task 2 reviews approved; Windows gate and whole-branch review pending ([evidence](093-verification-evidence.md)) |
 
 ## Pending
 
@@ -20,7 +21,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and live staged references without losing retry/cursor state | 084 merged | TODO — plan only |
 | [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | 084 merged | TODO — plan only |
 | [092](092-default-execution-timeout-setting.md) | Configurable default SQL execution timeout in config.json and Dashboard Settings; fallback for CLI commands and MCP tools | None | TODO — plan only |
-| [093](093-identity-safe-output-clipping.md) | Preserve full metric identity keys under cell clipping; avoid post-execution rendering failures | Existing projection | TODO — P1, plan only |
 | [094](094-compact-annotation-receipts.md) | Compact annotation receipts that fit minimum budgets; explicit full detail and one effective budget across commit/render | 085 DONE; execute before 095 | TODO — P1, plan only |
 | [095](095-budget-aware-artifact-pages.md) | Explicit artifact response budgets and bounded configurable source pages with complete continuation | 093, 094 implementations merged | TODO — P2, plan only |
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | TODO — P2, plan only |
