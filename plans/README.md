@@ -28,6 +28,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | Coordinate 089; no membership changes | TODO — P2, plan only |
 | [099](099-shadcn-cli-restoration.md) | Stable shadcn CLI devDependency, supported stylesheet import and contributor workflow | None | TODO — plan only |
 | [100](100-shadcn-primitive-adoption.md) | Complete dashboard control inventory, accessible shadcn composition, disclosures and standard tables | 099 implementation integrated | TODO — plan only |
+| [101](101-dashboard-operation-annotations-setting.md) | Enable or disable agent operation annotations in Dashboard Settings; valid paired journal saves and MCP restart guidance | 085 merged; coordinate 092 | TODO — plan only |
 
 ## Limit-economics execution notes (2026-10-20)
 
