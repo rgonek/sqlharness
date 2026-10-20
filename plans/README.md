@@ -26,7 +26,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | TODO — P2, plan only |
 | [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | TODO — P2, plan only |
 | [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | Coordinate 089; no membership changes | TODO — P2, plan only |
-| [100](100-shadcn-primitive-adoption.md) | Complete dashboard control inventory, accessible shadcn composition, disclosures and standard tables | Plan 099 implementation integrated | IN PROGRESS — Tasks 1–5 implemented on `plan-100`; Plan 099 implementation locally integrated at `c479210` |
+| [100](100-shadcn-primitive-adoption.md) | Complete dashboard control inventory, accessible shadcn composition, disclosures and standard tables | Plan 099 implementation integrated | IN PROGRESS — Tasks 1–7 implemented on `plan-100`; Plan 099 implementation locally integrated at `c479210` |
 
 ## Limit-economics execution notes (2026-10-20)
 

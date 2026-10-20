@@ -9,6 +9,7 @@ import { PlanChanges } from "./PlanChanges"
 
 const baselineA = "a".repeat(64)
 const baselineB = "b".repeat(64)
+const baselineC = "f".repeat(64)
 const candidateA = "c".repeat(64)
 const candidateB = "d".repeat(64)
 const shapeHash = "e".repeat(64)
@@ -19,13 +20,13 @@ const pair = (before = variant({ variant: "baseline", plans: [] }), after = vari
   candidate: after,
 })
 
-const occurrence = (variantName: string, documentSha256: string, repetition: number, operator: string, actualRows: number) => ({
+const occurrence = (variantName: string, documentSha256: string, repetition: number, operator: string, actualRows: number, documentOrdinal = 0) => ({
   variant: variantName,
   parameterSet: null,
   caseId: "0",
   caseLabel: "Case 1",
   repetition,
-  documentOrdinal: 0,
+  documentOrdinal,
   statementIndex: 0,
   spanStart: 0,
   spanLength: 26,
@@ -74,30 +75,36 @@ test("requires exact occurrence selection when same-shape actuals have multiple 
     "/api/operations/10/plans": manifest([
       occurrence("baseline", baselineA, 1, "Index Scan", 40),
       occurrence("baseline", baselineB, 2, "Clustered Scan", 80),
+      occurrence("baseline", baselineC, 2, "Hash Match", 90, 1),
       occurrence("candidate", candidateA, 1, "Index Seek", 5),
       occurrence("candidate", candidateB, 2, "Index Seek", 8),
     ]),
     "/api/operations/10/source-map": (url: URL) => new Response(JSON.stringify(sourceMap(url.searchParams.get("variant")!, Number(url.searchParams.get("repetition")))), { status: 200 }),
     [`/api/plan-documents/${baselineB}/graph`]: graph("Clustered Scan", 80),
+    [`/api/plan-documents/${baselineC}/graph`]: graph("Hash Match", 90),
     [`/api/plan-documents/${candidateB}/graph`]: graph("Index Seek", 8),
   })
   renderPlanChanges()
   const before = await screen.findByRole("combobox", { name: "Baseline occurrence" }) as HTMLSelectElement
   const after = screen.getByRole("combobox", { name: "Candidate occurrence" }) as HTMLSelectElement
-  expect(before).toHaveValue("")
-  expect(after).toHaveValue("")
+  expect(before).toHaveTextContent("Choose exact occurrence")
+  expect(after).toHaveTextContent("Choose exact occurrence")
   expect(screen.getByText("Choose an exact baseline occurrence; multiple repetitions or documents are available.")).toBeInTheDocument()
   expect(calls.filter(url => url.endsWith("/graph"))).toEqual([])
 
-  const baselineOption = Array.from(before.options).find(option => option.textContent?.includes(`Repetition 2 · document 1 · statement 1 · ${baselineB.slice(0, 8)}`))!
-  const candidateOption = Array.from(after.options).find(option => option.textContent?.includes(`Repetition 2 · document 1 · statement 1 · ${candidateB.slice(0, 8)}`))!
-  await userEvent.selectOptions(before, baselineOption.value)
-  await userEvent.selectOptions(after, candidateOption.value)
+  const baselineOptionLabel = `Repetition 2 · document 2 · statement 1 · ${baselineC.slice(0, 8)}`
+  const candidateOptionLabel = `Repetition 2 · document 1 · statement 1 · ${candidateB.slice(0, 8)}`
+  await userEvent.click(before)
+  await userEvent.click(await screen.findByRole("option", { name: baselineOptionLabel }))
+  await userEvent.click(after)
+  await userEvent.click(await screen.findByRole("option", { name: candidateOptionLabel }))
+  expect(before).toHaveTextContent(baselineOptionLabel)
+  expect(after).toHaveTextContent(candidateOptionLabel)
   expect(await screen.findByRole("region", { name: "Statement 1 plan changes" })).toBeInTheDocument()
-  expect(screen.getByText("Clustered Scan")).toBeInTheDocument()
+  expect(screen.getByText("Hash Match")).toBeInTheDocument()
   expect(screen.getByText("Index Seek")).toBeInTheDocument()
-  expect(screen.getByText("Clustered Scan: 80 rows / 1 executions")).toBeInTheDocument()
-  expect(calls).toContain(`/api/plan-documents/${baselineB}/graph`)
+  expect(screen.getByText("Hash Match: 90 rows / 1 executions")).toBeInTheDocument()
+  expect(calls).toContain(`/api/plan-documents/${baselineC}/graph`)
   expect(calls).toContain(`/api/plan-documents/${candidateB}/graph`)
   expect(calls.some(url => url.includes("source-map?variant=baseline&repetition=2&caseId=0"))).toBe(true)
   expect(calls.some(url => url.includes("source-map?variant=candidate&repetition=2&caseId=0"))).toBe(true)

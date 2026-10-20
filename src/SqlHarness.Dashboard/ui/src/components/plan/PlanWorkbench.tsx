@@ -5,6 +5,7 @@ import { fetchPlanGraph, queryKeys, useOperationPlans, usePlanSourceMap, type Pl
 import type { VariantDetail } from "@/api/types"
 import type { SqlSourceSelection, SqlSourceSpan } from "@/lib/sqlDiff"
 import { PlanErrorState } from "./PlanErrorState"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { PlanGraphDocument, PlanGraphLink, PlanGraphSelection } from "./PlanGraphView"
 import { planNodeKey, resolvePlanSourceLinks, type PlanGraphDocumentData, type ResolvedPlanSourceLink } from "./planSourceLinks"
 import { PlanPropertiesPanel } from "./PlanPropertiesPanel"
@@ -227,29 +228,50 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget }: {
   return <section aria-label="Plans" className="space-y-3 rounded-lg border border-border p-3">
     <div className="flex flex-wrap items-end gap-3">
       <label className="grid gap-1 text-sm">Case
-        <select aria-label="Case" className="rounded-md border bg-background px-2 py-1" value={caseId} onChange={event => {
-          setSelectedCase(event.target.value)
+        <Select items={caseOptions.map(([id, label]) => ({ value: id, label }))} value={caseId} onValueChange={value => {
+          if (typeof value !== "string") return
+          setSelectedCase(value)
           setSelectedRepetition(null)
           setSelectedDocumentKey("all")
           setSelectedStatementIndex(null)
           setSelectedNodeKey(null)
-        }}>{caseOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
+        }}>
+          <SelectTrigger aria-label="Case" className="min-w-48 max-w-[min(32rem,80vw)]"><SelectValue /></SelectTrigger>
+          <SelectContent className="!w-max !max-w-[calc(100vw-2rem)] [&_*]:whitespace-normal">
+            {caseOptions.map(([id, label]) => <SelectItem key={id} value={id}>{label}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </label>
       {repetitions.length > 1 && <label className="grid gap-1 text-sm">Repetition
-        <select aria-label="Repetition" className="rounded-md border bg-background px-2 py-1" value={repetition} onChange={event => {
-          setSelectedRepetition(Number(event.target.value))
+        <Select items={repetitions.map(value => ({ value, label: `Repetition ${value}` }))} value={repetition} onValueChange={value => {
+          if (typeof value !== "number") return
+          setSelectedRepetition(value)
           setSelectedDocumentKey("all")
           setSelectedStatementIndex(null)
           setSelectedNodeKey(null)
           setSqlSelection(null)
-        }}>{repetitions.map(value => <option key={value} value={value}>Repetition {value}</option>)}</select>
+        }}>
+          <SelectTrigger aria-label="Repetition"><SelectValue /></SelectTrigger>
+          <SelectContent>{repetitions.map(value => <SelectItem key={value} value={value}>Repetition {value}</SelectItem>)}</SelectContent>
+        </Select>
       </label>}
       {documentOptions.length > 0 && <label className="grid gap-1 text-sm">Plan document
-        <select aria-label="Plan document" className="rounded-md border bg-background px-2 py-1" value={documentSelection} onChange={event => {
-          setSelectedDocumentKey(event.target.value)
+        <Select items={[{ value: "all", label: "All plan documents" }, ...documentOptions.map(document => ({
+          value: documentKey(document), label: `Document ${document.documentOrdinal + 1} · ${document.documentSha256.slice(0, 8)}`,
+        }))]} value={documentSelection} onValueChange={value => {
+          if (typeof value !== "string") return
+          setSelectedDocumentKey(value)
           setSelectedNodeKey(null)
           setSqlSelection(null)
-        }}><option value="all">All plan documents</option>{documentOptions.map(document => <option key={documentKey(document)} value={documentKey(document)}>Document {document.documentOrdinal + 1} · {document.documentSha256.slice(0, 8)}</option>)}</select>
+        }}>
+          <SelectTrigger aria-label="Plan document"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All plan documents</SelectItem>
+            {documentOptions.map(document => <SelectItem key={documentKey(document)} value={documentKey(document)}>
+              Document {document.documentOrdinal + 1} · {document.documentSha256.slice(0, 8)}
+            </SelectItem>)}
+          </SelectContent>
+        </Select>
       </label>}
       <PlanStatementSwitcher occurrences={occurrences} selectedIndex={statementIndex} onChange={value => {
         setSelectedStatementIndex(value)

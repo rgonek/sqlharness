@@ -217,21 +217,24 @@ test("SQL tab and diff mode survive closing and reopening their compare panel", 
 
 test("plans and reproduction scripts use the selected operation's actual baseline and candidate variants", async () => {
   const before = "C".repeat(64)
+  const secondBefore = "E".repeat(64)
   const after = "D".repeat(64)
   const shapeHash = "E".repeat(64)
   const { calls } = renderCompare(operationDetail({
     operation: operation({ operation: "compare" }),
     variants: [
-      variant({ ordinal: 0, variant: "baseline", caseId: "0", plans: [{ repetition: 1, ordinal: 0, hash: before, stored: true }] }),
+      variant({ ordinal: 0, variant: "baseline", caseId: "0", plans: [
+        { repetition: 1, ordinal: 0, hash: before, stored: true }, { repetition: 1, ordinal: 1, hash: secondBefore, stored: true },
+      ] }),
       variant({ ordinal: 1, variant: "candidate", caseId: "0", plans: [{ repetition: 1, ordinal: 0, hash: after, stored: true }] }),
     ],
   }), {
     "/api/operations/10/plans": {
       operationId: 10,
       state: "stored",
-      occurrences: [before, after].map((documentSha256, index) => ({
-        variant: index === 0 ? "baseline" : "candidate", parameterSet: null, caseId: "0", caseLabel: "Case 1",
-        repetition: 1, documentOrdinal: 0, statementIndex: 0, spanStart: 0, spanLength: 8,
+      occurrences: [before, secondBefore, after].map((documentSha256, index) => ({
+        variant: index < 2 ? "baseline" : "candidate", parameterSet: null, caseId: "0", caseLabel: "Case 1",
+        repetition: 1, documentOrdinal: index === 1 ? 1 : 0, statementIndex: 0, spanStart: 0, spanLength: 8,
         statementId: 1, statementCompId: 1, documentSha256, shapeHash, format: "showplan-xml",
         matchKind: "exact", omitted: false, stored: true,
       })),
@@ -245,17 +248,27 @@ test("plans and reproduction scripts use the selected operation's actual baselin
     [`/api/plan-documents/${before}/graph`]: {
       engine: "sqlserver", error: null, graph: { engine: "sqlserver", statements: [{ index: 0, statementId: 1, statementCompId: 1, rootNodeId: "0:0" }], nodes: [{ id: "0:0", statementIndex: 0, showplanNodeId: 1, physicalOperator: "Index Scan", logicalOperator: "Index Scan", object: null, tableReferenceId: null, predicates: [], definedValues: [], estimatedRows: null, actualRows: null, executions: null, costFraction: null, warnings: [] }], edges: [] },
     },
+    [`/api/plan-documents/${secondBefore}/graph`]: {
+      engine: "sqlserver", error: null, graph: { engine: "sqlserver", statements: [{ index: 0, statementId: 1, statementCompId: 1, rootNodeId: "0:0" }], nodes: [{ id: "0:0", statementIndex: 0, showplanNodeId: 1, physicalOperator: "Index Scan", logicalOperator: "Index Scan", object: null, tableReferenceId: null, predicates: [], definedValues: [], estimatedRows: null, actualRows: null, executions: null, costFraction: null, warnings: [] }], edges: [] },
+    },
     [`/api/plan-documents/${after}/graph`]: {
       engine: "sqlserver", error: null, graph: { engine: "sqlserver", statements: [{ index: 0, statementId: 1, statementCompId: 1, rootNodeId: "0:0" }], nodes: [{ id: "0:0", statementIndex: 0, showplanNodeId: 1, physicalOperator: "Index Seek", logicalOperator: "Index Seek", object: null, tableReferenceId: null, predicates: [], definedValues: [], estimatedRows: null, actualRows: null, executions: null, costFraction: null, warnings: [] }], edges: [] },
     },
   })
   await userEvent.click(screen.getByRole("button", { name: "Plans" }))
   const documentSelectors = await screen.findAllByRole("combobox", { name: "Plan document" })
-  await userEvent.selectOptions(documentSelectors[0], `${before}:0`)
-  await userEvent.selectOptions(documentSelectors[1], `${after}:0`)
+  await userEvent.click(documentSelectors[0])
+  await userEvent.click(await screen.findByRole("option", { name: `Document 2 · ${secondBefore.slice(0, 8)}` }))
+  await userEvent.click(documentSelectors[1])
+  await userEvent.click(await screen.findByRole("option", { name: `Document 1 · ${after.slice(0, 8)}` }))
+  expect(documentSelectors[0]).toHaveTextContent(`Document 2 · ${secondBefore.slice(0, 8)}`)
   const planHrefs = screen.getAllByRole("link", { name: "Download selected plan" }).map(link => link.getAttribute("href"))
-  expect(planHrefs).toContain(`/api/plan-documents/${before}`)
+  expect(planHrefs).toContain(`/api/plan-documents/${secondBefore}`)
   expect(planHrefs).toContain(`/api/plan-documents/${after}`)
+  await userEvent.click(screen.getByRole("button", { name: "Plans" }))
+  expect(screen.queryByRole("combobox", { name: "Plan document" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Plans" }))
+  expect(screen.getAllByRole("combobox", { name: "Plan document" })[0]).toHaveTextContent(`Document 2 · ${secondBefore.slice(0, 8)}`)
   await userEvent.click(screen.getByRole("button", { name: "Per-case & per-run details" }))
   await userEvent.click(screen.getByRole("combobox", { name: "Side" }))
   await userEvent.click(screen.getByRole("option", { name: /^Candidate$/ }))

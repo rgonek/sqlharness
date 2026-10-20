@@ -4,6 +4,7 @@ import { useOperationPlans, usePlanGraph, usePlanSourceMap, type PlanSourceMapPa
 import type { DistilledPlan, PlanNode } from "@/api/types"
 import { PlanErrorState } from "@/components/plan/PlanErrorState"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { ComparePair } from "@/lib/compare"
@@ -98,13 +99,17 @@ function ExactOccurrenceSelect({
   onChange: (key: string) => void
 }) {
   const sideName = side === "baseline" ? "Baseline" : "Candidate"
+  const items = options.map(option => ({
+    value: choiceKey(option),
+    label: `Repetition ${option.repetition} · document ${option.documentOrdinal + 1} · statement ${option.statementIndex + 1} · ${(option.documentSha256 ?? "").slice(0, 8)}`,
+  }))
   return <label className="grid gap-1 text-sm">{sideName} occurrence
-    <select aria-label={`${sideName} occurrence`} className="min-w-64 rounded-md border bg-background px-2 py-1" value={selectedKey} onChange={event => onChange(event.target.value)}>
-      <option value="">Choose exact occurrence</option>
-      {options.map(option => <option key={choiceKey(option)} value={choiceKey(option)}>
-        Repetition {option.repetition} · document {option.documentOrdinal + 1} · statement {option.statementIndex + 1} · {(option.documentSha256 ?? "").slice(0, 8)}
-      </option>)}
-    </select>
+    <Select items={items} value={selectedKey || null} onValueChange={value => onChange(typeof value === "string" ? value : "")}>
+      <SelectTrigger aria-label={`${sideName} occurrence`} className="min-w-64 max-w-[min(32rem,80vw)]">
+        <SelectValue placeholder="Choose exact occurrence" />
+      </SelectTrigger>
+      <SelectContent>{items.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+    </Select>
   </label>
 }
 

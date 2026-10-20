@@ -113,11 +113,11 @@
 **Tests:** src/components/PlanChanges.test.tsx; create src/components/plan/PlanWorkbench.test.tsx for the picker reset chain. Reuse existing operation/compare integration fixtures where they already exercise plan selection.
 **Interfaces:** Five Select sites; occurrence/document keys and numeric statement/repetition identities unchanged.
 
-- [ ] Convert occurrence, case, repetition, plan document and statement. Preserve conditional rendering, All plan documents option and labels for repeated/versioned occurrences.
-- [ ] Supply initial-value label mapping for all keys; document hashes may be part of existing descriptive labels but encoded keys must not leak as the entire selected text.
-- [ ] Preserve every current case/repetition/document/statement callback reset: selected node, SQL selection/reveal and downstream document/statement selection as applicable. Do not normalize handlers into one generic reset if their behaviors differ.
-- [ ] Add tests selecting each picker and asserting resulting document/statement/viewer state, including repeated statement IDs across documents, empty/omitted plans and changed available options. Pin case/repetition reset chains with an actual selected node/SQL span before change.
-- [ ] Run focused suites/typecheck/lint and relevant OperationPage/CompareDetail cases. Browser-check long labels and popup sizing. Review and commit.
+- [x] Convert occurrence, case, repetition, plan document and statement. Preserve conditional rendering, All plan documents option and labels for repeated/versioned occurrences.
+- [x] Supply initial-value label mapping for all keys; document hashes may be part of existing descriptive labels but encoded keys must not leak as the entire selected text.
+- [x] Preserve every current case/repetition/document/statement callback reset: selected node, SQL selection/reveal and downstream document/statement selection as applicable. Do not normalize handlers into one generic reset if their behaviors differ.
+- [x] Add tests selecting each picker and asserting resulting document/statement/viewer state, including repeated statement IDs across documents, empty/omitted plans and changed available options. Pin case/repetition reset chains with an actual selected node/SQL span before change.
+- [x] Run focused suites/typecheck/lint and relevant OperationPage/CompareDetail cases. Browser-check long labels and popup sizing. Review and commit.
 
 ### Task 8: Correct tooltip/dialog trigger composition
 

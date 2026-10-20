@@ -1,4 +1,5 @@
 import type { PlanOccurrenceManifest } from "@/api/types"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export function PlanStatementSwitcher({
   occurrences,
@@ -14,10 +15,16 @@ export function PlanStatementSwitcher({
   if (options.length <= 1) return <p className="text-sm text-muted-foreground">Batch SQL stays visible while its linked statement is selected.</p>
   return <label className="grid min-w-48 gap-1 text-sm">
     Statement
-    <select aria-label="Statement" className="rounded-md border bg-background px-2 py-1" value={selectedIndex ?? options[0].statementIndex} onChange={event => onChange(Number(event.target.value))}>
-      {options.map(occurrence => <option key={occurrence.statementIndex} value={occurrence.statementIndex}>
+    <Select items={options.map(occurrence => ({
+      value: occurrence.statementIndex,
+      label: `Statement ${occurrence.statementIndex + 1}${occurrence.matchKind === "unmatched" ? " · unmatched" : ""}`,
+    }))} value={selectedIndex ?? options[0].statementIndex} onValueChange={value => {
+      if (typeof value === "number") onChange(value)
+    }}>
+      <SelectTrigger aria-label="Statement"><SelectValue /></SelectTrigger>
+      <SelectContent>{options.map(occurrence => <SelectItem key={occurrence.statementIndex} value={occurrence.statementIndex}>
         Statement {occurrence.statementIndex + 1}{occurrence.matchKind === "unmatched" ? " · unmatched" : ""}
-      </option>)}
-    </select>
+      </SelectItem>)}</SelectContent>
+    </Select>
   </label>
 }
