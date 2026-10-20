@@ -158,7 +158,7 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
         <h1>Usage</h1>
-        <div className="grid min-w-52 gap-1.5">
+        <div className="grid w-full min-w-0 gap-1.5 sm:w-auto sm:min-w-52">
           <Label htmlFor="stats-profile">Statistics profile</Label>
           <Select items={[...profileOptions.map(name => ({ value: `profile:${name}`, label: name })), { value: "unprofiled", label: "No profile" }]}
             value={selectedProfile === null ? "unprofiled" : `profile:${selectedProfile}`}
@@ -169,7 +169,7 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
               setAxisChoice(null)
             }}
           >
-            <SelectTrigger id="stats-profile" className="w-full"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="stats-profile" className="w-full min-w-0"><SelectValue /></SelectTrigger>
             <SelectContent>{profileOptions.map(name => <SelectItem key={name} value={`profile:${name}`}>{name}</SelectItem>)}
               <SelectItem value="unprofiled">No profile</SelectItem>
             </SelectContent>

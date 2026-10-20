@@ -169,8 +169,8 @@ test("uses occurrence identity and keeps graph selection linked to the exact bat
   renderVariantPanel()
 
   const repetition = await screen.findByRole("combobox", { name: "Repetition" })
-  expect(repetition).toHaveValue("2")
-  expect(screen.getByRole("combobox", { name: "Case" })).toHaveValue("case-a")
+  expect(repetition).toHaveTextContent("Repetition 2")
+  expect(screen.getByRole("combobox", { name: "Case" })).toHaveTextContent("Gold customers")
   expect(await screen.findByRole("textbox", { name: "Executed SQL" })).toHaveValue(batchSql)
   expect(calls).toContain(`/api/operations/10/source-map?variant=measure&parameterSet=set-a&repetition=2&caseId=case-a`)
 
@@ -183,7 +183,9 @@ test("uses occurrence identity and keeps graph selection linked to the exact bat
   expect(screen.getByTestId("monaco-contract")).toHaveAttribute("data-revealed-span", JSON.stringify({ start: 15, length: 10 }))
   expect(await screen.findByText("11")).toBeInTheDocument()
 
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Statement" }), "1")
+  const statement = screen.getByRole("combobox", { name: "Statement" })
+  await userEvent.click(statement)
+  await userEvent.click(await screen.findByRole("option", { name: "Statement 2" }))
   expect(screen.getByRole("textbox", { name: "Executed SQL" })).toHaveValue(batchSql)
 
   const sqlEditor = screen.getByRole("textbox", { name: "Executed SQL" }) as HTMLTextAreaElement
@@ -195,7 +197,8 @@ test("uses occurrence identity and keeps graph selection linked to the exact bat
   await waitFor(() => expect(screen.getByRole("button", { name: /Customers/ })).toHaveAttribute("aria-pressed", "true"))
   expect(screen.getByText("Plan graph fitted to SQL selection")).toBeInTheDocument()
 
-  await userEvent.selectOptions(repetition, "1")
+  await userEvent.click(repetition)
+  await userEvent.click(await screen.findByRole("option", { name: "Repetition 1" }))
   expect(await screen.findByRole("textbox", { name: "Executed SQL" })).toHaveValue("SELECT id FROM dbo.OldOrders;")
   expect(calls).toContain(`/api/operations/10/source-map?variant=measure&parameterSet=set-a&repetition=1&caseId=case-a`)
   expect(screen.getByRole("textbox", { name: "Executed SQL" })).toHaveValue("SELECT id FROM dbo.OldOrders;")
@@ -248,21 +251,25 @@ test("scopes SQL selection to the filtered document when links overlap across re
   renderVariantPanel()
 
   await screen.findByRole("textbox", { name: "Executed SQL" })
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Statement" }), "1")
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Plan document" }), `${documentB}:1`)
+  const statement = screen.getByRole("combobox", { name: "Statement" })
+  await userEvent.click(statement)
+  await userEvent.click(await screen.findByRole("option", { name: "Statement 2" }))
+  const document = screen.getByRole("combobox", { name: "Plan document" })
+  await userEvent.click(document)
+  await userEvent.click(await screen.findByRole("option", { name: "Document 2 · bbbbbbbb" }))
 
   const sqlEditor = screen.getByRole("textbox", { name: "Executed SQL" }) as HTMLTextAreaElement
   sqlEditor.setSelectionRange(5, 15)
   fireEvent.select(sqlEditor)
 
-  await waitFor(() => expect(screen.getByRole("combobox", { name: "Statement" })).toHaveValue("1"))
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "Statement" })).toHaveTextContent("Statement 2"))
   await waitFor(() => expect(screen.getByTestId("monaco-contract")).toHaveAttribute("data-highlighted-spans", JSON.stringify([{ start: 5, length: 10 }])))
   expect(screen.getByTestId("plan-flow")).toHaveAttribute("data-highlighted-keys", `${documentB}:1:shared-node`)
 
   sqlEditor.setSelectionRange(30, 40)
   fireEvent.select(sqlEditor)
 
-  await waitFor(() => expect(screen.getByRole("combobox", { name: "Statement" })).toHaveValue("1"))
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "Statement" })).toHaveTextContent("Statement 2"))
   expect(await screen.findByRole("status")).toHaveTextContent("No operator source link matches this SQL selection in the selected plan document.")
   expect(screen.getByTestId("monaco-contract")).toHaveAttribute("data-highlighted-spans", "[]")
 })
