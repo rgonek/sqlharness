@@ -34,4 +34,3 @@ Self-review of the explicit diff confirmed the existing group/scope selection an
 Commit: `a2a27d7818f568e488871b1e774233ccab42bab0` (`Adopt Base UI selects for optimization group scope`).
 
 The 	ask-done helper could not run in the WSL ash.exe environment because this Windows worktree .git pointer resolves to a Windows-only path there. Its final test command was run directly from the UI directory; the equivalent verification passed. The Plan 100 ledger was updated in PowerShell.
-

@@ -1,6 +1,6 @@
 # Task 9 — Standard Button actions
 
-Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`  
+Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`
 Branch/base: `plan-100` at `92370a67b856f87d693bfb4bf72badb3e925f0a9`
 
 ## Changes

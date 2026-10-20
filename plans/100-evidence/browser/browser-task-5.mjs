@@ -31,5 +31,3 @@ try {
   await page.screenshot({ path: process.env.SCREENSHOT_PATH ?? ".superpowers/sdd/100-shadcn-primitive-adoption/scratch/task-5/narrow-layout.png", fullPage: true })
   process.stdout.write(JSON.stringify({ viewport: 390, document: initialWidth.document, filterChoices: ["All values", "Unknown (missing)", "(empty)"], disabledColumnChoice: disabled }) + "\n")
 } finally { await browser.close() }
-
-

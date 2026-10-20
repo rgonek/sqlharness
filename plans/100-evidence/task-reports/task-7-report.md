@@ -1,7 +1,7 @@
 # Task 7 evidence — Plan100 pickers
 
-Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`  
-Branch: `plan-100`  
+Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`
+Branch: `plan-100`
 Base before Task 7: `a2a27d7818f568e488871b1e774233ccab42bab0`
 
 ## Implementation
@@ -43,4 +43,3 @@ The first run exposed a long case label wider than the popup (desktop popup 512p
 Reviewed the task diff locally, including distinct callbacks, retained domain values, labels, tests, plan index, and `git diff --check`. Parent disclosure reopen coverage is in the relevant CompareDetail integration fixture. This task did not run a separate independent reviewer, the full UI suite, or the final repository gate; those remain for the plan's integration task. No browser-console claim is made from this fixture. No backend, database, merge, or push action was performed.
 
 Commit: `d3dbd543654664430fc4e29b7b594e4707fc73da` (`Adopt Base UI selects for plan pickers`). The report, browser fixture, measurements and screenshot are ignored scratch artifacts and were not added to the commit.
-

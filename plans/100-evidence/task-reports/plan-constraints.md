@@ -9,4 +9,3 @@
 - Existing behavior tests are adapted only when markup/API changes. Add focused tests for identified behavioral hazards; no tests merely mirroring trivial Input/Button substitutions.
 - Each task: run the named focused Vitest files with npm exec -- vitest run <paths>, run npm run typecheck and npm run lint, obtain independent review and resolve findings, then commit explicit files. Run the whole UI suite at integration points and final just verify; do not label scoped checks a full gate.
 - Current inventory is 19 select, 11 details, 3 textarea, 3 checkbox, 4 radio, 2 text input, 9 button and 8 table source sites outside tests/components/ui. Refresh and classify drift before execution; a stale count never licenses silently skipping new controls.
-

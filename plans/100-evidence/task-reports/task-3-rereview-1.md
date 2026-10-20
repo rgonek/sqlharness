@@ -5,5 +5,3 @@
 - **Verification evidence (not rerun):** The updated report records 7 passing CompareDetail tests plus successful typecheck and lint at `3-report.md:22`-`:23`.
 
 **Assessment:** Finding addressed; scoped re-review clean.
-
-

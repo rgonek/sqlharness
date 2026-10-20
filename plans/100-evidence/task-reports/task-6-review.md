@@ -30,4 +30,3 @@
 **Task quality:** Approved
 
 **Reasoning:** The implementation preserves the existing selection, reset, conditional-rendering, and request-construction paths while adapting the controls to Base UI. The remaining code-review items are focused test-coverage improvements; the task report's validation output is unavailable for inspection.
-

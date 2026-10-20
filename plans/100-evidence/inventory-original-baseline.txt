@@ -1,0 +1,65 @@
+components\CompareDetail.tsx:60: <label className="text-sm">Case <select aria-label="Case" value={card?.pair?.baseline.caseId ?? selectedCase} onChange={event => onCaseChange?.(event.target.value)} className="ml-2 rounded-md border bg-background px-2 py-1">{cards.filter(item => item.pair).map(item => <option key={item.pair!.baseline.caseId} value={item.pair!.baseline.caseId}>{item.label}</option>)}</select></label>
+components\CompareDetail.tsx:61: <label className="text-sm">Side <select aria-label="Side" value={side} onChange={event => setSide(event.target.value as typeof side)} className="ml-2 rounded-md border bg-background px-2 py-1"><option value="baseline">Baseline</option><option value="candidate">Candidate</option></select></label>
+components\CompareDetail.tsx:94: <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">SQL diff &amp; conditions</summary><div className="mt-4 space-y-4"><SetupSql detail={detail} /><SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={detail.operation.engine} /><Conditions detail={detail} /></div></details>
+components\CompareDetail.tsx:95: <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Plans</summary><div className="mt-4 space-y-4">{activePair ? <><TableIoComparison pairs={[activePair]} engine={detail.operation.engine} /><PlanChanges operationId={detail.operation.id} pair={activePair} /><section aria-label="Selected variant plan" className="space-y-2"><VariantPanel operationId={detail.operation.id} variant={activePair.baseline} engine={detail.operation.engine} compareMetrics /><VariantPanel operationId={detail.operation.id} variant={activePair.candidate} engine={detail.operation.engine} compareMetrics /></section></> : <p className="text-sm text-muted-foreground">No paired plans or IO are available.</p>}</div></details>
+components\CompareDetail.tsx:96: <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Per-case &amp; per-run details</summary><div className="mt-4"><Cases detail={detail} selectedCase={activeCase} onCaseChange={onCaseChange} /></div></details>
+components\CopyButton.tsx:49: <textarea ref={textarea} aria-label="Text to copy" readOnly value={manualText ?? ""} onFocus={event => event.currentTarget.select()} className="min-h-40 w-full rounded border bg-background p-2 font-mono text-xs" />
+components\InternalOperationsToggle.tsx:2: return <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showInternal} onChange={event => onChange(event.target.checked)} />Show internal operations</label>
+components\PlanChanges.tsx:102: <select aria-label={`${sideName} occurrence`} className="min-w-64 rounded-md border bg-background px-2 py-1" value={selectedKey} onChange={event => onChange(event.target.value)}>
+components\SessionNoteCard.tsx:30: <textarea
+components\SessionVersionDiff.tsx:90: <select aria-label="From version" value={keyOf(fromOption) ?? ""} onChange={event => setFromSelection(event.target.value)}>
+components\SessionVersionDiff.tsx:95: <select aria-label="To version" value={keyOf(toOption) ?? ""} onChange={event => setToSelection(event.target.value)}>
+components\SqlDiff.tsx:21: <label className="flex items-center gap-1"><input type="radio" name={radioName} value="side-by-side" checked={mode === "side-by-side"} onChange={() => onModeChange("side-by-side")} />Side by side</label>
+components\SqlDiff.tsx:22: <label className="flex items-center gap-1"><input type="radio" name={radioName} value="unified" checked={mode === "unified"} onChange={() => onModeChange("unified")} />Unified</label>
+components\SqlDiff.tsx:24: <label className="flex items-center gap-2"><input type="checkbox" checked={ignoreFormatting} onChange={event => onIgnoreFormattingChange(event.target.checked)} />Ignore formatting</label>
+components\StatusBadge.tsx:24: <TooltipTrigger render={<button type="button" aria-haspopup="dialog" onClick={() => setOpen(true)} />}>
+components\TableIoComparison.tsx:18: return <details className="mt-2 text-sm">
+components\TableIoComparison.tsx:19: <summary className="cursor-pointer text-muted-foreground">More</summary>
+components\optimization\ComparisonPanel.tsx:111: <table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2 pr-3">Table</th><th className="px-3 py-2">Scans before</th><th className="px-3 py-2">Scans after</th><th className="px-3 py-2">Logical reads before</th><th className="px-3 py-2">Logical reads after</th><th className="px-3 py-2">Change</th></tr></thead>
+components\optimization\OptimizationSection.tsx:32: {!!section.unassigned.length && <details className="rounded-lg border p-3">
+components\optimization\OptimizationSection.tsx:33: <summary className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</summary>
+components\optimization\OptimizationSection.tsx:74: <select aria-label={`${subject.subject} conditions group`} value={group.fingerprint} onChange={event => {
+components\optimization\OptimizationSection.tsx:80: <select aria-label={`${subject.subject} scope`} value={scope.scope} onChange={event => {
+components\optimization\StatementRows.tsx:24: return <details className="mt-2">
+components\optimization\StatementRows.tsx:25: <summary className="cursor-pointer text-sm">Objects ({row.objects.length})</summary>
+components\optimization\StatementRows.tsx:27: <table className="w-full text-sm" aria-label={`${row.text} object IO`}>
+components\optimization\StatementRows.tsx:52: <table className="w-full text-sm" aria-label="Statement IO rows">
+components\optimization\VersionTable.tsx:14: <table className="w-full text-sm" aria-label={`${subject} versions`}>
+components\optimization\VersionTable.tsx:21: <td className="px-3 py-2"><label className="flex items-center gap-1"><input type="radio" name={`${subject}-a`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} />A</label></td>
+components\optimization\VersionTable.tsx:22: <td className="px-3 py-2"><label className="flex items-center gap-1"><input type="radio" name={`${subject}-b`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} />B</label></td>
+components\plan\PlanErrorState.tsx:32: {onRetry && <button type="button" className="mt-1 rounded border px-2 py-1 underline" onClick={onRetry}>Retry</button>}
+components\plan\PlanGraphView.tsx:62: <button
+components\plan\PlanGraphView.tsx:92: <button
+components\plan\PlanGraphView.tsx:233: <button type="button" className="rounded border px-2 py-1 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" disabled={fitTargets.length === 0} onClick={() => setFitVersion(value => value + 1)}>Fit selection</button>
+components\plan\PlanPropertiesPanel.tsx:81: <button type="button" className="w-full rounded border border-dashed border-amber-600/60 px-2 py-1 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" title={rule} onClick={() => onSelect(selection)}>
+components\plan\PlanStatementSwitcher.tsx:17: <select aria-label="Statement" className="rounded-md border bg-background px-2 py-1" value={selectedIndex ?? options[0].statementIndex} onChange={event => onChange(Number(event.target.value))}>
+components\plan\PlanWorkbench.tsx:230: <select aria-label="Case" className="rounded-md border bg-background px-2 py-1" value={caseId} onChange={event => {
+components\plan\PlanWorkbench.tsx:239: <select aria-label="Repetition" className="rounded-md border bg-background px-2 py-1" value={repetition} onChange={event => {
+components\plan\PlanWorkbench.tsx:248: <select aria-label="Plan document" className="rounded-md border bg-background px-2 py-1" value={documentSelection} onChange={event => {
+mutations\ApprovalDialog.tsx:65: <table className="w-full border-collapse text-left text-sm"><thead><tr><th className="border-b p-2">Name</th><th className="border-b p-2">Type</th><th className="border-b p-2">Value</th></tr></thead>
+pages\AgentSessionPage.tsx:63: : <><textarea aria-label="Agent session note" maxLength={10_000} rows={5} className="w-full rounded border p-2" value={noteDraft} onChange={event => setNoteDraft(event.target.value)} />
+pages\NamedOperationsPage.tsx:15: <input aria-label="Search named operations" className="w-full rounded-md border bg-background px-3 py-2" value={search} onChange={event => setSearch(event.currentTarget.value)} />
+pages\NamedOperationsPage.tsx:20: <button className="rounded-md border px-3 py-1.5" onClick={() => void query.fetchNextPage()}>Retry loading more</button>
+pages\NamedOperationsPage.tsx:22: {query.hasNextPage && <button className="rounded-md border px-3 py-2 text-sm" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+pages\OperationPage.tsx:72: <input className="rounded-md border bg-background px-2 py-1" value={note} onChange={event => setNote(event.currentTarget.value)} />
+pages\OperationPage.tsx:100: <table className="w-full text-sm">
+pages\OperationPage.tsx:123: <details>
+pages\OperationPage.tsx:124: <summary className="cursor-pointer font-medium">Connection events</summary>
+pages\OperationPage.tsx:250: <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Run diagnostics</summary><div className="mt-4 space-y-4">
+pages\OperationPage.tsx:339: <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Run diagnostics</summary><div className="mt-4 space-y-4">
+pages\ProfileDimensionsPanel.tsx:78: <select
+pages\ProfileDimensionsPanel.tsx:220: <select id="matrix-limit" className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted" value={limit} onChange={event => setLimit(Number(event.target.value))}>
+pages\ProfileDimensionsPanel.tsx:229: <table className="min-w-full border-separate border-spacing-0 text-sm">
+pages\ProfileDimensionsPanel.tsx:248: {cell ? <button
+pages\ProfileDimensionsPanel.tsx:370: <select id="matrix-row" className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted" value={axes.row} onChange={event => {
+pages\ProfileDimensionsPanel.tsx:377: <select id="matrix-column" className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted" value={axes.column} onChange={event => {
+pages\ProfileDimensionsPanel.tsx:384: <select id="matrix-metric" className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted" value={metric} onChange={event => setMetric(event.target.value as Metric)}>
+pages\ProfileDimensionsPanel.tsx:394: {displayedDimensions.map(dimension => <details key={dimension.name} open className="min-w-0 rounded-md border p-3">
+pages\ProfileDimensionsPanel.tsx:395: <summary className="cursor-pointer font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{dimension.name}: {formatNumber(dimension.values.length)} values</summary>
+pages\SessionPage.tsx:57: <details>
+pages\SessionPage.tsx:58: <summary className="cursor-pointer text-sm font-medium">Session metadata</summary>
+pages\SessionsPage.tsx:59: <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={hasOptimization} onChange={e => setHasOptimization(e.target.checked)} />Contains optimization</label>
+pages\SettingsPage.tsx:139: <select id="approval-sound" className="h-9 w-fit rounded-lg border border-input bg-background px-2 text-sm" value={preferences.selection}
+pages\SettingsPage.tsx:181: <table className="w-full text-sm" aria-label="Agent session matching coverage"><thead><tr className="border-b text-left"><th className="py-1 pr-3">Agent</th><th className="px-3 py-1">Transport</th><th className="px-3 py-1">Exact</th><th className="px-3 py-1">Inferred</th><th className="px-3 py-1">Unassigned</th></tr></thead>
+pages\SettingsPage.tsx:357: <select id="mutation-default-mode" aria-label="Default mutation mode" className="h-9 w-fit rounded-lg border border-input bg-background px-2 text-sm"
+pages\StatsPage.tsx:162: <select

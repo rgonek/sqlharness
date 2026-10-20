@@ -8,4 +8,3 @@ npm warn Unknown cli config "--t". This will stop working in the next major vers
       Tests  8 passed (8)
    Start at  15:26:41
    Duration  12.15s (import 39%, tests 34%, transform 14%, environment 10%, setup 3%)
-

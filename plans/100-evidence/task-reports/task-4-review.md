@@ -37,5 +37,3 @@
 - Read the supplied diff package once; its tool display was clipped, so I inspected only the changed Select hunks and related tests needed to complete the review.
 - Read existing evidence logs; focused tests report 5 files / 50 tests passed, typecheck and lint completed, and the browser log confirms keyboard, focus, typeahead and 320px checks for SessionVersionDiff. No suites were rerun.
 - Checked CompareDetail’s empty-option behavior against the installed Base UI SelectValue implementation as a focused check for the named unmatched-value risk.
-
-

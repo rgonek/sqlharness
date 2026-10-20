@@ -1,6 +1,6 @@
 # Browser evidence
 
-The PNGs are screenshots from cached Chromium 1228; paired light/dark logs hold the measured results and runner assertions. The runner files use `PLAYWRIGHT_CORE_PATH`, `CHROMIUM_PATH`, `THEME`, and `UI_FIXTURE_URL` where needed. The archived TSX/HTML fixtures render the production components or routed pages with local fixture data and intercepted API requests.
+The PNGs are screenshots from cached Chromium 1228; paired light/dark captured outputs hold the measured results and runner assertions. The runner files use `PLAYWRIGHT_CORE_PATH`, `CHROMIUM_PATH`, `THEME`, and `UI_FIXTURE_URL` where needed. The archived TSX/HTML fixtures render the production components or routed pages with local fixture data and intercepted API requests.
 
 - Tasks 3–5 cover compare disclosures, nested reopen state, editor sizing, reduced motion, the version picker keyboard/typeahead/escape lifecycle, and open/close/reopen behavior for all dimension disclosures and filters.
 - Task 7 covers a long PlanWorkbench case label and popup bounds, then clicks the source-match button with a pointer in the real PlanWorkbench layout. The runner asserts the selected node, source-match rule and SQL source-span highlight.

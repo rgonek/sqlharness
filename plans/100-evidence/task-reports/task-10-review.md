@@ -30,7 +30,3 @@ None.
 **Task quality:** Approved
 
 **Reasoning:** The changed tables preserve the requested semantics and readable data, and the targeted tests cover the A/B radio interaction and fixture-only approval presentation. The only diff-external check is the unchanged matrix, for which the saved browser evidence records sticky scrolling.
-
-
-
-

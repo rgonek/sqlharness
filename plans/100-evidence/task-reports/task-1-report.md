@@ -33,5 +33,3 @@ Both baseline and post-change test runs emitted two `ECONNREFUSED` AggregateErro
 ## Files and commit
 
 The only product files changed are the six new primitive source files listed above. `package.json`, `package-lock.json`, `src/index.css`, and callers remain unchanged. Commit: `01c2176f5fa2d87bbf60b49ef410295307b713bd` (`feat(ui): add missing shadcn primitives`).
-
-

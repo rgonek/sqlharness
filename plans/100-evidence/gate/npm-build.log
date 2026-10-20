@@ -21,7 +21,7 @@ dist/assets/PlanGraphView-C4LNFWft.js                        175.36 kB │ gzip:
 dist/assets/index-WAAeUEbP.js                              1,483.87 kB │ gzip: 447.09 kB
 dist/assets/monaco-NGThTZmE.js                             2,724.40 kB │ gzip: 700.44 kB
 
-[plugin builtin:vite-reporter] 
+[plugin builtin:vite-reporter]
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting

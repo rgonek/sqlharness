@@ -31,4 +31,3 @@
 **Task quality:** Approved
 
 **Reasoning:** The changed implementation uses the installed primitives at the requested sites, and the mounted/hidden accessibility behavior is supported by the installed Base UI implementation. No task-scoped correctness or maintainability defect is visible; the controller should resolve the listed cross-task and unchanged-state checks before marking the plan task complete.
-

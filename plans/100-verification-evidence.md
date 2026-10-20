@@ -6,7 +6,9 @@ The implementation and integrated browser acceptance are verified. Task11's inde
 
 ## Inventory and exceptions
 
-The production TSX scan before and after Task11 found the same four remaining source sites. The raw inventories are [before](100-evidence/inventory-before.txt) and [after](100-evidence/inventory-after.txt). The four are the explicit semantic exceptions:
+Three production TSX scans are retained. The original pre-migration snapshot is [inventory-original-baseline.txt](100-evidence/inventory-original-baseline.txt): 65 matching source lines with 70 opening-tag matches across 27 files. Its category counts were 19 selects across 9 files; 11 details and 11 summaries across 7 files; 3 textareas across 3 files; 9 inputs across 6 files; 9 buttons across 6 files; and 8 tables across 7 files. These map to the planned Select, Accordion/Collapsible, Textarea, Checkbox/RadioGroup, Button and Table migrations. The original exception sites are the VersionTable A/B radios, rich PlanGraphView operator button and ProfileDimensionsPanel matrix table.
+
+The [Task11-start scan](100-evidence/inventory-before.txt) and [post-Task11 scan](100-evidence/inventory-after.txt) each have six matching lines representing the same four remaining source sites. These are the explicit semantic exceptions:
 
 | Site | Reason |
 |---|---|
@@ -14,7 +16,7 @@ The production TSX scan before and after Task11 found the same four remaining so
 | [PlanGraphView.tsx:64](../src/SqlHarness.Dashboard/ui/src/components/plan/PlanGraphView.tsx:64) | The multiline React Flow operator node remains a rich domain button. |
 | [ProfileDimensionsPanel.tsx:242](../src/SqlHarness.Dashboard/ui/src/pages/ProfileDimensionsPanel.tsx:242) | The sticky, separately bordered dimension matrix remains a native table with its specialized scroll behavior. |
 
-The before and after scan includes matching closing tags for the button and table, so the raw inventories contain six lines for these four source sites. No remaining native select, details/summary, textarea, or ordinary control button/table was found outside tests and owned primitives.
+The Task11 scans include matching closing tags for the button and table. Compared with the original baseline, the Task11-start inventory shows that all standard controls were adopted before the StatsPage narrow-screen fix; the after scan remains unchanged. No remaining native select, details/summary, textarea, or ordinary control button/table was found outside tests and owned primitives.
 
 ## Dependencies and audit
 
@@ -24,7 +26,7 @@ Both audit commands exited 1 because advisories remain. Full audit: 2 LOW and 7 
 
 ## UI checks
 
-On `3caacc3`, `npm run check` exited 0 with 63 test files and 346 tests passing; `npm run build` exited 0. The captured outputs and exit files are [check](100-evidence/gate/npm-check.log), [check exit](100-evidence/gate/npm-check-exit.txt), [build](100-evidence/gate/npm-build.log), and [build exit](100-evidence/gate/npm-build-exit.txt). Existing non-failing router-test diagnostics include `ECONNREFUSED` to localhost:3000. The build reports the existing large Monaco and main chunks; neither diagnostic failed the command.
+On `3caacc3`, `npm run check` exited 0 with 63 test files and 346 tests passing; `npm run build` exited 0. The captured outputs and exit files are [check](100-evidence/gate/npm-check.log), [check exit](100-evidence/gate/npm-check-exit.txt), [build](100-evidence/gate/npm-build.log), and [build exit](100-evidence/gate/npm-build-exit.txt). The test output includes non-failing `ECONNREFUSED` diagnostics to localhost:3000 and Node `DEP0190`; both were present at the Plan 100 baseline. The build reports the existing large Monaco and main chunks. These are reported diagnostics, not a pristine-console claim, and none failed the command.
 
 ## Browser acceptance
 
@@ -43,4 +45,4 @@ The Task4 SettingsPage/StatsPage surface and Task9 source-match pointer gaps are
 
 The final required command was `just verify -LogDirectory C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness\.superpowers\sdd\100-shadcn-primitive-adoption\scratch\task-11\final-gate-retry-1`, run from the repository root at the tested revision. It exited 0: UI install, build, UI check, and .NET tests passed; format correctly skipped because there were zero changed C# files. The [captured console](100-evidence/gate/just-verify-final-console.log) records `verify: OK stages=5`, and the actual [exit code](100-evidence/gate/just-verify-final-exit.txt) is 0. Stage logs are retained for [UI install](100-evidence/gate/just-verify-ui-install.log), [build](100-evidence/gate/just-verify-build.log), [UI check](100-evidence/gate/just-verify-ui-check.log), and both [test projects](100-evidence/gate/just-verify-test-SqlHarness.Tests.log) and [MCP tests](100-evidence/gate/just-verify-test-SqlHarness.Mcp.Tests.log). The first attempt ended at UI install because the worktree's still-running Vite server held Rolldown's native module open; after stopping that exact Vite process, the retry passed. The first-attempt cause is recorded in [the gate note](100-evidence/gate/just-verify-attempt-1.md).
 
-Task reports, individual Task1–10 reviews, the implementation progress ledger, and linked raw artifacts are archived in [task reports and artifacts](100-evidence/task-reports/). Task11's independent Luna xhigh review and the Sol low whole-branch review remain pending with the controller. Implementation and verification are complete; plan closure remains pending those two reviews.
+Task reports, individual Task1–10 reviews, the implementation progress ledger, and linked artifacts are archived in [task reports and artifacts](100-evidence/task-reports/). Captured log copies in this archive have trailing whitespace removed and trailing blank lines trimmed so the complete branch diff passes `git diff --check`; their substantive output, ANSI sequences, diagnostics and exit results are retained. The untouched original command outputs remain in the ignored plan scratch directory until closure. Task11's independent Luna xhigh review and the Sol low whole-branch review remain pending with the controller. Implementation and verification are complete; plan closure remains pending those two reviews.

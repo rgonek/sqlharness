@@ -3069,7 +3069,7 @@ Ignored nodes: comments, script, style
                   >
                     CREATE TABLE
                   </span>
-                   #work (id 
+                   #work (id
                   <span
                     class="hljs-type"
                   >
@@ -10893,7 +10893,7 @@ Ignored nodes: comments, script, style
                   <span
                     class="rounded border px-2 py-1 text-xs"
                   >
-                    UDF time 
+                    UDF time
                     15
                     % of statement
                   </span>
@@ -11046,4 +11046,3 @@ Ignored nodes: comments, script, style
 
     Isolate  6 workers spawned · ~1.31s startup each (spawn + environment, per file)
              at least ~6.54s faster with isolate: false — reuses workers across files instead of one per file
-

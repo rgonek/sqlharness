@@ -18,4 +18,3 @@
 
 - Read review-582a807..fe20a52.diff once; it contains only the two fixes and their regression/assertion tests.
 - Read existing fix-round logs: focused tests report 2 files / 16 tests passed; typecheck and lint completed. I did not rerun suites.
-

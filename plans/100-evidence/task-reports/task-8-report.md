@@ -1,7 +1,7 @@
 # Task 8 evidence — StatusBadge trigger composition
 
-Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`  
-Branch: `plan-100`  
+Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`
+Branch: `plan-100`
 Base revision: `d3dbd543654664430fc4e29b7b594e4707fc73da`
 
 ## Change
@@ -68,4 +68,3 @@ The open dialog associates to its originating button with `aria-controls`; Escap
 Reviewed the final diff and component tree: both triggers and the content share the same uncontrolled Dialog root; composition renders a single button; no copied Radix `asChild` usage or nested button exists. Only `StatusBadge.tsx` and `StatusBadge.test.tsx` are product changes. No full UI suite, final repository gate, merge, push, backend, or live write was performed.
 
 Commit: `92370a67b856f87d693bfb4bf72badb3e925f0a9` (`Compose StatusBadge tooltip and dialog trigger`).
-

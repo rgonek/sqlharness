@@ -29,4 +29,3 @@ None.
 **Task quality:** Approved
 
 **Reasoning:** The implementation matches the requested Base UI composition and preserves StatusBadge behavior and content. Focused test, typecheck, lint, and browser evidence is recorded in the report; this review did not rerun suites or claim the full Plan 100 gate.
-

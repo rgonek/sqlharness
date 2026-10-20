@@ -52,4 +52,3 @@ try {
   await page.screenshot({ path: join(here, "task-10-narrow.png"), fullPage: true })
   process.stdout.write(JSON.stringify({ columnHeaders: 8, rowHeader: true, matrixSticky: { before: stickyBefore, after: stickyAfter }, matrixContainedScroll: true, approvalDialogContained: dialogBox, longParameterWrappedAndSelectable: { cellBox, selected: true }, narrowApproval: { dialog: narrowDialog, tableContainer: scroll }, consoleErrors: errors }, null, 2) + "\n")
 } finally { await browser.close() }
-

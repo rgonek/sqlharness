@@ -1,6 +1,6 @@
 # Task 10 — Ordinary table-family adoption
 
-Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`  
+Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`
 Branch/base: `plan-100`, commit `bbd3d60` based on `ec8493c1b6c6a36b71b21d789a128cda36058eee`
 
 ## Changes
@@ -57,4 +57,3 @@ Browser output:
 ```
 
 The long parameter's content exceeds the dialog's visible height, so it is reachable through the dialog's existing vertical scroll. The task-level browser fixture verified layout and selection; the full Plan 100 browser matrix and `just verify` remain Task 11 work. No backend, database, merge, push, or live write was involved. Review was a self-review because this dispatched task explicitly disallowed subagents; the parent handles task/branch review.
-

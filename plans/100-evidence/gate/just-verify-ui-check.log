@@ -28,7 +28,7 @@
              learn more: https://vitest.dev/guide/improving-performance#test-isolation
 (node:11580) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
 (Use `node --trace-deprecation ...` to show where the warning was created)
-AggregateError: 
+AggregateError:
     at internalConnectMultiple (node:net:1194:18)
     at afterConnectMultiple (node:net:1784:7) {
   code: 'ECONNREFUSED',
@@ -53,7 +53,7 @@ AggregateError:
     }
   ]
 }
-AggregateError: 
+AggregateError:
     at internalConnectMultiple (node:net:1194:18)
     at afterConnectMultiple (node:net:1784:7) {
   code: 'ECONNREFUSED',

@@ -5,7 +5,7 @@
 
  RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui
 
-AggregateError: 
+AggregateError:
     at internalConnectMultiple (node:net:1194:18)
     at afterConnectMultiple (node:net:1784:7) {
   code: 'ECONNREFUSED',
@@ -30,7 +30,7 @@ AggregateError:
     }
   ]
 }
-AggregateError: 
+AggregateError:
     at internalConnectMultiple (node:net:1194:18)
     at afterConnectMultiple (node:net:1784:7) {
   code: 'ECONNREFUSED',
@@ -64,4 +64,3 @@ AggregateError:
      Import  252 modules were evaluated 2663 times · 77.70s total, 35% of tracked time
              ~70.35s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
              learn more: https://vitest.dev/guide/improving-performance#test-isolation
-
