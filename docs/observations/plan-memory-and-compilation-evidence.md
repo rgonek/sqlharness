@@ -92,3 +92,37 @@ availability for the existing operations and enumerate which cases and statement
 Missing fields must remain distinct from zero. For later synthesis, ask whether explicit review coverage
 alongside a rejection decision is sufficient or whether an existing evidence surface needs improvement.
 This entry chooses neither a safeguard nor an API change and authorizes no plan or implementation.
+
+## Follow-up 2026-10-20 — static-list aggregation
+
+Recorded against repository HEAD `6f39a292`. Status: collecting observations, not approved for
+implementation. Earlier observations remain unchanged. This is a separate session from the
+existence-check follow-up above.
+
+Two comparisons and four artifact-plan reads reviewed both variants of a static-list query and its
+metadata-preserving revision. Complete last-measured operator trees fit without clipping or
+continuation. The final report used them to explain eliminated repeated lookups. A retro clarification
+narrowed the wording: complete operator trees were reviewed, but memory grants and compilation were
+not. See the [report entry](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-20--static-list-aggregation-lower-reads-with-preserved-metadata)
+for provenance, call counts and the interim metadata correction.
+
+Classification: agent slip in review/report coverage; the existing evidence-surface UX gap is relevant,
+not newly demonstrated. Confidence is high in the observed review limit. Current source defines grant
+and compilation fields in `src/SqlHarness.Core/Journal/PlanMetricsExtractor.cs:14-28`; the safe artifact
+models in `src/SqlHarness.Core/ArtifactReader.cs:43-103` expose metrics and operator trees separately.
+Actual grant/compilation availability for these retained operations was not checked. Exact installed
+binary correspondence to the inspected HEAD was not established. Successful full tree retrieval does
+not prove full diagnostic review, unavailable fields, or zero grant/compilation cost.
+
+Two bounded local read-only journal invocations inspected schema, operation output counters, phase
+aggregates and event summaries. Initial target confirmation was dominated by connection work;
+subsequent connections were smaller. Connection and artifact event summaries showed success. Detailed
+event payloads were not inspected; authentication, network and server causes remain unknown. The sole
+rejected offline dry run had a parse error from agent-authored SQL and no connection work. No live SQL
+was rerun during the retro. Output counters exclude discovery, inputs, source reads and final prose;
+no complete token-cost or savings claim follows.
+
+The cheapest next check is offline availability inspection of retained grant and compilation metrics,
+keeping missing values distinct from zero. For later synthesis: is explicit review-coverage wording
+sufficient while the existing surface question remains open? This follow-up selects no API or safeguard
+and authorizes no plan, implementation or publication.

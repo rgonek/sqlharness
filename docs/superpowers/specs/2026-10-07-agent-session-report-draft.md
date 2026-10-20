@@ -58,6 +58,7 @@ the tool. Keep workload values out.
 | 2026-10-20 current-source existence-check candidate (unmapped) | optimization | reject | 1 | source context, variant x case table, plan interpretation, limits | not recorded | yes (source applicability, callers, candidate rationale) | 2 clarifications | external context and explicit review coverage; no API decision |
 | 2026-10-20 sync-range batch with lookup join (unmapped) | optimization | reject | 1 | pre-measurement source context, case x metric table (baseline only), read-attribution explanation, rejected candidates (1 measured, 2 reasoned), unmeasured out-of-SQL lever, unexplained telemetry gap, evidence links | ~9 / ~22 | yes (selection via historical telemetry plus source match, index and join-shape rejection by reasoning, stopping decision) | 2 (overstated text match; inference presented as measurement) | external context; explicit measured vs inferred labeling; no API decision |
 | 2026-10-20 multi-statement read batch, function replaced by ranked CTE (unmapped) | optimization | adopt (proposed, not applied) | 1 | pre-measurement source context with parameter type table, bottleneck explanation, change description, case x metric table (before → after, equality), plan check, limits and uncovered branches, question for a human | ~15 / ~20 | yes (source context, equivalence reasoning for branches without data, untrusted-constraint risk) | 3 clarifications (overstated review coverage x2; unlabeled hypothesis) | external context; explicit review coverage; tool-known hidden work not on agent path; no API decision |
+| 2026-10-20 static-list aggregation (unmapped) | optimization | adopt (proposed, not applied) | 1 | source context, variant x metric table, equality, plans, limits, evidence links | ~7 / ~10 | yes (source applicability, callers, rewrite rationale, deferral) | 1 clarification; 1 interim metadata revision | external context and review coverage; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -780,3 +781,62 @@ implementation. The system label is not asserted to match earlier entries.
   missing from the agent's responses. No API is selected and no readiness or savings follow.
 - **Operator decision:** Record this entry, the statement-metrics follow-up and the error-message
   clipping observation only. No plan, code, skill edit or publication is authorized.
+
+### 2026-10-20 — static-list aggregation, lower reads with preserved metadata
+
+Recorded against repository HEAD `6f39a292`. Status: collecting observations, not approved for implementation.
+
+`Kind:` optimization · `Outcome:` adopt (proposed, not applied) · `Scopes:` 1 · `System label:` unmapped.
+
+- **Actual report:** Current-source query selected; source file, method, caller authorization,
+  static SQL construction and absence of parameters stated before measurement. Final response
+  contains variant x metric table, read-reduction conclusion, equivalence checks, operator
+  explanation, uncovered zero-assignment case, candidate file and artifact reference. Product
+  implementation deferred because the purpose was testing the tool. No human question or follow-up
+  offer.
+- **Report blocks:** source context; variant x metric table; rewrite explanation; equality and plan
+  review; limit; evidence links; no application changes.
+- **Evidence and interpretation:** Two comparisons with five repeats each; four complete
+  artifact-plan reads. First comparison used multiset equality and exposed a metadata nullability
+  difference without failing default equality. Revised candidate preserved nullability; second
+  comparison used ordered strict-nullability equality. Query rows supplied target, schema/index
+  context, two-way EXCEPT validation and absence of the uncovered case. Plans supported elimination
+  of repeated lookups. No historical telemetry used.
+- **Content provenance:** Approximately seven of ten numeric report statements came from compare
+  metrics, two from query rows and one from artifact nodes; approximate statement counts exclude
+  paths and opaque evidence identifiers. Values manually transcribed. Source location, calling
+  conditions, SQL construction, candidate rationale and deferral have no journal operation. Exact
+  total prose statement count: not recorded.
+- **Corrections:** One retro clarification: complete operator trees were reviewed, but grants and
+  compilation were not. Cause: imprecise coverage wording, not a demonstrated tool defect. One
+  interim candidate revision corrected metadata nullability; it was disclosed before final reporting
+  and is not a retraction of final equality. Initial conservative timing interpretation was updated
+  after the second successful comparison.
+- **Dashboard usefulness:** Preserve selected source context, deferred adoption, equivalence policy
+  revision, result table and uncovered data case. Dashboard was not used. Reconstruction effort and
+  actual usability benefit: not recorded.
+- **Observed workflow cost:** capabilities x1, query x5 (four successful executions, one rejected
+  offline dryRun), compare x2, artifact plan x4: twelve investigation calls. The rejection was
+  safety_rejected / ParseError from agent-authored nested CTE syntax; corrected within unchanged
+  read-only scope. No clipped SQLHarness response or continuation needed. Retro: two bounded
+  read-only journal invocations (schema inspection, then operation phases/cost counters/event
+  summaries), plus source/discovery reads; no live SQL rerun.
+- **Cost coverage:** Journal emitted-byte and estimated-token counters inspected for eleven
+  journaled calls; capabilities excluded. Approximate tokens are byte-derived estimates, not model
+  tokenization. Input/catalog overhead, repository reads, final-chat/document duplication and
+  whole-workflow cost unmeasured. No savings baseline or modeled replacement.
+- **Diagnostic qualification:** Phase aggregates covered the journaled calls. Connection dominated
+  initial target confirmation; subsequent connections were smaller. Compare time included execute,
+  artifact and other phases. Connection and artifact event summaries showed success; detailed
+  payloads not read because aggregates did not warrant causal diagnosis. Parse rejection had only
+  other-phase time. Authentication/network/server cause remains unknown. No timing noise attributed
+  to infrastructure.
+- **Optional API implications:** Authored source applicability and explicit review coverage
+  complement journal metrics. No API readiness, implementation decision or savings conclusion
+  follows.
+- **Operator decision:** Record O1 and O2 only. Private investigation report saved separately; no
+  plan, code, skill edit, commit or publication authorized.
+- **Related coverage and question:** See the [review-coverage
+  follow-up](../../observations/plan-memory-and-compilation-evidence.md#follow-up-2026-10-20--static-list-aggregation).
+  Should later synthesis distinguish interim metadata revisions from corrections to a delivered
+  final report? Cheapest check: compare this entry with the existing template; no new benchmark.
