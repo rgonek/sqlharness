@@ -459,6 +459,7 @@ public sealed class DashboardHousekeepingTests
         Directory.CreateDirectory(project);
         var transcript = Path.Combine(project, "conv-idle.jsonl");
         var passCount = 0;
+        var appendRequested = 1;
         const string call = "toolu_idle";
         void AppendTitle()
         {
@@ -474,24 +475,48 @@ public sealed class DashboardHousekeepingTests
         };
         var clock = Clock();
         var passes = new Passes();
+        using var cts = new CancellationTokenSource();
         var run = DashboardHost.RunAsync(
             Options(home, TimeSpan.FromMinutes(2), clock, passes, config) with
             {
                 AgentHomes = homes,
-                Housekept = () => { AppendTitle(); passes.Completed(); },
-            }, CancellationToken.None);
-        // Each pass hook appends a title update before the next cycle, making the matcher commit without an agent journal write.
-        await WaitForAsync(() => Volatile.Read(ref passCount) >= 2);
-        clock.Advance(TimeSpan.FromMinutes(1));
-        await WaitForAsync(() => Volatile.Read(ref passCount) >= 4);
-        Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
-        var matchedTitle = (string?)Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT title FROM agent_conversations"))["title"];
-        Assert.StartsWith("title-", matchedTitle);
-        Assert.True(int.TryParse(matchedTitle!["title-".Length..], out var matchedTitleIteration) && matchedTitleIteration >= 2,
-            $"Expected multiple matcher-owned title updates, found '{matchedTitle}'.");
+                Housekept = () =>
+                {
+                    if (Interlocked.Exchange(ref appendRequested, 0) != 0)
+                        AppendTitle();
+                    passes.Completed();
+                },
+            }, cts.Token);
 
-        clock.Advance(TimeSpan.FromMinutes(1));
-        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+        try
+        {
+            // The initial scan links the operation; only its following hook appends the first title.
+            await WaitForAsync(() => Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links").Count == 1);
+            await WaitForAsync(() => Volatile.Read(ref passCount) >= 1);
+
+            // Housekeeping passes do not imply matcher scans. Move to the next 60-second sweep,
+            // then wait for the committed value that proves it consumed the post-scan append.
+            clock.Advance(TimeSpan.FromMinutes(1));
+            await WaitForAsync(() =>
+            {
+                var conversations = Journal.JournalDb.Rows(home.DatabasePath, "SELECT title FROM agent_conversations");
+                return conversations.Count == 1 && (string?)conversations[0]["title"] == "title-1";
+            });
+            Assert.False(run.IsCompleted, "the dashboard remains up before its original two-minute idle deadline");
+
+            // Arm one more append after the observed commit; extra housekeeping passes do not
+            // create title updates. The final eligible sweep commits it at the original deadline.
+            Volatile.Write(ref appendRequested, 1);
+            await WaitForAsync(() => Volatile.Read(ref passCount) >= 2);
+            clock.Advance(TimeSpan.FromMinutes(1));
+            Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+            Assert.Equal("title-2", (string?)Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT title FROM agent_conversations"))["title"]);
+        }
+        finally
+        {
+            cts.Cancel();
+            await run.WaitAsync(TimeSpan.FromSeconds(20));
+        }
     }
 
     [Fact]
