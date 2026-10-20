@@ -2,6 +2,7 @@ import { Background, Controls, Handle, MarkerType, Position, ReactFlow, ReactFlo
 import { useEffect, useMemo, useState } from "react"
 import "@xyflow/react/dist/style.css"
 import type { PlanGraph, PlanGraphNode, SourceMapLink } from "@/api/types"
+import { Button } from "@/components/ui/button"
 import { formatNumber, formatPercent } from "@/lib/format"
 import { layoutPlanDocuments, PLAN_NODE_WIDTH } from "./planGraphLayout"
 
@@ -59,6 +60,7 @@ function NodeCard({ data }: NodeProps<FlowNode>) {
     <article className={`min-w-[230px] max-w-[250px] rounded-lg ${confidenceClass(confidence)} ${highlighted ? "ring-4 ring-primary/50" : ""} ${selected ? "outline outline-2 outline-primary" : ""}`} data-confidence={confidence} style={{ pointerEvents: "auto" }}>
       <Handle type="source" position={Position.Left} isConnectable={false} aria-hidden style={{ width: 1, height: 1, opacity: 0, border: 0, pointerEvents: "none" }} />
       <Handle type="target" position={Position.Right} isConnectable={false} aria-hidden style={{ width: 1, height: 1, opacity: 0, border: 0, pointerEvents: "none" }} />
+      {/* Native by design: the dense multi-line operator card is a React Flow domain surface. */}
       <button
         type="button"
         className="block w-full rounded-t-md px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -89,12 +91,14 @@ function NodeCard({ data }: NodeProps<FlowNode>) {
         </span>
       </button>
       {hasChildren && <div className="flex justify-end border-t border-border/70 px-2 py-1">
-        <button
+        <Button
           type="button"
-          className="rounded px-2 py-1 text-xs underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          variant="ghost"
+          size="xs"
+          className="underline"
           aria-label={`${collapsed ? "Expand" : "Collapse"} subtree for ${name}`}
           onClick={event => { event.stopPropagation(); onToggleCollapse(selection.key) }}
-        >{collapsed ? "Expand" : "Collapse"}</button>
+        >{collapsed ? "Expand" : "Collapse"}</Button>
       </div>}
     </article>
   )
@@ -230,7 +234,7 @@ export function PlanGraphView({
           <h3 className="font-medium">Graphical execution plan</h3>
           <p className="text-xs text-muted-foreground">Operators flow from left to right toward the root. Solid links are exact; dashed links are inferred or ambiguous.</p>
         </div>
-        <button type="button" className="rounded border px-2 py-1 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" disabled={fitTargets.length === 0} onClick={() => setFitVersion(value => value + 1)}>Fit selection</button>
+        <Button type="button" variant="outline" size="sm" disabled={fitTargets.length === 0} onClick={() => setFitVersion(value => value + 1)}>Fit selection</Button>
       </header>
       <div className="flex flex-wrap gap-3 px-3 text-xs" aria-label="Source match confidence">
         <span data-confidence="exact">Exact · solid</span><span data-confidence="inferred">Inferred · dashed</span><span data-confidence="ambiguous">Ambiguous candidates</span><span data-confidence="none">No source link</span>

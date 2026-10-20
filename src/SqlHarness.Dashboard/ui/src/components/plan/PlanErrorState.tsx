@@ -1,4 +1,5 @@
 import { HttpStatusError, NotFoundError } from "@/api/client"
+import { Button } from "@/components/ui/button"
 
 export function PlanErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   let status: number | null = null
@@ -29,6 +30,6 @@ export function PlanErrorState({ error, onRetry }: { error: unknown; onRetry?: (
     <p className="font-medium">{reason ?? `Plan request failed${status ? ` (${status})` : ""}.`}</p>
     {status !== null && <p>HTTP {status}{code ? ` · ${code}` : ""}</p>}
     <p>{message}</p>
-    {onRetry && <button type="button" className="mt-1 rounded border px-2 py-1 underline" onClick={onRetry}>Retry</button>}
+    {onRetry && <Button type="button" variant="outline" size="sm" className="mt-1 underline" onClick={onRetry}>Retry</Button>}
   </div>
 }

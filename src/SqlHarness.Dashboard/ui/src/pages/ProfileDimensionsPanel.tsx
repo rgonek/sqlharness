@@ -258,14 +258,15 @@ export function Matrix({
                   const value = cell ? metricValue(cell.metrics, metric) : null
                   const shade = value !== null && max > 0 ? Math.round(22 * value / max) : 0
                   return <td key={identityKey(column)} className="border-t p-1 text-end">
-                    {cell ? <button
+                    {cell ? <Button
+                      variant="ghost"
                       type="button"
-                      className="min-h-9 min-w-20 rounded px-2 py-1 text-end focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:cursor-default"
+                      className="h-auto min-h-9 w-full min-w-20 justify-end rounded px-2 py-1 text-end tabular-nums active:scale-[0.98] disabled:cursor-default"
                       style={{ backgroundColor: `color-mix(in oklch, var(--chart-1) ${shade}%, transparent)` }}
                       aria-label={`${rowName} ${dimensionLabel(row)}, ${columnName} ${dimensionLabel(column)}: ${matrixMetric(cell.metrics, metric)}; ${formatNumber(cell.metrics.operations)} operations, ${formatNumber(cell.metrics.failed)} failed, ${formatNumber(cell.metrics.rejected)} rejected${cell.metrics.durationUnavailableOperations ? `, ${formatNumber(cell.metrics.durationUnavailableOperations)} durations unavailable` : ""}`}
                       disabled={!onCellSelect}
                       onClick={() => cellClick(cell)}
-                    >{matrixMetric(cell.metrics, metric)}</button> : searchHidden
+                    >{matrixMetric(cell.metrics, metric)}</Button> : searchHidden
                       ? <span className="inline-block min-w-20 px-2 py-1 text-muted-foreground" aria-label="Operations hidden by matrix search">…</span>
                       : <span className="inline-block min-w-20 px-2 py-1 text-muted-foreground" aria-label="No operations">—</span>}
                   </td>

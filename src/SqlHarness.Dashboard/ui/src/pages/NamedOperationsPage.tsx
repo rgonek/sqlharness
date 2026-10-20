@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useNamedOperations } from "@/api/queries"
 import { OperationTable } from "@/components/OperationTable"
 import { ErrorState } from "@/components/ErrorState"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -20,10 +21,10 @@ export function NamedOperationsPage() {
     {query.isPending ? <Skeleton className="h-32 w-full" /> : operations.length ? <OperationTable operations={operations} showInternal /> : <p className="text-sm text-muted-foreground">No named operations found.</p>}
     {query.isFetchNextPageError && <div role="alert" className="flex items-center gap-3 rounded-md border border-destructive/40 p-3 text-sm">
       <span>Could not load more operations: {query.error instanceof Error ? query.error.message : String(query.error)}</span>
-      <button className="rounded-md border px-3 py-1.5" onClick={() => void query.fetchNextPage()}>Retry loading more</button>
+      <Button type="button" variant="outline" size="sm" onClick={() => void query.fetchNextPage()}>Retry loading more</Button>
     </div>}
-    {query.hasNextPage && <button className="rounded-md border px-3 py-2 text-sm" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+    {query.hasNextPage && <Button type="button" variant="outline" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
       {query.isFetchingNextPage ? "Loading…" : "Load more operations"}
-    </button>}
+    </Button>}
   </section>
 }

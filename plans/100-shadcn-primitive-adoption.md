@@ -136,11 +136,13 @@
 **Tests:** src/pages/{NamedOperationsPage,StatsPage}.test.tsx; src/components/plan/PlanGraphView.test.tsx; relevant existing OperationPage/CompareDetail plan fixtures.
 **Interfaces:** Seven bare action buttons adopt existing Button; the rich graph operator-node button remains native.
 
-- [ ] Convert named-operation retry/load-more, fit-selection, subtree expand/collapse, plan-error retry, source-match action and matrix-cell action according to the spec's variants/layout choices.
-- [ ] Keep type=button, disabled/pending, aria labels/pressed state, title/source hints, event stopPropagation and navigation/callback behavior. Source-match content must wrap; numeric matrix cells keep alignment.
-- [ ] Keep the rich multi-line operator-node button with a documented domain-layout exception; do not turn it into an undersized single-line action.
-- [ ] Reuse behavior tests for load-more/retry/pending, matrix selection, fit-selection disabled and subtree toggles. Add a test only for a previously uncovered behavioral hazard, not each mechanical Button substitution.
-- [ ] Run focused tests/typecheck/lint; browser-check React Flow pointer/keyboard interactions and dense/narrow layouts. Review and commit.
+- [x] Convert named-operation retry/load-more, fit-selection, subtree expand/collapse, plan-error retry, source-match action and matrix-cell action according to the spec's variants/layout choices.
+- [x] Keep type=button, disabled/pending, aria labels/pressed state, title/source hints, event stopPropagation and navigation/callback behavior. Source-match content must wrap; numeric matrix cells keep alignment.
+- [x] Keep the rich multi-line operator-node button with a documented domain-layout exception; do not turn it into an undersized single-line action.
+- [x] Reuse behavior tests for load-more/retry/pending, matrix selection, fit-selection disabled and subtree toggles. Add a test only for a previously uncovered behavioral hazard, not each mechanical Button substitution.
+- [x] Run focused tests/typecheck/lint; browser-check React Flow pointer/keyboard interactions and dense/narrow layouts. Review and commit.
+
+Task 9 implementation evidence is in [the task report](../.superpowers/sdd/100-shadcn-primitive-adoption/scratch/task-9-report.md); raw browser fixture and output are in the ignored plan scratch directory.
 
 ### Task 10: Ordinary tables; preserve semantic matrix and radio groups
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import type { PlanGraphPropertyNode } from "@/api/types"
+import { Button } from "@/components/ui/button"
 import { usePlanProperties } from "@/api/queries"
 import { formatNumber, formatPercent } from "@/lib/format"
 import { PlanErrorState } from "./PlanErrorState"
@@ -78,9 +79,9 @@ export function PlanPropertiesPanel({
       <h4 className="text-sm font-medium">Ambiguous candidates</h4>
       <p className="text-xs text-muted-foreground">The source match has more than one possible operator. Choose a candidate to inspect it.</p>
       <ul className="space-y-1">{candidates.map(({ selection, rule }) => <li key={selection.key}>
-        <button type="button" className="w-full rounded border border-dashed border-amber-600/60 px-2 py-1 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" title={rule} onClick={() => onSelect(selection)}>
+        <Button type="button" variant="outline" className="h-auto min-h-8 w-full justify-start whitespace-normal border-dashed border-amber-600/60 px-2 py-1 text-left text-sm" title={rule} onClick={() => onSelect(selection)}>
           {selection.node.physicalOperator}{selection.node.object?.table ? ` · ${selection.node.object.table}` : ""}
-        </button>
+        </Button>
       </li>)}</ul>
     </section>}
   </aside>
