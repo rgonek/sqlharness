@@ -405,9 +405,9 @@ Plan [099](099-shadcn-cli-restoration.md) is DONE on feature branch `plan-099`: 
 
 DONE — locally integrated into `main` at `e41c990` (2026-10-20). Verified product tree `9adc27d` passed the final Windows gate; the docs-only Plan 092 merge has no changes in `src`, `tests`, `scripts`, or `justfile`, so no integrated-tree gate was rerun. All task reviews, whole-branch Sol review, and final scoped Sol re-review are approved. The controller accepted the historical capabilities exact-byte oracle limitation and the absence of an outer MCP response-path test as a Minor coverage gap; shared-handler rollback coverage and fixed/request budget wiring were accepted. No push. See [085 verification evidence](085-verification-evidence.md).
 
-## Plan 100 implementation verified — 2026-10-20
+## Plan 100 DONE on feature branch — 2026-10-20
 
-Plan [100](100-shadcn-primitive-adoption.md) Tasks 1–11 are implemented on branch `plan-100`; the product tree at `3caacc3` passed the Windows `just verify` gate. Integrated browser acceptance closes the carried SettingsPage/StatsPage narrow-label and real PlanWorkbench source-match pointer gaps. Task11's independent review and the Sol low whole-branch review remain pending, so Plan 100 is not closed or integrated. No Linux gate, merge, push, or live database action occurred. See [Plan 100 verification evidence](100-verification-evidence.md).
+Plan [100](100-shadcn-primitive-adoption.md) Tasks 1–11 are implemented on branch `plan-100`; the product tree at `3caacc3` passed the Windows `just verify` gate. Integrated browser acceptance closes the carried SettingsPage/StatsPage narrow-label and real PlanWorkbench source-match pointer gaps. All task reviews and the Sol low whole-branch review are approved; the branch-wide verdict is Ready to merge with no Critical or Important findings. Two accepted Task6 minor coverage follow-ups remain recorded in the evidence. Plan100 is DONE on this feature branch and remains unmerged/unpushed; no Linux gate or live database action occurred. See [Plan 100 verification evidence](100-verification-evidence.md).
 
 ## Calendar dates
 

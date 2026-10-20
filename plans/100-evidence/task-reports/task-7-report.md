@@ -1,7 +1,9 @@
 # Task 7 evidence — Plan100 pickers
 
 Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`
+
 Branch: `plan-100`
+
 Base before Task 7: `a2a27d7818f568e488871b1e774233ccab42bab0`
 
 ## Implementation

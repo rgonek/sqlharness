@@ -1,7 +1,7 @@
 # Design: shadcn CLI and primitive adoption
 
 **Created:** 2026-10-18; **revised:** 2026-10-20.
-**Status:** revised plan/spec only; implementation has not started.
+**Status:** implemented and verified on feature branch `plan-100` at product revision `3caacc3`; all task and whole-branch reviews approved. Not merged into `main`.
 **Scope:** dashboard UI, build dependencies, contributor documentation and evidence. No backend, MCP, database, mutation approval policy or data-contract changes.
 
 ## Outcome and revised decisions

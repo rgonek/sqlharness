@@ -1,7 +1,9 @@
 # Task 8 evidence — StatusBadge trigger composition
 
 Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`
+
 Branch: `plan-100`
+
 Base revision: `d3dbd543654664430fc4e29b7b594e4707fc73da`
 
 ## Change

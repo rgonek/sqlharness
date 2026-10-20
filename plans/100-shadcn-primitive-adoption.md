@@ -7,7 +7,7 @@
 **Tech Stack:** React, TypeScript, Tailwind v4, shadcn/base-nova, Base UI, Vitest/Testing Library and userEvent.
 **Spec:** [revised design](../docs/superpowers/specs/2026-10-18-shadcn-cli-and-primitive-adoption-design.md).
 **Depends on:** [CLI restoration implementation](099-shadcn-cli-restoration.md) actually integrated, not merely its plan or branch ancestry.
-**Status:** implementation verified on `3caacc3`; Task11 closure is recorded; independent Task11 and whole-branch reviews are pending.
+**Status:** DONE — implementation and Windows verification passed on product revision `3caacc3`; all task reviews and whole-branch review approved. Branch `plan-100` remains unmerged and unpushed.
 
 ## Global constraints and working convention
 
@@ -167,7 +167,7 @@ Task 9 implementation evidence is in [the task report](../.superpowers/sdd/100-s
 - [x] Inspect dependency/source diffs for accidental primitive-library mixing, unreviewed overwrites and unrelated changes. Confirm local shadcn version and stylesheet export remain correct. Record registry source generation evidence.
 - [x] Run npm run check, npm run build and capture full/production npm audit results. Explain actual dependency/advisory changes; no fixed count or emitted CSS size requirement.
 - [x] Complete browser fixture walk-through in both themes and narrow layouts: labels, keyboard selection/typeahead, popup collision/scroll, all-open compare/dimensions, nested reopen state, editor sizing, radio groups, reduced motion and StatusBadge focus return. Record real observations/screenshots and outstanding gaps.
-- [ ] Obtain whole-branch independent review against the spec and repository requirements; fix blockers. Task reviews alone are insufficient for cross-task state behavior.
+- [x] Obtain whole-branch independent review against the spec and repository requirements; fix blockers. Task reviews alone are insufficient for cross-task state behavior.
 - [x] From repository root run just verify on the final product tree and require exit 0. Record exact revision/logs and diagnostics. Follow docs/agents/verification.md for reruns/reuse; Linux only when requested.
 - [x] Write evidence with inventory before/after, exceptions, dependency provenance, review results, focused checks, full gate and browser results. Update index/history accurately; no placeholder numeric evidence paths, automatic merge or push.
 - [x] Check documentation links and git diff --check, then commit only task files. Completion requires all acceptance evidence; final report distinguishes implementation, verification, local integration and publication.

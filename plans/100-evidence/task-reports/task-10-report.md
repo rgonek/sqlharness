@@ -1,6 +1,7 @@
 # Task 10 — Ordinary table-family adoption
 
 Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`
+
 Branch/base: `plan-100`, commit `bbd3d60` based on `ec8493c1b6c6a36b71b21d789a128cda36058eee`
 
 ## Changes

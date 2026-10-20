@@ -1,6 +1,7 @@
 # Task 6 report — Optimization group and scope Selects
 
 Worktree: `C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness`
+
 Branch/base: `plan-100`, base `54435c01aa1270c233ccdd78bef2fd5d12b7f197`
 
 ## Changes
