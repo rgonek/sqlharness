@@ -1,6 +1,6 @@
 # Plan 085 implementation evidence
 
-**Status:** Task 5 changes are implemented on branch `plan-085`. The final Windows gate passed on product tree `7c5686c`; Task 5 review and the independent whole-branch review are pending. This branch has not been merged into `main`.
+**Status:** Final review fixes are implemented on branch `plan-085`; final Windows verification and whole-branch re-review are pending. This branch has not been merged into `main`.
 
 ## MCP byte measurements
 
@@ -35,3 +35,13 @@ Optional paired agent and second-session reuse trials were not run. They were op
 Explicit branch formatting: `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 3702ce1` passed for 39 branch-changed C# files after normalization. Direct output is retained at `D:/temp/sqlharness-plan085-format-3702ce1-postcommit.log`; the initial diagnostics and branch fix output are retained at `D:/temp/sqlharness-plan085-format-3702ce1.log` and `D:/temp/sqlharness-plan085-format-3702ce1-fix.log`.
 
 The gate's UI check, Windows test suites and branch-format command passed. Linux, live database checks and actual-agent trials were not run.
+
+## Final review fix wave
+
+The whole-branch review rulings keep `keep` and owner star as markers subject to normal retention. Tool wording and MCP documentation now say those markers can expire; a focused journal-retention test proves both kept and ordinary operation annotations expire with their rows. Annotation batches now preflight the complete success envelope through the same JSON serializer and byte-budget path used by the MCP adapter while the SQLite transaction is open; oversized results throw a clear budget/split error and roll back. The complete envelope includes omitted-field echoes and JSON escaping.
+
+The operation page now shows owner annotation request failures and clipboard copy failures, with focused UI coverage. `docs/mcp/tools.md` spells out matching caller/target provider tuples, resolved and unresolved caller rules, and that inferred membership never authorizes. The historical capabilities byte oracle remains unproven as recorded above; no historical build was repeated.
+
+Focused validation before the final gate: `AnnotateToolTests` 10/10; `Normal_retention_expires_kept_and_unkept_operation_annotations` 1/1; `OperationPage.test.tsx` 28/28. Final direct branch formatting passed on committed code tree `9adc27d` with `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 3702ce1`; it checked 40 branch C# files.
+
+The first final gate attempt (`D:/temp/sqlharness-plan085-finalwave2`) passed build and UI but hit the existing timing-sensitive `DashboardHousekeepingTests.Matcher_commits_do_not_keep_an_idle_dashboard_up` assertion (null title). Its focused rerun passed 1/1. No code changed; the full gate was rerun with fresh logs. `just verify -LogDirectory D:/temp/sqlharness-plan085-finalwave3` passed all five stages on tree `9adc27d8cc1c935968ece5a4023acff8313f50a1`: build 0 warnings / 0 errors; UI 62 files / 331 tests passed; Core 4,562 passed / 11 skipped; MCP 462 passed / 4 skipped. Working-tree formatting was skipped because there were zero changed C# files; direct branch formatting above passed. The UI log has non-failing localhost connection refusals. Linux and live database checks were not run. Whole-branch final re-review is pending; historical capabilities bytes remain the evidence minor for adjudication.
