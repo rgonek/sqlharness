@@ -12,8 +12,8 @@
 
 ## Status and dependencies
 
-- TODO. Depends on the actual Plan 084 implementation being merged into main. Planning product base: `3f11525`; originating Sol Important finding is recorded in [084 evidence](084-verification-evidence.md).
-- User requested a plan, not implementation. Priority P1.
+- IN PROGRESS on feature branch `plan-089`; Plan 084 is integrated at `67bdd6b`. Task 1 backend paging is implemented in `00b8f86`; Task 2 dashboard paging is implemented, with task review, branch formatting and Windows `just verify` pending controller completion. Planning product base: `3f11525`; originating Sol Important finding is recorded in [084 evidence](084-verification-evidence.md).
+- Implementation is authorized; local merge and push are not. Priority P1.
 
 ## Fix contract
 
