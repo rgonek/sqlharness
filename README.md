@@ -605,7 +605,9 @@ The UI lives in `src/SqlHarness.Dashboard/ui` (React, Vite, shadcn/ui on Base UI
 
 For UI development run `sqlharness dashboard --no-open`, then in `ui/` run `SQLHARNESS_DASHBOARD_TOKEN=<t value> npm run dev` (bash) or `$env:SQLHARNESS_DASHBOARD_TOKEN='<t value>'; npm run dev` (PowerShell); the Vite dev server proxies `/api` to the running dashboard (set `SQLHARNESS_DASHBOARD_URL` when it is not on the default `http://127.0.0.1:47800`).
 
-Add shadcn components with `npx shadcn@latest add <component>` from `ui/`; the shadcn CLI is deliberately not a project dependency (its file-globbing dependencies carry an unpatched `braces` advisory), and the one stylesheet the UI needs from it is vendored as `ui/src/styles/shadcn-tailwind.css`. If the CLI re-adds `@import "shadcn/tailwind.css"` to `src/index.css`, point it back at the vendored file.
+The UI pins shadcn as a development dependency and imports its stylesheet normally with `@import "shadcn/tailwind.css";` in `src/index.css`. `components.json` selects the `base-nova` style. Files under `src/components/ui` are project-owned source and may be edited after reviewing the changes. From `src/SqlHarness.Dashboard/ui`, preview an addition with `npm exec -- shadcn add <component> --dry-run`, then inspect proposed source changes with `npm exec -- shadcn add <component> --diff`. Apply with `npm exec -- shadcn add <component>` only after reviewing the changes; do not use blanket overwrite options.
+
+For an explicit CLI upgrade, resolve the current stable release with `npm view shadcn dist-tags --json`, install that exact version with `npm install --save-dev --save-exact shadcn@<version>`, and review `package.json`, `package-lock.json`, and registry source diffs before applying updates. Registry component output can change independently of the CLI version in the lockfile, so preview each requested component and run the relevant UI checks (`npm run check` and `npm run build`) after applying reviewed changes.
 
 </details>
 

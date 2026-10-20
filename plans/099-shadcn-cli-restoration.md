@@ -6,7 +6,7 @@
 **Architecture:** Resolve the current stable CLI once, install as a locked devDependency, import its exported CSS and verify emitted behavior. Review upstream changes rather than assume byte identity.
 **Tech Stack:** npm, Vite, Tailwind v4, shadcn/base-nova on Base UI.
 **Spec:** [revised design](../docs/superpowers/specs/2026-10-18-shadcn-cli-and-primitive-adoption-design.md).
-**Status:** revised 2026-10-20; plan only. No product implementation performed.
+**Status:** IMPLEMENTED on `plan-099` (Tasks 1–3); final verification and whole-branch review pending. Not integrated. Task 3 evidence: [report](../.superpowers/sdd/099-shadcn-cli-restoration/task-3-report.md).
 
 ## Global constraints
 
@@ -56,13 +56,14 @@
 **Files:** README.md; docs/superpowers/plans/2026-10-08-dashboard-settings-errors-theme.md; plans/071-dashboard-compare-review.md only if its current text contains superseded guidance; plans/README.md.
 **Interfaces:** Current instructions describe local CLI preview, review and apply. The original historical evidence remains intact.
 
-- [ ] Locate stale instructions with rg -n "shadcn-tailwind|npx shadcn|never edited|stay unchanged" README.md docs plans. Classify current guidance versus historical records.
-- [ ] Update the current README dashboard contributor paragraph: devDependency, normal CSS import, components.json base-nova and owned/editable component source. Give npm exec -- shadcn add <component> --dry-run, npm exec -- shadcn add <component> --diff, then apply without blanket overwrite after reviewing proposed changes.
-- [ ] Document explicit upgrades: resolve current stable, review package/lockfile and registry source diffs, run relevant checks. Explain registry output is not frozen by the CLI lockfile.
-- [ ] Add a brief supersession link to the old 2026-10-08/071 workaround notes where present. Do not rewrite historical results, statuses or old command transcripts. The revised spec explicitly supersedes older immutable-generated/no-style rules.
-- [ ] Preview npm exec -- shadcn add accordion --dry-run without applying it. Record actual proposed changes; stylesheet or dependency edits are reviewed if proposed, not rejected simply because an old dry-run proposed none.
-- [ ] Ensure both plans remain discoverable in plans/README.md with accurate dependency/status. Use Plan 099 and Plan 100 with the recorded dependency; do not renumber existing plans.
-- [ ] Check documentation links and git diff --check. Obtain independent task review and commit.
+- [x] Locate stale instructions with rg -n "shadcn-tailwind|npx shadcn|never edited|stay unchanged" README.md docs plans. Classify current guidance versus historical records.
+- [x] Update the current README dashboard contributor paragraph: devDependency, normal CSS import, components.json base-nova and owned/editable component source. Give npm exec -- shadcn add <component> --dry-run, npm exec -- shadcn add <component> --diff, then apply without blanket overwrite after reviewing proposed changes.
+- [x] Document explicit upgrades: resolve current stable, review package/lockfile and registry source diffs, run relevant checks. Explain registry output is not frozen by the CLI lockfile.
+- [x] Add a brief supersession link to the old 2026-10-08/071 workaround notes where present. Do not rewrite historical results, statuses or old command transcripts. The revised spec explicitly supersedes older immutable-generated/no-style rules.
+- [x] Preview npm exec -- shadcn add accordion --dry-run without applying it. Record actual proposed changes; stylesheet or dependency edits are reviewed if proposed, not rejected simply because an old dry-run proposed none.
+- [x] Ensure both plans remain discoverable in plans/README.md with accurate dependency/status. Use Plan 099 and Plan 100 with the recorded dependency; do not renumber existing plans.
+- [x] Check documentation links and git diff --check.
+- [ ] Obtain independent task review and commit.
 
 ### Task 4: Final verification and evidence
 

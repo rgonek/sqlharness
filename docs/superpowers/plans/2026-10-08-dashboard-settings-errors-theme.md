@@ -25,6 +25,7 @@
 - Profiles: never read environment variables; return the `passwordEnvVar` name only.
 - Theme storage key: `sqlharness.theme`; values `system` | `light` | `dark`; every `localStorage` access in `try/catch`.
 - SQL dialects: `postgresql` for engine `postgres`, `transactsql` otherwise.
+- Historical shadcn CLI and generated-source guidance below is superseded for new work by the [revised shadcn design](../specs/2026-10-18-shadcn-cli-and-primitive-adoption-design.md); preserve this plan's original implementation record.
 - shadcn primitives are added with `npx shadcn@latest add <name>` from `src/SqlHarness.Dashboard/ui` and stay unchanged; if the CLI rewrites `src/index.css` to `@import "shadcn/tailwind.css"`, point it back at `./styles/shadcn-tailwind.css`.
 
 ## Review Focus
