@@ -136,6 +136,28 @@ test("operation detail offers SQL reuse only when SQL was stored", async () => {
   expect(screen.queryByText("SQL not stored")).not.toBeInTheDocument()
 })
 
+test("owner note editor follows the operation when cached detail navigation reuses the page", async () => {
+  stubOperationFetch({
+    "/api/operations/10": operationDetail({ operation: operation({ id: 10, ownerNote: "note for 10" }) }),
+    "/api/operations/11": operationDetail({ operation: operation({ id: 11, ownerNote: "note for 11" }) }),
+  })
+  const { router } = renderApp("/operations/10")
+  const note = await screen.findByRole("textbox", { name: "Owner note" })
+  expect(note).toHaveValue("note for 10")
+
+  await router.navigate({ to: "/operations/$id", params: { id: "11" } })
+
+  expect(await screen.findByRole("textbox", { name: "Owner note" })).toHaveValue("note for 11")
+})
+
+test("compare operation detail also exposes owner annotation controls", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, operation: "compare", ownerNote: "compare note" }) }) })
+  renderApp("/operations/10")
+
+  expect(await screen.findByRole("textbox", { name: "Owner note" })).toHaveValue("compare note")
+  expect(screen.getByRole("button", { name: /Owner starred|Star operation/ })).toBeInTheDocument()
+})
+
 test("operation details show phase timing shares and expandable connection diagnostics", async () => {
   stubOperationFetch({ "/api/operations/10": operationDetail({
     operation: operation({ durationMs: 100 }),

@@ -173,7 +173,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
             <StatusBadge operation={op} />
             <FlagBadges operation={op} />
           </div>
-          <OperationOwnerAnnotations operation={op} />
+          <OperationOwnerAnnotations key={op.id} operation={op} />
           <CardDescription>
             {op.operation} by {agentLabel(op.agentKind)} in{" "}
             <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined}>
@@ -318,6 +318,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
       <span className="text-sm">{op.database ?? "Unknown database"}</span>
       <time className="text-sm" dateTime={op.startedAt}>{formatTimestamp(op.startedAt)}</time>
       <StatusBadge operation={op} />
+      <OperationOwnerAnnotations key={op.id} operation={op} />
       {returnAgent
         ? <Link to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)} className="ml-auto text-sm underline">Back to agent session</Link>
         : <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined} className="ml-auto text-sm underline">Back to {title}</Link>}
