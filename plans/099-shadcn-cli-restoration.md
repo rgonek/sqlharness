@@ -6,7 +6,7 @@
 **Architecture:** Resolve the current stable CLI once, install as a locked devDependency, import its exported CSS and verify emitted behavior. Review upstream changes rather than assume byte identity.
 **Tech Stack:** npm, Vite, Tailwind v4, shadcn/base-nova on Base UI.
 **Spec:** [revised design](../docs/superpowers/specs/2026-10-18-shadcn-cli-and-primitive-adoption-design.md).
-**Status:** IMPLEMENTED and Windows-verified on `plan-099`; Task 4 and whole-branch review pending. Not integrated. See the [verification evidence](099-verification-evidence.md).
+**Status:** IMPLEMENTED and Windows-verified on `plan-099`; the whole-branch review's Important documentation finding is fixed, with final Sol low scoped re-review pending. Not integrated. See the [verification evidence](099-verification-evidence.md).
 
 ## Global constraints
 
@@ -70,7 +70,7 @@
 **Files:** create plans/099-verification-evidence.md; update plans/README.md and eventually plans/history.md when implemented.
 **Interfaces:** Supplies actual integrated CLI/import predecessor evidence for the adoption plan.
 
-- [ ] Perform independent whole-branch review against the revised spec, resolve blockers, and retain reviewer/evidence pointers.
+- [x] Perform independent whole-branch review against the revised spec, resolve the Important documentation finding, and retain reviewer/evidence pointers; final Sol low scoped re-review is pending.
 - [x] From repository root run just verify on the final product tree; require exit 0. Record revision, command, logs, stage results and any baseline diagnostics. Follow docs/agents/verification.md on reruns and unchanged-tree reuse. Do not run verify-linux unless requested.
 - [x] Record npm audit full/production results and their diff from baseline without treating advisory-bearing audit exits as success. New findings require an explicit resolution or documented disposition; no copied two-advisory exception.
 - [x] Record version/lockfile, registry preview, CSS differences and browser evidence from Task 2. An unavailable backend/browser fixture is an unverified acceptance item, not a manual pass.

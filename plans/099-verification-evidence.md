@@ -35,7 +35,13 @@ Coverage limits: the Settings page had no disabled switch and the app had no ver
 
 ## Reviews and status
 
-Task 1, Task 2, and Task 3 independent reviews approved their changes; reports and review notes are retained in [task review evidence](099-evidence/task-reports/). The initial Task 4 review identified missing tracked raw logs and a wording issue; the review and fix report are archived there, and the fixes are committed for re-review. Task 4 re-review and the independent whole-branch review remain pending. Plan 099 is implemented and Windows-verified on `plan-099`; it is not integrated. Plan 100 still requires Plan 099's implementation to be integrated before execution. No merge, push, publication, or live database operation is authorized by this evidence.
+Task 1, Task 2, and Task 3 independent reviews approved their changes; reports and review notes are retained in [task review evidence](099-evidence/task-reports/). The Task 4 re-review approved its evidence fixes; its original review, re-review, and fix report are archived there. The whole-branch review at `11d0f68` found one Important Windows PowerShell command issue, fixed in this documentation-only wave. The reviewer also recorded two nonblocking observations: byte-preserved raw logs carry whitespace that causes the full-range `git diff --check` to fail, and unchanged emitted CSS retains a 150 ms tooltip enter animation under reduced-motion emulation. Both remain separate follow-ups with their original evidence preserved. The final Sol low scoped re-review is pending. Plan 099 is implemented and Windows-verified on `plan-099`; it is not integrated. Plan 100 control conversions remain outside this branch and require Plan 099 implementation integration before execution. No merge, push, publication, or live database operation is authorized by this evidence.
+
+### Review scope ledger
+
+The whole-branch reviewer declined to judge Plan 100's control inventory, conversions, and interaction behavior because this branch covers Plan 099 tooling, stylesheet import, and contributor documentation. Future registry-generated component applies were not judged because none was applied here; applying output remains a separately reviewed change. Linux and live database behavior remain unverified because this plan run did not require those checks and no live database operation was performed. Existing localhost:3000 connection-refused diagnostics remain assigned to Plan 091 because the passing Windows gate gives no evidence that they arise from these changes. These boundaries and reasons are retained from the review in [final review](099-evidence/task-reports/final-review-11d0f68.md).
+
+The Important finding is resolved by publishing both portable `npm exec` commands and Windows PowerShell `npm.cmd exec` commands. With the existing installed `shadcn@4.22.1`, the PowerShell version command printed `4.22.1` and the accordion dry run exited 0, proposing one new component file and the existing `cn` dependency; neither command installed or applied anything. See the exact outcomes in the [final fix report](099-evidence/task-reports/final-fix-report.md). The remaining audit disposition is unchanged: seven new HIGH development-tool findings remain visible for dependency maintenance, as described above.
 
 ## Evidence index
 
@@ -45,3 +51,4 @@ Task 1, Task 2, and Task 3 independent reviews approved their changes; reports a
 - [Browser](099-evidence/browser/): Task 2 screenshots from the disposable dashboard fixture.
 - [Gate](099-evidence/gate/): four required-stage logs from `just verify`; formatting was skipped because no C# files changed.
 - [Task reports and reviews](099-evidence/task-reports/): implementation evidence and independent approvals for Tasks 1–3.
+- [Final review, Task 4 re-review, and final fix report](099-evidence/task-reports/): archived findings, re-review verdict, and the PowerShell command correction with scoped checks.
