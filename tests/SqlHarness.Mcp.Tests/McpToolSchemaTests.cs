@@ -374,6 +374,12 @@ public sealed class McpToolSchemaTests : IDisposable
             ["label"] = "hidden when off",
         }, cancellationToken: CancellationToken.None);
         Assert.True(rejected.IsError == true);
+        var responseDetailWhenOff = await off.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = "SELECT 1",
+            ["responseDetail"] = "receipt",
+        }, cancellationToken: CancellationToken.None);
+        Assert.True(responseDetailWhenOff.IsError == true);
     }
 
     [Fact]
