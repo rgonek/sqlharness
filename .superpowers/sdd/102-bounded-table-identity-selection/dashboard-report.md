@@ -20,3 +20,17 @@ The host is started with a cancellation token and the test cancels and awaits it
 - Full `just verify` was not run; the controller owns the combined gate after review.
 
 No matcher or idle-shutdown product code changed. The previous gate's null-title failure and this test's ordered committed-title observations support the synchronization diagnosis; they do not establish a full-gate result.
+
+## Whole-review fix
+
+Review finding, verbatim:
+
+> `tests/SqlHarness.Tests/Dashboard/DashboardHousekeepingTests.cs:509-513` — The second title append is not synchronized before the clock advances to the final sweep. Once `title-1` is observed, the preceding sweep's `Housekept` callback may already have incremented `passCount` to two. In that schedule, `WaitForAsync(passCount >= 2)` returns immediately after `appendRequested` is armed, and the next loop iteration at the two-minute deadline runs the matcher before `Housekept`. It exits for idle shutdown without appending or committing `title-2`, reproducing a timing-dependent failure in the test intended to repair the gate. Ensure the second transcript update is actually appended before advancing to the final sweep, for example by invoking the fixture append explicitly after observing `title-1`, or by waiting for a new callback beyond a captured pass count while advancing the fake clock enough to trigger it.
+
+The test now waits for the initial scan's post-cycle housekeeping signal before appending `title-1`. After it observes the `title-1` commit from the next sweep, it synchronously appends `title-2` before advancing the clock. This removes the callback-count race while retaining two observed commits, the two-minute deadline, and cancellation cleanup.
+
+Final focused verification:
+
+- Command: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter FullyQualifiedName~DashboardHousekeepingTests --logger "console;verbosity=normal"`
+- Result: passed; 17 total, 17 passed, 0 failed (11.7861 seconds reported by VSTest).
+- Full gate and formatter were not run; the controller owns those checks.

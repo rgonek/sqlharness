@@ -459,7 +459,6 @@ public sealed class DashboardHousekeepingTests
         Directory.CreateDirectory(project);
         var transcript = Path.Combine(project, "conv-idle.jsonl");
         var passCount = 0;
-        var appendRequested = 1;
         const string call = "toolu_idle";
         void AppendTitle()
         {
@@ -475,6 +474,7 @@ public sealed class DashboardHousekeepingTests
         };
         var clock = Clock();
         var passes = new Passes();
+        var initialSweepCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cts = new CancellationTokenSource();
         var run = DashboardHost.RunAsync(
             Options(home, TimeSpan.FromMinutes(2), clock, passes, config) with
@@ -482,17 +482,17 @@ public sealed class DashboardHousekeepingTests
                 AgentHomes = homes,
                 Housekept = () =>
                 {
-                    if (Interlocked.Exchange(ref appendRequested, 0) != 0)
-                        AppendTitle();
                     passes.Completed();
+                    initialSweepCompleted.TrySetResult();
                 },
             }, cts.Token);
 
         try
         {
-            // The initial scan links the operation; only its following hook appends the first title.
+            // Wait until the initial scan linked the operation and completed before appending a title.
             await WaitForAsync(() => Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links").Count == 1);
-            await WaitForAsync(() => Volatile.Read(ref passCount) >= 1);
+            await initialSweepCompleted.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            AppendTitle();
 
             // Housekeeping passes do not imply matcher scans. Move to the next 60-second sweep,
             // then wait for the committed value that proves it consumed the post-scan append.
@@ -504,10 +504,9 @@ public sealed class DashboardHousekeepingTests
             });
             Assert.False(run.IsCompleted, "the dashboard remains up before its original two-minute idle deadline");
 
-            // Arm one more append after the observed commit; extra housekeeping passes do not
-            // create title updates. The final eligible sweep commits it at the original deadline.
-            Volatile.Write(ref appendRequested, 1);
-            await WaitForAsync(() => Volatile.Read(ref passCount) >= 2);
+            // Append synchronously only after observing the first commit, so the final eligible
+            // sweep cannot race ahead of the second transcript update.
+            AppendTitle();
             clock.Advance(TimeSpan.FromMinutes(1));
             Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
             Assert.Equal("title-2", (string?)Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT title FROM agent_conversations"))["title"]);
