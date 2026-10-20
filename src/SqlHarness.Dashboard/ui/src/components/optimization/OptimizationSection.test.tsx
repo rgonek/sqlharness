@@ -82,6 +82,12 @@ test("renders forty versions and updates the URL when a version picker changes",
   await userEvent.click(within(table).getByRole("radio", { name: "B v2" }))
   expect(within(table).getByRole("radio", { name: "A v1" })).toBeChecked()
   expect(within(table).getByRole("radio", { name: "B v2" })).toBeChecked()
+  await userEvent.click(within(table).getByRole("radio", { name: "A v1" }))
+  await userEvent.keyboard("{ArrowDown}")
+  expect(within(table).getByRole("radio", { name: "A v2" })).toBeChecked()
+  expect(within(table).getByRole("radio", { name: "B v2" })).toBeChecked()
+  expect(within(table).getByRole("rowheader", { name: "v1" })).toBeInTheDocument()
+  expect(within(table).getByRole("radio", { name: "B v1" })).not.toBeChecked()
 })
 
 test("version table shows measure-only outcomes and unverified comparison label", async () => {

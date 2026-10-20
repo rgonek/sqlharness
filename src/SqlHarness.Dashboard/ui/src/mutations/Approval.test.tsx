@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { expect, test, vi } from "vitest"
 import { renderApp, stubFetch } from "@/test/render"
 import * as sound from "./sound"
@@ -22,7 +22,11 @@ class FakeEventSource {
 
 const request = {
   requestId: "r-1",
-  request: { profile: "prod-db", server: "db.example", database: "payments", engine: "postgres", tier: "dml", digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", grantees: [], sql: "<script>alert(1)</script>", parameters: [{ name: "p", type: "text", value: "<img src=x onerror=1>" }] },
+  request: { profile: "prod-db", server: "db.example", database: "payments", engine: "postgres", tier: "dml", digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", grantees: [], sql: "<script>alert(1)</script>", parameters: [
+    { name: "p", type: "text", value: "<img src=x onerror=1>" },
+    { name: "optional", type: null, value: null },
+    { name: "long_parameter_name_that_must_remain_selectable", type: "text", value: "0123456789abcdef".repeat(40) },
+  ] },
   environment: "production", writerSameAsReader: false, expiresAt: new Date(Date.now() + 60_000).toISOString(),
 }
 const profiles = { status: "valid", message: null, profiles: [{ name: "prod-db", environment: "production", mutationMode: "yolo", acknowledgeProductionYolo: true }] }
@@ -68,8 +72,17 @@ test("approval dialog renders SQL and parameter values as literal text and waits
   expect(screen.getByText("production")).toBeInTheDocument()
   expect(screen.getByTestId("sql-code").textContent).toBe("<script>alert(1)</script>")
   expect(screen.getByText("<img src=x onerror=1>")).toBeInTheDocument()
+  const parameters = screen.getByRole("table")
+  expect(within(parameters).getByRole("rowheader", { name: "p" })).toBeInTheDocument()
+  expect(within(parameters).getByText("NULL")).toBeInTheDocument()
+  expect(within(parameters).getByText("0123456789abcdef".repeat(40))).toBeInTheDocument()
+  expect(within(parameters).getByText("long_parameter_name_that_must_remain_selectable")).toBeInTheDocument()
   expect(document.querySelector("script")).toBeNull()
   expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
+  const decisionFetch = vi.spyOn(globalThis, "fetch")
+  expect(decisionFetch.mock.calls.some(([input]) => String(input).includes("/approve") || String(input).includes("/deny"))).toBe(false)
+  decisionFetch.mockRestore()
   act(() => vi.advanceTimersByTime(1_000))
   expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled()
   const fetchSpy = vi.spyOn(globalThis, "fetch")

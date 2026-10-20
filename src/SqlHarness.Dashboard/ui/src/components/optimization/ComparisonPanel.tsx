@@ -5,6 +5,7 @@ import { CopyButton } from "@/components/CopyButton"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { SessionVersionDiff } from "@/components/SessionVersionDiff"
 import { Button } from "@/components/ui/button"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { conditionsDifferMessage, optimizationMarkdown, optimizationMetricRows } from "@/lib/optimizationMarkdown"
 import { badgeTier } from "@/lib/flags"
 import { operationReturnSearch } from "@/lib/sessionSearch"
@@ -107,11 +108,11 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
     {comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <>
       {activeView === "statements" || activeView === "changed"
         ? <StatementRows rows={comparison.statements ?? []} postgres={comparison.tableIoUnavailable ?? false} />
-        : comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <div className="overflow-x-auto">
-        <table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2 pr-3">Table</th><th className="px-3 py-2">Scans before</th><th className="px-3 py-2">Scans after</th><th className="px-3 py-2">Logical reads before</th><th className="px-3 py-2">Logical reads after</th><th className="px-3 py-2">Change</th></tr></thead>
-          <tbody>{comparison.tables.map(row => <tr key={row.table} className="border-b"><th scope="row" className="py-2 pr-3 text-left font-normal">{row.table}</th><td className="px-3 py-2">{row.scansBefore ?? "—"}</td><td className="px-3 py-2">{row.scansAfter ?? "—"}</td><td className="px-3 py-2">{row.readsBefore ?? "—"}</td><td className="px-3 py-2">{row.readsAfter ?? "—"}</td><td className="px-3 py-2">{row.change}</td></tr>)}
-            {comparison.collapsed && <tr><td colSpan={6} className="py-2 text-muted-foreground">{comparison.collapsed.label}</td></tr>}</tbody></table>
-      </div>}
+        : comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <Table>
+        <TableHeader><TableRow><TableHead>Table</TableHead><TableHead>Scans before</TableHead><TableHead>Scans after</TableHead><TableHead>Logical reads before</TableHead><TableHead>Logical reads after</TableHead><TableHead>Change</TableHead></TableRow></TableHeader>
+        <TableBody>{comparison.tables.map(row => <TableRow key={row.table}><TableHead scope="row" className="whitespace-normal">{row.table}</TableHead><TableCell>{row.scansBefore ?? "—"}</TableCell><TableCell>{row.scansAfter ?? "—"}</TableCell><TableCell>{row.readsBefore ?? "—"}</TableCell><TableCell>{row.readsAfter ?? "—"}</TableCell><TableCell className="whitespace-normal">{row.change}</TableCell></TableRow>)}
+          {comparison.collapsed && <TableRow><TableCell colSpan={6} className="whitespace-normal text-muted-foreground">{comparison.collapsed.label}</TableCell></TableRow>}</TableBody>
+      </Table>}
       <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict}</dd>}
         {optimizationMetricRows(comparison).map(row => <Fragment key={row.label}><dt className="font-medium">{row.label}</dt><dd>{row.before} → {row.after}</dd></Fragment>)}
       </dl>

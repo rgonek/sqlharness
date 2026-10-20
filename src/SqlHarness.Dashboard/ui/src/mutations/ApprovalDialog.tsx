@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { SqlBlock } from "@/components/SqlBlock"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { postMutationDecision } from "@/api/client"
 import { mutationStore, usePendingMutations } from "./mutationStore"
 
@@ -62,9 +63,10 @@ export function ApprovalDialog({ requestId }: { requestId: string | null }) {
           <SqlBlock sql={item.request.sql} engine={item.request.engine} label="SQL" initiallyFormatted={false} />
           <div className="space-y-2">
             <h3 className="font-medium">Parameters</h3>
-            <table className="w-full border-collapse text-left text-sm"><thead><tr><th className="border-b p-2">Name</th><th className="border-b p-2">Type</th><th className="border-b p-2">Value</th></tr></thead>
-              <tbody>{item.request.parameters.map((parameter, index) => <tr key={`${parameter.name}-${index}`}><td className="border-b p-2">{parameter.name}</td><td className="border-b p-2">{parameter.type ?? "—"}</td><td className="border-b p-2 whitespace-pre-wrap">{parameter.value ?? "NULL"}</td></tr>)}</tbody>
-            </table>
+            <Table>
+              <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Type</TableHead><TableHead>Value</TableHead></TableRow></TableHeader>
+              <TableBody>{item.request.parameters.map((parameter, index) => <TableRow key={`${parameter.name}-${index}`}><TableHead scope="row" className="whitespace-normal break-all">{parameter.name}</TableHead><TableCell className="whitespace-normal break-all">{parameter.type ?? "—"}</TableCell><TableCell className="whitespace-pre-wrap break-all">{parameter.value ?? "NULL"}</TableCell></TableRow>)}</TableBody>
+            </Table>
           </div>
           <p className="text-sm text-muted-foreground">Digest {item.request.digest.slice(0, 12)} · Expires in {remaining}s</p>
           {message && <p role="alert" className="text-destructive">{message}</p>}

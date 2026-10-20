@@ -288,6 +288,7 @@ test("enables transcript reading, shows status, and confirms clearing matched da
   expect(coverage).toHaveTextContent("mcp")
   expect(coverage).toHaveTextContent("3")
   expect(coverage).toHaveTextContent("Inferred")
+  expect(within(coverage).getByRole("rowheader", { name: "claude" })).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Clear matched data" }))
   const dialog = await screen.findByRole("dialog")
   expect(dialog).toHaveTextContent("Removes matched titles, models, conversations and frozen version labels. Session and agent-session annotations are kept.")

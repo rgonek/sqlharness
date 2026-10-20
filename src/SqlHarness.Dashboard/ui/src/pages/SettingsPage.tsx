@@ -5,6 +5,7 @@ import type { Settings } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -182,11 +183,10 @@ function AgentTranscriptsStatus() {
     <div className="grid gap-2">
       {status.data && <p>Matched {status.data.matched} · Unmatched {status.data.unmatched} · Read errors {status.data.readErrors}</p>}
       {status.data?.lastCycleAt && <p className="text-sm text-muted-foreground">Last cycle: {status.data.lastCycleAt}</p>}
-      {!!status.data?.coverage?.length && <div className="overflow-x-auto">
-        <table className="w-full text-sm" aria-label="Agent session matching coverage"><thead><tr className="border-b text-left"><th className="py-1 pr-3">Agent</th><th className="px-3 py-1">Transport</th><th className="px-3 py-1">Exact</th><th className="px-3 py-1">Inferred</th><th className="px-3 py-1">Unassigned</th></tr></thead>
-          <tbody>{status.data.coverage.map(row => <tr key={`${row.agentKind}:${row.transport}`} className="border-b"><th scope="row" className="py-1 pr-3 text-left">{row.agentKind}</th><td className="px-3 py-1">{row.transport}</td><td className="px-3 py-1">{row.exact}</td><td className="px-3 py-1">{row.inferred}</td><td className="px-3 py-1">{row.unassigned}</td></tr>)}</tbody>
-        </table>
-      </div>}
+      {!!status.data?.coverage?.length && <Table aria-label="Agent session matching coverage">
+        <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Transport</TableHead><TableHead>Exact</TableHead><TableHead>Inferred</TableHead><TableHead>Unassigned</TableHead></TableRow></TableHeader>
+        <TableBody>{status.data.coverage.map(row => <TableRow key={`${row.agentKind}:${row.transport}`}><TableHead scope="row" className="whitespace-normal">{row.agentKind}</TableHead><TableCell>{row.transport}</TableCell><TableCell>{row.exact}</TableCell><TableCell>{row.inferred}</TableCell><TableCell>{row.unassigned}</TableCell></TableRow>)}</TableBody>
+      </Table>}
       {status.error && <p role="alert" className="text-sm text-destructive">{status.error.message}</p>}
       <div>
         <Button variant="outline" disabled={clear.isPending} onClick={() => setConfirming(true)}>Clear matched data</Button>

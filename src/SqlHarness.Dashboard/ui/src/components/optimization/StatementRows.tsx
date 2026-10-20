@@ -1,6 +1,7 @@
 import type { StatementRow } from "@/api/types"
 import { HiddenWorkFlag } from "./HiddenWorkFlag"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 const statusLabels: Record<string, string> = {
   shared: "shared",
@@ -24,17 +25,17 @@ function Objects({ row, measured }: { row: StatementRow; measured: boolean }) {
   if (row.objects.length === 0) return null
   return <Collapsible className="mt-2">
     <CollapsibleTrigger className="cursor-pointer text-sm">Objects ({row.objects.length})</CollapsibleTrigger>
-    <CollapsibleContent keepMounted><div className="mt-2 overflow-x-auto">
-      <table className="w-full text-sm" aria-label={`${row.text} object IO`}>
-        <thead><tr className="border-b text-left"><th className="py-1 pr-3">Object</th>{measured
-          ? <><th className="px-2 py-1">Scans</th><th className="px-2 py-1">Logical reads</th></>
-          : <><th className="px-2 py-1">Scans before</th><th className="px-2 py-1">Scans after</th><th className="px-2 py-1">Logical reads before</th><th className="px-2 py-1">Logical reads after</th><th className="px-2 py-1">Change</th></>}</tr></thead>
-        <tbody>{row.objects.map(item => <tr key={item.table} className="border-b">
-          <th scope="row" className="py-1 pr-3 text-left font-normal">{item.table}</th>{measured
-            ? <><td className="px-2 py-1">{number(item.scansAfter)}</td><td className="px-2 py-1">{number(item.readsAfter)}</td></>
-            : <><td className="px-2 py-1">{number(item.scansBefore)}</td><td className="px-2 py-1">{number(item.scansAfter)}</td><td className="px-2 py-1">{number(item.readsBefore)}</td><td className="px-2 py-1">{number(item.readsAfter)}</td><td className="px-2 py-1">{item.change}</td></>}
-        </tr>)}</tbody>
-      </table>
+    <CollapsibleContent keepMounted><div className="mt-2">
+      <Table aria-label={`${row.text} object IO`}>
+        <TableHeader><TableRow><TableHead>Object</TableHead>{measured
+          ? <><TableHead>Scans</TableHead><TableHead>Logical reads</TableHead></>
+          : <><TableHead>Scans before</TableHead><TableHead>Scans after</TableHead><TableHead>Logical reads before</TableHead><TableHead>Logical reads after</TableHead><TableHead>Change</TableHead></>}</TableRow></TableHeader>
+        <TableBody>{row.objects.map(item => <TableRow key={item.table}>
+          <TableHead scope="row" className="whitespace-normal">{item.table}</TableHead>{measured
+            ? <><TableCell>{number(item.scansAfter)}</TableCell><TableCell>{number(item.readsAfter)}</TableCell></>
+            : <><TableCell>{number(item.scansBefore)}</TableCell><TableCell>{number(item.scansAfter)}</TableCell><TableCell>{number(item.readsBefore)}</TableCell><TableCell>{number(item.readsAfter)}</TableCell><TableCell className="whitespace-normal">{item.change}</TableCell></>}
+        </TableRow>)}</TableBody>
+      </Table>
     </div></CollapsibleContent>
   </Collapsible>
 }
@@ -49,27 +50,25 @@ export function StatementRows({ rows, measured = false, postgres = false }: { ro
     || left.text.localeCompare(right.text) || left.occurrence - right.occurrence)
   return <section aria-label="Statement IO" className="space-y-3">
     {postgres && <p className="text-sm text-muted-foreground">per-statement IO not available for this engine</p>}
-    {ordered.length > 0 && <div className="overflow-x-auto">
-      <table className="w-full text-sm" aria-label="Statement IO rows">
-        <thead><tr className="border-b text-left"><th className="py-2 pr-3">Statement</th><th className="px-3 py-2">Status</th>{measured
-          ? <><th className="px-3 py-2">Executions</th><th className="px-3 py-2">Scans</th><th className="px-3 py-2">Logical reads</th></>
-          : <><th className="px-3 py-2">Executions</th><th className="px-3 py-2">Reads before</th><th className="px-3 py-2">Reads after</th><th className="px-3 py-2">Change</th></>}</tr></thead>
-        <tbody>{ordered.map((row, index) => <tr key={`${row.key}:${row.occurrence}`} className="border-b align-top">
-          <td className="py-2 pr-3"><div className="max-w-2xl whitespace-pre-wrap">{row.text}</div>
-            <div className="mt-1 flex flex-wrap gap-2 text-xs">{!measured && <><PlanLink href={row.planLinkBefore} hash={row.planHashBefore} label="Plan before" /><PlanLink href={row.planLinkAfter} hash={row.planHashAfter} label="Plan after" /></>}
-              {measured && <PlanLink href={row.planLinkAfter} hash={row.planHashAfter} label="Plan after" />}</div>
-            {row.hiddenWork.length > 0 && <div className="mt-2 flex flex-wrap gap-1" aria-label={`Hidden work for statement ${index + 1}`}>
-              {row.hiddenWork.map((item, itemIndex) => <HiddenWorkFlag key={`${item.kind}:${item.name}:${itemIndex}`} item={item} />)}
-            </div>}
-            <Objects row={row} measured={measured} />
-          </td>
-          <td className="px-3 py-2">{statusLabels[row.status] ?? row.status}</td>
-          <td className="px-3 py-2">{row.executions === null ? "—" : `${number(row.executions)} ${row.executions === 1 ? "execution" : "executions"}`}</td>
-          {measured ? <><td className="px-3 py-2">{number(row.scansAfter)}</td><td className="px-3 py-2">{number(row.readsAfter)}</td></>
-            : <><td className="px-3 py-2">{number(row.readsBefore)}</td><td className="px-3 py-2">{number(row.readsAfter)}</td><td className="px-3 py-2">{row.change}</td></>}
-        </tr>)}</tbody>
-      </table>
-    </div>}
+    {ordered.length > 0 && <Table aria-label="Statement IO rows">
+      <TableHeader><TableRow><TableHead>Statement</TableHead><TableHead>Status</TableHead>{measured
+        ? <><TableHead>Executions</TableHead><TableHead>Scans</TableHead><TableHead>Logical reads</TableHead></>
+        : <><TableHead>Executions</TableHead><TableHead>Reads before</TableHead><TableHead>Reads after</TableHead><TableHead>Change</TableHead></>}</TableRow></TableHeader>
+      <TableBody>{ordered.map((row, index) => <TableRow key={`${row.key}:${row.occurrence}`} className="align-top">
+        <TableCell className="whitespace-normal"><div className="max-w-2xl whitespace-pre-wrap break-words">{row.text}</div>
+          <div className="mt-1 flex flex-wrap gap-2 text-xs">{!measured && <><PlanLink href={row.planLinkBefore} hash={row.planHashBefore} label="Plan before" /><PlanLink href={row.planLinkAfter} hash={row.planHashAfter} label="Plan after" /></>}
+            {measured && <PlanLink href={row.planLinkAfter} hash={row.planHashAfter} label="Plan after" />}</div>
+          {row.hiddenWork.length > 0 && <div className="mt-2 flex flex-wrap gap-1" aria-label={`Hidden work for statement ${index + 1}`}>
+            {row.hiddenWork.map((item, itemIndex) => <HiddenWorkFlag key={`${item.kind}:${item.name}:${itemIndex}`} item={item} />)}
+          </div>}
+          <Objects row={row} measured={measured} />
+        </TableCell>
+        <TableCell className="whitespace-normal">{statusLabels[row.status] ?? row.status}</TableCell>
+        <TableCell>{row.executions === null ? "—" : `${number(row.executions)} ${row.executions === 1 ? "execution" : "executions"}`}</TableCell>
+        {measured ? <><TableCell>{number(row.scansAfter)}</TableCell><TableCell>{number(row.readsAfter)}</TableCell></>
+          : <><TableCell>{number(row.readsBefore)}</TableCell><TableCell>{number(row.readsAfter)}</TableCell><TableCell className="whitespace-normal">{row.change}</TableCell></>}
+      </TableRow>)}</TableBody>
+    </Table>}
   </section>
 }
 
