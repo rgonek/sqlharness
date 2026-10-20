@@ -12,8 +12,8 @@
 
 ## Status and dependencies
 
-- TODO. Depends on the actual Plan 084 implementation being merged into main. Planning product base: `3f11525`; originating Sol Important finding is recorded in [084 evidence](084-verification-evidence.md).
-- User requested a plan, not implementation. Priority P1.
+- DONE on feature branch `plan-089`; Windows gate passed on `75d841d983645f189fea38c362165701ca3b8010`, with all task and whole-branch reviews approved. Not merged or pushed. See [verification evidence](089-verification-evidence.md). Plan 084 dependency is integrated at `67bdd6b`.
+- Implementation is authorized; local merge and push are not. Priority P1.
 
 ## Fix contract
 
@@ -46,10 +46,10 @@
 
 **Interfaces:** `JournalReader.AgentSessionOperations(AgentSessionKey key, int? limit = null, long? cursor = null)` returns `Page<AgentSessionOperation>?`; null means unknown key. Share the bounded selector with `AgentSession` without changing its response shape. Route is specified in Fix contract.
 
-- [ ] Add failing tests: `Trailing_unassigned_rows_do_not_make_exact_members_unreachable` (501 eligible rows, pages of 500 and 1), `Foreign_members_do_not_consume_page_capacity`, `Agent_operation_pages_merge_children_once`, `Cursor_survives_new_rows_and_retention`, and route cursor/limit/404 cases.
-- [ ] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~AgentSessionsTests|FullyQualifiedName~DashboardServerTests|FullyQualifiedName~DashboardContractTests"`; retain meaningful RED output.
-- [ ] Implement the selector, route and global initial detail cap; keep counts and recency unchanged. Validate JSON contract with real route tests.
-- [ ] Rerun focused tests GREEN; commit `fix(089): page agent-session operations after membership selection`.
+- [x] Add failing tests: `Trailing_unassigned_rows_do_not_make_exact_members_unreachable` (501 eligible rows, pages of 500 and 1), `Foreign_members_do_not_consume_page_capacity`, `Agent_operation_pages_merge_children_once`, `Cursor_survives_new_rows_and_retention`, and route cursor/limit/404 cases.
+- [x] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~AgentSessionsTests|FullyQualifiedName~DashboardServerTests|FullyQualifiedName~DashboardContractTests"`; retain meaningful RED output.
+- [x] Implement the selector, route and global initial detail cap; keep counts and recency unchanged. Validate JSON contract with real route tests.
+- [x] Rerun focused tests GREEN; commit `fix(089): page agent-session operations after membership selection`.
 
 ### Task 2: Dashboard paging and completion evidence
 
@@ -57,10 +57,10 @@
 
 **Interfaces:** `useAgentSessionOperations(key: AgentSessionKey, enabled = true)` uses `useInfiniteQuery` and the Task 1 endpoint. Cache key includes agent kind and conversation ID. `Page<AgentSessionOperation>` matches the existing page contract.
 
-- [ ] Add failing UI tests for Load more reaching the old exact row, subsequent-page failure/retry retaining rows, global newest-first ordering, visible membership, internal-row toggle, and matching-off invalidation/redirect.
-- [ ] Implement the hook and button; replace the misleading fixed-cap description with loaded-state feedback. Keep annotation and Optimization requests unchanged.
-- [ ] Run `npm --prefix src/SqlHarness.Dashboard/ui run check` GREEN; review the task and whole branch, fixing findings through the selected workflow.
-- [ ] Run branch formatting with a retained direct exit/log, then Windows `just verify` with unique logs. Record page sizes/cursors, test revision, counts and remaining boundaries; update plan/index/history. Commit `docs(089): record operation pagination verification`.
+- [x] Add failing UI tests for Load more reaching the old exact row, subsequent-page failure/retry retaining rows, global newest-first ordering, visible membership, internal-row toggle, and matching-off invalidation/redirect.
+- [x] Implement the hook and button; replace the misleading fixed-cap description with loaded-state feedback. Keep annotation and Optimization requests unchanged.
+- [x] Run `npm --prefix src/SqlHarness.Dashboard/ui run check` GREEN; review the task and whole branch, fixing findings through the selected workflow.
+- [x] Run branch formatting with a retained direct exit/log, then Windows `just verify` with unique logs. Record page sizes/cursors, test revision, counts and remaining boundaries; update plan/index/history. Commit `docs(089): record operation pagination verification`.
 
 ## Plan self-review
 

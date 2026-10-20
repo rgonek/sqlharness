@@ -37,6 +37,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     internal const int MaximumSearchLength = 200;
     public const int MaximumLimit = 200;
     public const int SessionOperationLimit = 500;
+    public const int AgentSessionOperationPageLimit = 500;
     public const int CompareHistoryPageLimit = 100;
     public const int MutationHistoryPageLimit = 100;
     public const int TopLimit = 20;
@@ -317,7 +318,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             return null;
         var matching = memberships.Where(item => item.Key == key).ToArray();
         var childIds = matching.Select(item => item.SessionId).Distinct().ToHashSet();
-        var allRows = new List<AgentSessionOperation>();
+        var operationPage = SelectAgentSessionOperations(connection, memberships, key, AgentSessionOperationPageLimit, null);
         var children = new List<AgentSessionChild>();
         foreach (var childId in childIds)
         {
@@ -325,21 +326,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             if (detail is null)
                 continue;
             var byId = memberships.Where(item => item.SessionId == childId
-                && (item.Key == key || item.Membership == Membership.Unassigned)).ToDictionary(item => item.OperationId);
-            var selectedOperationIds = byId.Keys.OrderByDescending(id => id).Take(SessionOperationLimit).ToArray();
-            var operationParameters = selectedOperationIds.Select((id, index) => ($"$operation{index}", (object?)id))
-                .Append(("$sessionId", (object?)childId)).ToArray();
-            var operationFilter = selectedOperationIds.Length == 0 ? "0" : $"o.id IN ({string.Join(",", selectedOperationIds.Select((_, index) => $"$operation{index}"))})";
-            var liveness = new ProcessLiveness(processes, _dead);
-            var operationRows = selectedOperationIds.Length == 0 ? [] : Query(connection, $"""
-                SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
-                WHERE o.session_id = $sessionId AND {operationFilter} ORDER BY o.id DESC;
-                """, operationParameters, reader => ReadOperation(reader, liveness));
-            var displayed = operationRows.Where(operation => byId.ContainsKey(operation.Id))
-                .Select(operation => new AgentSessionOperation(operation,
-                    byId[operation.Id].Membership.ToString().ToLowerInvariant())).ToArray();
-            allRows.AddRange(displayed);
-            var counts = byId.Values.GroupBy(item => item.Membership).ToDictionary(group => group.Key, group => group.Count());
+                && (item.Key == key || item.Membership == Membership.Unassigned)).ToArray();
+            var counts = byId.GroupBy(item => item.Membership).ToDictionary(group => group.Key, group => group.Count());
             children.Add(new AgentSessionChild(detail.Session,
                 counts.GetValueOrDefault(Membership.Exact), counts.GetValueOrDefault(Membership.Inferred),
                 counts.GetValueOrDefault(Membership.Unassigned)));
@@ -348,7 +336,55 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var note = Query(connection, "SELECT note FROM agent_session_annotations WHERE agent_kind = $kind AND conversation_id = $id;",
             [("$kind", key.AgentKind), ("$id", key.ConversationId)], r => NullableString(r, 0)).FirstOrDefault();
         return new AgentSessionDetail(summary with { Children = children.OrderByDescending(child => child.Session.LastSeen, StringComparer.Ordinal).ToArray() },
-            allRows.OrderByDescending(row => row.Operation.Id).ToArray(), note);
+            operationPage.Items, note);
+    }
+
+    public Page<AgentSessionOperation>? AgentSessionOperations(AgentSessionKey key, int? limit = null, long? cursor = null)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return null;
+        var memberships = ReadAgentMemberships(connection);
+        var exists = Scalar<long>(connection, """
+            SELECT EXISTS (SELECT 1 FROM agent_conversations WHERE agent_kind = $kind AND conversation_id = $id)
+                OR EXISTS (SELECT 1 FROM agent_session_annotations WHERE agent_kind = $kind AND conversation_id = $id)
+                OR EXISTS (SELECT 1 FROM operations o JOIN sessions s ON s.id = o.session_id
+                           WHERE s.agent_kind = $kind AND o.agent_session_id = $id);
+            """, [("$kind", key.AgentKind), ("$id", key.ConversationId)]) != 0;
+        if (!exists && !memberships.Any(item => item.Key == key))
+            return null;
+        return SelectAgentSessionOperations(connection, memberships, key,
+            Math.Clamp(limit ?? AgentSessionOperationPageLimit, 1, AgentSessionOperationPageLimit), cursor);
+    }
+
+    private Page<AgentSessionOperation> SelectAgentSessionOperations(SqliteConnection connection,
+        IReadOnlyList<OperationMembership> memberships, AgentSessionKey key, int limit, long? cursor)
+    {
+        var childIds = memberships.Where(item => item.Key == key
+                && item.Membership is Membership.Exact or Membership.Inferred)
+            .Select(item => item.SessionId).ToHashSet();
+        var membershipById = memberships.Where(item =>
+                (item.Key == key && item.Membership is Membership.Exact or Membership.Inferred)
+                || (item.Membership == Membership.Unassigned && childIds.Contains(item.SessionId)))
+            .GroupBy(item => item.OperationId)
+            .ToDictionary(group => group.Key, group => group.First().Membership);
+        var operationIds = membershipById.Keys.Where(id => cursor is null || id < cursor.Value)
+            .OrderByDescending(id => id).Take(limit + 1).ToArray();
+        var hasMore = operationIds.Length > limit;
+        var pageIds = operationIds.Take(limit).ToArray();
+        if (pageIds.Length == 0)
+            return new Page<AgentSessionOperation>([], null);
+
+        var parameters = pageIds.Select((id, index) => ($"$operation{index}", (object?)id)).ToArray();
+        var operationFilter = $"o.id IN ({string.Join(",", pageIds.Select((_, index) => $"$operation{index}"))})";
+        var liveness = new ProcessLiveness(processes, _dead);
+        var operations = Query(connection, $"""
+            SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
+            WHERE {operationFilter} ORDER BY o.id DESC;
+            """, parameters, reader => ReadOperation(reader, liveness));
+        var items = operations.Select(operation => new AgentSessionOperation(operation,
+            membershipById[operation.Id].ToString().ToLowerInvariant())).ToArray();
+        return new Page<AgentSessionOperation>(items, hasMore && items.Length > 0 ? items[^1].Operation.Id : null);
     }
 
     private static AgentSessionSummary BuildAgentSessionSummary(SqliteConnection connection,

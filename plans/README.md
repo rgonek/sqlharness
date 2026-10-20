@@ -16,7 +16,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [077](077-agent-sql-optimization-evidence.md) | Lean MCP JSON and actionable SQL optimization evidence; portable real-MCP fixture requests and paired agent trials verify the complete workflow | 055–061/065–067/076 DONE; coordinate 063/073 | IN PROGRESS — implementation merged locally into main (`4bd57e4`); actual-agent acceptance unverified (nine provider HTTP 402 errors) |
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |
 | [083](083-table-and-list-parameters.md) | Stage D table-valued parameters (inline rows or rows from a read-only query, catalog-resolved types, Structured binding) and Dapper list expansion across read-only tools; conditions, labels and SSMS scripts; mutation rejects them | 077, 079 merged | IMPLEMENTATION VERIFIED; locally integrated into `main` at `55d23ba`; final scoped Sol review approved; live UAT pending; Linux waived ([evidence](083-verification-evidence.md)) |
-| [089](089-agent-session-operation-pagination.md) | Reach every eligible agent-session operation through bounded cursor pagination; fixes the parked 084 detail-cap Important | 084 merged | TODO — plan only |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and live staged references without losing retry/cursor state | 084 merged | TODO — plan only |
 | [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | 084 merged | TODO — plan only |
 | [092](092-default-execution-timeout-setting.md) | Configurable default SQL execution timeout in config.json and Dashboard Settings; fallback for CLI commands and MCP tools | None | TODO — plan only |
@@ -46,12 +45,9 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [089](089-agent-session-operation-pagination.md) | Bounded agent-session operation pages and Load more; old exact members remain reachable | DONE; local integration in progress; feature Windows verified at `75d841d` ([evidence](089-verification-evidence.md)) |
 | [093](093-identity-safe-output-clipping.md) | Complete metric identities within response budgets | DONE with 102; locally integrated into `main` at `6f07792`; verified product unchanged; not pushed ([evidence](102-verification-evidence.md)) |
 | [102](102-bounded-table-identity-selection.md) | Linear entry accounting and deterministic dashboard idle test | DONE; locally integrated into `main` at `6f07792`; final product `76ebb0d` unchanged, gate exit 0; not pushed ([evidence](102-verification-evidence.md)) |
-
-
-| Plan | Scope | Branch status |
-|---|---|---|
 | [099](099-shadcn-cli-restoration.md) | Stable shadcn CLI devDependency, supported stylesheet import and contributor workflow | DONE; locally integrated into `main` at `c479210`; Windows-verified product unchanged; all reviews approved ([evidence](099-verification-evidence.md)) |
 | [100](100-shadcn-primitive-adoption.md) | Complete dashboard control inventory, accessible shadcn composition, disclosures and standard tables | DONE; locally integrated into `main` at `74f248c`; Windows-verified product revision `3caacc3` unchanged; all task and whole-branch reviews approved ([evidence](100-verification-evidence.md)) |
 

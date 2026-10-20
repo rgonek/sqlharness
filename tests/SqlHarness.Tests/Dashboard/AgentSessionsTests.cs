@@ -218,6 +218,157 @@ public sealed class AgentSessionsTests
     }
 
     [Fact]
+    public async Task Trailing_unassigned_rows_do_not_make_exact_members_unreachable()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var child = JournalSeed.Session("codex:paged", "codex");
+        var exact = seed.Operation(child, agent: new AgentCallMetadata("target", null, null, "target-conversation", null, null, null));
+        for (var i = 0; i < 500; i++)
+            seed.Operation(child, agent: new AgentCallMetadata($"unassigned-{i}", null, null, null, null, null, null));
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var firstResponse = await client.GetAsync("/api/agent-sessions/codex/target-conversation/operations");
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        using var firstJson = JsonDocument.Parse(await firstResponse.Content.ReadAsStringAsync());
+        Assert.Equal(500, firstJson.RootElement.GetProperty("items").GetArrayLength());
+        var cursor = firstJson.RootElement.GetProperty("nextCursor").GetInt64();
+        Assert.True(cursor > exact.OperationId);
+
+        using var secondResponse = await client.GetAsync($"/api/agent-sessions/codex/target-conversation/operations?limit=500&cursor={cursor}");
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        using var secondJson = JsonDocument.Parse(await secondResponse.Content.ReadAsStringAsync());
+        var exactMember = Assert.Single(secondJson.RootElement.GetProperty("items").EnumerateArray());
+        Assert.Equal(exact.OperationId, exactMember.GetProperty("operation").GetProperty("id").GetInt64());
+        Assert.Equal("exact", exactMember.GetProperty("membership").GetString());
+        Assert.True(secondJson.RootElement.GetProperty("nextCursor").ValueKind is JsonValueKind.Null);
+
+        using var detailResponse = await client.GetAsync("/api/agent-sessions/codex/target-conversation");
+        using var detailJson = JsonDocument.Parse(await detailResponse.Content.ReadAsStringAsync());
+        Assert.Equal(500, detailJson.RootElement.GetProperty("operations").GetArrayLength());
+        Assert.Equal(1, detailJson.RootElement.GetProperty("agentSession").GetProperty("exact").GetInt32());
+        Assert.Equal(500, detailJson.RootElement.GetProperty("agentSession").GetProperty("unassigned").GetInt32());
+
+        using var clampedResponse = await client.GetAsync("/api/agent-sessions/codex/target-conversation/operations?limit=9999");
+        using var clampedJson = JsonDocument.Parse(await clampedResponse.Content.ReadAsStringAsync());
+        Assert.Equal(500, clampedJson.RootElement.GetProperty("items").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Foreign_members_do_not_consume_page_capacity()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var child = JournalSeed.Session("codex:shared-page", "codex");
+        var target = seed.Operation(child, agent: new AgentCallMetadata("target", null, null, "target-conversation", null, null, null));
+        for (var i = 0; i < 501; i++)
+            seed.Operation(child, agent: new AgentCallMetadata($"foreign-{i}", null, null, $"foreign-conversation-{i}", null, null, null));
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync("/api/agent-sessions/codex/target-conversation/operations?limit=1");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var item = Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
+        Assert.Equal(target.OperationId, item.GetProperty("operation").GetProperty("id").GetInt64());
+        Assert.Equal("exact", item.GetProperty("membership").GetString());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("nextCursor").ValueKind);
+    }
+
+    [Fact]
+    public async Task Agent_operation_pages_merge_children_once()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var target = "merged-conversation";
+        var first = seed.Operation(JournalSeed.Session("codex:child-one", "codex"),
+            agent: new AgentCallMetadata("one", null, null, target, null, null, null));
+        var second = seed.Operation(JournalSeed.Session("codex:child-two", "codex"),
+            agent: new AgentCallMetadata("two", null, null, target, null, null, null));
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var response = await client.GetAsync($"/api/agent-sessions/codex/{target}/operations?limit=1");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var item = Assert.Single(json.RootElement.GetProperty("items").EnumerateArray());
+        Assert.Equal(Math.Max(first.OperationId, second.OperationId), item.GetProperty("operation").GetProperty("id").GetInt64());
+        Assert.Equal(Math.Max(first.OperationId, second.OperationId), json.RootElement.GetProperty("nextCursor").GetInt64());
+        using var nextResponse = await client.GetAsync($"/api/agent-sessions/codex/{target}/operations?limit=1&cursor={json.RootElement.GetProperty("nextCursor").GetInt64()}");
+        Assert.Equal(HttpStatusCode.OK, nextResponse.StatusCode);
+        using var nextJson = JsonDocument.Parse(await nextResponse.Content.ReadAsStringAsync());
+        Assert.Equal(Math.Min(first.OperationId, second.OperationId), Assert.Single(nextJson.RootElement.GetProperty("items").EnumerateArray())
+            .GetProperty("operation").GetProperty("id").GetInt64());
+        Assert.Equal(JsonValueKind.Null, nextJson.RootElement.GetProperty("nextCursor").ValueKind);
+    }
+
+    [Fact]
+    public async Task Cursor_survives_new_rows_and_retention()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var child = JournalSeed.Session("codex:cursor-page", "codex");
+        var target = "cursor-conversation";
+        var operations = Enumerable.Range(0, 4).Select(i => seed.Operation(child,
+            agent: new AgentCallMetadata($"call-{i}", null, null, i == 0 ? target : null, null, null, null))).ToArray();
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var firstResponse = await client.GetAsync($"/api/agent-sessions/codex/{target}/operations?limit=2");
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        using var firstJson = JsonDocument.Parse(await firstResponse.Content.ReadAsStringAsync());
+        var firstIds = firstJson.RootElement.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("operation").GetProperty("id").GetInt64()).ToArray();
+        var cursor = firstJson.RootElement.GetProperty("nextCursor").GetInt64();
+        seed.Operation(child, agent: new AgentCallMetadata("newer", null, null, target, null, null, null));
+        using (var retention = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            retention.Open();
+            using var delete = retention.CreateCommand();
+            delete.CommandText = "DELETE FROM operations WHERE id = $id;";
+            delete.Parameters.AddWithValue("$id", operations[1].OperationId);
+            Assert.Equal(1, delete.ExecuteNonQuery());
+        }
+
+        using var nextResponse = await client.GetAsync($"/api/agent-sessions/codex/{target}/operations?limit=2&cursor={cursor}");
+        Assert.Equal(HttpStatusCode.OK, nextResponse.StatusCode);
+        using var nextJson = JsonDocument.Parse(await nextResponse.Content.ReadAsStringAsync());
+        var nextIds = nextJson.RootElement.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("operation").GetProperty("id").GetInt64()).ToArray();
+        Assert.Equal([operations[0].OperationId], nextIds);
+        Assert.All(firstIds, id => Assert.DoesNotContain(id, nextIds));
+        Assert.DoesNotContain(nextIds, id => id >= cursor);
+        Assert.DoesNotContain(operations[1].OperationId, nextIds);
+    }
+
+    [Fact]
+    public async Task Agent_operation_page_route_validates_cursor_limit_and_unknown_keys()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("codex:route-page", "codex"),
+            agent: new AgentCallMetadata("call", null, null, "route-conversation", null, null, null));
+        await using var dashboard = await StartEnabled(home);
+        var (_, client) = dashboard;
+
+        using var defaultResponse = await client.GetAsync("/api/agent-sessions/codex/route-conversation/operations");
+        Assert.Equal(HttpStatusCode.OK, defaultResponse.StatusCode);
+        using var defaultJson = JsonDocument.Parse(await defaultResponse.Content.ReadAsStringAsync());
+        Assert.Equal(["items", "nextCursor"], defaultJson.RootElement.EnumerateObject().Select(p => p.Name));
+        Assert.Single(defaultJson.RootElement.GetProperty("items").EnumerateArray());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/agent-sessions/codex/route-conversation/operations?cursor=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/agent-sessions/codex/route-conversation/operations?cursor=abc")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/agent-sessions/codex/route-conversation/operations?limit=abc")).StatusCode);
+        using var clampedSmallResponse = await client.GetAsync("/api/agent-sessions/codex/route-conversation/operations?limit=0");
+        Assert.Equal(HttpStatusCode.OK, clampedSmallResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/agent-sessions/codex/missing/operations")).StatusCode);
+        using var clampedResponse = await client.GetAsync("/api/agent-sessions/codex/route-conversation/operations?limit=9999");
+        Assert.Equal(HttpStatusCode.OK, clampedResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Agent_session_detail_keeps_members_beyond_child_limit_and_uses_member_recency()
     {
         using var home = new TempHome();
@@ -257,6 +408,7 @@ public sealed class AgentSessionsTests
         Assert.False(sessions.RootElement.GetProperty("matching").GetBoolean());
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/agent-sessions")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/agent-sessions/codex/thread-1")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/agent-sessions/codex/thread-1/operations")).StatusCode);
         using var patch = Patch("/api/agent-sessions/codex/thread-1/annotation", "{\"title\":\"hidden\"}");
         Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(patch)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/agent-sessions/claude/conversation-1/optimization")).StatusCode);

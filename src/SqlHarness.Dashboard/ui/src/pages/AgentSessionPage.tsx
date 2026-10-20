@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "@tanstack/react-router"
-import { useAgentSession, useAgentSessionOptimization, useSettings, useUpdateAgentSessionAnnotation } from "@/api/queries"
+import { useAgentSession, useAgentSessionOperations, useAgentSessionOptimization, useSettings, useUpdateAgentSessionAnnotation } from "@/api/queries"
 import { NotFoundError } from "@/api/client"
 import { ErrorState } from "@/components/ErrorState"
 import { InternalOperationsToggle } from "@/components/InternalOperationsToggle"
@@ -19,6 +19,7 @@ export function AgentSessionPage() {
   const settings = useSettings()
   const matchingEnabled = settings.data?.settings.dashboard.agentTranscripts.enabled ?? false
   const detail = useAgentSession(key, matchingEnabled)
+  const operationPages = useAgentSessionOperations(key, matchingEnabled)
   const optimization = useAgentSessionOptimization(key, matchingEnabled)
   const navigate = useNavigate({ from: "/agent-sessions/$kind/$id" })
   const [showInternal, setShowInternal] = useShowInternalOperations()
@@ -36,9 +37,11 @@ export function AgentSessionPage() {
     return <p role="status">Transcript matching is off. Returning to MCP/CLI sessions…</p>
   if (settings.error) return <ErrorState error={settings.error} />
   if (detail.error) return <ErrorState error={detail.error instanceof NotFoundError ? detail.error : detail.error} />
-  if (detail.isPending || settings.isPending) return <Skeleton className="h-64 w-full" />
+  if (detail.isPending || settings.isPending || operationPages.isPending) return <Skeleton className="h-64 w-full" />
+  if (operationPages.error && !operationPages.data) return <ErrorState error={operationPages.error} />
 
-  const { agentSession, operations } = detail.data
+  const { agentSession } = detail.data
+  const operations = operationPages.data?.pages.flatMap(page => page.items) ?? []
   const displayTitle = agentSession.title ?? `${kind}:${id}`
   const membership = Object.fromEntries(operations.map(item => [item.operation.id, item.membership]))
   const firstChild = agentSession.children[0]
@@ -76,8 +79,12 @@ export function AgentSessionPage() {
     {optimization.data?.versionLabelsProvisional && optimization.data.versionLabelNote && <p role="note" className="text-sm text-muted-foreground">{optimization.data.versionLabelNote}</p>}
     {agentSession.children.some(child => child.session.hasCompare) && <Card><CardHeader><CardTitle>Child Optimization histories</CardTitle><CardDescription>Each child session keeps its own history, including inferred and CLI compares.</CardDescription></CardHeader>
       <CardContent><ul className="list-disc pl-5">{agentSession.children.filter(child => child.session.hasCompare).map(child => <li key={child.session.id}><Link className="underline" to="/sessions/$id" params={{ id: String(child.session.id) }}>{child.session.title ?? child.session.sessionKey}</Link> · Optimization history</li>)}</ul></CardContent></Card>}
-    {agentSession.children.length > 0 && <Card><CardHeader><CardTitle>Operations</CardTitle><CardDescription>Newest first, up to 500. Membership is shown for every operation.</CardDescription></CardHeader><CardContent>
+    <Card><CardHeader><CardTitle>Operations</CardTitle><CardDescription>Loaded {operations.length} of {agentSession.exact + agentSession.inferred + agentSession.unassigned} operations. Newest first; membership is shown for every operation.</CardDescription></CardHeader><CardContent className="space-y-3">
       <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} /><OperationTable operations={operations.map(item => item.operation)} showInternal={showInternal} membership={membership} />
-    </CardContent></Card>}
+      {operationPages.isFetchNextPageError && <p role="alert">Could not load older operations.</p>}
+      {operationPages.hasNextPage && <Button variant="outline" disabled={operationPages.isFetchingNextPage} onClick={() => void operationPages.fetchNextPage()}>
+        {operationPages.isFetchNextPageError ? "Retry" : operationPages.isFetchingNextPage ? "Loading…" : "Load more"}
+      </Button>}
+    </CardContent></Card>
   </div>
 }

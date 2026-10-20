@@ -1,6 +1,6 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, HttpStatusError, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
-import type { AgentSessionAnnotation, AgentSessionDetail, AgentSessionKey, AgentSessionSummary, AnnotationPatch, CompareAttemptSummary, DashboardStats, KeyCount, MutationRequestSummary, OperationAnnotation, OperationAnnotationPatch, OperationDetail, OperationPlanManifest, OperationSummary, OptimizationComparison, OptimizationSection, Page, PlanGraphBuildResult, PlanGraphPropertyResult, PlanSourceMapResponse, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
+import type { AgentSessionAnnotation, AgentSessionDetail, AgentSessionKey, AgentSessionOperation, AgentSessionSummary, AnnotationPatch, CompareAttemptSummary, DashboardStats, KeyCount, MutationRequestSummary, OperationAnnotation, OperationAnnotationPatch, OperationDetail, OperationPlanManifest, OperationSummary, OptimizationComparison, OptimizationSection, Page, PlanGraphBuildResult, PlanGraphPropertyResult, PlanSourceMapResponse, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string; hasCompare?: boolean }
 
@@ -103,6 +103,18 @@ export function useUnmatchedAgentSessions(filters: SessionFilters, enabled = tru
 
 export function useAgentSession(key: AgentSessionKey, enabled = true) {
   return useQuery({ queryKey: ["agent-session", key], queryFn: () => getJson<AgentSessionDetail>(`/api/agent-sessions/${encodeURIComponent(key.agentKind)}/${encodeURIComponent(key.conversationId)}`), enabled })
+}
+
+export function useAgentSessionOperations(key: AgentSessionKey, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: ["agent-session-operations", key],
+    queryFn: ({ pageParam }) => getJson<Page<AgentSessionOperation>>(`/api/agent-sessions/${encodeURIComponent(key.agentKind)}/${encodeURIComponent(key.conversationId)}/operations`, {
+      cursor: pageParam, limit: 500,
+    }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: page => page.nextCursor ?? undefined,
+    enabled,
+  })
 }
 
 export function useUpdateAgentSessionAnnotation(key: AgentSessionKey) {
@@ -367,6 +379,7 @@ export function useSaveSettings() {
       void client.invalidateQueries({ queryKey: ["agent-sessions"] })
       if (!data.settings.dashboard.agentTranscripts.enabled) {
         client.removeQueries({ queryKey: ["agent-session"] })
+        client.removeQueries({ queryKey: ["agent-session-operations"] })
         client.removeQueries({ queryKey: ["agent-session-optimization"] })
         client.removeQueries({ queryKey: ["agent-session-optimization-comparison"] })
         client.removeQueries({ queryKey: ["agent-session-sql"] })
