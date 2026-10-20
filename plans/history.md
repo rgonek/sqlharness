@@ -399,6 +399,10 @@ Kept as right: T-SQL classifier and its closed bypass shapes, typed parameter bi
 
 ## Calendar dates
 
+## Plan 085 branch record, 2026-10-20
+
+Implementation and Task 5 evidence are committed on `plan-085` at `7c5686c`; the final Windows gate passed. The branch is not integrated into `main`. Task 5 review and independent whole-branch review remain pending; see [085 verification evidence](085-verification-evidence.md).
+
 - 2026-11-10: .NET 8 and .NET 9 end of support (plan 022).
 - About 2027-11: next LTS move (.NET 12).
 - Each new PostgreSQL major: extend diagnostic test/source coverage (037) when useful; compatible runtime shapes do not wait for a version allowlist. Review known dangerous-call checks (019) against concrete evidence rather than widening name prefixes automatically.

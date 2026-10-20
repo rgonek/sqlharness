@@ -1,0 +1,37 @@
+# Plan 085 implementation evidence
+
+**Status:** Task 5 changes are implemented on branch `plan-085`. The final Windows gate passed on product tree `7c5686c`; Task 5 review and the independent whole-branch review are pending. This branch has not been merged into `main`.
+
+## MCP byte measurements
+
+Measurements use the UTF-8 byte count of the serialized MCP tools or the single result text block. They are deterministic synthetic checks; no database connection or agent trial was used.
+
+| Surface | Annotations off | Annotations on | Context |
+|---|---:|---:|---|
+| `tools/list` | 28,248 B | 31,109 B | Same fixed SQL Server scoped test profile; 9 versus 10 tools; on remains below 32,768 B |
+| `sqlharness_capabilities` result | 969 B | 997 B | Same fixed SQL Server scope; the on response adds the true `operationAnnotations` member |
+| Representative query result, 4,096 B budget | 285 B | 335 B | Synthetic result; on includes a 32-character `operationRef` |
+| Representative query result, 65,536 B budget | 285 B | 335 B | Same synthetic result and reference |
+
+The existing `unavailable-metrics` PostgreSQL workflow fixture measures `tools/list` at 23,462 B. The SQL Server synthetic workflow fixture measures 28,248 B. The difference comes from engine-scoped tool descriptions; the on/off comparison above uses the same SQL Server scope. Both fit the catalog limit.
+
+Task 0's `modelVisibleUtf8Bytes` field was computed before trimming the newline absent from the stored `text`, causing a one-byte overcount. It now counts the exact normalized, trimmed string stored in each fixture record. Affected `OperationAnnotations/off/results` values and manifest hashes were updated. The workflow fixture check passes.
+
+## Focused checks
+
+- `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~Operation_annotation_members_are_gated_by_the_startup_config|FullyQualifiedName~Query_result_byte_measurements_are_recorded_with_annotations_off_and_on|FullyQualifiedName~Scripted_workflows_fit_4096_and_65536_and_freeze_portable_records" --logger "console;verbosity=detailed"` — 3 passed. The on-mode catalog and result sizes above were reported by the tests.
+- `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~Post_hoc_annotation_call_is_journaled_without_target_or_reference" --logger "console;verbosity=minimal"` — 1 passed. It verifies the wrapper journals a target-free `annotation` row with a null operation reference.
+
+## Remaining evidence limits
+
+A focused capabilities serialization test was attempted from detached commit `3702ce1` in a temporary worktree. The test build stalled after Core, MCP, and WorkflowHost output; it was interrupted, and the temporary worktree was removed. Source review confirms the current nullable `operationAnnotations` capability is omitted when false, but the exact historical capabilities byte golden was not captured. This remains for whole-branch review to triage.
+
+Optional paired agent and second-session reuse trials were not run. They were optional, and no authorization for those trials was provided. Linux verification and live-database activity are outside this task.
+
+## Final gate
+
+`just verify -LogDirectory D:/temp/sqlharness-plan085-formatted` passed all five stages on the product tree committed as `7c5686c`; the gate ran immediately before the formatting-only commit, with the same C# content. Build succeeded with 0 warnings and 0 errors. UI check passed 62 files / 329 tests in 3m44s. Core passed 4,561 tests with 11 skipped; MCP passed 460 with 4 skipped. The gate's working-tree formatting check passed 19 C# files. The UI log includes non-failing localhost:3000 connection refusals and Node `DEP0190`; these were diagnostics, and the stage passed.
+
+Explicit branch formatting: `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 3702ce1` passed for 39 branch-changed C# files after normalization. Direct output is retained at `D:/temp/sqlharness-plan085-format-3702ce1-postcommit.log`; the initial diagnostics and branch fix output are retained at `D:/temp/sqlharness-plan085-format-3702ce1.log` and `D:/temp/sqlharness-plan085-format-3702ce1-fix.log`.
+
+The gate's UI check, Windows test suites and branch-format command passed. Linux, live database checks and actual-agent trials were not run.

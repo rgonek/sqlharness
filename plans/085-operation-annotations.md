@@ -14,7 +14,7 @@
 
 ## Status and dependencies
 
-- TODO. Planning base `6c37cd7`. Depends on 077, 079, 084.
+- IMPLEMENTED on branch `plan-085` at `7c5686c`; final Windows gate passed, Task 5 review and whole-branch review/integration pending. Planning base `6c37cd7`. Depends on 077, 079, 084.
 - Priority P2; effort M–L; risk MEDIUM (MCP contract; scope rule).
 
 ## Global Constraints

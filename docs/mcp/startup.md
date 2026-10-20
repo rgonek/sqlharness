@@ -14,6 +14,7 @@ sqlharness mcp serve <profile> --var key=value [--input-root <absolute-directory
 - `--input-root` is repeatable and takes an absolute directory that allows file inputs. By default no input roots are configured, which means no file inputs are admitted at all.
 - `--max-result-bytes` sets the process response ceiling in bytes: default 262144, accepted range 4096..1048576. Each call defaults to a 65536-byte budget and may raise or lower that budget up to the process ceiling.
 - `--max-operation-seconds` sets the process database time budget in seconds: default 900, accepted range 1..86400. A single tool call may only lower it.
+- Optional `journal.operationAnnotations: true` in `~/.sqlharness/config.json` enables agent labels, keep state, and operation references. It requires `journal.enabled: true`; the setting is read at startup, so restart the MCP server and reconnect the client after changing it. With the switch off (the default), the annotation tool, arguments, references, capability member, and annotation wording are omitted.
 - `--unsafe-direct` is blocked for `mcp serve` and rejected with exit 2. Direct server/database targets are not available on this path.
 
 Request-scoped mode selects one of the explicitly allowed SQL Server profiles on each target-dependent call:

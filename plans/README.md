@@ -7,6 +7,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
+| [085](085-operation-annotations.md) | Opt-in agent operation labels/keep at call time + post-hoc annotation tool by operationRef scoped to the agent session; owner operation star/note and Named operations view | 077, 079, 084 merged | IMPLEMENTED on `plan-085`; Windows gate passed; Task 5 and whole-branch reviews pending — see [evidence](085-verification-evidence.md) |
 
 ## Pending
 
@@ -19,7 +20,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [089](089-agent-session-operation-pagination.md) | Reach every eligible agent-session operation through bounded cursor pagination; fixes the parked 084 detail-cap Important | 084 merged | TODO — plan only |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and live staged references without losing retry/cursor state | 084 merged | TODO — plan only |
 | [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | 084 merged | TODO — plan only |
-| [085](085-operation-annotations.md) | Opt-in agent operation labels/keep at call time + post-hoc annotation tool by operationRef scoped to the agent session; owner operation star/note and Named operations view | 077, 079, 084 merged | TODO |
 
 Plans 063, 070, 071, 072, 073, 074, 076, 079, 080, 081, and 087 are DONE; see their evidence in [history](history.md). Plan 081 is locally integrated into `main` at `e88c7fd`; its integrated gate passed on the exact product tree before commit, and all task, security, whole-branch, and integration reviews are approved ([evidence](081-verification-evidence.md)). Plan 088 is DONE and locally integrated into `main`; all task reviews, the Sol low whole-branch review, and the final scoped re-review are approved. Its Windows gate passed on `f503c22`, and the merge retained that product tree without a separate integrated-tree gate ([history](history.md), [evidence](088-verification-evidence.md)). Plan 071 uses Monaco behind a provider-neutral SQL editor contract, with direct Monaco API lifecycle management for the diff widget. Plan 080's scoped re-review approved all findings, and local integration completed at `42a1e365` with the verified product unchanged; the redundant gate was stopped at the owner's request. Coordinate work that changes shared MCP, journal, and dashboard contracts through the selected plan.
 
