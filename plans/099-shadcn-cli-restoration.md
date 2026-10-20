@@ -6,7 +6,7 @@
 **Architecture:** Resolve the current stable CLI once, install as a locked devDependency, import its exported CSS and verify emitted behavior. Review upstream changes rather than assume byte identity.
 **Tech Stack:** npm, Vite, Tailwind v4, shadcn/base-nova on Base UI.
 **Spec:** [revised design](../docs/superpowers/specs/2026-10-18-shadcn-cli-and-primitive-adoption-design.md).
-**Status:** IMPLEMENTED, Windows-verified, and all task/whole-branch reviews approved on `plan-099` at `19e82a3`. Not integrated. Plan 100 remains blocked until the implementation is actually integrated. See the [verification evidence](099-verification-evidence.md).
+**Status:** DONE; locally integrated into `main` by fast-forward at `c479210` on 2026-10-20. Windows verification and all task/whole-branch reviews are approved; the integrated product matches verified `dd8b9e9`. Plan 100's implementation predecessor is satisfied; its execution requires a separate assignment. See the [verification evidence](099-verification-evidence.md).
 
 ## Global constraints
 
@@ -76,4 +76,4 @@
 - [x] Record version/lockfile, registry preview, CSS differences and browser evidence from Task 2. An unavailable backend/browser fixture is an unverified acceptance item, not a manual pass.
 - [x] Write evidence and update index/history accurately. This work can be marked implemented/verified only with required evidence; integration requires separate authorization.
 - [x] Check final documentation diff/links and commit requested files.
-- [ ] Hand off the adoption plan only after this implementation actually lands on the intended base. Do not push or merge implicitly.
+- [x] Implementation integrated into `main` at `c479210` with explicit owner authorization. Plan 100 predecessor satisfied; no Plan 100 implementation or push performed.
