@@ -1,0 +1,29 @@
+{
+  "theme": "light",
+  "viewport": 320,
+  "settings": {
+    "heading": "Settings",
+    "approvalSound": "Warm chime",
+    "bounds": {
+      "x": 32,
+      "y": 2499.734375,
+      "width": 256,
+      "height": 32
+    },
+    "documentWidth": 320
+  },
+  "stats": {
+    "profileText": "Production Profile with a deliberately long retained label for narrow screens",
+    "bounds": {
+      "x": 16,
+      "y": 148,
+      "width": 288,
+      "height": 32
+    },
+    "metrics": {
+      "clientWidth": 286,
+      "scrollWidth": 286,
+      "text": "Production Profile with a deliberately long retained label for narrow screens▼"
+    }
+  }
+}

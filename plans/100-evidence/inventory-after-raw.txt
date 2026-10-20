@@ -1,0 +1,6 @@
+src/SqlHarness.Dashboard/ui/src\pages\ProfileDimensionsPanel.tsx:242:        <table className="min-w-full border-separate border-spacing-0 text-sm">
+src/SqlHarness.Dashboard/ui/src\pages\ProfileDimensionsPanel.tsx:283:        </table>
+src/SqlHarness.Dashboard/ui/src\components\plan\PlanGraphView.tsx:64:      <button
+src/SqlHarness.Dashboard/ui/src\components\plan\PlanGraphView.tsx:92:      </button>
+src/SqlHarness.Dashboard/ui/src\components\optimization\VersionTable.tsx:21:      <TableCell><label className="flex items-center gap-1"><input type="radio" name={`${subject}-a`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} />A</label></TableCell>
+src/SqlHarness.Dashboard/ui/src\components\optimization\VersionTable.tsx:22:      <TableCell><label className="flex items-center gap-1"><input type="radio" name={`${subject}-b`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} />B</label></TableCell>

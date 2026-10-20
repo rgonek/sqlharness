@@ -1,0 +1,45 @@
+{
+  "columnHeaders": 8,
+  "rowHeader": true,
+  "matrixSticky": {
+    "before": {
+      "left": "0px",
+      "position": "sticky",
+      "x": 17
+    },
+    "after": {
+      "x": 17,
+      "scrollLeft": 600
+    }
+  },
+  "matrixContainedScroll": true,
+  "approvalDialogContained": {
+    "x": 448,
+    "y": 45,
+    "width": 384,
+    "height": 810
+  },
+  "longParameterWrappedAndSelectable": {
+    "cellBox": {
+      "x": 574.78125,
+      "y": 353,
+      "width": 241.21875,
+      "height": 1497
+    },
+    "selected": true
+  },
+  "narrowApproval": {
+    "dialog": {
+      "x": 0,
+      "y": 20.9140625,
+      "width": 320,
+      "height": 758.171875
+    },
+    "tableContainer": {
+      "client": 288,
+      "width": 288,
+      "overflowX": "auto"
+    }
+  },
+  "consoleErrors": []
+}

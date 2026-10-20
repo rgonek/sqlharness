@@ -1,0 +1,11 @@
+npm warn "duplicate visible labels" is being parsed as a normal command line argument.
+npm warn Unknown cli config "--t". This will stop working in the next major version of npm.
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  15:26:41
+   Duration  12.15s (import 39%, tests 34%, transform 14%, environment 10%, setup 3%)
+

@@ -1,0 +1,8800 @@
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ❯ src/components/optimization/OptimizationSection.test.tsx (10 tests | 1 failed) 5317ms
+   × hides one-option controls and gives each subject its own accessible selector names 1907ms
+ ❯ src/components/optimization/ComparisonPanel.test.tsx (10 tests | 1 failed) 2407ms
+   × SQL diff starts at the selected non-default A/B pair 202ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/optimization/ComparisonPanel.test.tsx > SQL diff starts at the selected non-default A/B pair
+Error: expect(element).toHaveValue(["v1","h1"])
+
+Expected the element to have value:
+  ["v1","h1"]
+Received:
+
+ ❯ src/components/optimization/ComparisonPanel.test.tsx:96:73
+     94|   renderPanel({ ...comparison, a: "v1", b: "v2" }, versions, "/session…
+     95|   await userEvent.click(await screen.findByRole("button", { name: "SQL…
+     96|   expect(await screen.findByRole("combobox", { name: "From version" })…
+       |                                                                         ^
+     97|   expect(screen.getByRole("combobox", { name: "To version" })).toHaveV…
+     98| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/optimization/OptimizationSection.test.tsx > hides one-option controls and gives each subject its own accessible selector names
+TestingLibraryElementError: Unable to find an accessible element with the role "combobox" and name "Orders scope"
+
+Here are the accessible roles:
+
+  banner:
+
+  Name "":
+  <header
+    class="mx-auto flex max-w-7xl items-center gap-3 p-4"
+  />
+
+  --------------------------------------------------
+  link:
+
+  Name "SQLHarness home":
+  <a
+    aria-label="SQLHarness home"
+    class="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    href="/"
+  />
+
+  Name "Live":
+  <a
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    href="/"
+  />
+
+  Name "Sessions":
+  <a
+    aria-current="page"
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 active"
+    data-status="active"
+    href="/sessions"
+  />
+
+  Name "Operations":
+  <a
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    href="/operations"
+  />
+
+  Name "Named operations":
+  <a
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    href="/named-operations"
+  />
+
+  Name "Usage":
+  <a
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    href="/stats"
+  />
+
+  Name "Profiles":
+  <a
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    href="/profiles"
+  />
+
+  Name "Mutations":
+  <a
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    href="/mutations"
+  />
+
+  Name "Settings":
+  <a
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    href="/settings"
+  />
+
+  Name "Operation #10":
+  <a
+    class="underline"
+    href="/operations/10?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #11":
+  <a
+    class="underline"
+    href="/operations/11?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #12":
+  <a
+    class="underline"
+    href="/operations/12?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #13":
+  <a
+    class="underline"
+    href="/operations/13?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #14":
+  <a
+    class="underline"
+    href="/operations/14?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #15":
+  <a
+    class="underline"
+    href="/operations/15?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #16":
+  <a
+    class="underline"
+    href="/operations/16?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #17":
+  <a
+    class="underline"
+    href="/operations/17?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #18":
+  <a
+    class="underline"
+    href="/operations/18?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #19":
+  <a
+    class="underline"
+    href="/operations/19?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #20":
+  <a
+    class="underline"
+    href="/operations/20?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #21":
+  <a
+    class="underline"
+    href="/operations/21?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #22":
+  <a
+    class="underline"
+    href="/operations/22?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #23":
+  <a
+    class="underline"
+    href="/operations/23?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #24":
+  <a
+    class="underline"
+    href="/operations/24?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #25":
+  <a
+    class="underline"
+    href="/operations/25?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #26":
+  <a
+    class="underline"
+    href="/operations/26?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #27":
+  <a
+    class="underline"
+    href="/operations/27?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #28":
+  <a
+    class="underline"
+    href="/operations/28?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #29":
+  <a
+    class="underline"
+    href="/operations/29?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #30":
+  <a
+    class="underline"
+    href="/operations/30?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #31":
+  <a
+    class="underline"
+    href="/operations/31?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #32":
+  <a
+    class="underline"
+    href="/operations/32?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #33":
+  <a
+    class="underline"
+    href="/operations/33?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #34":
+  <a
+    class="underline"
+    href="/operations/34?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #35":
+  <a
+    class="underline"
+    href="/operations/35?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #36":
+  <a
+    class="underline"
+    href="/operations/36?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #37":
+  <a
+    class="underline"
+    href="/operations/37?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #38":
+  <a
+    class="underline"
+    href="/operations/38?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #39":
+  <a
+    class="underline"
+    href="/operations/39?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #40":
+  <a
+    class="underline"
+    href="/operations/40?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #41":
+  <a
+    class="underline"
+    href="/operations/41?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #42":
+  <a
+    class="underline"
+    href="/operations/42?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #43":
+  <a
+    class="underline"
+    href="/operations/43?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #44":
+  <a
+    class="underline"
+    href="/operations/44?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #45":
+  <a
+    class="underline"
+    href="/operations/45?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #46":
+  <a
+    class="underline"
+    href="/operations/46?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #47":
+  <a
+    class="underline"
+    href="/operations/47?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #48":
+  <a
+    class="underline"
+    href="/operations/48?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #49":
+  <a
+    class="underline"
+    href="/operations/49?returnSession=7&returnSubject=Orders&returnDb=shop&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #10":
+  <a
+    class="underline"
+    href="/operations/10?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #11":
+  <a
+    class="underline"
+    href="/operations/11?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #12":
+  <a
+    class="underline"
+    href="/operations/12?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #13":
+  <a
+    class="underline"
+    href="/operations/13?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #14":
+  <a
+    class="underline"
+    href="/operations/14?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #15":
+  <a
+    class="underline"
+    href="/operations/15?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #16":
+  <a
+    class="underline"
+    href="/operations/16?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #17":
+  <a
+    class="underline"
+    href="/operations/17?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #18":
+  <a
+    class="underline"
+    href="/operations/18?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #19":
+  <a
+    class="underline"
+    href="/operations/19?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #20":
+  <a
+    class="underline"
+    href="/operations/20?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #21":
+  <a
+    class="underline"
+    href="/operations/21?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #22":
+  <a
+    class="underline"
+    href="/operations/22?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #23":
+  <a
+    class="underline"
+    href="/operations/23?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #24":
+  <a
+    class="underline"
+    href="/operations/24?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #25":
+  <a
+    class="underline"
+    href="/operations/25?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #26":
+  <a
+    class="underline"
+    href="/operations/26?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #27":
+  <a
+    class="underline"
+    href="/operations/27?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #28":
+  <a
+    class="underline"
+    href="/operations/28?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #29":
+  <a
+    class="underline"
+    href="/operations/29?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #30":
+  <a
+    class="underline"
+    href="/operations/30?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #31":
+  <a
+    class="underline"
+    href="/operations/31?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #32":
+  <a
+    class="underline"
+    href="/operations/32?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #33":
+  <a
+    class="underline"
+    href="/operations/33?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #34":
+  <a
+    class="underline"
+    href="/operations/34?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #35":
+  <a
+    class="underline"
+    href="/operations/35?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #36":
+  <a
+    class="underline"
+    href="/operations/36?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #37":
+  <a
+    class="underline"
+    href="/operations/37?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #38":
+  <a
+    class="underline"
+    href="/operations/38?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #39":
+  <a
+    class="underline"
+    href="/operations/39?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #40":
+  <a
+    class="underline"
+    href="/operations/40?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #41":
+  <a
+    class="underline"
+    href="/operations/41?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #42":
+  <a
+    class="underline"
+    href="/operations/42?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #43":
+  <a
+    class="underline"
+    href="/operations/43?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #44":
+  <a
+    class="underline"
+    href="/operations/44?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #45":
+  <a
+    class="underline"
+    href="/operations/45?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #46":
+  <a
+    class="underline"
+    href="/operations/46?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #47":
+  <a
+    class="underline"
+    href="/operations/47?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #48":
+  <a
+    class="underline"
+    href="/operations/48?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #49":
+  <a
+    class="underline"
+    href="/operations/49?returnSession=7&returnSubject=Customers&returnDb=crm&returnGroup=customers-0&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #10":
+  <a
+    class="underline"
+    href="/operations/10?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #11":
+  <a
+    class="underline"
+    href="/operations/11?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #12":
+  <a
+    class="underline"
+    href="/operations/12?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #13":
+  <a
+    class="underline"
+    href="/operations/13?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #14":
+  <a
+    class="underline"
+    href="/operations/14?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #15":
+  <a
+    class="underline"
+    href="/operations/15?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #16":
+  <a
+    class="underline"
+    href="/operations/16?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #17":
+  <a
+    class="underline"
+    href="/operations/17?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #18":
+  <a
+    class="underline"
+    href="/operations/18?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #19":
+  <a
+    class="underline"
+    href="/operations/19?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #20":
+  <a
+    class="underline"
+    href="/operations/20?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #21":
+  <a
+    class="underline"
+    href="/operations/21?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #22":
+  <a
+    class="underline"
+    href="/operations/22?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #23":
+  <a
+    class="underline"
+    href="/operations/23?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #24":
+  <a
+    class="underline"
+    href="/operations/24?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #25":
+  <a
+    class="underline"
+    href="/operations/25?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #26":
+  <a
+    class="underline"
+    href="/operations/26?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #27":
+  <a
+    class="underline"
+    href="/operations/27?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #28":
+  <a
+    class="underline"
+    href="/operations/28?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #29":
+  <a
+    class="underline"
+    href="/operations/29?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #30":
+  <a
+    class="underline"
+    href="/operations/30?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #31":
+  <a
+    class="underline"
+    href="/operations/31?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #32":
+  <a
+    class="underline"
+    href="/operations/32?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #33":
+  <a
+    class="underline"
+    href="/operations/33?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #34":
+  <a
+    class="underline"
+    href="/operations/34?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #35":
+  <a
+    class="underline"
+    href="/operations/35?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #36":
+  <a
+    class="underline"
+    href="/operations/36?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #37":
+  <a
+    class="underline"
+    href="/operations/37?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #38":
+  <a
+    class="underline"
+    href="/operations/38?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #39":
+  <a
+    class="underline"
+    href="/operations/39?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #40":
+  <a
+    class="underline"
+    href="/operations/40?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #41":
+  <a
+    class="underline"
+    href="/operations/41?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #42":
+  <a
+    class="underline"
+    href="/operations/42?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #43":
+  <a
+    class="underline"
+    href="/operations/43?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #44":
+  <a
+    class="underline"
+    href="/operations/44?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #45":
+  <a
+    class="underline"
+    href="/operations/45?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #46":
+  <a
+    class="underline"
+    href="/operations/46?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #47":
+  <a
+    class="underline"
+    href="/operations/47?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #48":
+  <a
+    class="underline"
+    href="/operations/48?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "Operation #49":
+  <a
+    class="underline"
+    href="/operations/49?returnSession=7&returnSubject=Products&returnDb=catalog&returnGroup=fp-1&returnScope=whole+query&returnA=v0&returnB=v39&returnCase=all&returnAgg=sum&returnView=changed"
+  />
+
+  Name "70":
+  <a
+    href="/operations/70?returnSession=1"
+  />
+
+  Name "Session #1":
+  <a
+    class="underline"
+    href="/sessions/1"
+  />
+
+  --------------------------------------------------
+  navigation:
+
+  Name "Main navigation":
+  <nav
+    aria-label="Main navigation"
+    class="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "Theme: system":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="Theme: system"
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8"
+    data-slot="dropdown-menu-trigger"
+    id="base-ui-_r_36_"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Edit title":
+  <button
+    aria-label="Edit title"
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8"
+    data-slot="button"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Star session":
+  <button
+    aria-label="Star session"
+    aria-pressed="false"
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8"
+    data-slot="button"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Archive":
+  <button
+    class="group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    data-slot="button"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Session metadata":
+  <button
+    aria-disabled="false"
+    aria-expanded="false"
+    class="cursor-pointer text-sm font-medium"
+    data-slot="collapsible-trigger"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Select comparison":
+  <button
+    class="group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    data-slot="button"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Select comparison":
+  <button
+    class="group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    data-slot="button"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Select comparison":
+  <button
+    class="group/button inline-flex shrink-0 items-center justify-center border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    data-slot="button"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Unassigned compares (1)":
+  <button
+    aria-disabled="false"
+    aria-expanded="false"
+    class="cursor-pointer font-medium"
+    data-slot="collapsible-trigger"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Add note":
+  <button
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2"
+    data-slot="button"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Star operation":
+  <button
+    aria-label="Star operation"
+    aria-pressed="false"
+    class="group/button inline-flex shrink-0 items-center justify-center border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+    data-slot="button"
+    tabindex="0"
+    type="button"
+  />
+
+  --------------------------------------------------
+  separator:
+
+  Name "":
+  <div
+    aria-orientation="horizontal"
+    class="shrink-0 bg-border data-horizontal:h-px data-horizontal:w-full data-vertical:w-px data-vertical:self-stretch"
+    data-orientation="horizontal"
+    data-slot="separator"
+    role="separator"
+  />
+
+  --------------------------------------------------
+  main:
+
+  Name "":
+  <main
+    class="mx-auto max-w-7xl space-y-4 p-4"
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "cli:abc":
+  <h1
+    class="cursor-text"
+  />
+
+  Name "Optimization":
+  <h2
+    class="font-heading text-lg font-medium"
+    id="optimization-heading"
+  />
+
+  Name "Orders":
+  <h3
+    class="font-medium"
+  />
+
+  Name "Customers":
+  <h3
+    class="font-medium"
+  />
+
+  Name "Products":
+  <h3
+    class="font-medium"
+  />
+
+  --------------------------------------------------
+  region:
+
+  Name "Optimization":
+  <section
+    aria-labelledby="optimization-heading"
+    class="space-y-4"
+  />
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  <p
+    class="text-sm text-muted-foreground"
+  />
+
+  Name "":
+  <p
+    class="text-sm text-muted-foreground"
+  />
+
+  Name "":
+  <p
+    class="text-sm font-medium"
+  />
+
+  Name "":
+  <p
+    class="text-sm text-muted-foreground"
+  />
+
+  Name "":
+  <p
+    class="text-sm font-medium"
+  />
+
+  Name "":
+  <p
+    class="text-sm text-muted-foreground"
+  />
+
+  Name "":
+  <p
+    class="text-sm font-medium"
+  />
+
+  --------------------------------------------------
+  article:
+
+  Name "":
+  <article
+    class="space-y-3 rounded-lg border p-3"
+  />
+
+  Name "":
+  <article
+    class="space-y-3 rounded-lg border p-3"
+  />
+
+  Name "":
+  <article
+    class="space-y-3 rounded-lg border p-3"
+  />
+
+  --------------------------------------------------
+  combobox:
+
+  Name "Orders conditions group":
+  <button
+    aria-expanded="false"
+    aria-haspopup="listbox"
+    aria-label="Orders conditions group"
+    class="flex items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 w-full"
+    data-size="default"
+    data-slot="select-trigger"
+    id="_r_3d_-group"
+    role="combobox"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Customers conditions group":
+  <button
+    aria-expanded="false"
+    aria-haspopup="listbox"
+    aria-label="Customers conditions group"
+    class="flex items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 w-full"
+    data-size="default"
+    data-slot="select-trigger"
+    id="_r_3h_-group"
+    role="combobox"
+    tabindex="0"
+    type="button"
+  />
+
+  --------------------------------------------------
+  table:
+
+  Name "Orders-shop versions":
+  <table
+    aria-label="Orders-shop versions"
+    class="w-full text-sm"
+  />
+
+  Name "Customers-crm versions":
+  <table
+    aria-label="Customers-crm versions"
+    class="w-full text-sm"
+  />
+
+  Name "Products-catalog versions":
+  <table
+    aria-label="Products-catalog versions"
+    class="w-full text-sm"
+  />
+
+  Name "":
+  <table
+    class="w-full caption-bottom text-sm"
+    data-slot="table"
+  />
+
+  --------------------------------------------------
+  rowgroup:
+
+  Name "":
+  <thead />
+
+  Name "":
+  <tbody />
+
+  Name "":
+  <thead />
+
+  Name "":
+  <tbody />
+
+  Name "":
+  <thead />
+
+  Name "":
+  <tbody />
+
+  Name "":
+  <thead
+    class="[&_tr]:border-b"
+    data-slot="table-header"
+  />
+
+  Name "":
+  <tbody
+    class="[&_tr:last-child]:border-0"
+    data-slot="table-body"
+  />
+
+  --------------------------------------------------
+  row:
+
+  Name "Version Logical reads (sum) Scans Elapsed median (ms) Outcome Observed in A B":
+  <tr
+    class="border-b text-left"
+  />
+
+  Name "v0 0 0 0 1/1 ok basis: whole batch Operation #10 A v0 A B v0 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v1 10 1 1 1/1 ok basis: whole batch Operation #11 A v1 A B v1 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v2 20 2 2 1/1 ok basis: whole batch Operation #12 A v2 A B v2 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v3 30 3 3 1/1 ok basis: whole batch Operation #13 A v3 A B v3 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v4 40 4 4 1/1 ok basis: whole batch Operation #14 A v4 A B v4 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v5 50 5 5 1/1 ok basis: whole batch Operation #15 A v5 A B v5 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v6 60 6 6 1/1 ok basis: whole batch Operation #16 A v6 A B v6 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v7 70 7 7 1/1 ok basis: whole batch Operation #17 A v7 A B v7 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v8 80 8 8 1/1 ok basis: whole batch Operation #18 A v8 A B v8 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v9 90 9 9 1/1 ok basis: whole batch Operation #19 A v9 A B v9 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v10 100 10 10 1/1 ok basis: whole batch Operation #20 A v10 A B v10 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v11 110 11 11 1/1 ok basis: whole batch Operation #21 A v11 A B v11 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v12 120 12 12 1/1 ok basis: whole batch Operation #22 A v12 A B v12 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v13 130 13 13 1/1 ok basis: whole batch Operation #23 A v13 A B v13 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v14 140 14 14 1/1 ok basis: whole batch Operation #24 A v14 A B v14 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v15 150 15 15 1/1 ok basis: whole batch Operation #25 A v15 A B v15 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v16 160 16 16 1/1 ok basis: whole batch Operation #26 A v16 A B v16 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v17 170 17 17 1/1 ok basis: whole batch Operation #27 A v17 A B v17 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v18 180 18 18 1/1 ok basis: whole batch Operation #28 A v18 A B v18 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v19 190 19 19 1/1 ok basis: whole batch Operation #29 A v19 A B v19 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v20 200 20 20 1/1 ok basis: whole batch Operation #30 A v20 A B v20 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v21 210 21 21 1/1 ok basis: whole batch Operation #31 A v21 A B v21 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v22 220 22 22 1/1 ok basis: whole batch Operation #32 A v22 A B v22 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v23 230 23 23 1/1 ok basis: whole batch Operation #33 A v23 A B v23 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v24 240 24 24 1/1 ok basis: whole batch Operation #34 A v24 A B v24 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v25 250 25 25 1/1 ok basis: whole batch Operation #35 A v25 A B v25 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v26 260 26 26 1/1 ok basis: whole batch Operation #36 A v26 A B v26 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v27 270 27 27 1/1 ok basis: whole batch Operation #37 A v27 A B v27 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v28 280 28 28 1/1 ok basis: whole batch Operation #38 A v28 A B v28 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v29 290 29 29 1/1 ok basis: whole batch Operation #39 A v29 A B v29 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v30 300 30 30 1/1 ok basis: whole batch Operation #40 A v30 A B v30 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v31 310 31 31 1/1 ok basis: whole batch Operation #41 A v31 A B v31 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v32 320 32 32 1/1 ok basis: whole batch Operation #42 A v32 A B v32 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v33 330 33 33 1/1 ok basis: whole batch Operation #43 A v33 A B v33 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v34 340 34 34 1/1 ok basis: whole batch Operation #44 A v34 A B v34 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v35 350 35 35 1/1 ok basis: whole batch Operation #45 A v35 A B v35 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v36 360 36 36 1/1 ok basis: whole batch Operation #46 A v36 A B v36 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v37 370 37 37 1/1 ok basis: whole batch Operation #47 A v37 A B v37 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v38 380 38 38 1/1 ok basis: whole batch Operation #48 A v38 A B v38 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v39 390 39 39 1/1 ok basis: whole batch Operation #49 A v39 A B v39 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "Version Logical reads (sum) Scans Elapsed median (ms) Outcome Observed in A B":
+  <tr
+    class="border-b text-left"
+  />
+
+  Name "v0 0 0 0 1/1 ok basis: whole batch Operation #10 A v0 A B v0 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v1 10 1 1 1/1 ok basis: whole batch Operation #11 A v1 A B v1 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v2 20 2 2 1/1 ok basis: whole batch Operation #12 A v2 A B v2 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v3 30 3 3 1/1 ok basis: whole batch Operation #13 A v3 A B v3 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v4 40 4 4 1/1 ok basis: whole batch Operation #14 A v4 A B v4 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v5 50 5 5 1/1 ok basis: whole batch Operation #15 A v5 A B v5 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v6 60 6 6 1/1 ok basis: whole batch Operation #16 A v6 A B v6 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v7 70 7 7 1/1 ok basis: whole batch Operation #17 A v7 A B v7 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v8 80 8 8 1/1 ok basis: whole batch Operation #18 A v8 A B v8 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v9 90 9 9 1/1 ok basis: whole batch Operation #19 A v9 A B v9 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v10 100 10 10 1/1 ok basis: whole batch Operation #20 A v10 A B v10 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v11 110 11 11 1/1 ok basis: whole batch Operation #21 A v11 A B v11 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v12 120 12 12 1/1 ok basis: whole batch Operation #22 A v12 A B v12 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v13 130 13 13 1/1 ok basis: whole batch Operation #23 A v13 A B v13 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v14 140 14 14 1/1 ok basis: whole batch Operation #24 A v14 A B v14 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v15 150 15 15 1/1 ok basis: whole batch Operation #25 A v15 A B v15 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v16 160 16 16 1/1 ok basis: whole batch Operation #26 A v16 A B v16 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v17 170 17 17 1/1 ok basis: whole batch Operation #27 A v17 A B v17 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v18 180 18 18 1/1 ok basis: whole batch Operation #28 A v18 A B v18 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v19 190 19 19 1/1 ok basis: whole batch Operation #29 A v19 A B v19 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v20 200 20 20 1/1 ok basis: whole batch Operation #30 A v20 A B v20 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v21 210 21 21 1/1 ok basis: whole batch Operation #31 A v21 A B v21 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v22 220 22 22 1/1 ok basis: whole batch Operation #32 A v22 A B v22 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v23 230 23 23 1/1 ok basis: whole batch Operation #33 A v23 A B v23 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v24 240 24 24 1/1 ok basis: whole batch Operation #34 A v24 A B v24 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v25 250 25 25 1/1 ok basis: whole batch Operation #35 A v25 A B v25 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v26 260 26 26 1/1 ok basis: whole batch Operation #36 A v26 A B v26 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v27 270 27 27 1/1 ok basis: whole batch Operation #37 A v27 A B v27 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v28 280 28 28 1/1 ok basis: whole batch Operation #38 A v28 A B v28 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v29 290 29 29 1/1 ok basis: whole batch Operation #39 A v29 A B v29 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v30 300 30 30 1/1 ok basis: whole batch Operation #40 A v30 A B v30 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v31 310 31 31 1/1 ok basis: whole batch Operation #41 A v31 A B v31 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v32 320 32 32 1/1 ok basis: whole batch Operation #42 A v32 A B v32 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v33 330 33 33 1/1 ok basis: whole batch Operation #43 A v33 A B v33 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v34 340 34 34 1/1 ok basis: whole batch Operation #44 A v34 A B v34 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v35 350 35 35 1/1 ok basis: whole batch Operation #45 A v35 A B v35 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v36 360 36 36 1/1 ok basis: whole batch Operation #46 A v36 A B v36 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v37 370 37 37 1/1 ok basis: whole batch Operation #47 A v37 A B v37 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v38 380 38 38 1/1 ok basis: whole batch Operation #48 A v38 A B v38 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v39 390 39 39 1/1 ok basis: whole batch Operation #49 A v39 A B v39 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "Version Logical reads (sum) Scans Elapsed median (ms) Outcome Observed in A B":
+  <tr
+    class="border-b text-left"
+  />
+
+  Name "v0 0 0 0 1/1 ok basis: whole batch Operation #10 A v0 A B v0 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v1 10 1 1 1/1 ok basis: whole batch Operation #11 A v1 A B v1 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v2 20 2 2 1/1 ok basis: whole batch Operation #12 A v2 A B v2 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v3 30 3 3 1/1 ok basis: whole batch Operation #13 A v3 A B v3 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v4 40 4 4 1/1 ok basis: whole batch Operation #14 A v4 A B v4 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v5 50 5 5 1/1 ok basis: whole batch Operation #15 A v5 A B v5 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v6 60 6 6 1/1 ok basis: whole batch Operation #16 A v6 A B v6 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v7 70 7 7 1/1 ok basis: whole batch Operation #17 A v7 A B v7 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v8 80 8 8 1/1 ok basis: whole batch Operation #18 A v8 A B v8 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v9 90 9 9 1/1 ok basis: whole batch Operation #19 A v9 A B v9 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v10 100 10 10 1/1 ok basis: whole batch Operation #20 A v10 A B v10 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v11 110 11 11 1/1 ok basis: whole batch Operation #21 A v11 A B v11 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v12 120 12 12 1/1 ok basis: whole batch Operation #22 A v12 A B v12 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v13 130 13 13 1/1 ok basis: whole batch Operation #23 A v13 A B v13 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v14 140 14 14 1/1 ok basis: whole batch Operation #24 A v14 A B v14 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v15 150 15 15 1/1 ok basis: whole batch Operation #25 A v15 A B v15 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v16 160 16 16 1/1 ok basis: whole batch Operation #26 A v16 A B v16 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v17 170 17 17 1/1 ok basis: whole batch Operation #27 A v17 A B v17 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v18 180 18 18 1/1 ok basis: whole batch Operation #28 A v18 A B v18 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v19 190 19 19 1/1 ok basis: whole batch Operation #29 A v19 A B v19 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v20 200 20 20 1/1 ok basis: whole batch Operation #30 A v20 A B v20 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v21 210 21 21 1/1 ok basis: whole batch Operation #31 A v21 A B v21 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v22 220 22 22 1/1 ok basis: whole batch Operation #32 A v22 A B v22 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v23 230 23 23 1/1 ok basis: whole batch Operation #33 A v23 A B v23 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v24 240 24 24 1/1 ok basis: whole batch Operation #34 A v24 A B v24 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v25 250 25 25 1/1 ok basis: whole batch Operation #35 A v25 A B v25 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v26 260 26 26 1/1 ok basis: whole batch Operation #36 A v26 A B v26 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v27 270 27 27 1/1 ok basis: whole batch Operation #37 A v27 A B v27 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v28 280 28 28 1/1 ok basis: whole batch Operation #38 A v28 A B v28 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v29 290 29 29 1/1 ok basis: whole batch Operation #39 A v29 A B v29 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v30 300 30 30 1/1 ok basis: whole batch Operation #40 A v30 A B v30 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v31 310 31 31 1/1 ok basis: whole batch Operation #41 A v31 A B v31 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v32 320 32 32 1/1 ok basis: whole batch Operation #42 A v32 A B v32 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v33 330 33 33 1/1 ok basis: whole batch Operation #43 A v33 A B v33 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v34 340 34 34 1/1 ok basis: whole batch Operation #44 A v34 A B v34 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v35 350 35 35 1/1 ok basis: whole batch Operation #45 A v35 A B v35 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v36 360 36 36 1/1 ok basis: whole batch Operation #46 A v36 A B v36 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v37 370 37 37 1/1 ok basis: whole batch Operation #47 A v37 A B v37 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v38 380 38 38 1/1 ok basis: whole batch Operation #48 A v38 A B v38 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "v39 390 39 39 1/1 ok basis: whole batch Operation #49 A v39 A B v39 B":
+  <tr
+    class="border-b"
+  />
+
+  Name "# Owner Label Started Session / subject Agent Operation Status Target Duration Logical reads Flags":
+  <tr
+    class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+    data-slot="table-row"
+  />
+
+  Name "70 ☆ — 2026-10-07 11:00:00 Session #1 Claude Code compare succeeded local / sqlserver / srv / db 1.2 s —":
+  <tr
+    class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+    data-slot="table-row"
+  />
+
+  --------------------------------------------------
+  columnheader:
+
+  Name "Version":
+  <th
+    class="py-2 pr-3"
+  />
+
+  Name "Logical reads (sum)":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Scans":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Elapsed median (ms)":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Outcome":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Observed in":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "A":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "B":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Version":
+  <th
+    class="py-2 pr-3"
+  />
+
+  Name "Logical reads (sum)":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Scans":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Elapsed median (ms)":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Outcome":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Observed in":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "A":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "B":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Version":
+  <th
+    class="py-2 pr-3"
+  />
+
+  Name "Logical reads (sum)":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Scans":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Elapsed median (ms)":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Outcome":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "Observed in":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "A":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "B":
+  <th
+    class="px-3 py-2"
+  />
+
+  Name "#":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Owner":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Label":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Started":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Session / subject":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Agent":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Operation":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Status":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Target":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Duration":
+  <th
+    class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-head"
+  />
+
+  Name "Logical reads":
+  <th
+    class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-head"
+  />
+
+  Name "Flags":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  --------------------------------------------------
+  rowheader:
+
+  Name "v0":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v1":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v2":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v3":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v4":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v5":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v6":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v7":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v8":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v9":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v10":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v11":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v12":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v13":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v14":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v15":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v16":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v17":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v18":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v19":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v20":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v21":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v22":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v23":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v24":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v25":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v26":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v27":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v28":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v29":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v30":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v31":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v32":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v33":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v34":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v35":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v36":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v37":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v38":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v39":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v0":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v1":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v2":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v3":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v4":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v5":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v6":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v7":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v8":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v9":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v10":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v11":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v12":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v13":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v14":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v15":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v16":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v17":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v18":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v19":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v20":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v21":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v22":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v23":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v24":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v25":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v26":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v27":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v28":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v29":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v30":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v31":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v32":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v33":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v34":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v35":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v36":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v37":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v38":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v39":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v0":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v1":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v2":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v3":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v4":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v5":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v6":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v7":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v8":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v9":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v10":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v11":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v12":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v13":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v14":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v15":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v16":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v17":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v18":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v19":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v20":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v21":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v22":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v23":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v24":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v25":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v26":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v27":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v28":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v29":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v30":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v31":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v32":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v33":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v34":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v35":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v36":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v37":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v38":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  Name "v39":
+  <th
+    class="py-2 pr-3 text-left font-medium"
+    scope="row"
+  />
+
+  --------------------------------------------------
+  cell:
+
+  Name "0":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "0":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "0":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v0 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v0 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #11":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v1 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v1 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "2":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "2":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #12":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v2 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v2 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "3":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "3":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #13":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v3 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v3 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "40":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "4":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "4":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #14":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v4 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v4 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "50":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "5":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "5":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #15":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v5 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v5 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "60":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "6":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "6":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #16":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v6 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v6 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "70":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "7":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "7":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #17":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v7 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v7 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "80":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "8":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "8":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #18":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v8 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v8 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "90":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "9":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "9":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #19":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v9 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v9 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "100":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v10 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v10 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "110":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "11":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "11":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #21":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v11 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v11 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "120":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "12":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "12":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #22":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v12 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v12 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "130":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "13":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "13":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #23":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v13 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v13 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "140":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "14":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "14":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #24":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v14 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v14 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "150":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "15":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "15":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #25":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v15 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v15 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "160":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "16":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "16":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #26":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v16 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v16 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "170":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "17":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "17":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #27":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v17 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v17 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "180":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "18":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "18":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #28":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v18 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v18 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "190":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "19":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "19":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #29":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v19 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v19 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "200":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v20 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v20 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "210":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "21":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "21":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #31":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v21 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v21 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "220":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "22":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "22":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #32":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v22 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v22 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "230":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "23":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "23":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #33":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v23 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v23 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "240":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "24":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "24":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #34":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v24 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v24 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "250":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "25":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "25":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #35":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v25 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v25 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "260":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "26":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "26":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #36":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v26 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v26 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "270":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "27":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "27":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #37":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v27 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v27 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "280":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "28":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "28":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #38":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v28 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v28 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "290":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "29":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "29":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #39":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v29 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v29 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "300":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #40":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v30 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v30 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "310":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "31":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "31":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #41":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v31 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v31 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "320":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "32":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "32":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #42":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v32 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v32 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "330":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "33":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "33":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #43":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v33 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v33 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "340":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "34":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "34":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #44":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v34 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v34 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "350":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "35":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "35":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #45":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v35 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v35 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "360":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "36":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "36":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #46":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v36 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v36 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "370":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "37":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "37":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #47":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v37 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v37 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "380":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "38":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "38":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #48":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v38 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v38 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "390":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "39":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "39":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #49":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v39 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v39 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "0":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "0":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "0":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v0 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v0 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #11":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v1 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v1 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "2":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "2":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #12":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v2 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v2 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "3":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "3":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #13":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v3 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v3 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "40":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "4":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "4":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #14":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v4 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v4 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "50":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "5":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "5":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #15":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v5 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v5 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "60":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "6":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "6":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #16":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v6 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v6 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "70":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "7":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "7":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #17":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v7 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v7 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "80":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "8":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "8":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #18":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v8 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v8 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "90":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "9":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "9":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #19":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v9 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v9 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "100":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v10 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v10 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "110":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "11":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "11":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #21":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v11 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v11 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "120":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "12":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "12":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #22":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v12 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v12 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "130":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "13":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "13":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #23":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v13 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v13 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "140":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "14":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "14":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #24":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v14 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v14 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "150":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "15":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "15":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #25":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v15 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v15 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "160":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "16":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "16":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #26":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v16 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v16 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "170":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "17":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "17":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #27":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v17 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v17 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "180":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "18":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "18":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #28":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v18 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v18 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "190":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "19":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "19":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #29":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v19 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v19 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "200":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v20 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v20 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "210":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "21":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "21":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #31":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v21 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v21 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "220":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "22":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "22":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #32":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v22 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v22 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "230":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "23":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "23":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #33":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v23 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v23 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "240":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "24":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "24":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #34":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v24 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v24 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "250":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "25":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "25":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #35":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v25 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v25 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "260":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "26":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "26":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #36":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v26 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v26 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "270":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "27":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "27":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #37":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v27 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v27 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "280":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "28":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "28":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #38":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v28 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v28 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "290":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "29":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "29":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #39":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v29 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v29 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "300":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #40":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v30 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v30 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "310":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "31":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "31":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #41":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v31 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v31 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "320":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "32":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "32":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #42":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v32 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v32 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "330":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "33":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "33":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #43":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v33 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v33 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "340":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "34":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "34":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #44":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v34 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v34 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "350":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "35":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "35":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #45":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v35 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v35 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "360":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "36":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "36":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #46":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v36 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v36 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "370":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "37":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "37":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #47":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v37 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v37 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "380":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "38":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "38":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #48":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v38 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v38 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "390":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "39":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "39":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #49":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v39 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v39 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "0":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "0":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "0":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v0 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v0 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #11":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v1 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v1 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "2":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "2":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #12":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v2 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v2 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "3":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "3":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #13":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v3 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v3 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "40":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "4":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "4":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #14":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v4 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v4 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "50":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "5":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "5":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #15":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v5 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v5 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "60":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "6":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "6":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #16":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v6 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v6 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "70":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "7":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "7":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #17":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v7 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v7 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "80":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "8":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "8":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #18":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v8 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v8 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "90":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "9":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "9":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #19":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v9 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v9 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "100":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "10":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v10 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v10 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "110":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "11":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "11":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #21":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v11 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v11 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "120":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "12":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "12":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #22":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v12 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v12 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "130":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "13":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "13":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #23":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v13 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v13 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "140":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "14":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "14":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #24":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v14 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v14 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "150":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "15":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "15":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #25":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v15 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v15 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "160":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "16":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "16":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #26":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v16 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v16 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "170":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "17":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "17":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #27":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v17 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v17 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "180":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "18":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "18":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #28":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v18 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v18 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "190":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "19":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "19":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #29":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v19 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v19 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "200":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "20":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v20 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v20 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "210":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "21":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "21":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #31":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v21 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v21 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "220":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "22":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "22":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #32":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v22 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v22 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "230":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "23":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "23":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #33":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v23 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v23 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "240":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "24":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "24":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #34":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v24 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v24 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "250":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "25":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "25":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #35":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v25 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v25 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "260":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "26":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "26":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #36":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v26 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v26 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "270":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "27":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "27":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #37":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v27 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v27 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "280":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "28":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "28":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #38":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v28 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v28 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "290":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "29":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "29":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #39":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v29 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v29 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "300":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "30":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #40":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v30 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v30 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "310":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "31":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "31":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #41":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v31 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v31 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "320":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "32":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "32":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #42":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v32 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v32 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "330":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "33":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "33":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #43":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v33 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v33 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "340":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "34":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "34":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #44":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v34 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v34 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "350":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "35":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "35":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #45":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v35 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v35 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "360":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "36":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "36":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #46":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v36 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v36 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "370":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "37":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "37":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #47":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v37 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v37 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "380":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "38":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "38":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #48":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v38 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v38 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "390":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "39":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "39":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "1/1 ok basis: whole batch":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "Operation #49":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "A v39 A":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "B v39 B":
+  <td
+    class="px-3 py-2"
+  />
+
+  Name "70":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+    data-slot="table-cell"
+  />
+
+  Name "☆":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+    data-slot="table-cell"
+  />
+
+  Name "—":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+    data-slot="table-cell"
+  />
+
+  Name "2026-10-07 11:00:00":
+  <td
+    class="p-2 align-middle [&:has([role=checkbox])]:pr-0 whitespace-nowrap"
+    data-slot="table-cell"
+  />
+
+  Name "Session #1":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+    data-slot="table-cell"
+  />
+
+  Name "Claude Code":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+    data-slot="table-cell"
+  />
+
+  Name "compare":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+    data-slot="table-cell"
+  />
+
+  Name "succeeded":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+    data-slot="table-cell"
+  />
+
+  Name "local / sqlserver / srv / db":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 max-w-48 truncate"
+    data-slot="table-cell"
+    title="local / sqlserver / srv / db"
+  />
+
+  Name "1.2 s":
+  <td
+    class="p-2 align-middle [&:has([role=checkbox])]:pr-0 text-right whitespace-nowrap"
+    data-slot="table-cell"
+  />
+
+  Name "—":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-cell"
+  />
+
+  Name "":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+    data-slot="table-cell"
+  />
+
+  --------------------------------------------------
+  radio:
+
+  Name "A v0":
+  <input
+    aria-label="A v0"
+    checked=""
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v0":
+  <input
+    aria-label="B v0"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v1":
+  <input
+    aria-label="A v1"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v1":
+  <input
+    aria-label="B v1"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v2":
+  <input
+    aria-label="A v2"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v2":
+  <input
+    aria-label="B v2"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v3":
+  <input
+    aria-label="A v3"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v3":
+  <input
+    aria-label="B v3"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v4":
+  <input
+    aria-label="A v4"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v4":
+  <input
+    aria-label="B v4"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v5":
+  <input
+    aria-label="A v5"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v5":
+  <input
+    aria-label="B v5"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v6":
+  <input
+    aria-label="A v6"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v6":
+  <input
+    aria-label="B v6"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v7":
+  <input
+    aria-label="A v7"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v7":
+  <input
+    aria-label="B v7"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v8":
+  <input
+    aria-label="A v8"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v8":
+  <input
+    aria-label="B v8"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v9":
+  <input
+    aria-label="A v9"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v9":
+  <input
+    aria-label="B v9"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v10":
+  <input
+    aria-label="A v10"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v10":
+  <input
+    aria-label="B v10"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v11":
+  <input
+    aria-label="A v11"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v11":
+  <input
+    aria-label="B v11"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v12":
+  <input
+    aria-label="A v12"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v12":
+  <input
+    aria-label="B v12"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v13":
+  <input
+    aria-label="A v13"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v13":
+  <input
+    aria-label="B v13"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v14":
+  <input
+    aria-label="A v14"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v14":
+  <input
+    aria-label="B v14"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v15":
+  <input
+    aria-label="A v15"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v15":
+  <input
+    aria-label="B v15"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v16":
+  <input
+    aria-label="A v16"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v16":
+  <input
+    aria-label="B v16"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v17":
+  <input
+    aria-label="A v17"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v17":
+  <input
+    aria-label="B v17"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v18":
+  <input
+    aria-label="A v18"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v18":
+  <input
+    aria-label="B v18"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v19":
+  <input
+    aria-label="A v19"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v19":
+  <input
+    aria-label="B v19"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v20":
+  <input
+    aria-label="A v20"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v20":
+  <input
+    aria-label="B v20"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v21":
+  <input
+    aria-label="A v21"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v21":
+  <input
+    aria-label="B v21"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v22":
+  <input
+    aria-label="A v22"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v22":
+  <input
+    aria-label="B v22"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v23":
+  <input
+    aria-label="A v23"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v23":
+  <input
+    aria-label="B v23"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v24":
+  <input
+    aria-label="A v24"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v24":
+  <input
+    aria-label="B v24"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v25":
+  <input
+    aria-label="A v25"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v25":
+  <input
+    aria-label="B v25"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v26":
+  <input
+    aria-label="A v26"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v26":
+  <input
+    aria-label="B v26"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v27":
+  <input
+    aria-label="A v27"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v27":
+  <input
+    aria-label="B v27"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v28":
+  <input
+    aria-label="A v28"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v28":
+  <input
+    aria-label="B v28"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v29":
+  <input
+    aria-label="A v29"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v29":
+  <input
+    aria-label="B v29"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v30":
+  <input
+    aria-label="A v30"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v30":
+  <input
+    aria-label="B v30"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v31":
+  <input
+    aria-label="A v31"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v31":
+  <input
+    aria-label="B v31"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v32":
+  <input
+    aria-label="A v32"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v32":
+  <input
+    aria-label="B v32"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v33":
+  <input
+    aria-label="A v33"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v33":
+  <input
+    aria-label="B v33"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v34":
+  <input
+    aria-label="A v34"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v34":
+  <input
+    aria-label="B v34"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v35":
+  <input
+    aria-label="A v35"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v35":
+  <input
+    aria-label="B v35"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v36":
+  <input
+    aria-label="A v36"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v36":
+  <input
+    aria-label="B v36"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v37":
+  <input
+    aria-label="A v37"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v37":
+  <input
+    aria-label="B v37"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v38":
+  <input
+    aria-label="A v38"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v38":
+  <input
+    aria-label="B v38"
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v39":
+  <input
+    aria-label="A v39"
+    name="Orders-shop-a"
+    type="radio"
+  />
+
+  Name "B v39":
+  <input
+    aria-label="B v39"
+    checked=""
+    name="Orders-shop-b"
+    type="radio"
+  />
+
+  Name "A v0":
+  <input
+    aria-label="A v0"
+    checked=""
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v0":
+  <input
+    aria-label="B v0"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v1":
+  <input
+    aria-label="A v1"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v1":
+  <input
+    aria-label="B v1"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v2":
+  <input
+    aria-label="A v2"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v2":
+  <input
+    aria-label="B v2"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v3":
+  <input
+    aria-label="A v3"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v3":
+  <input
+    aria-label="B v3"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v4":
+  <input
+    aria-label="A v4"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v4":
+  <input
+    aria-label="B v4"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v5":
+  <input
+    aria-label="A v5"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v5":
+  <input
+    aria-label="B v5"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v6":
+  <input
+    aria-label="A v6"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v6":
+  <input
+    aria-label="B v6"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v7":
+  <input
+    aria-label="A v7"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v7":
+  <input
+    aria-label="B v7"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v8":
+  <input
+    aria-label="A v8"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v8":
+  <input
+    aria-label="B v8"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v9":
+  <input
+    aria-label="A v9"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v9":
+  <input
+    aria-label="B v9"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v10":
+  <input
+    aria-label="A v10"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v10":
+  <input
+    aria-label="B v10"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v11":
+  <input
+    aria-label="A v11"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v11":
+  <input
+    aria-label="B v11"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v12":
+  <input
+    aria-label="A v12"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v12":
+  <input
+    aria-label="B v12"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v13":
+  <input
+    aria-label="A v13"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v13":
+  <input
+    aria-label="B v13"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v14":
+  <input
+    aria-label="A v14"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v14":
+  <input
+    aria-label="B v14"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v15":
+  <input
+    aria-label="A v15"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v15":
+  <input
+    aria-label="B v15"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v16":
+  <input
+    aria-label="A v16"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v16":
+  <input
+    aria-label="B v16"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v17":
+  <input
+    aria-label="A v17"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v17":
+  <input
+    aria-label="B v17"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v18":
+  <input
+    aria-label="A v18"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v18":
+  <input
+    aria-label="B v18"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v19":
+  <input
+    aria-label="A v19"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v19":
+  <input
+    aria-label="B v19"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v20":
+  <input
+    aria-label="A v20"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v20":
+  <input
+    aria-label="B v20"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v21":
+  <input
+    aria-label="A v21"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v21":
+  <input
+    aria-label="B v21"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v22":
+  <input
+    aria-label="A v22"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v22":
+  <input
+    aria-label="B v22"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v23":
+  <input
+    aria-label="A v23"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v23":
+  <input
+    aria-label="B v23"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v24":
+  <input
+    aria-label="A v24"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v24":
+  <input
+    aria-label="B v24"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v25":
+  <input
+    aria-label="A v25"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v25":
+  <input
+    aria-label="B v25"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v26":
+  <input
+    aria-label="A v26"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v26":
+  <input
+    aria-label="B v26"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v27":
+  <input
+    aria-label="A v27"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v27":
+  <input
+    aria-label="B v27"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v28":
+  <input
+    aria-label="A v28"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v28":
+  <input
+    aria-label="B v28"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v29":
+  <input
+    aria-label="A v29"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v29":
+  <input
+    aria-label="B v29"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v30":
+  <input
+    aria-label="A v30"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v30":
+  <input
+    aria-label="B v30"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v31":
+  <input
+    aria-label="A v31"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v31":
+  <input
+    aria-label="B v31"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v32":
+  <input
+    aria-label="A v32"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v32":
+  <input
+    aria-label="B v32"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v33":
+  <input
+    aria-label="A v33"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v33":
+  <input
+    aria-label="B v33"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v34":
+  <input
+    aria-label="A v34"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v34":
+  <input
+    aria-label="B v34"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v35":
+  <input
+    aria-label="A v35"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v35":
+  <input
+    aria-label="B v35"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v36":
+  <input
+    aria-label="A v36"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v36":
+  <input
+    aria-label="B v36"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v37":
+  <input
+    aria-label="A v37"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v37":
+  <input
+    aria-label="B v37"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v38":
+  <input
+    aria-label="A v38"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v38":
+  <input
+    aria-label="B v38"
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v39":
+  <input
+    aria-label="A v39"
+    name="Customers-crm-a"
+    type="radio"
+  />
+
+  Name "B v39":
+  <input
+    aria-label="B v39"
+    checked=""
+    name="Customers-crm-b"
+    type="radio"
+  />
+
+  Name "A v0":
+  <input
+    aria-label="A v0"
+    checked=""
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v0":
+  <input
+    aria-label="B v0"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v1":
+  <input
+    aria-label="A v1"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v1":
+  <input
+    aria-label="B v1"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v2":
+  <input
+    aria-label="A v2"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v2":
+  <input
+    aria-label="B v2"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v3":
+  <input
+    aria-label="A v3"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v3":
+  <input
+    aria-label="B v3"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v4":
+  <input
+    aria-label="A v4"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v4":
+  <input
+    aria-label="B v4"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v5":
+  <input
+    aria-label="A v5"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v5":
+  <input
+    aria-label="B v5"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v6":
+  <input
+    aria-label="A v6"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v6":
+  <input
+    aria-label="B v6"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v7":
+  <input
+    aria-label="A v7"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v7":
+  <input
+    aria-label="B v7"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v8":
+  <input
+    aria-label="A v8"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v8":
+  <input
+    aria-label="B v8"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v9":
+  <input
+    aria-label="A v9"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v9":
+  <input
+    aria-label="B v9"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v10":
+  <input
+    aria-label="A v10"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v10":
+  <input
+    aria-label="B v10"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v11":
+  <input
+    aria-label="A v11"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v11":
+  <input
+    aria-label="B v11"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v12":
+  <input
+    aria-label="A v12"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v12":
+  <input
+    aria-label="B v12"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v13":
+  <input
+    aria-label="A v13"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v13":
+  <input
+    aria-label="B v13"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v14":
+  <input
+    aria-label="A v14"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v14":
+  <input
+    aria-label="B v14"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v15":
+  <input
+    aria-label="A v15"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v15":
+  <input
+    aria-label="B v15"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v16":
+  <input
+    aria-label="A v16"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v16":
+  <input
+    aria-label="B v16"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v17":
+  <input
+    aria-label="A v17"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v17":
+  <input
+    aria-label="B v17"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v18":
+  <input
+    aria-label="A v18"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v18":
+  <input
+    aria-label="B v18"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v19":
+  <input
+    aria-label="A v19"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v19":
+  <input
+    aria-label="B v19"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v20":
+  <input
+    aria-label="A v20"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v20":
+  <input
+    aria-label="B v20"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v21":
+  <input
+    aria-label="A v21"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v21":
+  <input
+    aria-label="B v21"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v22":
+  <input
+    aria-label="A v22"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v22":
+  <input
+    aria-label="B v22"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v23":
+  <input
+    aria-label="A v23"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v23":
+  <input
+    aria-label="B v23"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v24":
+  <input
+    aria-label="A v24"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v24":
+  <input
+    aria-label="B v24"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v25":
+  <input
+    aria-label="A v25"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v25":
+  <input
+    aria-label="B v25"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v26":
+  <input
+    aria-label="A v26"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v26":
+  <input
+    aria-label="B v26"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v27":
+  <input
+    aria-label="A v27"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v27":
+  <input
+    aria-label="B v27"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v28":
+  <input
+    aria-label="A v28"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v28":
+  <input
+    aria-label="B v28"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v29":
+  <input
+    aria-label="A v29"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v29":
+  <input
+    aria-label="B v29"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v30":
+  <input
+    aria-label="A v30"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v30":
+  <input
+    aria-label="B v30"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v31":
+  <input
+    aria-label="A v31"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v31":
+  <input
+    aria-label="B v31"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v32":
+  <input
+    aria-label="A v32"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v32":
+  <input
+    aria-label="B v32"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v33":
+  <input
+    aria-label="A v33"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v33":
+  <input
+    aria-label="B v33"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v34":
+  <input
+    aria-label="A v34"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v34":
+  <input
+    aria-label="B v34"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v35":
+  <input
+    aria-label="A v35"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v35":
+  <input
+    aria-label="B v35"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v36":
+  <input
+    aria-label="A v36"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v36":
+  <input
+    aria-label="B v36"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v37":
+  <input
+    aria-label="A v37"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v37":
+  <input
+    aria-label="B v37"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v38":
+  <input
+    aria-label="A v38"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v38":
+  <input
+    aria-label="B v38"
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  Name "A v39":
+  <input
+    aria-label="A v39"
+    name="Products-catalog-a"
+    type="radio"
+  />
+
+  Name "B v39":
+  <input
+    aria-label="B v39"
+    checked=""
+    name="Products-catalog-b"
+    type="radio"
+  />
+
+  --------------------------------------------------
+  status:
+
+  Name "":
+  <p
+    class="mt-3"
+    role="status"
+  />
+
+  Name "":
+  <p
+    class="mt-3"
+    role="status"
+  />
+
+  Name "":
+  <p
+    class="mt-3"
+    role="status"
+  />
+
+  --------------------------------------------------
+  checkbox:
+
+  Name "Show internal operations":
+  <span
+    aria-checked="false"
+    aria-labelledby="_r_39_-label"
+    class="peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input transition-colors outline-none group-has-disabled/field:opacity-50 group-has-[:focus-visible]/field-label:ring-0 group-has-[:focus-visible]/field-label:not-data-checked:border-input after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-[:focus-visible]/field-label:data-checked:border-primary dark:data-checked:bg-primary"
+    data-slot="checkbox"
+    data-unchecked=""
+    id="base-ui-_r_3a_"
+    role="checkbox"
+    tabindex="0"
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="min-h-screen"
+    >
+      <div
+        aria-live="polite"
+        class="fixed right-4 bottom-4 z-40 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2"
+      />
+      <header
+        class="mx-auto flex max-w-7xl items-center gap-3 p-4"
+      >
+        <a
+          aria-label="SQLHarness home"
+          class="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          href="/"
+        >
+          <span
+            class="inline-flex items-center gap-2 whitespace-nowrap"
+          >
+            <svg
+              aria-hidden="true"
+              class="size-8 shrink-0"
+              viewBox="205 205 268 254"
+            >
+              <path
+                d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"
+                fill="#10AC61"
+              />
+              <path
+                class="fill-[#0B203B] dark:fill-white"
+                d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"
+              />
+            </svg>
+            <span
+              class="hidden text-lg font-semibold tracking-tight md:inline"
+            >
+              <span
+                class="text-[#0B203B] dark:text-white"
+              >
+                SQL
+              </span>
+              <span
+                class="text-[#10AC61]"
+              >
+                Harness
+              </span>
+            </span>
+          </span>
+        </a>
+        <nav
+          aria-label="Main navigation"
+          class="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+        >
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+            href="/"
+          >
+            Live
+          </a>
+          <a
+            aria-current="page"
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 active"
+            data-status="active"
+            href="/sessions"
+          >
+            Sessions
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+            href="/operations"
+          >
+            Operations
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 rounded-[min(var(--radius-md),...
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/optimization/OptimizationSection.test.tsx:166:17
+    164|
+    165|   expect(await screen.findByRole("combobox", { name: "Orders condition…
+    166|   expect(screen.getByRole("combobox", { name: "Orders scope" })).toBeI…
+       |                 ^
+    167|   expect(screen.getByRole("combobox", { name: "Customers conditions gr…
+    168|   expect(screen.getByRole("combobox", { name: "Customers scope" })).to…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 18 passed (20)
+   Start at  15:57:14
+   Duration  19.32s (tests 41%, import 37%, environment 10%, transform 8%, setup 4%)
+
+     Import  141 modules were evaluated 249 times · 6.93s total, 37% of tracked time
+             ~3.01s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+

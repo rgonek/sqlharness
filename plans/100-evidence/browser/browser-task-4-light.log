@@ -1,0 +1,22 @@
+{
+  "keyboardArrowEnter": "v2/hash2",
+  "escapeFocusReturn": true,
+  "typeaheadEnter": "v3/hash3",
+  "longLabel": true,
+  "layout": {
+    "viewport": 320,
+    "document": 320,
+    "triggers": [
+      {
+        "width": 272,
+        "right": 296,
+        "text": "v3 · release▼"
+      },
+      {
+        "width": 272,
+        "right": 296,
+        "text": "v3 · release▼"
+      }
+    ]
+  }
+}

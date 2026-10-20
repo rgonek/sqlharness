@@ -1,0 +1,2 @@
+npm audit --json exit: 1
+npm audit --omit=dev --json exit: 1

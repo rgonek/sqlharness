@@ -1,0 +1,9 @@
+Browser: cached Chromium 1228 via Playwright Core; Vite disposable UI fixture at 127.0.0.1:4173. API mock restricted to URL paths beginning /api/ (no writes).
+Initial disclosure aria-expanded values: false, false, false.
+Keyboard: with focus on SQL diff & conditions, Tab moved to Plans. Shift+Tab + Enter activated SQL disclosure.
+All compare sections could remain open simultaneously: SQL=true, Plans=true, Per-case & per-run=true.
+Nested More: false -> true while Plans remained true; toggled false/true independently; after Plans false then true, More remained true.
+Reduced motion: matchMedia('(prefers-reduced-motion: reduce)') = true.
+Editor reveal at 1280x900: one inactive Monaco instance 0x0/display none; two visible Monaco panes 455x512/display block. Screenshot shows rendered side-by-side diff after reveal.
+Screenshots: compare-open.png (interaction layout), compare-styled.png (styled UI/editor layout).
+Initial fixture attempt used an overbroad API route and returned application/json for src/api/queries.ts; narrowed route to /api/* and verified corrected fixture load. No live/backend writes.

@@ -1,0 +1,614 @@
+npm warn "duplicate visible labels" is being parsed as a normal command line argument.
+npm warn Unknown cli config "--t". This will stop working in the next major version of npm.
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ❯ src/components/CompareDetail.test.tsx (8 tests | 1 failed) 4383ms
+   × cases with duplicate visible labels remain selectable by case identity 677ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/CompareDetail.test.tsx > cases with duplicate visible labels remain selectable by case identity
+TestingLibraryElementError: Unable to find an accessible element with the role "option" and name `/^Same case label \(case 0\)$/`
+
+Here are the accessible roles:
+
+  region:
+
+  Name "Compare detail":
+  <section
+    aria-label="Compare detail"
+    class="space-y-3"
+  />
+
+  Name "Per-case & per-run details":
+  <div
+    aria-labelledby="base-ui-_r_24_"
+    class="overflow-hidden text-sm data-open:animate-accordion-down data-closed:animate-accordion-up"
+    data-index="2"
+    data-open=""
+    data-orientation="vertical"
+    data-slot="accordion-content"
+    id="base-ui-_r_23_"
+    role="region"
+    style="--accordion-panel-height: auto; --accordion-panel-width: auto;"
+  />
+
+  Name "Key metrics":
+  <section
+    aria-label="Key metrics"
+    class="grid grid-cols-2 gap-4 md:grid-cols-4"
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "SQL diff & conditions":
+  <h2
+    class="flex flex"
+    data-closed=""
+    data-hidden=""
+    data-index="0"
+    data-orientation="vertical"
+  />
+
+  Name "Plans":
+  <h2
+    class="flex flex"
+    data-closed=""
+    data-hidden=""
+    data-index="1"
+    data-orientation="vertical"
+  />
+
+  Name "Per-case & per-run details":
+  <h2
+    class="flex flex"
+    data-index="2"
+    data-open=""
+    data-orientation="vertical"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "SQL diff & conditions":
+  <button
+    aria-disabled="false"
+    aria-expanded="false"
+    class="group/accordion-trigger relative flex flex-1 items-start justify-between rounded-lg border border-transparent py-2.5 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:after:border-ring aria-disabled:pointer-events-none aria-disabled:opacity-50 **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 **:data-[slot=accordion-trigger-icon]:text-muted-foreground"
+    data-hidden=""
+    data-orientation="vertical"
+    data-slot="accordion-trigger"
+    data-value="case-details"
+    id="base-ui-_r_1t_"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Plans":
+  <button
+    aria-disabled="false"
+    aria-expanded="false"
+    class="group/accordion-trigger relative flex flex-1 items-start justify-between rounded-lg border border-transparent py-2.5 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:after:border-ring aria-disabled:pointer-events-none aria-disabled:opacity-50 **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 **:data-[slot=accordion-trigger-icon]:text-muted-foreground"
+    data-hidden=""
+    data-index="1"
+    data-orientation="vertical"
+    data-slot="accordion-trigger"
+    data-value="case-details"
+    id="base-ui-_r_20_"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Per-case & per-run details":
+  <button
+    aria-controls="base-ui-_r_23_"
+    aria-disabled="false"
+    aria-expanded="true"
+    class="group/accordion-trigger relative flex flex-1 items-start justify-between rounded-lg border border-transparent py-2.5 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:after:border-ring aria-disabled:pointer-events-none aria-disabled:opacity-50 **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 **:data-[slot=accordion-trigger-icon]:text-muted-foreground"
+    data-index="2"
+    data-orientation="vertical"
+    data-panel-open=""
+    data-slot="accordion-trigger"
+    data-value="case-details"
+    id="base-ui-_r_24_"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Retry":
+  <button
+    class="mt-1 rounded border px-2 py-1 underline"
+    type="button"
+  />
+
+  Name "Copy script (as executed)":
+  <button
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2"
+    data-disabled=""
+    data-slot="button"
+    disabled=""
+    tabindex="0"
+    title="Script not available — enable storeSensitive"
+    type="button"
+  />
+
+  Name "Copy script (local variables)":
+  <button
+    class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2"
+    data-disabled=""
+    data-slot="button"
+    disabled=""
+    tabindex="0"
+    title="Script not available — enable storeSensitive"
+    type="button"
+  />
+
+  --------------------------------------------------
+  combobox:
+
+  Name "Case":
+  <button
+    aria-controls="base-ui-_r_25_-list"
+    aria-expanded="true"
+    aria-haspopup="listbox"
+    aria-label="Case"
+    class="flex items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 w-full min-w-0"
+    data-popup-open=""
+    data-popup-side="bottom"
+    data-pressed=""
+    data-size="default"
+    data-slot="select-trigger"
+    id="base-ui-_r_25_"
+    role="combobox"
+    tabindex="0"
+    type="button"
+  />
+
+  Name "Side":
+  <button
+    aria-expanded="false"
+    aria-haspopup="listbox"
+    aria-label="Side"
+    class="flex items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 w-full min-w-0"
+    data-size="default"
+    data-slot="select-trigger"
+    id="base-ui-_r_28_"
+    role="combobox"
+    tabindex="0"
+    type="button"
+  />
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  <p
+    class="text-sm text-muted-foreground"
+  />
+
+  Name "":
+  <p
+    class="font-medium"
+  />
+
+  Name "":
+  <p />
+
+  Name "":
+  <p />
+
+  --------------------------------------------------
+  table:
+
+  Name "":
+  <table
+    class="w-full caption-bottom text-sm"
+    data-slot="table"
+  />
+
+  Name "":
+  <table
+    class="w-full caption-bottom text-sm"
+    data-slot="table"
+  />
+
+  --------------------------------------------------
+  rowgroup:
+
+  Name "":
+  <thead
+    class="[&_tr]:border-b"
+    data-slot="table-header"
+  />
+
+  Name "":
+  <tbody
+    class="[&_tr:last-child]:border-0"
+    data-slot="table-body"
+  />
+
+  Name "":
+  <thead
+    class="[&_tr]:border-b"
+    data-slot="table-header"
+  />
+
+  Name "":
+  <tbody
+    class="[&_tr:last-child]:border-0"
+    data-slot="table-body"
+  />
+
+  --------------------------------------------------
+  row:
+
+  Name "Table Logical Scans LOB logical Total Cold runs":
+  <tr
+    class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+    data-slot="table-row"
+  />
+
+  Name "Orders 50 1 0 50 1":
+  <tr
+    class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+    data-slot="table-row"
+  />
+
+  Name "Wait type Time (ms) Count":
+  <tr
+    class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+    data-slot="table-row"
+  />
+
+  Name "PAGEIOLATCH_SH 40 7":
+  <tr
+    class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+    data-slot="table-row"
+  />
+
+  --------------------------------------------------
+  columnheader:
+
+  Name "Table":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Logical":
+  <th
+    class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-head"
+  />
+
+  Name "Scans":
+  <th
+    class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-head"
+  />
+
+  Name "LOB logical":
+  <th
+    class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-head"
+  />
+
+  Name "Total":
+  <th
+    class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-head"
+  />
+
+  Name "Cold runs":
+  <th
+    class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-head"
+  />
+
+  Name "Wait type":
+  <th
+    class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+    data-slot="table-head"
+  />
+
+  Name "Time (ms)":
+  <th
+    class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-head"
+  />
+
+  Name "Count":
+  <th
+    class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-head"
+  />
+
+  --------------------------------------------------
+  cell:
+
+  Name "Orders":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 font-mono"
+    data-slot="table-cell"
+  />
+
+  Name "50":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-cell"
+  />
+
+  Name "1":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-cell"
+  />
+
+  Name "0":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-cell"
+  />
+
+  Name "50":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-cell"
+  />
+
+  Name "1":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-cell"
+  />
+
+  Name "PAGEIOLATCH_SH":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 font-mono"
+    data-slot="table-cell"
+  />
+
+  Name "40":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-cell"
+  />
+
+  Name "7":
+  <td
+    class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 text-right"
+    data-slot="table-cell"
+  />
+
+  --------------------------------------------------
+  alert:
+
+  Name "":
+  <div
+    class="space-y-1 rounded border border-destructive/40 bg-destructive/5 p-3 text-sm"
+    role="alert"
+  />
+
+  --------------------------------------------------presentation:
+
+  Name "":
+  <div
+    data-base-ui-inert=""
+    role="presentation"
+    style="position: fixed; inset: 0; user-select: none; clip-path: polygon(0% 0%,100% 0%,100% 100%,0% 100%,0% 0%,0px 0px,0px 0px,0px 0px,0px 0px,0px 0px);"
+  />
+
+  Name "":
+  <div
+    class="isolate z-50"
+    data-align="center"
+    data-anchor-hidden=""
+    data-open=""
+    data-side="bottom"
+    role="presentation"
+    style="position: absolute; --available-width: -10px; --available-height: -10px; --anchor-width: 0px; --anchor-height: 0px; --transform-origin: 0px -4px; left: 0px; top: 0px; transform: translate(0px, 4px);"
+  />
+
+  Name "":
+  <div
+    class="relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+    data-align="center"
+    data-align-trigger="true"
+    data-base-ui-focusable=""
+    data-open=""
+    data-side="bottom"
+    data-slot="select-content"
+    role="presentation"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  listbox:
+
+  Name "":
+  <div
+    class="base-ui-disable-scrollbar"
+    id="base-ui-_r_25_-list"
+    role="listbox"
+  />
+
+  --------------------------------------------------
+  option:
+
+  Name "Same case label":
+  <div
+    aria-selected="false"
+    class="relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2"
+    data-slot="select-item"
+    role="option"
+    tabindex="-1"
+  />
+
+  Name "Same case label":
+  <div
+    aria-selected="true"
+    class="relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2"
+    data-highlighted=""
+    data-selected=""
+    data-slot="select-item"
+    role="option"
+    tabindex="0"
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body
+  style="overflow-y: hidden; overflow-x: hidden;"
+>
+  <div
+    data-base-ui-inert=""
+  >
+    <section
+      aria-label="Compare detail"
+      class="space-y-3"
+    >
+      <div
+        class="flex w-full flex-col"
+        data-orientation="vertical"
+        data-slot="accordion"
+      >
+        <div
+          class="not-last:border-b rounded-lg border p-4"
+          data-closed=""
+          data-hidden=""
+          data-index="0"
+          data-orientation="vertical"
+          data-slot="accordion-item"
+        >
+          <h2
+            class="flex flex"
+            data-closed=""
+            data-hidden=""
+            data-index="0"
+            data-orientation="vertical"
+          >
+            <button
+              aria-disabled="false"
+              aria-expanded="false"
+              class="group/accordion-trigger relative flex flex-1 items-start justify-between rounded-lg border border-transparent py-2.5 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:after:border-ring aria-disabled:pointer-events-none aria-disabled:opacity-50 **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 **:data-[slot=accordion-trigger-icon]:text-muted-foreground"
+              data-hidden=""
+              data-orientation="vertical"
+              data-slot="accordion-trigger"
+              data-value="case-details"
+              id="base-ui-_r_1t_"
+              tabindex="0"
+              type="button"
+            >
+              SQL diff & conditions
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-chevron-down pointer-events-none shrink-0 group-aria-expanded/accordion-trigger:hidden"
+                data-slot="accordion-trigger-icon"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="m6 9 6 6 6-6"
+                />
+              </svg>
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-chevron-up pointer-events-none hidden shrink-0 group-aria-expanded/accordion-trigger:inline"
+                data-slot="accordion-trigger-icon"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="m18 15-6-6-6 6"
+                />
+              </svg>
+            </button>
+          </h2>
+          <div
+            aria-labelledby="base-ui-_r_1t_"
+            class="overflow-hidden text-sm data-open:animate-accordion-down data-closed:animate-accordion-up"
+            data-closed=""
+            data-hidden=""
+            data-index="0"
+            data-orientation="vertical"
+            data-slot="accordion-content"
+            hidden=""
+            id="base-ui-_r_1s_"
+            role="region"
+            style="--accordion-panel-height: auto; --accordion-panel-width: auto;"
+          >
+            <div
+              class="h-(--accordion-panel-height) pt-0 pb-2.5 data-ending-style:h-0 data-starting-style:h-0 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4"
+            >
+              <div
+                class="mt-4 space-y-4"
+              >
+                <section
+                  aria-label="Setup SQL"
+                  class="space-y-2"
+                >
+                  <h3
+                    class="font-medium"
+                  >
+                    Setup SQL
+                  </h3>
+                  <p
+                    class="text-sm text-muted-foreground"
+                  >
+                    Setup SQL is not stored (journal.storeSensitive is off or historical data is unavailable).
+                  </p>
+                </section>
+                <div
+                  class="space-y-4"
+                >
+                  <p
+                    class="text-sm text-muted-foreground"
+                  >
+                    SQL text is not stored for both sides (journal.storeSensitive is off or historical text is unavailable).
+                  </p>
+                </div>
+                <div
+                  class="space-y-4"
+                >
+                  <dl
+                    class="grid gap-1 text-sm sm:grid-cols-[max-content_1fr]"
+                  >
+                    <dt
+                      class="text-muted-foregr...
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/CompareDetail.test.tsx:118:17
+    116|   expect(caseSelect).toHaveTextContent("Same case label")
+    117|   await userEvent.click(caseSelect)
+    118|   expect(screen.getByRole("option", { name: /^Same case label \(case 0…
+       |                 ^
+    119|   expect(screen.getByRole("option", { name: /^Same case label \(case 1…
+    120|   await userEvent.click(screen.getByRole("option", { name: /^Same case…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  15:26:19
+   Duration  11.55s (tests 39%, import 37%, transform 13%, environment 8%, setup 3%)
+

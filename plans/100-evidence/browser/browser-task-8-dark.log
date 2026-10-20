@@ -1,0 +1,9 @@
+{
+  "initialButtons": 2,
+  "tooltipAfterHover": true,
+  "tooltipAfterFocus": true,
+  "keyboardOpen": true,
+  "escapeFocusReturn": true,
+  "badgeIsolation": true,
+  "controlledPopupRelation": true
+}

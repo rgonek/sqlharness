@@ -1,0 +1,9 @@
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  15:52:01
+   Duration  15.29s (tests 53%, import 27%, transform 10%, environment 7%, setup 3%)
+

@@ -1,0 +1,66 @@
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui
+
+stderr | src/components/CompareDetail.test.tsx > plans and reproduction scripts use the selected operation's actual baseline and candidate variants
+Error: [vitest] No "LazyPlanSqlViewer" export is defined on the "@/components/SqlEditors" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui/node_modules/vitest/dist/chunks/index.k8L_ZRzq.js:64:17)
+    at Object.get (file:///C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui/node_modules/vitest/dist/chunks/index.k8L_ZRzq.js:341:16)
+    at PlanSourceView (C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui/src/components/plan/PlanSourceView.tsx:19:11)
+    at Object.react_stack_bottom_frame (C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness\src\SqlHarness.Dashboard\ui\node_modules\react-dom\cjs\react-dom-client.development.js:28571:20)
+    at renderWithHooks (C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness\src\SqlHarness.Dashboard\ui\node_modules\react-dom\cjs\react-dom-client.development.js:8030:22)
+    at updateFunctionComponent (C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness\src\SqlHarness.Dashboard\ui\node_modules\react-dom\cjs\react-dom-client.development.js:10569:19)
+    at beginWork (C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness\src\SqlHarness.Dashboard\ui\node_modules\react-dom\cjs\react-dom-client.development.js:12205:18)
+    at runWithFiberInDEV (C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness\src\SqlHarness.Dashboard\ui\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at performUnitOfWork (C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness\src\SqlHarness.Dashboard\ui\node_modules\react-dom\cjs\react-dom-client.development.js:19176:22)
+    at workLoopSync (C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness\src\SqlHarness.Dashboard\ui\node_modules\react-dom\cjs\react-dom-client.development.js:19004:41) {
+  codeFrame: 'vi.mock(import("@/components/SqlEditors"), async (importOriginal) => {\n' +
+    '  const actual = await importOriginal()\n' +
+    '  return {\n' +
+    '    ...actual,\n' +
+    '    // your mocked methods\n' +
+    '  }\n' +
+    '})'
+}
+An error occurred in the <PlanSourceView> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+ ❯ src/components/CompareDetail.test.tsx (7 tests | 1 failed) 7020ms
+   × plans and reproduction scripts use the selected operation's actual baseline and candidate variants 5199ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/CompareDetail.test.tsx > plans and reproduction scripts use the selected operation's actual baseline and candidate variants
+TestingLibraryElementError: Unable to find role="combobox" and name "Plan document"
+
+Ignored nodes: comments, script, style
+<body>
+  <div />
+</body>
+
+Ignored nodes: comments, script, style
+<body>
+  <div />
+</body>
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/components/CompareDetail.test.tsx:186:42
+    184|   })
+    185|   await userEvent.click(screen.getByRole("button", { name: "Plans" }))
+    186|   const documentSelectors = await screen.findAllByRole("combobox", { n…
+       |                                          ^
+    187|   await userEvent.selectOptions(documentSelectors[0], `${before}:0`)
+    188|   await userEvent.selectOptions(documentSelectors[1], `${after}:0`)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  15:13:41
+   Duration  13.98s (tests 51%, import 28%, transform 10%, environment 8%, setup 3%)
+

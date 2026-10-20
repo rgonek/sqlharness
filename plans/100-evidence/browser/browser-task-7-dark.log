@@ -1,0 +1,28 @@
+{
+  "longLabelInitial": true,
+  "popupDesktop": {
+    "x": 170,
+    "right": 860.453125,
+    "width": 690.453125,
+    "clientWidth": 690,
+    "scrollWidth": 690,
+    "optionWidth": 690.453125,
+    "optionTextWidth": 690,
+    "optionTextClientWidth": 690
+  },
+  "popupMobile": {
+    "x": 27,
+    "right": 315,
+    "width": 288,
+    "clientWidth": 288,
+    "scrollWidth": 288,
+    "optionTextWidth": 288,
+    "optionTextClientWidth": 288
+  },
+  "triggerMobile": {
+    "x": 37,
+    "y": 133,
+    "width": 256,
+    "height": 32
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "graphPointerSelection": true,
+  "graphKeyboardSelection": true,
+  "fitSelectionDisabledAndEnabled": true,
+  "subtreeToggle": true,
+  "sourceMatchNarrow": {
+    "x": 29,
+    "right": 291,
+    "width": 262,
+    "height": 70,
+    "whiteSpace": "normal",
+    "pageScrollWidth": 636
+  },
+  "matrixRightAlignment": "end",
+  "matrixContainedScroll": true,
+  "consoleErrors": []
+}

@@ -1,0 +1,8 @@
+pwsh ./scripts/verify.ps1 -LogDirectory C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\cf54\sqlharness\.superpowers\sdd\100-shadcn-primitive-adoption\scratch\task-11\final-gate-retry-1
+[6 q==> ui-install ok 3m52s
+==> build ok 1m50s
+==> ui-check ok 6m13s
+==> test ok 3m01s
+format: skipped (0 changed C# files)
+==> format skipped (0 changed C# files)
+verify: OK  stages=5  13m06s

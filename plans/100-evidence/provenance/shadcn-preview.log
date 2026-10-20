@@ -1,0 +1,10 @@
+- Checking registry.
+√ Checking registry.
+- Updating files.
+√ Created 6 files:
+  - src\components\ui\checkbox.tsx
+  - src\components\ui\select.tsx
+  - src\components\ui\textarea.tsx
+  - src\components\ui\radio-group.tsx
+  - src\components\ui\accordion.tsx
+  - src\components\ui\collapsible.tsx

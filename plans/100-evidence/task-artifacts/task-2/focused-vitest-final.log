@@ -1,0 +1,13 @@
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/cf54/sqlharness/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  9 passed (9)
+      Tests  80 passed (80)
+   Start at  14:29:27
+   Duration  62.30s (import 43%, tests 32%, environment 16%, setup 5%, transform 3%)
+
+     Import  172 modules were evaluated 816 times · 25.89s total, 43% of tracked time
+             ~20.43s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+
