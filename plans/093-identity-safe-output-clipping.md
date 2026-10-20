@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IN PROGRESS — Tasks 1–2 implemented; Task 2 specification and quality reviews approved. Windows gate and whole-branch review pending. Planned at `32adaa7`, 2026-10-20.
+- IMPLEMENTED, REVIEW BLOCKED — Tasks 1–2 are implemented; the original starvation finding is addressed. Scoped final re-review found an Important performance issue in repeated full-projection serialization, deferred to [Plan 102](102-bounded-table-identity-selection.md). Final Windows gate failed in the CLI test stage on the dashboard matcher test; its isolated rerun passed, but root cause is unproven. This plan is not DONE or ready to merge. Planned at `32adaa7`, 2026-10-20.
 - Priority P1; effort S; implementation risk MED; category bug.
 - Dependencies: The existing benchmark/artifact projection must be present. No new-plan predecessor.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -51,7 +51,7 @@ Out of scope: annotation receipt design, numeric budget defaults, SQL execution,
 - [x] Keep actual retained-entry omission accounting correct across rejected fit attempts; do not count an omitted display clip on a key now emitted in full.
 - [x] Add assertions that output is valid JSON, stays within budget, and never reports success with wrong table-to-metric attribution.
 - [x] Add a normal-input regression demonstrating no new response fields or schema bump.
-- **Verify:** focused commands and both affected suites are GREEN; direct branch formatting passed. Final Windows gate and reviews remain pending; see [verification evidence](093-verification-evidence.md).
+- **Verify:** focused commands and both affected suites have been run. MCP passed; CLI and the final Windows gate failed on `DashboardHousekeepingTests.Matcher_commits_do_not_keep_an_idle_dashboard_up`, while one isolated rerun passed. Root cause is unproven. Direct branch formatting passed. Scoped final review has a new Important performance finding; see [verification evidence](093-verification-evidence.md) and follow-up [Plan 102](102-bounded-table-identity-selection.md).
 
 ## Maintenance notes
 
