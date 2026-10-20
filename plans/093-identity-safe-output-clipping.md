@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- DONE on feature branch `plan-093`, together with Plan 102. Both review blockers are resolved; the combined Sol low review/scoped re-review is approved. Final Windows gate and direct branch formatting passed on `76ebb0d`. Not merged or pushed; see [102 final evidence](102-verification-evidence.md).
+- DONE on feature branch `plan-093`, together with Plan 102. Both review blockers are resolved; the combined Sol low review/scoped re-review is approved. Final Windows gate and direct branch formatting passed on `76ebb0d`. Locally fast-forward merged into `main` at `6f07792`; not pushed; see [102 final evidence](102-verification-evidence.md).
 - Priority P1; effort S; implementation risk MED; category bug.
 - Dependencies: The existing benchmark/artifact projection must be present. No new-plan predecessor.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.

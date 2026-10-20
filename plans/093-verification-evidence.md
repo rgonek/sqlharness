@@ -2,7 +2,7 @@
 
 ## Current closure
 
-The prior blockers below are historical and now resolved by Plan 102. Combined review/scoped re-review approved, direct formatting exit 0, and final Windows gate exit 0 on `76ebb0d` (13m00s). Plans 093/102 are DONE on the feature branch; not merged or pushed. See [final evidence](102-verification-evidence.md).
+The prior blockers below are historical and now resolved by Plan 102. Combined review/scoped re-review approved, direct formatting exit 0, and final Windows gate exit 0 on `76ebb0d` (13m00s). Plans 093/102 are DONE and locally fast-forward integrated into `main` at `6f07792`; not pushed. See [final evidence](102-verification-evidence.md).
 
 ## Historical blocked status
 

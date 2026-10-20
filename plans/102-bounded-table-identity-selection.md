@@ -12,7 +12,7 @@
 
 ## Status and provenance
 
-- DONE on feature branch `plan-093`, 2026-10-20. Both original Plan 093 blockers are resolved, task/combined reviews are approved, and final Windows gate/direct formatting passed on `76ebb0d`. Not merged or pushed; see [evidence](102-verification-evidence.md).
+- DONE on feature branch `plan-093`, 2026-10-20. Both original Plan 093 blockers are resolved, task/combined reviews are approved, and final Windows gate/direct formatting passed on `76ebb0d`. Locally fast-forward merged into `main` at `6f07792`; not pushed; see [evidence](102-verification-evidence.md).
 - Start from Plan 093 implementation `e7eaddec15fdac850ae4b00d714b59b932c9e8a8` or a verified successor containing it. Plan 093 is review-blocked; it does not need to merge first. Work on that feature branch or an isolated descendant, never silently assume main contains it.
 - Finding: `SelectTableReadMaps` calls callbacks that serialize the entire containing compare/measure/artifact projection for every candidate. Large maps repeatedly serialize retained entries and can allocate near-budget responses for every rejected candidate.
 - Existing correctness tests cover zero/four/2048 cell clipping and first-ranked identities at 3000/3500/5000 characters. Preserve those tests.

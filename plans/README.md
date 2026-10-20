@@ -46,8 +46,8 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
-| [093](093-identity-safe-output-clipping.md) | Complete metric identities within response budgets | DONE on `plan-093` with 102; final Windows gate/direct formatting and all reviews approved; not merged or pushed ([evidence](102-verification-evidence.md)) |
-| [102](102-bounded-table-identity-selection.md) | Linear entry accounting and deterministic dashboard idle test | DONE on `plan-093`; final product `76ebb0d`, gate exit 0; not merged or pushed ([evidence](102-verification-evidence.md)) |
+| [093](093-identity-safe-output-clipping.md) | Complete metric identities within response budgets | DONE with 102; locally integrated into `main` at `6f07792`; verified product unchanged; not pushed ([evidence](102-verification-evidence.md)) |
+| [102](102-bounded-table-identity-selection.md) | Linear entry accounting and deterministic dashboard idle test | DONE; locally integrated into `main` at `6f07792`; final product `76ebb0d` unchanged, gate exit 0; not pushed ([evidence](102-verification-evidence.md)) |
 
 
 | Plan | Scope | Branch status |

@@ -2,7 +2,7 @@
 
 ## State
 
-Implementation continues on isolated branch `plan-093`, based at `1266881c3e340ac3e4d5e2abeebd5725100145f9` for this remediation. The combined branch base is `fab299f2abfc76b5f8b2eee2b07c91735bbf7059`. No integration, push, live database or paid-provider trial is authorized or performed here. Plans 093 and 102 are DONE on this feature branch. Both task reviews, the combined whole-branch review and final scoped re-review are approved with no open findings. Final direct formatting and Windows gate exited 0 on `76ebb0d`; the successful final result below supersedes earlier failed/interrupted runs. Not merged or pushed.
+Implementation completed on isolated branch `plan-093`, based at `1266881c3e340ac3e4d5e2abeebd5725100145f9` for this remediation. The combined branch base is `fab299f2abfc76b5f8b2eee2b07c91735bbf7059`. The operator subsequently authorized local integration; push, live database and paid-provider trials remain outside this work. Plans 093 and 102 are DONE on this feature branch. Both task reviews, the combined whole-branch review and final scoped re-review are approved with no open findings. Final direct formatting and Windows gate exited 0 on `76ebb0d`; the successful final result below supersedes earlier failed/interrupted runs. Locally fast-forward integrated into `main` at `6f07792`; not pushed.
 
 ## Reviewed implementation
 
@@ -51,3 +51,7 @@ The first revised test exposed repeated title appends (`title-3` instead of `tit
 ## Ruling retained for delivery
 
 Accept the measured pre-fix baseline limited to measure/compare, retaining deterministic work-bound and correctness coverage for artifact/rejected-entry cases rather than rebuilding the old tree solely for their missing measurements. Reason: meaningful RED and exact once-per-entry accounting establish the defect and fix. Cost if wrong: artifact/rejected-entry before/after performance savings remain unquantified; none are claimed.
+
+## Local integration
+
+The operator selected local merge. On 2026-10-20, clean `main` at `fab299f2` was fast-forwarded to `6f0779285e68775bf068157278745ceb8918b351`. `git diff --exit-code 76ebb0d HEAD -- src tests scripts docs/mcp/runtime.md` exited 0 after integration: source, tests, scripts and runtime guidance match the Windows-verified product exactly. No new integrated-tree gate was run because there is no product change or unresolved risk. The following integration record commit is documentation only. Nothing was pushed; the feature worktree remains available with its review reports.
