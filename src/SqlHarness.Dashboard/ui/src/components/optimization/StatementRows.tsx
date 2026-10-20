@@ -1,5 +1,6 @@
 import type { StatementRow } from "@/api/types"
 import { HiddenWorkFlag } from "./HiddenWorkFlag"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 const statusLabels: Record<string, string> = {
   shared: "shared",
@@ -21,9 +22,9 @@ function changeMagnitude(row: StatementRow, measured: boolean): number {
 
 function Objects({ row, measured }: { row: StatementRow; measured: boolean }) {
   if (row.objects.length === 0) return null
-  return <details className="mt-2">
-    <summary className="cursor-pointer text-sm">Objects ({row.objects.length})</summary>
-    <div className="mt-2 overflow-x-auto">
+  return <Collapsible className="mt-2">
+    <CollapsibleTrigger className="cursor-pointer text-sm">Objects ({row.objects.length})</CollapsibleTrigger>
+    <CollapsibleContent keepMounted><div className="mt-2 overflow-x-auto">
       <table className="w-full text-sm" aria-label={`${row.text} object IO`}>
         <thead><tr className="border-b text-left"><th className="py-1 pr-3">Object</th>{measured
           ? <><th className="px-2 py-1">Scans</th><th className="px-2 py-1">Logical reads</th></>
@@ -34,8 +35,8 @@ function Objects({ row, measured }: { row: StatementRow; measured: boolean }) {
             : <><td className="px-2 py-1">{number(item.scansBefore)}</td><td className="px-2 py-1">{number(item.scansAfter)}</td><td className="px-2 py-1">{number(item.readsBefore)}</td><td className="px-2 py-1">{number(item.readsAfter)}</td><td className="px-2 py-1">{item.change}</td></>}
         </tr>)}</tbody>
       </table>
-    </div>
-  </details>
+    </div></CollapsibleContent>
+  </Collapsible>
 }
 
 function PlanLink({ href, hash, label }: { href: string | null; hash: string | null; label: string }) {

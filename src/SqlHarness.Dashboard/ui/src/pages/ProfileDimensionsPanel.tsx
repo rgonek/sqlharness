@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { useStats, type StatsRange, type StatsWindow } from "@/api/queries"
 import type { DimensionAggregate, DimensionMatrixCell, DimensionStat, DimensionValueSummary, TargetStat } from "@/api/types"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -391,10 +392,10 @@ export function ProfileDimensionsPanel({
           </section>
           <section className="grid gap-4">
             <h2 className="text-base font-semibold">Dimension breakdowns</h2>
-            {displayedDimensions.map(dimension => <details key={dimension.name} open className="min-w-0 rounded-md border p-3">
-              <summary className="cursor-pointer font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{dimension.name}: {formatNumber(dimension.values.length)} values</summary>
-              <div className="mt-3"><DimensionBreakdown dimension={dimension} onFilter={value => setDimensionFilter(dimension.name, value)} /></div>
-            </details>)}
+            {displayedDimensions.map(dimension => <Collapsible key={dimension.name} defaultOpen className="min-w-0 rounded-md border p-3">
+              <CollapsibleTrigger className="cursor-pointer font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{dimension.name}: {formatNumber(dimension.values.length)} values</CollapsibleTrigger>
+              <CollapsibleContent keepMounted><div className="mt-3"><DimensionBreakdown dimension={dimension} onFilter={value => setDimensionFilter(dimension.name, value)} /></div></CollapsibleContent>
+            </Collapsible>)}
           </section>
         </>}
 

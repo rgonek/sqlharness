@@ -5,7 +5,9 @@ import { expect, test, vi } from "vitest"
 import type { DimensionValueSummary } from "@/api/types"
 import { stats } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
+import { queryKeys } from "@/api/queries"
 import { Matrix } from "./ProfileDimensionsPanel"
+import { ProfileDimensionsPanel } from "./ProfileDimensionsPanel"
 import { StatsPage } from "./StatsPage"
 
 test("shows KPIs, charts and top lists, and switches range", async () => {
@@ -203,6 +205,47 @@ test("switching from a profile named unprofiled to no-profile resets matrix cont
   expect(screen.getByRole("textbox", { name: "Search row and column values" })).toHaveValue("")
   expect(screen.getByRole("combobox", { name: "Display limit per axis" })).toHaveValue("25")
   expect(screen.getByText(/Showing 25 of 30 row values/)).toBeInTheDocument()
+})
+
+test("dimension disclosures start open and retain choices as dimensions are added or removed", async () => {
+  const window = { from: "2026-10-01T00:00:00.000Z", to: "2026-10-08T00:00:00.000Z" }
+  const initial = [
+    { name: "component", values: [dimensionValue("component", "api", 2, 30)] },
+    { name: "project", values: [dimensionValue("project", "alpha", 2, 30)] },
+    { name: "region", values: [dimensionValue("region", "west", 2, 20)] },
+  ]
+  const alternate = [
+    { name: "project", values: [dimensionValue("project", "alpha", 2, 30)] },
+    { name: "region", values: [dimensionValue("region", "west", 2, 20)] },
+    { name: "service", values: [dimensionValue("service", "catalog", 1, 10)] },
+  ]
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+  const emptyScope = { ...stats(), profileDimensions: null }
+  client.setQueryData(queryKeys.stats("7d", window, "app", {}, "component", "project", false), emptyScope)
+  client.setQueryData(queryKeys.stats("7d", window, "app", {}, "project", "region", false), emptyScope)
+  const props = (dimensions: typeof initial) => <ProfileDimensionsPanel range="7d" window={window} unprofiled={false}
+    profile="app" profileName="app" databaseTemplate={undefined} profileDefinitionAvailable dimensions={dimensions} targets={[]}
+    dimensionFilters={{}} onDimensionFiltersChange={vi.fn()} axisChoice={null} onAxisChoiceChange={vi.fn()} />
+  const view = render(<QueryClientProvider client={client}>{props(initial)}</QueryClientProvider>)
+
+  const component = screen.getByRole("button", { name: "component: 1 values" })
+  const project = screen.getByRole("button", { name: "project: 1 values" })
+  const region = screen.getByRole("button", { name: "region: 1 values" })
+  expect(component).toHaveAttribute("aria-expanded", "true")
+  expect(project).toHaveAttribute("aria-expanded", "true")
+  expect(region).toHaveAttribute("aria-expanded", "true")
+  await userEvent.click(project)
+  await userEvent.click(region)
+  expect(screen.queryByRole("button", { name: "Filter project to alpha" })).not.toBeInTheDocument()
+  view.rerender(<QueryClientProvider client={client}>{props(alternate)}</QueryClientProvider>)
+  expect(screen.getByRole("button", { name: "service: 1 values" })).toHaveAttribute("aria-expanded", "true")
+  expect(screen.getByRole("button", { name: "project: 1 values" })).toHaveAttribute("aria-expanded", "false")
+  expect(screen.getByRole("button", { name: "region: 1 values" })).toHaveAttribute("aria-expanded", "false")
+  await userEvent.click(screen.getByRole("button", { name: "service: 1 values" }))
+  view.rerender(<QueryClientProvider client={client}>{props(initial)}</QueryClientProvider>)
+  expect(screen.getByRole("button", { name: "component: 1 values" })).toHaveAttribute("aria-expanded", "true")
+  expect(screen.getByRole("button", { name: "project: 1 values" })).toHaveAttribute("aria-expanded", "false")
+  expect(screen.getByRole("button", { name: "region: 1 values" })).toHaveAttribute("aria-expanded", "false")
 })
 
 test("marks search-hidden cross-intersections and excludes them from visible totals", async () => {

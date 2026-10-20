@@ -9,6 +9,7 @@ import { SqlBlock } from "@/components/SqlBlock"
 import { ConditionsList } from "@/components/ConditionsList"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { badgeTier } from "@/lib/flags"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 
 type JsonObject = Record<string, unknown>
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
@@ -91,8 +92,19 @@ export function CompareDetail({ detail, selectedCase = "all", onCaseChange }: { 
   const activeCase = selectedCase === "all" ? cards[0]?.pair?.baseline.caseId ?? "all" : selectedCase
   const activePair = cards.find(card => card.pair?.baseline.caseId === activeCase)?.pair ?? cards[0]?.pair
   return <section className="space-y-3" aria-label="Compare detail">
-    <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">SQL diff &amp; conditions</summary><div className="mt-4 space-y-4"><SetupSql detail={detail} /><SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={detail.operation.engine} /><Conditions detail={detail} /></div></details>
-    <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Plans</summary><div className="mt-4 space-y-4">{activePair ? <><TableIoComparison pairs={[activePair]} engine={detail.operation.engine} /><PlanChanges operationId={detail.operation.id} pair={activePair} /><section aria-label="Selected variant plan" className="space-y-2"><VariantPanel operationId={detail.operation.id} variant={activePair.baseline} engine={detail.operation.engine} compareMetrics /><VariantPanel operationId={detail.operation.id} variant={activePair.candidate} engine={detail.operation.engine} compareMetrics /></section></> : <p className="text-sm text-muted-foreground">No paired plans or IO are available.</p>}</div></details>
-    <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Per-case &amp; per-run details</summary><div className="mt-4"><Cases detail={detail} selectedCase={activeCase} onCaseChange={onCaseChange} /></div></details>
+    <Accordion multiple keepMounted>
+      <AccordionItem value="sql-diff" className="rounded-lg border p-4">
+        <AccordionTrigger headingLevel="h2">SQL diff &amp; conditions</AccordionTrigger>
+        <AccordionContent keepMounted><div className="mt-4 space-y-4"><SetupSql detail={detail} /><SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={detail.operation.engine} /><Conditions detail={detail} /></div></AccordionContent>
+      </AccordionItem>
+      <AccordionItem value="plans" className="rounded-lg border p-4">
+        <AccordionTrigger headingLevel="h2">Plans</AccordionTrigger>
+        <AccordionContent keepMounted><div className="mt-4 space-y-4">{activePair ? <><TableIoComparison pairs={[activePair]} engine={detail.operation.engine} /><PlanChanges operationId={detail.operation.id} pair={activePair} /><section aria-label="Selected variant plan" className="space-y-2"><VariantPanel operationId={detail.operation.id} variant={activePair.baseline} engine={detail.operation.engine} compareMetrics /><VariantPanel operationId={detail.operation.id} variant={activePair.candidate} engine={detail.operation.engine} compareMetrics /></section></> : <p className="text-sm text-muted-foreground">No paired plans or IO are available.</p>}</div></AccordionContent>
+      </AccordionItem>
+      <AccordionItem value="case-details" className="rounded-lg border p-4">
+        <AccordionTrigger headingLevel="h2">Per-case &amp; per-run details</AccordionTrigger>
+        <AccordionContent keepMounted><div className="mt-4"><Cases detail={detail} selectedCase={activeCase} onCaseChange={onCaseChange} /></div></AccordionContent>
+      </AccordionItem>
+    </Accordion>
   </section>
 }

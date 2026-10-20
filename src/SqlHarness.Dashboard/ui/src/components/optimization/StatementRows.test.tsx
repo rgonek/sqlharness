@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import type { StatementRow } from "@/api/types"
 import { StatementRows } from "./StatementRows"
@@ -12,7 +13,7 @@ const row: StatementRow = {
   udfElapsedMilliseconds: 4,
 }
 
-test("renders statement status, counters, expandable objects, and only the resolved plan destination", () => {
+test("renders statement status, counters, and only the resolved plan destination", () => {
   render(<StatementRows rows={[row]} />)
 
   expect(screen.getByText("different work")).toBeInTheDocument()
@@ -20,21 +21,23 @@ test("renders statement status, counters, expandable objects, and only the resol
   expect(screen.getByRole("link", { name: "Plan before" })).toHaveAttribute("href", "/operations/11?planStatement=0")
   expect(screen.getByText("Plan unavailable")).toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "Plan after" })).not.toBeInTheDocument()
-  const objects = screen.getByText("Objects (1)").closest("details")!
-  fireEvent.click(within(objects).getByText("Objects (1)"))
-  expect(within(objects).getByRole("rowheader", { name: "dbo.Orders" })).toBeInTheDocument()
+  expect(screen.queryByRole("rowheader", { name: "dbo.Orders" })).not.toBeInTheDocument()
 })
 
-test("renders one joined object row with its before and after counters", () => {
+test("Objects retains its nested open state across close and reopen", async () => {
   render(<StatementRows rows={[{
     ...row,
     objects: [{ table: "dbo.T", scansBefore: 2, scansAfter: 1, readsBefore: 20, readsAfter: 10, change: "−50%" }],
   }]} />)
 
-  const objects = screen.getByText("Objects (1)").closest("details")!
-  fireEvent.click(within(objects).getByText("Objects (1)"))
-  const objectRow = within(objects).getByRole("row", { name: "dbo.T 2 1 20 10 −50%" })
-  expect(objectRow).toBeInTheDocument()
+  const trigger = screen.getByRole("button", { name: "Objects (1)" })
+  expect(screen.queryByRole("row", { name: "dbo.T 2 1 20 10 −50%" })).not.toBeInTheDocument()
+  await userEvent.click(trigger)
+  expect(screen.getByRole("row", { name: "dbo.T 2 1 20 10 −50%" })).toBeInTheDocument()
+  await userEvent.click(trigger)
+  expect(screen.queryByRole("row", { name: "dbo.T 2 1 20 10 −50%" })).not.toBeInTheDocument()
+  await userEvent.click(trigger)
+  expect(screen.getByRole("row", { name: "dbo.T 2 1 20 10 −50%" })).toBeInTheDocument()
 })
 
 test("renders both hidden-work flag forms", () => {

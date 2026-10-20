@@ -5,6 +5,7 @@ import { useAgentSessionOptimization, useAgentSessionOptimizationComparison, use
 import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
 import { VersionTable } from "@/components/optimization/VersionTable"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SessionSearch } from "@/router"
 
@@ -29,11 +30,11 @@ export function OptimizationSection({ sessionId, agentSessionKey }: { sessionId:
   return <section aria-labelledby="optimization-heading" className="space-y-4">
     <div><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><p className="text-sm text-muted-foreground">Compare retained SQL versions and review measurements within their conditions and scope.</p></div>
     {section.subjects.map(subject => <SubjectCard key={subjectKey(subject)} sessionId={sessionId} agentSessionKey={agentSessionKey} search={search} subject={subject} />)}
-    {!!section.unassigned.length && <details className="rounded-lg border p-3">
-      <summary className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</summary>
-      <p className="mt-2 text-sm text-muted-foreground">These compares do not have a complete subject and scope, so they are not included in version comparisons.</p>
-      <ol className="divide-y">{section.unassigned.map(item => <li key={item.operationId} className="flex flex-wrap gap-3 py-2"><Link to="/operations/$id" params={{ id: String(item.operationId) }} search={operationReturnSearch(sessionId, { ...search, unassigned: true }, agentSessionKey)}>Compare #{item.operationId}</Link><span>{item.status}</span><time className="text-muted-foreground">{item.startedAt}</time></li>)}</ol>
-    </details>}
+    {!!section.unassigned.length && <Collapsible className="rounded-lg border p-3">
+      <CollapsibleTrigger className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</CollapsibleTrigger>
+      <CollapsibleContent keepMounted><p className="mt-2 text-sm text-muted-foreground">These compares do not have a complete subject and scope, so they are not included in version comparisons.</p>
+      <ol className="divide-y">{section.unassigned.map(item => <li key={item.operationId} className="flex flex-wrap gap-3 py-2"><Link to="/operations/$id" params={{ id: String(item.operationId) }} search={operationReturnSearch(sessionId, { ...search, unassigned: true }, agentSessionKey)}>Compare #{item.operationId}</Link><span>{item.status}</span><time className="text-muted-foreground">{item.startedAt}</time></li>)}</ol></CollapsibleContent>
+    </Collapsible>}
   </section>
 }
 

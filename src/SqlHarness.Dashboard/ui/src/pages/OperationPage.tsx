@@ -28,6 +28,7 @@ import { sessionSearchFromOperation } from "@/lib/sessionSearch"
 import type { OperationDetailSearch } from "@/router"
 import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
 import { StatementRows } from "@/components/optimization/StatementRows"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -123,9 +124,9 @@ function OperationTimings({ detail }: { detail: OperationDetail }) {
     </Card>
     {events && events.length > 0 && <Card>
       <CardContent className="pt-4">
-        <details>
-          <summary className="cursor-pointer font-medium">Connection events</summary>
-          <ol className="mt-3 space-y-2 text-sm">
+        <Collapsible>
+          <CollapsibleTrigger className="cursor-pointer text-sm font-medium">Connection events</CollapsibleTrigger>
+          <CollapsibleContent keepMounted><ol className="mt-3 space-y-2 text-sm">
             {events.map((event, index) => <li key={`${event.phase}:${event.offsetMs}:${index}`} className="rounded-md border p-3">
               {event.outcome === "truncated" && event.droppedCount !== null ? (
                 <span>{formatNumber(event.droppedCount)} diagnostic events omitted</span>
@@ -136,8 +137,8 @@ function OperationTimings({ detail }: { detail: OperationDetail }) {
                 {event.clientConnectionId && <span className="font-mono">{event.clientConnectionId}</span>}
               </div>}
             </li>)}
-          </ol>
-        </details>
+          </ol></CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>}
   </>
@@ -250,7 +251,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
           {detail.variants.map(v => <TabsContent key={v.ordinal} value={String(v.ordinal)}><VariantPanel operationId={op.id} variant={v} engine={op.engine} planTarget={v === targetVariant ? planTarget : undefined} /></TabsContent>)}
         </Tabs>
       )}
-      <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Run diagnostics</summary><div className="mt-4 space-y-4">
+      <Collapsible className="rounded-lg border p-4"><CollapsibleTrigger className="cursor-pointer font-medium">Run diagnostics</CollapsibleTrigger><CollapsibleContent keepMounted><div className="mt-4 space-y-4">
         <Card><CardHeader><CardTitle>Output size</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Fact label="Output bytes (raw / emitted)">{formatNumber(detail.rawBytes)} / {formatNumber(detail.emittedBytes)}</Fact>
           <Fact label="Estimated output tokens (raw / emitted)">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
@@ -262,7 +263,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
           <Fact label="Effort">{detail.agent.reasoningEffort ?? detail.agent.transcriptReasoningEffort ?? "—"}{!detail.agent.reasoningEffort && detail.agent.transcriptReasoningEffort && <span className="ml-1 text-sm text-muted-foreground">from transcript</span>}</Fact>
           {detail.agent.conversationTitle && <Fact label="Conversation">{detail.agent.conversationTitle}</Fact>}<Fact label="Agent session">{detail.agent.sessionId ?? "—"}</Fact><Fact label="Turn">{detail.agent.turnId ?? "—"}</Fact><Fact label="Trigger">{detail.agent.turnTrigger ?? "—"}</Fact><Fact label="Thread source">{detail.agent.threadSource ?? "—"}</Fact><Fact label="Call id">{detail.agent.callId ?? "—"}</Fact>
         </CardContent></Card>}
-      </div></details>
+      </div></CollapsibleContent></Collapsible>
 
       {op.operation === "measure" && <Card>
         <CardHeader><CardTitle>Measurement conditions</CardTitle></CardHeader>
@@ -339,7 +340,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
         onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }) }) }} />
       <CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data.selectedCase : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }) }) }} />
     </> : null}
-    <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Run diagnostics</summary><div className="mt-4 space-y-4">
+    <Collapsible className="rounded-lg border p-4"><CollapsibleTrigger className="cursor-pointer font-medium">Run diagnostics</CollapsibleTrigger><CollapsibleContent keepMounted><div className="mt-4 space-y-4">
       <Card><CardHeader><CardTitle>Output size</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Fact label="Output bytes (raw / emitted)">{formatNumber(detail.rawBytes)} / {formatNumber(detail.emittedBytes)}</Fact>
         <Fact label="Estimated output tokens (raw / emitted)">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
@@ -350,7 +351,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
         <Fact label="Model">{detail.agent.model ?? detail.agent.transcriptModel ?? "—"}</Fact><Fact label="Effort">{detail.agent.reasoningEffort ?? detail.agent.transcriptReasoningEffort ?? "—"}</Fact>
         {detail.agent.conversationTitle && <Fact label="Conversation">{detail.agent.conversationTitle}</Fact>}<Fact label="Agent session">{detail.agent.sessionId ?? "—"}</Fact><Fact label="Turn">{detail.agent.turnId ?? "—"}</Fact><Fact label="Trigger">{detail.agent.turnTrigger ?? "—"}</Fact><Fact label="Thread source">{detail.agent.threadSource ?? "—"}</Fact><Fact label="Call id">{detail.agent.callId ?? "—"}</Fact>
       </CardContent></Card>}
-    </div></details>
+    </div></CollapsibleContent></Collapsible>
   </main>
 }
 

@@ -6,6 +6,7 @@ import { formatNumber } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 function nullableTotal(rows: TableIoRow[], field: "physicalReads" | "readAheadReads" | "lobLogicalReads" | "lobPhysicalReads" | "lobReadAheadReads"): number | null {
   const values = rows.map(row => row[field]).filter((value): value is number => value !== null)
@@ -15,9 +16,9 @@ function nullableTotal(rows: TableIoRow[], field: "physicalReads" | "readAheadRe
 function MoreRows({ rows }: { rows: TableIoDeltaRow[] }) {
   const total = (side: "baseline" | "candidate", field: "physicalReads" | "readAheadReads" | "lobLogicalReads" | "lobPhysicalReads" | "lobReadAheadReads") =>
     nullableTotal(rows.flatMap(row => row[side] ? [row[side]!] : []), field)
-  return <details className="mt-2 text-sm">
-    <summary className="cursor-pointer text-muted-foreground">More</summary>
-    <Table>
+  return <Collapsible className="mt-2 text-sm">
+    <CollapsibleTrigger className="cursor-pointer text-muted-foreground">More</CollapsibleTrigger>
+    <CollapsibleContent keepMounted><Table>
       <TableHeader><TableRow><TableHead>Table</TableHead><TableHead className="text-right">Physical B</TableHead><TableHead className="text-right">C</TableHead><TableHead className="text-right">Read-ahead B</TableHead><TableHead className="text-right">C</TableHead><TableHead className="text-right">LOB logical B</TableHead><TableHead className="text-right">C</TableHead><TableHead className="text-right">LOB physical B</TableHead><TableHead className="text-right">C</TableHead><TableHead className="text-right">LOB read-ahead B</TableHead><TableHead className="text-right">C</TableHead></TableRow></TableHeader>
       <TableBody>
         {rows.map(row => <TableRow key={row.table}><TableCell className="font-mono">{row.table}</TableCell>
@@ -35,8 +36,8 @@ function MoreRows({ rows }: { rows: TableIoDeltaRow[] }) {
           <TableCell className="text-right">{formatNumber(total("baseline", "lobReadAheadReads"))}</TableCell><TableCell className="text-right">{formatNumber(total("candidate", "lobReadAheadReads"))}</TableCell>
         </TableRow>
       </TableBody>
-    </Table>
-  </details>
+    </Table></CollapsibleContent>
+  </Collapsible>
 }
 
 function SqlServerTable({ pair }: { pair: ComparePair }) {

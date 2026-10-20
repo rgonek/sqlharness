@@ -11,11 +11,16 @@ const renderCompare = (detail: ReturnType<typeof operationDetail>, routes: Recor
   return { ...render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>), calls }
 }
 
-test("compare detail disclosures start collapsed", () => {
+test("compare panels start closed and can remain open together", async () => {
   renderCompare(operationDetail({ operation: operation({ operation: "compare" }) }))
   for (const label of ["SQL diff & conditions", "Plans", "Per-case & per-run details"]) {
-    expect(screen.getByText(label).closest("details")).not.toHaveAttribute("open")
+    expect(screen.getByRole("button", { name: label })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("region", { name: label })).not.toBeInTheDocument()
   }
+  for (const label of ["SQL diff & conditions", "Plans", "Per-case & per-run details"])
+    await userEvent.click(screen.getByRole("button", { name: label }))
+  for (const label of ["SQL diff & conditions", "Plans", "Per-case & per-run details"])
+    expect(screen.getByRole("button", { name: label })).toHaveAttribute("aria-expanded", "true")
 })
 
 test("no assessment explains its meaning and keeps policy version in a tooltip", () => {
@@ -58,8 +63,8 @@ test("per-run details select one case and one side at a time", async () => {
     ],
   })
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} selectedCase="1" onCaseChange={onCaseChange} /></QueryClientProvider>)
-  await userEvent.click(screen.getByText("Per-case & per-run details"))
-  const section = screen.getByText("Per-case & per-run details").closest("details")!
+  await userEvent.click(screen.getByRole("button", { name: "Per-case & per-run details" }))
+  const section = screen.getByRole("region", { name: "Per-case & per-run details" })
   const caseSelect = within(section).getByRole("combobox", { name: "Case" })
   expect(caseSelect).toHaveValue("1")
   fireEvent.change(caseSelect, { target: { value: "0" } })
@@ -80,12 +85,43 @@ test("SQL, conditions, and plans stay within their disclosures", async () => {
     variants: [variant({ ordinal: 0, variant: "baseline" }), variant({ ordinal: 1, variant: "candidate" })],
   })
   renderCompare(detail)
-  await userEvent.click(screen.getByText("SQL diff & conditions"))
-  const sql = screen.getByText("SQL diff & conditions").closest("details")!
+  await userEvent.click(screen.getByRole("button", { name: "SQL diff & conditions" }))
+  const sql = screen.getByRole("region", { name: "SQL diff & conditions" })
   expect(within(sql).getByText("CREATE TABLE #work (id int);")).toBeInTheDocument()
   expect(within(sql).getByText("Timeout")).toBeInTheDocument()
-  await userEvent.click(screen.getAllByText("Plans")[0])
-  expect(within(screen.getAllByText("Plans")[0].closest("details")!).getAllByRole("region", { name: "Key metrics" })).toHaveLength(2)
+  await userEvent.click(screen.getByRole("button", { name: "Plans" }))
+  const plans = screen.getByRole("region", { name: "Plans" })
+  expect(within(plans).getAllByRole("region", { name: "Key metrics" })).toHaveLength(2)
+  const tableIo = within(plans).getByRole("region", { name: "compare table IO" })
+  expect(within(tableIo).getAllByRole("table")).toHaveLength(1)
+  const more = within(tableIo).getByRole("button", { name: "More" })
+  await userEvent.click(more)
+  expect(within(tableIo).getAllByRole("table")).toHaveLength(2)
+  expect(screen.getByRole("button", { name: "Plans" })).toHaveAttribute("aria-expanded", "true")
+  await userEvent.click(more)
+  expect(within(tableIo).getAllByRole("table")).toHaveLength(1)
+  await userEvent.click(more)
+  await userEvent.click(screen.getByRole("button", { name: "Plans" }))
+  expect(screen.queryByRole("region", { name: "compare table IO" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Plans" }))
+  expect(within(screen.getByRole("region", { name: "compare table IO" })).getAllByRole("table")).toHaveLength(2)
+})
+
+test("SQL diff mode survives closing and reopening its compare panel", async () => {
+  const detail = operationDetail({
+    operation: operation({ operation: "compare" }),
+    sqlText: "SELECT id FROM Orders", candidateSqlText: "SELECT id FROM Orders WHERE id > 0",
+  })
+  renderCompare(detail)
+  const trigger = screen.getByRole("button", { name: "SQL diff & conditions" })
+  expect(screen.queryByRole("tab", { name: "Baseline" })).not.toBeInTheDocument()
+  await userEvent.click(trigger)
+  await userEvent.click(await screen.findByRole("tab", { name: "Baseline" }))
+  expect(screen.getByRole("tab", { name: "Baseline" })).toHaveAttribute("aria-selected", "true")
+  await userEvent.click(trigger)
+  expect(screen.queryByRole("tab", { name: "Baseline" })).not.toBeInTheDocument()
+  await userEvent.click(trigger)
+  expect(screen.getByRole("tab", { name: "Baseline" })).toHaveAttribute("aria-selected", "true")
 })
 
 test("plans and reproduction scripts use the selected operation's actual baseline and candidate variants", async () => {
@@ -122,14 +158,14 @@ test("plans and reproduction scripts use the selected operation's actual baselin
       engine: "sqlserver", error: null, graph: { engine: "sqlserver", statements: [{ index: 0, statementId: 1, statementCompId: 1, rootNodeId: "0:0" }], nodes: [{ id: "0:0", statementIndex: 0, showplanNodeId: 1, physicalOperator: "Index Seek", logicalOperator: "Index Seek", object: null, tableReferenceId: null, predicates: [], definedValues: [], estimatedRows: null, actualRows: null, executions: null, costFraction: null, warnings: [] }], edges: [] },
     },
   })
-  await userEvent.click(screen.getAllByText("Plans").find(element => element.tagName.toLowerCase() === "summary")!)
+  await userEvent.click(screen.getByRole("button", { name: "Plans" }))
   const documentSelectors = await screen.findAllByRole("combobox", { name: "Plan document" })
   await userEvent.selectOptions(documentSelectors[0], `${before}:0`)
   await userEvent.selectOptions(documentSelectors[1], `${after}:0`)
   const planHrefs = screen.getAllByRole("link", { name: "Download selected plan" }).map(link => link.getAttribute("href"))
   expect(planHrefs).toContain(`/api/plan-documents/${before}`)
   expect(planHrefs).toContain(`/api/plan-documents/${after}`)
-  await userEvent.click(screen.getByText("Per-case & per-run details"))
+  await userEvent.click(screen.getByRole("button", { name: "Per-case & per-run details" }))
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "Side" }), "candidate")
   await waitFor(() => expect(calls.some(call => {
     const url = new URL(call, "http://dashboard")

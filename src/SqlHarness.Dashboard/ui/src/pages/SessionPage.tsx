@@ -15,6 +15,7 @@ import { clientLabel, rootLabel } from "@/lib/roots"
 import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
 import { useShowInternalOperations } from "@/lib/internalOperations"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 const unknownRootsHint =
   "Unknown: the client did not declare roots, has not answered yet, or uses MCP 2026-07-28, where SQLHarness does not request roots."
@@ -54,9 +55,9 @@ function SessionView({ id }: { id: number }) {
           <CardDescription>{agentLabel(session.agentKind)} via {session.transport} ({session.source})</CardDescription>
         </CardHeader>
         <CardContent>
-          <details>
-            <summary className="cursor-pointer text-sm font-medium">Session metadata</summary>
-            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+          <Collapsible>
+            <CollapsibleTrigger className="cursor-pointer text-sm font-medium">Session metadata</CollapsibleTrigger>
+            <CollapsibleContent keepMounted><div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
               <Fact label="Client" value={clientLabel(session)} />
               <Fact label="MCP mode" value={session.mcpMode} />
               <Fact label="MCP protocol" value={session.protocolVersion} />
@@ -83,8 +84,8 @@ function SessionView({ id }: { id: number }) {
               <Fact label="Last seen" value={formatTimestamp(session.lastSeen)} />
               <Fact label="Failed / rejected" value={`${session.failed} / ${session.rejected}`} />
               <Fact label="Running / abandoned" value={`${session.running} / ${session.abandoned}`} />
-            </div>
-          </details>
+            </div></CollapsibleContent>
+          </Collapsible>
         </CardContent>
       </Card>
       {session.hasCompare && <OptimizationSection sessionId={id} />}
