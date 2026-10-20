@@ -329,6 +329,9 @@ public sealed class McpToolSchemaTests : IDisposable
         var annotationTool = onTools.Single(tool => tool.Name == "sqlharness_annotate");
         var annotationSchema = Properties(ServedSchema(annotationTool));
         Assert.Contains("items", annotationSchema.EnumerateObject().Select(property => property.Name));
+        Assert.Contains("responseDetail", annotationSchema.EnumerateObject().Select(property => property.Name));
+        Assert.Contains("maxResultBytes", annotationSchema.EnumerateObject().Select(property => property.Name));
+        Assert.Equal("receipt", annotationSchema.GetProperty("responseDetail").GetProperty("default").GetString());
         Assert.Equal(1, annotationSchema.GetProperty("items").GetProperty("minItems").GetInt32());
         Assert.Equal(20, annotationSchema.GetProperty("items").GetProperty("maxItems").GetInt32());
         var itemProperties = Properties(annotationSchema.GetProperty("items").GetProperty("items"));
