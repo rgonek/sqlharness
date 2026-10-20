@@ -7,7 +7,7 @@ Implemented Plan 100 Task 3 on `plan-100` from HEAD `7164958da9c1b324b78b3ad52ba
 - Replaced CompareDetail's three native disclosures with a single Base UI Accordion in `multiple` mode. Items use stable values (`sql-diff`, `plans`, `case-details`), start closed, retain the existing summary text, and use `h2` headings appropriate to the page hierarchy. Accordion panels keep descendants mounted.
 - Replaced the requested OperationPage disclosures, Session metadata, Table IO More, Optimization Unassigned, StatementRows Objects, and mapped profile dimension disclosures with independent Base UI Collapsibles. Every panel uses the installed primitive's `keepMounted` API. Profile dimensions remain keyed by dimension name and default open without shared controlled state.
 - Reworked structural tests into trigger, expanded, and hidden-content interactions. Added coverage for independently open compare sections, retained nested More/Objects and SQL tab state across reopening, and keyed dimension add/remove behavior.
-- No backend, SQL, or live database writes. Temporary browser fixture files were removed after checks.
+- No backend, SQL, or live database writes. Temporary copies of the browser fixture under the UI root were removed after checks; the fixture and automation source are retained in `scratch/task-3/`.
 
 ## Verification
 
@@ -23,6 +23,8 @@ Commands were run in `src/SqlHarness.Dashboard/ui` unless noted:
 ## Browser checks
 
 A disposable fixture rendered the real CompareDetail with local fixture data in cached Chromium. The browser evidence and raw observations are in `scratch/task-3/browser-checks.log`; screenshots are `scratch/task-3/compare-open.png` and `scratch/task-3/compare-styled.png`.
+
+The retained `scratch/task-3/browser-fixture.html`, `browser-fixture.tsx`, and `browser-check.mjs` reproduce the check. Copy the two fixture files to the UI root as `task-3-browser-fixture.html` and `task-3-browser-fixture.tsx`, start Vite on port 4173 from the UI directory, then run the automation there with `playwright-core` resolvable and the cached Chromium path available. Remove those two temporary UI-root copies afterward.
 
 All three compare panels were initially closed and could remain open together. Keyboard Tab moved from the first disclosure trigger to Plans; Shift+Tab then Enter activated SQL diff. Nested More toggled without closing Plans and retained its open state after Plans was closed and reopened. Reduced-motion emulation was active. After revealing SQL diff, the two visible Monaco panes measured 455x512 at a 1280x900 viewport and rendered side by side; the inactive Monaco instance remained display:none at 0x0.
 
