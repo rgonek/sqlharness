@@ -771,6 +771,74 @@ public sealed class McpTokenBudgetTests
         Assert.Equal(JsonValueKind.Null, cases[0].GetProperty("equivalent").ValueKind);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    public void Compare_table_metric_keys_keep_identity_under_mcp_cell_clipping(int maximumCellCharacters)
+    {
+        var firstName = new string('x', maximumCellCharacters) + "first";
+        var secondName = new string('x', maximumCellCharacters) + "second";
+        var reads = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+        {
+            [firstName] = new(1, 11, 21),
+            [secondName] = new(2, 29, 39),
+        };
+        var source = BuildCompareReport();
+        var compare = source with
+        {
+            Baseline = source.Baseline with { LogicalReadsByTable = reads },
+            Candidate = source.Candidate with { LogicalReadsByTable = reads },
+        };
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, compare, null),
+            "sqlharness_compare", new McpResultBudget(4096, maximumCellCharacters));
+
+        ResultTextBytes(result, 4096);
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var projected = document.RootElement.GetProperty("result");
+        AssertTableReadValues(projected.GetProperty("baseline").GetProperty("logicalReadsByTable"), firstName, secondName);
+        AssertTableReadValues(projected.GetProperty("candidate").GetProperty("logicalReadsByTable"), firstName, secondName);
+    }
+
+    [Fact]
+    public void Compare_omits_unfittable_long_table_identity_truthfully_within_minimum_budget()
+    {
+        var longName = new string('x', 5000) + "table";
+        var source = BuildCompareReport();
+        var reads = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+        {
+            [longName] = new(1, 11, 21),
+            ["dbo.short"] = new(2, 29, 39),
+        };
+        var compare = source with
+        {
+            Baseline = source.Baseline with { LogicalReadsByTable = reads },
+            Candidate = source.Candidate with { LogicalReadsByTable = reads },
+        };
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, compare, null),
+            "sqlharness_compare", new McpResultBudget(4096, 2048));
+
+        ResultTextBytes(result, 4096);
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+        var projected = document.RootElement.GetProperty("result");
+        foreach (var side in new[] { "baseline", "candidate" })
+        {
+            var tableReads = projected.GetProperty(side).GetProperty("logicalReadsByTable");
+            Assert.False(tableReads.TryGetProperty(longName, out _));
+            if (tableReads.TryGetProperty("dbo.short", out var shortReads))
+                Assert.Equal(29, shortReads.GetProperty("median").GetInt64());
+        }
+    }
+
+    private static void AssertTableReadValues(JsonElement reads, string firstName, string secondName)
+    {
+        Assert.Equal(2, reads.EnumerateObject().Count());
+        Assert.Equal(11, reads.GetProperty(firstName).GetProperty("median").GetInt64());
+        Assert.Equal(29, reads.GetProperty(secondName).GetProperty("median").GetInt64());
+    }
+
     private static SqlHarnessCompareReport MatrixInventoryCompare(int index)
     {
         var source = BuildCompareReport();

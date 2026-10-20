@@ -910,6 +910,117 @@ public sealed class AgentOutputTests
         Assert.Equal(["[dbo].[A]", "[dbo].[D]", "[dbo].[E]", "[dbo].[C]", "[dbo].[B]", "Worktable"], ordered);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    [InlineData(2048)]
+    public void Agent_measure_map_preserves_complete_table_identity(int maximumCellCharacters)
+    {
+        var (firstName, secondName, reads) = CollidingTableReads(maximumCellCharacters);
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var baseline = VariantWithTableReads("baseline", reads);
+        var measureJson = RenderAgentResult(new SqlHarnessMeasureReport(target, 3, 3, true, baseline, null), "measure",
+            new AgentOutputOptions(65536, maximumCellCharacters));
+        AssertTableReadValues(measureJson.RootElement.GetProperty("result").GetProperty("query").GetProperty("logicalReadsByTable"),
+            firstName, secondName);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    [InlineData(2048)]
+    public void Agent_compare_maps_preserve_complete_table_identity_on_both_sides(int maximumCellCharacters)
+    {
+        var (firstName, secondName, reads) = CollidingTableReads(maximumCellCharacters);
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var baseline = VariantWithTableReads("baseline", reads);
+        var candidate = VariantWithTableReads("candidate", reads);
+        var compare = new SqlHarnessCompareReport(target, 3, 3, true, baseline, candidate, null);
+
+        var compareJson = RenderAgentResult(compare, "compare", new AgentOutputOptions(65536, maximumCellCharacters));
+        var result = compareJson.RootElement.GetProperty("result");
+        AssertTableReadValues(result.GetProperty("baseline").GetProperty("logicalReadsByTable"), firstName, secondName);
+        AssertTableReadValues(result.GetProperty("candidate").GetProperty("logicalReadsByTable"), firstName, secondName);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    [InlineData(2048)]
+    public void Agent_artifact_metric_map_preserves_complete_table_identity(int maximumCellCharacters)
+    {
+        var (firstName, secondName, reads) = CollidingTableReads(maximumCellCharacters);
+        var artifactMetrics = new ArtifactMetricsSection("artifact", "measure",
+            [new ArtifactNamedMetrics("query", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
+                new CompareDistribution(7, 8, 9), reads, [])]);
+        var artifactJson = RenderAgentResult(artifactMetrics, "artifact", new AgentOutputOptions(65536, maximumCellCharacters));
+        AssertTableReadValues(artifactJson.RootElement.GetProperty("result").GetProperty("variants")[0]
+            .GetProperty("logicalReadsByTable"), firstName, secondName);
+    }
+
+    [Fact]
+    public void Measure_set_summary_retains_each_requested_set()
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var metrics = VariantWithTableReads("query", new Dictionary<string, CompareDistribution>
+        {
+            ["dbo.Shared_first"] = new(1, 11, 21),
+            ["dbo.Shared_second"] = new(2, 29, 39),
+        });
+        var set = new SqlHarnessMeasureSetReport(target, 3, 6, 0, ["small", "large"], "user order", "cache stable",
+            [new MeasureParameterSetReport("small", [], null, 3, true, null, metrics, []),
+             new MeasureParameterSetReport("large", [], null, 3, true, null, metrics, [])],
+            new MeasureCrossSetSummary("small", 1, "large", 2, "small", 1, "large", 2, "small", 1, "large", 2), null);
+
+        var json = RenderAgentResult(set, "measure-set", new AgentOutputOptions(65536, 4));
+        var sets = json.RootElement.GetProperty("result").GetProperty("sets");
+        Assert.Equal(2, sets.GetArrayLength());
+        Assert.Equal(new[] { "smal", "larg" }, sets.EnumerateArray()
+            .Select(item => item.GetProperty("name").GetString()).ToArray());
+        Assert.Equal(8, sets[0].GetProperty("medianLogicalReads").GetInt64());
+        Assert.Equal(8, sets[1].GetProperty("medianLogicalReads").GetInt64());
+    }
+
+    private static (string First, string Second, IReadOnlyDictionary<string, CompareDistribution> Reads)
+        CollidingTableReads(int maximumCellCharacters)
+    {
+        var (firstName, secondName) = CollidingTableNames(maximumCellCharacters);
+        return (firstName, secondName, new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+        {
+            [firstName] = new(1, 11, 21),
+            [secondName] = new(2, 29, 39),
+        });
+    }
+
+    private static (string First, string Second) CollidingTableNames(int maximumCellCharacters)
+    {
+        var shared = new string('x', maximumCellCharacters);
+        return ($"{shared}first", $"{shared}second");
+    }
+
+    private static CompareVariantReport VariantWithTableReads(string name,
+        IReadOnlyDictionary<string, CompareDistribution> reads) =>
+        new(name, new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
+            new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], [])
+        {
+            LogicalReadsByTable = reads,
+        };
+
+    private static JsonDocument RenderAgentResult(object report, string command, AgentOutputOptions options)
+    {
+        var output = new StringWriter();
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), command,
+            new OutputCaptureWriter(output), options);
+        return JsonDocument.Parse(output.ToString());
+    }
+
+    private static void AssertTableReadValues(JsonElement reads, string firstName, string secondName)
+    {
+        Assert.Equal(2, reads.EnumerateObject().Count());
+        Assert.Equal(11, reads.GetProperty(firstName).GetProperty("median").GetInt64());
+        Assert.Equal(29, reads.GetProperty(secondName).GetProperty("median").GetInt64());
+    }
+
     [Fact]
     public void Query_small_three_result_sets_render_complete_with_ordinals()
     {
