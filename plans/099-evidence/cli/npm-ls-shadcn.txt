@@ -1,0 +1,2 @@
+ui@0.0.0 D:\Dev\sqlharness\.worktrees\plan-099\src\SqlHarness.Dashboard\ui
+└── shadcn@4.22.1
