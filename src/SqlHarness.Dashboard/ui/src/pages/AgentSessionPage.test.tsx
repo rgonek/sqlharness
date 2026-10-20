@@ -44,6 +44,53 @@ test("agent detail shows membership counts, markers, annotations, and child opti
   expect(patches).toContainEqual({ starred: true })
 })
 
+test("agent session note drafts cancel cleanly and save the current value after a retry", async () => {
+  let savedNote = "full owner note"
+  const patches: unknown[] = []
+  const calls = stubFetch({
+    "/api/settings": settings,
+    "/api/agent-sessions/codex/conversation-1": { agentSession: summary, get note() { return savedNote }, operations: [] },
+    "/api/agent-sessions/codex/conversation-1/annotation": (_url: URL, init?: RequestInit) => {
+      const patch = JSON.parse(String(init?.body)) as { note?: string | null }
+      patches.push(patch)
+      if (patches.length === 1) return new Response("save failed", { status: 500 })
+      savedNote = patch.note ?? ""
+      return new Response(JSON.stringify({ title: null, note: savedNote, starred: false, archived: false }), { status: 200 })
+    },
+    "/api/agent-sessions/codex/conversation-1/optimization": { subjects: [], unassigned: [] },
+  })
+  renderApp("/agent-sessions/codex/conversation-1")
+
+  await screen.findByText("full owner note")
+  await userEvent.click(screen.getByRole("button", { name: "Edit note" }))
+  const note = screen.getByRole("textbox", { name: "Agent session note" })
+  expect(note).toHaveValue("full owner note")
+  expect(note).toHaveAttribute("maxlength", "10000")
+  expect(note).toHaveAttribute("rows", "5")
+  await userEvent.clear(note)
+  await userEvent.type(note, "discarded draft")
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }))
+
+  expect(screen.queryByRole("textbox", { name: "Agent session note" })).not.toBeInTheDocument()
+  expect(screen.getByText("full owner note")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Edit note" }))
+  const reopenedNote = screen.getByRole("textbox", { name: "Agent session note" })
+  expect(reopenedNote).toHaveValue("full owner note")
+  await userEvent.clear(reopenedNote)
+  await userEvent.type(reopenedNote, "saved owner note")
+  await userEvent.click(screen.getByRole("button", { name: "Save note" }))
+
+  expect(await screen.findByRole("alert")).toBeInTheDocument()
+  expect(screen.getByRole("textbox", { name: "Agent session note" })).toHaveValue("saved owner note")
+  expect(patches).toEqual([{ note: "saved owner note" }])
+  await userEvent.click(screen.getByRole("button", { name: "Save note" }))
+
+  expect(await screen.findByText("saved owner note")).toBeInTheDocument()
+  expect(screen.queryByRole("textbox", { name: "Agent session note" })).not.toBeInTheDocument()
+  expect(patches).toEqual([{ note: "saved owner note" }, { note: "saved owner note" }])
+  expect(calls).toContain("/api/agent-sessions/codex/conversation-1/annotation")
+})
+
 test("subagent fallback label is visible", async () => {
   stubFetch({
     "/api/settings": settings,
