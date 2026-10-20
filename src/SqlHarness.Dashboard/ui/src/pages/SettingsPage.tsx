@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createSaveQueue } from "@/lib/saveQueue"
 import { isDestructive } from "@/lib/settingsRules"
 import { BUILT_IN_SOUNDS, getSoundPreferences, MAX_CUSTOM_SOUND_BYTES, previewApprovalSound, saveSoundPreferences, validateCustomSound, type SoundPreferences } from "@/mutations/sound"
@@ -136,11 +137,15 @@ function BrowserSoundSettings() {
         {preferences ? <>
           <div className="grid gap-1">
             <Label htmlFor="approval-sound">Approval sound</Label>
-            <select id="approval-sound" className="h-9 w-fit rounded-lg border border-input bg-background px-2 text-sm" value={preferences.selection}
-              onChange={event => store({ ...preferences, selection: event.target.value as SoundPreferences["selection"] })}>
-              {BUILT_IN_SOUNDS.map(sound => <option key={sound.id} value={sound.id}>{sound.label}</option>)}
-              {preferences.customAudio && <option value="custom">Custom audio</option>}
-            </select>
+            <Select items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : [])]}
+              value={preferences.selection} onValueChange={value => { if (value !== null) store({ ...preferences, selection: value as SoundPreferences["selection"] }) }}>
+              <SelectTrigger id="approval-sound" className="w-full max-w-sm"><SelectValue>
+                {value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}
+              </SelectValue></SelectTrigger>
+              <SelectContent>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}
+                {preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-wrap gap-2">
             {BUILT_IN_SOUNDS.map(sound => <Button key={sound.id} type="button" variant="outline" disabled={preferences.muted}
@@ -354,10 +359,11 @@ export function SettingsPage() {
         <CardContent className="grid gap-4">
           <div className="grid gap-1">
             <Label htmlFor="mutation-default-mode">Default mutation mode</Label>
-            <select id="mutation-default-mode" aria-label="Default mutation mode" className="h-9 w-fit rounded-lg border border-input bg-background px-2 text-sm"
-              value={draft.mutations.defaultMode} onChange={event => setMutations({ defaultMode: event.target.value as Settings["mutations"]["defaultMode"] })}>
-              <option value="never">Never</option><option value="operator">Operator approval</option><option value="yolo">YOLO</option>
-            </select>
+            <Select items={[{ value: "never", label: "Never" }, { value: "operator", label: "Operator approval" }, { value: "yolo", label: "YOLO" }]}
+              value={draft.mutations.defaultMode} onValueChange={value => { if (value !== null) setMutations({ defaultMode: value as Settings["mutations"]["defaultMode"] }) }}>
+              <SelectTrigger id="mutation-default-mode" className="w-full max-w-sm"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="never">Never</SelectItem><SelectItem value="operator">Operator approval</SelectItem><SelectItem value="yolo">YOLO</SelectItem></SelectContent>
+            </Select>
           </div>
           <div className="grid gap-1">
             <span className="text-sm">Verification</span>

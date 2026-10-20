@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test, vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -76,15 +76,49 @@ test("per-run details select one case and one side at a time", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Per-case & per-run details" }))
   const section = screen.getByRole("region", { name: "Per-case & per-run details" })
   const caseSelect = within(section).getByRole("combobox", { name: "Case" })
-  expect(caseSelect).toHaveValue("1")
-  fireEvent.change(caseSelect, { target: { value: "0" } })
+  expect(caseSelect).toHaveTextContent("@tenant = N'silver'")
+  await userEvent.click(caseSelect)
+  await userEvent.click(screen.getByRole("option", { name: /^@tenant = N'gold'$/ }))
   expect(onCaseChange).toHaveBeenCalledWith("0")
-  await userEvent.selectOptions(within(section).getByRole("combobox", { name: "Side" }), "candidate")
+  const side = within(section).getByRole("combobox", { name: "Side" })
+  expect(side).toHaveTextContent("Baseline")
+  await userEvent.click(side)
+  await userEvent.click(screen.getByRole("option", { name: /^Candidate$/ }))
+  expect(side).toHaveTextContent("Candidate")
   expect(within(section).getAllByRole("region", { name: "Key metrics" })).toHaveLength(1)
   expect(within(section).getByText("22 ms")).toBeInTheDocument()
   expect(within(section).queryByText("21 ms")).not.toBeInTheDocument()
   expect(within(section).getByText(/Results differ/)).toBeInTheDocument()
   expect(within(section).getByText(/Regression detected/)).toBeInTheDocument()
+})
+
+test("cases with duplicate visible labels remain selectable by case identity", async () => {
+  const onCaseChange = vi.fn()
+  const detail = operationDetail({
+    operation: operation({ operation: "compare" }),
+    conditions: conditions({ cases: [
+      { id: "0", index: 0, label: "Same case label", setName: null, varying: [], fingerprint: "a" },
+      { id: "1", index: 1, label: "Same case label", setName: null, varying: [], fingerprint: "b" },
+    ] }),
+    compareCases: [{ index: 0 }, { index: 1 }],
+    variants: [
+      variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 }),
+      variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0 }),
+      variant({ ordinal: 2, variant: "baseline", caseId: "1", matrixCell: 1 }),
+      variant({ ordinal: 3, variant: "candidate", caseId: "1", matrixCell: 1 }),
+    ],
+  })
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <CompareDetail detail={detail} selectedCase="1" onCaseChange={onCaseChange} />
+  </QueryClientProvider>)
+  await userEvent.click(screen.getByRole("button", { name: "Per-case & per-run details" }))
+  const caseSelect = screen.getByRole("combobox", { name: "Case" })
+  expect(caseSelect).toHaveTextContent("Same case label")
+  await userEvent.click(caseSelect)
+  expect(screen.getByRole("option", { name: /^Same case label \(case 0\)$/ })).toBeInTheDocument()
+  expect(screen.getByRole("option", { name: /^Same case label \(case 1\)$/ })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("option", { name: /^Same case label \(case 0\)$/ }))
+  expect(onCaseChange).toHaveBeenCalledWith("0")
 })
 
 test("SQL, conditions, and plans stay within their disclosures", async () => {
@@ -193,7 +227,8 @@ test("plans and reproduction scripts use the selected operation's actual baselin
   expect(planHrefs).toContain(`/api/plan-documents/${before}`)
   expect(planHrefs).toContain(`/api/plan-documents/${after}`)
   await userEvent.click(screen.getByRole("button", { name: "Per-case & per-run details" }))
-  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Side" }), "candidate")
+  await userEvent.click(screen.getByRole("combobox", { name: "Side" }))
+  await userEvent.click(screen.getByRole("option", { name: /^Candidate$/ }))
   await waitFor(() => expect(calls.some(call => {
     const url = new URL(call, "http://dashboard")
     return url.pathname === "/api/operations/10/repro" && url.searchParams.get("side") === "candidate" && url.searchParams.get("case") === "0"

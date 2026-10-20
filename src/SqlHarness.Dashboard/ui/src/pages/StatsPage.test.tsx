@@ -56,7 +56,7 @@ test("no-profile activity has a distinct scope and drills down without a profile
   const requests: URL[] = []
   const calls = stubFetch({
     "/api/stats": (url: URL) => {
-      if (url.searchParams.get("unprofiled") !== "true") return jsonResponse(stats())
+      if (url.searchParams.get("unprofiled") !== "true") return jsonResponse(stats({ profileOperations: [{ profile: "app", operations: 1 }] }))
       requests.push(url)
       const literalUnknown = dimensionValue("region", "Unknown", 1, 10)
       const api = dimensionValue("component", "api", 1, 10)
@@ -79,7 +79,11 @@ test("no-profile activity has a distinct scope and drills down without a profile
   })
   renderApp("/stats")
 
-  await userEvent.selectOptions(await screen.findByRole("combobox", { name: "Statistics profile" }), "unprofiled")
+  const profile = await screen.findByRole("combobox", { name: "Statistics profile" })
+  await waitFor(() => expect(profile).toHaveTextContent("app"))
+  await userEvent.click(profile)
+  await userEvent.click(screen.getByRole("option", { name: /^No profile$/ }))
+  expect(profile).toHaveTextContent("No profile")
   expect(await screen.findByText(/No profile · database template: definition unavailable/)).toBeInTheDocument()
   expect(await screen.findByRole("button", { name: /region Unknown, component api: 1/ })).toBeInTheDocument()
   expect(screen.getByRole("cell", { name: "postgres" })).toBeInTheDocument()
@@ -112,7 +116,7 @@ test("selects a profile and shows filtered, searchable dimension matrix totals",
 
   const profile = await screen.findByRole("combobox", { name: "Statistics profile" })
   expect(await screen.findByText(/database template: \{project\}\.\{component\}/)).toBeInTheDocument()
-  expect(profile).toHaveValue("profile:app")
+  expect(profile).toHaveTextContent("app")
   expect(await screen.findByRole("button", { name: /component api, project alpha: 2/ })).toBeInTheDocument()
   expect(screen.getByText(/Full-scope total: 3 \(3 operations\)/)).toBeInTheDocument()
 
@@ -128,14 +132,17 @@ test("selects a profile and shows filtered, searchable dimension matrix totals",
   await userEvent.selectOptions(projectFilter, "value:beta")
   expect(calls.some(call => call.includes("dimensions=%7B%22project%22%3A%22beta%22%7D"))).toBe(true)
 
-  await userEvent.selectOptions(profile, "profile:solo")
+  await userEvent.click(profile)
+  await userEvent.click(screen.getByRole("option", { name: /^solo$/ }))
   expect(await screen.findByRole("heading", { name: "Breakdown" })).toBeInTheDocument()
-  expect(profile).toHaveValue("profile:solo")
+  expect(profile).toHaveTextContent("solo")
   await userEvent.click(screen.getByRole("tab", { name: "All time" }))
   await screen.findByRole("heading", { name: "Breakdown" })
-  expect(profile).toHaveValue("profile:solo")
+  expect(profile).toHaveTextContent("solo")
 
-  await userEvent.selectOptions(profile, "profile:empty")
+  await userEvent.click(profile)
+  await userEvent.click(screen.getByRole("option", { name: /^empty$/ }))
+  expect(profile).toHaveTextContent("empty")
   expect(await screen.findByText("This profile has no configured or recorded dimensions.")).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: "Databases in this scope" })).toBeInTheDocument()
 })
@@ -191,14 +198,15 @@ test("switching from a profile named unprofiled to no-profile resets matrix cont
 
   const profile = await screen.findByRole("combobox", { name: "Statistics profile" })
   await screen.findByText(/Showing 25 of 30 row values/)
-  expect(profile).toHaveValue("profile:unprofiled")
+  expect(profile).toHaveTextContent("unprofiled")
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "Metric" }), "failed")
   setMatrixSearch("profile-value-29")
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "Display limit per axis" }), "10")
 
-  fireEvent.change(profile, { target: { value: "unprofiled" } })
+  await userEvent.click(profile)
+  await userEvent.click(screen.getByRole("option", { name: /^No profile$/ }))
 
-  await waitFor(() => expect(profile).toHaveValue("unprofiled"))
+  await waitFor(() => expect(profile).toHaveTextContent("No profile"))
   await waitFor(() => expect(calls.some(call => call.startsWith("/api/stats?") && call.includes("unprofiled=true"))).toBe(true))
   expect(await screen.findByRole("combobox", { name: "region" })).toBeInTheDocument()
   expect(screen.getByRole("combobox", { name: "Metric" })).toHaveValue("operations")
@@ -288,7 +296,7 @@ test("preserves a non-axis filter in cell scope across a time-range change", asy
     && call.includes("rowDimension=component") && call.includes("columnDimension=project"))).toBe(true)
 
   await userEvent.click(screen.getByRole("tab", { name: "All time" }))
-  await waitFor(() => expect(profile).toHaveValue("profile:app"))
+  await waitFor(() => expect(profile).toHaveTextContent("app"))
   await waitFor(() => expect(screen.getByRole("combobox", { name: "region" })).toHaveValue("value:west"))
   await userEvent.click(await screen.findByRole("button", { name: /component api, project alpha:/ }))
   const latestScopedUrl = new URL(`http://local${calls.filter(call => call.startsWith("/api/stats?") && call.includes("profile=app")).at(-1)}`)

@@ -9,6 +9,7 @@ import { Kpi } from "@/components/Kpi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -158,21 +159,21 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
       <div className="flex flex-wrap items-center gap-4">
         <h1>Usage</h1>
         <div className="grid min-w-52 gap-1.5">
-          <Label htmlFor="stats-profile">Profile</Label>
-          <select
-            id="stats-profile"
-            aria-label="Statistics profile"
-            className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted"
+          <Label htmlFor="stats-profile">Statistics profile</Label>
+          <Select items={[...profileOptions.map(name => ({ value: `profile:${name}`, label: name })), { value: "unprofiled", label: "No profile" }]}
             value={selectedProfile === null ? "unprofiled" : `profile:${selectedProfile}`}
-            onChange={event => {
-              setManualProfile({ value: event.target.value === "unprofiled" ? null : event.target.value.slice("profile:".length) })
+            onValueChange={value => {
+              if (value === null) return
+              setManualProfile({ value: value === "unprofiled" ? null : value.slice("profile:".length) })
               setDimensionFilters({})
               setAxisChoice(null)
             }}
           >
-            {profileOptions.map(name => <option key={name} value={`profile:${name}`}>{name}</option>)}
-            <option value="unprofiled">No profile</option>
-          </select>
+            <SelectTrigger id="stats-profile" className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>{profileOptions.map(name => <SelectItem key={name} value={`profile:${name}`}>{name}</SelectItem>)}
+              <SelectItem value="unprofiled">No profile</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <Tabs value={range} onValueChange={value => {
           const nextRange = String(value) as StatsRange

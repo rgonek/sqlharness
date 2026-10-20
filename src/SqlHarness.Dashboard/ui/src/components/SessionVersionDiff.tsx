@@ -3,6 +3,7 @@ import { NotFoundError } from "@/api/client"
 import { useSessionSqlText } from "@/api/queries"
 import type { AgentSessionKey } from "@/api/types"
 import { CopyButton } from "@/components/CopyButton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DiffControls } from "@/components/SqlDiff"
 import { LazySqlMergeView, loadUnifiedDiffText } from "@/components/SqlEditors"
 import type { SqlVersionOption } from "@/lib/compare"
@@ -40,6 +41,7 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
   const [toSelection, setToSelection] = useState<string | null>(() => keyOf(options.find(option => option.version === initialTo) ?? options.at(-1)))
   const fromOption = selectedOption(options, fromSelection) ?? options[0]
   const toOption = selectedOption(options, toSelection) ?? options.at(-1)
+  const selectItems = options.map(option => ({ value: keyOf(option)!, label: option.label ?? option.version }))
   const fromQuery = useSessionSqlText(sessionId, fromOption?.hash ?? null, agentSessionKey)
   const toQuery = useSessionSqlText(sessionId, toOption?.hash ?? null, agentSessionKey)
   const [mode, setMode] = useState<DiffMode>(() => readPreference(MODE_KEY, ["side-by-side", "unified"], "side-by-side"))
@@ -86,15 +88,17 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
 
   return <div className="space-y-3">
     <div className="grid gap-3 sm:grid-cols-2">
-      <label className="grid gap-1 text-sm">From version
-        <select aria-label="From version" value={keyOf(fromOption) ?? ""} onChange={event => setFromSelection(event.target.value)}>
-          {options.map(option => <option key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</option>)}
-        </select>
+      <label className="grid min-w-0 gap-1 text-sm">From version
+        <Select items={selectItems} value={keyOf(fromOption)} onValueChange={value => setFromSelection(value)}>
+          <SelectTrigger aria-label="From version" className="w-full min-w-0"><SelectValue placeholder="No versions available" /></SelectTrigger>
+          <SelectContent>{options.map(option => <SelectItem key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</SelectItem>)}</SelectContent>
+        </Select>
       </label>
-      <label className="grid gap-1 text-sm">To version
-        <select aria-label="To version" value={keyOf(toOption) ?? ""} onChange={event => setToSelection(event.target.value)}>
-          {options.map(option => <option key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</option>)}
-        </select>
+      <label className="grid min-w-0 gap-1 text-sm">To version
+        <Select items={selectItems} value={keyOf(toOption)} onValueChange={value => setToSelection(value)}>
+          <SelectTrigger aria-label="To version" className="w-full min-w-0"><SelectValue placeholder="No versions available" /></SelectTrigger>
+          <SelectContent>{options.map(option => <SelectItem key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</SelectItem>)}</SelectContent>
+        </Select>
       </label>
     </div>
     <div className="space-y-3">

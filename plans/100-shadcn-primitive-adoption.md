@@ -74,13 +74,13 @@
 **Tests:** src/components/{SessionVersionDiff,CompareDetail}.test.tsx; src/pages/{SettingsMutations,SettingsPage,StatsPage}.test.tsx.
 **Interfaces:** Seven Select sites; explicit items label mapping; controlled values/callbacks preserve existing domain types.
 
-- [ ] Convert from/to versions, case/side, approval sound/default mutation mode and statistics profile. Use current Base UI generated API, not Radix snippets.
-- [ ] Provide items or a formatted SelectValue so initial closed triggers show human labels, never encoded version/hash JSON. Keep exact option identities, order and conditional/disabled behavior.
-- [ ] Put id/label association on the interactive trigger. Resolve Statistics profile's competing labels into one consistent visible/accessible name and deliberately update affected tests.
-- [ ] Use standard component sizes and responsive widths; add layout classes only where usability needs them. No h-9 parity requirement.
-- [ ] Replace selectOptions/fireEvent.change with trigger-open then option-click. Use screen for portal options. Assert initial/updated label and actual downstream case/version/preference, not just label text. Distinguish duplicate visible labels by identity without first-match hacks.
-- [ ] Cover persisted/initial values before opening the popup and missing/empty option transitions. Preserve number-input assertions in SettingsPage.
-- [ ] Run focused suites/typecheck/lint. Browser-check keyboard arrows, Enter/Escape, typeahead, focus return, long labels and viewport overflow. Review and commit.
+- [x] Convert from/to versions, case/side, approval sound/default mutation mode and statistics profile. Use current Base UI generated API, not Radix snippets.
+- [x] Provide items or a formatted SelectValue so initial closed triggers show human labels, never encoded version/hash JSON. Keep exact option identities, order and conditional/disabled behavior.
+- [x] Put id/label association on the interactive trigger. Resolve Statistics profile's competing labels into one consistent visible/accessible name and deliberately update affected tests.
+- [x] Use standard component sizes and responsive widths; add layout classes only where usability needs them. No h-9 parity requirement.
+- [x] Replace selectOptions/fireEvent.change with trigger-open then option-click. Use screen for portal options. Assert initial/updated label and actual downstream case/version/preference, not just label text. Distinguish duplicate visible labels by identity without first-match hacks.
+- [x] Cover persisted/initial values before opening the popup and missing/empty option transitions. Preserve number-input assertions in SettingsPage.
+- [x] Run focused suites/typecheck/lint. Browser-check keyboard arrows, Enter/Escape, typeahead, focus return, long labels and viewport overflow. Review and commit.
 
 ### Task 5: Dimension filters and matrix controls
 

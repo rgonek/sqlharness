@@ -10,6 +10,7 @@ import { ConditionsList } from "@/components/ConditionsList"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { badgeTier } from "@/lib/flags"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type JsonObject = Record<string, unknown>
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
@@ -52,14 +53,29 @@ function Cases({ detail, selectedCase, onCaseChange }: { detail: OperationDetail
   const pairs = comparePairs(detail.variants)
   const cells = detail.compareCases ?? []
   const cards = compareCards(detail)
+  const selectableCards = cards.filter(item => item.pair)
+  const labelCounts = new Map<string, number>()
+  for (const item of selectableCards) labelCounts.set(item.label, (labelCounts.get(item.label) ?? 0) + 1)
+  const accessibleLabel = (item: CompareCard) => labelCounts.get(item.label)! > 1 ? `${item.label} (case ${item.pair!.baseline.caseId})` : item.label
   if (pairs.length === 0 && cells.length === 0) return <p className="text-sm text-muted-foreground">No complete baseline/candidate pairs are available.</p>
   const card = cards.find(item => item.pair?.baseline.caseId === selectedCase) ?? cards[0]
   const pair = card?.pair
   const selected = pair ? (side === "baseline" ? pair.baseline : pair.candidate) : null
   return <div className="space-y-3">
     <div className="flex flex-wrap items-center gap-3">
-      <label className="text-sm">Case <select aria-label="Case" value={card?.pair?.baseline.caseId ?? selectedCase} onChange={event => onCaseChange?.(event.target.value)} className="ml-2 rounded-md border bg-background px-2 py-1">{cards.filter(item => item.pair).map(item => <option key={item.pair!.baseline.caseId} value={item.pair!.baseline.caseId}>{item.label}</option>)}</select></label>
-      <label className="text-sm">Side <select aria-label="Side" value={side} onChange={event => setSide(event.target.value as typeof side)} className="ml-2 rounded-md border bg-background px-2 py-1"><option value="baseline">Baseline</option><option value="candidate">Candidate</option></select></label>
+      <label className="grid min-w-0 gap-1 text-sm">Case
+        <Select items={selectableCards.map(item => ({ value: item.pair!.baseline.caseId, label: item.label }))}
+          value={card?.pair?.baseline.caseId ?? selectedCase} onValueChange={value => { if (value !== null) onCaseChange?.(value) }}>
+          <SelectTrigger aria-label="Case" className="w-full min-w-0"><SelectValue placeholder="No cases available" /></SelectTrigger>
+          <SelectContent>{selectableCards.map(item => <SelectItem key={item.pair!.baseline.caseId} value={item.pair!.baseline.caseId} aria-label={accessibleLabel(item)}>{item.label}</SelectItem>)}</SelectContent>
+        </Select>
+      </label>
+      <label className="grid min-w-0 gap-1 text-sm">Side
+        <Select items={[{ value: "baseline", label: "Baseline" }, { value: "candidate", label: "Candidate" }]} value={side} onValueChange={value => { if (value !== null) setSide(value) }}>
+          <SelectTrigger aria-label="Side" className="w-full min-w-0"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="baseline">Baseline</SelectItem><SelectItem value="candidate">Candidate</SelectItem></SelectContent>
+        </Select>
+      </label>
       {card && <span className="text-sm text-muted-foreground">Execution {detail.operation.status} · <span data-tier={card.regression?.verdict === "fail" ? badgeTier("regression") : undefined} title={regressionLabel(card.regression) === "No assessment" ? "No regression assessment is available for this comparison." : typeof card.regression?.policyVersion === "number" ? `Policy v${card.regression.policyVersion}` : undefined}>{regressionLabel(card.regression)}</span> · <span data-tier={card.equivalence?.equivalent === false ? badgeTier("results-differ") : undefined}>{equivalenceLabel(card.equivalence)}</span></span>}
     </div>
     {selected ? <><VariantPanel operationId={detail.operation.id} variant={selected} engine={detail.operation.engine} compareMetrics />

@@ -37,7 +37,7 @@ test("builds distinct hash-backed versions in numeric order", () => {
   ])
 })
 
-test("adds hash suffixes when retained versions share a label", () => {
+test("adds hash suffixes when retained versions share a label", async () => {
   const labeled = versionOptions([{ version: "v2", hash: "sha256:aaaaaaaa" }, { version: "v2", hash: "sha256:bbbbbbbb" }])
   stubFetch({
     "/api/sessions/5/sql": (url: URL) => {
@@ -47,8 +47,11 @@ test("adds hash suffixes when retained versions share a label", () => {
   })
   renderDiff(labeled)
 
-  expect(screen.getAllByRole("option", { name: "v2 (aaaaaaaa)" })).toHaveLength(2)
-  expect(screen.getAllByRole("option", { name: "v2 (bbbbbbbb)" })).toHaveLength(2)
+  expect(screen.getByRole("combobox", { name: "From version" })).toHaveTextContent("v2 (aaaaaaaa)")
+  expect(screen.getByRole("combobox", { name: "To version" })).toHaveTextContent("v2 (bbbbbbbb)")
+  await userEvent.click(screen.getByRole("combobox", { name: "From version" }))
+  expect(screen.getByRole("option", { name: /^v2 \(aaaaaaaa\)$/ })).toBeInTheDocument()
+  expect(screen.getByRole("option", { name: /^v2 \(bbbbbbbb\)$/ })).toBeInTheDocument()
 })
 
 test("defaults to retained endpoints, fetches each selected hash, and keeps mode keyboard accessible", async () => {
@@ -63,8 +66,8 @@ test("defaults to retained endpoints, fetches each selected hash, and keeps mode
   renderDiff(options)
 
   expect(await screen.findByLabelText("merge side-by-side")).toHaveTextContent("SELECT 0|SELECT 3")
-  expect(screen.getByRole("combobox", { name: "From version" })).toHaveValue(JSON.stringify(["v0", hash0]))
-  expect(screen.getByRole("combobox", { name: "To version" })).toHaveValue(JSON.stringify(["v3", hash3]))
+  expect(screen.getByRole("combobox", { name: "From version" })).toHaveTextContent("v0")
+  expect(screen.getByRole("combobox", { name: "To version" })).toHaveTextContent("v3")
   expect(calls).toEqual([
     `/api/sessions/5/sql?hash=${encodeURIComponent(hash0)}`,
     `/api/sessions/5/sql?hash=${encodeURIComponent(hash3)}`,
@@ -76,10 +79,19 @@ test("defaults to retained endpoints, fetches each selected hash, and keeps mode
   expect(unified).toBeChecked()
   expect(await screen.findByLabelText("merge unified")).toBeInTheDocument()
 
-  await user.selectOptions(screen.getByRole("combobox", { name: "To version" }), JSON.stringify(["v1", hash1]))
+  await user.click(screen.getByRole("combobox", { name: "To version" }))
+  await user.click(screen.getByRole("option", { name: /^v1$/ }))
   expect(await screen.findByLabelText("merge unified")).toHaveTextContent("SELECT 0|SELECT 1")
+  expect(screen.getByRole("combobox", { name: "To version" })).toHaveTextContent("v1")
   await waitFor(() => expect(calls).toContain(`/api/sessions/5/sql?hash=${encodeURIComponent(hash1)}`))
   expect(calls.filter(call => call.includes(encodeURIComponent(hash0)))).toHaveLength(1)
+})
+
+test("shows an empty state and recovers when retained versions are missing", () => {
+  renderDiff([])
+  expect(screen.getByRole("combobox", { name: "From version" })).toHaveTextContent("No versions available")
+  expect(screen.getByRole("combobox", { name: "To version" })).toHaveTextContent("No versions available")
+  expect(screen.queryByRole("option")).not.toBeInTheDocument()
 })
 
 test("explains missing text and oversized stored versions", async () => {
