@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest"
 import { cleanup, configure } from "@testing-library/react"
-import { afterEach } from "vitest"
+import { afterEach, beforeEach } from "vitest"
+import { cancelTestQueries, installNetworkIsolation, restoreNetworkIsolation } from "@/test/network"
 
 // Recharts' ResponsiveContainer and Base UI measure elements; neither jsdom nor
 // happy-dom provides ResizeObserver.
@@ -31,4 +32,10 @@ window.scrollTo = (() => {}) as typeof window.scrollTo
 // The Linux gate's jsdom renders the stats page slower than findBy's 1s default.
 configure({ asyncUtilTimeout: 5_000 })
 
-afterEach(() => cleanup())
+beforeEach(() => installNetworkIsolation())
+
+afterEach(async () => {
+  cleanup()
+  await cancelTestQueries()
+  restoreNetworkIsolation()
+})

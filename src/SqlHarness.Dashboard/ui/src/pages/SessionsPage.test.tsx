@@ -157,6 +157,7 @@ test("a failed save shows the server message and re-enables the button", async (
 
 test("matching on lists expandable agent rows and leaves unmatched sessions at the top level", async () => {
   stubFetch({
+    "/api/settings": { status: "valid", settings: { dashboard: { agentTranscripts: { enabled: true } } } },
     "/api/agents": [],
     "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null, matching: true },
     "/api/sessions?archived=false&starred=false&limit=50": { items: [session({ id: 9, sessionKey: "cli:unmatched" })], nextCursor: null, matching: true },
@@ -178,6 +179,7 @@ test("matching on lists expandable agent rows and leaves unmatched sessions at t
 
 test("agent search preserves matches on child session titles", async () => {
   stubFetch({
+    "/api/settings": { status: "valid", settings: { dashboard: { agentTranscripts: { enabled: true } } } },
     "/api/agents": [],
     "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null, matching: true },
     "/api/sessions?archived=false&starred=false&limit=50": { items: [], nextCursor: null, matching: true },
@@ -197,6 +199,7 @@ test("agent search preserves matches on child session titles", async () => {
 
 test("does not label a matched child not matched when its agent row is on a later page", async () => {
   stubFetch({
+    "/api/settings": { status: "valid", settings: { dashboard: { agentTranscripts: { enabled: true } } } },
     "/api/agents": [],
     "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null, matching: true },
     "/api/sessions?archived=false&starred=false&limit=50": { items: [session({ id: 22, sessionKey: "mcp:later-page-child" })], nextCursor: 22, matching: true },

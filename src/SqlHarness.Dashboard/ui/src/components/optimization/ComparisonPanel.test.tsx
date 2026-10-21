@@ -31,6 +31,7 @@ function renderPanel(payload = comparison, versions = [{ version: "v0", hash: "h
     "/api/operations/214/optimization": comparison,
     "/api/operations/214/optimization?case=all&aggregate=sum": comparison,
     "/api/operations/214/optimization?case=customer-9001&aggregate=mean": comparison,
+    "/api/operations/214/repro": { text: "SELECT 1", completeness: "Complete", label: "Ready" },
   })
   return { ...renderApp(searchUrl), calls }
 }

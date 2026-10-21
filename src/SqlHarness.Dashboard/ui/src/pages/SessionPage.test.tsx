@@ -31,7 +31,7 @@ test("shows the optimization section for sessions marked with a compare", async 
 })
 
 test("unknown session shows not found", async () => {
-  stubFetch({})
+  stubFetch({ "/api/sessions/999": () => new Response("", { status: 404 }) })
   renderApp("/sessions/999")
   expect(await screen.findByText("Not found")).toBeInTheDocument()
 })
