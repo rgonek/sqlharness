@@ -1,6 +1,6 @@
 # Plan 092 verification evidence
 
-Plan 092 is implemented and Windows-verified on branch `plan-092` at product revision `b7b7b7088c545c9518de237838f91a429708281b`. All four task reviews are clean, and the Sol low whole-branch review approved head `077c64f` as **Ready to merge** with no Critical or Important findings. The review tail changes documentation and evidence only; the tested product revision remains unchanged. The branch has not been merged or pushed. Linux verification and live database access were not performed.
+Plan 092 is implemented and Windows-verified on branch `plan-092` at product revision `b7b7b7088c545c9518de237838f91a429708281b`. All four task reviews are clean, and the Sol low whole-branch review approved head `077c64f` as **Ready to merge** with no Critical or Important findings. The review tail changes documentation and evidence only; the tested product revision remains unchanged. The branch was fast-forwarded locally into `main` at `dbdb3e5`; no push occurred. Linux verification and live database access were not performed.
 
 ## Final review and deferred items
 
@@ -46,3 +46,7 @@ The next gate attempt on `b7b7b7088c545c9518de237838f91a429708281b` passed build
 - [Second gate attempt](evidence/092/attempt-2/console.log), archived with its stage logs.
 - [Focused ProcessRunner rerun](evidence/092/processrunner-focused.log) and direct exit file.
 - Initial format failure and branch-scope formatting repair logs are retained in the same `evidence/092/` folder.
+
+## Local integration
+
+Local fast-forward integration completed at `dbdb3e5`. Direct `git diff --exit-code b7b7b70 HEAD -- src tests scripts justfile` confirmed the integrated product, tests and verification scripts match the Windows-verified revision. No redundant gate was run under docs/agents/verification.md. Two accidentally tracked temporary SDD reports were removed from the index before integration; durable evidence remains here. This integration entry changes documentation only. No push, Linux gate or live database access occurred.

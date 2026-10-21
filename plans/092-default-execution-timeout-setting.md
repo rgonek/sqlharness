@@ -16,7 +16,7 @@
 
 ## Status and dependencies
 
-- IMPLEMENTATION VERIFIED on branch `plan-092` at product revision `b7b7b7088c545c9518de237838f91a429708281b`. All four task reviews and the Sol low whole-branch review are approved; final review marked Ready to merge with no Critical or Important findings. One non-blocking request-scope measure/compare parameter-description Minor is deferred (see [verification evidence](092-verification-evidence.md)). Not merged or pushed. No blocking dependencies. Priority P2.
+- DONE; locally integrated into `main` at `dbdb3e5`; verified product revision `b7b7b7088c545c9518de237838f91a429708281b`. All four task reviews and the Sol low whole-branch review are approved; final review marked Ready to merge with no Critical or Important findings. One non-blocking request-scope measure/compare parameter-description Minor is deferred (see [verification evidence](092-verification-evidence.md)). Not pushed; integrated product/test tree matches the Windows-verified revision. No blocking dependencies. Priority P2.
 
 ## Fix contract
 
