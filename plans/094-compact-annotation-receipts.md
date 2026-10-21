@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IMPLEMENTATION VERIFIED on `plan-094` at `a0c3760`; all task and whole-branch reviews approved. Not merged or pushed.
+- DONE; locally merged into `main` at `6acc342`; all task and whole-branch reviews approved. Verified product source unchanged; not pushed.
 - Priority P1; effort M; implementation risk MED; category perf.
 - Dependencies: 085 implementation is merged. Coordinate shared MCP helper edits with 095; implement 094 first.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
