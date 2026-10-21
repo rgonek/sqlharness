@@ -7,6 +7,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
+| [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | 084 merged | IMPLEMENTED and Windows-verified; final Sol low whole-branch review pending ([evidence](091-verification-evidence.md)) |
 
 ## Pending
 
@@ -17,7 +18,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |
 | [083](083-table-and-list-parameters.md) | Stage D table-valued parameters (inline rows or rows from a read-only query, catalog-resolved types, Structured binding) and Dapper list expansion across read-only tools; conditions, labels and SSMS scripts; mutation rejects them | 077, 079 merged | IMPLEMENTATION VERIFIED; locally integrated into `main` at `55d23ba`; final scoped Sol review approved; live UAT pending; Linux waived ([evidence](083-verification-evidence.md)) |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and live staged references without losing retry/cursor state | 084 merged | TODO — plan only |
-| [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | 084 merged | TODO — plan only |
 | [092](092-default-execution-timeout-setting.md) | Configurable default SQL execution timeout in config.json and Dashboard Settings; fallback for CLI commands and MCP tools | None | TODO — plan only |
 | [095](095-budget-aware-artifact-pages.md) | Explicit artifact response budgets and bounded configurable source pages with complete continuation | 093 and 094 implementations merged | TODO — P2, plan only |
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | TODO — P2, plan only |
@@ -38,7 +38,7 @@ Plans 063, 070, 071, 072, 073, 074, 076, 079, 080, 081, 085, and 087 are DONE; s
 
 Plan 082 is DONE and locally merged into `main` at `dd37512`. All task reviews and the final Sol low scoped re-review are approved. The Windows gate and branch formatting passed on `b9f6092`; the merge preserves that verified product tree. Synthetic UAT confirmed the focused verdict. Linux was explicitly skipped; see [verification evidence](082-verification-evidence.md) and [history](history.md).
 
-Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up plans 089, 090 and 091 cover the parked detail limit and both deferred Minors. See [084 evidence](084-verification-evidence.md) and [history](history.md).
+Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up Plans 089, 090 and 091 cover the parked detail limit and the two deferred Minors. Plan 091's verified UI gate closes its diagnostic Minor; Plan 090 remains the title-backfill follow-up. See [084 evidence](084-verification-evidence.md) and [history](history.md).
 
 ## History
 

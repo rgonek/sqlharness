@@ -12,7 +12,7 @@
 
 ## Status and dependencies
 
-- TODO, depends on merged 084. Priority P2, test-only hygiene. Planning authorization only. No new dependency assumed.
+- IN PROGRESS — Task 1 implementation and Windows verification are complete; the final Sol low whole-branch review is pending. Depends on merged 084. Priority P2, test-only hygiene. No new dependency assumed.
 
 ## Fix contract
 
@@ -52,9 +52,12 @@
 
 **Files:** `plans/091-verification-evidence.md`, this plan, queue/history; test helper documentation only if a reusable helper was introduced.
 
-- [ ] Review Task 1 and whole branch, including whether interception covers the actual network boundary and resets across tests.
-- [ ] Run Windows `just verify` with unique logs. Record all pass/skip counts and inspect the UI output, distinguishing expected warnings from unexpected errors. A zero exit alone does not close this plan.
-- [ ] Record before/after request evidence, exact test owners and final revision; close the 084 diagnostic Minor only when the unexplained requests are gone. Commit `docs(091): record UI network-isolation verification`.
+- [x] Review Task 1 evidence and confirm interception wraps the global `fetch` boundary before each test, explicit route matching is required, and teardown cleans the DOM, cancels tracked QueryClients, asserts retained unexpected-request diagnostics, and restores `fetch` in `finally`. Task 1 scoped review is approved; final Sol low whole-branch review remains pending.
+- [x] Run Windows `just verify` with unique persistent logs. Record every pass/skip count and inspect UI output; the unexplained request diagnostics are absent.
+- [x] Record before/after request evidence, exact test owners and tested revision in [verification evidence](091-verification-evidence.md). The Plan 084 UI diagnostic Minor is closed by the passing UI log with no `ECONNREFUSED`, unhandled rejection, or unmatched-request diagnostic.
+- [ ] Complete final Sol low whole-branch review and any required docs-only follow-up.
+
+Task 2 evidence commit: `docs(091): record UI network-isolation verification`. The full gate does not need to be repeated for subsequent documentation-only review amendments.
 
 ## Plan self-review
 
