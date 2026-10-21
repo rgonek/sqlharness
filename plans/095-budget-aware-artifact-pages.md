@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IMPLEMENTED on `plan-095` branch; Task 3 focused workflow is green. Pending final Windows gate, task/whole-branch review, and authorized local integration. See [verification evidence](095-verification-evidence.md).
+- IMPLEMENTED on `plan-095` branch; Task 3 focused workflow, direct branch formatting and final Windows gate are green on product revision `84b4796`. Task 3 review, independent whole-branch review, and authorized local integration remain pending. See [verification evidence](095-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: 093 and 094 implementations must be merged before starting; they fix shared identity projection and target-free budget plumbing.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.

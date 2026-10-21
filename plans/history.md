@@ -2,7 +2,7 @@
 
 ## Plan 095 implementation on branch — 2026-10-21 (review pending)
 
-Plan [095](095-budget-aware-artifact-pages.md) is implemented on `plan-095`; Task 3's actual-SDK 513-node fixture reconstructs identical complete nodes with five default-page calls or two calls at `pageSize=512` and `maxResultBytes=131072`. Combined MCP request/response wire bytes were 193,287 versus 190,465; these are deterministic fixture bytes, not model-token measurements. Task 3's focused workflow passed 8/8 and the human docs/evidence are updated. The final Windows gate, task/whole-branch review, and authorized local integration remain pending. No push or live database use occurred. See [verification evidence](095-verification-evidence.md).
+Plan [095](095-budget-aware-artifact-pages.md) is implemented on `plan-095`; Task 3's actual-SDK 513-node fixture reconstructs identical complete nodes with five default-page calls or two calls at `pageSize=512` and `maxResultBytes=131072`. Combined MCP request/response wire bytes were 193,287 versus 190,465; these are deterministic fixture bytes, not model-token measurements. Task 3's focused workflow passed 8/8. A Windows gate first exposed that the changed statement projection bypassed its existing detail-count limit; restoring that bound made the focused regression pass 1/1 and the final gate green on product revision `84b4796` (UI 361/361, Core 4,595 passed/11 skipped, MCP 489/4 skipped). Direct branch formatting also passed. Task 3/whole-branch review and authorized local integration remain pending. No push or live database use occurred. See [verification evidence](095-verification-evidence.md).
 
 ## Plan 091 DONE — locally integrated — 2026-10-21
 

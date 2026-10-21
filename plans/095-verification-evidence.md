@@ -55,6 +55,24 @@ The required Task 3 focused command passed after those changes:
 
 Result: 8 passed, 0 failed, 0 skipped; direct exit code 0. Full output is retained in `plans/095-evidence/task3-workflow.log` in the worktree.
 
-## Remaining completion evidence
+## Final product verification and review boundary
 
-The final branch formatter, Windows `just verify`, tested commit/tree, and task/whole-branch review results are recorded here after they finish. Until then this is implementation-branch evidence only; it is not a review approval or integration result.
+The final product revision tested by the direct branch formatter and the final Windows gate is `84b47966d8c249df64cf99345d1317faf8daa76e` (`fix(095): retain statement detail limit`), with tree `fa6ffad72b8a93b0299b80a114df59066197502d`. The later Task 3 evidence/report commit changes only plans and records; it does not change that tested product tree.
+
+The first full gate attempt exposed a real regression from Task 2: statement projection no longer honored its existing `detailLimit`. The relevant existing assertion, `Agent_projection_bounds_statement_entries_and_operator_details`, failed because it expected one selected statement at limit 1 and received two. The stage log is retained as `plans/095-evidence/gate-attempt-1-core-tests.log`; the complete failed console is `plans/095-evidence/verify-console.log`. Restoring `.Take(detailLimit)` in statement selection preserved the established projection contract while retaining byte-fit accounting. The focused regression then passed 1/1, and the final full Core and MCP suites passed on the fix.
+
+After the final product commit, the required direct branch format check passed:
+
+`pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 384357c031a321ab2f32cf99f049b9c0bc4c71f2`
+
+Result: `format: 13 changed C# file(s) (branch)`, `format: OK`, direct exit code 0. Output: `plans/095-evidence/branch-format-direct-final.log`. The branch `-Fix` pass also returned exit 0 (`branch-format-fix-regression.log`). The final `just verify` format stage skipped because no C# files were uncommitted; the direct branch check covered all branch-changed C# files.
+
+The required final Windows gate was run on that same product revision/tree:
+
+`just verify -LogDirectory D:/temp/sqlharness-plan095-verify`
+
+Runner PID 22656; direct exit code 0; `verify: OK stages=5 8m28s`. Stages: `ui-install` skipped because the lockfile was unchanged; build passed in 35.3s; UI check passed in 5m08s (64 files, 361 tests); Core passed 4,595, failed 0, skipped 11 (4,606 total); MCP passed 489, failed 0, skipped 4 (493 total); format skipped for zero uncommitted C# changes. Final console and per-stage logs are retained under `plans/095-evidence/verify-console-final.log` and `verify-final-*.log`; stage logs were initially written under `D:/temp/sqlharness-plan095-verify`.
+
+Task 3's actual-SDK test measures a deterministic synthetic saved-artifact fixture and asserts the host attempted zero DB connections. It does not invoke an LLM/provider, establish production latency, measure token consumption, or represent live saved database evidence. The byte and call comparison applies only to this same 513-node fixture, the listed defaults, and the two explicit request values. The live SDK discovery asserts current catalog sizes against the 32,768-byte ceiling; Plan 077's frozen `OperationAnnotations/off` snapshots and manifest remain unchanged. Only the historical workflow comparison field `discoveryUtf8Bytes` is normalized out, since the served catalog intentionally changed; runtime catalog byte/limit assertions are separate.
+
+This implementation branch has focused Task 3 results and a green direct formatter and final Windows gate. Task 3 review and independent whole-branch review remain pending. Local integration is authorized only after those reviews approve; this work has not merged, pushed, or accessed a live database.
