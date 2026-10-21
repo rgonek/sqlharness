@@ -1,5 +1,5 @@
-using System.Security.Cryptography;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -773,7 +773,9 @@ public class ArtifactReaderTests
         File.WriteAllText(Path.Combine(directory, "plans", planName), tree);
         File.WriteAllText(Path.Combine(directory, "runs.jsonl"), JsonSerializer.Serialize(new
         {
-            variant = "baseline", repetition = 1, planJsonFiles = new[] { planName },
+            variant = "baseline",
+            repetition = 1,
+            planJsonFiles = new[] { planName },
         }));
     }
 

@@ -382,6 +382,8 @@ The default is the last measured repetition and the response identifies that sel
 
 Plan nodes are flattened in preorder with stable paths and paged so following continuations reconstructs the saved hierarchy. Each response is trimmed to its byte budget; returned node counts vary with content and budget, and continuation advances by nodes returned. `planShapeStable` compares saved operator shape, object/index identity, and predicates, excluding costs, timing, and row counts. It is `null` when fewer than two measured repetitions are available, because there is not enough evidence to compare; in that case `evidenceGaps` is empty. If a multi-repetition comparison has missing or incomplete saved plan evidence, `planShapeStable` is also `null` and `evidenceGaps` describes the gap.
 
+MCP artifact reads accept `maxResultBytes` (4096..1048576, default 65536 and capped by the process limit) and a `pageSize` from 1..512 for matrix cells, operators, statements, or plan nodes. Omitted source windows default to 32 matrix cells, 32 operators, 128 statements, and 128 plan nodes. The final response budget can reduce the number returned below the requested page size; continue from the returned cursor to avoid gaps. See [the MCP artifact contract](docs/mcp/artifacts.md#artifacts) for the full behavior.
+
 The `operators` section is paged too, but its noteworthy-operator source is capped and does not represent the full plan.
 
 SQL Server per-table read summaries normalize session-suffixed temporary table names before aggregating repetitions: `[schema].[#name<underscores><12 hex>]` becomes `[schema].[#name]`, and `#name<underscores><12 hex>` becomes `#name`. Other table names are unchanged.

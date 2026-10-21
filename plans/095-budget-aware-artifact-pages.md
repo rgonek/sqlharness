@@ -1,12 +1,12 @@
 # Plan 095: Let saved-artifact reads spend an explicit bounded response budget
 
-> **Executor:** use staged implementation, task review and whole-branch review. This is a plan, not authorization to implement, merge, push, run paid agent trials or access a live database.
+> **Executor:** use staged implementation, task review and whole-branch review. Local integration is authorized after all implementation, reviews, and verification are complete and green. Pushes, paid agent trials, and live database access are not authorized.
 >
 > **Drift check first:** `git diff --stat 32adaa7..HEAD -- src/SqlHarness.Core/ArtifactReader.cs src/SqlHarness.Core/Contracts.cs src/SqlHarness.Mcp tests/SqlHarness.Tests/ArtifactReaderTests.cs tests/SqlHarness.Mcp.Tests`. Reconcile changed interfaces against the excerpts below; do not overwrite later features. Work in an isolated `.worktrees/plan-095` checkout.
 
 ## Status and authority
 
-- TODO — plan only. Planned at `32adaa7`, 2026-10-20.
+- IMPLEMENTED on `plan-095` branch; Task 3 focused workflow is green. Pending final Windows gate, task/whole-branch review, and authorized local integration. See [verification evidence](095-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: 093 and 094 implementations must be merged before starting; they fix shared identity projection and target-free budget plumbing.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -42,22 +42,22 @@ Docs: `docs/mcp/artifacts.md`, `docs/mcp/tools.md`, `docs/mcp/runtime.md`, relev
 
 ### Task 1: Add served-budget and source-window regressions
 
-- [ ] At a 256 KiB process ceiling, prove a saved-artifact call requesting more than 64 KiB can return more than 64 KiB of useful evidence while staying below its request/ceiling. Compare the old default to the explicit larger request.
-- [ ] Test pageSize 1, default, 512, 0 and 513; unknown/foreign artifact refusal must remain content-free regardless selectors/budget.
-- [ ] Prepare at least 513 plan nodes and a synthetic matrix inventory of more than 32 entries (reader-level fixture; do not lift real execution's 32-case ceiling). Reconstruct all items under small and large budgets.
+- [x] At a 256 KiB process ceiling, prove a saved-artifact call requesting more than 64 KiB can return more than 64 KiB of useful evidence while staying below its request/ceiling. Compare the old default to the explicit larger request.
+- [x] Test pageSize 1, default, 512, 0 and 513; unknown/foreign artifact refusal must remain content-free regardless selectors/budget.
+- [x] Prepare at least 513 plan nodes and a synthetic matrix inventory of more than 32 entries (reader-level fixture; do not lift real execution's 32-case ceiling). Reconstruct all items under small and large budgets.
 - **Verify:** `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpTokenBudgetTests"` and `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter FullyQualifiedName~ArtifactReaderTests` show intended RED.
 
 ### Task 2: Propagate bounded page requests and exact response budgets
 
-- [ ] Add optional fields through both MCP schemas/unknown-key allowlists and the Core reader operation. Preserve old method callers and CLI behavior.
-- [ ] Replace fixed source-window use with validated defaults/request values; use existing byte-fit accounting to derive returned cursor advancement.
-- [ ] Test no item fits, final page, includeText variants, multiple repetitions, inserts not applicable to immutable artifacts, and partial legacy evidence.
+- [x] Add optional fields through both MCP schemas/unknown-key allowlists and the Core reader operation. Preserve old method callers and CLI behavior.
+- [x] Replace fixed source-window use with validated defaults/request values; use existing byte-fit accounting to derive returned cursor advancement.
+- [x] Test no item fits, final page, includeText variants, multiple repetitions, inserts not applicable to immutable artifacts, and partial legacy evidence.
 - **Verify:** Task 1 commands GREEN; existing Plan 065/077 continuation and byte-budget tests remain green.
 
 ### Task 3: Demonstrate useful aggregation, not just bigger JSON
 
-- [ ] For the same saved 513-node evidence completion, record calls and total request/response bytes with default windows versus explicit pageSize/budget. A larger response should reduce calls where it actually fits; record any total-byte increase and do not call that token savings.
-- [ ] Exercise actual SDK tool calls with zero DB connections, not only direct projector calls. Record catalog bytes and defaults compatibility.
+- [x] For the same saved 513-node evidence completion, record calls and total request/response bytes with default windows versus explicit pageSize/budget. A larger response should reduce calls where it actually fits; record any total-byte increase and do not call that token savings.
+- [x] Exercise actual SDK tool calls with zero DB connections, not only direct projector calls. Record catalog bytes and defaults compatibility.
 - **Verify:** `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~AgentOptimizationWorkflowTests` GREEN, then Common verification.
 
 ## Maintenance notes
