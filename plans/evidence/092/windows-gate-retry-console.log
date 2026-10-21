@@ -1,0 +1,8 @@
+pwsh ./scripts/verify.ps1 -LogDirectory D:/temp/sqlharness-plan092-verify-20261021-b7b7b70-retry
+[6 q==> ui-install skipped (lockfile unchanged)
+==> build ok 32,8s
+==> ui-check ok 6m21s
+==> test ok 3m47s
+format: skipped (0 changed C# files)
+==> format skipped (0 changed C# files)
+verify: OK  stages=5  10m09s

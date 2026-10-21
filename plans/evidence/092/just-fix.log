@@ -1,0 +1,2 @@
+pwsh ./scripts/format-changed.ps1 -Fix
+[6 qformat: skipped (0 changed C# files)
