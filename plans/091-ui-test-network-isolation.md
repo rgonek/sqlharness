@@ -12,7 +12,7 @@
 
 ## Status and dependencies
 
-- IN PROGRESS — Task 1 implementation and Windows verification are complete; the final Sol low whole-branch review is pending. Depends on merged 084. Priority P2, test-only hygiene. No new dependency assumed.
+- IN PROGRESS — Task 1 implementation and Windows verification are complete. The final review's method-blind fixture finding is fixed and gated in `857402d`; final Sol low scoped review of the fix is pending. Depends on merged 084. Priority P2, test-only hygiene. No new dependency assumed.
 
 ## Fix contract
 
@@ -43,19 +43,19 @@
 
 **Interfaces:** Existing test harness and production query APIs remain compatible. If shared interception is needed, its lifecycle is test-scoped install/reset/restore, with explicit per-test handlers and an error for unmatched requests.
 
-- [ ] Run `npm --prefix src/SqlHarness.Dashboard/ui run check`, capture the exact diagnostic and identify request owners with test-scoped tracing. Record concrete offending files and method/path before changing fixtures.
-- [ ] Add a RED regression proving an unexpected request fails locally with method/path; add cleanup/isolation coverage for the actual offending lifecycle and preserve an intentional API-error test.
-- [ ] Implement explicit fixtures and teardown at the smallest owning scope; remove temporary tracing after root cause is documented. Never silence the original error globally.
-- [ ] Rerun affected tests GREEN, then full UI check; verify no unexpected ECONNREFUSED or unhandled rejections. Commit `test(091): isolate dashboard test network activity`.
+- [x] Run `npm --prefix src/SqlHarness.Dashboard/ui run check`, capture the exact diagnostic and identify request owners with test-scoped tracing. Record concrete offending files and method/path before changing fixtures.
+- [x] Add a RED regression proving an unexpected request fails locally with method/path; add cleanup/isolation coverage for the actual offending lifecycle and preserve an intentional API-error test.
+- [x] Implement explicit fixtures and teardown at the smallest owning scope; remove temporary tracing after root cause is documented. Never silence the original error globally.
+- [x] Rerun affected tests GREEN, then full UI check; verify no unexpected ECONNREFUSED or unhandled rejections. Commit `test(091): isolate dashboard test network activity`.
 
 ### Task 2: Full gate and diagnostic evidence
 
 **Files:** `plans/091-verification-evidence.md`, this plan, queue/history; test helper documentation only if a reusable helper was introduced.
 
-- [x] Review Task 1 evidence and confirm interception wraps the global `fetch` boundary before each test, explicit route matching is required, and teardown cleans the DOM, cancels tracked QueryClients, asserts retained unexpected-request diagnostics, and restores `fetch` in `finally`. Task 1 scoped review is approved; final Sol low whole-branch review remains pending.
+- [x] Review Task 1 evidence and confirm interception wraps the global `fetch` boundary before each test, explicit route matching is required, and teardown cleans the DOM, cancels tracked QueryClients, asserts retained unexpected-request diagnostics, and restores `fetch` in `finally`. Task 1 scoped review is approved. The whole-branch method-blind finding is fixed in `857402d`; final Sol low scoped review is pending.
 - [x] Run Windows `just verify` with unique persistent logs. Record every pass/skip count and inspect UI output; the unexplained request diagnostics are absent.
 - [x] Record before/after request evidence, exact test owners and tested revision in [verification evidence](091-verification-evidence.md). The Plan 084 UI diagnostic Minor is closed by the passing UI log with no `ECONNREFUSED`, unhandled rejection, or unmatched-request diagnostic.
-- [ ] Complete final Sol low whole-branch review and any required docs-only follow-up.
+- [ ] Complete final Sol low scoped review of `857402d` and any required docs-only follow-up.
 
 Task 2 evidence commit: `docs(091): record UI network-isolation verification`. The full gate does not need to be repeated for subsequent documentation-only review amendments.
 

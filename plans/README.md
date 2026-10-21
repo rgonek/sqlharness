@@ -7,7 +7,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
-| [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | 084 merged | IMPLEMENTED and Windows-verified; final Sol low whole-branch review pending ([evidence](091-verification-evidence.md)) |
+| [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | 084 merged | IMPLEMENTED and Windows-verified; method-aware final fix gated; final Sol low scoped review pending ([evidence](091-verification-evidence.md)) |
 
 ## Pending
 
