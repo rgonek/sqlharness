@@ -194,6 +194,8 @@ For output interpretation, the [tool contract](docs/mcp/tools.md) defines compar
 
 To enable agent labels, keep flags, and returned operation references, add `"operationAnnotations": true` under `journal` in `~/.sqlharness/config.json`. The default is off, and it requires `journal.enabled: true`; restart the MCP server and reconnect its client after changing it. Enabled `query`, `measure`, `compare`, `watch`, and `snapshot` calls accept optional labels (up to 120 Unicode code points) and keep flags. The owner star/note controls and **Named operations** dashboard view are available independently. Agent labels and keep flags are plain text stored whenever this feature is enabled, regardless of `journal.storeSensitive`; SQL, setup text, parameter values and plans still follow the sensitive-storage setting.
 
+`sqlharness_annotate` returns compact receipts by default, with one status per reference and no label echo. Pass `responseDetail: "full"` when the updated labels are needed; an oversized full response rolls back the whole batch. If the process is already at its result-byte ceiling, retry with the default receipt. See the [MCP annotation examples](docs/mcp/tools.md#operation-annotations) for the full-detail call and ceiling error.
+
 <a id="agent-startup"></a>
 
 ## Check your configuration

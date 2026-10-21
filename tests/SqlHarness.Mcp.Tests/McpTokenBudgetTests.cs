@@ -114,6 +114,13 @@ public sealed class McpTokenBudgetTests
 
             Assert.False(offJson.RootElement.TryGetProperty("operationRef", out _));
             Assert.Equal("0123456789abcdef0123456789abcdef", onJson.RootElement.GetProperty("operationRef").GetString());
+            if (budget == 4096)
+            {
+                Assert.Equal(285, McpResultAdapter.MeasureBytes(offResult));
+                var offHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(offText)));
+                Assert.Equal("611BF72927E6ADD8399D4F776D7B9D094FA4ED779CA8BFA59233802B89E085C1", offHash);
+                _output.WriteLine($"annotations-off query result SHA256: {offHash}");
+            }
             Assert.InRange(McpResultAdapter.MeasureBytes(offResult), 1, budget);
             Assert.InRange(McpResultAdapter.MeasureBytes(onResult), 1, budget);
             _output.WriteLine($"query result @{budget}: off={McpResultAdapter.MeasureBytes(offResult)} on={McpResultAdapter.MeasureBytes(onResult)} UTF-8 bytes");

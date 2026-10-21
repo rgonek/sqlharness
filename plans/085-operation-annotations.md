@@ -66,3 +66,9 @@
 - [x] Document the conditional `operationRef` in 077's contract docs (D1 amendment note), `docs/mcp.md`, README (switch, privacy: labels stored when on regardless of `storeSensitive`), capabilities docs. No skill change unless optional trials show under-labelling.
 - [x] Byte measurements recorded: tools/list on/off, representative results on/off. Optional paired agent trials and second-session reuse trial vs work-folder baseline were not run; they were not authorized.
 - [x] `just verify`; queue → history; commit `docs(085): record plan 085 evidence`.
+
+## Amendment 2 — compact annotation receipts (Plan 094, 2026-10-20)
+
+The historical Plan 085 contract and evidence describe full-detail annotation results. They do not establish the cost or behavior of compact receipts. Plan 094 amends the conditional `sqlharness_annotate` response contract: `responseDetail` defaults to `receipt`, which returns one ordered result per input with successful `operationRef`, `status`, `tool`, and `keep` fields and no label; unavailable results retain only `operationRef` and `status`. Explicit `responseDetail: "full"` retains resulting labels. Optional `maxResultBytes` is bounded by the process-owned ceiling, and full-detail overflow rolls back the entire batch before commit with an actionable error. Envelope version remains v3; the feature-off catalog and results remain byte-identical to their frozen goldens.
+
+Plan 094's deterministic served fixture compares the prior full-echo rejection plus split resubmission workflow with one receipt call for the same twenty successful updates. It records serialized UTF-8 input/output bytes and call counts separately from model tokens. This fixture is not provider tokenization, an actual-agent trial, or live-database evidence. See [Plan 094 verification evidence](094-verification-evidence.md) for exact measurements and tested revision.

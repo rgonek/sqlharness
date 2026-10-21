@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- TODO — plan only. Planned at `32adaa7`, 2026-10-20.
+- IMPLEMENTATION VERIFIED on `plan-094` at `a0c3760`; all task and whole-branch reviews approved. Not merged or pushed.
 - Priority P1; effort M; implementation risk MED; category perf.
 - Dependencies: 085 implementation is merged. Coordinate shared MCP helper edits with 095; implement 094 first.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -45,23 +45,23 @@ Out of scope: retention pins, authorization changes, larger input batches, autom
 
 ### Task 1: Freeze the compact contract with failing real-tool tests
 
-- [ ] Exercise both fixed and request served annotation tools with twenty 120-code-point multibyte labels, a 4096-byte process cap, and default receipt mode. Require twenty complete item outcomes and persisted changes, not an error/retry.
-- [ ] At a 65536-byte cap, request full detail and verify complete resulting labels. At 4096, oversized full detail must reject and preserve all prior labels/keep values.
-- [ ] Verify call-level budget is clamped, unsupported values rejected before writes, unknown/expired/foreign outcomes are uniform, and annotations-off schemas reject new arguments.
+- [x] Exercise both fixed and request served annotation tools with twenty 120-code-point multibyte labels, a 4096-byte process cap, and default receipt mode. Require twenty complete item outcomes and persisted changes, not an error/retry.
+- [x] At a 65536-byte cap, request full detail and verify complete resulting labels. At 4096, oversized full detail must reject and preserve all prior labels/keep values.
+- [x] Verify call-level budget is clamped, unsupported values rejected before writes, unknown/expired/foreign outcomes are uniform, and annotations-off schemas reject new arguments.
 - **Verify:** `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "FullyQualifiedName~AnnotateToolTests|FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpOperationAnnotationWiringTests"` has meaningful RED.
 
 ### Task 2: Implement receipts and single-source budget resolution
 
-- [ ] Extend both handler signatures, schema options/allowlists and target-free RunAsync budget plumbing. Preserve optional defaults at unrelated call sites.
-- [ ] Project the complete authorized item list to the selected response shape before the precommit fit check; return that same shape afterward.
-- [ ] Test duplicates/omitted fields/empty-label clear/idempotency and invalid-call journaling behavior using existing 085 conventions.
+- [x] Extend both handler signatures, schema options/allowlists and target-free RunAsync budget plumbing. Preserve optional defaults at unrelated call sites.
+- [x] Project the complete authorized item list to the selected response shape before the precommit fit check; return that same shape afterward.
+- [x] Test duplicates/omitted fields/empty-label clear/idempotency and invalid-call journaling behavior using existing 085 conventions.
 - **Verify:** Task 1 command GREEN; `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~McpTokenBudgetTests` GREEN.
 
 ### Task 3: Measure task cost and amend interfaces
 
-- [ ] Compare the old full-echo/rejection/split workflow against one receipt call for the same twenty successful updates. Record serialized input/output bytes and number of calls, separately from model tokens. Include actual error and resubmitted input in the old workflow total.
-- [ ] Freeze off-mode golden bytes and on-mode catalog size. Make one explicit full-detail example and one operator-ceiling error example available through served descriptions/docs.
-- [ ] Record the intended response change as a new amendment to 085; do not claim historical full-echo evidence applied to receipts.
+- [x] Compare the old full-echo/rejection/split workflow against one receipt call for the same twenty successful updates. Record serialized input/output bytes and number of calls, separately from model tokens. Include actual error and resubmitted input in the old workflow total.
+- [x] Freeze off-mode golden bytes and on-mode catalog size. Make one explicit full-detail example and one operator-ceiling error example available through served descriptions/docs.
+- [x] Record the intended response change as a new amendment to 085; do not claim historical full-echo evidence applied to receipts.
 - **Verify:** focused MCP tests above plus the real workflow fixture tests pass; Common verification completes.
 
 ## Maintenance notes

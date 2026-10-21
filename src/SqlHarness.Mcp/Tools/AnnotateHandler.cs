@@ -23,6 +23,10 @@ public sealed record AnnotationItemResult(
     string? Label = null,
     bool? Keep = null);
 
+internal sealed record AnnotationReceiptSuccess(string OperationRef, string Status, string Tool, bool? Keep);
+internal sealed record AnnotationUnavailable(string OperationRef, string Status);
+internal sealed record AnnotationFullSuccess(string OperationRef, string Status, string Tool, string? Label, bool? Keep);
+
 /// <summary>Resolves references and writes annotations using only the local journal.</summary>
 internal static class AnnotateHandler
 {
@@ -52,10 +56,42 @@ internal static class AnnotateHandler
         IReadOnlyList<AnnotationItemArgument> items,
         bool matchingOn,
         CancellationToken cancellationToken,
-        int responseBudgetBytes = McpLimits.MaxCallToolResultBudgetBytes)
+        int responseBudgetBytes = McpLimits.MaxCallToolResultBudgetBytes,
+        string responseDetail = "full")
+    {
+        var result = await ApplyCoreAsync(databasePath, sessionKey, currentAgentSessionId, items, matchingOn,
+            cancellationToken, new McpResultBudget(responseBudgetBytes), responseDetail, null, wireResponse: false);
+        return result.Cast<AnnotationItemResult>().ToArray();
+    }
+
+    internal static Task<IReadOnlyList<object>> ApplyForToolAsync(
+        string databasePath,
+        string sessionKey,
+        string? currentAgentSessionId,
+        IReadOnlyList<AnnotationItemArgument> items,
+        bool matchingOn,
+        CancellationToken cancellationToken,
+        McpResultBudget responseBudget,
+        string responseDetail,
+        int processMaximumBytes) => ApplyCoreAsync(databasePath, sessionKey, currentAgentSessionId, items, matchingOn,
+            cancellationToken, responseBudget, responseDetail, processMaximumBytes, wireResponse: true);
+
+    private static async Task<IReadOnlyList<object>> ApplyCoreAsync(
+        string databasePath,
+        string sessionKey,
+        string? currentAgentSessionId,
+        IReadOnlyList<AnnotationItemArgument> items,
+        bool matchingOn,
+        CancellationToken cancellationToken,
+        McpResultBudget responseBudget,
+        string responseDetail,
+        int? processMaximumBytes,
+        bool wireResponse)
     {
         cancellationToken.ThrowIfCancellationRequested();
         Validate(items);
+        if (responseDetail is not ("receipt" or "full"))
+            throw new McpMappingException("responseDetail must be 'receipt' or 'full'.");
 
         var results = new List<AnnotationItemResult>(items.Count);
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databasePath, Mode = SqliteOpenMode.ReadWrite }.ToString());
@@ -67,8 +103,10 @@ internal static class AnnotateHandler
         {
             foreach (var item in items)
                 results.Add(Unavailable(item.OperationRef));
+            var callerUnavailableResponse = ProjectResponse(results, responseDetail, wireResponse);
+            EnsureFits(callerUnavailableResponse, responseBudget, processMaximumBytes ?? responseBudget.MaximumBytes, responseDetail);
             transaction.Commit();
-            return results;
+            return wireResponse ? callerUnavailableResponse : results.Cast<object>().ToArray();
         }
 
         var targets = new Dictionary<string, TargetRow?>(StringComparer.Ordinal);
@@ -106,12 +144,35 @@ internal static class AnnotateHandler
             results.Add(new AnnotationItemResult(item.OperationRef, "success", target.Tool, annotation.Label, annotation.Keep));
         }
 
-        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, results, null);
-        if (!McpResultAdapter.FitsCompleteResult(outcome, "sqlharness_annotate", new McpResultBudget(responseBudgetBytes)))
-            throw new McpMappingException("The complete annotation response exceeds the result byte budget; raise the budget or split the batch. No annotations were changed.");
+        var response = ProjectResponse(results, responseDetail, wireResponse);
+        EnsureFits(response, responseBudget, processMaximumBytes ?? responseBudget.MaximumBytes, responseDetail);
 
         transaction.Commit();
-        return results;
+        return wireResponse ? response : results.Cast<object>().ToArray();
+    }
+
+    private static IReadOnlyList<object> ProjectResponse(
+        IReadOnlyList<AnnotationItemResult> results, string responseDetail, bool wireResponse) =>
+        results.Select(result => !wireResponse
+            ? (object)result
+            : result.Status != "success"
+                ? new AnnotationUnavailable(result.OperationRef, result.Status)
+                : responseDetail == "receipt"
+                    ? new AnnotationReceiptSuccess(result.OperationRef, result.Status, result.Tool!, result.Keep)
+                    : new AnnotationFullSuccess(result.OperationRef, result.Status, result.Tool!, result.Label, result.Keep))
+            .ToArray();
+
+    private static void EnsureFits(IReadOnlyList<object> response, McpResultBudget responseBudget,
+        int processMaximumBytes, string responseDetail)
+    {
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, response, null);
+        if (McpResultAdapter.FitsCompleteResult(outcome, "sqlharness_annotate", responseBudget))
+            return;
+
+        var nextAction = responseDetail == "full" && responseBudget.MaximumBytes < processMaximumBytes
+            ? "use responseDetail 'receipt' or request a larger maxResultBytes within the process ceiling"
+            : "use responseDetail 'receipt'";
+        throw new McpMappingException($"The complete annotation response exceeds the effective {responseBudget.MaximumBytes}-byte result budget (maximum allowed {processMaximumBytes} bytes). {nextAction}. No annotations were changed.");
     }
 
     private static async Task<CallerIdentity?> ReadCallerAsync(SqliteConnection connection, SqliteTransaction transaction,

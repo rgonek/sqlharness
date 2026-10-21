@@ -19,8 +19,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and live staged references without losing retry/cursor state | 084 merged | TODO — plan only |
 | [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | 084 merged | TODO — plan only |
 | [092](092-default-execution-timeout-setting.md) | Configurable default SQL execution timeout in config.json and Dashboard Settings; fallback for CLI commands and MCP tools | None | TODO — plan only |
-| [094](094-compact-annotation-receipts.md) | Compact annotation receipts that fit minimum budgets; explicit full detail and one effective budget across commit/render | 085 DONE; execute before 095 | TODO — P1, plan only |
-| [095](095-budget-aware-artifact-pages.md) | Explicit artifact response budgets and bounded configurable source pages with complete continuation | 093, 094 implementations merged | TODO — P2, plan only |
+| [095](095-budget-aware-artifact-pages.md) | Explicit artifact response budgets and bounded configurable source pages with complete continuation | 093 merged; 094 implementation verified on branch, integration still required | TODO — P2, plan only |
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | TODO — P2, plan only |
 | [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | TODO — P2, plan only |
 | [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | Coordinate 089; no membership changes | TODO — P2, plan only |
@@ -45,6 +44,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [094](094-compact-annotation-receipts.md) | Compact annotation receipts that fit minimum budgets; explicit full detail and one effective budget across commit/render | IMPLEMENTATION VERIFIED on `plan-094` at `a0c3760`; reviews and Windows gate passed; not merged/pushed ([evidence](094-verification-evidence.md)) |
 | [089](089-agent-session-operation-pagination.md) | Bounded agent-session operation pages and Load more; old exact members remain reachable | DONE; locally integrated into `main` at `a0ecabb`; integrated Windows gate passed ([evidence](089-verification-evidence.md)) |
 | [093](093-identity-safe-output-clipping.md) | Complete metric identities within response budgets | DONE with 102; locally integrated into `main` at `6f07792`; verified product unchanged; not pushed ([evidence](102-verification-evidence.md)) |
 | [102](102-bounded-table-identity-selection.md) | Linear entry accounting and deterministic dashboard idle test | DONE; locally integrated into `main` at `6f07792`; final product `76ebb0d` unchanged, gate exit 0; not pushed ([evidence](102-verification-evidence.md)) |

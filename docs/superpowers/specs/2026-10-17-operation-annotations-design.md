@@ -97,3 +97,9 @@ that on reviewable, reusable investigations.
 - Measurement: tools/list bytes on/off; 077-style paired agent trials on/off; a second-session reuse trial against a
   work-folder baseline. Byte counts reported separately from provider tokens.
 - The bundled skill gets no text unless trials show agents under-label (then one conditional sentence).
+
+## Amendment 2 — compact annotation receipts (Plan 094, 2026-10-20)
+
+The conditional `sqlharness_annotate` tool now defaults to a compact `receipt` response. Each input retains its ordered status and opaque reference; successful outcomes include tool and keep state without echoing labels, while unavailable outcomes retain only reference and status. Callers can request `responseDetail: "full"` to receive resulting labels. The optional result budget cannot exceed the operator-owned process ceiling. Full-detail responses that exceed the effective budget roll back all annotations before commit and report a supported next action. The MCP envelope remains v3 and annotation-off output remains byte-identical to the pre-amendment golden.
+
+Plan 094 records deterministic served-workflow UTF-8 byte and call-count measurements separately from model tokens. Its results describe a fixture, not provider tokenization, an actual-agent trial, or live-database behavior.

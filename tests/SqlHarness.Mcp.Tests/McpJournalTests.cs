@@ -40,6 +40,38 @@ public sealed class McpJournalTests : IDisposable
     public static TheoryData<string> Modes => new() { "fixed", "request" };
 
     [Fact]
+    public async Task Invalid_annotation_request_is_journaled_without_target_or_reference()
+    {
+        var profile = new TargetProfile("annotation-host.invalid", "annotation-db", new Dictionary<string, string>(), "integrated");
+        var scope = McpScope.Create(new McpServerOptions { Profile = "annotation-profile" },
+            new Dictionary<string, TargetProfile> { ["annotation-profile"] = profile });
+        var journal = ActivityJournal.Open(new JournalConfig(), TextWriter.Null);
+        const string callerKey = "mcp:annotation-invalid-test";
+        var module = new JournalingModule(new SqlHarnessModule(), () => journal,
+            () => new SessionIdentity(callerKey, "codex", "mcp-clientinfo", JournalTransport.Mcp,
+                "codex-test", "1", "fixed", Environment.ProcessId, DateTimeOffset.UtcNow,
+                Environment.ProcessId, DateTimeOffset.UtcNow, Directory.GetCurrentDirectory()));
+        var handlers = new McpToolHandlers(scope, module, mutationSessionKey: callerKey, operationAnnotationsEnabled: true);
+
+        var response = await handlers.AnnotateAsync(null!, [new AnnotationItemArgument("invalid-reference")]);
+
+        Assert.True(response.IsError == true);
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(_home, "data", "activity.db")};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT operation, operation_ref, profile, server, database, status FROM operations";
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal("annotation", reader.GetString(0));
+        Assert.True(reader.IsDBNull(1));
+        Assert.True(reader.IsDBNull(2));
+        Assert.True(reader.IsDBNull(3));
+        Assert.True(reader.IsDBNull(4));
+        Assert.Equal("failed", reader.GetString(5));
+        Assert.False(reader.Read());
+    }
+
+    [Fact]
     public async Task Artifact_tool_journals_own_and_parent_references_for_success_and_failure()
     {
         var profile = new TargetProfile("artifact-host.invalid", "artifact-db", new Dictionary<string, string>(), "integrated");
