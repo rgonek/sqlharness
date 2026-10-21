@@ -84,7 +84,15 @@ export function stubFetch(routes: FetchRoutes) {
 
   const calls: string[] = []
   const methodRoutes: FetchRoutes = {}
-  for (const [key, route] of Object.entries({ ...appLayoutRoutes, ...routes })) {
+  const sessionOperationRoutes: FetchRoutes = {}
+  for (const [path, value] of Object.entries(routes)) {
+    const match = /^\/api\/sessions\/(\d+)$/.exec(path)
+    if (!match || routes[`/api/sessions/${match[1]}/operations`] !== undefined) continue
+    const items = typeof value === "object" && value !== null && "operations" in value && Array.isArray(value.operations)
+      ? value.operations : []
+    sessionOperationRoutes[`/api/sessions/${match[1]}/operations`] = { items, nextCursor: null }
+  }
+  for (const [key, route] of Object.entries({ ...appLayoutRoutes, ...sessionOperationRoutes, ...routes })) {
     const explicitMethod = /^([A-Za-z]+) (\/.*)$/.exec(key)
     const methodKey = explicitMethod ? `${explicitMethod[1].toUpperCase()} ${explicitMethod[2]}` : `GET ${key}`
     methodRoutes[methodKey] = route

@@ -180,6 +180,15 @@ export function useSession(id: number) {
   return useQuery({ queryKey: queryKeys.session(id), queryFn: () => getJson<SessionDetail>(`/api/sessions/${id}`) })
 }
 
+export function useSessionOperations(id: number) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.session(id), "operations"] as const,
+    queryFn: ({ pageParam }) => getJson<Page<OperationSummary>>(`/api/sessions/${id}/operations`, { cursor: pageParam, limit: 500 }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: page => page.nextCursor ?? undefined,
+  })
+}
+
 export function useSessionCompares(id: number) {
   return useInfiniteQuery({
     queryKey: queryKeys.compares(id),
