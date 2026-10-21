@@ -26,6 +26,8 @@ Cancellation propagates to connection, execution, reads, delays, and artifact wr
 
 Progress notifications go out at most once per second per call, only when the client supplied a progress token, and carry only the command and stage: never SQL, parameters, or rows. While a mutation waits for dashboard approval, it reports `awaiting_approval` at most every five seconds; this does not indicate that execution has started. Watch does not emit NDJSON on the MCP path; NDJSON stays a CLI-only surface.
 
+The `sqlharness_capabilities` result reports `defaultExecutionTimeoutSeconds` in fixed and request scope. It is the process's configured SQL timeout fallback from `execution.defaultTimeoutSeconds` in `~/.sqlharness/config.json` (default 30 seconds); calls can override it with `timeout`. MCP snapshots configuration at process start, so after changing the setting restart `mcp serve`, reconnect the client, and request capabilities again. CLI commands read the setting when invoked, so a new command uses the saved value.
+
 The activity journal records why a call was cancelled: `client` (the client sent
 `notifications/cancelled`), `shutdown` (stdin closed or the host stopped), or
 `deadline` (the call time budget ran out).

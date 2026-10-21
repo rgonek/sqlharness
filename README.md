@@ -531,6 +531,7 @@ Schema v14 starts a fresh journal. When SQLHarness opens a journal older than v1
 ```json
 {
   "connection": { "timeoutSeconds": 30 },
+  "execution": { "defaultTimeoutSeconds": 30 },
   "journal": { "retention": { "enabled": true, "maxAgeDays": 30, "maxSizeMb": 500 } },
   "diagnostics": { "enabled": false },
   "dashboard": { "autoStart": true, "idleShutdownHours": 8 }
@@ -538,6 +539,8 @@ Schema v14 starts a fresh journal. When SQLHarness opens a journal older than v1
 ```
 
 `connection.timeoutSeconds` controls SQL Server and PostgreSQL connection establishment in seconds (1..300, default 30). It is independent of query timeouts and MCP operation budgets. The connection includes authentication performed by the database driver; Azure CLI token acquisition retains its separate existing budget. CLI capabilities reports the effective value as `limits.connectionTimeoutSeconds`; MCP capabilities reports `connectionTimeoutSeconds`.
+
+`execution.defaultTimeoutSeconds` sets the fallback SQL execution timeout in seconds (1..300, default 30) for CLI query, mutation, measure, compare, watch, and snapshot commands and their MCP tools. An explicit `--timeout` or MCP `timeout` argument takes precedence. CLI commands read the saved setting when they start. MCP processes snapshot configuration at startup; restart `mcp serve`, reconnect its client, and call `sqlharness_capabilities` again after changing it. Capabilities reports the effective fallback as `defaultExecutionTimeoutSeconds` in both fixed and request scope. This default does not change the hard 1..300-second command bound or the separate MCP process-operation budget.
 
 `journal.retention` (off by default; needs `journal.enabled`) deletes operations older than `maxAgeDays` (1..3650, default 30), then unreferenced plans and empty sessions last seen before that age, then the oldest operations while the database's used size exceeds `maxSizeMb` (10..102400, default 500), and finally returns free pages with `PRAGMA incremental_vacuum` (skipped for a database whose `auto_vacuum` is not `INCREMENTAL`; every journal SQLHarness creates is).
 
@@ -584,7 +587,7 @@ Browsers do not isolate cookies by port, so the session cookie is also sent to o
 
 Snap-confined browsers (for example Firefox or Chromium from a snap on Ubuntu) may not be allowed to open the redirect page under the hidden SQLHarness home directory; open the printed URL instead.
 
-Settings retains the optional model-price reference refresh (`POST /api/prices/refresh`); it is separate from workflow output measurements and does not produce savings estimates. The Settings page edits the operator settings in `config.json` (journal, retention, connection timeout and diagnostics, dashboard auto-start and idle shutdown, and agent transcript matching) and autosaves (there is no Save button; numbers apply on blur or Enter); `dashboard.port` is not editable, and enabling `journal.storeSensitive`, enabling retention, or lowering retention limits while retention is on asks for confirmation first.
+Settings retains the optional model-price reference refresh (`POST /api/prices/refresh`); it is separate from workflow output measurements and does not produce savings estimates. The Settings page edits the operator settings in `config.json` (journal, retention, connection timeout, default SQL execution timeout and diagnostics, dashboard auto-start and idle shutdown, and agent transcript matching) and autosaves (there is no Save button; numbers apply on blur or Enter); `dashboard.port` is not editable, and enabling `journal.storeSensitive`, enabling retention, or lowering retention limits while retention is on asks for confirmation first.
 
 Agent transcript matching is off by default. Enable `dashboard.agentTranscripts.enabled` in `~/.sqlharness/config.json` to let the dashboard read local Claude Code and Codex metadata. A journal change is noticed through SQLite `data_version` polling while matching is enabled; matching waits for a 1.5-second debounce, then runs a targeted cycle. A full sweep still runs every 60 seconds, and each cycle reads at most 32 MiB. Claude files are read from `CLAUDE_CONFIG_DIR` (or `~/.claude`), under `projects/<encoded cwd>/`, including subagent JSONL files. Codex titles are read from `$CODEX_HOME/session_index.jsonl` (default `~/.codex/session_index.jsonl`). Codex and OpenCode operations link directly by `operations.agent_session_id`; Claude operations link when a transcript tool-use id matches the operation's `client_call_id`. No time or working-directory guesses are used to create exact links.
 

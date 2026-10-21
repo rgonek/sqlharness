@@ -16,7 +16,7 @@
 
 ## Status and dependencies
 
-- TODO — plan only. No blocking dependencies. Priority P2. Planning-only authorization.
+- IMPLEMENTATION VERIFIED on branch `plan-092` at product revision `b7b7b7088c545c9518de237838f91a429708281b`. Task reviews 1–3 are clean; the final whole-branch review is pending. Not merged or pushed. No blocking dependencies. Priority P2.
 
 ## Fix contract
 
@@ -92,13 +92,13 @@
 
 **Interfaces:** `ExecutionConfig` record, `SqlHarnessConfig.Execution`, `SqlHarnessConfigLoader.Parse` validation.
 
-- [ ] Add failing tests in `SqlHarnessConfigTests.cs`:
+- [x] Add failing tests in `SqlHarnessConfigTests.cs`:
   - `Execution_timeout_defaults_when_missing_and_custom_value_round_trips`
   - `Execution_timeout_out_of_range_fails_validation` (verifying `< 1` and `> 300`)
   - `Execution_timeout_accepts_inclusive_bounds` (verifying 1 and 300)
-- [ ] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SqlHarnessConfigTests"`; confirm RED failures.
-- [ ] Implement `ExecutionConfig`, update `SqlHarnessConfig`, `SqlHarnessConfigLoader` (`IsComplete` and range check), and `SqlHarnessConfigWriter`.
-- [ ] Rerun tests; confirm GREEN. Commit `feat(092): add execution default timeout to config schema and loader`.
+- [x] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SqlHarnessConfigTests"`; confirm RED failures.
+- [x] Implement `ExecutionConfig`, update `SqlHarnessConfig`, `SqlHarnessConfigLoader` (`IsComplete` and range check), and `SqlHarnessConfigWriter`.
+- [x] Rerun tests; confirm GREEN. Commit `feat(092): add execution default timeout to config schema and loader`.
 
 ### Task 2: CLI and MCP default timeout resolution
 
@@ -106,10 +106,10 @@
 
 **Interfaces:** CLI command execution falling back to `config.Execution.DefaultTimeoutSeconds`, MCP tool dispatch falling back to `process.Config.Execution.DefaultTimeoutSeconds`.
 
-- [ ] Add failing tests verifying that when `--timeout` (CLI) or `timeout` (MCP) is omitted, the operation uses the configured default from `config.json`, and when explicitly passed, the explicit parameter takes precedence.
-- [ ] Run CLI and MCP tests; confirm RED failures.
-- [ ] Implement fallback resolution in CLI command runners and MCP tool mapper.
-- [ ] Rerun tests; confirm GREEN. Commit `feat(092): resolve default execution timeout from config in CLI and MCP`.
+- [x] Add failing tests verifying that when `--timeout` (CLI) or `timeout` (MCP) is omitted, the operation uses the configured default from `config.json`, and when explicitly passed, the explicit parameter takes precedence.
+- [x] Run CLI and MCP tests; confirm RED failures.
+- [x] Implement fallback resolution in CLI command runners and MCP tool mapper.
+- [x] Rerun tests; confirm GREEN. Commit `feat(092): resolve default execution timeout from config in CLI and MCP`.
 
 ### Task 3: Dashboard API contract, UI card, and tests
 
@@ -117,21 +117,21 @@
 
 **Interfaces:** `Settings.execution` in TypeScript, Dashboard Settings contract JSON, `SettingsPage` SQL execution card.
 
-- [ ] Add failing contract test in `DashboardContractTests.cs` verifying `execution.defaultTimeoutSeconds` is present in `SettingsResponse`.
-- [ ] Add failing UI test in `SettingsPage.test.tsx` verifying that the "SQL execution" card renders, displays the current value, commits on change, and shows field errors on invalid input.
-- [ ] Run tests; confirm RED failures.
-- [ ] Update `types.ts`, `SettingsPage.tsx` with the new card and mutation logic.
-- [ ] Run `npm --prefix src/SqlHarness.Dashboard/ui run check` and vitest; confirm GREEN.
-- [ ] Rerun C# dashboard contract tests; confirm GREEN. Commit `feat(092): add SQL execution timeout card to dashboard settings`.
+- [x] Add failing contract test in `DashboardContractTests.cs` verifying `execution.defaultTimeoutSeconds` is present in `SettingsResponse`.
+- [x] Add failing UI test in `SettingsPage.test.tsx` verifying that the "SQL execution" card renders, displays the current value, commits on change, and shows field errors on invalid input.
+- [x] Run tests; confirm RED failures.
+- [x] Update `types.ts`, `SettingsPage.tsx` with the new card and mutation logic.
+- [x] Run `npm --prefix src/SqlHarness.Dashboard/ui run check` and vitest; confirm GREEN.
+- [x] Rerun C# dashboard contract tests; confirm GREEN. Commit `feat(092): add SQL execution timeout card to dashboard settings`.
 
 ### Task 4: Documentation, verification evidence, and index updates
 
 **Files:** `docs/mcp/runtime.md`, `README.md`, `plans/README.md`, `plans/092-verification-evidence.md`.
 
-- [ ] Update documentation describing `execution.defaultTimeoutSeconds` in `config.json` and its role in CLI/MCP fallback.
-- [ ] Run branch formatting (`pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef main`) and `just verify` on Windows.
-- [ ] Record test revision, test counts, and gate logs in `plans/092-verification-evidence.md`.
-- [ ] Update `plans/README.md` status. Commit `docs(092): record default execution timeout verification and update docs`.
+- [x] Update documentation describing `execution.defaultTimeoutSeconds` in `config.json` and its role in CLI/MCP fallback.
+- [x] Run branch formatting (`pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef main`) and `just verify` on Windows.
+- [x] Record test revision, test counts, and gate logs in `plans/092-verification-evidence.md`.
+- [x] Update `plans/README.md` status. Commit `docs(092): record default execution timeout verification and update docs`.
 
 ## Plan self-review
 
