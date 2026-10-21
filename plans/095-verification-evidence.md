@@ -45,7 +45,7 @@ These are focused test results, not a full verification gate.
 
 The larger requested window reduced the read from five calls to two because all 512 requested source nodes fit within the larger response budget. Combined wire bytes decreased by 2,822; there was no total-byte increase in this fixture. These measurements are UTF-8 bytes on the SDK stdin/stdout protocol streams, not model tokens and not a token-savings claim. The selected response text also remained within its requested byte budget.
 
-The serialized fixed-scope tools catalog was 28,675 UTF-8 bytes; the Postgres fixture catalog was 23,889 bytes. Both fit the 32,768-byte tools/list ceiling. The test compares every complete serialized node record and stable path across omitted defaults, explicit `pageSize=128`, and the larger request, confirming defaults compatibility and gap-free reconstruction.
+The serialized fixed-scope tools catalog was 28,675 UTF-8 bytes; the Postgres fixture catalog was 23,889 bytes. Both fit the 32,768-byte tools/list ceiling. The test compares every complete serialized node record across omitted defaults, explicit `pageSize=128`, and the larger request. The final-fix follow-up below additionally asserts the exact expected path preorder and uniqueness for each mode, so the SDK workflow independently establishes gap-free reconstruction.
 
 Plan 077's `OperationAnnotations/off` records and manifest are historical baseline evidence and remain unchanged. The existing scripted workflow equality now excludes only `discoveryUtf8Bytes`, because serving the new artifact interface intentionally changes catalog size; current catalog sizes and the ceiling are asserted from live SDK discovery on each run. All other frozen workflow fields remain compared byte-for-byte after normalization.
 
@@ -76,3 +76,18 @@ Runner PID 22656; direct exit code 0; `verify: OK stages=5 8m28s`. Stages: `ui-i
 Task 3's actual-SDK test measures a deterministic synthetic saved-artifact fixture and asserts the host attempted zero DB connections. It does not invoke an LLM/provider, establish production latency, measure token consumption, or represent live saved database evidence. The byte and call comparison applies only to this same 513-node fixture, the listed defaults, and the two explicit request values. The live SDK discovery asserts current catalog sizes against the 32,768-byte ceiling; Plan 077's frozen `OperationAnnotations/off` snapshots and manifest remain unchanged. Only the historical workflow comparison field `discoveryUtf8Bytes` is normalized out, since the served catalog intentionally changed; runtime catalog byte/limit assertions are separate.
 
 This implementation branch has focused Task 3 results and a green direct formatter and final Windows gate. Task 3 review and independent whole-branch review remain pending. Local integration is authorized only after those reviews approve; this work has not merged, pushed, or accessed a live database.
+
+## Final review fix: exact SDK traversal proof
+
+The whole-branch review identified one nonblocking Minor: SDK completion compared 513 paths/records across three modes but did not independently establish the fixture's expected traversal. The SDK path test now asserts the exact sequence `0`, `0/0` through `0/511`, and 513 unique paths for omitted defaults, explicit `pageSize=128`, and `pageSize=512` with the larger byte budget. The traversal helper fails after 513 calls, rejects a continuation response with no nodes, and requires every continuation cursor to advance beyond the requested cursor. No product behavior changed.
+
+The final product/test revision is `419f32a745f6bb8a08289e440fd241d8d17ea23f`, tree `08eae298821c962a8549de25a82332c8ef2e0478`, based on immutable Task 3 base `384357c031a321ab2f32cf99f049b9c0bc4c71f2`.
+
+| Command | Result |
+|---|---|
+| `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~AgentOptimizationWorkflowTests` | 8 passed, 0 failed, 0 skipped; direct exit 0 (`plans/095-evidence/final-fix-focused-sdk.log`) |
+| `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 384357c031a321ab2f32cf99f049b9c0bc4c71f2 -Fix` | 13 changed C# files, `format: OK`, direct exit 0 (`plans/095-evidence/final-fix-format-fix.log`) |
+| `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 384357c031a321ab2f32cf99f049b9c0bc4c71f2` | 13 changed C# files, `format: OK`, direct exit 0 (`plans/095-evidence/final-fix-format-direct.log`) |
+| `just verify -LogDirectory D:/temp/sqlharness-plan095-final-review-verify` | `verify: OK stages=5 9m20s`, direct exit 0. UI: 361 tests; Core: 4,595 passed, 11 skipped, 0 failed; MCP: 489 passed, 4 skipped, 0 failed. Build passed; formatter stage skipped because the committed tree had no uncommitted C# files, covered by the direct branch formatter above. Durable console and stage output are under `plans/095-evidence/final-review-*`. |
+
+The original Task 3 review finding is resolved by commit `419f32a`. A final scoped re-review of this revision remains pending with the controller; no whole-branch approval, merge, or push is claimed here.

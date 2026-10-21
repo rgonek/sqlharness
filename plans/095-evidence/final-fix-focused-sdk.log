@@ -1,0 +1,16 @@
+  Determining projects to restore...
+  Restored D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj (in 787 ms).
+  Restored D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Cli\SqlHarness.Cli.csproj (in 787 ms).
+  Restored D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj (in 787 ms).
+  Restored D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Core\SqlHarness.Core.csproj (in 787 ms).
+  2 of 6 projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Mcp.WorkflowHost -> D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:     8, Skipped:     0, Total:     8, Duration: 29 s - SqlHarness.Mcp.Tests.dll (net10.0)
