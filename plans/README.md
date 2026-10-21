@@ -7,7 +7,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
-| [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | 084 merged | IMPLEMENTED and Windows-verified; method-aware final fix gated; final Sol low scoped review pending ([evidence](091-verification-evidence.md)) |
 
 ## Pending
 
@@ -38,12 +37,13 @@ Plans 063, 070, 071, 072, 073, 074, 076, 079, 080, 081, 085, and 087 are DONE; s
 
 Plan 082 is DONE and locally merged into `main` at `dd37512`. All task reviews and the final Sol low scoped re-review are approved. The Windows gate and branch formatting passed on `b9f6092`; the merge preserves that verified product tree. Synthetic UAT confirmed the focused verdict. Linux was explicitly skipped; see [verification evidence](082-verification-evidence.md) and [history](history.md).
 
-Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up Plans 089, 090 and 091 cover the parked detail limit and the two deferred Minors. Plan 091's verified UI gate closes its diagnostic Minor; Plan 090 remains the title-backfill follow-up. See [084 evidence](084-verification-evidence.md) and [history](history.md).
+Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up Plans 089, 090 and 091 cover the parked detail limit and the two deferred Minors. Plan 091 closes its diagnostic Minor; Plan 090 remains the title-backfill follow-up. See [084 evidence](084-verification-evidence.md) and [history](history.md).
 
 ## History
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | DONE on `plan-091`; Windows-verified and all reviews approved; local integration into `main` pending ([evidence](091-verification-evidence.md)) |
 | [094](094-compact-annotation-receipts.md) | Compact annotation receipts that fit minimum budgets; explicit full detail and one effective budget across commit/render | DONE; locally integrated into `main` at `6acc342`; verified product unchanged; not pushed ([evidence](094-verification-evidence.md)) |
 | [089](089-agent-session-operation-pagination.md) | Bounded agent-session operation pages and Load more; old exact members remain reachable | DONE; locally integrated into `main` at `a0ecabb`; integrated Windows gate passed ([evidence](089-verification-evidence.md)) |
 | [093](093-identity-safe-output-clipping.md) | Complete metric identities within response budgets | DONE with 102; locally integrated into `main` at `6f07792`; verified product unchanged; not pushed ([evidence](102-verification-evidence.md)) |

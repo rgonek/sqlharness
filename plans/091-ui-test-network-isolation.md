@@ -12,7 +12,7 @@
 
 ## Status and dependencies
 
-- IN PROGRESS — Task 1 implementation and Windows verification are complete. The final review's method-blind fixture finding is fixed and gated in `857402d`; final Sol low scoped review of the fix is pending. Depends on merged 084. Priority P2, test-only hygiene. No new dependency assumed.
+- DONE on feature branch — implementation, Windows gate and all reviews are complete; local integration into `main` is pending. Depends on merged 084. Priority P2, test-only hygiene. No new dependency assumed.
 
 ## Fix contract
 
@@ -52,10 +52,10 @@
 
 **Files:** `plans/091-verification-evidence.md`, this plan, queue/history; test helper documentation only if a reusable helper was introduced.
 
-- [x] Review Task 1 evidence and confirm interception wraps the global `fetch` boundary before each test, explicit route matching is required, and teardown cleans the DOM, cancels tracked QueryClients, asserts retained unexpected-request diagnostics, and restores `fetch` in `finally`. Task 1 scoped review is approved. The whole-branch method-blind finding is fixed in `857402d`; final Sol low scoped review is pending.
+- [x] Review Task 1 and the whole branch, including interception at the global `fetch` boundary, reset between tests, and method-aware fixtures. Task 1 review and final Sol low scoped review are approved with no open findings.
 - [x] Run Windows `just verify` with unique persistent logs. Record every pass/skip count and inspect UI output; the unexplained request diagnostics are absent.
 - [x] Record before/after request evidence, exact test owners and tested revision in [verification evidence](091-verification-evidence.md). The Plan 084 UI diagnostic Minor is closed by the passing UI log with no `ECONNREFUSED`, unhandled rejection, or unmatched-request diagnostic.
-- [ ] Complete final Sol low scoped review of `857402d` and any required docs-only follow-up.
+- [x] Complete final Sol low scoped review of `857402d`; it approved the fix with no new Critical, Important or Minor findings.
 
 Task 2 evidence commit: `docs(091): record UI network-isolation verification`. The full gate does not need to be repeated for subsequent documentation-only review amendments.
 
