@@ -126,7 +126,6 @@ public static partial class McpOperationMapper
     private static readonly TimeSpan DefaultWatchInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DefaultWatchMaxDuration = TimeSpan.FromMinutes(15);
     private const int DefaultWatchUntilUnchanged = 3;
-    private const int DefaultQueryTimeout = 30;
     private const int DefaultQueryMaxRows = 50;
     private const int DefaultRepeat = 5;
 
@@ -287,20 +286,22 @@ public static partial class McpOperationMapper
         string? sql,
         string? file,
         IReadOnlyList<McpParameterArgument>? parameters,
-        int timeout,
+        int? timeout,
         int maxRows,
         CancellationToken ct,
-        bool dryRun = false) =>
-        MapQueryAsync(scope, new McpSqlSourceArgument { Sql = sql, File = file }, parameters, timeout, maxRows, ct, dryRun);
+        bool dryRun = false,
+        int defaultTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds) =>
+        MapQueryAsync(scope, new McpSqlSourceArgument { Sql = sql, File = file }, parameters, timeout, maxRows, ct, dryRun, defaultTimeoutSeconds);
 
     internal static async Task<SqlHarnessQueryOperation> MapQueryAsync(
         McpScope scope,
         McpSqlSourceArgument source,
         IReadOnlyList<McpParameterArgument>? parameters,
-        int timeout,
+        int? timeout,
         int maxRows,
         CancellationToken ct,
-        bool dryRun = false)
+        bool dryRun = false,
+        int defaultTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(source);
@@ -310,7 +311,7 @@ public static partial class McpOperationMapper
         // plus session-local temp rules.
         return new SqlHarnessQueryOperation(
             scope.TargetRequest, sqlText, [],
-            RequireTimeout(timeout), RequireMaxRows(maxRows), AllowMutation: false, ConfirmDatabase: null)
+            RequireTimeout(timeout, defaultTimeoutSeconds), RequireMaxRows(maxRows), AllowMutation: false, ConfirmDatabase: null)
         {
             TypedParameters = MapParameters(parameters),
             DryRun = dryRun,
@@ -322,12 +323,13 @@ public static partial class McpOperationMapper
         string? sql,
         string? file,
         IReadOnlyList<McpParameterArgument>? parameters,
-        int timeout,
+        int? timeout,
         int maxRows,
         string? expectDatabase,
         string sessionKey,
         CancellationToken ct,
-        bool dryRun = false)
+        bool dryRun = false,
+        int defaultTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionKey);
@@ -338,7 +340,7 @@ public static partial class McpOperationMapper
             scope.TargetRequest,
             sqlText,
             MapParameters(parameters),
-            RequireTimeout(timeout),
+            RequireTimeout(timeout, defaultTimeoutSeconds),
             RequireMaxRows(maxRows),
             expectDatabase)
         {
@@ -360,7 +362,8 @@ public static partial class McpOperationMapper
         IReadOnlyList<McpParameterSetArgument>? parameterSets = null,
         McpMatrixArgument? matrix = null,
         string? subject = null,
-        string? optimizationScope = null)
+        string? optimizationScope = null,
+        int defaultTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(query);
@@ -379,7 +382,7 @@ public static partial class McpOperationMapper
         }
         return new SqlHarnessMeasureOperation(
             scope.TargetRequest, setupSql, querySql, [],
-            RequireTimeout(timeout), RequireRepeat(repeat), sets)
+            RequireTimeout(timeout, defaultTimeoutSeconds), RequireRepeat(repeat), sets)
         {
             TypedParameters = MapParameters(parameters),
             TypedMatrix = matrix is null ? null : MapMatrix(matrix),
@@ -405,7 +408,8 @@ public static partial class McpOperationMapper
         IReadOnlyList<string>? parameterSetFiles = null,
         string? subject = null,
         string? optimizationScope = null,
-        CompareConfig? compareConfig = null)
+        CompareConfig? compareConfig = null,
+        int defaultTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(baseline);
@@ -436,7 +440,7 @@ public static partial class McpOperationMapper
         var setupSql = await ReadOptionalSourceAsync(setup, scope, "setup", ct);
         var typedParameters = MapParameters(parameters);
         var parameterSetInputs = await MapParameterSetsAsync(parameterSets, parameterSetFiles, scope, ct);
-        var validatedTimeout = RequireTimeout(timeout);
+        var validatedTimeout = RequireTimeout(timeout, defaultTimeoutSeconds);
         var validatedRepeat = RequireRepeat(repeat);
         if (matrix is null && parameterSetInputs is null)
             return new SqlHarnessCompareOperation(
@@ -464,13 +468,14 @@ public static partial class McpOperationMapper
         string? sql,
         string? file,
         IReadOnlyList<McpParameterArgument>? parameters,
-        int timeout,
+        int? timeout,
         int maxRows,
         string? until,
         int? untilUnchanged,
         string? interval,
         string? maxDuration,
-        CancellationToken ct)
+        CancellationToken ct,
+        int defaultTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)
     {
         ArgumentNullException.ThrowIfNull(scope);
         var hasUntil = !string.IsNullOrWhiteSpace(until);
@@ -481,7 +486,7 @@ public static partial class McpOperationMapper
         var sqlText = await McpInputReader.ReadSqlAsync(sql, file, scope, ct);
         return new SqlHarnessWatchOperation(
             scope.TargetRequest, sqlText, [],
-            RequireTimeout(timeout), RequireMaxRows(maxRows),
+            RequireTimeout(timeout, defaultTimeoutSeconds), RequireMaxRows(maxRows),
             ParseWatchDuration(interval, DefaultWatchInterval, "interval"),
             ParseWatchDuration(maxDuration, DefaultWatchMaxDuration, "maxDuration"),
             hasUntil ? until!.Trim() : null,
@@ -498,9 +503,10 @@ public static partial class McpOperationMapper
         string? sql,
         string? file,
         IReadOnlyList<McpParameterArgument>? parameters,
-        int timeout,
+        int? timeout,
         int maxRows,
-        CancellationToken ct)
+        CancellationToken ct,
+        int defaultTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (action is null || !SnapshotActions.Contains(action))
@@ -514,7 +520,7 @@ public static partial class McpOperationMapper
         // scoped captures and refuses foreign baselines before data.
         return new SqlHarnessSnapshotOperation(
             scope.TargetRequest, sqlText, [],
-            RequireTimeout(timeout), RequireMaxRows(maxRows), name,
+            RequireTimeout(timeout, defaultTimeoutSeconds), RequireMaxRows(maxRows), name,
             Diff: string.Equals(action, "diff", StringComparison.OrdinalIgnoreCase), Force: false,
             Owner: scope.Owner)
         {
@@ -723,11 +729,11 @@ public static partial class McpOperationMapper
         return await ReadParameterSetsOrNullAsync(parameterSetFiles, scope, ct);
     }
 
-    private static int RequireTimeout(int? timeout)
+    private static int RequireTimeout(int? timeout, int defaultTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)
     {
         // Range lives in Core; the default and the MCP message stay here.
         if (timeout is null)
-            return DefaultQueryTimeout;
+            timeout = defaultTimeoutSeconds;
         if (!OperationLimits.IsQueryTimeoutSeconds(timeout.Value))
             throw new McpMappingException("SQL timeout must be between 1 and 300 seconds.");
         return timeout.Value;

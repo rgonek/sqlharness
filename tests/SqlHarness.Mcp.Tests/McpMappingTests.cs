@@ -570,6 +570,67 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Theory]
+    [InlineData(null, 47)]
+    [InlineData(30, 30)]
+    [InlineData(61, 61)]
+    public async Task Query_handler_uses_configured_timeout_only_when_option_is_omitted(int? timeout, int expected)
+    {
+        var scope = Scope();
+        var recording = new RecordingModule();
+        var handlers = new McpToolHandlers(scope, recording, defaultExecutionTimeoutSeconds: 47);
+
+        var result = await handlers.QueryAsync(null!, "SELECT 1", timeout: timeout);
+
+        Assert.False(result.IsError == true);
+        Assert.Equal(expected, Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(recording.Operations)).TimeoutSeconds);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(301)]
+    public async Task Query_handler_rejects_explicit_timeout_outside_safety_bounds(int timeout)
+    {
+        var scope = Scope();
+        var recording = new RecordingModule();
+        var handlers = new McpToolHandlers(scope, recording, defaultExecutionTimeoutSeconds: 47);
+
+        var result = await handlers.QueryAsync(null!, "SELECT 1", timeout: timeout);
+
+        Assert.True(result.IsError == true);
+        Assert.Empty(recording.Operations);
+    }
+
+    [Fact]
+    public async Task Every_timeout_tool_uses_the_configured_default_when_timeout_is_omitted()
+    {
+        var scope = Scope();
+        var recording = new RecordingModule();
+        var handlers = new McpToolHandlers(scope, recording, defaultExecutionTimeoutSeconds: 47);
+        var source = new McpSqlSourceArgument { Sql = "SELECT 1" };
+
+        await handlers.QueryAsync(null!, "SELECT 1");
+        await handlers.MutationAsync(null!, "DELETE FROM dbo.T", dryRun: true);
+        await handlers.MeasureAsync(null!, source, timeout: null);
+        await handlers.CompareAsync(null!, source, source, "timeout-test", "whole", timeout: null);
+        await handlers.CompareWithoutContextAsync(null!, source, source, timeout: null);
+        await handlers.WatchAsync(null!, "SELECT 1");
+        await handlers.SnapshotAsync(null!, "capture", "timeout-test", "SELECT 1");
+
+        Assert.Equal(7, recording.Operations.Count);
+        Assert.All(recording.Operations, operation => Assert.Equal(47, operation switch
+        {
+            SqlHarnessQueryOperation value => value.TimeoutSeconds,
+            SqlHarnessMutationOperation value => value.TimeoutSeconds,
+            SqlHarnessMeasureOperation value => value.TimeoutSeconds,
+            SqlHarnessCompareOperation value => value.TimeoutSeconds,
+            SqlHarnessCompareMatrixOperation value => value.TimeoutSeconds,
+            SqlHarnessWatchOperation value => value.TimeoutSeconds,
+            SqlHarnessSnapshotOperation value => value.TimeoutSeconds,
+            _ => -1,
+        }));
+    }
+
+    [Theory]
     [InlineData("10", 10)]
     [InlineData("90m", 5400)]
     [InlineData("24h", 86400)]

@@ -1268,7 +1268,7 @@ public sealed class McpToolSchemaTests : IDisposable
 
         var query = schemas["sqlharness_query"];
         Assert.Empty(Required(query));
-        Assert.Equal(30, Properties(query).GetProperty("timeout").GetProperty("default").GetInt32());
+        Assert.True(Properties(query).GetProperty("timeout").GetProperty("default").ValueKind is JsonValueKind.Null or JsonValueKind.Undefined);
         Assert.Equal(50, Properties(query).GetProperty("maxRows").GetProperty("default").GetInt32());
 
         var measure = schemas["sqlharness_measure"];

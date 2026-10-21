@@ -16,7 +16,8 @@ public sealed class MutationCommand(
     IMutationBrokerClient broker,
     McpHostConsole console,
     int approvalTimeoutSeconds,
-    string sessionKey) : SqlHarnessCommand<MutationCommand.Settings>(module, output, renderer)
+    string sessionKey,
+    SqlHarnessConfig config) : SqlHarnessCommand<MutationCommand.Settings>(module, output, renderer, config)
 {
     public sealed class Settings : TargetSettings
     {
@@ -27,8 +28,8 @@ public sealed class MutationCommand(
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
 
-        [CommandOption("--timeout <SECONDS>")][DefaultValue(30)]
-        public int Timeout { get; set; } = 30;
+        [Description("SQL execution timeout in seconds (1..300); defaults to execution.defaultTimeoutSeconds from config.json.")][CommandOption("--timeout <SECONDS>")]
+        public int? Timeout { get; set; }
 
         [Description("Presentation-only row cap (0..500). The server still computes the full result; canonical hashes cover all rows.")]
         [CommandOption("--max-rows <COUNT>")][DefaultValue(50)]
@@ -48,7 +49,8 @@ public sealed class MutationCommand(
             return Invalid(targetError);
         if (settings.Json && settings.Output is not null)
             return Invalid("Choose only one of --output, --json, or --json-summary.");
-        if (settings.Timeout is < 1 or > 300 || settings.MaxRows is < 0 or > 500)
+        var timeout = settings.Timeout ?? DefaultExecutionTimeoutSeconds;
+        if (timeout is < 1 or > 300 || settings.MaxRows is < 0 or > 500)
             return Invalid("--timeout must be 1..300 and --max-rows must be 0..500.");
         var hasFile = !string.IsNullOrWhiteSpace(settings.File);
         if (!hasFile && !input.StdinRedirected)
@@ -61,7 +63,7 @@ public sealed class MutationCommand(
                 : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
             var parameters = settings.Parameters.Select(ParseParameter).ToArray();
             var operation = new SqlHarnessMutationOperation(
-                target, sql, parameters, settings.Timeout, settings.MaxRows, settings.ExpectDatabase)
+                target, sql, parameters, timeout, settings.MaxRows, settings.ExpectDatabase)
             {
                 DryRun = settings.DryRun,
                 SessionKey = sessionKey,

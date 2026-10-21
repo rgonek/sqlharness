@@ -8,8 +8,8 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Cli.Commands;
 
-public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CliInput input)
-    : SqlHarnessCommand<WatchCommand.Settings>(module, output, renderer)
+public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CliInput input, SqlHarnessConfig config)
+    : SqlHarnessCommand<WatchCommand.Settings>(module, output, renderer, config)
 {
     private const int DefaultTimeoutSeconds = 30;
     private const int DefaultMaxRows = 50;
@@ -24,7 +24,7 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
-        [CommandOption("--timeout <SECONDS>")][DefaultValue(DefaultTimeoutSeconds)] public int Timeout { get; set; } = DefaultTimeoutSeconds;
+        [Description("SQL execution timeout in seconds (1..300); defaults to execution.defaultTimeoutSeconds from config.json.")][CommandOption("--timeout <SECONDS>")] public int? Timeout { get; set; }
         [CommandOption("--max-rows <COUNT>")][DefaultValue(DefaultMaxRows)] public int MaxRows { get; set; } = DefaultMaxRows;
         [CommandOption("--interval <DURATION>")] public string? Interval { get; set; }
         [CommandOption("--max-duration <DURATION>")] public string? MaxDuration { get; set; }
@@ -44,6 +44,8 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
 
         if (settings.HistoryLimit is < 1 or > 10000)
             return Invalid("--history-limit must be between 1 and 10000.");
+        var timeout = settings.Timeout ?? DefaultExecutionTimeoutSeconds;
+        if (timeout is < 1 or > 300) return Invalid("--timeout must be 1..300.");
 
         string? until = null;
         int? untilUnchanged = null;
@@ -83,7 +85,7 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
                 target,
                 sql,
                 settings.Parameters,
-                settings.Timeout,
+                timeout,
                 settings.MaxRows,
                 interval,
                 maxDuration,

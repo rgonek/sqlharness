@@ -42,7 +42,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Inline SQL, at most 1 MiB.")] string? sql = null,
         [Description("SQL file under an operator input root.")] string? file = null,
         [Description(McpToolCatalog.ParametersDescription)] McpParameterArgument[]? parameters = null,
-        [Description("SQL timeout 1..300 seconds.")] int timeout = 30,
+        [Description("1..300s; omit for config.")] int? timeout = null,
         [Description("Presentation row cap 0..500.")] int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
         [Description("Cell clip 0..4096 characters; default 2048.")] int? maxCellChars = null,
@@ -58,7 +58,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Inline SQL, at most 1 MiB. Exactly one of sql or file.")] string? sql = null,
         [Description("SQL file under an operator input root.")] string? file = null,
         [Description(McpToolCatalog.ParametersDescription)] McpParameterArgument[]? parameters = null,
-        [Description("SQL timeout 1..300 seconds.")] int timeout = 30,
+        [Description("1..300s; omit for config.")] int? timeout = null,
         [Description("Presentation row cap 0..500.")] int maxRows = 50,
         [Description("Database name this change is intended for.")] string? expectDatabase = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
@@ -142,7 +142,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Inline SQL, at most 1 MiB.")] string? sql = null,
         [Description("SQL file under an operator input root.")] string? file = null,
         [Description(McpToolCatalog.ParametersDescription)] McpParameterArgument[]? parameters = null,
-        [Description("SQL timeout 1..300 seconds.")] int timeout = 30,
+        [Description("1..300s; omit for config.")] int? timeout = null,
         [Description("Presentation row cap 0..500.")] int maxRows = 50,
         [Description("Stop predicate on the first row.")] string? until = null,
         [Description("Stop after N unchanged polls.")] int? untilUnchanged = null,
@@ -163,7 +163,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Inline SQL.")] string? sql = null,
         [Description("SQL file under an operator input root.")] string? file = null,
         [Description(McpToolCatalog.ParametersDescription)] McpParameterArgument[]? parameters = null,
-        [Description("SQL timeout.")] int timeout = 30,
+        [Description("1..300s; omit for config.")] int? timeout = null,
         [Description("Presentation row cap.")] int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
         [Description("Cell clip 0..4096 characters; default 2048.")] int? maxCellChars = null,
@@ -262,7 +262,8 @@ public sealed class McpRequestToolHandlers(
         }
         var handlers = new McpToolHandlers(scope, _moduleFactory(scope), _clock, hostShutdown, acceptRequestScope: true,
             compareConfig: process.CompareConfig, mutationBroker: _mutationBroker, mutationSessionKey: _mutationSessionKey,
-            operationAnnotationsEnabled: process.Config.Journal.OperationAnnotations);
+            operationAnnotationsEnabled: process.Config.Journal.OperationAnnotations,
+            defaultExecutionTimeoutSeconds: process.Config.Execution.DefaultTimeoutSeconds);
         return invoke(handlers);
     }
 

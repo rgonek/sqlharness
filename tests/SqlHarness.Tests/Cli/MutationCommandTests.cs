@@ -43,6 +43,18 @@ public sealed class MutationCommandTests : IDisposable
         using var envelope = JsonDocument.Parse(run.Output);
     }
 
+    [Fact]
+    public async Task Mutation_uses_configured_timeout_when_omitted()
+    {
+        var broker = new RecordingBroker(new(MutationStatus.Success, null, QueryReport()));
+        var config = SqlHarnessConfig.Default with { Execution = new ExecutionConfig { DefaultTimeoutSeconds = 47 } };
+
+        var run = await RunWithConfig(broker, config, "mutation", "ss", "--file", Sql("DELETE FROM dbo.T;"));
+
+        Assert.Equal(0, run.Exit);
+        Assert.Equal(47, broker.Request!.TimeoutSeconds);
+    }
+
     [Theory]
     [InlineData(MutationStatus.Disabled, 2)]
     [InlineData(MutationStatus.Unavailable, 2)]
@@ -142,6 +154,9 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     private async Task<(int Exit, string Output, string Error, int ModuleCalls)> Run(RecordingBroker broker, params string[] args)
+        => await RunWithConfig(broker, null, args);
+
+    private async Task<(int Exit, string Output, string Error, int ModuleCalls)> RunWithConfig(RecordingBroker broker, SqlHarnessConfig? config, params string[] args)
     {
         var output = new StringWriter();
         var error = new StringWriter();
@@ -150,7 +165,7 @@ public sealed class MutationCommandTests : IDisposable
                 ? new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessDryRunReport("mutation", "mutation", "dml", [], 1), null)
                 : new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessMutationPrepared(Request(mutation)), null)
             : new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, "unexpected operation"));
-        var exit = await SqlHarnessCli.Create(module, output, mutationBroker: broker, mcpError: error)
+        var exit = await SqlHarnessCli.Create(module, output, mutationBroker: broker, mcpError: error, config: config)
             .RunAsync(args);
         return (exit, output.ToString(), error.ToString(), module.Calls);
     }

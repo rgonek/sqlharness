@@ -11,6 +11,79 @@ namespace SqlHarness.Tests.Cli;
 
 public sealed class CommandTests
 {
+    [Theory]
+    [InlineData(null, 47)]
+    [InlineData(30, 30)]
+    [InlineData(61, 61)]
+    public async Task Query_uses_configured_timeout_only_when_option_is_omitted(int? explicitTimeout, int expected)
+    {
+        var module = new FakeModule(Success(QueryReport()));
+        var config = SqlHarnessConfig.Default with { Execution = new ExecutionConfig { DefaultTimeoutSeconds = 47 } };
+        var app = SqlHarnessCli.Create(module, new StringWriter(), new StringReader("select 1"), stdinRedirected: true, config: config);
+        var args = new List<string> { "query", "dev" };
+        if (explicitTimeout is int supplied) args.AddRange(["--timeout", supplied.ToString()]);
+
+        var exit = await app.RunAsync(args);
+
+        Assert.Equal(0, exit);
+        Assert.Equal(expected, Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(module.Operations)).TimeoutSeconds);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(301)]
+    public async Task Query_rejects_explicit_timeout_outside_safety_bounds(int timeout)
+    {
+        var module = new FakeModule(Success(QueryReport()));
+        var config = SqlHarnessConfig.Default with { Execution = new ExecutionConfig { DefaultTimeoutSeconds = 47 } };
+        var exit = await SqlHarnessCli.Create(module, new StringWriter(), new StringReader("select 1"), stdinRedirected: true, config: config)
+            .RunAsync(["query", "dev", "--timeout", timeout.ToString()]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        Assert.Empty(module.Operations);
+    }
+
+    [Fact]
+    public async Task Measure_compare_watch_and_snapshot_use_the_configured_timeout_when_omitted()
+    {
+        var query = TempFile("select 1 as Value");
+        var baseline = TempFile("select 1 as Value");
+        var candidate = TempFile("select 1 as Value");
+        try
+        {
+            foreach (var args in new string[][]
+            {
+                ["measure", "dev", "--query", query, "--repeat", "1"],
+                ["compare", "dev", "--baseline", baseline, "--candidate", candidate, "--repeat", "1", "--subject", "timeout-test", "--scope", "whole"],
+                ["watch", "dev", "--file", query, "--until", "Value > 0"],
+                ["snapshot", "dev", "--file", query, "--name", "timeout-test"],
+            })
+            {
+                var module = new FakeModule(Success(QueryReport()));
+                var config = SqlHarnessConfig.Default with { Execution = new ExecutionConfig { DefaultTimeoutSeconds = 47 } };
+                var output = new StringWriter();
+                var exit = await SqlHarnessCli.Create(module, output, config: config).RunAsync(args);
+
+                Assert.True(exit == 0, $"{string.Join(' ', args)} failed: {output}");
+                var timeout = Assert.Single(module.Operations) switch
+                {
+                    SqlHarnessMeasureOperation value => value.TimeoutSeconds,
+                    SqlHarnessCompareOperation value => value.TimeoutSeconds,
+                    SqlHarnessWatchOperation value => value.TimeoutSeconds,
+                    SqlHarnessSnapshotOperation value => value.TimeoutSeconds,
+                    _ => throw new Xunit.Sdk.XunitException("The command dispatched an unexpected operation type."),
+                };
+                Assert.Equal(47, timeout);
+            }
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(baseline);
+            File.Delete(candidate);
+        }
+    }
+
     [Fact]
     public async Task Query_parses_profile_vars_and_emits_json_report()
     {

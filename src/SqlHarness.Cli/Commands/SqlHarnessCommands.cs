@@ -168,11 +168,12 @@ public static class SqlInputReader
     }
 }
 
-public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, OutputContext output, Renderer renderer) : AsyncCommand<TSettings> where TSettings : CommandSettings
+public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, OutputContext output, Renderer renderer, SqlHarnessConfig? config = null) : AsyncCommand<TSettings> where TSettings : CommandSettings
 {
     protected ISqlHarnessModule Module => module;
     protected OutputContext Output => output;
     protected Renderer Renderer => renderer;
+    protected int DefaultExecutionTimeoutSeconds => (config ?? SqlHarnessConfig.Default).Execution.DefaultTimeoutSeconds;
 
     protected int Invalid(string error, SqlHarnessError? structuredError = null)
     {
@@ -251,7 +252,7 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
             "Provide SQL input up to 16 MiB UTF-8 via --file or redirected stdin."));
 }
 
-public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CliInput input) : SqlHarnessCommand<QueryCommand.Settings>(module, output, renderer)
+public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CliInput input, SqlHarnessConfig config) : SqlHarnessCommand<QueryCommand.Settings>(module, output, renderer, config)
 {
     public sealed class Settings : TargetSettings
     {
@@ -262,7 +263,7 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         [Description("Read fixed typed parameters from a bounded .sqljson file; exclusive with --param.")]
         [CommandOption("--params-json <PATH>")]
         public string? ParametersJson { get; set; }
-        [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
+        [Description("SQL execution timeout in seconds (1..300); defaults to execution.defaultTimeoutSeconds from config.json.")][CommandOption("--timeout <SECONDS>")] public int? Timeout { get; set; }
         [Description("Presentation-only row cap (0..500). The server still computes the full result; canonical hashes and equivalence cover all rows.")]
         [CommandOption("--max-rows <COUNT>")][DefaultValue(50)] public int MaxRows { get; set; } = 50;
         [Description("Check the exact arguments offline (bounds, safety classification, parameter binding, setup shape) and stop before connecting, authenticating or writing. Same report as MCP dryRun; exit 0 when allowed, 2 when rejected.")]
@@ -280,7 +281,9 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         {
             var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
             var typedParameters = await ParameterInputCliReader.ReadAsync(settings.ParametersJson, settings.Parameters, ct);
-            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, false, null) { TypedParameters = typedParameters, DryRun = settings.DryRun }, ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
+            var timeout = settings.Timeout ?? DefaultExecutionTimeoutSeconds;
+            if (timeout is < 1 or > 300) return Invalid("--timeout must be 1..300.");
+            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, timeout, settings.MaxRows, false, null) { TypedParameters = typedParameters, DryRun = settings.DryRun }, ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
         catch (ParameterSetFileException exception) { return Invalid(exception.Message); }
@@ -289,7 +292,7 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
     }
 }
 
-public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer) : SqlHarnessCommand<MeasureCommand.Settings>(module, output, renderer)
+public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, SqlHarnessConfig config) : SqlHarnessCommand<MeasureCommand.Settings>(module, output, renderer, config)
 {
     public sealed class Settings : TargetSettings
     {
@@ -310,7 +313,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         [CommandOption("--param-set <PATH>")]
         public string[] ParameterSets { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
-        [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
+        [Description("SQL execution timeout in seconds (1..300); defaults to execution.defaultTimeoutSeconds from config.json.")][CommandOption("--timeout <SECONDS>")] public int? Timeout { get; set; }
         [CommandOption("--json-summary")] public bool JsonSummary { get; set; }
         [Description("Check the exact arguments offline (bounds, safety classification, parameter binding, setup shape) and stop before connecting, authenticating or writing. Same report as MCP dryRun; exit 0 when allowed, 2 when rejected.")]
         [CommandOption("--dry-run")] public bool DryRun { get; set; }
@@ -320,7 +323,8 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         if (!s.TryTarget(out var target, out var error)) return Invalid(error);
         if (s.Json && s.JsonSummary || s.Output is not null && (s.Json || s.JsonSummary)) return Invalid("Choose only one of --output, --json, or --json-summary.");
         if (string.IsNullOrWhiteSpace(s.Query)) return Invalid("--query SQL file is required.");
-        if (s.Timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
+        var timeout = s.Timeout ?? DefaultExecutionTimeoutSeconds;
+        if (timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
         var setPaths = s.ParameterSets ?? [];
         if (setPaths.Length == 1)
             return Invalid("Exactly one --param-set is invalid. Use --param for one set.");
@@ -338,7 +342,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
             var typedParameters = await ParameterInputCliReader.ReadAsync(s.ParametersJson, s.Parameters, ct);
             var parameterSets = setPaths.Length == 0 ? null : await ReadParameterSetsAsync(setPaths, ct);
             return await Dispatch(
-                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = measureContext },
+                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, timeout, s.Repeat, parameterSets) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = measureContext },
                 ResolveOutputMode(s.Json, s.JsonSummary, s.Output),
                 ct,
                 new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
@@ -373,7 +377,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
     }
 }
 
-public sealed class CompareCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CompareConfig compareConfig) : SqlHarnessCommand<CompareCommand.Settings>(module, output, renderer)
+public sealed class CompareCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CompareConfig compareConfig, SqlHarnessConfig config) : SqlHarnessCommand<CompareCommand.Settings>(module, output, renderer, config)
 {
     public sealed class Settings : TargetSettings
     {
@@ -393,7 +397,7 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [CommandOption("--matrix <NAME:TYPE=VALUES>")]
         public string[] Matrix { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
-        [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
+        [Description("SQL execution timeout in seconds (1..300); defaults to execution.defaultTimeoutSeconds from config.json.")][CommandOption("--timeout <SECONDS>")] public int? Timeout { get; set; }
         [Description("Compare observed rows: ordered, multiset, set, or off. Read regression verdict/reasons separately; it does not change the exit code.")]
         [CommandOption("--compare-results <MODE>")]
         [DefaultValue("ordered")]
@@ -412,7 +416,8 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         var matrix = s.Matrix ?? [];
         if (matrix.Length > 1) return Invalid("Version 1 accepts exactly one --matrix option.");
         if (string.IsNullOrWhiteSpace(s.Baseline) || string.IsNullOrWhiteSpace(s.Candidate)) return Invalid("Both --baseline and --candidate SQL files are required.");
-        if (s.Timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
+        var timeout = s.Timeout ?? DefaultExecutionTimeoutSeconds;
+        if (timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
         if (!TryParseCompareResults(s.CompareResults, out var compareResults))
             return Invalid("--compare-results must be ordered, multiset, set, or off.");
         if (s.CompareNullability && compareResults == ResultComparisonMode.Off)
@@ -433,8 +438,8 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
             var baseline = (await Read(s.Baseline, ct))!;
             var candidate = (await Read(s.Candidate, ct))!;
             SqlHarnessOperation operation = matrix.Length == 1
-                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults, s.CompareNullability) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = compareContext }
-                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults, s.CompareNullability) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = compareContext };
+                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, timeout, s.Repeat, matrix[0], compareResults, s.CompareNullability) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = compareContext }
+                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, timeout, s.Repeat, compareResults, s.CompareNullability) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = compareContext };
             return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary, s.Output), ct, new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }

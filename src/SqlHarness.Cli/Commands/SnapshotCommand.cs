@@ -8,8 +8,8 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Cli.Commands;
 
-public sealed class SnapshotCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CliInput input)
-    : SqlHarnessCommand<SnapshotCommand.Settings>(module, output, renderer)
+public sealed class SnapshotCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CliInput input, SqlHarnessConfig config)
+    : SqlHarnessCommand<SnapshotCommand.Settings>(module, output, renderer, config)
 {
     private const int DefaultTimeoutSeconds = 30;
     private const int DefaultMaxRows = 50;
@@ -24,7 +24,7 @@ public sealed class SnapshotCommand(ISqlHarnessModule module, OutputContext outp
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
-        [CommandOption("--timeout <SECONDS>")][DefaultValue(DefaultTimeoutSeconds)] public int Timeout { get; set; } = DefaultTimeoutSeconds;
+        [Description("SQL execution timeout in seconds (1..300); defaults to execution.defaultTimeoutSeconds from config.json.")][CommandOption("--timeout <SECONDS>")] public int? Timeout { get; set; }
         [CommandOption("--max-rows <COUNT>")][DefaultValue(DefaultMaxRows)] public int MaxRows { get; set; } = DefaultMaxRows;
         [CommandOption("--name <LABEL>")] public string? Name { get; set; }
         [CommandOption("--diff")] public bool Diff { get; set; }
@@ -40,6 +40,8 @@ public sealed class SnapshotCommand(ISqlHarnessModule module, OutputContext outp
 
         if (string.IsNullOrWhiteSpace(settings.Name) || !SnapshotNamePattern.IsMatch(settings.Name))
             return Invalid("--name must match ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$.");
+        var timeout = settings.Timeout ?? DefaultExecutionTimeoutSeconds;
+        if (timeout is < 1 or > 300) return Invalid("--timeout must be 1..300.");
 
         var hasFile = !string.IsNullOrWhiteSpace(settings.File);
         // Prefer explicit --file when present. Agent shells often redirect an empty stdin,
@@ -55,7 +57,7 @@ public sealed class SnapshotCommand(ISqlHarnessModule module, OutputContext outp
                     target,
                     sql,
                     settings.Parameters,
-                    settings.Timeout,
+                    timeout,
                     settings.MaxRows,
                     settings.Name,
                     settings.Diff,

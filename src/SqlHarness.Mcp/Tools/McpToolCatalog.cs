@@ -48,7 +48,8 @@ public sealed class McpToolHandlers(
     CompareConfig? compareConfig = null,
     IMutationBrokerClient? mutationBroker = null,
     string? mutationSessionKey = null,
-    bool operationAnnotationsEnabled = false)
+    bool operationAnnotationsEnabled = false,
+    int defaultExecutionTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)
 {
     private readonly McpScope scope = mcpScope;
     private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
@@ -58,6 +59,7 @@ public sealed class McpToolHandlers(
     private readonly IMutationBrokerClient _mutationBroker = mutationBroker ?? UnavailableMutationBrokerClient.Instance;
     private readonly string _mutationSessionKey = mutationSessionKey ?? "mcp:" + Guid.NewGuid().ToString("N");
     private readonly bool _operationAnnotationsEnabled = operationAnnotationsEnabled;
+    private readonly int _defaultExecutionTimeoutSeconds = defaultExecutionTimeoutSeconds;
 
     public Task<CallToolResult> CapabilitiesAsync(
         RequestContext<CallToolRequestParams> ctx,
@@ -86,8 +88,8 @@ public sealed class McpToolHandlers(
         string? file = null,
         [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
-        [Description("SQL timeout 1..300 seconds.")]
-        int timeout = 30,
+        [Description("1..300s; omit for config.")]
+        int? timeout = null,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
@@ -104,7 +106,7 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", .. AnnotationArgumentNames()]);
-            var operation = await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token, dryRun);
+            var operation = await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token, dryRun, _defaultExecutionTimeoutSeconds);
             return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
@@ -116,8 +118,8 @@ public sealed class McpToolHandlers(
         string? file = null,
         [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
-        [Description("SQL timeout 1..300 seconds.")]
-        int timeout = 30,
+        [Description("1..300s; omit for config.")]
+        int? timeout = null,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
         [Description("Database name this change is intended for.")]
@@ -135,7 +137,7 @@ public sealed class McpToolHandlers(
         {
             ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "expectDatabase", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
             var operation = await McpOperationMapper.MapMutationAsync(
-                scope, sql, file, parameters, timeout, maxRows, expectDatabase, _mutationSessionKey, token, dryRun);
+                scope, sql, file, parameters, timeout, maxRows, expectDatabase, _mutationSessionKey, token, dryRun, _defaultExecutionTimeoutSeconds);
             var outcome = await module.ExecuteAsync(operation, token);
             if (dryRun || outcome.Report is not SqlHarnessMutationPrepared prepared)
                 return outcome;
@@ -181,7 +183,7 @@ public sealed class McpToolHandlers(
         McpMatrixArgument? matrix = null,
         [Description("Repetitions 1..100.")]
         int repeat = 5,
-        [Description("SQL timeout 1..300 seconds.")]
+        [Description("1..300s; omit for config.")]
         int? timeout = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
@@ -201,7 +203,7 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", "subject", "scope", .. AnnotationArgumentNames()]);
-            var operation = await McpOperationMapper.MapMeasureAsync(this.scope, query, setup, parameters, parameterSetFiles, repeat, timeout, token, dryRun, parameterSets, matrix, subject, scope);
+            var operation = await McpOperationMapper.MapMeasureAsync(this.scope, query, setup, parameters, parameterSetFiles, repeat, timeout, token, dryRun, parameterSets, matrix, subject, scope, _defaultExecutionTimeoutSeconds);
             return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
@@ -220,7 +222,7 @@ public sealed class McpToolHandlers(
         McpParameterArgument[]? parameters = null,
         [Description("Repetitions 1..100.")]
         int repeat = 5,
-        [Description("SQL timeout 1..300 seconds.")]
+        [Description("1..300s; omit for config.")]
         int? timeout = null,
         [Description("Result comparison mode.")]
         [AllowedValues("ordered", "multiset", "set", "off")]
@@ -247,7 +249,7 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["baseline", "candidate", "subject", "scope", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", .. AnnotationArgumentNames()]);
-            var operation = await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, subject, scope, _compareConfig);
+            var operation = await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, subject, scope, _compareConfig, _defaultExecutionTimeoutSeconds);
             return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
@@ -275,7 +277,7 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", .. AnnotationArgumentNames()]);
-            var operation = await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, compareConfig: new CompareConfig { RequireContext = false });
+            var operation = await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, compareConfig: new CompareConfig { RequireContext = false }, defaultTimeoutSeconds: _defaultExecutionTimeoutSeconds);
             return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
@@ -287,8 +289,8 @@ public sealed class McpToolHandlers(
         string? file = null,
         [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
-        [Description("SQL timeout 1..300 seconds.")]
-        int timeout = 30,
+        [Description("1..300s; omit for config.")]
+        int? timeout = null,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
         [Description("Stop predicate on the first row. Exactly one of until or untilUnchanged.")]
@@ -311,7 +313,7 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_watch", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, remaining) =>
         {
             ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxCellChars", "maxOperationSeconds", .. AnnotationArgumentNames()]);
-            var operation = await McpOperationMapper.MapWatchAsync(scope, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, token);
+            var operation = await McpOperationMapper.MapWatchAsync(scope, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, token, _defaultExecutionTimeoutSeconds);
             operation = McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled);
             // The watch deadline is bounded by the remaining request budget, so
             // a natural max-duration stop stays a controlled exit 7 inside it.
@@ -333,8 +335,8 @@ public sealed class McpToolHandlers(
         string? file = null,
         [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
-        [Description("SQL timeout 1..300 seconds.")]
-        int timeout = 30,
+        [Description("1..300s; omit for config.")]
+        int? timeout = null,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
@@ -349,7 +351,7 @@ public sealed class McpToolHandlers(
         RunDbAsync("sqlharness_snapshot", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", .. AnnotationArgumentNames()]);
-            var operation = await McpOperationMapper.MapSnapshotAsync(scope, action, name, sql, file, parameters, timeout, maxRows, token);
+            var operation = await McpOperationMapper.MapSnapshotAsync(scope, action, name, sql, file, parameters, timeout, maxRows, token, _defaultExecutionTimeoutSeconds);
             return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
         }, ct);
 
@@ -744,7 +746,7 @@ public static class McpToolCatalog
     {
         ArgumentNullException.ThrowIfNull(process);
         if (!process.RequestScope)
-            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule(process.CompareConfig, process.Config.Connection)), clock, hostShutdown, process.CompareConfig, mutationBroker, mutationSessionKey ?? process.MutationSessionKey, process.Config.Journal.OperationAnnotations);
+            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule(process.CompareConfig, process.Config.Connection)), clock, hostShutdown, process.CompareConfig, mutationBroker, mutationSessionKey ?? process.MutationSessionKey, process.Config.Journal.OperationAnnotations, process.Config.Execution.DefaultTimeoutSeconds);
         var factory = new ToolFactory(new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory, mutationBroker, mutationSessionKey ?? process.MutationSessionKey), RequestScopeEngine, process.Config.Journal.OperationAnnotations);
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
@@ -789,14 +791,15 @@ public static class McpToolCatalog
         CompareConfig? compareConfig = null,
         IMutationBrokerClient? mutationBroker = null,
         string? mutationSessionKey = null,
-        bool operationAnnotationsEnabled = false)
+        bool operationAnnotationsEnabled = false,
+        int defaultExecutionTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(module);
         var policy = compareConfig ?? SqlHarnessConfig.Default.Compare;
         var handlers = new McpToolHandlers(scope, module, clock, hostShutdown, compareConfig: policy,
             mutationBroker: mutationBroker, mutationSessionKey: mutationSessionKey ?? "mcp:" + Guid.NewGuid().ToString("N"),
-            operationAnnotationsEnabled: operationAnnotationsEnabled);
+            operationAnnotationsEnabled: operationAnnotationsEnabled, defaultExecutionTimeoutSeconds: defaultExecutionTimeoutSeconds);
         var factory = new ToolFactory(handlers, scope.ResolvedTarget.Engine, operationAnnotationsEnabled);
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
