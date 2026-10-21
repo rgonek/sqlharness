@@ -1,0 +1,86 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Mcp.WorkflowHost -> D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:02.94]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 0, section: "statements", accepted: False) [FAIL]
+[xUnit.net 00:00:03.00]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 513, section: "statements", accepted: False) [FAIL]
+[xUnit.net 00:00:03.06]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 1, section: "statements", accepted: True) [FAIL]
+[xUnit.net 00:00:03.12]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 512, section: "statements", accepted: True) [FAIL]
+[xUnit.net 00:00:03.20]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 1, section: "summary", accepted: False) [FAIL]
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 0, section: "statements", accepted: False) [61 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Unknown argument. Supported arguments: id"···
+Not found: "pageSize"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 660
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 662
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 513, section: "statements", accepted: False) [61 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Unknown argument. Supported arguments: id"···
+Not found: "pageSize"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 660
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 662
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 1, section: "statements", accepted: True) [64 ms]
+  Error Message:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "success"
+Actual:   "error"
+           ↑ (pos 0)
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 653
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 662
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 512, section: "statements", accepted: True) [58 ms]
+  Error Message:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "success"
+Actual:   "error"
+           ↑ (pos 0)
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 653
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 662
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 1, section: "summary", accepted: False) [77 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Unknown argument. Supported arguments: id"···
+Not found: "pageSize"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 660
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(Nullable`1 pageSize, String section, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 662
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:03.62]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Request_scope_schema_is_required_only_on_the_target_tools [FAIL]
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Request_scope_schema_is_required_only_on_the_target_tools [86 ms]
+  Error Message:
+   {"type":"object","properties":{"id":{"description":"Artifact directory name from a saved report.","type":"string"},"section":{"description":"Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.","type":"string","enum":["summary","metrics","operators","statements","matrix-cells","plan"]},"target":{"description":"Request target.","type":"object","properties":{"profile":{"type":"string"},"vars":{"type":"object","additionalProperties":{"type":"string"}}},"required":["profile","vars"]},"cursor":{"description":"Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.","type":["integer","null"],"default":null},"variant":{"description":"Plan variant: baseline, candidate, or query.","type":["string","null"],"default":null},"statement":{"description":"Zero-based statement ordinal for section=plan.","type":"integer","default":0},"parameterSet":{"description":"Measure parameter set for section=plan.","type":["string","null"],"default":null},"repetition":{"description":"Measured repetition for section=plan; default is the identified last measured run. A run without a saved plan reports missing evidence, never an earlier plan.","type":["integer","null"],"default":null},"includeText":{"description":"Return bounded statement text and predicates in section=plan.","type":"boolean","default":false},"maxCellChars":{"description":"Cell clip 0..4096 characters; default 2048.","type":["integer","null"],"default":null}},"required":["id","section","target"]}
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Request_scope_schema_is_required_only_on_the_target_tools() in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 476
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Request_scope_schema_is_required_only_on_the_target_tools() in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 540
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:04.89]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_requests_raise_the_call_budget_and_reconstruct_statement_pages [FAIL]
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_requests_raise_the_call_budget_and_reconstruct_statement_pages [161 ms]
+  Error Message:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "success"
+Actual:   "error"
+           ↑ (pos 0)
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_requests_raise_the_call_budget_and_reconstruct_statement_pages() in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 585
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_requests_raise_the_call_budget_and_reconstruct_statement_pages() in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 626
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     7, Passed:    99, Skipped:     0, Total:   106, Duration: 7 s - SqlHarness.Mcp.Tests.dll (net10.0)

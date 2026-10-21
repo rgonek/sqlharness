@@ -1,0 +1,75 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:02.83]     SqlHarness.Tests.ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(pageSize: null, expectedSourceWindow: 32) [FAIL]
+[xUnit.net 00:00:02.84]     SqlHarness.Tests.ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(pageSize: 1, expectedSourceWindow: 1) [FAIL]
+[xUnit.net 00:00:02.84]     SqlHarness.Tests.ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(pageSize: 512, expectedSourceWindow: 65) [FAIL]
+[xUnit.net 00:00:02.86]     SqlHarness.Tests.ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(pageSize: 512, expectedSourceWindow: 512) [FAIL]
+[xUnit.net 00:00:02.88]     SqlHarness.Tests.ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(pageSize: 1, expectedSourceWindow: 1) [FAIL]
+[xUnit.net 00:00:02.89]     SqlHarness.Tests.ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(pageSize: null, expectedSourceWindow: 128) [FAIL]
+  Failed SqlHarness.Tests.ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(pageSize: null, expectedSourceWindow: 32) [23 ms]
+  Error Message:
+   Assert.NotNull() Failure: Value is null
+  Stack Trace:
+     at SqlHarness.Tests.ArtifactReaderTests.ReadSectionWithPageSize(String root, String id, String section, Nullable`1 cursor, ArtifactPlanSelector planSelector, Boolean includeText, Nullable`1 pageSize) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 730
+   at SqlHarness.Tests.ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(Nullable`1 pageSize, Int32 expectedSourceWindow) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 705
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(pageSize: 1, expectedSourceWindow: 1) [3 ms]
+  Error Message:
+   Assert.NotNull() Failure: Value is null
+  Stack Trace:
+     at SqlHarness.Tests.ArtifactReaderTests.ReadSectionWithPageSize(String root, String id, String section, Nullable`1 cursor, ArtifactPlanSelector planSelector, Boolean includeText, Nullable`1 pageSize) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 730
+   at SqlHarness.Tests.ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(Nullable`1 pageSize, Int32 expectedSourceWindow) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 705
+   at InvokeStub_ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(pageSize: 512, expectedSourceWindow: 65) [3 ms]
+  Error Message:
+   Assert.NotNull() Failure: Value is null
+  Stack Trace:
+     at SqlHarness.Tests.ArtifactReaderTests.ReadSectionWithPageSize(String root, String id, String section, Nullable`1 cursor, ArtifactPlanSelector planSelector, Boolean includeText, Nullable`1 pageSize) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 730
+   at SqlHarness.Tests.ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(Nullable`1 pageSize, Int32 expectedSourceWindow) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 705
+   at InvokeStub_ArtifactReaderTests.Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(pageSize: 512, expectedSourceWindow: 512) [23 ms]
+  Error Message:
+   Assert.NotNull() Failure: Value is null
+  Stack Trace:
+     at SqlHarness.Tests.ArtifactReaderTests.ReadSectionWithPageSize(String root, String id, String section, Nullable`1 cursor, ArtifactPlanSelector planSelector, Boolean includeText, Nullable`1 pageSize) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 730
+   at SqlHarness.Tests.ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(Nullable`1 pageSize, Int32 expectedSourceWindow) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 670
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(pageSize: 1, expectedSourceWindow: 1) [21 ms]
+  Error Message:
+   Assert.NotNull() Failure: Value is null
+  Stack Trace:
+     at SqlHarness.Tests.ArtifactReaderTests.ReadSectionWithPageSize(String root, String id, String section, Nullable`1 cursor, ArtifactPlanSelector planSelector, Boolean includeText, Nullable`1 pageSize) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 730
+   at SqlHarness.Tests.ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(Nullable`1 pageSize, Int32 expectedSourceWindow) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 670
+   at InvokeStub_ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(pageSize: null, expectedSourceWindow: 128) [5 ms]
+  Error Message:
+   Assert.NotNull() Failure: Value is null
+  Stack Trace:
+     at SqlHarness.Tests.ArtifactReaderTests.ReadSectionWithPageSize(String root, String id, String section, Nullable`1 cursor, ArtifactPlanSelector planSelector, Boolean includeText, Nullable`1 pageSize) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 730
+   at SqlHarness.Tests.ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(Nullable`1 pageSize, Int32 expectedSourceWindow) in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 670
+   at InvokeStub_ArtifactReaderTests.Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:03.05]     SqlHarness.Tests.ArtifactReaderTests.Statements_section_accepts_a_continuation_cursor [FAIL]
+  Failed SqlHarness.Tests.ArtifactReaderTests.Statements_section_accepts_a_continuation_cursor [48 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 128
+Actual:   300
+  Stack Trace:
+     at SqlHarness.Tests.ArtifactReaderTests.Statements_section_accepts_a_continuation_cursor() in D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 637
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     7, Passed:    62, Skipped:     0, Total:    69, Duration: 1 s - SqlHarness.Tests.dll (net10.0)

@@ -472,6 +472,13 @@ public sealed class McpToolSchemaTests : IDisposable
             .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells", "plan"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
         Assert.Contains("cursor", Properties(requestSchemas["sqlharness_artifact"]).EnumerateObject().Select(property => property.Name));
+        var requestArtifactProperties = Properties(requestSchemas["sqlharness_artifact"]);
+        Assert.True(requestArtifactProperties.TryGetProperty("maxResultBytes", out var requestArtifactBudget), requestSchemas["sqlharness_artifact"].GetRawText());
+        Assert.Equal(McpLimits.MinCallToolResultBudgetBytes, requestArtifactBudget.GetProperty("minimum").GetInt32());
+        Assert.Equal(McpLimits.MaxCallToolResultBudgetBytes, requestArtifactBudget.GetProperty("maximum").GetInt32());
+        Assert.True(requestArtifactProperties.TryGetProperty("pageSize", out var requestArtifactPageSize), requestSchemas["sqlharness_artifact"].GetRawText());
+        Assert.Equal(1, requestArtifactPageSize.GetProperty("minimum").GetInt32());
+        Assert.Equal(512, requestArtifactPageSize.GetProperty("maximum").GetInt32());
         var projectedTools = new[] { "sqlharness_query", "sqlharness_mutation", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_plan", "sqlharness_artifact" };
         foreach (var tool in projectedTools)
             Assert.True(Properties(requestSchemas[tool]).TryGetProperty("maxCellChars", out _), $"{tool} must expose maxCellChars.");
@@ -517,6 +524,13 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.DoesNotContain("target", Properties(fixedSchemas[tool]).EnumerateObject().Select(property => property.Name));
         foreach (var tool in projectedTools)
             Assert.True(Properties(fixedSchemas[tool]).TryGetProperty("maxCellChars", out _), $"{tool} must expose maxCellChars.");
+        var fixedArtifactProperties = Properties(fixedSchemas["sqlharness_artifact"]);
+        Assert.True(fixedArtifactProperties.TryGetProperty("maxResultBytes", out var fixedArtifactBudget), fixedSchemas["sqlharness_artifact"].GetRawText());
+        Assert.Equal(McpLimits.MinCallToolResultBudgetBytes, fixedArtifactBudget.GetProperty("minimum").GetInt32());
+        Assert.Equal(McpLimits.MaxCallToolResultBudgetBytes, fixedArtifactBudget.GetProperty("maximum").GetInt32());
+        Assert.True(fixedArtifactProperties.TryGetProperty("pageSize", out var fixedArtifactPageSize), fixedSchemas["sqlharness_artifact"].GetRawText());
+        Assert.Equal(1, fixedArtifactPageSize.GetProperty("minimum").GetInt32());
+        Assert.Equal(512, fixedArtifactPageSize.GetProperty("maximum").GetInt32());
         Assert.False(Properties(fixedSchemas["sqlharness_capabilities"]).TryGetProperty("maxCellChars", out _));
         Assert.Contains("subject", Required(fixedSchemas["sqlharness_compare"]));
         Assert.Contains("scope", Required(fixedSchemas["sqlharness_compare"]));
@@ -524,6 +538,179 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.True(Properties(fixedSchemas["sqlharness_measure"]).TryGetProperty("scope", out _));
         Assert.DoesNotContain("subject", Required(fixedSchemas["sqlharness_measure"]));
         Assert.DoesNotContain("scope", Required(fixedSchemas["sqlharness_measure"]));
+    }
+
+    [Fact]
+    public async Task Artifact_requests_raise_the_call_budget_and_reconstruct_statement_pages()
+    {
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            Profile = ProfileName,
+            Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+            MaxResultBytes = 262144,
+        }, () => ProfileStore.Load(_targetsFile));
+        var scope = process.FixedScope!;
+        Directory.CreateDirectory(SqlHarnessPaths.CompareDir);
+        var statements = Enumerable.Range(0, 512).Select(ordinal => new ArtifactStatementMetric(
+            "baseline", null, null, ordinal, new string((char)('a' + ordinal % 26), 64), 1, 2, 1,
+            [new StatementOperatorSummary(ordinal, new string('o', 32), new string('t', 24), new string('i', 24), 1, 1, 1)])).ToArray();
+        WriteStatementsArtifact("large-statements", scope.Owner, statements);
+        WriteStatementsArtifact("foreign-statements", new ArtifactOwner("other-profile", new Dictionary<string, string>(), "sqlserver", "other", "other"), statements);
+        Assert.Equal(512, Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(
+            SqlHarnessPaths.CompareDir, "large-statements", "statements", scope.Owner)).Statements.Count);
+        await using var served = await ServedCatalog.CreateAsync(process);
+
+        var defaultResult = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+        {
+            ["id"] = "large-statements",
+            ["section"] = "statements",
+        }, cancellationToken: CancellationToken.None);
+        var raisedResult = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+        {
+            ["id"] = "large-statements",
+            ["section"] = "statements",
+            ["maxResultBytes"] = 131072,
+            ["pageSize"] = 512,
+        }, cancellationToken: CancellationToken.None);
+
+        var defaultText = Assert.Single(defaultResult.Content.OfType<TextContentBlock>()).Text;
+        Assert.Equal("success", ServedEnvelope(defaultResult, "sqlharness_artifact").GetProperty("status").GetString());
+        var defaultBytes = Encoding.UTF8.GetByteCount(defaultText);
+        Assert.InRange(defaultBytes, 1, 65536);
+        var defaultProjection = ServedEnvelope(defaultResult, "sqlharness_artifact").GetProperty("result");
+        Assert.Equal(128, defaultProjection.GetProperty("statements").GetArrayLength());
+        Assert.Equal(128, defaultProjection.GetProperty("continuation").GetInt32());
+
+        var raisedText = Assert.Single(raisedResult.Content.OfType<TextContentBlock>()).Text;
+        Assert.Equal("success", ServedEnvelope(raisedResult, "sqlharness_artifact").GetProperty("status").GetString());
+        var raisedBytes = Encoding.UTF8.GetByteCount(raisedText);
+        Assert.InRange(raisedBytes, 65537, 131072);
+        var raisedProjection = ServedEnvelope(raisedResult, "sqlharness_artifact").GetProperty("result");
+        var allStatementOrdinals = raisedProjection.GetProperty("statements").EnumerateArray()
+            .Select(statement => statement.GetProperty("statementOrdinal").GetInt32()).ToList();
+        Assert.All(raisedProjection.GetProperty("statements").EnumerateArray(), statement =>
+        {
+            Assert.Equal(64, statement.GetProperty("statementHash").GetString()!.Length);
+            Assert.Single(statement.GetProperty("topOperators").EnumerateArray());
+        });
+        Assert.InRange(allStatementOrdinals.Count, 129, 512);
+        var continuation = raisedProjection.GetProperty("continuation");
+        Assert.Equal(allStatementOrdinals.Count < 512 ? allStatementOrdinals.Count : (int?)null,
+            continuation.ValueKind == JsonValueKind.Null ? null : continuation.GetInt32());
+        while (continuation.ValueKind != JsonValueKind.Null)
+        {
+            var next = continuation.GetInt32();
+            var nextPage = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+            {
+                ["id"] = "large-statements",
+                ["section"] = "statements",
+                ["cursor"] = next,
+                ["maxResultBytes"] = 131072,
+                ["pageSize"] = 512,
+            }, cancellationToken: CancellationToken.None);
+            var nextText = Assert.Single(nextPage.Content.OfType<TextContentBlock>()).Text;
+            Assert.InRange(Encoding.UTF8.GetByteCount(nextText), 1, 131072);
+            var nextProjection = ServedEnvelope(nextPage, "sqlharness_artifact").GetProperty("result");
+            var nextStatements = nextProjection.GetProperty("statements").EnumerateArray()
+                .Select(statement => statement.GetProperty("statementOrdinal").GetInt32()).ToArray();
+            Assert.All(nextProjection.GetProperty("statements").EnumerateArray(), statement =>
+            {
+                Assert.Equal(64, statement.GetProperty("statementHash").GetString()!.Length);
+                Assert.Single(statement.GetProperty("topOperators").EnumerateArray());
+            });
+            Assert.NotEmpty(nextStatements);
+            Assert.Equal(next, nextStatements[0]);
+            allStatementOrdinals.AddRange(nextStatements);
+            continuation = nextProjection.GetProperty("continuation");
+        }
+        Assert.Equal(Enumerable.Range(0, 512), allStatementOrdinals);
+
+    }
+
+    [Theory]
+    [InlineData(1, "statements", true)]
+    [InlineData(null, "statements", true)]
+    [InlineData(512, "statements", true)]
+    [InlineData(0, "statements", false)]
+    [InlineData(513, "statements", false)]
+    [InlineData(1, "summary", false)]
+    public async Task Artifact_page_size_accepts_only_supported_windows(int? pageSize, string section, bool accepted)
+    {
+        var process = ArtifactProcess();
+        WriteStatementsArtifact("page-size-statements", process.FixedScope!.Owner, SyntheticArtifactStatements());
+        await using var served = await ServedCatalog.CreateAsync(process);
+        var arguments = new Dictionary<string, object?>
+        {
+            ["id"] = "page-size-statements",
+            ["section"] = section,
+        };
+        if (pageSize is int requested)
+            arguments["pageSize"] = requested;
+        var result = await served.Client.CallToolAsync("sqlharness_artifact", arguments, cancellationToken: CancellationToken.None);
+        var envelope = ServedEnvelope(result, "sqlharness_artifact");
+        if (accepted)
+        {
+            Assert.Equal("success", envelope.GetProperty("status").GetString());
+            if (pageSize == 1)
+                Assert.Single(envelope.GetProperty("result").GetProperty("statements").EnumerateArray());
+        }
+        else
+        {
+            var message = envelope.GetProperty("error").GetProperty("message").GetString();
+            Assert.Contains("pageSize", message, StringComparison.Ordinal);
+            Assert.Contains(section == "summary" ? "pageable" : "1..512", message, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public async Task Unknown_and_foreign_artifacts_stay_content_free_with_selectors_and_large_budget()
+    {
+        var process = ArtifactProcess();
+        WriteStatementsArtifact("foreign-statements",
+            new ArtifactOwner("other-profile", new Dictionary<string, string>(), "sqlserver", "other", "other"),
+            SyntheticArtifactStatements());
+        await using var served = await ServedCatalog.CreateAsync(process);
+        foreach (var id in new[] { "missing-artifact", "foreign-statements" })
+        {
+            var refused = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+            {
+                ["id"] = id,
+                ["section"] = "plan",
+                ["variant"] = "secret-selector",
+                ["statement"] = 999,
+                ["repetition"] = 999,
+                ["includeText"] = true,
+                ["maxResultBytes"] = 131072,
+                ["pageSize"] = 512,
+            }, cancellationToken: CancellationToken.None);
+            var refusalText = Assert.Single(refused.Content.OfType<TextContentBlock>()).Text;
+            Assert.DoesNotContain("foreign-statements", refusalText, StringComparison.Ordinal);
+            Assert.DoesNotContain("secret-selector", refusalText, StringComparison.Ordinal);
+            Assert.DoesNotContain(new string('o', 32), refusalText, StringComparison.Ordinal);
+        }
+    }
+
+    private McpProcessContext ArtifactProcess() => McpProcessContext.Create(new McpServerOptions
+    {
+        Profile = ProfileName,
+        Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+        MaxResultBytes = 262144,
+    }, () => ProfileStore.Load(_targetsFile));
+
+    private static ArtifactStatementMetric[] SyntheticArtifactStatements() => Enumerable.Range(0, 512).Select(ordinal => new ArtifactStatementMetric(
+        "baseline", null, null, ordinal, new string((char)('a' + ordinal % 26), 64), 1, 2, 1,
+        [new StatementOperatorSummary(ordinal, new string('o', 32), new string('t', 24), new string('i', 24), 1, 1, 1)])).ToArray();
+
+    private static void WriteStatementsArtifact(string id, ArtifactOwner owner, IReadOnlyList<ArtifactStatementMetric> statements)
+    {
+        var directory = Path.Combine(SqlHarnessPaths.CompareDir, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(
+            new ArtifactManifest(ArtifactReader.CurrentManifestVersion, ArtifactReader.CompareKind, "report.json", ["statements"])
+            { Owner = owner }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        File.WriteAllText(Path.Combine(directory, "statements.json"), JsonSerializer.Serialize(
+            new ArtifactStatementsSection(id, ArtifactReader.CompareKind, statements, 0),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
     }
 
     [Fact]
