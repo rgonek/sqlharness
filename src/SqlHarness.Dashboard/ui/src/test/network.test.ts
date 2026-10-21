@@ -26,6 +26,25 @@ test("rejects an unexpected request with its method and path", async () => {
   )
 })
 
+test("does not let a read fixture satisfy an unregistered write method", async () => {
+  stubFetch({ "/api/settings": { status: "valid" } })
+
+  const testName = expect.getState().currentTestName
+  await expect(fetch("/api/settings", { method: "PUT" }))
+    .rejects.toThrow(`Unexpected dashboard test request in "${testName}": PUT /api/settings`)
+  expect(() => assertNoUnexpectedRequests()).toThrow(
+    `Unexpected dashboard test request in "${testName}": PUT /api/settings`,
+  )
+})
+
+test("serves a write fixture only for its explicitly registered method", async () => {
+  stubFetch({ "POST /api/prices/refresh": { refreshed: true } })
+
+  const response = await fetch(new Request("http://localhost/api/prices/refresh", { method: "POST" }))
+  expect(response.status).toBe(200)
+  await expect(response.json()).resolves.toEqual({ refreshed: true })
+})
+
 test("does not retain a previous test's request handlers", async () => {
   const testName = expect.getState().currentTestName
   await expect(fetch("/api/profiles"))

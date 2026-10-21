@@ -106,7 +106,7 @@ test("star and archive buttons patch the annotation and refetch", async () => {
     "/api/agents": [],
     "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
     "/api/sessions?archived=false&starred=false&limit=50": { items: [session({ id: 7, sessionKey: "cli:x" })], nextCursor: null },
-    "/api/sessions/7/annotation": (url: URL, init?: RequestInit) => {
+    "PATCH /api/sessions/7/annotation": (url: URL, init?: RequestInit) => {
       patches.push({ url: url.pathname, body: JSON.parse(String(init?.body)) })
       expect(init?.method).toBe("PATCH")
       expect(new Headers(init?.headers).get("X-SqlHarness-Dashboard")).toBe("1")
@@ -147,7 +147,7 @@ test("a failed save shows the server message and re-enables the button", async (
     "/api/agents": [],
     "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
     "/api/sessions?archived=false&starred=false&limit=50": { items: [session({ id: 9, sessionKey: "cli:busy" })], nextCursor: null },
-    "/api/sessions/9/annotation": () => new Response(JSON.stringify({ error: "The journal is busy; try again." }), { status: 503 }),
+    "PATCH /api/sessions/9/annotation": () => new Response(JSON.stringify({ error: "The journal is busy; try again." }), { status: 503 }),
   })
   renderApp("/sessions")
   await userEvent.click(await screen.findByRole("button", { name: "Star session cli:busy" }))
@@ -230,8 +230,16 @@ test("matching off returns immediately to per-session rows even when agent rows 
     "/api/agent-sessions/unmatched": { items: [], nextCursor: null, matching: true },
     "/api/prices": { source: "embedded", fetchedAt: "2026-10-07T09:00:00Z", origin: "embedded" },
     "/api/transcripts": { enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null },
-    "/api/settings": (_url: URL, init?: RequestInit) => {
-      if (init?.method === "PUT") { enabled = false; matching = false }
+    "/api/settings": () => {
+      return new Response(JSON.stringify({ status: "valid", path: "config.json", settings: {
+        journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
+        dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled } },
+        compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 },
+      } }), { status: 200 })
+    },
+    "PUT /api/settings": () => {
+      enabled = false
+      matching = false
       return new Response(JSON.stringify({ status: "valid", path: "config.json", settings: {
         journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
         dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled } },

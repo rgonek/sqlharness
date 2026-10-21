@@ -21,13 +21,11 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
 function stubSettings(initial: SettingsResponse) {
   const puts: { body: unknown; search: string }[] = []
   stubSettingsPageFetch({
-    "/api/settings": (url: URL, init?: RequestInit) => {
-      if (init?.method === "PUT") {
-        const body = JSON.parse(String(init.body))
-        puts.push({ body, search: url.search })
-        return new Response(JSON.stringify({ ...initial, status: "valid", settings: body }), { status: 200 })
-      }
-      return new Response(JSON.stringify(initial), { status: 200 })
+    "/api/settings": initial,
+    "PUT /api/settings": (url: URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      puts.push({ body, search: url.search })
+      return new Response(JSON.stringify({ ...initial, status: "valid", settings: body }), { status: 200 })
     },
   })
   return puts
@@ -203,10 +201,8 @@ test("Lowering_limits_with_retention_on_asks_for_confirmation", async () => {
 
 test("a failed save shows the error and keeps the server value", async () => {
   stubSettingsPageFetch({
-    "/api/settings": (_url: URL, init?: RequestInit) =>
-      init?.method === "PUT"
-        ? new Response(JSON.stringify({ errors: [{ field: "dashboard.idleShutdownHours", message: "Must be between 1 and 168." }] }), { status: 400 })
-        : new Response(JSON.stringify(response()), { status: 200 }),
+    "/api/settings": response(),
+    "PUT /api/settings": () => new Response(JSON.stringify({ errors: [{ field: "dashboard.idleShutdownHours", message: "Must be between 1 and 168." }] }), { status: 400 }),
   })
   renderApp("/settings")
 
@@ -220,12 +216,10 @@ test("a failed save shows the error and keeps the server value", async () => {
 test("a conflict on save refetches and shows the invalid-file alert", async () => {
   let invalid = false
   stubSettingsPageFetch({
-    "/api/settings": (_url: URL, init?: RequestInit) => {
-      if (init?.method === "PUT") {
-        invalid = true
-        return new Response(JSON.stringify({ error: "config.json is invalid" }), { status: 409 })
-      }
-      return new Response(JSON.stringify(response({ status: invalid ? "invalid" : "valid" })), { status: 200 })
+    "/api/settings": () => new Response(JSON.stringify(response({ status: invalid ? "invalid" : "valid" })), { status: 200 }),
+    "PUT /api/settings": () => {
+      invalid = true
+      return new Response(JSON.stringify({ error: "config.json is invalid" }), { status: 409 })
     },
   })
   renderApp("/settings")
@@ -250,7 +244,7 @@ test("refreshing model prices updates the shown snapshot and reports failures", 
     "/api/settings": response(),
     "/api/prices": { source: "models.dev", fetchedAt: "2026-10-11T00:00:00Z", origin: "embedded" },
     "/api/transcripts": { enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null },
-    "/api/prices/refresh": () =>
+    "POST /api/prices/refresh": () =>
       fail
         ? new Response(JSON.stringify({ error: "Model prices could not be refreshed." }), { status: 502 })
         : new Response(JSON.stringify({ source: "models.dev", fetchedAt: "2026-10-20T08:00:00Z", origin: "refreshed" }), { status: 200 }),
@@ -270,19 +264,17 @@ test("enables transcript reading, shows status, and confirms clearing matched da
   const puts: { body: unknown; search: string }[] = []
   const posts: { body: unknown; header: string | null }[] = []
   stubSettingsPageFetch({
-    "/api/settings": (url: URL, init?: RequestInit) => {
-      if (init?.method === "PUT") {
-        const body = JSON.parse(String(init.body))
-        puts.push({ body, search: url.search })
-        return new Response(JSON.stringify({ ...response(), settings: body }), { status: 200 })
-      }
-      return new Response(JSON.stringify(response()), { status: 200 })
+    "/api/settings": response(),
+    "PUT /api/settings": (url: URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      puts.push({ body, search: url.search })
+      return new Response(JSON.stringify({ ...response(), settings: body }), { status: 200 })
     },
     "/api/transcripts": { enabled: false, matched: 3, unmatched: 1, readErrors: 0, lastCycleAt: "2026-10-07T09:05:00.000Z", coverage: [
       { agentKind: "claude", transport: "mcp", exact: 3, inferred: 1, unassigned: 2 },
       { agentKind: "codex", transport: "cli", exact: 0, inferred: 0, unassigned: 4 },
     ] },
-    "/api/transcripts/clear": (_url: URL, init?: RequestInit) => {
+    "POST /api/transcripts/clear": (_url: URL, init?: RequestInit) => {
       posts.push({ body: JSON.parse(String(init?.body)), header: new Headers(init?.headers).get("X-SqlHarness-Dashboard") })
       return new Response(JSON.stringify({ enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null }), { status: 200 })
     },

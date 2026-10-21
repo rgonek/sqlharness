@@ -123,7 +123,7 @@ test("starring a live session updates its row", async () => {
     [RUNNING]: page([]),
     [STARRED]: () => json(page(starred ? [row()] : [])),
     [SESSIONS]: () => json(page(starred ? [] : [row()])),
-    "/api/sessions/4/annotation": () => {
+    "PATCH /api/sessions/4/annotation": () => {
       starred = true
       return json({ title: null, note: null, starred: true, archived: false })
     },
@@ -230,7 +230,7 @@ test("clearing transcript data removes stale titles and models from the live cac
     } },
     "/api/prices": { source: "embedded", fetchedAt: "2026-10-07T09:00:00Z", origin: "embedded" },
     "/api/transcripts": { enabled: false, matched: 1, unmatched: 0, readErrors: 0, lastCycleAt: null },
-    "/api/transcripts/clear": () => {
+    "POST /api/transcripts/clear": () => {
       cleared = true
       return json({ enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null })
     },

@@ -106,7 +106,7 @@ test("approval dialog renders SQL and parameter values as literal text and waits
 
 test("a 409 approve shows the pending-state message and removed closes the dialog", async () => {
   const { source } = await setup()
-  stubApprovalPageFetch({ "/api/mutations/r-1/approve": () => new Response(JSON.stringify({ error: "request_not_pending" }), { status: 409 }) })
+  stubApprovalPageFetch({ "POST /api/mutations/r-1/approve": () => new Response(JSON.stringify({ error: "request_not_pending" }), { status: 409 }) })
   act(() => source().emit("added", request))
   vi.useFakeTimers()
   fireEvent.click(screen.getByRole("button", { name: "Review" }))
@@ -122,7 +122,7 @@ test("a 409 approve shows the pending-state message and removed closes the dialo
 
 test("a profile execution conflict explains that the approved request did not run", async () => {
   const { source } = await setup()
-  stubApprovalPageFetch({ "/api/mutations/r-1/approve": () => new Response(JSON.stringify({ status: "busy", error: "profile_execution_busy" }), { status: 409 }) })
+  stubApprovalPageFetch({ "POST /api/mutations/r-1/approve": () => new Response(JSON.stringify({ status: "busy", error: "profile_execution_busy" }), { status: 409 }) })
   act(() => source().emit("added", request))
   vi.useFakeTimers()
   fireEvent.click(screen.getByRole("button", { name: "Review" }))

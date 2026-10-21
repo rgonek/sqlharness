@@ -146,7 +146,7 @@ test("operation detail offers SQL reuse only when SQL was stored", async () => {
 test("operation detail shows owner annotation save failures", async () => {
   stubOperationFetch({
     "/api/operations/10": operationDetail({ operation: operation({ id: 10 }) }),
-    "/api/operations/10/annotation": () => new Response(JSON.stringify({ message: "write denied" }), { status: 500 }),
+    "PATCH /api/operations/10/annotation": () => new Response(JSON.stringify({ message: "write denied" }), { status: 500 }),
   })
   renderApp("/operations/10")
 

@@ -57,7 +57,7 @@ test("shows the agent title and conversation list, and clears back to that title
       session: session({ id: 1, title, agentTitle: title ? null : "Optimize orders", agentKind: "claude" }),
       conversations: [{ agentKind: "claude", conversationId: "conv-1", title: "Optimize orders", operations: 2 }],
     })), { status: 200 }),
-    "/api/sessions/1/annotation": (_url: URL, init?: RequestInit) => {
+    "PATCH /api/sessions/1/annotation": (_url: URL, init?: RequestInit) => {
       title = (JSON.parse(String(init?.body)) as { title: string | null }).title
       return new Response(JSON.stringify({ title, note: null, starred: false, archived: false }), { status: 200 })
     },
@@ -140,7 +140,7 @@ test("edits the title inline: Enter saves, Escape cancels, empty clears", async 
   stubFetch({
     // The detail is refetched after each save, so it must reflect the saved state.
     "/api/sessions/1": () => new Response(JSON.stringify({ session: session({ id: 1, sessionKey: "cli:abc", title }), operations: [], note: null }), { status: 200 }),
-    "/api/sessions/1/annotation": (_url: URL, init?: RequestInit) => {
+    "PATCH /api/sessions/1/annotation": (_url: URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { title: string | null }
       bodies.push(body)
       title = body.title
@@ -176,7 +176,7 @@ test("a failed save rolls back and shows the server message", async () => {
   })
   stubFetch({
     "/api/sessions/1": { session: session({ id: 1, sessionKey: "cli:abc", starred: false }), operations: [], note: null },
-    "/api/sessions/1/annotation": () => pending,
+    "PATCH /api/sessions/1/annotation": () => pending,
   })
   renderApp("/sessions/1")
   await userEvent.click(await screen.findByRole("button", { name: "Star session" }))
@@ -189,7 +189,7 @@ test("a failed save rolls back and shows the server message", async () => {
 test("a save for a session that no longer exists shows the server message", async () => {
   stubFetch({
     "/api/sessions/1": { session: session({ id: 1, starred: false }), operations: [], note: null },
-    "/api/sessions/1/annotation": () => new Response(JSON.stringify({ error: "The session no longer exists." }), { status: 404 }),
+    "PATCH /api/sessions/1/annotation": () => new Response(JSON.stringify({ error: "The session no longer exists." }), { status: 404 }),
   })
   renderApp("/sessions/1")
   await userEvent.click(await screen.findByRole("button", { name: "Star session" }))
@@ -201,7 +201,7 @@ test("archive shows a badge and the button turns into Unarchive", async () => {
   let archived = false
   stubFetch({
     "/api/sessions/1": () => new Response(JSON.stringify({ session: session({ id: 1, archived }), operations: [], note: null }), { status: 200 }),
-    "/api/sessions/1/annotation": () => {
+    "PATCH /api/sessions/1/annotation": () => {
       archived = true
       return new Response(JSON.stringify({ title: null, note: null, starred: false, archived: true }), { status: 200 })
     },
@@ -217,7 +217,7 @@ test("adds, counts and saves a note", async () => {
   let note: string | null = null
   stubFetch({
     "/api/sessions/1": () => new Response(JSON.stringify({ session: session({ id: 1 }), operations: [], note }), { status: 200 }),
-    "/api/sessions/1/annotation": (_url: URL, init?: RequestInit) => {
+    "PATCH /api/sessions/1/annotation": (_url: URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { note: string | null }
       bodies.push(body)
       note = body.note

@@ -27,7 +27,7 @@ test("agent detail shows membership counts, markers, annotations, and child opti
       { operation: operation({ id: 12 }), membership: "inferred" },
       { operation: operation({ id: 13 }), membership: "unassigned" },
     ], nextCursor: null },
-    "/api/agent-sessions/codex/conversation-1/annotation": (_url: URL, init?: RequestInit) => {
+    "PATCH /api/agent-sessions/codex/conversation-1/annotation": (_url: URL, init?: RequestInit) => {
       patches.push(JSON.parse(String(init?.body)))
       return new Response(JSON.stringify({ title: null, note: "full owner note", starred: true, archived: false }), { status: 200 })
     },
@@ -138,7 +138,7 @@ test("agent session note drafts cancel cleanly and save the current value after 
     "/api/settings": settings,
     "/api/agent-sessions/codex/conversation-1": { agentSession: summary, get note() { return savedNote }, operations: [] },
     "/api/agent-sessions/codex/conversation-1/operations": { items: [], nextCursor: null },
-    "/api/agent-sessions/codex/conversation-1/annotation": (_url: URL, init?: RequestInit) => {
+    "PATCH /api/agent-sessions/codex/conversation-1/annotation": (_url: URL, init?: RequestInit) => {
       const patch = JSON.parse(String(init?.body)) as { note?: string | null }
       patches.push(patch)
       if (patches.length === 1) return new Response("save failed", { status: 500 })

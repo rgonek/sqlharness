@@ -3,8 +3,9 @@ import { expect } from "vitest"
 
 type FetchHandler = (url: URL, init?: RequestInit) => Response | Promise<Response>
 type FetchRoute = unknown | FetchHandler
+type FetchRoutes = Record<string, FetchRoute>
 type UnexpectedRequest = { method: string; path: string; testName: string }
-const appLayoutRoutes: Record<string, FetchRoute> = {
+const appLayoutRoutes: FetchRoutes = {
   "/api/profiles": { status: "missing", profiles: [], message: null },
   "/api/settings": { status: "valid", path: "config.json", settings: { dashboard: { safetyNotifications: false, agentTranscripts: { enabled: false } } } },
 }
@@ -25,7 +26,7 @@ const isolatedFetch: typeof fetch = async (input, init) => {
   const method = (init?.method ?? request?.method ?? "GET").toUpperCase()
   const path = url.pathname + url.search
   activeCalls?.push(path)
-  const handler = activeRoutes?.[path] ?? activeRoutes?.[url.pathname]
+  const handler = activeRoutes?.[`${method} ${path}`] ?? activeRoutes?.[`${method} ${url.pathname}`]
 
   if (!activeRoutes || handler === undefined) {
     const unexpected = { method, path, testName: expect.getState().currentTestName ?? "<unknown test>" }
@@ -77,12 +78,18 @@ export async function cancelTestQueries() {
   activeQueryClients.clear()
 }
 
-/** Registers the current test's explicit response routes. Exact path+query wins over path-only. */
-export function stubFetch(routes: Record<string, FetchRoute>) {
+/** Registers explicit method/path routes; bare paths are GET-only. Exact query matches win. */
+export function stubFetch(routes: FetchRoutes) {
   if (!originalFetch) throw new Error("Dashboard test network isolation is not installed")
 
   const calls: string[] = []
-  activeRoutes = { ...appLayoutRoutes, ...routes }
+  const methodRoutes: FetchRoutes = {}
+  for (const [key, route] of Object.entries({ ...appLayoutRoutes, ...routes })) {
+    const explicitMethod = /^([A-Za-z]+) (\/.*)$/.exec(key)
+    const methodKey = explicitMethod ? `${explicitMethod[1].toUpperCase()} ${explicitMethod[2]}` : `GET ${key}`
+    methodRoutes[methodKey] = route
+  }
+  activeRoutes = methodRoutes
   activeCalls = calls
   return calls
 }

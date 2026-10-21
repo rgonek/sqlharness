@@ -17,13 +17,11 @@ const initial = {
 function routes(onPut?: (body: unknown) => Response) {
   const puts: unknown[] = []
   stubFetch({
-    "/api/settings": (_url: URL, init?: RequestInit) => {
-      if (init?.method === "PUT") {
-        const body = JSON.parse(String(init.body))
-        puts.push(body)
-        return onPut?.(body) ?? new Response(JSON.stringify({ ...initial, settings: body }), { status: 200 })
-      }
-      return new Response(JSON.stringify(initial), { status: 200 })
+    "/api/settings": initial,
+    "PUT /api/settings": (_url: URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      puts.push(body)
+      return onPut?.(body) ?? new Response(JSON.stringify({ ...initial, settings: body }), { status: 200 })
     },
     "/api/profiles": { status: "valid", message: null, profiles: [] },
     "/api/transcripts": { enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null },
