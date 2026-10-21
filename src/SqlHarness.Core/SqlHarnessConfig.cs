@@ -61,6 +61,15 @@ public sealed record ConnectionConfig
     public int TimeoutSeconds { get; init; } = DefaultTimeoutSeconds;
 }
 
+public sealed record ExecutionConfig
+{
+    public const int MinimumTimeoutSeconds = 1;
+    public const int MaximumTimeoutSeconds = 300;
+    public const int DefaultExecutionTimeoutSeconds = 30;
+
+    public int DefaultTimeoutSeconds { get; init; } = DefaultExecutionTimeoutSeconds;
+}
+
 /// <summary>Operator settings from <c>~/.sqlharness/config.json</c>; tool behavior only, never targets.</summary>
 public sealed record SqlHarnessConfig
 {
@@ -70,6 +79,7 @@ public sealed record SqlHarnessConfig
     public DiagnosticsConfig Diagnostics { get; init; } = new();
     public MutationsConfig Mutations { get; init; } = new();
     public ConnectionConfig Connection { get; init; } = new();
+    public ExecutionConfig Execution { get; init; } = new();
 
     public static SqlHarnessConfig Default { get; } = new();
 }
@@ -153,7 +163,7 @@ public static class SqlHarnessConfigLoader
         }
 
         if (config is null || !IsComplete(config))
-            return Failed("$", "The journal, journal.retention, dashboard, dashboard.agentTranscripts, compare, diagnostics, mutations and connection sections must be objects.");
+            return Failed("$", "The journal, journal.retention, dashboard, dashboard.agentTranscripts, compare, diagnostics, mutations, connection and execution sections must be objects.");
 
         var errors = new List<SqlHarnessConfigFieldError>();
         if (config.Journal.Retention.MaxAgeDays is < 1 or > 3650)
@@ -172,6 +182,8 @@ public static class SqlHarnessConfigLoader
             errors.Add(new("mutations.approvalTimeoutSeconds", "Must be between 30 and 600."));
         if (config.Connection.TimeoutSeconds is < ConnectionConfig.MinimumTimeoutSeconds or > ConnectionConfig.MaximumTimeoutSeconds)
             errors.Add(new("connection.timeoutSeconds", $"Must be between {ConnectionConfig.MinimumTimeoutSeconds} and {ConnectionConfig.MaximumTimeoutSeconds}."));
+        if (config.Execution.DefaultTimeoutSeconds is < ExecutionConfig.MinimumTimeoutSeconds or > ExecutionConfig.MaximumTimeoutSeconds)
+            errors.Add(new("execution.defaultTimeoutSeconds", $"Must be between {ExecutionConfig.MinimumTimeoutSeconds} and {ExecutionConfig.MaximumTimeoutSeconds}."));
         return errors.Count == 0 ? new(config, []) : new(null, errors);
     }
 
@@ -184,5 +196,5 @@ public static class SqlHarnessConfigLoader
     private static bool IsComplete(SqlHarnessConfig config) =>
         config.Journal is not null && config.Journal.Retention is not null && config.Dashboard is not null &&
         config.Dashboard.AgentTranscripts is not null && config.Compare is not null && config.Diagnostics is not null &&
-        config.Mutations is not null && config.Connection is not null;
+        config.Mutations is not null && config.Connection is not null && config.Execution is not null;
 }

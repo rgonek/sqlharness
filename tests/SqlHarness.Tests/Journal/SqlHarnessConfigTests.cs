@@ -54,6 +54,52 @@ public sealed class SqlHarnessConfigTests : IDisposable
             .RootElement.GetProperty("connection").GetProperty("timeoutSeconds").GetInt32());
     }
 
+    [Fact]
+    public void Execution_timeout_defaults_when_missing_and_custom_value_round_trips()
+    {
+        var defaults = SqlHarnessConfigLoader.Parse("{}"u8.ToArray()).Config!;
+        var parsed = SqlHarnessConfigLoader.Parse("""{ "execution": { "defaultTimeoutSeconds": 47 } }"""u8.ToArray());
+
+        Assert.Equal(30, defaults.Execution.DefaultTimeoutSeconds);
+        Assert.Empty(parsed.Errors);
+        Assert.Equal(47, parsed.Config!.Execution.DefaultTimeoutSeconds);
+        Assert.Equal(47, System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(parsed.Config))
+            .RootElement.GetProperty("execution").GetProperty("defaultTimeoutSeconds").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(301)]
+    public void Execution_timeout_out_of_range_fails_validation(int seconds)
+    {
+        var parsed = SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes(
+            $"{{ \"execution\": {{ \"defaultTimeoutSeconds\": {seconds} }} }}"));
+
+        Assert.Null(parsed.Config);
+        Assert.Contains(parsed.Errors, error => error.Field == "execution.defaultTimeoutSeconds" && error.Message == "Must be between 1 and 300.");
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(300)]
+    public void Execution_timeout_accepts_inclusive_bounds(int seconds)
+    {
+        var parsed = SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes(
+            $"{{ \"execution\": {{ \"defaultTimeoutSeconds\": {seconds} }} }}"));
+
+        Assert.Empty(parsed.Errors);
+        Assert.Equal(seconds, parsed.Config!.Execution.DefaultTimeoutSeconds);
+    }
+
+    [Fact]
+    public void Explicit_null_execution_section_is_invalid()
+    {
+        var parsed = SqlHarnessConfigLoader.Parse("""{ "execution": null }"""u8.ToArray());
+
+        Assert.Null(parsed.Config);
+        Assert.Contains(parsed.Errors, error => error.Field == "$" && error.Message.Contains("execution", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(300)]
