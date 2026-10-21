@@ -166,9 +166,14 @@ public sealed class AgentOptimizationWorkflowTests
         var defaults = await ReadPlanCompletionAsync(session, artifactId!, pageSize: null, maxResultBytes: null);
         var explicitDefaults = await ReadPlanCompletionAsync(session, artifactId!, pageSize: 128, maxResultBytes: null);
         var explicitLarge = await ReadPlanCompletionAsync(session, artifactId!, pageSize: 512, maxResultBytes: 131072);
-        Assert.Equal(513, defaults.NodePaths.Count);
+        var expectedNodePaths = new[] { "0" }.Concat(Enumerable.Range(0, 512).Select(index => $"0/{index}")).ToArray();
+        Assert.Equal(expectedNodePaths, defaults.NodePaths);
+        Assert.Equal(expectedNodePaths.Length, defaults.NodePaths.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(expectedNodePaths, explicitDefaults.NodePaths);
+        Assert.Equal(expectedNodePaths.Length, explicitDefaults.NodePaths.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(expectedNodePaths, explicitLarge.NodePaths);
+        Assert.Equal(expectedNodePaths.Length, explicitLarge.NodePaths.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(defaults.NodePaths, explicitDefaults.NodePaths);
-        Assert.Equal(513, explicitLarge.NodePaths.Count);
         Assert.Equal(defaults.NodePaths, explicitLarge.NodePaths);
         Assert.Equal(defaults.NodeRecords, explicitDefaults.NodeRecords);
         Assert.Equal(defaults.NodeRecords, explicitLarge.NodeRecords);
@@ -195,6 +200,8 @@ public sealed class AgentOptimizationWorkflowTests
         int? cursor = null;
         do
         {
+            Assert.True(calls.Count < 513, "Plan completion exceeded the one-item-per-call traversal bound.");
+            var requestedCursor = cursor;
             var arguments = new Dictionary<string, object?>
             {
                 ["id"] = artifactId,
@@ -225,6 +232,12 @@ public sealed class AgentOptimizationWorkflowTests
                 nodeRecords.Add(node.GetRawText());
             }
             cursor = Continuation(envelope);
+            if (cursor is int nextCursor)
+            {
+                Assert.NotEmpty(nodes.EnumerateArray());
+                Assert.True(requestedCursor is null || nextCursor > requestedCursor,
+                    $"Plan continuation did not advance: requested {requestedCursor}, received {nextCursor}.");
+            }
             calls.Add(new PlanCallCost(requestBytes, responseBytes, textBytes));
         }
         while (cursor is not null);
