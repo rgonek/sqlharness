@@ -1,0 +1,96 @@
+
+> ui@0.0.0 test
+> vitest run src/test/network.test.ts
+
+
+ RUN  v5.0.3 D:/Dev/sqlharness/.worktrees/plan-098/src/SqlHarness.Dashboard/ui
+
+ ❯ src/test/network.test.ts (8 tests | 1 failed) 204ms
+   × does not let a session detail fixture satisfy an unregistered operation page 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/test/network.test.ts > does not let a session detail fixture satisfy an unregistered operation page
+AssertionError: promise resolved "Response{ bodyUsed: false, …(7), …(6) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ Response {
++   "bodyUsed": false,
++   "headers": Headers {
++     Symbol(entries): {
++       "content-type": {
++         "name": "Content-Type",
++         "value": [
++           "application/json",
++         ],
++       },
++     },
++   },
++   "ok": true,
++   "redirected": false,
++   "status": 200,
++   "statusText": "",
++   "type": "basic",
++   "url": "",
++   Symbol(cachedResponse): null,
++   Symbol(buffer): {
++     "data": [
++       123,
++       34,
++       105,
++       116,
++       101,
++       109,
++       115,
++       34,
++       58,
++       91,
++       93,
++       44,
++       34,
++       110,
++       101,
++       120,
++       116,
++       67,
++       117,
++       114,
++       115,
++       111,
++       114,
++       34,
++       58,
++       110,
++       117,
++       108,
++       108,
++       125,
++     ],
++     "type": "Buffer",
++   },
++   Symbol(virtualServerFile): null,
++   Symbol(aborted): false,
++   Symbol(error): null,
++   Symbol(body): ReadableStreamWrapper {},
+  }
+
+ ❯ src/test/network.test.ts:44:64
+     42|
+     43|   const testName = expect.getState().currentTestName
+     44|   await expect(fetch("/api/sessions/983/operations?limit=500"))
+       |                                                                ^
+     45|     .rejects.toThrow(`Unexpected dashboard test request in "${testName…
+     46|   expect(() => assertNoUnexpectedRequests()).toThrow(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  13:15:53
+   Duration  6.66s (import 59%, transform 18%, environment 14%, setup 5%, tests 3%)
+

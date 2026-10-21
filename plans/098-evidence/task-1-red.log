@@ -1,0 +1,19 @@
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-098\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-098\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-098\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-098\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-098\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-098\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:03.36]     SqlHarness.Tests.Dashboard.SessionOperationPaginationTests.Ordinary_session_operations_are_read_in_bounded_pages_from_the_journal [FAIL]
+  Failed SqlHarness.Tests.Dashboard.SessionOperationPaginationTests.Ordinary_session_operations_are_read_in_bounded_pages_from_the_journal [1 s]
+  Error Message:
+   System.Net.Http.HttpRequestException : Response status code does not indicate success: 404 (Not Found).
+  Stack Trace:
+     at System.Net.Http.HttpResponseMessage.EnsureSuccessStatusCode()
+   at System.Net.Http.HttpClient.GetStringAsyncCore(HttpRequestMessage request, CancellationToken cancellationToken)
+   at SqlHarness.Tests.Dashboard.SessionOperationPaginationTests.Ordinary_session_operations_are_read_in_bounded_pages_from_the_journal() in D:\Dev\sqlharness\.worktrees\plan-098\tests\SqlHarness.Tests\Dashboard\SessionOperationPaginationTests.cs:line 34
+   at SqlHarness.Tests.Dashboard.SessionOperationPaginationTests.Ordinary_session_operations_are_read_in_bounded_pages_from_the_journal() in D:\Dev\sqlharness\.worktrees\plan-098\tests\SqlHarness.Tests\Dashboard\SessionOperationPaginationTests.cs:line 85
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - SqlHarness.Tests.dll (net10.0)

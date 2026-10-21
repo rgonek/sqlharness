@@ -1,0 +1,13 @@
+
+> ui@0.0.0 test
+> vitest run src/pages/SessionPage.test.tsx
+
+
+ RUN  v5.0.3 D:/Dev/sqlharness/.worktrees/plan-098/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  1 passed (1)
+      Tests  21 passed (21)
+   Start at  13:05:01
+   Duration  10.11s (tests 39%, import 36%, transform 12%, environment 10%, setup 3%)
+

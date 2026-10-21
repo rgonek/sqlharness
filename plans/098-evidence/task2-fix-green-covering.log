@@ -1,0 +1,17 @@
+
+> ui@0.0.0 test
+> vitest run src/test/network.test.ts src/pages/SessionPage.test.tsx src/components/optimization/OptimizationSection.test.tsx src/components/optimization/ComparisonPanel.test.tsx
+
+
+ RUN  v5.0.3 D:/Dev/sqlharness/.worktrees/plan-098/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  4 passed (4)
+      Tests  49 passed (49)
+   Start at  13:16:53
+   Duration  32.26s (tests 39%, import 38%, environment 13%, transform 5%, setup 5%)
+
+     Import  186 modules were evaluated 509 times · 11.75s total, 38% of tracked time
+             ~7.46s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+
