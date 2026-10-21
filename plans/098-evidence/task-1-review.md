@@ -29,3 +29,5 @@ None.
 **Task quality:** Approved
 
 **Reasoning:** The implementation satisfies the assigned reader and route contract with a bounded, session-scoped SQL query and clear continuation semantics. The regression exercises the specified route edge cases and confirms other-session volume does not consume the target page capacity; no task-scoped defect was found.
+
+Correction added 2026-10-21: the foreign session has 1,001 fixture rows because `seed.Operation(foreign)` inserts one row before 1,000 bulk inserts. The earlier review count reflected only bulk-added rows. Raw test logs are preserved unchanged.

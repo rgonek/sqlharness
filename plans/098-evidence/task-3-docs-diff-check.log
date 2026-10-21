@@ -1,0 +1,3 @@
+Command: git diff --check
+Git output: no whitespace errors (PowerShell/Git also reported expected LF-to-CRLF checkout notices for three Markdown files)
+DirectExit=0

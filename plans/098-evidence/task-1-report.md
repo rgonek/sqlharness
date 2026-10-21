@@ -26,3 +26,5 @@ The final focused result includes the new continuation regression and the existi
 Self-review confirmed session filtering occurs in SQL before ordering and limiting, cursor filtering is exclusive, and next cursor is emitted only when the extra eligible row exists. The session summary still comes from the existing full-count query, and the existing session-detail query is untouched. No live database, merge, push, or paid trials were used.
 
 No Task 1 implementation concerns identified. The full Windows gate remains for Task 3; this report does not claim it passed.
+
+Correction added 2026-10-21: the foreign session has 1,001 fixture rows because `seed.Operation(foreign)` inserts one row before `InsertOperations(..., 1000)`. The earlier report count described only the bulk inserts. Raw test logs are preserved unchanged.
