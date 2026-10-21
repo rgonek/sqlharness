@@ -12,7 +12,7 @@
 
 ## Status and dependencies
 
-- DONE on feature branch — implementation, Windows gate and all reviews are complete; local integration into `main` is pending. Depends on merged 084. Priority P2, test-only hygiene. No new dependency assumed.
+- DONE — locally integrated into `main` at `479e200`. The integrated product/test tree matches Windows-verified revision `857402d`; no redundant gate was needed. No push. Depends on merged 084. Priority P2, test-only hygiene. No new dependency assumed.
 
 ## Fix contract
 
@@ -27,7 +27,7 @@
 
 - Preserve ordinary user-facing error handling and the existing size-limit assertions.
 - Reuse existing test infrastructure before adding dependencies. No live DB, dashboard server, transcript scan or credentials needed.
-- Windows full gate on final product tree; Linux only on explicit request. No merge/push implied.
+- Windows full gate on final product tree; Linux only on explicit request. Local integration was authorized after final review and the passing gate; no push is implied.
 
 ## Review Focus
 

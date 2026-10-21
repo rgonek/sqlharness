@@ -43,7 +43,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
-| [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | DONE on `plan-091`; Windows-verified and all reviews approved; local integration into `main` pending ([evidence](091-verification-evidence.md)) |
+| [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | DONE; locally integrated into `main` at `479e200`; verified product/test tree unchanged, no redundant gate; not pushed ([evidence](091-verification-evidence.md)) |
 | [094](094-compact-annotation-receipts.md) | Compact annotation receipts that fit minimum budgets; explicit full detail and one effective budget across commit/render | DONE; locally integrated into `main` at `6acc342`; verified product unchanged; not pushed ([evidence](094-verification-evidence.md)) |
 | [089](089-agent-session-operation-pagination.md) | Bounded agent-session operation pages and Load more; old exact members remain reachable | DONE; locally integrated into `main` at `a0ecabb`; integrated Windows gate passed ([evidence](089-verification-evidence.md)) |
 | [093](093-identity-safe-output-clipping.md) | Complete metric identities within response budgets | DONE with 102; locally integrated into `main` at `6f07792`; verified product unchanged; not pushed ([evidence](102-verification-evidence.md)) |

@@ -2,13 +2,13 @@
 
 ## Scope and review status
 
-Plan [091](091-ui-test-network-isolation.md) adds strict per-test network isolation to the dashboard UI test harness and explicit fixtures to the request-owning tests. The Task 1 review and final Sol low whole-branch/scoped re-review are approved with no open findings. The plan is DONE on the feature branch; local fast-forward integration into `main` is pending.
+Plan [091](091-ui-test-network-isolation.md) adds strict per-test network isolation to the dashboard UI test harness and explicit fixtures to the request-owning tests. The Task 1 review and final Sol low whole-branch/scoped re-review are approved with no open findings. Plan 091 is DONE and locally integrated into `main` at `479e200`.
 
 - Worktree: `D:/Dev/sqlharness/.worktrees/plan-091`, branch `plan-091`.
 - Final verified product/test revision: `857402d91c5fa69c011c65c3923821a91087b993` (`test(091): match dashboard fixtures by method`), tree `5dc911fd1a32b65684f8880dd8715b2a85f85918`. Documentation-only commit `56c0403` followed the gate; this administrative update follows the approved review. The original Task 1 implementation commit is `838c3d252ee8639f728447efa2aa6a7e6485bb06`.
 - Parent implementation commit: `1823f1a` (`test(091): isolate dashboard test network activity`).
 - No product code, API contract, or dependency version changed. The changes are test harness code, test assertions and scenario-owned response fixtures.
-- No live database, dashboard server, credentials, merge, or push was used. Linux was not run.
+- No live database, dashboard server, credentials or push was used. Linux was not run.
 
 ## Request ownership and before/after evidence
 
@@ -46,4 +46,4 @@ The consolidated focused rerun passed 9 files / 118 tests. `npm.cmd run lint` an
 
 ## Completion boundary
 
-Task 2 gate and evidence work is complete, and the final Sol low scoped review of `857402d` is approved. Plan 091 is DONE on the feature branch; local merge into `main` is pending. No merge or push is claimed in this evidence. The product gate need not be repeated for docs-only changes.
+Task 2 gate and evidence work is complete, and the final Sol low scoped review of `857402d` is approved. After the owner authorized local integration, `main` fast-forwarded from `a8281ca` to `479e200`. The controller confirmed `git diff --exit-code 857402d HEAD -- src tests scripts Directory.Build.props Directory.Packages.props` passed, so the integrated product/test/build-configuration tree matches the verified revision. No redundant gate was run for this documentation-only integration, and no push occurred. Plan 091 is DONE and locally integrated; the following docs-only record commit preserves this evidence.
