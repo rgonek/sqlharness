@@ -597,9 +597,13 @@ public sealed class McpToolSchemaTests : IDisposable
         var continuation = raisedProjection.GetProperty("continuation");
         Assert.Equal(allStatementOrdinals.Count < 512 ? allStatementOrdinals.Count : (int?)null,
             continuation.ValueKind == JsonValueKind.Null ? null : continuation.GetInt32());
+        var cursor = 0;
+        var pageCount = 1;
         while (continuation.ValueKind != JsonValueKind.Null)
         {
             var next = continuation.GetInt32();
+            Assert.True(next > cursor, $"Continuation cursor must advance beyond {cursor}, but was {next}.");
+            Assert.InRange(++pageCount, 2, 512);
             var nextPage = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
             {
                 ["id"] = "large-statements",
@@ -622,6 +626,7 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Equal(next, nextStatements[0]);
             allStatementOrdinals.AddRange(nextStatements);
             continuation = nextProjection.GetProperty("continuation");
+            cursor = next;
         }
         Assert.Equal(Enumerable.Range(0, 512), allStatementOrdinals);
 
@@ -684,9 +689,20 @@ public sealed class McpToolSchemaTests : IDisposable
                 ["pageSize"] = 512,
             }, cancellationToken: CancellationToken.None);
             var refusalText = Assert.Single(refused.Content.OfType<TextContentBlock>()).Text;
+            using var refusalDocument = JsonDocument.Parse(refusalText);
+            var refusalEnvelope = refusalDocument.RootElement;
+            Assert.True(!refusalEnvelope.TryGetProperty("result", out var refusalResult)
+                || refusalResult.ValueKind == JsonValueKind.Null);
+            Assert.DoesNotContain("\"statements\"", refusalText, StringComparison.Ordinal);
+            Assert.DoesNotContain("statementOrdinal", refusalText, StringComparison.Ordinal);
+            Assert.DoesNotContain("statementHash", refusalText, StringComparison.Ordinal);
             Assert.DoesNotContain("foreign-statements", refusalText, StringComparison.Ordinal);
             Assert.DoesNotContain("secret-selector", refusalText, StringComparison.Ordinal);
+            Assert.DoesNotContain(new string('a', 64), refusalText, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"statementOrdinal\":0", refusalText, StringComparison.Ordinal);
             Assert.DoesNotContain(new string('o', 32), refusalText, StringComparison.Ordinal);
+            Assert.DoesNotContain(new string('t', 24), refusalText, StringComparison.Ordinal);
+            Assert.DoesNotContain(new string('i', 24), refusalText, StringComparison.Ordinal);
         }
     }
 

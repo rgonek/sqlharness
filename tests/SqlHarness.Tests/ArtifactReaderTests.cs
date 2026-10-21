@@ -665,8 +665,10 @@ public class ArtifactReaderTests
         {
             var paths = new List<string>();
             int? cursor = 0;
+            var pageCount = 0;
             while (cursor is { } current)
             {
+                Assert.InRange(++pageCount, 1, 513);
                 var source = Assert.IsType<ArtifactPlanSection>(ReadSectionWithPageSize(temp.Path, id, "plan",
                     cursor: current, planSelector: new ArtifactPlanSelector("baseline"), pageSize: pageSize));
                 Assert.InRange(source.Nodes.Count, 1, expectedSourceWindow);
@@ -677,6 +679,8 @@ public class ArtifactReaderTests
                 Assert.InRange(JsonSerializer.SerializeToUtf8Bytes(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length, 1, budget);
                 Assert.NotEmpty(projected.Nodes);
                 paths.AddRange(projected.Nodes.Select(node => node.NodePath));
+                if (projected.Continuation is int next)
+                    Assert.True(next > current, $"Continuation cursor must advance beyond {current}, but was {next}.");
                 cursor = projected.Continuation;
             }
 
@@ -700,8 +704,10 @@ public class ArtifactReaderTests
         {
             var indexes = new List<int>();
             int? cursor = 0;
+            var pageCount = 0;
             while (cursor is { } current)
             {
+                Assert.InRange(++pageCount, 1, 65);
                 var source = Assert.IsType<ArtifactMatrixCellsSection>(
                     ReadSectionWithPageSize(temp.Path, id, "matrix-cells", cursor: current, pageSize: pageSize));
                 Assert.InRange(source.Cases.Count, 1, expectedSourceWindow);
@@ -712,6 +718,8 @@ public class ArtifactReaderTests
                 Assert.InRange(JsonSerializer.SerializeToUtf8Bytes(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length, 1, budget);
                 Assert.NotEmpty(projected.Cases);
                 indexes.AddRange(projected.Cases.Select(item => item.Index));
+                if (projected.Continuation is int next)
+                    Assert.True(next > current, $"Continuation cursor must advance beyond {current}, but was {next}.");
                 cursor = projected.Continuation;
             }
 

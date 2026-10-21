@@ -33,3 +33,16 @@ After edits, both requested focused commands compile and show behavior RED:
 - The reflection helper expects a public `ArtifactReader.ReadSection` parameter named `pageSize`; keep that seam named consistently when plumbing the optional window through Core.
 - The explicit 131072-byte test requires a response over 65536 bytes with complete statement records, while continuation must resume at the actual returned ordinal when the page is budget-trimmed.
 - The worktree still has intentional failing tests; no production fix, database access, merge, or push was performed.
+
+## Review fixes (2026-10-21)
+
+The Task 1 review identified two test robustness gaps. The unknown/foreign refusal regression now verifies that the response has no non-null `result` payload and contains neither saved statement fields nor distinctive fixture values: a 64-character hash, ordinal 0, and the synthetic operator/object/index strings. All three page reconstruction loops now require strictly advancing continuation cursors and have finite iteration limits matching the source item counts. No production files changed.
+
+After these amendments, the focused test commands were rerun:
+
+| Command | Actual output |
+|---|---|
+| `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpTokenBudgetTests"` | Failed 7, passed 99, skipped 0, total 106. The strengthened unknown/foreign refusal test passes; remaining failures are the expected missing budget/page-size schema and behavior. Full output: [task1-mcp-red.log](task1-mcp-red.log). |
+| `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter FullyQualifiedName~ArtifactReaderTests` | Failed 7, passed 62, skipped 0, total 69. Expected missing reflected `pageSize` seam and default statement window mismatch remain. Full output: [task1-core-red.log](task1-core-red.log). |
+
+`git diff --check` passed. Both projects compiled in the final focused runs. An initial parallel launch hit a transient compiler output-file lock; I reran the MCP suite sequentially and excluded the lock failure from the retained RED evidence. The saved logs contain the final sequential runs.
