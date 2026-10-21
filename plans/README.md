@@ -21,7 +21,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [095](095-budget-aware-artifact-pages.md) | Explicit artifact response budgets and bounded configurable source pages with complete continuation | 093 and 094 implementations merged | TODO — P2, plan only |
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | TODO — P2, plan only |
 | [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | TODO — P2, plan only |
-| [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | Coordinate 089; no membership changes | TODO — P2, plan only |
 | [101](101-dashboard-operation-annotations-setting.md) | Enable or disable agent operation annotations in Dashboard Settings; valid paired journal saves and MCP restart guidance | 085 merged; coordinate 092 | TODO — plan only |
 
 ## Limit-economics execution notes (2026-10-20)
@@ -50,6 +49,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 | [102](102-bounded-table-identity-selection.md) | Linear entry accounting and deterministic dashboard idle test | DONE; locally integrated into `main` at `6f07792`; final product `76ebb0d` unchanged, gate exit 0; not pushed ([evidence](102-verification-evidence.md)) |
 | [099](099-shadcn-cli-restoration.md) | Stable shadcn CLI devDependency, supported stylesheet import and contributor workflow | DONE; locally integrated into `main` at `c479210`; Windows-verified product unchanged; all reviews approved ([evidence](099-verification-evidence.md)) |
 | [100](100-shadcn-primitive-adoption.md) | Complete dashboard control inventory, accessible shadcn composition, disclosures and standard tables | DONE; locally integrated into `main` at `74f248c`; Windows-verified product revision `3caacc3` unchanged; all task and whole-branch reviews approved ([evidence](100-verification-evidence.md)) |
+| [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | DONE; locally integrated into `main` at `aca7979`; Windows-verified product `effc0bf` unchanged; all reviews approved; not pushed ([evidence](098-verification-evidence.md)) |
 
 Evidence from completed plans, former queues, rejected proposals and audit decisions are in the [history](history.md). Read it when investigating earlier decisions or evidence, not before every task.
 

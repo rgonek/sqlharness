@@ -1,6 +1,6 @@
 import { useParams } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
-import { useSession } from "@/api/queries"
+import { useSession, useSessionOperations } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { OperationTable } from "@/components/OperationTable"
 import { InternalOperationsToggle } from "@/components/InternalOperationsToggle"
@@ -16,6 +16,7 @@ import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
 import { useShowInternalOperations } from "@/lib/internalOperations"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Button } from "@/components/ui/button"
 
 const unknownRootsHint =
   "Unknown: the client did not declare roots, has not answered yet, or uses MCP 2026-07-28, where SQLHarness does not request roots."
@@ -39,11 +40,13 @@ export function SessionPage() {
 function SessionView({ id }: { id: number }) {
   const [showInternal, setShowInternal] = useShowInternalOperations()
   const detail = useSession(id)
+  const operationPages = useSessionOperations(id)
 
   if (detail.error) return <ErrorState error={detail.error} />
   if (detail.isPending) return <Skeleton className="h-64 w-full" />
 
-  const { session, operations, note = null, conversations = [] } = detail.data
+  const { session, note = null, conversations = [] } = detail.data
+  const loadedOperations = [...new Map((operationPages.data?.pages.flatMap(page => page.items) ?? []).map(operation => [operation.id, operation])).values()]
   return (
     <div className="space-y-4">
       <Card>
@@ -94,11 +97,18 @@ function SessionView({ id }: { id: number }) {
       <Card>
         <CardHeader>
           <CardTitle>All operations</CardTitle>
-          <CardDescription>Newest first, up to 500.</CardDescription>
+          <CardDescription>Newest first. Loaded {loadedOperations.length} of {session.operations} operations.</CardDescription>
         </CardHeader>
         <CardContent>
           <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />
-          <OperationTable operations={operations} showInternal={showInternal} />
+          {operationPages.isError && <div role="alert" className="mb-3 flex items-center gap-3 text-sm text-destructive">
+            <span>{operationPages.error instanceof Error ? operationPages.error.message : "Could not load session operations."}</span>
+            <Button size="sm" variant="outline" onClick={() => void (operationPages.isFetchNextPageError ? operationPages.fetchNextPage() : operationPages.refetch())}>Retry</Button>
+          </div>}
+          {operationPages.isPending && <div className="mb-3 text-sm text-muted-foreground">Loading operations…</div>}
+          <OperationTable operations={loadedOperations} showInternal={showInternal} />
+          {operationPages.hasNextPage && <Button className="mt-3" variant="outline" disabled={operationPages.isFetchingNextPage}
+            onClick={() => void operationPages.fetchNextPage()}>{operationPages.isFetchingNextPage ? "Loading…" : "Load more"}</Button>}
         </CardContent>
       </Card>
     </div>

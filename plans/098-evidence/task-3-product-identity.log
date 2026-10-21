@@ -1,0 +1,8 @@
+git rev-parse effc0bf
+effc0bfbf72d0d548f3ec8945f431e041111d91d
+
+git rev-parse 'effc0bf^{tree}'
+a75b970c6b2bb2d46460d33c5784e287b95fb337
+
+checked HEAD
+9b3908a30a57e36bb234716bc4ae15fdec22df00

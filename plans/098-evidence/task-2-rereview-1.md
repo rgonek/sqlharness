@@ -1,0 +1,5 @@
+- **Implicit operations-page fallback from any session-detail fixture** — ADDRESSED. `src/SqlHarness.Dashboard/ui/src/test/network.ts:87` now combines only shared layout routes with caller-supplied routes; it no longer synthesizes the operations route. `src/SqlHarness.Dashboard/ui/src/test/network.test.ts:40` verifies a detail-only fixture rejects an unregistered operations request.
+- **New breakage in fix diff:** None found.
+- **Out-of-scope observations:** None.
+- **Check:** The recorded covering run shows 4 files / 49 tests passed; the recorded UI check shows typecheck and lint completed plus 64 files / 361 tests passed. I did not rerun tests.
+- **Verdict:** All findings addressed, with no new Critical or Important breakage.

@@ -1,0 +1,5 @@
+Command: git diff --exit-code effc0bf HEAD -- src tests scripts
+First check HEAD: 9b3908a30a57e36bb234716bc4ae15fdec22df00
+First check output: no source, test, or script differences; DirectExit=0
+Current fix-round check HEAD: 5d42058f0f86085aa5ac70ac4de5206f8bc2f8ad
+Current check output: no source, test, or script differences; DirectExit=0

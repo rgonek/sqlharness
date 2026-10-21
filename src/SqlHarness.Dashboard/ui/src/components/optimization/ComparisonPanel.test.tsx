@@ -19,6 +19,7 @@ const comparison: OptimizationComparison = {
 function renderPanel(payload = comparison, versions = [{ version: "v0", hash: "h0", logicalReadsSum: 100, logicalReadsMean: 100, scansSum: 4, elapsedMedianMs: 10, caseOutcome: "1/1 ok", measuredIn: [214], latestOperationId: 214 }, { version: "v3", hash: "h3", logicalReadsSum: 135, logicalReadsMean: 135, scansSum: 2, elapsedMedianMs: 11, caseOutcome: "worse", measuredIn: [214], latestOperationId: 214 }], searchUrl = "/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v0&b=v3&case=all&agg=sum") {
   const calls = stubFetch({
     "/api/sessions/7": sessionDetail({ session: session({ id: 7, hasCompare: true }), operations: [operation({ id: 70, operation: "compare" })] }),
+    "/api/sessions/7/operations": { items: [operation({ id: 70, operation: "compare" })], nextCursor: null },
     "/api/sessions/7/optimization": { subjects: [{ subject: "Orders", database: "shop", engine: "SqlServer", groups: [
       { fingerprint: "fp-1", label: "1 case", subject: "Orders", database: "shop", defaultA: "v0", defaultB: "v3", scopes: [{ scope: "whole query", defaultA: "v0", defaultB: "v3", versions }] },
       { fingerprint: "fp-2", label: "another group", subject: "Orders", database: "shop", defaultA: "v1", defaultB: "v2", scopes: [{ scope: "fragment:customer", defaultA: "v1", defaultB: "v2", versions: [
@@ -64,6 +65,7 @@ test("shows the engine IO message and action links and copies the panel Markdown
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
   const calls = stubFetch({
     "/api/sessions/7": sessionDetail({ session: session({ id: 7, hasCompare: true }), operations: [operation({ id: 70, operation: "compare" })] }),
+    "/api/sessions/7/operations": { items: [operation({ id: 70, operation: "compare" })], nextCursor: null },
     "/api/sessions/7/optimization": { subjects: [{ subject: "Orders", database: "shop", engine: "PostgreSql", groups: [{ fingerprint: "fp-1", label: "1 cases", subject: "Orders", database: "shop", defaultA: "v0", defaultB: "v3", scopes: [{ scope: "whole query", defaultA: "v0", defaultB: "v3", versions: [{ version: "v0", hash: "h0", logicalReadsSum: 100, logicalReadsMean: 100, scansSum: 4, elapsedMedianMs: 10, caseOutcome: "1/1 ok", measuredIn: [214], latestOperationId: 214 }, { version: "v3", hash: "h3", logicalReadsSum: 135, logicalReadsMean: 135, scansSum: 2, elapsedMedianMs: 11, caseOutcome: "worse", measuredIn: [214], latestOperationId: 214 }] }] }] }], unassigned: [] },
     "/api/sessions/7/optimization/compare": { ...comparison, tableIoUnavailable: true, tables: [], collapsed: null },
     "/api/operations/214/repro": { text: "SELECT 1", completeness: "Complete", label: "Ready" },

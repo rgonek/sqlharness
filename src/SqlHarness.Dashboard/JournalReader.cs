@@ -481,6 +481,27 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             compares.Count(attempt => attempt.Subject is null || attempt.Scope is null), note, conversations);
     }
 
+    public Page<OperationSummary>? SessionOperations(long sessionId, int? limit = null, long? cursor = null)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return null;
+        if (Scalar<long>(connection, "SELECT EXISTS (SELECT 1 FROM sessions WHERE id = $id);", [("$id", sessionId)]) == 0)
+            return null;
+
+        var pageLimit = Math.Clamp(limit ?? SessionOperationLimit, 1, SessionOperationLimit);
+        var liveness = new ProcessLiveness(processes, _dead);
+        var rows = Query(connection, $"""
+            SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
+            WHERE o.session_id = $session AND ($cursor IS NULL OR o.id < $cursor)
+            ORDER BY o.id DESC LIMIT $limit;
+            """, [("$session", sessionId), ("$cursor", cursor), ("$limit", pageLimit + 1)],
+            reader => ReadOperation(reader, liveness));
+        var items = rows.Take(pageLimit).ToArray();
+        long? nextCursor = rows.Count > pageLimit && items.Length > 0 ? items[^1].Id : null;
+        return new Page<OperationSummary>(items, nextCursor);
+    }
+
     /// <summary>Builds the optimization section from every retained compare and its journaled case evidence.</summary>
     public OptimizationSection Optimization(long sessionId, bool storeSensitive = true) =>
         OptimizationSummaryBuilder.Build(OptimizationEvidence(sessionId, storeSensitive));

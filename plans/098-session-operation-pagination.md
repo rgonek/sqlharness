@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- TODO — plan only. Planned at `32adaa7`, 2026-10-20.
+- DONE and locally integrated into `main` at `aca7979` — implementation and all task reviews plus Sol low whole-branch review approved; Windows-verified at `effc0bfbf72d0d548f3ec8945f431e041111d91d`. Local fast-forward integration was authorized on 2026-10-21; no push occurred. Planned at `32adaa7`, 2026-10-20. See [verification evidence](098-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category bug.
 - Dependencies: No semantic predecessor. Coordinate 089 first where practical because both edit JournalReader/DashboardServer/query hooks; 089 remains responsible for agent-session membership pagination.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -43,24 +43,24 @@ Docs: README dashboard section. No MCP changes, journal migrations, agent member
 
 ### Task 1: Add reader and route continuation tests
 
-- [ ] Create 1001 retained operations with distinct IDs; pages 500, 500, 1 recover all exactly once in descending order.
-- [ ] Verify another session's rows do not consume capacity or appear; summary counts remain full.
-- [ ] Cover bad cursors/limits, unknown session, new inserts and retention between reads, exact final-page nextCursor=null, and empty known session.
-- [ ] Add the bounded reader method and authenticated GET route, preserving existing SessionDetail contracts.
+- [x] Create 1001 retained operations with distinct IDs; pages 500, 500, 1 recover all exactly once in descending order.
+- [x] Verify another session's rows do not consume capacity or appear; summary counts remain full.
+- [x] Cover bad cursors/limits, unknown session, new inserts and retention between reads, exact final-page nextCursor=null, and empty known session.
+- [x] Add the bounded reader method and authenticated GET route, preserving existing SessionDetail contracts.
 - **Verify:** `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~SessionOperationPaginationTests|FullyQualifiedName~DashboardServerTests|FullyQualifiedName~DashboardContractTests"` progresses RED to GREEN.
 
 ### Task 2: Wire infinite UI history and recovery
 
-- [ ] Add `useSessionOperations(id)` with child key `[...queryKeys.session(id), "operations"]`, exclusive cursor and terminal-null handling; use the shared Page type.
-- [ ] Test Load more, later-page failure/retry without disappearing rows, disabled pending button, cached navigation to another session, and pages consisting only of hidden internal rows.
-- [ ] After multiple pages load, simulate the existing live operation-event/session-prefix invalidation. Require running/completed status and a new operation to become visible without duplicate IDs, losing loaded rows on a transient refetch error, or confusing SessionDetail with infinite-query cache data.
-- [ ] Show loaded-state feedback instead of claiming the entire history is capped at 500. Keep the independent session compares/Optimization hooks unchanged.
+- [x] Add `useSessionOperations(id)` with child key `[...queryKeys.session(id), "operations"]`, exclusive cursor and terminal-null handling; use the shared Page type.
+- [x] Test Load more, later-page failure/retry without disappearing rows, disabled pending button, cached navigation to another session, and pages consisting only of hidden internal rows.
+- [x] After multiple pages load, simulate the existing live operation-event/session-prefix invalidation. Require running/completed status and a new operation to become visible without duplicate IDs, losing loaded rows on a transient refetch error, or confusing SessionDetail with infinite-query cache data.
+- [x] Show loaded-state feedback instead of claiming the entire history is capped at 500. Keep the independent session compares/Optimization hooks unchanged.
 - **Verify:** `npm --prefix src/SqlHarness.Dashboard/ui test -- src/pages/SessionPage.test.tsx` (plus the new live-feed test if created) and `npm --prefix src/SqlHarness.Dashboard/ui run check` exit 0.
 
 ### Task 3: Record reachability and complete verification
 
-- [ ] Record page sizes/cursors, source row counts and no-duplicate/no-gap assertions. This is a dashboard reachability fix, not measured agent-token savings.
-- [ ] Review the combined diff against any now-merged 089 changes; reuse shared helpers without changing agent membership behavior.
+- [x] Record page sizes/cursors, source row counts and no-duplicate/no-gap assertions. This is a dashboard reachability fix, not measured agent-token savings.
+- [x] Review the combined diff against any now-merged 089 changes; reuse shared helpers without changing agent membership behavior.
 - **Verify:** Common verification plus affected UI build `npm --prefix src/SqlHarness.Dashboard/ui run build` exit 0.
 
 ## Maintenance notes
@@ -83,8 +83,8 @@ Report a concrete design blocker if the live interfaces invalidate the Fix contr
 
 ## Done criteria
 
-- [ ] All task-specific regressions below pass and each task has spec/quality review.
-- [ ] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
-- [ ] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
-- [ ] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
-- [ ] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.
+- [x] All task-specific regressions below pass and each task has spec/quality review.
+- [x] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
+- [x] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
+- [x] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
+- [x] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.

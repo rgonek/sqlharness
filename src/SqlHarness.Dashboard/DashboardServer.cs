@@ -283,6 +283,11 @@ public static partial class DashboardServer
                     : reader.AgentSessionSqlText(new AgentSessionKey(kind, id), hash) is { } text ? Results.Json(text, Json) : Results.NotFound());
         MapRead(api, "/sessions/{id:long}", (long id) =>
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
+        MapRead(api, "/sessions/{id:long}/operations", (long id, int? limit, long? cursor) =>
+            cursor is <= 0
+                ? BadRequest("cursor must be a positive operation ID.")
+                : reader.SessionOperations(id, limit, cursor) is { } page
+                    ? Results.Json(page, Json) : Results.NotFound());
         MapRead(api, "/sessions/{id:long}/optimization", (long id) =>
             reader.Session(id) is null ? Results.NotFound() : Results.Json(reader.Optimization(id, loadConfig().Journal.StoreSensitive), Json));
         MapRead(api, "/sessions/{id:long}/optimization/compare", (long id, string? subject, string? database,
