@@ -119,7 +119,7 @@ public sealed class ProcessRunnerTests
         var childScript = Path.Combine(testDirectory, "child.ps1");
         var parentScript = Path.Combine(testDirectory, "parent.ps1");
         var childStandardError = Path.Combine(testDirectory, "child.stderr.log");
-        var missingChildExe = $"sqlharness-missing-{Guid.NewGuid():N}.exe";
+        var missingChildExe = Path.Combine(testDirectory, "missing-child.exe");
         Directory.CreateDirectory(testDirectory);
         await File.WriteAllTextAsync(childScript, "while ($true) { Start-Sleep -Seconds 1 }");
         await File.WriteAllTextAsync(parentScript, ParentScriptTemplate);
