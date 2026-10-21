@@ -1,6 +1,19 @@
 # Plan 092 verification evidence
 
-Plan 092 is implemented and Windows-verified on branch `plan-092` at product revision `b7b7b7088c545c9518de237838f91a429708281b`. Task reviews 1–3 are clean; the final whole-branch review remains pending. This branch has not been merged or pushed. Linux verification and live database access were not performed.
+Plan 092 is implemented and Windows-verified on branch `plan-092` at product revision `b7b7b7088c545c9518de237838f91a429708281b`. All four task reviews are clean, and the Sol low whole-branch review approved head `077c64f` as **Ready to merge** with no Critical or Important findings. The review tail changes documentation and evidence only; the tested product revision remains unchanged. The branch has not been merged or pushed. Linux verification and live database access were not performed.
+
+## Final review and deferred items
+
+The Sol low review found no Critical or Important issues. It identified one non-blocking Minor: the request-scope `measure` and `compare` timeout parameter descriptions in `McpRequestToolHandlers.cs` do not mention that omission uses the configured fallback. Behavior is correct and capabilities discloses the fallback. The wording improvement is deferred to preserve this docs-only closure and should retain the existing tools/list byte limit.
+
+The review accepted the shortened capabilities description as non-blocking: `inputRootCursor` and response cursors still describe input-root pagination, `connectionTimeoutSeconds` remains disclosed, and the README retains the connection/authentication explanation. Restoring the connection/authentication qualifier in future compact wording would improve precision. Node `DEP0190` remains a non-failing diagnostic without verified baseline provenance. The earlier ProcessRunner PID-publication timing failure remains unexplained; the unchanged test passed focused and in the final full gate, and the review found no timeout configuration path into the process-launch helper. Neither fact is treated as proof of a root cause or as a demonstrated timeout-feature regression.
+
+## Controller rulings retained from the SDD ledger
+
+- Rename the example's default constant to a distinct conventional name while preserving `DefaultTimeoutSeconds` as the instance property; C# cannot compile duplicate members. Cost if wrong: naming-only rework.
+- Omitted timeout uses config, while explicitly supplied 30 remains an override; null/default marker means omission only. This preserves caller intent despite the ambiguous “or set to default” phrase. Cost if wrong: revise argument semantics and tests.
+- Reuse current dashboard primitives rather than reproduce stale JSX literally; Plan 100 is already on main and binding behavior is unchanged. Cost if wrong: presentation rework.
+- Publish the effective execution timeout default in MCP capabilities during Task 4, with focused contract coverage before the final gate; `AGENTS.md` makes runtime policy authoritative there and the reviewer identified missing disclosure. Cost if wrong: additive interface field and test rework.
 
 ## Product contract added in Task 4
 
