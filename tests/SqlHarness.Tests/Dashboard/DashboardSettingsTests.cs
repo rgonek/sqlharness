@@ -87,6 +87,40 @@ public sealed class DashboardSettingsTests
     }
 
     [Fact]
+    public async Task Put_persists_custom_execution_timeout_and_get_reads_it_back()
+    {
+        using var home = new TempHome();
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (server, client) = dashboard;
+        var body = ValidBody.Replace("\"diagnostics\": { \"enabled\": true }", "\"diagnostics\": { \"enabled\": true }, \"execution\": { \"defaultTimeoutSeconds\": 75 }");
+
+        var response = await client.SendAsync(Put(server, body));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(75, SqlHarnessConfigLoader.Load(ConfigPath(home)).Config.Execution.DefaultTimeoutSeconds);
+        Assert.Equal(75, (await Json(await client.GetAsync("/api/settings"))).GetProperty("settings")
+            .GetProperty("execution").GetProperty("defaultTimeoutSeconds").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(301)]
+    public async Task Put_rejects_execution_timeout_outside_bounds(int timeoutSeconds)
+    {
+        using var home = new TempHome();
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (server, client) = dashboard;
+        var body = ValidBody.Replace("\"diagnostics\": { \"enabled\": true }", $"\"diagnostics\": {{ \"enabled\": true }}, \"execution\": {{ \"defaultTimeoutSeconds\": {timeoutSeconds} }}");
+
+        var response = await client.SendAsync(Put(server, body));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = Assert.Single((await Json(response)).GetProperty("errors").EnumerateArray());
+        Assert.Equal("execution.defaultTimeoutSeconds", error.GetProperty("field").GetString());
+        Assert.False(File.Exists(ConfigPath(home)));
+    }
+
+    [Fact]
     public async Task Put_with_invalid_body_returns_field_errors_and_leaves_the_file()
     {
         using var home = new TempHome();

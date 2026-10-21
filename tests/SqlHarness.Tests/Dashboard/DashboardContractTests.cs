@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
+using SqlHarness.Core;
 using SqlHarness.Dashboard;
 
 namespace SqlHarness.Tests.Dashboard;
@@ -67,6 +68,17 @@ public sealed class DashboardContractTests
     public void Session_sql_text_names_match_the_ui()
     {
         Assert.Equal(["hash", "text", "tooLarge"], Names(new SqlVersionText("sha256:" + new string('a', 64), null, false)));
+    }
+
+    [Fact]
+    public void Settings_response_exposes_default_execution_timeout_to_the_ui()
+    {
+        var config = SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes("{}")).Config!;
+        var response = new SettingsResponse("valid", "config.json", config);
+
+        Assert.Equal(30, JsonDocument.Parse(JsonSerializer.Serialize(response, Json)).RootElement
+            .GetProperty("settings").GetProperty("execution").GetProperty("defaultTimeoutSeconds").GetInt32());
+        AssertTypescriptFieldsMatch("ExecutionSettings", config.Execution);
     }
 
     [Fact]

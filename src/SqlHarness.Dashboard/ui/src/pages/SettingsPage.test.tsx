@@ -14,6 +14,7 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
     diagnostics: { enabled: false },
     mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
     connection: { timeoutSeconds: 30 },
+    execution: { defaultTimeoutSeconds: 30 },
   },
   ...over,
 })
@@ -85,6 +86,36 @@ test("connection timeout saves within range and preserves unrelated settings", a
   expect((puts[0].body as { connection: { timeoutSeconds: number } }).connection.timeoutSeconds).toBe(75)
   expect((puts[0].body as { dashboard: unknown }).dashboard).toEqual(response().settings.dashboard)
   expect((puts[0].body as { compare: unknown }).compare).toEqual(response().settings.compare)
+})
+
+test("SQL execution settings render, save on commit, and preserve other settings", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  expect(await screen.findByText("SQL execution")).toBeInTheDocument()
+  const field = await screen.findByRole("spinbutton", { name: "Default execution timeout (seconds)" })
+  expect(field).toHaveValue(30)
+  await userEvent.clear(field)
+  await userEvent.type(field, "75")
+  expect(puts).toHaveLength(0)
+  await userEvent.tab()
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as { execution: { defaultTimeoutSeconds: number } }).execution.defaultTimeoutSeconds).toBe(75)
+  expect((puts[0].body as { journal: unknown }).journal).toEqual(response().settings.journal)
+})
+
+test("SQL execution settings show API field errors", async () => {
+  stubSettingsPageFetch({
+    "/api/settings": response(),
+    "PUT /api/settings": () => new Response(JSON.stringify({ errors: [{ field: "execution.defaultTimeoutSeconds", message: "Must be between 1 and 300." }] }), { status: 400 }),
+  })
+  renderApp("/settings")
+
+  const field = await screen.findByRole("spinbutton", { name: "Default execution timeout (seconds)" })
+  await userEvent.clear(field)
+  await userEvent.type(field, "200{Enter}")
+  expect(await screen.findByText("Must be between 1 and 300.")).toBeInTheDocument()
+  expect(field).toHaveValue(30)
 })
 
 test("safety notifications are opt-in and save with dashboard settings", async () => {

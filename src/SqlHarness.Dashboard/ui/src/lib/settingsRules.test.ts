@@ -9,6 +9,7 @@ const make = (enabled: boolean, maxAgeDays = 30, maxSizeMb = 500): Settings => (
   connection: { timeoutSeconds: 30 },
   diagnostics: { enabled: false },
   mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
+  execution: { defaultTimeoutSeconds: 30 },
 })
 
 test("enabling retention is destructive", () => expect(isDestructive(make(false), make(true))).toBe(true))

@@ -10,6 +10,7 @@ const initial = {
     dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled: false } },
     compare: { requireContext: true }, diagnostics: { enabled: false },
     connection: { timeoutSeconds: 30 },
+    execution: { defaultTimeoutSeconds: 30 },
     mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
   },
 }

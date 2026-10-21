@@ -234,7 +234,7 @@ test("matching off returns immediately to per-session rows even when agent rows 
       return new Response(JSON.stringify({ status: "valid", path: "config.json", settings: {
         journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
         dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled } },
-        compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 },
+        compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 }, execution: { defaultTimeoutSeconds: 30 },
       } }), { status: 200 })
     },
     "PUT /api/settings": () => {
@@ -243,7 +243,7 @@ test("matching off returns immediately to per-session rows even when agent rows 
       return new Response(JSON.stringify({ status: "valid", path: "config.json", settings: {
         journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
         dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled } },
-        compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 },
+        compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 }, execution: { defaultTimeoutSeconds: 30 },
       } }), { status: 200 })
     },
   })

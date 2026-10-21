@@ -60,7 +60,7 @@ function NumberField({ id, label, value, min, max, error, onCommit }: { id: stri
   )
 }
 
-type CardKey = "journal" | "dashboard" | "compare" | "diagnostics" | "mutations" | "connection"
+type CardKey = "journal" | "dashboard" | "compare" | "diagnostics" | "mutations" | "connection" | "execution"
 type Status = { state: "saving" } | { state: "saved" } | { state: "error"; message: string }
 
 function StatusLine({ status }: { status?: Status }) {
@@ -234,6 +234,7 @@ export function SettingsPage() {
   const setDiagnostics = (next: Partial<Settings["diagnostics"]>) => commit({ ...draft, diagnostics: { ...draft.diagnostics, ...next } }, "diagnostics")
   const setMutations = (next: Partial<Settings["mutations"]>) => commit({ ...draft, mutations: { ...draft.mutations, ...next } }, "mutations")
   const setConnection = (next: Partial<Settings["connection"]>) => commit({ ...draft, connection: { ...draft.connection, ...next } }, "connection")
+  const setExecution = (next: Partial<Settings["execution"]>) => commit({ ...draft, execution: { ...draft.execution, ...next } }, "execution")
 
   function apply(next: Settings, card: CardKey) {
     setEdited(next)
@@ -289,6 +290,14 @@ export function SettingsPage() {
         <CardContent className="grid gap-4">
           <NumberField id="connection-timeout" label="Connection timeout (seconds)" value={draft.connection.timeoutSeconds} min={1} max={300} error={fieldErrors["connection.timeoutSeconds"]} onCommit={value => setConnection({ timeoutSeconds: value })} />
           <StatusLine status={status.connection} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>SQL execution</CardTitle><CardDescription>Default command timeout for queries, mutations, benchmarks, and watches when no explicit timeout is passed. Capped at 1..300 seconds.</CardDescription></CardHeader>
+        <CardContent className="grid gap-4">
+          <NumberField id="execution-default-timeout" label="Default execution timeout (seconds)" value={draft.execution.defaultTimeoutSeconds} min={1} max={300}
+            error={fieldErrors["execution.defaultTimeoutSeconds"]} onCommit={value => setExecution({ defaultTimeoutSeconds: value })} />
+          <StatusLine status={status.execution} />
         </CardContent>
       </Card>
       <Card>
