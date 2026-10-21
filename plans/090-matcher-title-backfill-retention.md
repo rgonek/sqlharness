@@ -12,7 +12,7 @@
 
 ## Status and dependencies
 
-- Task 1 implemented on `plan-090`; focused tests and branch formatting pass, Task 1 review is approved, and Windows `just verify` passed on product revision `1e6b0eb03330099d69495d4e59d478498ca27097`. Task 2 documentation and whole-branch reviews are pending. Depends on merged 084. Origin: deferred title-backfill memory Minor in [084 evidence](084-verification-evidence.md). Priority P2. No merge or push is authorized by this plan.
+- DONE on feature branch `plan-090`; Task 1 and Task 2 reviews and the Sol low whole-branch review are approved. The final Sol review found no Critical or Important issues; its two documentation Minors are fixed in this closure wave, pending scoped re-review. Focused tests and branch formatting pass, and Windows `just verify` passed on product revision `1e6b0eb03330099d69495d4e59d478498ca27097`. Depends on merged 084. Origin: deferred title-backfill memory Minor in [084 evidence](084-verification-evidence.md). Priority P2. No merge or push is authorized by this plan.
 
 ## Fix contract
 
@@ -51,9 +51,9 @@
 
 **Files:** `plans/090-verification-evidence.md`, this plan, `plans/README.md`, `plans/history.md`.
 
-- [ ] Review Task 1 and whole branch. Record deterministic before/after live-set sizes for many retired identities plus staged survivors; no memory-performance claim from a passing fixture alone.
+- [x] Review Task 1 and whole branch. Record deterministic before/after live-set sizes for many retired identities plus in-flight batch survivors; record persistent staged survivors only if an applicable writer exists. Make no memory-performance claim from a passing fixture alone. Task 1 and Task 2 reviews and Sol low whole-branch review are approved; final scoped review of this documentation-only correction is pending.
 - [x] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef main`, retain direct exit/log; run Windows `just verify` with unique logs on final product tree. Direct branch formatting passed; Windows `just verify` exited 0 on product revision `1e6b0eb03330099d69495d4e59d478498ca27097` (UI 361; Core 4,599 passed/11 skipped; MCP 489 passed/4 skipped; 0 build warnings/errors; 9m04s).
-- [ ] Record revision/counts, staging lifetime evidence and any remaining limits; close the deferred 084 Minor only when its regression passes. Commit `docs(090): record title-backfill lifecycle verification`.
+- [x] Record revision/counts, staging lifetime evidence and remaining limits; close the deferred 084 Minor after its eviction/retry regressions pass. Commit `docs(090): record title-backfill lifecycle verification` (`902f125`); archive raw logs and review/ruling records under [`plans/evidence/090`](evidence/090/).
 
 ## Plan self-review
 
