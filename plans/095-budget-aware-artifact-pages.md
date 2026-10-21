@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IMPLEMENTED on `plan-095` branch; Task 3 focused workflow, direct branch formatting and final Windows gate are green on product revision `84b4796`. Task 3 review, independent whole-branch review, and authorized local integration remain pending. See [verification evidence](095-verification-evidence.md).
+- DONE on `plan-095`; all task reviews, whole-branch Sol low review and final scoped re-review approved. Final Windows gate and direct branch formatter passed on `419f32a`; authorized local integration follows. See [verification evidence](095-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: 093 and 094 implementations must be merged before starting; they fix shared identity projection and target-free budget plumbing.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -80,8 +80,8 @@ Report a concrete design blocker if the live interfaces invalidate the Fix contr
 
 ## Done criteria
 
-- [ ] All task-specific regressions below pass and each task has spec/quality review.
-- [ ] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
-- [ ] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
-- [ ] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
-- [ ] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.
+- [x] All task-specific regressions below pass and each task has spec/quality review.
+- [x] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
+- [x] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
+- [x] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
+- [x] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.
