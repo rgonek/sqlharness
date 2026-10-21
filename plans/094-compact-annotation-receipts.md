@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IN PROGRESS — Task 1 and Task 2 implementation/review complete; Task 3 implementation is ready for review, with the Windows gate pending.
+- IMPLEMENTATION VERIFIED on `plan-094` at `a0c3760`; all task and whole-branch reviews approved. Not merged or pushed.
 - Priority P1; effort M; implementation risk MED; category perf.
 - Dependencies: 085 implementation is merged. Coordinate shared MCP helper edits with 095; implement 094 first.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.

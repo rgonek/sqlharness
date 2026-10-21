@@ -48,4 +48,13 @@ Result: exit 0, 123 passed, 0 failed. Output included both workflow byte/call co
 
 ## Common gate and review status
 
-Task 3 implementation review and whole-branch review are pending. Direct branch formatting and the final Windows `just verify` gate will be recorded after the Task 3 commit. No merge or push is authorized. Linux verification, live-database behavior, and actual-agent token costs are unverified and outside this acceptance evidence.
+The Windows gate command was `just verify -LogDirectory D:/temp/sqlharness-plan094-verify`. It exited 0 with `verify: OK stages=5 11m10s` on tested product commit `78b7ac5110bfb5c075c75789cf0438714da7662d`, tree `c192affb081ee10c5cbba5e2d7897271817e609f`:
+
+- UI install passed (48.0s); build passed (72.52s; 0 warnings, 0 errors).
+- UI check passed after 6m50s: 63 files and 349 tests passed in 403.95s.
+- Core passed 4,588, skipped 11, failed 0; MCP passed 480, skipped 4, failed 0. The test stage completed in 3m31s.
+- Gate format reported skipped because there were 0 uncommitted C# files. The direct saved-base branch formatter check separately exited 0 on `78b7ac5`, covering 8 changed C# files; fix-mode branch and working-tree formatter passes also exited 0 before that commit.
+
+The UI stage log contains non-failing Node `DEP0190` and `ECONNREFUSED` diagnostics to localhost port 3000; the UI check still exited 0. Console output was not pristine. Full logs are under `D:/temp/sqlharness-plan094-verify`, and direct formatter output is in `D:/temp/sqlharness-plan094-format-check.txt`.
+
+Final scoped review and independent whole-branch review are approved with no open findings. The review's one Minor tautological assertion finding was removed in `a0c37603a17013421ea0faae734d973b8944d312`; the served workflow test passed 1/1 on that follow-up commit. This test-only assertion removal did not change verified product behavior, so the full gate was not repeated. Plan 094 is implementation-verified on `plan-094`; it is not merged or pushed. Linux verification, live-database behavior, and actual-agent token costs are unverified and outside this acceptance evidence.
