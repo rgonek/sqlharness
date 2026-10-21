@@ -28,11 +28,13 @@ public sealed class MutationCommand(
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
 
-        [Description("SQL execution timeout in seconds (1..300); defaults to execution.defaultTimeoutSeconds from config.json.")][CommandOption("--timeout <SECONDS>")]
+        [Description("SQL execution timeout in seconds (1..300); defaults to execution.defaultTimeoutSeconds from config.json.")]
+        [CommandOption("--timeout <SECONDS>")]
         public int? Timeout { get; set; }
 
         [Description("Presentation-only row cap (0..500). The server still computes the full result; canonical hashes cover all rows.")]
-        [CommandOption("--max-rows <COUNT>")][DefaultValue(50)]
+        [CommandOption("--max-rows <COUNT>")]
+        [DefaultValue(50)]
         public int MaxRows { get; set; } = 50;
 
         [CommandOption("--expect-database <DATABASE>")]
