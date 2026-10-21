@@ -5,7 +5,7 @@ import { assertNoUnexpectedRequests } from "./network"
 import { renderApp, stubFetch } from "./render"
 
 test("reports an unexpected request from a rendered API query", async () => {
-  stubFetch({})
+  stubFetch({ "/api/sessions/981/operations": { items: [], nextCursor: null } })
   renderApp("/sessions/981")
 
   expect(await screen.findByText("Dashboard unreachable: /api/sessions/981")).toBeInTheDocument()
@@ -37,6 +37,17 @@ test("does not let a read fixture satisfy an unregistered write method", async (
   )
 })
 
+test("does not let a session detail fixture satisfy an unregistered operation page", async () => {
+  stubFetch({ "/api/sessions/983": { session: {}, operations: [] } })
+
+  const testName = expect.getState().currentTestName
+  await expect(fetch("/api/sessions/983/operations?limit=500"))
+    .rejects.toThrow(`Unexpected dashboard test request in "${testName}": GET /api/sessions/983/operations?limit=500`)
+  expect(() => assertNoUnexpectedRequests()).toThrow(
+    `Unexpected dashboard test request in "${testName}": GET /api/sessions/983/operations?limit=500`,
+  )
+})
+
 test("serves a write fixture only for its explicitly registered method", async () => {
   stubFetch({ "POST /api/prices/refresh": { refreshed: true } })
 
@@ -60,6 +71,7 @@ let finishPendingRequest: ((response: Response) => void) | undefined
 test("starts an App API query that remains pending until renderApp teardown", async () => {
   stubFetch({
     "/api/sessions/982": () => new Promise<Response>(resolve => { finishPendingRequest = resolve }),
+    "/api/sessions/982/operations": { items: [], nextCursor: null },
   })
   previousQueryClient = renderApp("/sessions/982").client
 
