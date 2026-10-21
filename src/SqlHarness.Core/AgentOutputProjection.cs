@@ -559,7 +559,7 @@ public static class AgentOutputProjection
                 case ArtifactStatementsSection statements:
                     {
                         var selected = new List<ArtifactStatementMetric>();
-                        foreach (var sourceStatement in statements.Statements)
+                        foreach (var sourceStatement in statements.Statements.Take(detailLimit))
                         {
                             var statement = sourceStatement with
                             {
