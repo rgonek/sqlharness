@@ -27,3 +27,11 @@ Task 1/2 reports, reviews, focused RED/GREEN outputs, and Task 2's final UI chec
 ## Limits
 
 This is feature-branch verification. Linux was not run. No live database, actual-agent trial, merge, or push occurred. Documentation-only edits after `effc0bf` do not change the tested product tree. Final Task 3 and whole-branch review approval remain outstanding.
+
+## Task 3 fix round 1
+
+The Task 3 review found the foreign-session count should include its seed row. The fixture has 1,001 rows for both the target session and the foreign session; the foreign count is now stated as one seed plus 1,000 bulk inserts. I appended correction notes to the archived Task 1 report and review, and left their raw test logs unchanged. The final gate description now scopes the 0-warning/0-error count to the .NET build summary and records Vite's large-chunk advisory.
+
+The tested product identity is commit `effc0bfbf72d0d548f3ec8945f431e041111d91d`, tree `a75b970c6b2bb2d46460d33c5784e287b95fb337`. The controller confirmed the gate ran on that clean tree. Product-equivalence command `git diff --exit-code effc0bf HEAD -- src tests scripts` returned exit 0 at HEAD `5d42058f0f86085aa5ac70ac4de5206f8bc2f8ad`; output is archived in `plans/098-evidence/task-3-product-equivalence.log`. `git diff --check` returned exit 0 with no whitespace errors; Git printed only expected LF-to-CRLF notices for Markdown files. Its output and direct exit are archived in `plans/098-evidence/task-3-docs-diff-check.log` and `.exit`. `git rev-parse effc0bf` and `git rev-parse 'effc0bf^{tree}'` outputs are archived in `plans/098-evidence/task-3-product-identity.log`.
+
+Fix commit: `5d42058 docs(098): correct fixture evidence`. No product files changed, so the Windows gate was not rerun.
