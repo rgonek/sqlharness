@@ -116,7 +116,6 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
 
         Console.WriteLine($"annotation workflow fixture (UTF-8 bytes, not model tokens): old full echo + rejection + split calls={legacyCalls}, input={legacyInputBytes}, output={legacyOutputBytes}, error={error}; receipt calls=1, input={receiptInputBytes}, output={receiptOutputBytes}");
         Assert.True(legacyCalls > 1);
-        Assert.Single(new[] { receiptResponse });
         Assert.True(legacyInputBytes > receiptInputBytes);
         Assert.True(legacyOutputBytes > receiptOutputBytes);
     }
