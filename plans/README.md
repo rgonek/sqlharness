@@ -7,7 +7,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
-| [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | Coordinate 089; no membership changes | FEATURE BRANCH VERIFIED at `effc0bf`; final reviews pending; not integrated ([evidence](098-verification-evidence.md)) |
 
 ## Pending
 
@@ -50,6 +49,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 | [102](102-bounded-table-identity-selection.md) | Linear entry accounting and deterministic dashboard idle test | DONE; locally integrated into `main` at `6f07792`; final product `76ebb0d` unchanged, gate exit 0; not pushed ([evidence](102-verification-evidence.md)) |
 | [099](099-shadcn-cli-restoration.md) | Stable shadcn CLI devDependency, supported stylesheet import and contributor workflow | DONE; locally integrated into `main` at `c479210`; Windows-verified product unchanged; all reviews approved ([evidence](099-verification-evidence.md)) |
 | [100](100-shadcn-primitive-adoption.md) | Complete dashboard control inventory, accessible shadcn composition, disclosures and standard tables | DONE; locally integrated into `main` at `74f248c`; Windows-verified product revision `3caacc3` unchanged; all task and whole-branch reviews approved ([evidence](100-verification-evidence.md)) |
+| [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | DONE on feature branch `plan-098`; Windows-verified at `effc0bf`; all task reviews and Sol low whole-branch review approved; integration pending separate authorization, not pushed ([evidence](098-verification-evidence.md)) |
 
 Evidence from completed plans, former queues, rejected proposals and audit decisions are in the [history](history.md). Read it when investigating earlier decisions or evidence, not before every task.
 

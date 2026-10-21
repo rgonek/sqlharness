@@ -1,5 +1,7 @@
 # Plan 098 Task 1 report
 
+> **HISTORICAL COUNT SUPERSEDED (2026-10-21):** Any original reference below to 1,000 foreign-session rows omits the fixture seed row. The fixture contains 1,001 foreign-session rows: one `seed.Operation(foreign)` row plus 1,000 inserted rows. The original task record is preserved below; use this correction and the final verification evidence as authoritative.
+
 ## Result
 
 Implemented ordinary-session operation pagination through a bounded journal reader and authenticated dashboard GET route. The endpoint returns `Page<OperationSummary>` from retained journal rows, scoped to one ordinary session, in descending operation ID order. It uses one `OpenSnapshot`, applies an exclusive cursor before `LIMIT limit + 1`, defaults to 500 rows, clamps numeric limits to 1–500, returns 404 for an unknown session, and returns 400 for malformed or nonpositive cursors. Existing session detail behavior and its initial 500-operation cap remain unchanged.

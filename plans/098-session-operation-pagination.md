@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IN PROGRESS — feature branch implemented and Windows-verified at `effc0bfbf72d0d548f3ec8945f431e041111d91d`; final reviews pending, not integrated. Planned at `32adaa7`, 2026-10-20. See [verification evidence](098-verification-evidence.md).
+- DONE on feature branch `plan-098` — implementation and all task reviews plus Sol low whole-branch review approved; Windows-verified at `effc0bfbf72d0d548f3ec8945f431e041111d91d`. Integration and push are pending separate authorization. Planned at `32adaa7`, 2026-10-20. See [verification evidence](098-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category bug.
 - Dependencies: No semantic predecessor. Coordinate 089 first where practical because both edit JournalReader/DashboardServer/query hooks; 089 remains responsible for agent-session membership pagination.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -83,8 +83,8 @@ Report a concrete design blocker if the live interfaces invalidate the Fix contr
 
 ## Done criteria
 
-- [ ] All task-specific regressions below pass and each task has spec/quality review.
+- [x] All task-specific regressions below pass and each task has spec/quality review.
 - [x] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
-- [ ] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
+- [x] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
 - [x] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
 - [x] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.

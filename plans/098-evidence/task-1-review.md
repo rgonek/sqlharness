@@ -1,5 +1,7 @@
 ### Spec Compliance
 
+> **HISTORICAL COUNT SUPERSEDED (2026-10-21):** The 1,000 foreign-session-row assertion in the original review below omits the fixture seed row. The fixture contains 1,001 foreign-session rows: one `seed.Operation(foreign)` row plus 1,000 inserted rows. The original review text is preserved; the final verification evidence is authoritative.
+
 - ✅ Spec compliant for Task 1. The route returns a page from retained journal rows, rejects nonpositive cursors, and delegates to a bounded reader. The reader checks the session and reads its rows in one snapshot, scopes by session before the exclusive descending cursor, requests `limit + 1`, defaults/clamps at 500, and emits the last returned ID only when an extra row exists. See `src/SqlHarness.Dashboard/DashboardServer.cs:286` and `src/SqlHarness.Dashboard/JournalReader.cs:486`, `src/SqlHarness.Dashboard/JournalReader.cs:492`, `src/SqlHarness.Dashboard/JournalReader.cs:494`, `src/SqlHarness.Dashboard/JournalReader.cs:501`.
 - ⚠️ Cannot verify from this task diff: the paged UI stream, append/retry/cache-reset behavior, hidden internal-operation paging, query-key invalidation, and preservation of UI annotation/liveness/compare behavior in constraints 4–7. Those surfaces are outside Task 1 and should be checked in the UI task review. The backend new-insert/retention cursor case is covered here (`tests/SqlHarness.Tests/Dashboard/SessionOperationPaginationTests.cs:97`).
 

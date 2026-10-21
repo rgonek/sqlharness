@@ -1,6 +1,6 @@
 # Plan 098 verification evidence
 
-Plan 098 is implemented on feature branch `plan-098`. The saved implementation base is `171db244b58136e25f6801d7997e4223299d62ba`; it was not redefined after the implementation commits. The final product tree tested was revision `effc0bfbf72d0d548f3ec8945f431e041111d91d`. Task 1 and Task 2 reviews approved their implementation and fixes. Task 3 and whole-branch final reviews are pending, so the plan remains in progress and is not integrated.
+Plan 098 is DONE on feature branch `plan-098`. The saved implementation base is `171db244b58136e25f6801d7997e4223299d62ba`; it was not redefined after the implementation commits. The final product tree tested was revision `effc0bfbf72d0d548f3ec8945f431e041111d91d`. All three task reviews and the Sol low whole-branch review are approved. The whole-branch review found no Critical or Important issues; its archival-presentation Minor was closed by prominently annotating the superseded Task 1 count assertions. This status is feature-branch completion only: the plan is not integrated or pushed, and integration requires separate authorization.
 
 ## Reachability evidence
 
@@ -27,8 +27,15 @@ Logs are archived in [098-evidence](098-evidence/task-3-just-verify.log), includ
 
 `git diff --check` passed with direct exit 0; output and exit are archived in `task-3-docs-diff-check.log` and `.exit`.
 
-Task 3 fix round 1 corrected the foreign-session total to 1,001 rows and clarified that zero build warnings/errors refers to the .NET build summary; Vite also emitted its large-chunk advisory. Historical Task 1 report/review copies now carry correction notes; raw logs were preserved. Fix commit `5d42058` changes documentation only, so the Windows gate was not rerun.
+Task 3 fix round 1 corrected the foreign-session total to 1,001 rows and clarified that zero build warnings/errors refers to the .NET build summary; Vite also emitted its large-chunk advisory. The final documentation fix prominently annotates the original Task 1 report and review assertions as superseded while preserving their historical wording and raw logs. Archived Task 3 reviews, the whole-branch review, and the SDD ledger are in [098-evidence](098-evidence/). The final docs-only change preserves the tested product tree; no Windows gate was rerun.
 
 ## Limits and delivery state
 
-This is feature-branch verification only. Linux was not run. No live database, actual-agent trial, merge, or push occurred. The README and plan/index/history updates are documentation-only after the tested product revision; no gate rerun is needed for those updates. Final review approval is still required before integration.
+This is feature-branch verification only. Linux was not run. No live database, actual-agent trial, merge, or push occurred. The README and plan/index/history updates are documentation-only after the tested product revision; no gate rerun is needed for those updates. Integration and push remain pending separate authorization.
+
+## Archived reviews
+
+- [Task 3 review](098-evidence/task-3-review.md) and [Task 3 re-review](098-evidence/task-3-rereview-1.md): requested evidence fixes addressed; remaining historical Task 1 count presentation addressed in the final docs wave.
+- [Sol low whole-branch review](098-evidence/whole-review.md): approved with no Critical or Important findings; its sole archival-presentation Minor is closed.
+- [SDD progress ledger](098-evidence/progress.md): staged implementation, task reviews, rulings, and final docs-wave status.
+- [Final docs-fix report](098-evidence/final-fix-report.md): changed records and scoped check results.
