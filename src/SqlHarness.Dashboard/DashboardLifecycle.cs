@@ -51,7 +51,13 @@ public static class DashboardLifecycle
         deadline.CancelAfter(timeout);
         var started = TimeProvider.System.GetTimestamp();
         TimeSpan Remaining() => timeout - TimeProvider.System.GetElapsedTime(started);
-        Task PauseAsync(CancellationToken token) => Task.Delay(Remaining() < PollInterval ? Remaining() : PollInterval, token);
+        Task PauseAsync(CancellationToken token)
+        {
+            var remaining = Remaining();
+            return remaining <= TimeSpan.Zero
+                ? Task.CompletedTask
+                : Task.Delay(remaining < PollInterval ? remaining : PollInterval, token);
+        }
         using var client = new HttpClient(handler ?? CreateHandler(), disposeHandler: handler is null)
         {
             Timeout = Timeout.InfiniteTimeSpan,

@@ -19,9 +19,9 @@ verify-linux *args:
 fix:
     pwsh ./scripts/format-changed.ps1 -Fix
 
-# Test, publish a single-file binary, and install it where sqlharness is on PATH (override with SQLHARNESS_INSTALL_DIR)
+# Test, publish, and install on PATH; use `just publish fast` to skip tests (override with SQLHARNESS_INSTALL_DIR)
 publish *args:
-    pwsh ./scripts/publish-local.ps1 {{args}}
+    pwsh ./scripts/publish-local.ps1 {{if args == "fast" { "-SkipTests" } else { args }}}
 
 # Publish and install without running the tests first
 publish-fast:

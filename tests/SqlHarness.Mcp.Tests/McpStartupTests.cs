@@ -20,10 +20,25 @@ namespace SqlHarness.Mcp.Tests;
 /// stderr without echoing values.
 /// </summary>
 [Collection("McpScopeHome")]
-public sealed class McpStartupTests
+public sealed class McpStartupTests : IDisposable
 {
     private const string HandshakeVersion = "2025-11-25";
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
+    private readonly string? _savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+    private readonly string _home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-startup-" + Guid.NewGuid().ToString("N"));
+
+    public McpStartupTests()
+    {
+        Directory.CreateDirectory(_home);
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", _home);
+    }
+
+    public void Dispose()
+    {
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", _savedHome);
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        McpStdioProcessHarness.DeleteHome(_home);
+    }
 
     private static IReadOnlyDictionary<string, TargetProfile> StartupProfiles() =>
         new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
