@@ -1,8 +1,8 @@
 # Plan 090 verification evidence
 
-## Current status — feature branch
+## Current status — locally integrated
 
-Plan 090 is complete on feature branch `plan-090`. Product revision `1e6b0eb03330099d69495d4e59d478498ca27097` contains the matcher change and formatting repair; the focused `TranscriptMatcherTests` suite passed 26/26 after the repair. Both task reviews, the Task 1 scoped re-review, Sol low whole-branch review, and final scoped re-review are approved. The final re-review confirmed both documentation Minors addressed; its Important about ignored raw logs was fixed by force-tracking the ten intended `.log` files. No Critical or Important findings remain. This is feature-branch evidence, not an integrated-tree claim.
+Plan 090 was locally fast-forwarded into `main` at `7f03ecb` with owner authorization. Source, test and script trees match Windows-verified product `1e6b0eb`; no redundant gate was run. Nothing was pushed. Product revision `1e6b0eb03330099d69495d4e59d478498ca27097` contains the matcher change and formatting repair; the focused `TranscriptMatcherTests` suite passed 26/26 after the repair. Both task reviews, the Task 1 scoped re-review, Sol low whole-branch review, and final scoped re-review are approved. The final re-review confirmed both documentation Minors addressed; its Important about ignored raw logs was fixed by force-tracking the ten intended `.log` files. No Critical or Important findings remain. This is feature-branch evidence, not an integrated-tree claim.
 
 ## Deterministic retention evidence
 

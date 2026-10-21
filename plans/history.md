@@ -446,3 +446,5 @@ Plan [098](098-session-operation-pagination.md) is DONE on feature branch `plan-
 - 2026-11-10: .NET 8 and .NET 9 end of support (plan 022).
 - About 2027-11: next LTS move (.NET 12).
 - Each new PostgreSQL major: extend diagnostic test/source coverage (037) when useful; compatible runtime shapes do not wait for a version allowlist. Review known dangerous-call checks (019) against concrete evidence rather than widening name prefixes automatically.
+
+Plan 090 local integration: owner selected local merge; `main` fast-forwarded to `7f03ecb`. Source, tests and scripts match Windows-verified `1e6b0eb`; no redundant gate ran. No push.
