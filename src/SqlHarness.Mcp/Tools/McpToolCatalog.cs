@@ -75,6 +75,7 @@ public sealed class McpToolHandlers(
                 SqlHarnessExitCode.Success,
                 McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, inputRootCursor, _compareConfig) with
                 {
+                    DefaultExecutionTimeoutSeconds = _defaultExecutionTimeoutSeconds,
                     OperationAnnotations = _operationAnnotationsEnabled ? true : null,
                 },
                 null));
@@ -690,7 +691,7 @@ public static class McpToolCatalog
 {
     /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
     public const string CapabilitiesDescription =
-        "Runtime configuration of this server: scopeMode, active compareContext policy, connectionTimeoutSeconds, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. connectionTimeoutSeconds is the effective SQL connection/authentication timeout; Azure CLI token acquisition has a separate existing budget. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
+        "Runtime configuration of this server: scopeMode, active compareContext policy, connectionTimeoutSeconds, defaultExecutionTimeoutSeconds, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. connectionTimeoutSeconds is the effective SQL connection/authentication timeout; Azure CLI token acquisition has a separate existing budget. defaultExecutionTimeoutSeconds is the configured fallback when a SQL timeout is omitted. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     public const string OperationLabelDescription = "Optional plain-text label for this operation (up to 120 Unicode code points).";

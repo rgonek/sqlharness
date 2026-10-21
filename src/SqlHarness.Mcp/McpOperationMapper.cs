@@ -56,6 +56,7 @@ public sealed record McpCapabilitiesDocument(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<AllowedProfileMutationCapability>? AllowedProfileMutations = null,
     int ConnectionTimeoutSeconds = ConnectionConfig.DefaultTimeoutSeconds,
+    int DefaultExecutionTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? OperationAnnotations = null,
     McpArtifactPageLimits? ArtifactPages = null);
 
@@ -163,6 +164,7 @@ public static partial class McpOperationMapper
                 Mutations = SqlHarnessCapabilitiesProvider.MutationCapability(context.Config.Mutations, context.IsDashboardReachable()),
                 ProfileMutations = ProfileMutation(context.FixedScope!.TargetRequest.Profile, context.Profiles, context.Config.Mutations),
                 ConnectionTimeoutSeconds = context.Config.Connection.TimeoutSeconds,
+                DefaultExecutionTimeoutSeconds = context.Config.Execution.DefaultTimeoutSeconds,
                 OperationAnnotations = context.Config.Journal.OperationAnnotations ? true : null,
             };
         }
@@ -183,6 +185,7 @@ public static partial class McpOperationMapper
                 return new AllowedProfileMutationCapability(name, policy.Mode, policy.WriterConfigured);
             }).ToArray(),
             ConnectionTimeoutSeconds: context.Config.Connection.TimeoutSeconds,
+            DefaultExecutionTimeoutSeconds: context.Config.Execution.DefaultTimeoutSeconds,
             OperationAnnotations: context.Config.Journal.OperationAnnotations ? true : null,
             ArtifactPages: ArtifactPageLimits());
         return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);

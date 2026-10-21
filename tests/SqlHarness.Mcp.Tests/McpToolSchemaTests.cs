@@ -889,6 +889,31 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public async Task Capabilities_report_configured_execution_timeout_in_fixed_and_request_scope()
+    {
+        var scope = Scope();
+        var config = new SqlHarnessConfig { Execution = new ExecutionConfig { DefaultTimeoutSeconds = 47 } };
+
+        var fixedProcess = McpProcessContext.Create(new McpServerOptions
+        {
+            Profile = ProfileName,
+            Vars = new Dictionary<string, string> { ["tenant"] = "frozen" },
+        }, () => scope.Profiles, config: config);
+        await using var fixedServed = await ServedCatalog.CreateAsync(fixedProcess);
+        var fixedCapabilities = await fixedServed.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+        Assert.Equal(47, ServedEnvelope(fixedCapabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("defaultExecutionTimeoutSeconds").GetInt32());
+
+        var requestProcess = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => scope.Profiles, config: config);
+        await using var requestServed = await ServedCatalog.CreateAsync(requestProcess);
+        var requestCapabilities = await requestServed.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+        Assert.Equal(47, ServedEnvelope(requestCapabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("defaultExecutionTimeoutSeconds").GetInt32());
+    }
+
+    [Fact]
     public async Task Request_calls_resolve_each_supplied_scope_and_target_free_tools_need_none()
     {
         var scope = Scope();
