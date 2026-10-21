@@ -33,6 +33,14 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
 
     internal Func<string, bool> DirectoryExists { get; init; } = Directory.Exists;
     internal int LastCodexLookupIdentityCount { get; private set; }
+    internal int CodexTitleBackfillIdentityCount
+    {
+        get
+        {
+            lock (_gate)
+                return _codexTitleBackfillPending.Union(_codexTitleBackfillAttempted).Count();
+        }
+    }
 
     /// <summary>Opens an existing journal for the host's shared idle observer and matcher transactions.</summary>
     internal SqliteConnection? OpenJournalConnection() => Open();
@@ -296,15 +304,11 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
             AddWanted(key.Id, key.Kind);
 
         var fullSweep = operationIds is null;
-        var existingNullTitles = fullSweep ? NullTitleConversationIds(connection).ToHashSet() : [];
+        var liveBackfillIdentities = fullSweep ? LiveCodexTitleBackfillIdentities(connection, batch) : [];
         if (fullSweep)
         {
-            _codexTitleBackfillAttempted.RemoveWhere(key => !existingNullTitles.Contains(key));
-            var unresolvedTitles = existingNullTitles.Concat(batch.Conversations
-                    .Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is null)
-                    .Select(pair => pair.Key))
-                .ToHashSet();
-            _codexTitleBackfillPending.RemoveWhere(key => !unresolvedTitles.Contains(key));
+            _codexTitleBackfillAttempted.RemoveWhere(key => !liveBackfillIdentities.Contains(key));
+            _codexTitleBackfillPending.RemoveWhere(key => !liveBackfillIdentities.Contains(key));
         }
         foreach (var key in batch.Conversations.Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is not null).Select(pair => pair.Key))
         {
@@ -312,11 +316,9 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
             _codexTitleBackfillPending.Remove(key);
         }
 
-        var missingTitles = (operationIds is null ? existingNullTitles : [])
-            .Concat(batch.Conversations
+        var missingTitles = (fullSweep ? liveBackfillIdentities : batch.Conversations
                 .Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is null)
-                .Select(pair => pair.Key))
-            .Distinct()
+                .Select(pair => pair.Key).ToHashSet())
             .Where(key => !_codexTitleBackfillAttempted.Contains(key))
             .ToArray();
         foreach (var key in missingTitles)
@@ -413,13 +415,59 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
         }
     }
 
-    private static IEnumerable<(string Kind, string Id)> NullTitleConversationIds(SqliteConnection connection)
+    private HashSet<(string Kind, string Id)> LiveCodexTitleBackfillIdentities(SqliteConnection connection, Batch batch)
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT agent_kind, conversation_id FROM agent_conversations WHERE agent_kind IN ('codex', 'opencode') AND title IS NULL;";
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
-            yield return (reader.GetString(0), reader.GetString(1));
+        var unresolvedBatch = batch.Conversations
+            .Where(pair => pair.Key.Kind is "codex" or "opencode" && pair.Value is null)
+            .Select(pair => pair.Key)
+            .ToArray();
+        var candidates = _codexTitleBackfillPending
+            .Concat(_codexTitleBackfillAttempted)
+            .Concat(unresolvedBatch)
+            .ToHashSet();
+        if (candidates.Count == 0)
+            return [];
+
+        var resolved = ReadCodexIdentityMatches(connection, candidates, """
+            SELECT candidate.agent_kind, candidate.conversation_id
+            FROM candidate JOIN agent_conversations c
+              ON c.agent_kind = candidate.agent_kind AND c.conversation_id = candidate.conversation_id
+            WHERE c.title IS NOT NULL;
+            """);
+        var live = ReadCodexIdentityMatches(connection, candidates, """
+            SELECT DISTINCT candidate.agent_kind, candidate.conversation_id
+            FROM candidate
+            JOIN operations o ON o.agent_session_id = candidate.conversation_id
+            JOIN sessions s ON s.id = o.session_id AND s.agent_kind = candidate.agent_kind
+            LEFT JOIN agent_conversations c
+              ON c.agent_kind = candidate.agent_kind AND c.conversation_id = candidate.conversation_id
+            WHERE c.title IS NULL;
+            """);
+        live.UnionWith(unresolvedBatch.Where(key => !resolved.Contains(key)));
+        return live;
+    }
+
+    private static HashSet<(string Kind, string Id)> ReadCodexIdentityMatches(
+        SqliteConnection connection, HashSet<(string Kind, string Id)> candidates, string query)
+    {
+        var matches = new HashSet<(string Kind, string Id)>();
+        foreach (var chunk in candidates.Chunk(400))
+        {
+            using var command = connection.CreateCommand();
+            var values = string.Join(",", Enumerable.Range(0, chunk.Length).Select(index => $"($kind{index}, $id{index})"));
+            command.CommandText = $"WITH candidate(agent_kind, conversation_id) AS (VALUES {values}) {query}";
+            for (var index = 0; index < chunk.Length; index++)
+            {
+                command.Parameters.AddWithValue("$kind" + index, chunk[index].Kind);
+                command.Parameters.AddWithValue("$id" + index, chunk[index].Id);
+            }
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+                matches.Add((reader.GetString(0), reader.GetString(1)));
+        }
+
+        return matches;
     }
 
     private static void Collect(Batch batch, ClaudeLine? line)

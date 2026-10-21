@@ -42,10 +42,10 @@
 
 **Interfaces:** Keep existing matcher entry points unchanged. Extract a private live-identity query/helper only if needed; it consumes the existing sweep snapshot and current batch, returns kind-qualified identities. No public diagnostic API solely for testing.
 
-- [ ] Inspect the exact staged-reference table/expiration path and existing set/cursor ownership. Record concrete table/column references and expected lifetime in the implementation report before edits.
-- [ ] Add RED regressions for staged-only survival, orphan null-title eviction, post-eviction reintroduction, kind separation, interrupted scans, and repeated retention cycles. Observe set bounds through an internal test seam or established matcher tests, not reflection over incidental field names.
-- [ ] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~TranscriptMatcherTests"`; retain meaningful RED output.
-- [ ] Implement sweep pruning against the live union, keeping in-flight and staged work; rerun GREEN and self-review query/output bounds. Commit `fix(090): prune title-backfill state against live matcher work`.
+- [x] Inspect the exact staged-reference table/expiration path and existing set/cursor ownership. Record concrete table/column references and expected lifetime in the implementation report before edits.
+- [x] Add RED regressions for staged-only survival, orphan null-title eviction, post-eviction reintroduction, kind separation, interrupted scans, and repeated retention cycles. Observe set bounds through an internal test seam or established matcher tests, not reflection over incidental field names.
+- [x] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~TranscriptMatcherTests"`; retain meaningful RED output.
+- [x] Implement sweep pruning against the live union, keeping in-flight and staged work; rerun GREEN and self-review query/output bounds. Commit `fix(090): prune title-backfill state against live matcher work`.
 
 ### Task 2: Verification and closure
 

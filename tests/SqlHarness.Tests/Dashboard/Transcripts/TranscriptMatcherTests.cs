@@ -298,6 +298,7 @@ public sealed class TranscriptMatcherTests
 
         var matcher = f.Matcher();
         matcher.RunCycle(enabled: true);
+        Assert.Equal(1, matcher.CodexTitleBackfillIdentityCount);
         var old = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "old-thread");
         Assert.Null(old["title"]);
 
@@ -305,6 +306,7 @@ public sealed class TranscriptMatcherTests
         var targetOperationId = Convert.ToInt64(Journal.JournalDb.Rows(f.Home.DatabasePath,
             "SELECT id FROM operations WHERE agent_session_id = 'target-thread'").Single()["id"]);
         await matcher.RunTargetedAsync([targetOperationId], CancellationToken.None);
+        Assert.Equal(2, matcher.CodexTitleBackfillIdentityCount);
 
         var target = Assert.Single(f.Links(), row => (string)row["conversation_id"]! == "target-thread");
         Assert.Equal("Target title", target["title"]);
@@ -319,6 +321,135 @@ public sealed class TranscriptMatcherTests
         }
 
         Assert.Equal("Older title", old["title"]);
+        Assert.Equal(0, matcher.CodexTitleBackfillIdentityCount);
+    }
+
+    [Fact]
+    public void Full_sweep_evicts_orphan_null_title_state_and_allows_reintroduction()
+    {
+        using var f = new Fixture();
+        var operation = f.Seed.Operation(JournalSeed.Session("mcp:reused", "codex"), agent: Call("exec-reused", sessionId: "reused"));
+        f.CodexIndex();
+        var matcher = f.Matcher();
+
+        matcher.RunCycle(enabled: true);
+        Assert.Equal(1, matcher.CodexTitleBackfillIdentityCount);
+
+        using (var connection = new SqliteConnection($"Data Source={f.Home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var delete = connection.CreateCommand();
+            delete.CommandText = "DELETE FROM operations WHERE id = $id;";
+            delete.Parameters.AddWithValue("$id", operation.OperationId);
+            delete.ExecuteNonQuery();
+        }
+
+        matcher.RunCycle(enabled: true);
+        Assert.Equal(0, matcher.CodexTitleBackfillIdentityCount);
+
+        f.Seed.Operation(JournalSeed.Session("mcp:reused-again", "codex"), agent: Call("exec-reused-again", sessionId: "reused"));
+        f.CodexIndex("""{"id":"reused","thread_name":"Reintroduced title","updated_at":"t"}""");
+        matcher.RunCycle(enabled: true);
+
+        Assert.Equal("Reintroduced title", Assert.Single(f.Links())["title"]);
+        Assert.Equal(0, matcher.CodexTitleBackfillIdentityCount);
+    }
+
+    [Fact]
+    public void Full_sweep_prunes_kind_qualified_identity_independently()
+    {
+        using var f = new Fixture();
+        f.Seed.Operation(JournalSeed.Session("mcp:codex", "codex"), agent: Call("exec-codex", sessionId: "shared-id"));
+        var opencode = f.Seed.Operation(JournalSeed.Session("mcp:opencode", "opencode"), agent: Call("exec-opencode", sessionId: "shared-id"));
+        f.CodexIndex();
+        var matcher = f.Matcher();
+
+        matcher.RunCycle(enabled: true);
+        Assert.Equal(2, matcher.CodexTitleBackfillIdentityCount);
+
+        using (var connection = new SqliteConnection($"Data Source={f.Home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var delete = connection.CreateCommand();
+            delete.CommandText = "DELETE FROM operations WHERE id = $id;";
+            delete.Parameters.AddWithValue("$id", opencode.OperationId);
+            delete.ExecuteNonQuery();
+        }
+
+        matcher.RunCycle(enabled: true);
+
+        Assert.Equal(1, matcher.CodexTitleBackfillIdentityCount);
+        Assert.Contains(f.Links(), row => (string)row["agent_kind"]! == "codex" && (string)row["conversation_id"]! == "shared-id");
+    }
+
+    [Fact]
+    public void In_flight_batch_identity_survives_until_the_next_full_sweep()
+    {
+        using var f = new Fixture();
+        var codex = f.Seed.Operation(JournalSeed.Session("mcp:codex-inflight", "codex"), agent: Call("exec-inflight", sessionId: "inflight"));
+        f.Seed.Operation(JournalSeed.Session("mcp:claude-trigger", "claude"), agent: Call("toolu-trigger"));
+        f.CodexIndex();
+        var deleted = false;
+        var matcher = new TranscriptMatcher(f.Home.DatabasePath, f.Homes, new Journal.FixedTimeProvider(Now))
+        {
+            DirectoryExists = _ =>
+            {
+                if (!deleted)
+                {
+                    using var connection = new SqliteConnection($"Data Source={f.Home.DatabasePath};Pooling=False");
+                    connection.Open();
+                    using var delete = connection.CreateCommand();
+                    delete.CommandText = "DELETE FROM operations WHERE id = $id;";
+                    delete.Parameters.AddWithValue("$id", codex.OperationId);
+                    delete.ExecuteNonQuery();
+                    deleted = true;
+                }
+                return false;
+            },
+        };
+
+        matcher.RunCycle(enabled: true);
+
+        Assert.True(deleted);
+        Assert.Equal(1, matcher.CodexTitleBackfillIdentityCount);
+        Assert.Single(Journal.JournalDb.Rows(f.Home.DatabasePath,
+            "SELECT 1 FROM agent_conversations WHERE agent_kind = 'codex' AND conversation_id = 'inflight' AND title IS NULL"));
+
+        matcher.RunCycle(enabled: true);
+
+        Assert.Equal(0, matcher.CodexTitleBackfillIdentityCount);
+    }
+
+    [Fact]
+    public void Repeated_retention_cycles_bound_backfill_state_to_current_operations()
+    {
+        using var f = new Fixture();
+        f.CodexIndex();
+        var matcher = f.Matcher();
+
+        for (var cycle = 0; cycle < 3; cycle++)
+        {
+            var operations = Enumerable.Range(0, 20)
+                .Select(i => f.Seed.Operation(JournalSeed.Session($"mcp:cycle-{cycle}-{i}", "codex"),
+                    agent: Call($"exec-{cycle}-{i}", sessionId: $"thread-{cycle}-{i}")))
+                .ToArray();
+
+            matcher.RunCycle(enabled: true);
+            Assert.Equal(20, matcher.CodexTitleBackfillIdentityCount);
+
+            using (var connection = new SqliteConnection($"Data Source={f.Home.DatabasePath};Pooling=False"))
+            {
+                connection.Open();
+                using var delete = connection.CreateCommand();
+                delete.CommandText = "DELETE FROM operations WHERE id IN (" + string.Join(",", operations.Select((_, i) => "$id" + i)) + ");";
+                for (var i = 0; i < operations.Length; i++)
+                    delete.Parameters.AddWithValue("$id" + i, operations[i].OperationId);
+                delete.ExecuteNonQuery();
+            }
+
+            matcher.RunCycle(enabled: true);
+            Assert.Equal(0, matcher.CodexTitleBackfillIdentityCount);
+        }
     }
 
     [Fact]
