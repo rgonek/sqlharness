@@ -25,3 +25,6 @@ Task 2: cannot-verify SHA caveat resolved: controller captured HEAD 1e6b0eb imme
 Task 2: Sol whole-branch verdict approved; zero Critical/Important, two Minor documentation findings.
 Task 2: fixed exact RED-count wording and changed staged-survivor checklist to in-flight survivors plus conditional persistent staging. Archived raw logs, all task/branch review reports, task reports and this ruling ledger under plans/evidence/090.
 Task 2 final docs-only checks: git diff --check exit0; relative markdown links LOCAL_MARKDOWN_LINKS=OK; no tests/gate rerun. Scoped re-review of this docs/archive wave pending.
+Task 2: final scoped re-review marked both prior wording findings ADDRESSED and found archive packaging Important because the ten raw .log files were ignored by Git.
+Task 2: resolution is archival only: force-track the exact ten compact .log files and include final-rereview.md; no new ruling, behavior change, test, or gate rerun.
+Task 2: final archive completion verified `git ls-files 'plans/evidence/090/*.log'` count 10; raw hash and indexed blob matched 10/10; no line-ending conversion. Staged diff check passed. Final scoped re-review approved both wording fixes and packaging fix. Feature branch done; no merge/push.

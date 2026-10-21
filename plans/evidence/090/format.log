@@ -1,0 +1,5 @@
+[6 qformat: 2 changed C# file(s) (branch)
+D:\Dev\sqlharness\.worktrees\plan-090\tests\SqlHarness.Tests\Dashboard\Transcripts\TranscriptMatcherTests.cs(695,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-090\tests\SqlHarness.Tests\SqlHarness.Tests.csproj]
+D:\Dev\sqlharness\.worktrees\plan-090\src\SqlHarness.Dashboard\Transcripts\TranscriptMatcher.cs(680,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-090\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj]
+format: FAILED (dotnet format exit 2)
+Direct exit: 2

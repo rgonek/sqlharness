@@ -31,3 +31,9 @@ Read the archived Sol low whole-branch report. It found no Critical or Important
 Archived durable evidence and review records under `plans/evidence/090/`, including Task 1 and Task 2 reports, both task reviews, Task 1 re-review, Sol whole-branch report, the ruling ledger, baseline/focused/formatter outputs, and all small Windows gate logs. No diffs, briefs or generated build artifacts were copied.
 
 Docs-only checks: `git diff --check` exited 0 with no output. Relative-link validation over the five changed Markdown files printed `LOCAL_MARKDOWN_LINKS=OK`. No tests or Windows gate were rerun because this wave changes only documentation and archived text evidence.
+
+## Final scoped re-review and archive packaging resolution
+
+The final scoped re-review marked both wording findings ADDRESSED and found one Important packaging gap: all ten raw `.log` files existed in the evidence folder but were ignored by the repository `*.log` rule, so they were absent from the commit. Explicitly force-track those exact compact text logs and archive `final-rereview.md`; preserve the historical finding in that report. No product or behavioral docs fix was needed, and no gate/test was rerun.
+
+Final packaging verification: `git ls-files 'plans/evidence/090/*.log'` listed exactly 10 logs. For each, `git hash-object --no-filters <path>` matched the index blob (`RAW_LOG_BLOB_HASHES=10/10_EXACT`); `git ls-files --eol` showed `i/crlf w/crlf attr/-text` for all ten. `git diff --cached --check` printed `STAGED_DIFF_CHECK=OK`. The scoped `.gitattributes` entry preserves exact captured bytes while allowing whitespace validation on documentation.
