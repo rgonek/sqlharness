@@ -1,0 +1,5 @@
+format: 13 changed C# file(s) (branch)
+D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\AgentOptimizationWorkflowTests.cs(783,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\SqlHarness.Mcp.Tests.csproj]
+D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.WorkflowHost\WorkflowModule.cs(402,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.WorkflowHost\SqlHarness.Mcp.WorkflowHost.csproj]
+D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.WorkflowHost\WorkflowScenarios.cs(99,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.WorkflowHost\SqlHarness.Mcp.WorkflowHost.csproj]
+format: FAILED (dotnet format exit 2)

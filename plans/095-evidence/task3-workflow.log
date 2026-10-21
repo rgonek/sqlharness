@@ -1,0 +1,45 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Mcp.WorkflowHost -> D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-095\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+D:\Dev\sqlharness\.worktrees\plan-095\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.30]   Discovering: SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.55]   Discovered:  SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.60]   Starting:    SqlHarness.Mcp.Tests
+  Passed SqlHarness.Mcp.Tests.AgentOptimizationWorkflowTests.Compare_follow_up_reads_a_real_offline_artifact [1 s]
+  Passed SqlHarness.Mcp.Tests.AgentOptimizationWorkflowTests.Request_scoped_host_maps_the_synthetic_profile [1 s]
+  Passed SqlHarness.Mcp.Tests.AgentOptimizationWorkflowTests.Scripted_workflows_fit_4096_and_65536_and_freeze_portable_records [13 s]
+  Standard Output Messages:
+ no-improvement@4096: discovery=28675 protocolFrameBytes=34075 (machine-local; omitted from snapshot) calls=2
+ no-improvement@65536: discovery=28675 protocolFrameBytes=34075 (machine-local; omitted from snapshot) calls=2
+ partial-matrix-32@4096: discovery=28675 protocolFrameBytes=60678 (machine-local; omitted from snapshot) calls=2
+ partial-matrix-32@65536: discovery=28675 protocolFrameBytes=60098 (machine-local; omitted from snapshot) calls=1
+ colliding-operators@4096: discovery=28675 protocolFrameBytes=33339 (machine-local; omitted from snapshot) calls=3
+ colliding-operators@65536: discovery=28675 protocolFrameBytes=33339 (machine-local; omitted from snapshot) calls=3
+ unavailable-metrics@4096: discovery=23889 protocolFrameBytes=27338 (machine-local; omitted from snapshot) calls=1
+ unavailable-metrics@65536: discovery=23889 protocolFrameBytes=27338 (machine-local; omitted from snapshot) calls=1
+
+
+  Passed SqlHarness.Mcp.Tests.AgentOptimizationWorkflowTests.Child_process_stdout_is_pure_protocol_and_records_zero_connections [1 s]
+  Passed SqlHarness.Mcp.Tests.AgentOptimizationWorkflowTests.Manifest_pins_portable_scenario_ids_without_machine_paths [18 ms]
+  Passed SqlHarness.Mcp.Tests.AgentOptimizationWorkflowTests.Host_handshake_lists_nine_tools_serves_capabilities_and_rejects_unknown_sql [1 s]
+  Passed SqlHarness.Mcp.Tests.AgentOptimizationWorkflowTests.Ordered_compare_requires_ordered_semantics_and_does_not_emit_order_only [1 s]
+[xUnit.net 00:00:23.93]   Finished:    SqlHarness.Mcp.Tests
+  Passed SqlHarness.Mcp.Tests.AgentOptimizationWorkflowTests.Artifact_513_node_sdk_completion_measures_default_and_explicit_pages [3 s]
+  Standard Output Messages:
+ 513-node saved-artifact completion: catalog=28675 UTF-8 bytes; defaults calls=5, request=1207, response=192080, combined=193287; explicit pageSize=512/maxResultBytes=131072 calls=2, request=555, response=189910, combined=190465, increase=-2822 bytes.
+ Defaults compatibility: omitted pageSize and explicit pageSize=128 reconstruct the same 513 node paths; host connectionAttempts=0.
+
+
+
+Test Run Successful.
+Total tests: 8
+     Passed: 8
+ Total time: 25,2393 Seconds

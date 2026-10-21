@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- DONE on `plan-095`; all task reviews, whole-branch Sol low review and final scoped re-review approved. Final Windows gate and direct branch formatter passed on `419f32a`; authorized local integration follows. See [verification evidence](095-verification-evidence.md).
+- DONE on `plan-095`; all task reviews, whole-branch Sol low review and final scoped re-review approved. Final Windows gate and direct branch formatter passed on `419f32a`; locally merged into `main` at `55f06a5`. See [verification evidence](095-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: 093 and 094 implementations must be merged before starting; they fix shared identity projection and target-free budget plumbing.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.

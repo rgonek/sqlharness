@@ -2,7 +2,7 @@
 
 ## Scope and review boundary
 
-Implementation began at immutable base `384357c031a321ab2f32cf99f049b9c0bc4c71f2`. Task 1 tests were added in `add7efa` and hardened in `c36886e`; Task 2's approved implementation is `733781e5fb2c407d676312ef0c04039f44a3f8ca`. Task 3 adds a real SDK workflow around the existing reader and updates the four human-facing contracts. The product branch is `plan-095`; whole-branch review and authorized local integration remain pending. No push, live database, paid agent call, or Linux gate was performed.
+Implementation began at immutable base `384357c031a321ab2f32cf99f049b9c0bc4c71f2`. Task 1 tests were added in `add7efa` and hardened in `c36886e`; Task 2's approved implementation is `733781e5fb2c407d676312ef0c04039f44a3f8ca`. Task 3 adds a real SDK workflow around the existing reader and updates the four human-facing contracts. The product branch is `plan-095`; all task and whole-branch reviews are approved; local integration completed at `55f06a5`. No push, live database, paid agent call, or Linux gate was performed.
 
 ## Task 1 baseline and RED evidence
 
@@ -95,3 +95,7 @@ The original Task 3 review finding is resolved by commit `419f32a`. A final scop
 ## Review approval and delivery
 
 All task spec/quality reviews are approved. Sol low approved the whole branch and the final scoped re-review of `f0f7d60..e8b03db`; the sole Minor is addressed and no findings remain. Reports are archived in `plans/095-evidence/*review.md` and `*rereview.md`. Final verified product/test revision is `419f32a`; subsequent commits change documentation/evidence only. The owner authorized local merge into main after completion and green checks. No push is authorized or performed. Linux, paid-agent trials and live databases were not used.
+
+## Local integration
+
+Authorized local merge completed into `main` at `55f06a5`. `git diff --exit-code 419f32a HEAD -- src tests` returned 0 after merging, confirming the Windows-verified product/test tree is unchanged. Subsequent edits archive logs and update delivery documentation only; no redundant gate was run for these documentation-only edits. Main was clean before merging. No push occurred. Earlier gate/focused logs and the Task 1 behavioral RED are retained alongside the final logs under `plans/095-evidence/`.
