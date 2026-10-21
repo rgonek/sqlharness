@@ -51,7 +51,8 @@ public sealed record SqlHarnessArtifactReadOperation(
     ArtifactOwner? Owner = null,
     int? Cursor = null,
     ArtifactPlanSelector? PlanSelector = null,
-    bool IncludeText = false) : SqlHarnessOperation;
+    bool IncludeText = false,
+    int? PageSize = null) : SqlHarnessOperation;
 
 public sealed record SqlHarnessArtifactReadReport(object Section, string? ProducerOperationRef);
 

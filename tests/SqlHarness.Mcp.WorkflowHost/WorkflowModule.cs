@@ -110,6 +110,8 @@ public sealed class WorkflowModule : ISqlHarnessModule
 
     private PairShape ShapeFor(int? matrixIndex)
     {
+        if (_scenario.Id == WorkflowScenarios.PlanPagingId)
+            return new(true, 40m, 12m, 12, 4, false, false);
         if (_scenario.Id is WorkflowScenarios.NoImprovementId or WorkflowScenarios.RequestScopeId)
             return new(false, 40m, 12m, 12, 4, false, false);
         if (_scenario.Id == WorkflowScenarios.UnavailableMetricsId)
@@ -193,8 +195,9 @@ public sealed class WorkflowModule : ISqlHarnessModule
 
     private IReadOnlyList<CompareRunArtifact> BuildRuns(SqlHarnessCompareReport report, PairShape shape)
     {
-        var baselinePlan = PlanXml(_scenario.BaselineSql, warningOnSecond: false);
-        var candidatePlan = PlanXml(_scenario.CandidateSql, warningOnSecond: shape.WarningOnCandidate);
+        var planPagingFixture = _scenario.Id == WorkflowScenarios.PlanPagingId;
+        var baselinePlan = PlanXml(_scenario.BaselineSql, warningOnSecond: false, planPagingFixture);
+        var candidatePlan = PlanXml(_scenario.CandidateSql, warningOnSecond: shape.WarningOnCandidate, planPagingFixture);
         var baselineElapsed = ElapsedSamples(shape.BaselineElapsed, shape.UnstableBaseline);
         var candidateElapsed = ElapsedSamples(shape.CandidateElapsed, false);
         var table = _scenario.Id == WorkflowScenarios.CollidingOperatorsId ? "Accounts" : "Orders";
@@ -304,8 +307,15 @@ public sealed class WorkflowModule : ISqlHarnessModule
             Engine: _scenario.Engine);
     }
 
-    private static string PlanXml(string sql, bool warningOnSecond)
+    private static string PlanXml(string sql, bool warningOnSecond, bool planPagingFixture)
     {
+        if (planPagingFixture)
+        {
+            var children = string.Concat(Enumerable.Range(1, 512).Select(index =>
+                $"<RelOp NodeId=\"{index + 1}\" PhysicalOp=\"Index Seek\" LogicalOp=\"Index Seek\" EstimateRows=\"7\" EstimatedTotalSubtreeCost=\"0.1\"><IndexScan><Object Table=\"[dbo].[Orders]\" Index=\"[IX_Orders]\" /></IndexScan></RelOp>"));
+            return "<?xml version=\"1.0\" encoding=\"utf-8\"?><ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><BatchSequence><Batch><Statements><StmtSimple StatementText=\"SELECT Id FROM dbo.Orders;\"><QueryPlan><RelOp NodeId=\"1\" PhysicalOp=\"Nested Loops\" LogicalOp=\"Inner Join\" EstimateRows=\"512\" EstimatedTotalSubtreeCost=\"1\"><NestedLoops>" + children + "</NestedLoops></RelOp></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>";
+        }
+
         var statements = sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (statements.Length == 0)
             statements = [sql];

@@ -407,7 +407,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             var resolved = ArtifactReader.ReadSectionWithMetadata(
                 operation.Root, operation.ArtifactId, operation.Section, operation.Owner,
-                operation.Cursor, operation.PlanSelector, operation.IncludeText);
+                operation.Cursor, operation.PlanSelector, operation.IncludeText, operation.PageSize);
             var json = JsonSerializer.Serialize(resolved.Section, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             var bytes = System.Text.Encoding.UTF8.GetByteCount(json);
             var lines = json.Length == 0 ? 0 : json.Count(character => character == '\n') + 1;

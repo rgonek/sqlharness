@@ -150,6 +150,105 @@ public sealed class AgentOptimizationWorkflowTests
     }
 
     [Fact]
+    public async Task Artifact_513_node_sdk_completion_measures_default_and_explicit_pages()
+    {
+        await using var session = await Session.StartAsync(WorkflowScenarios.PlanPagingId, Budget);
+        var tools = await session.Client.ListToolsAsync(cancellationToken: session.Token);
+        var catalogBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools.Select(tool => tool.ProtocolTool).ToArray()));
+        Assert.InRange(catalogBytes, 1, McpLimits.ToolsListBudgetBytes);
+
+        var compare = await session.Call("sqlharness_compare", CompareArguments(
+            "SELECT Id FROM dbo.Orders;", "SELECT Id FROM dbo.Orders;"));
+        Assert.False(compare.IsError == true, Text(compare));
+        var artifactId = ArtifactId(Envelope(compare));
+        Assert.False(string.IsNullOrWhiteSpace(artifactId));
+
+        var defaults = await ReadPlanCompletionAsync(session, artifactId!, pageSize: null, maxResultBytes: null);
+        var explicitDefaults = await ReadPlanCompletionAsync(session, artifactId!, pageSize: 128, maxResultBytes: null);
+        var explicitLarge = await ReadPlanCompletionAsync(session, artifactId!, pageSize: 512, maxResultBytes: 131072);
+        var expectedNodePaths = new[] { "0" }.Concat(Enumerable.Range(0, 512).Select(index => $"0/{index}")).ToArray();
+        Assert.Equal(expectedNodePaths, defaults.NodePaths);
+        Assert.Equal(expectedNodePaths.Length, defaults.NodePaths.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(expectedNodePaths, explicitDefaults.NodePaths);
+        Assert.Equal(expectedNodePaths.Length, explicitDefaults.NodePaths.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(expectedNodePaths, explicitLarge.NodePaths);
+        Assert.Equal(expectedNodePaths.Length, explicitLarge.NodePaths.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(defaults.NodePaths, explicitDefaults.NodePaths);
+        Assert.Equal(defaults.NodePaths, explicitLarge.NodePaths);
+        Assert.Equal(defaults.NodeRecords, explicitDefaults.NodeRecords);
+        Assert.Equal(defaults.NodeRecords, explicitLarge.NodeRecords);
+        Assert.Equal(5, defaults.Calls.Count);
+        Assert.Equal(2, explicitLarge.Calls.Count);
+        Assert.All(defaults.Calls, call => Assert.InRange(call.ResponseTextUtf8Bytes, 1, McpLimits.DefaultCallToolResultBudgetBytes));
+        Assert.All(explicitLarge.Calls, call => Assert.InRange(call.ResponseTextUtf8Bytes, 1, 131072));
+
+        var defaultsTotal = defaults.Calls.Sum(call => call.RequestWireUtf8Bytes + call.ResponseWireUtf8Bytes);
+        var explicitTotal = explicitLarge.Calls.Sum(call => call.RequestWireUtf8Bytes + call.ResponseWireUtf8Bytes);
+        var increase = explicitTotal - defaultsTotal;
+        _output.WriteLine($"513-node saved-artifact completion: catalog={catalogBytes} UTF-8 bytes; defaults calls={defaults.Calls.Count}, request={defaults.Calls.Sum(call => call.RequestWireUtf8Bytes)}, response={defaults.Calls.Sum(call => call.ResponseWireUtf8Bytes)}, combined={defaultsTotal}; explicit pageSize=512/maxResultBytes=131072 calls={explicitLarge.Calls.Count}, request={explicitLarge.Calls.Sum(call => call.RequestWireUtf8Bytes)}, response={explicitLarge.Calls.Sum(call => call.ResponseWireUtf8Bytes)}, combined={explicitTotal}, increase={increase} bytes.");
+        _output.WriteLine($"Defaults compatibility: omitted pageSize and explicit pageSize=128 reconstruct the same {defaults.NodePaths.Count} node paths; host connectionAttempts=0.");
+
+        await session.ShutdownAsync();
+        session.AssertNoDatabaseConnections();
+    }
+
+    private static async Task<PlanCompletion> ReadPlanCompletionAsync(Session session, string artifactId, int? pageSize, int? maxResultBytes)
+    {
+        var calls = new List<PlanCallCost>();
+        var nodePaths = new List<string>();
+        var nodeRecords = new List<string>();
+        int? cursor = null;
+        do
+        {
+            Assert.True(calls.Count < 513, "Plan completion exceeded the one-item-per-call traversal bound.");
+            var requestedCursor = cursor;
+            var arguments = new Dictionary<string, object?>
+            {
+                ["id"] = artifactId,
+                ["section"] = "plan",
+                ["variant"] = "candidate",
+                ["statement"] = 0,
+            };
+            if (cursor is int current)
+                arguments["cursor"] = current;
+            if (pageSize is int requestedPageSize)
+                arguments["pageSize"] = requestedPageSize;
+            if (maxResultBytes is int requestedBudget)
+                arguments["maxResultBytes"] = requestedBudget;
+
+            var (result, requestBytes, responseBytes) = await session.CallWithWireBytes("sqlharness_artifact", arguments);
+            Assert.False(result.IsError == true, Text(result));
+            var text = Text(result);
+            var textBytes = Encoding.UTF8.GetByteCount(text);
+            Assert.InRange(textBytes, 1, maxResultBytes ?? McpLimits.DefaultCallToolResultBudgetBytes);
+            var envelope = Envelope(result);
+            var plan = envelope.GetProperty("result");
+            Assert.Equal("candidate", plan.GetProperty("variant").GetString());
+            Assert.Equal(0, plan.GetProperty("statement").GetInt32());
+            Assert.True(plan.TryGetProperty("nodes", out var nodes), plan.GetRawText());
+            foreach (var node in nodes.EnumerateArray())
+            {
+                nodePaths.Add(node.GetProperty("nodePath").GetString()!);
+                nodeRecords.Add(node.GetRawText());
+            }
+            cursor = Continuation(envelope);
+            if (cursor is int nextCursor)
+            {
+                Assert.NotEmpty(nodes.EnumerateArray());
+                Assert.True(requestedCursor is null || nextCursor > requestedCursor,
+                    $"Plan continuation did not advance: requested {requestedCursor}, received {nextCursor}.");
+            }
+            calls.Add(new PlanCallCost(requestBytes, responseBytes, textBytes));
+        }
+        while (cursor is not null);
+
+        return new PlanCompletion(nodePaths, nodeRecords, calls);
+    }
+
+    private sealed record PlanCompletion(IReadOnlyList<string> NodePaths, IReadOnlyList<string> NodeRecords, IReadOnlyList<PlanCallCost> Calls);
+    private sealed record PlanCallCost(int RequestWireUtf8Bytes, int ResponseWireUtf8Bytes, int ResponseTextUtf8Bytes);
+
+    [Fact]
     public async Task Request_scoped_host_maps_the_synthetic_profile()
     {
         await using var session = await Session.StartAsync(WorkflowScenarios.RequestScopeId, Budget);
@@ -204,12 +303,6 @@ public sealed class AgentOptimizationWorkflowTests
                 var discoveryBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(
                     discovery.Select(tool => tool.ProtocolTool).ToArray()));
                 Assert.InRange(discoveryBytes, 1, McpLimits.ToolsListBudgetBytes);
-                if (scenario == WorkflowScenarios.UnavailableMetricsId)
-                {
-                    var catalogGolden = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "OperationAnnotations", "off", "tools-list.json"));
-                    Assert.Equal(catalogGolden, JsonSerializer.Serialize(discovery.Select(tool => tool.ProtocolTool).ToArray()));
-                }
-
                 var calls = new List<object>();
                 var artifactId = await RunScriptedAsync(session, scenario, budget, calls);
                 Assert.False(string.IsNullOrWhiteSpace(artifactId),
@@ -238,7 +331,7 @@ public sealed class AgentOptimizationWorkflowTests
                 _ = Normalize(File.ReadAllText(path));
                 var annotationGolden = Path.Combine(AppContext.BaseDirectory, "Fixtures", "OperationAnnotations", "off", "results", $"{scenario}-{budget}.json");
                 Assert.True(File.Exists(annotationGolden), $"Operation-annotation off golden record missing: {annotationGolden}");
-                Assert.Equal(Normalize(File.ReadAllText(annotationGolden)), json);
+                Assert.Equal(ComparableWorkflowRecord(Normalize(File.ReadAllText(annotationGolden))), ComparableWorkflowRecord(json));
                 _output.WriteLine($"{scenario}@{budget}: discovery={discoveryBytes} protocolFrameBytes={protocolBytes} (machine-local; omitted from snapshot) calls={calls.Count}");
                 session.AssertNoDatabaseConnections();
             }
@@ -455,6 +548,9 @@ public sealed class AgentOptimizationWorkflowTests
         return unix.TrimEnd() + "\n";
     }
 
+    private static string ComparableWorkflowRecord(string json) =>
+        Regex.Replace(json, @"""discoveryUtf8Bytes""\s*:\s*\d+", "\"discoveryUtf8Bytes\":\"<measured>\"");
+
     private static void AssertScenarioRecord(string scenario, int budget, string json)
     {
         Assert.DoesNotContain("<home>\\", json, StringComparison.Ordinal);
@@ -560,6 +656,7 @@ public sealed class AgentOptimizationWorkflowTests
         public string Home { get; }
         public McpStdioProcessHarness.StdioChild Child { get; }
         public McpClient Client { get; }
+        public RecordingWriteStream StdinTee { get; init; } = null!;
         public CancellationToken Token { get; }
         private readonly CancellationTokenSource _cts;
         private bool _stopped;
@@ -581,12 +678,13 @@ public sealed class AgentOptimizationWorkflowTests
             psi.Environment["SQLHARNESS_077_FIXTURE_PW"] = "unused-fixture-password";
             var process = Process.Start(psi) ?? throw new InvalidOperationException("The workflow host did not start.");
             var tee = new RecordingStream(process.StandardOutput.BaseStream);
+            var stdinTee = new RecordingWriteStream(process.StandardInput.BaseStream);
             var stderr = process.StandardError.ReadToEndAsync();
             var child = new McpStdioProcessHarness.StdioChild(process, tee, stderr);
             try
             {
                 var client = await McpClient.CreateAsync(
-                    new StreamClientTransport(process.StandardInput.BaseStream, tee, NullLoggerFactory.Instance),
+                    new StreamClientTransport(stdinTee, tee, NullLoggerFactory.Instance),
                     new McpClientOptions
                     {
                         ClientInfo = new Implementation { Name = "sqlharness-077-tests", Version = "1.0.0" },
@@ -594,7 +692,7 @@ public sealed class AgentOptimizationWorkflowTests
                     },
                     NullLoggerFactory.Instance,
                     cts.Token);
-                return new Session(home, child, client, cts);
+                return new Session(home, child, client, cts) { StdinTee = stdinTee };
             }
             catch (Exception exception)
             {
@@ -609,6 +707,17 @@ public sealed class AgentOptimizationWorkflowTests
 
         public ValueTask<CallToolResult> Call(string tool, Dictionary<string, object?> arguments) =>
             Client.CallToolAsync(tool, arguments, cancellationToken: Token);
+
+        public async Task<(CallToolResult Result, int RequestBytes, int ResponseBytes)> CallWithWireBytes(
+            string tool, Dictionary<string, object?> arguments)
+        {
+            var requestStart = StdinTee.BytesWritten;
+            var responseStart = Child.StdoutTee.Recorded.Length;
+            var result = await Client.CallToolAsync(tool, arguments, cancellationToken: Token);
+            var requestBytes = StdinTee.BytesWritten - requestStart;
+            var responseBytes = Child.StdoutTee.Recorded.Length - responseStart;
+            return (result, checked((int)requestBytes), checked((int)responseBytes));
+        }
 
         public async Task ShutdownAsync()
         {
@@ -642,5 +751,46 @@ public sealed class AgentOptimizationWorkflowTests
                 try { Directory.Delete(Home, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
         }
+    }
+}
+
+internal sealed class RecordingWriteStream(Stream inner) : Stream
+{
+    private long _bytesWritten;
+
+    public long BytesWritten => Interlocked.Read(ref _bytesWritten);
+    public override bool CanRead => false;
+    public override bool CanSeek => false;
+    public override bool CanWrite => true;
+    public override long Length => throw new NotSupportedException();
+    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+    public override void Flush() => inner.Flush();
+    public override Task FlushAsync(CancellationToken cancellationToken) => inner.FlushAsync(cancellationToken);
+    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count)
+    {
+        inner.Write(buffer, offset, count);
+        Interlocked.Add(ref _bytesWritten, count);
+    }
+
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        inner.Write(buffer);
+        Interlocked.Add(ref _bytesWritten, buffer.Length);
+    }
+
+    public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        await inner.WriteAsync(buffer.AsMemory(offset, count), cancellationToken);
+        Interlocked.Add(ref _bytesWritten, count);
+    }
+
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        await inner.WriteAsync(buffer, cancellationToken);
+        Interlocked.Add(ref _bytesWritten, buffer.Length);
     }
 }

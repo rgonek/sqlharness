@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -633,7 +634,8 @@ public class ArtifactReaderTests
             new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 
         var first = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(temp.Path, id, "statements"));
-        Assert.Equal(300, first.Statements.Count);
+        Assert.Equal(128, first.Statements.Count);
+        Assert.Equal(128, first.Continuation);
         var projected = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(first, 512, 128, out _, 65536));
         Assert.Equal(128, projected.Statements.Count);
         Assert.Equal(128, projected.Continuation);
@@ -647,6 +649,154 @@ public class ArtifactReaderTests
         var projectedLast = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(last, 512, 128, out _, 65536));
         Assert.Equal(44, projectedLast.Statements.Count);
         Assert.Null(projectedLast.Continuation);
+    }
+
+    [Theory]
+    [InlineData(null, 128)]
+    [InlineData(1, 1)]
+    [InlineData(512, 512)]
+    public void Plan_source_windows_reconstruct_513_nodes_under_small_and_large_budgets(int? pageSize, int expectedSourceWindow)
+    {
+        using var temp = new TempDirectory();
+        const string id = "plan-window-513";
+        WritePlanArtifact(temp.Path, id, 513);
+
+        foreach (var budget in new[] { 4096, 65536 })
+        {
+            var paths = new List<string>();
+            int? cursor = 0;
+            var pageCount = 0;
+            while (cursor is { } current)
+            {
+                Assert.InRange(++pageCount, 1, 513);
+                var source = Assert.IsType<ArtifactPlanSection>(ReadSectionWithPageSize(temp.Path, id, "plan",
+                    cursor: current, planSelector: new ArtifactPlanSelector("baseline"), pageSize: pageSize));
+                Assert.InRange(source.Nodes.Count, 1, expectedSourceWindow);
+                if (current == 0)
+                    Assert.Equal(Math.Min(expectedSourceWindow, 513), source.Nodes.Count);
+                var projected = Assert.IsType<ArtifactPlanSection>(
+                    AgentOutputProjection.Project(source, 128, int.MaxValue, out _, budget, AgentProjectionProfile.Mcp));
+                Assert.InRange(JsonSerializer.SerializeToUtf8Bytes(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length, 1, budget);
+                Assert.NotEmpty(projected.Nodes);
+                paths.AddRange(projected.Nodes.Select(node => node.NodePath));
+                if (projected.Continuation is int next)
+                    Assert.True(next > current, $"Continuation cursor must advance beyond {current}, but was {next}.");
+                cursor = projected.Continuation;
+            }
+
+            Assert.Equal(513, paths.Count);
+            Assert.Equal(513, paths.Distinct(StringComparer.Ordinal).Count());
+            Assert.Equal(Enumerable.Range(0, 513).Select(index => index == 0 ? "0" : $"0/{index - 1}"), paths);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, 32)]
+    [InlineData(1, 1)]
+    [InlineData(512, 65)]
+    public void Matrix_source_windows_reconstruct_inventory_under_small_and_large_budgets(int? pageSize, int expectedSourceWindow)
+    {
+        using var temp = new TempDirectory();
+        const string id = "matrix-window-65";
+        WriteMatrixArtifact(temp.Path, id, 65);
+
+        foreach (var budget in new[] { 4096, 65536 })
+        {
+            var indexes = new List<int>();
+            int? cursor = 0;
+            var pageCount = 0;
+            while (cursor is { } current)
+            {
+                Assert.InRange(++pageCount, 1, 65);
+                var source = Assert.IsType<ArtifactMatrixCellsSection>(
+                    ReadSectionWithPageSize(temp.Path, id, "matrix-cells", cursor: current, pageSize: pageSize));
+                Assert.InRange(source.Cases.Count, 1, expectedSourceWindow);
+                if (current == 0)
+                    Assert.Equal(Math.Min(expectedSourceWindow, 65), source.Cases.Count);
+                var projected = Assert.IsType<ArtifactMatrixCellsSection>(
+                    AgentOutputProjection.Project(source, 128, int.MaxValue, out _, budget, AgentProjectionProfile.Mcp));
+                Assert.InRange(JsonSerializer.SerializeToUtf8Bytes(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length, 1, budget);
+                Assert.NotEmpty(projected.Cases);
+                indexes.AddRange(projected.Cases.Select(item => item.Index));
+                if (projected.Continuation is int next)
+                    Assert.True(next > current, $"Continuation cursor must advance beyond {current}, but was {next}.");
+                cursor = projected.Continuation;
+            }
+
+            Assert.Equal(65, indexes.Count);
+            Assert.Equal(65, indexes.Distinct().Count());
+            Assert.Equal(Enumerable.Range(0, 65), indexes);
+        }
+    }
+
+    private static object ReadSectionWithPageSize(string root, string id, string section,
+        int? cursor = null, ArtifactPlanSelector? planSelector = null, bool includeText = false, int? pageSize = null)
+    {
+        var method = typeof(ArtifactReader).GetMethod(nameof(ArtifactReader.ReadSection), BindingFlags.Public | BindingFlags.Static);
+        Assert.NotNull(method);
+        var parameters = method!.GetParameters();
+        Assert.NotNull(parameters.SingleOrDefault(parameter => parameter.Name == "pageSize"));
+        var arguments = parameters.Select(parameter => parameter.Name switch
+        {
+            "root" => (object)root,
+            "artifactId" => id,
+            "section" => section,
+            "cursor" => cursor,
+            "planSelector" => planSelector,
+            "includeText" => includeText,
+            "pageSize" => pageSize,
+            _ => parameter.DefaultValue,
+        }).ToArray();
+        try
+        {
+            return method.Invoke(null, arguments)!;
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
+    }
+
+    private static void WritePlanArtifact(string root, string id, int nodeCount)
+    {
+        var directory = Path.Combine(root, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+        var tree = JsonSerializer.Serialize(new
+        {
+            statements = new[] { new { root = new { physicalOp = "Root", children = Enumerable.Range(1, nodeCount - 1)
+                .Select(index => new { physicalOp = $"Scan-{index:D3}", children = Array.Empty<object>() }).ToArray() } } },
+        });
+        const string planName = "baseline-001-000-000.plan.json";
+        File.WriteAllText(Path.Combine(directory, "plans", planName), tree);
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), JsonSerializer.Serialize(new
+        {
+            variant = "baseline",
+            repetition = 1,
+            planJsonFiles = new[] { planName },
+        }));
+    }
+
+    private static void WriteMatrixArtifact(string root, string id, int count)
+    {
+        var directory = Path.Combine(root, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
+        var cases = Enumerable.Range(0, count).Select(index => new
+        {
+            index,
+            artifactId = $"cell-{index:D3}",
+            hasComparison = true,
+            equivalenceAvailability = "compared",
+            baseline = new { cpuMilliseconds = 1, elapsedMinimum = 1, elapsedMaximum = 2 },
+            candidate = new { cpuMilliseconds = 2, elapsedMinimum = 2, elapsedMaximum = 3 },
+            delta = new { cpuMilliseconds = 1, elapsedMinimum = 1, elapsedMaximum = 1 },
+            warnings = new[] { new string('w', 128) },
+        }).ToArray();
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new { cases }));
     }
 
     [Fact]

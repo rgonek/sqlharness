@@ -28,6 +28,7 @@ public static class WorkflowScenarios
     public const string CollidingOperatorsId = "colliding-operators";
     public const string UnavailableMetricsId = "unavailable-metrics";
     public const string RequestScopeId = "request-scope-mapping";
+    public const string PlanPagingId = "plan-paging-513";
 
     public const string NoImprovementBaselineSql =
         "SELECT Id, Name FROM dbo.Orders WHERE Region = @Region ORDER BY Id;";
@@ -59,6 +60,8 @@ public static class WorkflowScenarios
             UnavailableBaselineSql, UnavailableCandidateSql, null, null, null),
         new(RequestScopeId, "request-scope-mapping", 7705, true, "sqlserver",
             NoImprovementBaselineSql, NoImprovementCandidateSql, null, null, null),
+        new(PlanPagingId, "saved-plan-paging-513", 7706, false, "sqlserver",
+            "SELECT Id FROM dbo.Orders;", "SELECT Id FROM dbo.Orders;", null, null, null),
     ];
 
     public static WorkflowScenario Require(string id)
