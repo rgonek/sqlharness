@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- DONE on feature branch `plan-098` — implementation and all task reviews plus Sol low whole-branch review approved; Windows-verified at `effc0bfbf72d0d548f3ec8945f431e041111d91d`. Integration and push are pending separate authorization. Planned at `32adaa7`, 2026-10-20. See [verification evidence](098-verification-evidence.md).
+- DONE and locally integrated into `main` at `aca7979` — implementation and all task reviews plus Sol low whole-branch review approved; Windows-verified at `effc0bfbf72d0d548f3ec8945f431e041111d91d`. Local fast-forward integration was authorized on 2026-10-21; no push occurred. Planned at `32adaa7`, 2026-10-20. See [verification evidence](098-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category bug.
 - Dependencies: No semantic predecessor. Coordinate 089 first where practical because both edit JournalReader/DashboardServer/query hooks; 089 remains responsible for agent-session membership pagination.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
