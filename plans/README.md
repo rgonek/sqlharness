@@ -7,6 +7,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
+| [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | Coordinate 089; no membership changes | FEATURE BRANCH VERIFIED at `effc0bf`; final reviews pending; not integrated ([evidence](098-verification-evidence.md)) |
 
 ## Pending
 
@@ -21,7 +22,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [095](095-budget-aware-artifact-pages.md) | Explicit artifact response budgets and bounded configurable source pages with complete continuation | 093 and 094 implementations merged | TODO — P2, plan only |
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | TODO — P2, plan only |
 | [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | TODO — P2, plan only |
-| [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | Coordinate 089; no membership changes | TODO — P2, plan only |
 | [101](101-dashboard-operation-annotations-setting.md) | Enable or disable agent operation annotations in Dashboard Settings; valid paired journal saves and MCP restart guidance | 085 merged; coordinate 092 | TODO — plan only |
 
 ## Limit-economics execution notes (2026-10-20)
