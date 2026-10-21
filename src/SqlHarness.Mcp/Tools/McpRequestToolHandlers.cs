@@ -199,8 +199,11 @@ public sealed class McpRequestToolHandlers(
         [Description(McpToolCatalog.RepetitionDescription)] int? repetition = null,
         [Description("Return bounded statement text and predicates in section=plan.")] bool includeText = false,
         [Description("Cell clip 0..4096 characters; default 2048.")] int? maxCellChars = null,
+        [Description("Maximum result bytes, 4096..1048576, capped by the process limit.")]
+        [Range(McpLimits.MinCallToolResultBudgetBytes, McpLimits.MaxCallToolResultBudgetBytes)] int? maxResultBytes = null,
+        [Description(McpToolCatalog.ArtifactPageSizeDescription)] [Range(1, ArtifactReader.MaxPageSourceItems)] int? pageSize = null,
         CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_artifact", target, ["target", "id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText", "maxCellChars"], handler => handler.ArtifactAsync(ctx, id, section, cursor, variant, statement, parameterSet, repetition, includeText, maxCellChars, ct));
+        Invoke(ctx, "sqlharness_artifact", target, ["target", "id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText", "maxCellChars", "maxResultBytes", "pageSize"], handler => handler.ArtifactAsync(ctx, id, section, cursor, variant, statement, parameterSet, repetition, includeText, maxCellChars, maxResultBytes, pageSize, ct));
 
     public Task<CallToolResult> AnnotateAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("One to twenty journal operation references to annotate.")]

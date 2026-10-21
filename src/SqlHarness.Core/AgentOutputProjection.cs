@@ -501,7 +501,7 @@ public static class AgentOutputProjection
                             InequalityColumns = Take(index.InequalityColumns).Select(value => Clip(value)!).ToArray(),
                             IncludeColumns = Take(index.IncludeColumns).Select(value => Clip(value)!).ToArray(),
                         }).ToArray();
-                        var preparedNodes = plan.Nodes.Take(detailLimit).Select(node =>
+                        var preparedNodes = plan.Nodes.Select(node =>
                         {
                             var nodeClippedItems = 0;
                             string? ClipNodeText(string? value) => ClipText(value, maximumCellCharacters, ref nodeClippedItems);
@@ -558,25 +558,43 @@ public static class AgentOutputProjection
                     }
                 case ArtifactStatementsSection statements:
                     {
-                        var selected = Take(statements.Statements).Select(statement => statement with
+                        var selected = new List<ArtifactStatementMetric>();
+                        foreach (var sourceStatement in statements.Statements)
                         {
-                            Variant = Clip(statement.Variant)!,
-                            ParameterSet = Clip(statement.ParameterSet),
-                            TopOperators = Take(statement.TopOperators).Select(op => op with
+                            var statement = sourceStatement with
                             {
-                                PhysicalOp = Clip(op.PhysicalOp)!,
-                                Object = Clip(op.Object),
-                                Index = Clip(op.Index),
-                            }).ToArray(),
-                        }).ToArray();
-                        omissions += clippedItems;
+                                Variant = Clip(sourceStatement.Variant)!,
+                                ParameterSet = Clip(sourceStatement.ParameterSet),
+                                TopOperators = Take(sourceStatement.TopOperators).Select(op => op with
+                                {
+                                    PhysicalOp = Clip(op.PhysicalOp)!,
+                                    Object = Clip(op.Object),
+                                    Index = Clip(op.Index),
+                                }).ToArray(),
+                            };
+                            var candidateStatements = selected.Append(statement).ToArray();
+                            var candidate = statements with
+                            {
+                                Statements = candidateStatements,
+                                OmittedStatements = statements.OmittedStatements + statements.Statements.Count - candidateStatements.Length,
+                                Continuation = candidateStatements.Length < statements.Statements.Count
+                                    ? statements.Cursor + candidateStatements.Length
+                                    : statements.Continuation,
+                            };
+                            if (SerializedLength(candidate) + 384 > maximumBytes)
+                                break;
+                            selected.Add(statement);
+                        }
+                        if (selected.Count == 0 && statements.Statements.Count > 0)
+                            throw new SqlHarnessSafetyException("The output budget cannot fit an artifact statement.");
+                        omissions += Math.Max(0, statements.Statements.Count - selected.Count) + clippedItems;
                         return statements with
                         {
                             Statements = selected,
-                            OmittedStatements = statements.OmittedStatements + Math.Max(0, statements.Statements.Count - selected.Length),
-                            Continuation = selected.Length < statements.Statements.Count
-                                ? statements.Cursor + selected.Length
-                                : null,
+                            OmittedStatements = statements.OmittedStatements + Math.Max(0, statements.Statements.Count - selected.Count),
+                            Continuation = selected.Count < statements.Statements.Count
+                                ? statements.Cursor + selected.Count
+                                : statements.Continuation,
                         };
                     }
                 case ArtifactMatrixCellsSection matrixCells:

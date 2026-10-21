@@ -177,8 +177,14 @@ public static class ArtifactReader
     /// <summary>Report bound: mirrors the 16 MiB SQL input bound.</summary>
     public const long MaxReportBytes = 16L * 1024 * 1024;
 
-    /// <summary>Maximum saved plan nodes loaded for one budgeted response.</summary>
+    /// <summary>Maximum source items accepted in one saved artifact page.</summary>
+    public const int MaxPageSourceItems = 512;
+
+    /// <summary>Default saved plan nodes loaded for one budgeted response.</summary>
     public const int MaxPlanPageSourceNodes = 128;
+    public const int DefaultStatementsPageSourceItems = 128;
+    public const int DefaultMatrixCellsPageSourceItems = 32;
+    public const int DefaultOperatorsPageSourceItems = 32;
 
     public static readonly IReadOnlyList<string> SupportedSections =
         [SummarySection, MetricsSection, OperatorsSection, StatementsSection, MatrixCellsSection, PlanSection];
@@ -196,13 +202,18 @@ public static class ArtifactReader
     /// the offline CLI passes none and keeps reading by name).
     /// </summary>
     public static object ReadSection(string root, string artifactId, string section, ArtifactOwner? owner = null, int? cursor = null,
-        ArtifactPlanSelector? planSelector = null, bool includeText = false)
-        => ReadSectionWithMetadata(root, artifactId, section, owner, cursor, planSelector, includeText).Section;
+        ArtifactPlanSelector? planSelector = null, bool includeText = false, int? pageSize = null)
+        => ReadSectionWithMetadata(root, artifactId, section, owner, cursor, planSelector, includeText, pageSize).Section;
 
     public static (object Section, string? ProducerOperationRef) ReadSectionWithMetadata(
         string root, string artifactId, string section, ArtifactOwner? owner = null, int? cursor = null,
-        ArtifactPlanSelector? planSelector = null, bool includeText = false)
+        ArtifactPlanSelector? planSelector = null, bool includeText = false, int? pageSize = null)
     {
+        var pageable = section is MatrixCellsSection or OperatorsSection or StatementsSection or PlanSection;
+        if (pageSize is < 1 or > MaxPageSourceItems || pageSize is not null && !pageable)
+            throw new ArtifactReadException(
+                $"Artifact pageSize must be 1..{MaxPageSourceItems} and is only valid for pageable sections: matrix-cells, operators, statements, or plan.",
+                SqlHarnessExitCode.Safety);
         if (!SupportedSections.Contains(section, StringComparer.Ordinal))
             throw new ArtifactReadException(
                 $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.",
@@ -229,10 +240,10 @@ public static class ArtifactReader
         {
             SummarySection => ReadSummary(directory, artifactId, manifest),
             MetricsSection => ReadMetrics(directory, artifactId, manifest),
-            OperatorsSection => ReadOperators(directory, artifactId, manifest, cursor ?? 0),
-            StatementsSection => ReadStatements(directory, artifactId, manifest, cursor ?? 0),
-            MatrixCellsSection => ReadMatrixCells(directory, artifactId, cursor ?? 0),
-            PlanSection => ReadPlan(directory, artifactId, manifest, planSelector ?? new ArtifactPlanSelector(DefaultVariant(manifest.ArtifactKind)), cursor ?? 0, includeText),
+            OperatorsSection => ReadOperators(directory, artifactId, manifest, cursor ?? 0, pageSize ?? DefaultOperatorsPageSourceItems),
+            StatementsSection => ReadStatements(directory, artifactId, manifest, cursor ?? 0, pageSize ?? DefaultStatementsPageSourceItems),
+            MatrixCellsSection => ReadMatrixCells(directory, artifactId, cursor ?? 0, pageSize ?? DefaultMatrixCellsPageSourceItems),
+            PlanSection => ReadPlan(directory, artifactId, manifest, planSelector ?? new ArtifactPlanSelector(DefaultVariant(manifest.ArtifactKind)), cursor ?? 0, includeText, pageSize ?? MaxPlanPageSourceNodes),
             _ => throw new ArtifactReadException(
                 $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.",
                 SqlHarnessExitCode.Safety),
@@ -241,7 +252,7 @@ public static class ArtifactReader
         return (result, manifest.ProducerOperationRef);
     }
 
-    private static ArtifactMatrixCellsSection ReadMatrixCells(string directory, string artifactId, int cursor)
+    private static ArtifactMatrixCellsSection ReadMatrixCells(string directory, string artifactId, int cursor, int pageSize)
     {
         const string fileName = "matrix-cells.json";
         var path = Path.Combine(directory, fileName);
@@ -261,7 +272,6 @@ public static class ArtifactReader
             if (cursor > cases.GetArrayLength())
                 throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
 
-            const int pageSize = 32;
             var page = cases.EnumerateArray().Skip(cursor).Take(pageSize).Select(item =>
             {
                 if (!item.TryGetProperty("index", out var index)
@@ -418,7 +428,7 @@ public static class ArtifactReader
             report.Sets.Select(set => Of(set.Name, set.Metrics)).ToArray());
     }
 
-    private static ArtifactOperatorsSection ReadOperators(string directory, string artifactId, ArtifactManifest manifest, int cursor)
+    private static ArtifactOperatorsSection ReadOperators(string directory, string artifactId, ArtifactManifest manifest, int cursor, int pageSize)
     {
         IReadOnlyList<NoteworthyOperatorSummary> operators = manifest.ArtifactKind switch
         {
@@ -428,7 +438,6 @@ public static class ArtifactReader
             _ => throw new ArtifactReadException("Artifact manifest is invalid.", SqlHarnessExitCode.Safety),
         };
         if (cursor > operators.Count) throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
-        const int pageSize = 32;
         var page = operators.Skip(cursor).Take(pageSize).ToArray();
         IReadOnlyList<string>? gaps = operators.Count > 0 && operators.Any(op => op.PlanRefs is not { Count: > 0 })
             ? ["Exact plan source was not retained for one or more noteworthy operators."]
@@ -449,7 +458,7 @@ public static class ArtifactReader
     };
 
     private static ArtifactPlanSection ReadPlan(string directory, string artifactId, ArtifactManifest manifest,
-        ArtifactPlanSelector selector, int cursor, bool includeText)
+        ArtifactPlanSelector selector, int cursor, bool includeText, int pageSize)
     {
         if (selector.Statement < 0 || selector.Repetition is < 1)
             throw new ArtifactReadException("The artifact plan selector is invalid.", SqlHarnessExitCode.Safety);
@@ -512,7 +521,7 @@ public static class ArtifactReader
                 .Select(node => new ArtifactPlanNode(node.Path, node.Parent, node.Node with { Children = [] }))
                 .ToArray();
             if (cursor > allNodes.Length) throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
-            var nodes = allNodes.Skip(cursor).Take(MaxPlanPageSourceNodes).Select(node => includeText ? node : node with
+            var nodes = allNodes.Skip(cursor).Take(pageSize).Select(node => includeText ? node : node with
             { Operator = node.Operator with { Predicate = null } }).ToArray();
             bool? stable = null;
             var hasComparisonGap = false;
@@ -719,7 +728,7 @@ public static class ArtifactReader
         value = default; return false;
     }
 
-    private static ArtifactStatementsSection ReadStatements(string directory, string artifactId, ArtifactManifest manifest, int cursor)
+    private static ArtifactStatementsSection ReadStatements(string directory, string artifactId, ArtifactManifest manifest, int cursor, int pageSize)
     {
         var path = Path.Combine(directory, StatementsFileName);
         if (!IsPlainFile(path))
@@ -739,8 +748,10 @@ public static class ArtifactReader
             {
                 ArtifactId = artifactId,
                 ArtifactKind = manifest.ArtifactKind,
-                Statements = section.Statements.Skip(cursor).ToArray(),
-                Continuation = null,
+                Statements = section.Statements.Skip(cursor).Take(pageSize).ToArray(),
+                Continuation = cursor + Math.Min(pageSize, section.Statements.Count - cursor) < section.Statements.Count
+                    ? cursor + Math.Min(pageSize, section.Statements.Count - cursor)
+                    : null,
                 Cursor = cursor,
             };
         }

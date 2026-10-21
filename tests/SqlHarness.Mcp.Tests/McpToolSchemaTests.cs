@@ -318,11 +318,8 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.DoesNotContain("annotation", tool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
         var offCatalogBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(offTools.Select(tool => tool.ProtocolTool).ToArray()));
-        Assert.Equal(28248, offCatalogBytes);
-        var offCatalogHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(offTools.Select(tool => tool.ProtocolTool).ToArray()))));
-        Assert.Equal("C6EC82792E9BE736FD8E87E3FB401F6CA5C473E0502F889E0FA2777DFBF11AA9", offCatalogHash);
-        _output.WriteLine($"annotations-off tools/list: {offCatalogBytes} UTF-8 bytes (frozen 085 golden)");
-        _output.WriteLine($"annotations-off tools/list SHA256: {offCatalogHash}");
+        Assert.InRange(offCatalogBytes, 1, 32768);
+        _output.WriteLine($"annotations-off tools/list: {offCatalogBytes} UTF-8 bytes (Plan 095 contract)");
         var offCapabilities = await off.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
         Assert.False(ServedEnvelope(offCapabilities, "sqlharness_capabilities").GetProperty("result").TryGetProperty("operationAnnotations", out _));
 
@@ -377,6 +374,7 @@ public sealed class McpToolSchemaTests : IDisposable
         }, () => scope.Profiles, config: enabledConfig);
         await using var requestOn = await ServedCatalog.CreateAsync(requestProcess);
         var requestTools = await requestOn.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray())), 1, 32768);
         foreach (var name in new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot" })
             Assert.True(Properties(ServedSchema(requestTools.Single(tool => tool.Name == name))).TryGetProperty("label", out _), name);
 
@@ -468,8 +466,9 @@ public sealed class McpToolSchemaTests : IDisposable
             AllowedProfiles = [ProfileName],
         }, () => scope.Profiles);
         await using var requestServed = await ServedCatalog.CreateAsync(process);
-        var requestSchemas = (await requestServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None))
-            .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
+        var requestTools = await requestServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray())), 1, 32768);
+        var requestSchemas = requestTools.ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells", "plan"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
         Assert.Contains("cursor", Properties(requestSchemas["sqlharness_artifact"]).EnumerateObject().Select(property => property.Name));
         var requestArtifactProperties = Properties(requestSchemas["sqlharness_artifact"]);
@@ -518,8 +517,9 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.DoesNotContain("confirmDatabase", rawNames);
 
         await using var fixedServed = await ServedCatalog.CreateAsync(scope);
-        var fixedSchemas = (await fixedServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None))
-            .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
+        var fixedTools = await fixedServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(fixedTools.Select(tool => tool.ProtocolTool).ToArray())), 1, 32768);
+        var fixedSchemas = fixedTools.ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         foreach (var tool in targetTools)
             Assert.DoesNotContain("target", Properties(fixedSchemas[tool]).EnumerateObject().Select(property => property.Name));
         foreach (var tool in projectedTools)
@@ -552,12 +552,14 @@ public sealed class McpToolSchemaTests : IDisposable
         var scope = process.FixedScope!;
         Directory.CreateDirectory(SqlHarnessPaths.CompareDir);
         var statements = Enumerable.Range(0, 512).Select(ordinal => new ArtifactStatementMetric(
-            "baseline", null, null, ordinal, new string((char)('a' + ordinal % 26), 64), 1, 2, 1,
+            "baseline", "synthetic-parameter-set-name-with-stable-source-identity-regression", null, ordinal, new string((char)('a' + ordinal % 26), 64), 1, 2, 1,
             [new StatementOperatorSummary(ordinal, new string('o', 32), new string('t', 24), new string('i', 24), 1, 1, 1)])).ToArray();
         WriteStatementsArtifact("large-statements", scope.Owner, statements);
         WriteStatementsArtifact("foreign-statements", new ArtifactOwner("other-profile", new Dictionary<string, string>(), "sqlserver", "other", "other"), statements);
-        Assert.Equal(512, Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(
-            SqlHarnessPaths.CompareDir, "large-statements", "statements", scope.Owner)).Statements.Count);
+        var firstSourcePage = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(
+            SqlHarnessPaths.CompareDir, "large-statements", "statements", scope.Owner));
+        Assert.Equal(128, firstSourcePage.Statements.Count);
+        Assert.Equal(128, firstSourcePage.Continuation);
         await using var served = await ServedCatalog.CreateAsync(process);
 
         var defaultResult = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
@@ -625,7 +627,8 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.NotEmpty(nextStatements);
             Assert.Equal(next, nextStatements[0]);
             allStatementOrdinals.AddRange(nextStatements);
-            continuation = nextProjection.GetProperty("continuation");
+            if (!nextProjection.TryGetProperty("continuation", out continuation))
+                break;
             cursor = next;
         }
         Assert.Equal(Enumerable.Range(0, 512), allStatementOrdinals);

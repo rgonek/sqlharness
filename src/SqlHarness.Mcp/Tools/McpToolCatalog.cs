@@ -394,13 +394,34 @@ public sealed class McpToolHandlers(
         bool includeText = false,
         [Description("Cell clip 0..4096 characters; default 2048.")]
         int? maxCellChars = null,
+        [Description("Maximum result bytes, 4096..1048576, capped by the process limit.")]
+        [Range(McpLimits.MinCallToolResultBudgetBytes, McpLimits.MaxCallToolResultBudgetBytes)]
+        int? maxResultBytes = null,
+        [Description(McpToolCatalog.ArtifactPageSizeDescription)]
+        [Range(1, ArtifactReader.MaxPageSourceItems)]
+        int? pageSize = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_artifact", ctx, async token =>
+        ReadArtifactAsync(ctx, id, section, cursor, variant, statement, parameterSet, repetition, includeText,
+            maxCellChars, maxResultBytes, pageSize, ct);
+
+    private Task<CallToolResult> ReadArtifactAsync(RequestContext<CallToolRequestParams> ctx, string id, string section,
+        int? cursor, string? variant, int statement, string? parameterSet, int? repetition, bool includeText,
+        int? maxCellChars, int? maxResultBytes, int? pageSize, CancellationToken ct)
+    {
+        McpResultBudget budget;
+        try { budget = McpResultBudget.Resolve(scope.MaxResultBytes, maxResultBytes, maxCellChars, McpLimits.MaxCellCharactersLimit); }
+        catch (ArgumentOutOfRangeException exception)
         {
-            ThrowIfUnknown(ctx, ["id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText", "maxCellChars"]);
-            var operation = McpOperationMapper.MapArtifactRead(scope, id, section, cursor, variant, statement, parameterSet, repetition, includeText);
+            var message = exception.ParamName == "callMaximumCellCharacters" ? exception.Message : "The requested budget is invalid.";
+            return Task.FromResult(Fail(SqlHarnessExitCode.Safety, message, "sqlharness_artifact"));
+        }
+        return RunAsync("sqlharness_artifact", ctx, async token =>
+        {
+            ThrowIfUnknown(ctx, ["id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText", "maxCellChars", "maxResultBytes", "pageSize"]);
+            var operation = McpOperationMapper.MapArtifactRead(scope, id, section, cursor, variant, statement, parameterSet, repetition, includeText, pageSize);
             return await module.ExecuteAsync(operation, token);
-        }, ct, maxCellChars);
+        }, ct, maxCellChars, budget);
+    }
 
     public Task<CallToolResult> AnnotateAsync(
         RequestContext<CallToolRequestParams> ctx,
@@ -686,7 +707,8 @@ public static class McpToolCatalog
     public const string MeasureDescription = "Measure one query across repeats. For an optimization measurement, provide both optional subject and textual scope; this is independent of compare.requireContext. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence. TVP and list parameter sets have no valueHash; their low-entropy values are excluded from unkeyed hashes.";
     public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode: pass means no elapsed regression under policy, not improvement. Observed equivalence follows the selected ordering, duplicate and nullability rules; it is not domain equivalence. Dry-run reports validation: passed, execution: not-run, and setup/baseline/candidate classifications.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
-    public const string ArtifactDescription = "Read an existing saved artifact offline. Use its returned continuation for matrix-cells, statements, operators, or plan pages; plan nodes report omittedChildCount and omittedSubtreeCount when clipped.";
+    public const string ArtifactPageSizeDescription = "Source page size 1..512 for matrix-cells, operators, statements, or plan; defaults are 32, 32, 128, 128. The byte budget may return fewer items; continue from its cursor.";
+    public const string ArtifactDescription = "Offline saved-artifact read. maxResultBytes defaults to 65536, capped by process limit. Use returned continuation for pages. Plan clipping reports omittedChildCount/omittedSubtreeCount.";
     public const string WatchDescription = "Poll a bounded query until its stop condition or duration limit. Poll output has no continuation; inspect emitted polls, source omissions, and projection omissions in this response.";
     public const string QueryDescription = "A query duration is one execution's elapsed time, not benchmark evidence. Estimated plan rows are optimizer estimates; actualRows are observed rows and executions is the operator count. Dry-run reports validation: passed and execution: not-run.";
     public const string PlanDescription = "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only. Clipped nodes report omittedChildCount and omittedSubtreeCount.";

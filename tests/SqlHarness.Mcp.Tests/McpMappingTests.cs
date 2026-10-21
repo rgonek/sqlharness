@@ -101,6 +101,7 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal([ProfileName], document.AllowedProfiles);
         Assert.Equal(["sqlserver"], document.Engines);
         Assert.Equal(new McpProcessLimits(8192, 30), document.ProcessLimits);
+        Assert.Equal(new McpArtifactPageLimits(1, 512, 32, 32, 128, 128), document.ArtifactPages);
         Assert.DoesNotContain("frozen", json, StringComparison.Ordinal);
         Assert.DoesNotContain(PgProfileName, json, StringComparison.Ordinal);
         using var capabilityJson = JsonDocument.Parse(JsonSerializer.Serialize(document, new JsonSerializerOptions(JsonSerializerDefaults.Web)));

@@ -15,6 +15,13 @@ public sealed class McpMappingException(string message) : Exception(message);
 
 /// <summary>Enforced process ceilings reported by capabilities.</summary>
 public sealed record McpProcessLimits(int MaxResultBytes, int MaxOperationSeconds);
+public sealed record McpArtifactPageLimits(
+    int MinPageSize,
+    int MaxPageSize,
+    int MatrixCellsDefault,
+    int OperatorsDefault,
+    int StatementsDefault,
+    int PlanDefault);
 
 /// <summary>
 /// Runtime configuration for the capabilities tool. <see cref="ConfigurationRef"/>
@@ -49,7 +56,8 @@ public sealed record McpCapabilitiesDocument(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<AllowedProfileMutationCapability>? AllowedProfileMutations = null,
     int ConnectionTimeoutSeconds = ConnectionConfig.DefaultTimeoutSeconds,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? OperationAnnotations = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? OperationAnnotations = null,
+    McpArtifactPageLimits? ArtifactPages = null);
 
 public sealed record AllowedProfileMutationCapability(string Profile, string Mode, bool WriterConfigured);
 
@@ -140,7 +148,8 @@ public static partial class McpOperationMapper
             SqlHarnessCapabilitiesProvider.CompareContextPolicy(compareConfig),
             Diagnostics: includeDiagnostics ? LocalDiagnostics(scope.InputRoots) : null,
             Mutations: SqlHarnessCapabilitiesProvider.MutationCapability(null, false),
-            ProfileMutations: ProfileMutation(scope.TargetRequest.Profile, scope.Profiles, null));
+            ProfileMutations: ProfileMutation(scope.TargetRequest.Profile, scope.Profiles, null),
+            ArtifactPages: ArtifactPageLimits());
         return WithInputRootPage(document, scope.InputRoots, inputRootCursor, scope.MaxResultBytes);
     }
 
@@ -175,9 +184,17 @@ public static partial class McpOperationMapper
                 return new AllowedProfileMutationCapability(name, policy.Mode, policy.WriterConfigured);
             }).ToArray(),
             ConnectionTimeoutSeconds: context.Config.Connection.TimeoutSeconds,
-            OperationAnnotations: context.Config.Journal.OperationAnnotations ? true : null);
+            OperationAnnotations: context.Config.Journal.OperationAnnotations ? true : null,
+            ArtifactPages: ArtifactPageLimits());
         return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);
     }
+
+    private static McpArtifactPageLimits ArtifactPageLimits() => new(
+        1, ArtifactReader.MaxPageSourceItems,
+        ArtifactReader.DefaultMatrixCellsPageSourceItems,
+        ArtifactReader.DefaultOperatorsPageSourceItems,
+        ArtifactReader.DefaultStatementsPageSourceItems,
+        ArtifactReader.MaxPlanPageSourceNodes);
 
     private static SqlHarnessProfileCapability? ProfileMutation(string? profileName,
         IReadOnlyDictionary<string, TargetProfile> profiles, MutationsConfig? config)
@@ -532,7 +549,8 @@ public static partial class McpOperationMapper
     }
 
     public static object ReadArtifactSection(McpScope scope, string? id, string? section, int? cursor = null,
-        string? variant = null, int statement = 0, string? parameterSet = null, int? repetition = null, bool includeText = false)
+        string? variant = null, int statement = 0, string? parameterSet = null, int? repetition = null, bool includeText = false,
+        int? pageSize = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (section is null || !ArtifactSections.Contains(section))
@@ -540,11 +558,12 @@ public static partial class McpOperationMapper
         if (section != ArtifactReader.PlanSection && (variant is not null || statement != 0 || parameterSet is not null || repetition is not null || includeText))
             throw new McpMappingException("Plan selectors are only valid for the plan section.");
         return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section, scope.Owner, cursor,
-            BuildArtifactPlanSelector(section, variant, statement, parameterSet, repetition), includeText);
+            BuildArtifactPlanSelector(section, variant, statement, parameterSet, repetition), includeText, pageSize);
     }
 
     public static SqlHarnessArtifactReadOperation MapArtifactRead(McpScope scope, string? id, string? section, int? cursor = null,
-        string? variant = null, int statement = 0, string? parameterSet = null, int? repetition = null, bool includeText = false)
+        string? variant = null, int statement = 0, string? parameterSet = null, int? repetition = null, bool includeText = false,
+        int? pageSize = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (section is null || !ArtifactSections.Contains(section))
@@ -555,7 +574,7 @@ public static partial class McpOperationMapper
         if (section != ArtifactReader.PlanSection && (variant is not null || statement != 0 || parameterSet is not null || repetition is not null || includeText))
             throw new McpMappingException("Plan selectors are only valid for the plan section.");
         return new SqlHarnessArtifactReadOperation(SqlHarnessPaths.CompareDir, id ?? string.Empty, section,
-            scope.Owner, cursor, BuildArtifactPlanSelector(section, variant, statement, parameterSet, repetition), includeText);
+            scope.Owner, cursor, BuildArtifactPlanSelector(section, variant, statement, parameterSet, repetition), includeText, pageSize);
     }
 
     private static ArtifactPlanSelector? BuildArtifactPlanSelector(string? section, string? variant, int statement,
