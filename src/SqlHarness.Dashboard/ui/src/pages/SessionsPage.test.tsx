@@ -228,6 +228,8 @@ test("matching off returns immediately to per-session rows even when agent rows 
       starred: false, archived: false, exact: 0, inferred: 0, unassigned: 0, lastSeen: "2026-10-07T09:05:00.000Z", children: [],
     }], nextCursor: null }), { status: 200 }),
     "/api/agent-sessions/unmatched": { items: [], nextCursor: null, matching: true },
+    "/api/prices": { source: "embedded", fetchedAt: "2026-10-07T09:00:00Z", origin: "embedded" },
+    "/api/transcripts": { enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null },
     "/api/settings": (_url: URL, init?: RequestInit) => {
       if (init?.method === "PUT") { enabled = false; matching = false }
       return new Response(JSON.stringify({ status: "valid", path: "config.json", settings: {

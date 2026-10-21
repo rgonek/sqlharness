@@ -20,7 +20,7 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
 
 function stubSettings(initial: SettingsResponse) {
   const puts: { body: unknown; search: string }[] = []
-  stubFetch({
+  stubSettingsPageFetch({
     "/api/settings": (url: URL, init?: RequestInit) => {
       if (init?.method === "PUT") {
         const body = JSON.parse(String(init.body))
@@ -31,6 +31,15 @@ function stubSettings(initial: SettingsResponse) {
     },
   })
   return puts
+}
+
+/** SettingsPage always loads status and price data; each test's explicit responses override these page fixtures. */
+function stubSettingsPageFetch(routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)>) {
+  return stubFetch({
+    "/api/prices": { source: "embedded", fetchedAt: "2026-10-07T09:00:00Z", origin: "embedded" },
+    "/api/transcripts": { enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null },
+    ...routes,
+  })
 }
 
 type Put = { journal: { storeSensitive: boolean; retention: { enabled: boolean; maxAgeDays: number } }; dashboard: { autoStart: boolean } }
@@ -193,7 +202,7 @@ test("Lowering_limits_with_retention_on_asks_for_confirmation", async () => {
 })
 
 test("a failed save shows the error and keeps the server value", async () => {
-  stubFetch({
+  stubSettingsPageFetch({
     "/api/settings": (_url: URL, init?: RequestInit) =>
       init?.method === "PUT"
         ? new Response(JSON.stringify({ errors: [{ field: "dashboard.idleShutdownHours", message: "Must be between 1 and 168." }] }), { status: 400 })
@@ -210,7 +219,7 @@ test("a failed save shows the error and keeps the server value", async () => {
 
 test("a conflict on save refetches and shows the invalid-file alert", async () => {
   let invalid = false
-  stubFetch({
+  stubSettingsPageFetch({
     "/api/settings": (_url: URL, init?: RequestInit) => {
       if (init?.method === "PUT") {
         invalid = true
@@ -237,9 +246,10 @@ test("port is read-only and an invalid file needs explicit replacement", async (
 
 test("refreshing model prices updates the shown snapshot and reports failures", async () => {
   let fail = false
-  stubFetch({
+  stubSettingsPageFetch({
     "/api/settings": response(),
     "/api/prices": { source: "models.dev", fetchedAt: "2026-10-11T00:00:00Z", origin: "embedded" },
+    "/api/transcripts": { enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null },
     "/api/prices/refresh": () =>
       fail
         ? new Response(JSON.stringify({ error: "Model prices could not be refreshed." }), { status: 502 })
@@ -259,7 +269,7 @@ test("refreshing model prices updates the shown snapshot and reports failures", 
 test("enables transcript reading, shows status, and confirms clearing matched data", async () => {
   const puts: { body: unknown; search: string }[] = []
   const posts: { body: unknown; header: string | null }[] = []
-  stubFetch({
+  stubSettingsPageFetch({
     "/api/settings": (url: URL, init?: RequestInit) => {
       if (init?.method === "PUT") {
         const body = JSON.parse(String(init.body))

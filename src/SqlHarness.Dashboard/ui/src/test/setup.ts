@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest"
 import { cleanup, configure } from "@testing-library/react"
 import { afterEach, beforeEach } from "vitest"
-import { cancelTestQueries, installNetworkIsolation, restoreNetworkIsolation } from "@/test/network"
+import { assertNoUnexpectedRequests, cancelTestQueries, installNetworkIsolation, restoreNetworkIsolation } from "@/test/network"
 
 // Recharts' ResponsiveContainer and Base UI measure elements; neither jsdom nor
 // happy-dom provides ResizeObserver.
@@ -35,7 +35,11 @@ configure({ asyncUtilTimeout: 5_000 })
 beforeEach(() => installNetworkIsolation())
 
 afterEach(async () => {
-  cleanup()
-  await cancelTestQueries()
-  restoreNetworkIsolation()
+  try {
+    cleanup()
+    await cancelTestQueries()
+    assertNoUnexpectedRequests()
+  } finally {
+    restoreNetworkIsolation()
+  }
 })

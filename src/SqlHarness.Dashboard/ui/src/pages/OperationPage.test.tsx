@@ -12,6 +12,12 @@ const defaultOptimization = {
 }
 const stubOperationFetch = (routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)>) => stubFetch({
   "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+  "/api/operations/10/plans": { operationId: 10, state: "plans not stored", occurrences: [] },
+  "/api/operations/11/plans": { operationId: 11, state: "plans not stored", occurrences: [] },
+  "/api/operations/21/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+  "/api/operations/21/plans": { operationId: 21, state: "plans not stored", occurrences: [] },
+  "/api/operations/22/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+  "/api/operations/22/plans": { operationId: 22, state: "plans not stored", occurrences: [] },
   "/api/operations/10/optimization?case=all&aggregate=sum": defaultOptimization,
   "/api/operations/10/optimization": defaultOptimization,
   ...routes,
@@ -413,6 +419,7 @@ test.each([
       operationId: 10, state: "stored", engine: "sqlserver", variant: "measure", parameterSet: null, caseId: "0",
       caseLabel: "Case 1 of 1", repetition: 1, executedText: "SELECT 1", algorithmVersion: 1, links: [], omittedDocuments: [], errors: [],
     },
+    [`/api/plan-documents/${hash}/graph`]: { engine: "sqlserver", error: { code: "plan_document_unavailable", message: "Plan document is not available." }, graph: null },
   })
   const { router } = renderApp(`/operations/10?planCase=s%3A0&planVariant=measure&${query}&planRepetition=1&planDocument=0&planStatement=0`)
   expect(router.state.location.search).toMatchObject(parameterSet === ""

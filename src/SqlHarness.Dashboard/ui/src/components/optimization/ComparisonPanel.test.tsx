@@ -32,6 +32,7 @@ function renderPanel(payload = comparison, versions = [{ version: "v0", hash: "h
     "/api/operations/214/optimization?case=all&aggregate=sum": comparison,
     "/api/operations/214/optimization?case=customer-9001&aggregate=mean": comparison,
     "/api/operations/214/repro": { text: "SELECT 1", completeness: "Complete", label: "Ready" },
+    "/api/sessions/7/sql": (url: URL) => new Response(JSON.stringify({ hash: url.searchParams.get("hash"), text: `SELECT ${url.searchParams.get("hash")}`, tooLarge: false }), { status: 200 }),
   })
   return { ...renderApp(searchUrl), calls }
 }

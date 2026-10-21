@@ -286,6 +286,7 @@ test("labels plans not stored and unmatched occurrences without rendering an emp
   stubFetch({
     "/api/operations/10/plans": { operationId: 10, state: "stored", occurrences: [occurrence({ matchKind: "unmatched", spanStart: null, spanLength: null })] },
     "/api/operations/10/source-map": { ...sourceMap, links: [], executedText: batchSql },
+    [`/api/plan-documents/${documentA}/graph`]: () => new Response(JSON.stringify({ error: { code: "plan_document_unavailable", message: "Plan document is unavailable." } }), { status: 404, headers: { "Content-Type": "application/json" } }),
   })
   renderVariantPanel(fixtureVariant({ variant: "measure", parameterSet: "set-a", caseId: "case-a", caseLabel: "Gold customers", plans: [{ repetition: 2, ordinal: 0, hash: shapeHash, stored: true }] }))
   expect(await screen.findByText("Document 1, statement 1: unmatched SQL statement.")).toBeInTheDocument()
@@ -301,6 +302,9 @@ test("uses theme tokens for the graph in dark mode and supports keyboard node se
     [`/api/plan-documents/${documentA}/graph`]: graph("Orders"),
     [`/api/plan-documents/${documentA}/nodes/0%3A0%2F0/properties`]: {
       engine: "sqlserver", nodeId: "0:0/0", error: null, tree: { properties: [], isTruncated: false, omittedNodeCount: 0 },
+    },
+    [`/api/plan-documents/${documentA}/nodes/0%3A0/properties`]: {
+      engine: "sqlserver", nodeId: "0:0", error: null, tree: { properties: [], isTruncated: false, omittedNodeCount: 0 },
     },
   })
   renderVariantPanel()

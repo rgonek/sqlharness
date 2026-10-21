@@ -17,7 +17,11 @@ vi.mock("@/components/SqlEditors", async importOriginal => {
 })
 
 const renderCompare = (detail: ReturnType<typeof operationDetail>, routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)> = {}) => {
-  const calls = stubFetch({ "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" }, ...routes })
+  const calls = stubFetch({
+    "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+    "/api/operations/10/plans": { operationId: 10, state: "stored", occurrences: [] },
+    ...routes,
+  })
   return { ...render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>), calls }
 }
 
@@ -72,6 +76,10 @@ test("per-run details select one case and one side at a time", async () => {
       variant({ ordinal: 3, variant: "candidate", caseId: "1", matrixCell: 1, elapsedMs: { min: 1, median: 22, max: 23 } }),
     ],
   })
+  stubFetch({
+    "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+    "/api/operations/10/plans": { operationId: 10, state: "stored", occurrences: [] },
+  })
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} selectedCase="1" onCaseChange={onCaseChange} /></QueryClientProvider>)
   await userEvent.click(screen.getByRole("button", { name: "Per-case & per-run details" }))
   const section = screen.getByRole("region", { name: "Per-case & per-run details" })
@@ -108,6 +116,10 @@ test("cases with duplicate visible labels remain selectable by case identity", a
       variant({ ordinal: 3, variant: "candidate", caseId: "1", matrixCell: 1 }),
     ],
   })
+  stubFetch({
+    "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+    "/api/operations/10/plans": { operationId: 10, state: "stored", occurrences: [] },
+  })
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
     <CompareDetail detail={detail} selectedCase="1" onCaseChange={onCaseChange} />
   </QueryClientProvider>)
@@ -134,6 +146,10 @@ test("clears the case value when complete options disappear", async () => {
     operation: operation({ operation: "compare" }),
     compareCases: [{ index: 0 }],
     variants: [variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 })],
+  })
+  stubFetch({
+    "/api/operations/10/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+    "/api/operations/10/plans": { operationId: 10, state: "stored", occurrences: [] },
   })
   const view = render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
     <CompareDetail detail={complete} selectedCase="0" />
@@ -164,7 +180,9 @@ test("SQL, conditions, and plans stay within their disclosures", async () => {
   expect(within(sql).getByText("CREATE TABLE #work (id int);")).toBeInTheDocument()
   expect(within(sql).getByText("Timeout")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Plans" }))
-  const plans = screen.getByRole("region", { name: "Plans" })
+  const plans = screen.getAllByRole("region", { name: "Plans" })
+    .find(region => within(region).queryByRole("region", { name: "compare table IO" }))
+  if (!plans) throw new Error("The Plans disclosure should contain the compare table IO region.")
   expect(within(plans).getAllByRole("region", { name: "Key metrics" })).toHaveLength(2)
   const tableIo = within(plans).getByRole("region", { name: "compare table IO" })
   expect(within(tableIo).getAllByRole("table")).toHaveLength(1)

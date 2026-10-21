@@ -1,7 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query"
+import { expect } from "vitest"
 
-type FetchHandler = (url: URL, init?: RequestInit) => Response
+type FetchHandler = (url: URL, init?: RequestInit) => Response | Promise<Response>
 type FetchRoute = unknown | FetchHandler
+type UnexpectedRequest = { method: string; path: string; testName: string }
 const appLayoutRoutes: Record<string, FetchRoute> = {
   "/api/profiles": { status: "missing", profiles: [], message: null },
   "/api/settings": { status: "valid", path: "config.json", settings: { dashboard: { safetyNotifications: false, agentTranscripts: { enabled: false } } } },
@@ -10,7 +12,12 @@ const appLayoutRoutes: Record<string, FetchRoute> = {
 let originalFetch: typeof fetch | undefined
 let activeRoutes: Record<string, FetchRoute> | undefined
 let activeCalls: string[] | undefined
+let unexpectedRequests: UnexpectedRequest[] | undefined
 const activeQueryClients = new Set<QueryClient>()
+
+function formatUnexpectedRequest({ method, path, testName }: UnexpectedRequest) {
+  return `Unexpected dashboard test request in "${testName}": ${method} ${path}`
+}
 
 const isolatedFetch: typeof fetch = async (input, init) => {
   const request = input instanceof Request ? input : undefined
@@ -21,7 +28,9 @@ const isolatedFetch: typeof fetch = async (input, init) => {
   const handler = activeRoutes?.[path] ?? activeRoutes?.[url.pathname]
 
   if (!activeRoutes || handler === undefined) {
-    throw new Error(`Unexpected dashboard test request: ${method} ${path}`)
+    const unexpected = { method, path, testName: expect.getState().currentTestName ?? "<unknown test>" }
+    unexpectedRequests?.push(unexpected)
+    throw new Error(formatUnexpectedRequest(unexpected))
   }
 
   if (typeof handler === "function") return handler(url, init ?? request)
@@ -34,6 +43,7 @@ export function installNetworkIsolation() {
   originalFetch = globalThis.fetch
   activeRoutes = undefined
   activeCalls = undefined
+  unexpectedRequests = []
   globalThis.fetch = isolatedFetch
 }
 
@@ -44,7 +54,15 @@ export function restoreNetworkIsolation() {
   originalFetch = undefined
   activeRoutes = undefined
   activeCalls = undefined
+  unexpectedRequests = undefined
   activeQueryClients.clear()
+}
+
+/** Fails the owning test for any request the API client may have converted to query state. */
+export function assertNoUnexpectedRequests() {
+  const pending = unexpectedRequests ?? []
+  unexpectedRequests = []
+  if (pending.length > 0) throw new Error(pending.map(formatUnexpectedRequest).join("\n"))
 }
 
 /** Registers renderApp clients so test teardown can cancel retries after unmounting the DOM. */

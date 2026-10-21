@@ -86,6 +86,9 @@ function renderWorkbench() {
     [`/api/plan-documents/${documentHash}/nodes/${encodeURIComponent(node.id)}/properties`]: {
       engine: "sqlserver", nodeId: node.id, tree: null, error: null,
     },
+    [`/api/plan-documents/${secondDocumentHash}/nodes/${encodeURIComponent(secondNode.id)}/properties`]: {
+      engine: "sqlserver", nodeId: secondNode.id, tree: null, error: null,
+    },
   })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={client}><PlanWorkbench

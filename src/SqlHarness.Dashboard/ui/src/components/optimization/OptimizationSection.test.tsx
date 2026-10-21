@@ -167,7 +167,7 @@ test("hides one-option controls and gives each subject its own accessible select
       },
     ],
   }
-  stubFetch({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": multiple })
+  stubFetch({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": multiple, "/api/sessions/7/optimization/compare": comparison })
   renderApp("/sessions/7?subject=Orders&db=shop&group=fp-2")
 
   expect(await screen.findByRole("combobox", { name: "Orders conditions group" })).toBeInTheDocument()
@@ -217,7 +217,7 @@ test("links every retained measurement operation with the current session return
       { ...versions[1]!, measuredIn: [219], latestOperationId: 219 },
     ],
   }] }] }] }
-  stubFetch({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": measured })
+  stubFetch({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": measured, "/api/sessions/7/optimization/compare": comparison })
   renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query")
   const one = await screen.findByRole("link", { name: "Operation #201" })
   const two = screen.getByRole("link", { name: "Operation #214" })

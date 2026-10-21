@@ -31,11 +31,23 @@ const request = {
 }
 const profiles = { status: "valid", message: null, profiles: [{ name: "prod-db", environment: "production", mutationMode: "yolo", acknowledgeProductionYolo: true }] }
 
+/** LivePage always reads these lists; approval scenarios provide the event and mutation behavior separately. */
+function stubApprovalPageFetch(routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)>) {
+  return stubFetch({
+    "/api/profiles": profiles,
+    "/api/operations?limit=100": { items: [], nextCursor: null },
+    "/api/operations?status=running&limit=200": { items: [], nextCursor: null },
+    "/api/sessions?archived=any&starred=true&limit=100": { items: [], nextCursor: null },
+    "/api/sessions?archived=any&starred=false&limit=100": { items: [], nextCursor: null },
+    ...routes,
+  })
+}
+
 async function setup() {
   FakeEventSource.instances = []
   globalThis.EventSource = FakeEventSource as unknown as typeof EventSource
   const play = vi.spyOn(sound, "playApprovalSound").mockResolvedValue(undefined)
-  stubFetch({ "/api/profiles": profiles })
+  stubApprovalPageFetch({})
   renderApp("/")
   await screen.findByRole("main")
   const source = () => FakeEventSource.instances.find(item => item.url === "/api/mutations/events")!
@@ -94,7 +106,7 @@ test("approval dialog renders SQL and parameter values as literal text and waits
 
 test("a 409 approve shows the pending-state message and removed closes the dialog", async () => {
   const { source } = await setup()
-  stubFetch({ "/api/profiles": profiles, "/api/mutations/r-1/approve": () => new Response(JSON.stringify({ error: "request_not_pending" }), { status: 409 }) })
+  stubApprovalPageFetch({ "/api/mutations/r-1/approve": () => new Response(JSON.stringify({ error: "request_not_pending" }), { status: 409 }) })
   act(() => source().emit("added", request))
   vi.useFakeTimers()
   fireEvent.click(screen.getByRole("button", { name: "Review" }))
@@ -110,7 +122,7 @@ test("a 409 approve shows the pending-state message and removed closes the dialo
 
 test("a profile execution conflict explains that the approved request did not run", async () => {
   const { source } = await setup()
-  stubFetch({ "/api/profiles": profiles, "/api/mutations/r-1/approve": () => new Response(JSON.stringify({ status: "busy", error: "profile_execution_busy" }), { status: 409 }) })
+  stubApprovalPageFetch({ "/api/mutations/r-1/approve": () => new Response(JSON.stringify({ status: "busy", error: "profile_execution_busy" }), { status: 409 }) })
   act(() => source().emit("added", request))
   vi.useFakeTimers()
   fireEvent.click(screen.getByRole("button", { name: "Review" }))

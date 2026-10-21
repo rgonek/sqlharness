@@ -157,6 +157,7 @@ test("shows plans-not-stored state and surfaces graph 422 errors", async () => {
       occurrence("baseline", baselineA, 1, "Index Scan", 40),
       occurrence("candidate", candidateA, 1, "Index Seek", 5),
     ]),
+    "/api/operations/10/source-map": () => new Response(JSON.stringify({ error: { code: "invalid_plan_graph", message: "Plan document could not be parsed." } }), { status: 422, headers: { "Content-Type": "application/json" } }),
     [`/api/plan-documents/${baselineA}/graph`]: () => new Response(JSON.stringify({ engine: "sqlserver", graph: null, error: { code: "invalid_plan_graph", message: "Plan document could not be parsed." } }), { status: 422, headers: { "Content-Type": "application/json" } }),
     [`/api/plan-documents/${candidateA}/graph`]: graph("Index Seek", 5),
   })

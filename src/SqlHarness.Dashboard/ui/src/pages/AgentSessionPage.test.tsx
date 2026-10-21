@@ -194,6 +194,9 @@ test("matching off redirects away from cached agent scope", async () => {
   const calls = stubFetch({
     "/api/settings": { ...settings, settings: { ...settings.settings, dashboard: { ...settings.settings.dashboard, agentTranscripts: { enabled: false } } } },
     "/api/agent-sessions/codex/subagent": { agentSession: { ...summary, key: { agentKind: "codex", conversationId: "subagent" }, title: "subagent of unknown parent", children: [] }, operations: [] },
+    "/api/agents": [],
+    "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
+    "/api/sessions?archived=false&starred=false&limit=50": { items: [], nextCursor: null },
   })
   const { router } = renderApp("/agent-sessions/codex/subagent")
   await waitFor(() => expect(router.state.location.pathname).toBe("/sessions"))
@@ -216,6 +219,8 @@ test("agent comparison SQL versions use the agent-session route", async () => {
 test("aggregate measure from a second MCP child keeps the agent-session return route", async () => {
   const calls = stubFetch({
     "/api/settings": settings,
+    "/api/operations/21/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
+    "/api/operations/22/repro": { text: null, completeness: "Unavailable", label: "Script not available — enable storeSensitive" },
     "/api/agent-sessions/claude/conversation-1": { agentSession: { ...summary, children: [
       { session: session({ id: 7, sessionKey: "mcp:first-child", hasCompare: true }), exact: 1, inferred: 0, unassigned: 0 },
       { session: session({ id: 8, sessionKey: "mcp:second-child", hasCompare: true }), exact: 1, inferred: 0, unassigned: 0 },
