@@ -40,3 +40,11 @@
 - The live union is kind-qualified and bounded by candidate identities already in the tracked sets/current batch. SQL matching uses chunks of 400 identities (800 bind parameters per statement) rather than enumerating every conversation row. Pruning is full-sweep-only. The helper avoids treating a null-title conversation row without live operation/batch evidence as pending work. No schema or public matcher interface changed.
 - Existing pending-set cap remains 500; the work adds no arbitrary cap or unbounded transcript output. The added count seam is internal and only reports the distinct tracked identity count.
 - Staged-only persistent references for Codex/OpenCode do not exist in the current writer. The in-flight batch regression covers the real current lifetime; a future writer must be added to the live-union query and tests.
+
+## Review fix round 1
+
+- Review finding: the branch formatter reported `FINALNEWLINE` for `TranscriptMatcher.cs` and `TranscriptMatcherTests.cs`. Ran `just fix`; it exited 0 and reported `format: skipped (0 changed C# files)` because the implementation was already committed and the task's branch files are not working-tree changes.
+- Ran `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef main -Fix`. It reported `format: 2 changed C# file(s) (branch)` and `format: OK`. Inspection confirmed the only changes are the two final newline markers (the formatter removes the terminal CRLF from each file).
+- Reran `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef main`: `format: 2 changed C# file(s) (branch)`, `format: OK`, direct exit code 0. Raw output: `.superpowers/sdd/090-matcher-title-backfill-retention/task-1-fix-format.log`.
+- Reran `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~TranscriptMatcherTests"`: 26/26 passed, direct exit code 0. Raw output: `.superpowers/sdd/090-matcher-title-backfill-retention/task-1-fix-tests.log`.
+- `git diff --check` passed. The fix changes only EOF formatting in the two C# files; no product or test logic changed.
