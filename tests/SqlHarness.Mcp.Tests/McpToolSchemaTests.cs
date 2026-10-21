@@ -317,6 +317,12 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.False(properties.TryGetProperty("responseDetail", out _), tool.Name);
             Assert.DoesNotContain("annotation", tool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
+        var offCatalogBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(offTools.Select(tool => tool.ProtocolTool).ToArray()));
+        Assert.Equal(28248, offCatalogBytes);
+        var offCatalogHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(offTools.Select(tool => tool.ProtocolTool).ToArray()))));
+        Assert.Equal("C6EC82792E9BE736FD8E87E3FB401F6CA5C473E0502F889E0FA2777DFBF11AA9", offCatalogHash);
+        _output.WriteLine($"annotations-off tools/list: {offCatalogBytes} UTF-8 bytes (frozen 085 golden)");
+        _output.WriteLine($"annotations-off tools/list SHA256: {offCatalogHash}");
         var offCapabilities = await off.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
         Assert.False(ServedEnvelope(offCapabilities, "sqlharness_capabilities").GetProperty("result").TryGetProperty("operationAnnotations", out _));
 
@@ -360,6 +366,7 @@ public sealed class McpToolSchemaTests : IDisposable
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(onTools.Select(tool => tool.ProtocolTool).ToArray()));
         Assert.Equal(McpLimits.MaxToolsWithOperationAnnotations, onTools.Count());
         Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"annotation-enabled tools/list is {bytes} bytes.");
+        _output.WriteLine($"annotations-on tools/list: {bytes} UTF-8 bytes of {McpLimits.ToolsListBudgetBytes}");
         var onCapabilities = await on.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
         Assert.True(ServedEnvelope(onCapabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("operationAnnotations").GetBoolean());
 

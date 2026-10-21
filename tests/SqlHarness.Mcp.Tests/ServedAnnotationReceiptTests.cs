@@ -37,7 +37,8 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
     {
         Environment.SetEnvironmentVariable("SQLHARNESS_HOME", _savedHome);
         SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_home, recursive: true); } catch (IOException) { }
+        try { Directory.Delete(_home, recursive: true); }
+        catch (IOException) { }
         catch (UnauthorizedAccessException) { }
         return Task.CompletedTask;
     }
@@ -68,6 +69,56 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
         });
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(Text(response)) <= 4096);
         Assert.Equal(Enumerable.Repeat(new string('界', 120), 20), ReadLabels());
+    }
+
+    [Fact]
+    public async Task Served_receipt_costs_one_call_against_full_echo_rejection_and_split_workflow()
+    {
+        var label = new string('界', 120);
+        var items = Enumerable.Range(1, 20).Select(index => Item(Ref(index), label, true)).ToArray();
+        var receiptRequestBytes = System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(new { items }));
+        var fullRequestBytes = System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(new { items, responseDetail = "full" }));
+
+        var legacyCalls = 0;
+        var legacyInputBytes = fullRequestBytes;
+        var legacyOutputBytes = 0;
+        string error;
+        await using (var legacy = await Fixture.CreateAsync(requestScope: false, maxResultBytes: 4096))
+        {
+            Seed(legacy.Process.MutationSessionKey, 20, "snapshot");
+            var rejected = await legacy.AnnotateAsync(items, new Dictionary<string, object?> { ["responseDetail"] = "full" });
+            legacyCalls++;
+            legacyOutputBytes += McpResultAdapter.MeasureBytes(rejected);
+            Assert.True(rejected.IsError == true, "The full-echo request should exceed the 4096-byte operator ceiling.");
+            error = Text(rejected);
+            Assert.Contains("4096", error, StringComparison.Ordinal);
+            Assert.Contains("receipt", error, StringComparison.OrdinalIgnoreCase);
+
+            foreach (var chunk in items.Chunk(3))
+            {
+                legacyInputBytes += System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(new { items = chunk, responseDetail = "full" }));
+                var split = await legacy.AnnotateAsync(chunk, new Dictionary<string, object?> { ["responseDetail"] = "full" });
+                legacyCalls++;
+                Assert.False(split.IsError == true, Text(split));
+                legacyOutputBytes += McpResultAdapter.MeasureBytes(split);
+            }
+        }
+        Assert.Equal(20, ReadLabelCount());
+
+        ResetSchema();
+        await using var receipt = await Fixture.CreateAsync(requestScope: false, maxResultBytes: 4096);
+        Seed(receipt.Process.MutationSessionKey, 20, "snapshot");
+        var receiptResponse = await receipt.AnnotateAsync(items, new Dictionary<string, object?>());
+        Assert.False(receiptResponse.IsError == true, Text(receiptResponse));
+        var receiptInputBytes = receiptRequestBytes;
+        var receiptOutputBytes = McpResultAdapter.MeasureBytes(receiptResponse);
+        Assert.Equal(20, ReadLabelCount());
+
+        Console.WriteLine($"annotation workflow fixture (UTF-8 bytes, not model tokens): old full echo + rejection + split calls={legacyCalls}, input={legacyInputBytes}, output={legacyOutputBytes}, error={error}; receipt calls=1, input={receiptInputBytes}, output={receiptOutputBytes}");
+        Assert.True(legacyCalls > 1);
+        Assert.Single(new[] { receiptResponse });
+        Assert.True(legacyInputBytes > receiptInputBytes);
+        Assert.True(legacyOutputBytes > receiptOutputBytes);
     }
 
     [Theory]
@@ -312,6 +363,15 @@ public sealed class ServedAnnotationReceiptTests : IAsyncLifetime
             CREATE TABLE operation_annotations(operation_id INTEGER PRIMARY KEY, agent_label_initial TEXT, agent_label TEXT, agent_keep INTEGER, owner_starred INTEGER NOT NULL DEFAULT 0, owner_note TEXT, updated_at TEXT NOT NULL);
             """;
         command.ExecuteNonQuery();
+    }
+
+    private void ResetSchema()
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DROP TABLE operation_annotations; DROP TABLE operation_agent_links; DROP TABLE agent_conversations; DROP TABLE operations; DROP TABLE sessions;";
+        command.ExecuteNonQuery();
+        EnsureSchema();
     }
 
     private sealed class Fixture : IAsyncDisposable

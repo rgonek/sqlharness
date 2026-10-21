@@ -692,7 +692,7 @@ public static class McpToolCatalog
     public const string PlanDescription = "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only. Clipped nodes report omittedChildCount and omittedSubtreeCount.";
     public const string RepetitionDescription = "Measured repetition for section=plan; default is the identified last measured run. A run without a saved plan reports missing evidence, never an earlier plan.";
     private const string AnnotationToolName = "sqlharness_annotate";
-    private const string AnnotationToolDescription = "Apply an optional plain-text label and keep flag to one to twenty eligible journaled operations by operationRef. responseDetail defaults to receipt (operationRef, status, tool, keep; no label); full returns resulting labels. maxResultBytes is capped by the process limit. Unknown, expired, foreign, and out-of-scope references share one per-item result. An oversized full response rolls back the batch. The call is journaled without an operationRef.";
+    private const string AnnotationToolDescription = "Apply an optional plain-text label and keep flag to one to twenty eligible journaled operations by operationRef. responseDetail defaults to receipt (operationRef, status, tool, keep; no label); pass responseDetail 'full' for resulting labels. maxResultBytes is capped by the process limit. Unknown, expired, foreign, and out-of-scope references share one per-item result. An oversized full response rolls back the batch; use receipt at the operator ceiling. The call is journaled without an operationRef.";
 
     public static readonly IReadOnlyList<string> ToolNames =
     [
