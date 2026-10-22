@@ -1,0 +1,2 @@
+Original immutable Plan 097 implementation base, recorded before edits:
+898f8b20f40246b3d0ff5263c5969ed4e2130b12

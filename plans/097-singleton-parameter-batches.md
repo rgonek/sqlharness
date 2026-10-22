@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IMPLEMENTED on branch `plan-097`; task reviews and whole-branch review approved subject to controller's final evidence check. Windows gate passed on product revision `6d658da`; documentation/evidence follow-up and scoped re-review are in progress. No integration or push. Planned at `32adaa7`, 2026-10-20.
+- IMPLEMENTED on branch `plan-097`; task reviews and whole-branch review approved. The original-base format check exposed inherited formatting across the full Plan 096/097 diff; formatting is corrected on `aea93d6`, and the final Windows gate passed; final scoped documentation re-review is pending. No integration or push. Planned at `32adaa7`, 2026-10-20.
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: Existing 083 parameter semantics must be present. Execute after 096 to avoid concurrent CLI/parser edits; 096 is scheduling coordination, not a semantic predecessor.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -81,6 +81,6 @@ Report a concrete design blocker if the live interfaces invalidate the Fix contr
 
 - [x] All task-specific regressions below pass and each task has spec/quality review.
 - [x] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
-- [x] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
+- [ ] Direct branch formatting and final Windows `just verify` exit 0 on the corrected full branch; final scoped whole-branch re-review is approved.
 - [x] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
 - [x] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.

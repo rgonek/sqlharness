@@ -1,0 +1,5 @@
+Task 3 starting revision after the authorized Plan 096 merge:
+0b9c2e2c7304cd78e78523d87a19b3d953901546
+
+This is distinct from the immutable Plan 097 implementation base:
+898f8b20f40246b3d0ff5263c5969ed4e2130b12

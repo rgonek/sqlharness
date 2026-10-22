@@ -1,0 +1,14 @@
+Test run for D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.29]   Discovering: SqlHarness.Tests
+[xUnit.net 00:00:01.36]   Discovered:  SqlHarness.Tests
+[xUnit.net 00:00:01.41]   Starting:    SqlHarness.Tests
+[xUnit.net 00:00:01.98]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.PidPublicationError_PreservesOriginalWhenMarkerWriteFails [506 ms]
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 2,7898 Seconds
+Direct process exit code: 0
