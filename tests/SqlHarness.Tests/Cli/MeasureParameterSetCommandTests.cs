@@ -117,7 +117,7 @@ public sealed class MeasureParameterSetCommandTests
     }
 
     [Fact]
-    public async Task Measure_reads_large_typed_fixed_and_set_files_with_the_shared_parser_values()
+    public async Task Measure_reads_large_typed_fixed_and_set_files_matching_inline_typed_values()
     {
         var fixedJson = LargeFixedParametersJson();
         var setJson = ParameterSetFileReaderTests.LargeTypedParameterSetJson();
@@ -125,7 +125,12 @@ public sealed class MeasureParameterSetCommandTests
         Assert.True(Encoding.UTF8.GetByteCount(setJson) > 64 * 1024);
         using var fixedFile = TempJson(fixedJson);
         using var first = TempJson(setJson);
-        using var second = TempJson(setJson.Replace("large-typed-set", "large-typed-set-copy", StringComparison.Ordinal));
+        var secondJson = setJson.Replace("large-typed-set", "large-typed-set-copy", StringComparison.Ordinal);
+        using var second = TempJson(secondJson);
+        var inlineOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var inlineFixed = JsonSerializer.Deserialize<InlineFixedParameterFile>(fixedJson, inlineOptions)!;
+        var inlineFirst = JsonSerializer.Deserialize<InlineParameterSetFile>(setJson, inlineOptions)!;
+        var inlineSecond = JsonSerializer.Deserialize<InlineParameterSetFile>(secondJson, inlineOptions)!;
         var module = new FakeModule();
 
         var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync([
@@ -137,6 +142,9 @@ public sealed class MeasureParameterSetCommandTests
         var operation = Assert.IsType<SqlHarnessMeasureOperation>(Assert.Single(module.Operations));
         var fixedParameter = Assert.Single(operation.TypedParameters!);
         var sets = operation.ParameterSets!;
+        AssertTypedParametersEqual(inlineFixed.Parameters, operation.TypedParameters!);
+        AssertTypedParametersEqual(inlineFirst.Parameters, sets[0].TypedParameters!);
+        AssertTypedParametersEqual(inlineSecond.Parameters, sets[1].TypedParameters!);
         var firstParameter = Assert.Single(sets[0].TypedParameters!);
         var secondParameter = Assert.Single(sets[1].TypedParameters!);
         Assert.Equal("list", fixedParameter.Kind);
@@ -492,6 +500,32 @@ public sealed class MeasureParameterSetCommandTests
             new { name = "Ids", type = "int", kind = "list", values = Enumerable.Range(0, 5000).Select(index => $"item-{index:D6}-abcdefghij") },
         },
     });
+
+    private static void AssertTypedParametersEqual(
+        IReadOnlyList<SqlHarnessParameterInput> expected,
+        IReadOnlyList<SqlHarnessParameterInput> actual)
+    {
+        Assert.Equal(expected.Count, actual.Count);
+        for (var index = 0; index < expected.Count; index++)
+        {
+            Assert.Equal(expected[index].Name, actual[index].Name);
+            Assert.Equal(expected[index].Type, actual[index].Type);
+            Assert.Equal(expected[index].Value, actual[index].Value);
+            Assert.Equal(expected[index].Kind, actual[index].Kind);
+            Assert.Equal(expected[index].SourceSql, actual[index].SourceSql);
+            var expectedRows = expected[index].Rows;
+            var actualRows = actual[index].Rows;
+            Assert.Equal(expectedRows?.Count, actualRows?.Count);
+            if (expectedRows is not null && actualRows is not null)
+                for (var row = 0; row < expectedRows.Count; row++)
+                    Assert.Equal(expectedRows[row], actualRows[row]);
+            Assert.Equal(expected[index].Values, actual[index].Values);
+        }
+    }
+
+    private sealed record InlineFixedParameterFile(SqlHarnessParameterInput[] Parameters);
+
+    private sealed record InlineParameterSetFile(string Name, SqlHarnessParameterInput[] Parameters);
 
     private static byte[] SizedJson(int byteCount, bool fixedParameters = false)
     {

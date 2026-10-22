@@ -13,9 +13,11 @@ public sealed class ParameterInputFileReaderTests
         var json = LargeTypedParametersJson();
         Assert.True(Encoding.UTF8.GetByteCount(json) > 64 * 1024);
         using var file = TempJson(json);
+        var inline = JsonSerializer.Deserialize<InlineFixedParameterFile>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
 
         var actual = await ParameterInputFileReader.ReadAsync(file.Path, CancellationToken.None);
 
+        AssertTypedParametersEqual(inline.Parameters, actual);
         Assert.Equal(["tvp", "list"], actual.Select(parameter => parameter.Kind));
         Assert.Equal(2500, actual[0].Rows!.Count);
         Assert.Equal(5000, actual[1].Values!.Count);
@@ -56,6 +58,30 @@ public sealed class ParameterInputFileReaderTests
             },
         });
     }
+
+    private static void AssertTypedParametersEqual(
+        IReadOnlyList<SqlHarnessParameterInput> expected,
+        IReadOnlyList<SqlHarnessParameterInput> actual)
+    {
+        Assert.Equal(expected.Count, actual.Count);
+        for (var index = 0; index < expected.Count; index++)
+        {
+            Assert.Equal(expected[index].Name, actual[index].Name);
+            Assert.Equal(expected[index].Type, actual[index].Type);
+            Assert.Equal(expected[index].Value, actual[index].Value);
+            Assert.Equal(expected[index].Kind, actual[index].Kind);
+            Assert.Equal(expected[index].SourceSql, actual[index].SourceSql);
+            var expectedRows = expected[index].Rows;
+            var actualRows = actual[index].Rows;
+            Assert.Equal(expectedRows?.Count, actualRows?.Count);
+            if (expectedRows is not null && actualRows is not null)
+                for (var row = 0; row < expectedRows.Count; row++)
+                    Assert.Equal(expectedRows[row], actualRows[row]);
+            Assert.Equal(expected[index].Values, actual[index].Values);
+        }
+    }
+
+    private sealed record InlineFixedParameterFile(SqlHarnessParameterInput[] Parameters);
 
     private static byte[] SizedJson(int byteCount)
     {

@@ -93,6 +93,28 @@ public sealed class McpInputReaderTests : IDisposable
         });
     }
 
+    private static void AssertTypedParametersEqual(
+        IReadOnlyList<SqlHarnessParameterInput> expected,
+        IReadOnlyList<SqlHarnessParameterInput> actual)
+    {
+        Assert.Equal(expected.Count, actual.Count);
+        for (var index = 0; index < expected.Count; index++)
+        {
+            Assert.Equal(expected[index].Name, actual[index].Name);
+            Assert.Equal(expected[index].Type, actual[index].Type);
+            Assert.Equal(expected[index].Value, actual[index].Value);
+            Assert.Equal(expected[index].Kind, actual[index].Kind);
+            Assert.Equal(expected[index].SourceSql, actual[index].SourceSql);
+            var expectedRows = expected[index].Rows;
+            var actualRows = actual[index].Rows;
+            Assert.Equal(expectedRows?.Count, actualRows?.Count);
+            if (expectedRows is not null && actualRows is not null)
+                for (var row = 0; row < expectedRows.Count; row++)
+                    Assert.Equal(expectedRows[row], actualRows[row]);
+            Assert.Equal(expected[index].Values, actual[index].Values);
+        }
+    }
+
     private McpScope ScopeWithoutRoots() => McpScope.Create(
         new McpServerOptions
         {
@@ -415,10 +437,13 @@ public sealed class McpInputReaderTests : IDisposable
         var json = LargeTypedParameterSetJson();
         Assert.True(Encoding.UTF8.GetByteCount(json) > 64 * 1024);
         var path = WriteFile("large-typed.sqljson", json);
+        var inline = JsonSerializer.Deserialize<McpParameterSetArgument>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        var inlineTyped = McpOperationMapper.MapParameters(inline.Parameters);
 
         var actual = Assert.Single(await McpInputReader.ReadParameterSetsAsync([path], _scope, CancellationToken.None));
         var parameter = Assert.Single(actual.TypedParameters!);
         Assert.Equal("large-typed-set", actual.Name);
+        AssertTypedParametersEqual(inlineTyped, actual.TypedParameters!);
         Assert.Equal("list", parameter.Kind);
         Assert.Equal(5000, parameter.Values!.Count);
         Assert.Equal(["item-000000-abcdefghij", "item-000001-abcdefghij"], parameter.Values.Take(2));
