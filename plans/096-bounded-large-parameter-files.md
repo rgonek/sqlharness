@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IMPLEMENTED on `plan-096`; Tasks 1–3 and whole-branch review findings are addressed. Final scoped re-review is pending. Implementation base `898f8b20f40246b3d0ff5263c5969ed4e2130b12`; see [verification evidence](096-verification-evidence.md).
+- IMPLEMENTED on `plan-096`; all task, whole-branch and final scoped reviews are approved. The branch awaits separate integration authorization; it is not merged or pushed. Implementation base `898f8b20f40246b3d0ff5263c5969ed4e2130b12`; see [verification evidence](096-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: 083 TVP/list implementation is merged. Coordinate CLI/parser edits with 097; no dependency on output-budget plans.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -82,8 +82,8 @@ Report a concrete design blocker if the live interfaces invalidate the Fix contr
 
 ## Done criteria
 
-- [ ] All task-specific regressions below pass and each task has spec/quality review.
-- [ ] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
-- [ ] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
-- [ ] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
-- [ ] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.
+- [x] All task-specific regressions below pass and each task has spec/quality review.
+- [x] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
+- [x] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch and scoped reviews are approved.
+- [x] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
+- [x] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.

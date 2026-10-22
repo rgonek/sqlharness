@@ -6,7 +6,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
-| [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | IMPLEMENTED on `plan-096`; Tasks 1–3 and whole-review findings addressed; final scoped re-review pending ([evidence](096-verification-evidence.md)) |
+| [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | IMPLEMENTED; all task, whole-branch and final scoped reviews approved; awaiting separate integration authorization; not merged or pushed ([evidence](096-verification-evidence.md)) |
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 

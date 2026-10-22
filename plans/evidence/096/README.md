@@ -1,6 +1,6 @@
 # Plan 096 archived evidence
 
-This directory holds raw, tracked verification output for Plan 096. SDD briefs, reports and review packages remain in the ignored `.superpowers/sdd/096-bounded-large-parameter-files` workspace.
+This directory holds tracked verification output and the final durable whole-branch review record for Plan 096. SDD briefs, implementation reports and the working ledger remain in the ignored `.superpowers/sdd/096-bounded-large-parameter-files` workspace.
 
 - `task-0-baseline.log`: pre-change baseline.
 - `task-1-red-*.log` and `task-1-fix1-*.log`: meaningful regression red and green runs.
@@ -14,3 +14,4 @@ This directory holds raw, tracked verification output for Plan 096. SDD briefs, 
 - `final-fix-format.log` / `.exit`, `final-fix-build.log`, `final-fix-ui-check.log`, and `final-fix-*-tests.log`: final format check and Windows gate stage output for product revision `478d2d2`.
 - `final-fix-verify-summary.log` / `.exit`: final Windows gate command, tested product revision/tree, stage counts and direct exit.
 - `final-fix-revision.txt` and `final-fix-tree.txt`: exact product revision and tree checked by the final gate.
+- `whole-review-b9ea0fd.md` and `whole-rereview-752a653.md`: original whole-branch review and approved final scoped re-review. The review ledger and all implementation-time rulings are recorded in `plans/096-verification-evidence.md`.

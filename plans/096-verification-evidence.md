@@ -2,7 +2,7 @@
 
 Implementation base: `898f8b20f40246b3d0ff5263c5969ed4e2130b12` (saved before implementation/Task 1; never redefined).
 
-Product/test revision for the initial gate: `2b3585e7e4fe469e3bd1f1baa71ba5b5705ad1d0`; tree: `3126e5ff0811bfcebdf7e7989dd3630a8dc66298` (`feat(096)` plus the catalog-budget fix). After the final review fixes, product/test revision `478d2d227bf77c000eb9aab14cb5eaccce934c69`, tree `d30b1915a7c896a90777e040f8870712b8471f7e`, passed the final Windows gate. Task reviews and the whole-branch review findings are addressed; final scoped re-review is pending. Later changes in this commit will be documentation and evidence only.
+Product/test revision for the initial gate: `2b3585e7e4fe469e3bd1f1baa71ba5b5705ad1d0`; tree: `3126e5ff0811bfcebdf7e7989dd3630a8dc66298` (`feat(096)` plus the catalog-budget fix). After the final review fixes, product/test revision `478d2d227bf77c000eb9aab14cb5eaccce934c69`, tree `d30b1915a7c896a90777e040f8870712b8471f7e`, passed the final Windows gate. All task, whole-branch and final scoped reviews are approved. The branch awaits separate integration authorization; it is not merged or pushed. Later changes after the tested product commit are documentation and archived review evidence only.
 
 ## Offline large-file workflow
 
@@ -39,6 +39,32 @@ The reported materialization ceiling remains 33,554,432 bytes (32 MiB), the exis
 ## Accepted follow-up
 
 The materialization-bound test at `tests/SqlHarness.Tests/ParameterInputFileReaderTests.cs` admits file bytes and calls `ParameterSetResolver.ValidateInputs` directly. The current `SqlHarnessModule` validates typed inputs before session opening, and existing CLI/MCP aggregate admission tests assert no dispatch/session on raw-budget rejection. Keep a concrete follow-up to exercise this materialization failure through the full `SqlHarnessModule` path with a fail-on-open session factory, asserting the materialization error occurs with zero factory opens. This accepted Minor was not expanded into the final help-test wave.
+
+## Review record
+
+Review model assignments were gpt-6-luna xhigh for task reviews and gpt-6-sol low for the whole-branch and final scoped reviews. The durable review texts are archived as [whole-branch review at b9ea0fd](evidence/096/whole-review-b9ea0fd.md) and [final scoped re-review at 752a653](evidence/096/whole-rereview-752a653.md).
+
+| Review | Reviewed range/head | Verdict |
+|---|---|---|
+| Task 1 initial review | `898f8b2..9351ec5` | Needs fixes: add full typed file-to-inline parity assertions. |
+| Task 1 fix-round re-review | `9351ec5..3a9745f` | Approved: parity covers fixed, CLI set and MCP set file paths. |
+| Task 2 task review | `3a9745f..4dceb9c` | Approved; accepted Minor remains for the full-module materialization failure with an unopened session factory. |
+| Task 3 initial review | `4dceb9c..9458fc9` | Needs fixes: README still published 64 KiB and CLI materialization capability path was ambiguous. |
+| Task 3 fix-round re-review | `9458fc9..b9ea0fd` | Approved: both documentation findings addressed, no new breakage. |
+| Whole-branch review | `898f8b20f40246b3d0ff5263c5969ed4e2130b12..b9ea0fd` | With fixes: correct served CLI help and completion bookkeeping; retain materialization Minor as follow-up. |
+| Final scoped re-review | `b9ea0fd..752a653` (product/test commit `478d2d2`, tree `d30b1915a7c896a90777e040f8870712b8471f7e`) | **Approved; Ready to merge: Yes, subject to separate integration authorization.** No new breakage. |
+
+The final scoped review examined the original findings and fix diff only; it did not rerun suites. The product gate and direct formatter evidence above apply to the reviewed product tree.
+
+## Preserved scope rulings
+
+These implementation-time rulings remain part of the decision record:
+
+> Stream-specific coverage requiring the new admission API is completed in Task 2; Task 1 freezes existing public-path RED regressions — avoids uncompilable tests before the API exists — cost if wrong: task-boundary rework only.
+
+> Leave historical 64 KiB documents and separate ArtifactReader manifest policy outside this change; Linux/live/paid-agent behavior remains unverified — final reviewer declined these scopes and plan excludes them — cost if wrong: separate documentation/policy follow-up, no claimed coverage.
+
+> Defer the full module-path materialization/session-open regression as accepted Minor — current pre-session validation was inspected and aggregate full-path regressions pass — cost if wrong: weaker future regression detection; follow-up must exercise fail-on-open session factory after admitted typed file exceeds materialization limits.
 
 ## Evidence limits and archive
 
