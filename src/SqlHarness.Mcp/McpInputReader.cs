@@ -75,17 +75,19 @@ public static partial class McpInputReader
 
     /// <summary>
     /// Reads parameter-set files through the guarded reader and parses every
-    /// file with the shared Core parser (64 KiB, optional BOM/comments/
+    /// file with the shared Core parser (16 MiB, optional BOM/comments/
     /// trailing commas, only name and parameters). Only .sqljson files are
     /// admitted, and values never leave this path into reports.
     /// </summary>
     public static async Task<IReadOnlyList<SqlHarnessParameterSetInput>> ReadParameterSetsAsync(
         IReadOnlyList<string> paths,
         McpScope scope,
-        CancellationToken ct)
+        CancellationToken ct,
+        ParameterFileIngressBudget? ingressBudget = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(scope);
+        ingressBudget ??= new ParameterFileIngressBudget();
         var sets = new List<SqlHarnessParameterSetInput>(paths.Count);
         foreach (var path in paths)
         {
@@ -95,11 +97,16 @@ public static partial class McpInputReader
             byte[] bytes;
             try
             {
-                bytes = await ReadBytesFileAsync(path, scope.InputRoots, McpLimits.MaxParameterSetBytes, ct, kind: "parameter set file");
+                bytes = await ReadBytesFileAsync(path, scope.InputRoots, McpLimits.MaxParameterSetBytes, ct,
+                    kind: "parameter set file", ingressBudget: ingressBudget);
             }
             catch (McpInputException exception)
             {
                 throw new McpInputException($"Parameter set file '{EchoPath(path)}' could not be read: {exception.Message}");
+            }
+            catch (ParameterSetFileException exception)
+            {
+                throw new McpInputException(exception.Message);
             }
             try
             {
@@ -135,8 +142,9 @@ public static partial class McpInputReader
         IReadOnlyList<string> roots,
         long maxBytes,
         CancellationToken ct,
-        string kind = "input") =>
-        ReadFileAsync(path, roots, maxBytes, ct, bytes => bytes, kind);
+        string kind = "input",
+        ParameterFileIngressBudget? ingressBudget = null) =>
+        ReadFileAsync(path, roots, maxBytes, ct, bytes => bytes, kind, ingressBudget);
 
     private static async Task<T> ReadFileAsync<T>(
         string path,
@@ -144,7 +152,8 @@ public static partial class McpInputReader
         long maxBytes,
         CancellationToken ct,
         Func<byte[], T> decode,
-        string kind)
+        string kind,
+        ParameterFileIngressBudget? ingressBudget = null)
     {
         ArgumentNullException.ThrowIfNull(roots);
         if (roots.Count == 0)
@@ -176,7 +185,7 @@ public static partial class McpInputReader
         FileStream stream;
         try
         {
-            if (new FileInfo(full).Length > maxBytes)
+            if (ingressBudget is null && new FileInfo(full).Length > maxBytes)
                 throw new McpInputException(TooLargeMessage(kind, maxBytes));
             stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
         }
@@ -191,7 +200,11 @@ public static partial class McpInputReader
 
         await using (stream)
         {
-            var bytes = await ReadBoundedAsync(stream, maxBytes, ct, kind);
+            byte[] bytes;
+            if (ingressBudget is null)
+                bytes = await ReadBoundedAsync(stream, maxBytes, ct, kind);
+            else
+                bytes = await ingressBudget.ReadAsync(stream, EchoPath(path), ct);
             try
             {
                 return decode(bytes);
@@ -233,7 +246,7 @@ public static partial class McpInputReader
 
     private static string TooLargeMessage(string kind, long maxBytes) => kind switch
     {
-        "parameter set file" => "Parameter set file exceeds the 64 KiB limit.",
+        "parameter set file" => "Parameter set file exceeds the 16 MiB raw parameter-file limit.",
         "plan document" => "The plan document exceeds the 16 MiB limit.",
         "SQL input" => "SQL input exceeds the 16 MiB limit.",
         _ => "The input file exceeds the read limit.",

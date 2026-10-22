@@ -45,6 +45,66 @@ public sealed class ParameterInputFileReaderTests
         Assert.Contains(over.Path, exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Budget_reads_growing_stream_with_a_sentinel_and_preserves_cancellation()
+    {
+        var budget = new ParameterFileIngressBudget();
+        var exception = await Assert.ThrowsAsync<ParameterSetFileException>(() =>
+            budget.ReadAsync(new GeneratedStream(int.MaxValue), "growing.sqljson", CancellationToken.None));
+        Assert.Contains("16 MiB", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, budget.UsedBytes);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ParameterFileIngressBudget().ReadAsync(new GeneratedStream(int.MaxValue), "cancelled.sqljson", cts.Token));
+    }
+
+    [Fact]
+    public async Task Budget_counts_repeated_occurrences_and_allows_exact_aggregate_boundary()
+    {
+        var budget = new ParameterFileIngressBudget();
+        var exact = new GeneratedStream(ParameterFileIngressBudget.MaximumFileBytes);
+        Assert.Equal(ParameterFileIngressBudget.MaximumFileBytes,
+            (await budget.ReadAsync(exact, "same.sqljson", CancellationToken.None)).Length);
+        Assert.Equal(ParameterFileIngressBudget.MaximumFileBytes,
+            (await budget.ReadAsync(new GeneratedStream(ParameterFileIngressBudget.MaximumFileBytes), "same.sqljson", CancellationToken.None)).Length);
+        Assert.Equal(ParameterFileIngressBudget.MaximumTotalBytes, budget.UsedBytes);
+
+        var exception = await Assert.ThrowsAsync<ParameterSetFileException>(() =>
+            budget.ReadAsync(new GeneratedStream(1), "third.sqljson", CancellationToken.None));
+        Assert.Contains("32 MiB", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Parameter_set_reader_charges_external_bytes_once_including_typed_parser_wrappers()
+    {
+        const string json = "{\"name\":\"typed\",\"parameters\":[{\"name\":\"Ids\",\"type\":\"int\",\"kind\":\"list\",\"values\":[\"1\",\"2\"]}]}";
+        using var file = TempJson(json);
+        var budget = new ParameterFileIngressBudget();
+
+        var set = await ParameterSetFileReader.ReadAsync(file.Path, budget, CancellationToken.None);
+
+        Assert.Equal("typed", set.Name);
+        Assert.Equal(Encoding.UTF8.GetByteCount(json), budget.UsedBytes);
+    }
+
+    [Fact]
+    public async Task Admitted_file_still_obeys_the_existing_combined_materialization_limit()
+    {
+        var values = Enumerable.Repeat("x", 100_001);
+        using var file = TempJson(JsonSerializer.Serialize(new
+        {
+            parameters = new[] { new { name = "Ids", type = "int", kind = "list", values } },
+        }));
+
+        var parameters = await ParameterInputFileReader.ReadAsync(file.Path, CancellationToken.None);
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ParameterSetResolver.ValidateInputs(parameters, SqlEngine.SqlServer));
+
+        Assert.Contains("100000", exception.Message, StringComparison.Ordinal);
+    }
+
     private static string LargeTypedParametersJson()
     {
         var rows = Enumerable.Range(0, 2500).Select(index => new[] { $"{index:D8}", $"row-{index:D8}-abcdefghij" });
@@ -109,6 +169,29 @@ public sealed class ParameterInputFileReaderTests
         {
             if (File.Exists(Path))
                 File.Delete(Path);
+        }
+    }
+
+    private sealed class GeneratedStream(int remaining) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var count = Math.Min(buffer.Length, remaining);
+            buffer.Span[..count].Fill((byte)' ');
+            remaining -= count;
+            return ValueTask.FromResult(count);
         }
     }
 }

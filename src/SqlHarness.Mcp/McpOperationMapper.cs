@@ -684,11 +684,12 @@ public static partial class McpOperationMapper
     }
 
     private static async Task<IReadOnlyList<SqlHarnessParameterSetInput>?> ReadParameterSetsOrNullAsync(
-        IReadOnlyList<string>? paths, McpScope scope, CancellationToken ct)
+        IReadOnlyList<string>? paths, McpScope scope, CancellationToken ct,
+        ParameterFileIngressBudget ingressBudget)
     {
         if (paths is null)
             return null;
-        return await McpInputReader.ReadParameterSetsAsync(paths, scope, ct);
+        return await McpInputReader.ReadParameterSetsAsync(paths, scope, ct, ingressBudget);
     }
 
     private static void ValidateParameterSetChoices(
@@ -713,6 +714,7 @@ public static partial class McpOperationMapper
         McpScope scope,
         CancellationToken ct)
     {
+        var ingressBudget = new ParameterFileIngressBudget();
         if (parameterSets is not null)
         {
             var mapped = new SqlHarnessParameterSetInput[parameterSets.Count];
@@ -729,7 +731,7 @@ public static partial class McpOperationMapper
             return mapped;
         }
 
-        return await ReadParameterSetsOrNullAsync(parameterSetFiles, scope, ct);
+        return await ReadParameterSetsOrNullAsync(parameterSetFiles, scope, ct, ingressBudget);
     }
 
     private static int RequireTimeout(int? timeout, int defaultTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds)

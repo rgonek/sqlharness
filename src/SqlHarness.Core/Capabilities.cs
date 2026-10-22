@@ -199,6 +199,11 @@ public static class SqlHarnessCapabilitiesProvider
             ["repeat"] = new { min = OperationLimits.RepeatMin, max = OperationLimits.RepeatMax },
             ["nonScalarParameters"] = ParameterSetResolver.MaximumNonScalarParameters,
             ["combinedParameterRowsAndValues"] = ParameterSetResolver.MaximumCombinedRowsAndValues,
+            ["parameterFileIngress"] = new
+            {
+                maxFileBytes = ParameterFileIngressBudget.MaximumFileBytes,
+                maxTotalBytes = ParameterFileIngressBudget.MaximumTotalBytes,
+            },
             ["materializedParameterBytes"] = ParameterSetResolver.MaximumMaterializedBytes,
             ["finalCommandParameters"] = ParameterSetResolver.MaximumCommandParameters,
             ["targetIdentity"] = new { server = targetServer, database = "must match the resolved database (ordinal); mismatch is exit 4" },

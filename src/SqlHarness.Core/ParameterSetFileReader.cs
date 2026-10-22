@@ -8,7 +8,7 @@ public sealed class ParameterSetFileException(string message) : Exception(messag
 
 public static partial class ParameterSetFileReader
 {
-    public const int MaximumBytes = 65_536;
+    public const int MaximumBytes = ParameterFileIngressBudget.MaximumFileBytes;
 
     private const string UnableToReadReason = "could not be read";
 
@@ -20,12 +20,17 @@ public static partial class ParameterSetFileReader
     };
 
     public static async Task<SqlHarnessParameterSetInput> ReadAsync(string path, CancellationToken cancellationToken)
+        => await ReadAsync(path, new ParameterFileIngressBudget(), cancellationToken);
+
+    public static async Task<SqlHarnessParameterSetInput> ReadAsync(
+        string path, ParameterFileIngressBudget budget, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(budget);
         cancellationToken.ThrowIfCancellationRequested();
         byte[] bytes;
         try
         {
-            bytes = await ReadAtMostAsync(path, cancellationToken);
+            bytes = await ReadAtMostAsync(path, budget, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -58,13 +63,12 @@ public static partial class ParameterSetFileReader
         }
     }
 
-    private static async Task<byte[]> ReadAtMostAsync(string path, CancellationToken cancellationToken)
+    private static async Task<byte[]> ReadAtMostAsync(
+        string path, ParameterFileIngressBudget budget, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ParameterSetFileException(FileMessage(path, UnableToReadReason));
 
-        // One extra byte distinguishes a 64 KiB file from a larger one without reading the rest.
-        var buffer = new byte[MaximumBytes + 1];
         await using var stream = new FileStream(
             path,
             FileMode.Open,
@@ -72,23 +76,11 @@ public static partial class ParameterSetFileReader
             FileShare.Read,
             bufferSize: 8192,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
-        var total = 0;
-        while (total < buffer.Length)
-        {
-            var read = await stream.ReadAsync(buffer.AsMemory(total, buffer.Length - total), cancellationToken);
-            if (read == 0)
-                break;
-            total += read;
-        }
-
-        if (total > MaximumBytes)
-            throw new ParameterSetFileException(FileMessage(path, "exceeds the 64 KiB limit"));
-
-        return buffer[..total];
+        return await budget.ReadAsync(stream, path, cancellationToken);
     }
 
     /// <summary>
-    /// Parses already-read parameter-set bytes: at most 64 KiB, optional BOM,
+    /// Parses already-read parameter-set bytes: at most 16 MiB, optional BOM,
     /// comments, and trailing commas, with only name and parameters members. Shared
     /// by the CLI file reader and the MCP bounded input reader so both enforce
     /// the same contract without a second parser. Only
@@ -98,7 +90,7 @@ public static partial class ParameterSetFileReader
     {
         ArgumentNullException.ThrowIfNull(bytes);
         if (bytes.Length > MaximumBytes)
-            throw new ParameterSetFileException(FileMessage(path, "exceeds the 64 KiB limit"));
+            throw new ParameterSetFileException(FileMessage(path, "exceeds the 16 MiB raw parameter-file limit"));
 
         try
         {
