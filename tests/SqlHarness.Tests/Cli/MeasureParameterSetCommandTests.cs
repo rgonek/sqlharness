@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using SqlHarness.Cli;
 using SqlHarness.Cli.Commands;
@@ -17,6 +19,31 @@ public sealed class MeasureParameterSetCommandTests
     private readonly ITestOutputHelper _output;
 
     public MeasureParameterSetCommandTests(ITestOutputHelper output) => _output = output;
+
+    [Fact]
+    public async Task Measure_help_publishes_current_parameter_file_limits_and_types()
+    {
+        // Spectre help goes to the process console, not the injected command writer.
+        var cliAssembly = Path.Combine(AppContext.BaseDirectory, "sqlharness.dll");
+        using var process = Process.Start(new ProcessStartInfo("dotnet", $"\"{cliAssembly}\" measure --help")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        });
+
+        Assert.NotNull(process);
+        var standardOutput = await process.StandardOutput.ReadToEndAsync();
+        var standardError = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        Assert.True(process.ExitCode == 0, standardError);
+        var help = Regex.Replace(standardOutput, @"\s+", " ");
+        Assert.Contains("16 MiB per file", help, StringComparison.Ordinal);
+        Assert.Contains("32 MiB total raw bytes per call", help, StringComparison.Ordinal);
+        Assert.DoesNotContain("64 KiB", help, StringComparison.Ordinal);
+        Assert.DoesNotContain("table/list execution is not available yet", help, StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task Measure_dispatches_two_parameter_sets_in_user_order()
