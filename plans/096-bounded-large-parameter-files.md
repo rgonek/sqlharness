@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- IMPLEMENTED on `plan-096`; Task 3 review and whole-branch review pending. Implementation base `898f8b20f40246b3d0ff5263c5969ed4e2130b12`; see [verification evidence](096-verification-evidence.md).
+- IMPLEMENTED on `plan-096`; Tasks 1–3 and whole-branch review findings are addressed. Final scoped re-review is pending. Implementation base `898f8b20f40246b3d0ff5263c5969ed4e2130b12`; see [verification evidence](096-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: 083 TVP/list implementation is merged. Coordinate CLI/parser edits with 097; no dependency on output-budget plans.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -46,7 +46,7 @@ Docs: `docs/mcp/inputs.md`, `docs/mcp/tools.md`, `README.md`. Do not change targ
 
 - [x] Add an offline typed TVP/list input fixture above 64 KiB but below 16 MiB; assert CLI fixed-file/set-file paths and the existing MCP set-file path admit it with equivalent typed values to inline parsing. Do not invent a new MCP fixed-file argument. Use fake session factories; no DB calls.
 - [x] Test exactly the new limit and limit+1, a growing stream, cancellation, invalid UTF-8/JSON, duplicate fields, and unauthorized MCP paths.
-- [ ] Test combined files exceeding 32 MiB although each is valid; require rejection before a fake DB session opens. Assert fixed+sets share one allowance and nested parser wrappers are not charged twice.
+- [x] Test combined files exceeding 32 MiB although each is valid; require rejection before a fake DB session opens. Assert fixed+sets share one allowance and nested parser wrappers are not charged twice.
 - **Verify:** `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~ParameterSetFileReaderTests|FullyQualifiedName~ParameterInputFileReaderTests|FullyQualifiedName~MeasureParameterSetCommandTests"` and `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "FullyQualifiedName~McpInputReaderTests|FullyQualifiedName~McpParameterFileBudgetTests"` produce intended RED. Confirm at least one new accounting regression is selected, not merely existing passing tests.
 
 ### Task 2: Centralize admission and wire both command paths
@@ -58,8 +58,8 @@ Docs: `docs/mcp/inputs.md`, `docs/mcp/tools.md`, `README.md`. Do not change targ
 
 ### Task 3: Publish the separate ingress and execution bounds
 
-- [ ] Update all 64 KiB file claims on affected parameter surfaces, not unrelated SQL or frame limits. Check tool catalog still fits 32768 bytes.
-- [ ] Record a >64 KiB successful offline file workflow with no data echoed into output, raw byte counts, and that larger raw file admission is not larger allowed SQL materialization.
+- [x] Update all 64 KiB file claims on affected parameter surfaces, not unrelated SQL or frame limits. Check tool catalog still fits 32768 bytes.
+- [x] Record a >64 KiB successful offline file workflow with no data echoed into output, raw byte counts, and that larger raw file admission is not larger allowed SQL materialization.
 - **Verify:** `rg -n "64 KiB|64KiB|65536|65_536" src/SqlHarness.Core/ParameterInputFileReader.cs src/SqlHarness.Core/ParameterSetFileReader.cs src/SqlHarness.Mcp/McpLimits.cs docs/mcp/inputs.md` reviewed for remaining legitimate unrelated constants (exit 1 is normal if none remain); run Common verification.
 
 ## Maintenance notes

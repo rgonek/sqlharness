@@ -10,3 +10,7 @@ This directory holds raw, tracked verification output for Plan 096. SDD briefs, 
 - `task-3-catalog-budget.log`: served MCP catalog byte measurement.
 - `task-3-format-*.log` / `.exit`: format normalization and direct branch check outputs.
 - `task-3-just-verify-console.log`, `task-3-just-verify.exit`, and the `gate-*.log` files: final Windows gate output and stage logs.
+- `final-fix-help-red.log` / `final-fix-help-green.log` and matching `.exit` files: generated CLI help assertion before and after the contract fix.
+- `final-fix-format.log` / `.exit`, `final-fix-build.log`, `final-fix-ui-check.log`, and `final-fix-*-tests.log`: final format check and Windows gate stage output for product revision `478d2d2`.
+- `final-fix-verify-summary.log` / `.exit`: final Windows gate command, tested product revision/tree, stage counts and direct exit.
+- `final-fix-revision.txt` and `final-fix-tree.txt`: exact product revision and tree checked by the final gate.

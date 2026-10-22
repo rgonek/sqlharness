@@ -2,7 +2,7 @@
 
 Implementation base: `898f8b20f40246b3d0ff5263c5969ed4e2130b12` (saved before implementation/Task 1; never redefined).
 
-Product/test revision for the final gate: `2b3585e7e4fe469e3bd1f1baa71ba5b5705ad1d0`; tree: `3126e5ff0811bfcebdf7e7989dd3630a8dc66298` (`feat(096)` plus the catalog-budget fix). The gate checks the committed product tree; documentation and this evidence record are separate documentation commits. This is feature-branch evidence, pending Task 3 review and the independent whole-branch review.
+Product/test revision for the initial gate: `2b3585e7e4fe469e3bd1f1baa71ba5b5705ad1d0`; tree: `3126e5ff0811bfcebdf7e7989dd3630a8dc66298` (`feat(096)` plus the catalog-budget fix). After the final review fixes, product/test revision `478d2d227bf77c000eb9aab14cb5eaccce934c69`, tree `d30b1915a7c896a90777e040f8870712b8471f7e`, passed the final Windows gate. Task reviews and the whole-branch review findings are addressed; final scoped re-review is pending. Later changes in this commit will be documentation and evidence only.
 
 ## Offline large-file workflow
 
@@ -28,6 +28,17 @@ The reported materialization ceiling remains 33,554,432 bytes (32 MiB), the exis
 - Branch formatter fix: `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 898f8b20f40246b3d0ff5263c5969ed4e2130b12 -Fix`; exit 0.
 - Direct branch formatter check after code commits: `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 898f8b20f40246b3d0ff5263c5969ed4e2130b12`; exit 0, 14 changed C# files checked.
 - Final Windows gate: `just verify -LogDirectory D:/temp/sqlharness-plan096-verify`; exit 0, summary `verify: OK stages=5` in 10m37s. UI install, build (0 warnings/0 errors), UI check (64 files/372 tests), and test stages passed. Core tests: 4,631 passed/11 skipped; MCP tests: 501 passed/4 skipped. The gate's format stage reported skipped because all changed C# files were committed; the separate direct branch format check above passed across 14 changed files.
+
+## Final review fixes and verification
+
+- Generated CLI help regression: `Measure_help_publishes_current_parameter_file_limits_and_types` failed before the fix because `measure --help` lacked `16 MiB per file` and `32 MiB total raw bytes per call`; it passed after the description was corrected. The served `--param-set` contract now states both raw limits and table/list support. The existing large typed CLI fixture verifies list values are admitted.
+- Direct final formatter: `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 898f8b20f40246b3d0ff5263c5969ed4e2130b12`; exit 0, 14 C# files checked.
+- Final gate: `just verify -LogDirectory D:/temp/sqlharness-plan096-final-verify`; exit 0, `verify: OK stages=5` in 9m15s. Build: 0 warnings/0 errors. UI: 64 files and 372 tests passed. Core: 4,632 passed/11 skipped. MCP: 501 passed/4 skipped. The UI log includes the existing non-failing `DEP0190` Node warning.
+- The gate's exact committed product revision/tree and raw stage logs are archived under `plans/evidence/096/final-fix-*`. Its format stage skipped committed files; the separate direct branch check above is the formatting evidence.
+
+## Accepted follow-up
+
+The materialization-bound test at `tests/SqlHarness.Tests/ParameterInputFileReaderTests.cs` admits file bytes and calls `ParameterSetResolver.ValidateInputs` directly. The current `SqlHarnessModule` validates typed inputs before session opening, and existing CLI/MCP aggregate admission tests assert no dispatch/session on raw-budget rejection. Keep a concrete follow-up to exercise this materialization failure through the full `SqlHarnessModule` path with a fail-on-open session factory, asserting the materialization error occurs with zero factory opens. This accepted Minor was not expanded into the final help-test wave.
 
 ## Evidence limits and archive
 

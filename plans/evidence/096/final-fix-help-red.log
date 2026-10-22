@@ -1,0 +1,6 @@
+Command: dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter FullyQualifiedName~Measure_help_publishes_current_parameter_file_limits_and_types --no-restore
+Exit: 1
+[xUnit.net] Measure_help_publishes_current_parameter_file_limits_and_types [FAIL]
+Assert.Contains() Failure: Sub-string not found
+Not found: "16 MiB per file"
+The generated measure --help output lacked the current raw ingress contract before the description fix.
