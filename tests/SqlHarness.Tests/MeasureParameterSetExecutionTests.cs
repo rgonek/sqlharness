@@ -352,11 +352,16 @@ public sealed class MeasureParameterSetExecutionTests
     {
         const string subject = "orders-report";
         const string scope = "whole";
+        const string candidateSql = QuerySql + " -- candidate";
+        using var temp = new JournalTempDirectory();
+        var artifactRoot = Path.Combine(temp.Path, "artifacts");
+        Directory.CreateDirectory(artifactRoot);
+        var activityJournal = ActivityJournal.Open(temp.DatabasePath,
+            new JournalConfig { StoreSensitive = false }, TextWriter.Null, TimeProvider.System);
         var session = RecordingSession.Create(setCount: 1);
-        var writer = new CapturingWriter();
-        var journal = new StartCaptureJournal();
+        var writer = new CompareArtifactWriter(artifactRoot, () => DateTimeOffset.UnixEpoch);
         var operation = new SqlHarnessCompareMatrixOperation(
-            Target(), SetupSql, QuerySql, QuerySql, [], 30, 1, "")
+            Target(), SetupSql, QuerySql, candidateSql, [], 30, 1, "")
         {
             ParameterSets =
             [
@@ -367,7 +372,7 @@ public sealed class MeasureParameterSetExecutionTests
             ],
             Context = new CompareContext(subject, scope),
         };
-        var module = new JournalingModule(Module(session, writer: writer), () => journal,
+        var module = new JournalingModule(new SqlHarnessModule(session, writer, Profiles), () => activityJournal,
             () => JournalTestData.Session());
 
         var outcome = await module.ExecuteAsync(operation);
@@ -380,15 +385,38 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal([new BenchmarkParameterReport("@id", "int", null, null, null)], cell.SetParameters);
         Assert.True(cell.Compare.ResultsEquivalent);
         Assert.NotNull(cell.Compare.ArtifactDirectory);
-        Assert.Equal(1, writer.Writes);
-        Assert.Same(report, writer.Report);
+        var artifactDirectory = Assert.IsType<string>(cell.Compare.ArtifactDirectory);
+        Assert.True(File.Exists(Path.Combine(artifactDirectory, "report.json")));
+        var runsJson = File.ReadAllLines(Path.Combine(artifactDirectory, "runs.jsonl"));
+        Assert.Equal(2, runsJson.Length);
+        Assert.All(runsJson, line => Assert.Contains("\"parameterSet\":\"only\"", line, StringComparison.Ordinal));
+        using var matrixIndex = JsonDocument.Parse(File.ReadAllText(Path.Combine(artifactDirectory, "matrix-cells.json")));
+        var artifactCase = Assert.Single(matrixIndex.RootElement.GetProperty("cases").EnumerateArray().ToArray());
+        Assert.Equal(0, artifactCase.GetProperty("index").GetInt32());
+        Assert.Equal("only", artifactCase.GetProperty("setName").GetString());
+        Assert.True(artifactCase.GetProperty("artifactId").GetString()!.Length > 0);
         var runs = Assert.IsAssignableFrom<IReadOnlyList<CompareRunArtifact>>(outcome.BenchmarkRuns);
         Assert.Equal(["baseline", "candidate"], runs.Select(run => run.Variant));
         Assert.Equal([0], runs.Select(run => run.MatrixCell));
-        Assert.Equal(["only", "only"], writer.Runs.Select(run => run.ParameterSet));
+        Assert.Equal(["only", "only"], runs.Select(run => run.ParameterSet));
+        var baselineCommands = session.Commands.Where(command => command.Sql == QuerySql).ToArray();
+        var candidateCommands = session.Commands.Where(command => command.Sql == candidateSql).ToArray();
+        Assert.NotEmpty(baselineCommands);
+        Assert.NotEmpty(candidateCommands);
+        Assert.All(baselineCommands.Concat(candidateCommands), command =>
+            Assert.Equal(11, Assert.IsType<int>(Assert.Single(command.Parameters).Value)));
         Assert.Equal(1, session.ConnectionCount);
         Assert.Equal(1, session.SetupCount);
-        Assert.Equal(new CompareContext(subject, scope), journal.Start!.Context);
+        var journalRow = Assert.Single(JournalDb.Rows(temp.DatabasePath,
+            "SELECT compare_subject, compare_scope, conditions_json FROM operations"));
+        Assert.Equal(subject, journalRow["compare_subject"]);
+        Assert.Equal(scope, journalRow["compare_scope"]);
+        using var conditions = JsonDocument.Parse((string)journalRow["conditions_json"]!);
+        Assert.Matches("^[0-9A-F]{64}$", conditions.RootElement.GetProperty("fingerprint").GetString());
+        var reproducedCase = Assert.Single(conditions.RootElement.GetProperty("cases").EnumerateArray().ToArray());
+        Assert.Equal("0", reproducedCase.GetProperty("id").GetString());
+        Assert.Equal("only", reproducedCase.GetProperty("setName").GetString());
+        Assert.Matches("^[0-9A-F]{64}$", reproducedCase.GetProperty("measurementFingerprint").GetString());
     }
 
     [Fact]
@@ -1116,7 +1144,8 @@ public sealed class MeasureParameterSetExecutionTests
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
             }
 
-            if (!string.Equals(command.Sql, _querySql, StringComparison.Ordinal))
+            if (!string.Equals(command.Sql, _querySql, StringComparison.Ordinal)
+                && !string.Equals(command.Sql, _querySql + " -- candidate", StringComparison.Ordinal))
                 return Task.FromException<ISqlReader>(new InvalidOperationException("Unexpected SQL batch."));
 
             var number = _queryCount + 1;
