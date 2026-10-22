@@ -2,8 +2,8 @@ using System.Globalization;
 using System.Text.Json;
 
 using SqlHarness.Core;
-using SqlHarness.Tests.Journal;
 using SqlHarness.Core.Targets;
+using SqlHarness.Tests.Journal;
 
 namespace SqlHarness.Tests;
 
