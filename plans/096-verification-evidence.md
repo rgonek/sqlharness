@@ -2,7 +2,7 @@
 
 Implementation base: `898f8b20f40246b3d0ff5263c5969ed4e2130b12` (saved before implementation/Task 1; never redefined).
 
-Product/test revision for the initial gate: `2b3585e7e4fe469e3bd1f1baa71ba5b5705ad1d0`; tree: `3126e5ff0811bfcebdf7e7989dd3630a8dc66298` (`feat(096)` plus the catalog-budget fix). After the final review fixes, product/test revision `478d2d227bf77c000eb9aab14cb5eaccce934c69`, tree `d30b1915a7c896a90777e040f8870712b8471f7e`, passed the final Windows gate. All task, whole-branch and final scoped reviews are approved. The branch awaits separate integration authorization; it is not merged or pushed. Later changes after the tested product commit are documentation and archived review evidence only.
+Product/test revision for the initial gate: `2b3585e7e4fe469e3bd1f1baa71ba5b5705ad1d0`; tree: `3126e5ff0811bfcebdf7e7989dd3630a8dc66298` (`feat(096)` plus the catalog-budget fix). After the final review fixes, product/test revision `478d2d227bf77c000eb9aab14cb5eaccce934c69`, tree `d30b1915a7c896a90777e040f8870712b8471f7e`, passed the final Windows gate. All task, whole-branch and final scoped reviews are approved. Locally fast-forwarded into `main` at `d4e018c` with the verified product/test code unchanged; not pushed. Later changes after the tested product commit are documentation and archived review evidence only.
 
 ## Offline large-file workflow
 
@@ -71,3 +71,7 @@ These implementation-time rulings remain part of the decision record:
 All measurements above are deterministic local fixtures. There was no live database, actual-agent run, paid provider call, or Linux gate. UTF-8 byte counts and test call counts are not measured model tokens.
 
 Tracked raw test and gate logs, including prior task RED/GREEN evidence, are in [`plans/evidence/096`](evidence/096/README.md). The SDD workspace briefs and reports remain scratch files and are not tracked.
+
+## Local integration
+
+Owner authorized local merge on 2026-10-22. Fast-forward from main 898f8b2 to d4e018c succeeded. Comparing src, tests and scripts against verified product 478d2d2 returned exit 0 (no differences); no redundant gate was run. The pre-existing uncommitted README edit was restored byte-for-byte and remains outside the integration commit; a named stash and temporary backup retain it. No push occurred.

@@ -6,7 +6,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
-| [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | IMPLEMENTED; all task, whole-branch and final scoped reviews approved; awaiting separate integration authorization; not merged or pushed ([evidence](096-verification-evidence.md)) |
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 
@@ -41,6 +40,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | DONE; locally integrated into `main` at `d4e018c`; all reviews approved; verified product/test code unchanged; not pushed ([evidence](096-verification-evidence.md)) |
 | [101](101-dashboard-operation-annotations-setting.md) | Dashboard agent operation annotation toggle with atomic journal saves and restart guidance | DONE; locally integrated into `main` at `61ca7a4`; reviewed and Windows-verified product `13fb02e` unchanged; not pushed ([evidence](101-verification-evidence.md)) |
 | [092](092-default-execution-timeout-setting.md) | Configurable default SQL execution timeout in config.json and Dashboard Settings; fallback for CLI commands and MCP tools | DONE; locally integrated into `main` at `dbdb3e5`; Windows-verified product `b7b7b70` unchanged; all reviews approved; one non-blocking parameter-description Minor deferred; not pushed ([evidence](092-verification-evidence.md)) |
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |

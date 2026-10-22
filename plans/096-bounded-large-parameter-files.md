@@ -1,12 +1,12 @@
 # Plan 096: Make files a practical bounded path for large typed parameters
 
-> **Executor:** use staged implementation, task review and whole-branch review. The branch implementation is authorized; merging, pushing, paid agent trials and live database access remain out of scope.
+> **Executor:** use staged implementation, task review and whole-branch review. Implementation and local integration are authorized; pushing, paid agent trials and live database access remain out of scope.
 >
 > **Drift check first:** `git diff --stat 32adaa7..HEAD -- src/SqlHarness.Core/ParameterInputFileReader.cs src/SqlHarness.Core/ParameterSetFileReader.cs src/SqlHarness.Core/ParameterSetResolver.cs src/SqlHarness.Cli/Commands/SqlHarnessCommands.cs src/SqlHarness.Mcp/McpInputReader.cs src/SqlHarness.Mcp/McpOperationMapper.cs`. Reconcile changed interfaces against the excerpts below; do not overwrite later features. Work in an isolated `.worktrees/plan-096` checkout.
 
 ## Status and authority
 
-- IMPLEMENTED on `plan-096`; all task, whole-branch and final scoped reviews are approved. The branch awaits separate integration authorization; it is not merged or pushed. Implementation base `898f8b20f40246b3d0ff5263c5969ed4e2130b12`; see [verification evidence](096-verification-evidence.md).
+- IMPLEMENTED on `plan-096`; all task, whole-branch and final scoped reviews are approved. Locally fast-forwarded into `main` at `d4e018c` with the verified product/test code unchanged; not pushed. Implementation base `898f8b20f40246b3d0ff5263c5969ed4e2130b12`; see [verification evidence](096-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: 083 TVP/list implementation is merged. Coordinate CLI/parser edits with 097; no dependency on output-budget plans.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
