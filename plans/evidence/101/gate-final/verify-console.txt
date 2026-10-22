@@ -1,0 +1,17 @@
+Command: just verify -LogDirectory D:/temp/sqlharness-plan101-verify-20261021-helperfix-final
+Direct exit code: 0
+Console summary:
+==> ui-install skipped (lockfile unchanged)
+==> build ok 55,0s
+==> ui-check ok 6m13s
+==> test ok 3m59s
+format: 3 changed C# file(s) (working-tree)
+==> format ok 1m41s
+verify: OK  stages=5  11m54s
+
+Build: 0 warnings, 0 errors.
+UI: 64 files, 372 tests passed; Node DEP0190 warning appeared. UI test output includes a Vitest non-failing isolation performance advisory.
+MCP: 496 passed, 4 skipped, 500 total.
+Core: 4621 passed, 11 skipped, 4632 total.
+Format: working-tree mode passed; 3 changed C# files.
+Final diff SHA-256: 8524C505FD788F9EA273A90DAF3E4851A7430AFA0D481216EFBE79132DAB4053

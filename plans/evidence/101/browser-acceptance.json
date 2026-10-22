@@ -1,0 +1,69 @@
+{
+  "browser": "Microsoft Edge headless via Playwright",
+  "initial": {
+    "journalEnabled": "false",
+    "operationAnnotations": "false",
+    "disk": {
+      "journalEnabled": false,
+      "operationAnnotations": false,
+      "compareRequireContext": null,
+      "executionTimeoutSeconds": null
+    }
+  },
+  "enableWithJournalOff": {
+    "status": 200,
+    "submittedPair": {
+      "enabled": true,
+      "operationAnnotations": true
+    },
+    "saved": {
+      "journalEnabled": true,
+      "operationAnnotations": true,
+      "compareRequireContext": true,
+      "executionTimeoutSeconds": 30
+    }
+  },
+  "reloadAfterEnable": {
+    "journalEnabled": "true",
+    "operationAnnotations": "true",
+    "disk": {
+      "journalEnabled": true,
+      "operationAnnotations": true,
+      "compareRequireContext": true,
+      "executionTimeoutSeconds": 30
+    }
+  },
+  "disableJournal": {
+    "status": 200,
+    "submittedPair": {
+      "enabled": false,
+      "operationAnnotations": false
+    },
+    "saved": {
+      "journalEnabled": false,
+      "operationAnnotations": false,
+      "compareRequireContext": true,
+      "executionTimeoutSeconds": 30
+    }
+  },
+  "reloadAfterDisable": {
+    "journalEnabled": "false",
+    "operationAnnotations": "false",
+    "disk": {
+      "journalEnabled": false,
+      "operationAnnotations": false,
+      "compareRequireContext": true,
+      "executionTimeoutSeconds": 30
+    }
+  },
+  "feedback": [
+    "Saved",
+    "Saved"
+  ],
+  "visibleGuidance": [
+    "Allows agents to label operations and mark them for keeping. Requires the activity journal. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention.",
+    "Disabling the journal also disables agent annotations."
+  ],
+  "pageErrors": [],
+  "alertsAfterSaves": []
+}

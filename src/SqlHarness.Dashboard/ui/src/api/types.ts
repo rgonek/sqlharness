@@ -505,6 +505,7 @@ export type DistilledPlan = { statements: DistilledStatement[] }
 export type JournalSettings = {
   enabled: boolean
   storeSensitive: boolean
+  operationAnnotations: boolean
   retention: { enabled: boolean; maxAgeDays: number; maxSizeMb: number }
 }
 export type DashboardSettings = { autoStart: boolean; port: number; idleShutdownHours: number; safetyNotifications: boolean; agentTranscripts: { enabled: boolean } }

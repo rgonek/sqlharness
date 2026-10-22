@@ -44,6 +44,7 @@ public sealed class DashboardSettingsTests
         Assert.Equal("missing", body.GetProperty("status").GetString());
         Assert.Equal(ConfigPath(home), body.GetProperty("path").GetString());
         Assert.False(body.GetProperty("settings").GetProperty("journal").GetProperty("storeSensitive").GetBoolean());
+        Assert.False(body.GetProperty("settings").GetProperty("journal").GetProperty("operationAnnotations").GetBoolean());
         Assert.Equal(47800, body.GetProperty("settings").GetProperty("dashboard").GetProperty("port").GetInt32());
         Assert.False(body.GetProperty("settings").GetProperty("diagnostics").GetProperty("enabled").GetBoolean());
         Assert.False(body.GetProperty("settings").GetProperty("dashboard").GetProperty("safetyNotifications").GetBoolean());
@@ -100,6 +101,43 @@ public sealed class DashboardSettingsTests
         Assert.Equal(75, SqlHarnessConfigLoader.Load(ConfigPath(home)).Config.Execution.DefaultTimeoutSeconds);
         Assert.Equal(75, (await Json(await client.GetAsync("/api/settings"))).GetProperty("settings")
             .GetProperty("execution").GetProperty("defaultTimeoutSeconds").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Put_persists_operation_annotations_and_get_reads_it_back(bool enabled)
+    {
+        using var home = new TempHome();
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (server, client) = dashboard;
+        var body = ValidBody.Replace("\"enabled\": true, \"storeSensitive\": true", $"\"enabled\": true, \"storeSensitive\": true, \"operationAnnotations\": {enabled.ToString().ToLowerInvariant()}");
+
+        var response = await client.SendAsync(Put(server, body));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var settings = (await Json(await client.GetAsync("/api/settings"))).GetProperty("settings");
+        Assert.Equal(enabled, settings.GetProperty("journal").GetProperty("operationAnnotations").GetBoolean());
+        Assert.True(settings.GetProperty("dashboard").GetProperty("autoStart").GetBoolean());
+        Assert.Equal("operator", settings.GetProperty("mutations").GetProperty("defaultMode").GetString());
+    }
+
+    [Fact]
+    public async Task Put_with_operation_annotations_without_journal_preserves_the_existing_file()
+    {
+        using var home = new TempHome();
+        const string original = """{ "journal": { "enabled": true, "operationAnnotations": false } }""";
+        File.WriteAllText(ConfigPath(home), original);
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (server, client) = dashboard;
+        var invalid = ValidBody.Replace("\"enabled\": true, \"storeSensitive\": true", "\"enabled\": false, \"storeSensitive\": true, \"operationAnnotations\": true");
+
+        var response = await client.SendAsync(Put(server, invalid));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = Assert.Single((await Json(response)).GetProperty("errors").EnumerateArray());
+        Assert.Equal("journal.operationAnnotations", error.GetProperty("field").GetString());
+        Assert.Equal(original, File.ReadAllText(ConfigPath(home)));
     }
 
     [Theory]

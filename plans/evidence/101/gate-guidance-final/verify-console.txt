@@ -1,0 +1,11 @@
+PRE_GATE_PRODUCT_DIFF_SHA256=D02013025E3FA30061BD0BEF7C985597E6B2BD766E0B0D4EDF79C0CE7FD88C87
+pwsh ./scripts/verify.ps1 -LogDirectory D:/temp/sqlharness-plan101-verify-20261021-guidance-final
+==> ui-install skipped (lockfile unchanged)
+==> build ok 47,0s
+==> ui-check ok 5m12s
+==> test ok 3m43s
+format: 3 changed C# file(s) (working-tree)
+==> format ok 1m25s
+verify: OK  stages=5  10m20s
+
+Direct exit code: 0

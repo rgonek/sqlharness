@@ -12,7 +12,7 @@
 
 ## Status and dependencies
 
-TODO — plan only. Implementation is not authorized by adding this plan. Depends on the existing operation annotations feature (085, locally integrated). Coordinate shared Settings files with pending plan 092.
+DONE IN WORKTREE — implementation, browser acceptance, Luna xhigh task reviews, Sol low whole-branch review and scoped re-review approved; final-tree Windows gate passed (10m20s). Ready for authorized local integration from `plan-101`; no push. See [verification evidence](101-verification-evidence.md). Plan 085 and shared Settings work from 092 are integrated in the base.
 
 ## Fix contract
 
@@ -52,21 +52,21 @@ TODO — plan only. Implementation is not authorized by adding this plan. Depend
 
 **Interfaces:** Consume and persist `Settings.journal.operationAnnotations: boolean` using the existing Settings read/save API and journal save queue. No new public interface.
 
-- [ ] Add focused failing UI tests for default off, loaded on, on/off saves, enabling with journal off, disabling the journal with annotations on, and enabling the journal alone. Assert the exact paired booleans in each save and preservation of unrelated values.
-- [ ] Add tests for changing another card with annotations on, queued rapid journal changes, a rejected save and restart/reconnect guidance. Reuse current save-queue and failure behavior.
-- [ ] Add backend regression coverage: GET/PUT round-trips both annotation values; invalid `enabled: false, operationAnnotations: true` returns a field error without changing disk; unrelated settings survive.
-- [ ] Run focused tests and confirm the intended failures before implementation: `npm --prefix src/SqlHarness.Dashboard/ui test -- src/pages/SettingsPage.test.tsx` and `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter FullyQualifiedName~DashboardSettingsTests`.
-- [ ] Add the boolean type and fixture defaults, the toggle, explanatory text and paired journal transitions. Reuse the existing `setJournal`/autosave path and feedback; avoid separate requests for coupled values.
-- [ ] Rerun the focused tests; run `npm --prefix src/SqlHarness.Dashboard/ui run typecheck`. All must pass.
+- [x] Add focused failing UI tests for default off, loaded on, on/off saves, enabling with journal off, disabling the journal with annotations on, and enabling the journal alone. Assert the exact paired booleans in each save and preservation of unrelated values.
+- [x] Add tests for changing another card with annotations on, queued rapid journal changes, a rejected save and restart/reconnect guidance. Reuse current save-queue and failure behavior.
+- [x] Add backend regression coverage: GET/PUT round-trips both annotation values; invalid `enabled: false, operationAnnotations: true` returns a field error without changing disk; unrelated settings survive.
+- [x] Run focused tests and confirm the intended failures before implementation: `npm --prefix src/SqlHarness.Dashboard/ui test -- src/pages/SettingsPage.test.tsx` and `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter FullyQualifiedName~DashboardSettingsTests`.
+- [x] Add the boolean type and fixture defaults, the toggle, explanatory text and paired journal transitions. Reuse the existing `setJournal`/autosave path and feedback; avoid separate requests for coupled values.
+- [x] Rerun the focused tests; run `npm --prefix src/SqlHarness.Dashboard/ui run typecheck`. All must pass.
 
 ## Task 2: Document and verify the delivered behavior
 
 **Files:** `README.md`, this plan and `plans/README.md`; add `plans/101-verification-evidence.md` when implementation lands.
 
-- [ ] Update the existing human-facing annotation setup guidance to mention the Dashboard Settings toggle and the required MCP restart/reconnect. Link to the authoritative interface contract rather than duplicating it.
-- [ ] Browser-check Settings with a disposable config: enable with journal off, reload, disable journal, reload and inspect save/error feedback. Confirm saved values; do not alter a real operator's configuration for acceptance testing.
-- [ ] Run `just verify` on the final product tree as required by [verification](../docs/agents/verification.md). Record actual results and revision; no live database calls are required.
-- [ ] Record evidence and update plan/index status when work lands. Commit or publish only when separately authorized; keep delivered changes cohesive.
+- [x] Update the existing human-facing annotation setup guidance to mention the Dashboard Settings toggle and the required MCP restart/reconnect. Link to the authoritative interface contract rather than duplicating it.
+- [x] Browser-check Settings with a disposable config: enable with journal off, reload, disable journal, reload and inspect save/error feedback. Confirm saved values; do not alter a real operator's configuration for acceptance testing.
+- [x] Run `just verify` on the final product tree as required by [verification](../docs/agents/verification.md). Record actual results and revision; no live database calls are required. Two pre-fix runs failed on a process-runner test-helper sharing race; its focused fix was reviewed, and the final Windows gate passed ([verification evidence](101-verification-evidence.md)).
+- [x] Record evidence and update plan/index status when work lands. Commit or publish only when separately authorized; keep delivered changes cohesive.
 
 ## Completion criteria
 

@@ -21,7 +21,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and in-flight batch identities while preserving applicable staging and retry/cursor state | 084 merged | DONE; locally integrated into `main` at `7f03ecb`; both task reviews, Sol low whole-branch review and final scoped re-review approved; evidence archive includes 10 tracked raw logs ([evidence](090-verification-evidence.md)) |
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | 083 implementation present | TODO — P2, plan only |
 | [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | TODO — P2, plan only |
-| [101](101-dashboard-operation-annotations-setting.md) | Enable or disable agent operation annotations in Dashboard Settings; valid paired journal saves and MCP restart guidance | 085 merged; coordinate 092 | TODO — plan only |
 
 ## Limit-economics execution notes (2026-10-20)
 
@@ -42,6 +41,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [101](101-dashboard-operation-annotations-setting.md) | Dashboard agent operation annotation toggle with atomic journal saves and restart guidance | DONE IN WORKTREE; Luna task reviews and Sol whole-branch/scoped reviews approved; final Windows gate passed; ready for authorized local integration, not pushed ([evidence](101-verification-evidence.md)) |
 | [092](092-default-execution-timeout-setting.md) | Configurable default SQL execution timeout in config.json and Dashboard Settings; fallback for CLI commands and MCP tools | DONE; locally integrated into `main` at `dbdb3e5`; Windows-verified product `b7b7b70` unchanged; all reviews approved; one non-blocking parameter-description Minor deferred; not pushed ([evidence](092-verification-evidence.md)) |
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |
 | [091](091-ui-test-network-isolation.md) | Diagnose and remove unintended UI-test network requests; retain explicit error-path coverage | DONE; locally integrated into `main` at `479e200`; verified product/test tree unchanged, no redundant gate; not pushed ([evidence](091-verification-evidence.md)) |

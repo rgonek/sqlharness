@@ -8,7 +8,7 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
   status: "valid",
   path: "C:/Users/me/.sqlharness/config.json",
   settings: {
-    journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
+    journal: { enabled: true, storeSensitive: false, operationAnnotations: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
     dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled: false } },
     compare: { requireContext: true },
     diagnostics: { enabled: false },
@@ -150,6 +150,123 @@ test("disabling storeSensitive needs no confirmation", async () => {
 
   await userEvent.click(await screen.findByRole("switch", { name: "Store sensitive data" }))
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+})
+
+test("operation annotations default off and show process restart guidance", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  const toggle = await screen.findByRole("switch", { name: "Agent operation annotations" })
+  expect(toggle).not.toBeChecked()
+  expect(screen.getByText("Allows agents to label operations and mark them for keeping. Requires the activity journal. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention.")).toBeInTheDocument()
+  expect(screen.getByText(/Enabling agent annotations also enables the activity journal automatically\./)).toBeInTheDocument()
+  expect(puts).toHaveLength(0)
+})
+
+test("operation annotations load on and can be turned off without changing journal data", async () => {
+  const initial = response({ settings: { ...response().settings, journal: { ...response().settings.journal, operationAnnotations: true } } })
+  const puts = stubSettings(initial)
+  renderApp("/settings")
+
+  const toggle = await screen.findByRole("switch", { name: "Agent operation annotations" })
+  expect(toggle).toBeChecked()
+  await userEvent.click(toggle)
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as SettingsResponse["settings"]).journal).toEqual({ ...initial.settings.journal, operationAnnotations: false })
+})
+
+test("enabling operation annotations with the journal on saves the setting", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  await userEvent.click(await screen.findByRole("switch", { name: "Agent operation annotations" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as SettingsResponse["settings"]).journal).toMatchObject({ enabled: true, operationAnnotations: true })
+})
+
+test("enabling operation annotations with the journal off enables both in one save", async () => {
+  const initial = response({ settings: { ...response().settings, journal: { ...response().settings.journal, enabled: false } } })
+  const puts = stubSettings(initial)
+  renderApp("/settings")
+
+  await userEvent.click(await screen.findByRole("switch", { name: "Agent operation annotations" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as SettingsResponse["settings"]).journal.enabled).toBe(true)
+  expect((puts[0].body as SettingsResponse["settings"]).journal.operationAnnotations).toBe(true)
+})
+
+test("disabling the journal also disables operation annotations in one save", async () => {
+  const initial = response({ settings: { ...response().settings, journal: { ...response().settings.journal, operationAnnotations: true } } })
+  const puts = stubSettings(initial)
+  renderApp("/settings")
+
+  await userEvent.click(await screen.findByRole("switch", { name: "Journal enabled" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as SettingsResponse["settings"]).journal.enabled).toBe(false)
+  expect((puts[0].body as SettingsResponse["settings"]).journal.operationAnnotations).toBe(false)
+  expect(screen.getByText("Disabling the journal also disables agent annotations.")).toBeInTheDocument()
+})
+
+test("re-enabling the journal alone leaves operation annotations off", async () => {
+  const initial = response({ settings: { ...response().settings, journal: { ...response().settings.journal, enabled: false, operationAnnotations: false } } })
+  const puts = stubSettings(initial)
+  renderApp("/settings")
+
+  await userEvent.click(await screen.findByRole("switch", { name: "Journal enabled" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as SettingsResponse["settings"]).journal).toMatchObject({ enabled: true, operationAnnotations: false })
+})
+
+test("another settings card preserves enabled operation annotations", async () => {
+  const initial = response({ settings: { ...response().settings, journal: { ...response().settings.journal, operationAnnotations: true } } })
+  const puts = stubSettings(initial)
+  renderApp("/settings")
+
+  await userEvent.click(await screen.findByRole("switch", { name: "Safety notifications" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as SettingsResponse["settings"]).journal.operationAnnotations).toBe(true)
+  expect((puts[0].body as SettingsResponse["settings"]).dashboard.safetyNotifications).toBe(true)
+})
+
+test("rapid operation annotation and journal changes save valid queued snapshots", async () => {
+  const initial = response({ settings: { ...response().settings, journal: { ...response().settings.journal, enabled: false } } })
+  const puts: { body: unknown; search: string }[] = []
+  let releaseFirst: (() => void) | undefined
+  stubSettingsPageFetch({
+    "/api/settings": initial,
+    "PUT /api/settings": async (_url: URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      puts.push({ body, search: "" })
+      if (puts.length === 1) await new Promise<void>(resolve => { releaseFirst = resolve })
+      return new Response(JSON.stringify({ ...initial, settings: body }), { status: 200 })
+    },
+  })
+  const user = userEvent.setup()
+  renderApp("/settings")
+
+  await user.click(await screen.findByRole("switch", { name: "Agent operation annotations" }))
+  await user.click(screen.getByRole("switch", { name: "Journal enabled" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  releaseFirst?.()
+  await waitFor(() => expect(puts).toHaveLength(2))
+  expect(puts.map(put => (put.body as SettingsResponse["settings"]).journal)).toEqual([
+    { ...initial.settings.journal, enabled: true, operationAnnotations: true },
+    { ...initial.settings.journal, enabled: false, operationAnnotations: false },
+  ])
+})
+
+test("rejected operation annotation saves keep the server value and explain restart guidance", async () => {
+  stubSettingsPageFetch({
+    "/api/settings": response(),
+    "PUT /api/settings": () => new Response(JSON.stringify({ error: "Settings write unavailable" }), { status: 503 }),
+  })
+  renderApp("/settings")
+
+  const toggle = await screen.findByRole("switch", { name: "Agent operation annotations" })
+  await userEvent.click(toggle)
+  expect(await screen.findByRole("alert")).toHaveTextContent(/Not saved:/)
+  expect(toggle).not.toBeChecked()
+  expect(screen.getByText(/Restart the MCP server and reconnect the client/)).toBeInTheDocument()
 })
 
 test("Toggle_saves_immediately", async () => {

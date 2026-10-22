@@ -232,7 +232,7 @@ test("matching off returns immediately to per-session rows even when agent rows 
     "/api/transcripts": { enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null },
     "/api/settings": () => {
       return new Response(JSON.stringify({ status: "valid", path: "config.json", settings: {
-        journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
+        journal: { enabled: true, storeSensitive: false, operationAnnotations: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
         dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled } },
         compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 }, execution: { defaultTimeoutSeconds: 30 },
       } }), { status: 200 })
@@ -241,7 +241,7 @@ test("matching off returns immediately to per-session rows even when agent rows 
       enabled = false
       matching = false
       return new Response(JSON.stringify({ status: "valid", path: "config.json", settings: {
-        journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
+        journal: { enabled: true, storeSensitive: false, operationAnnotations: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
         dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled } },
         compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 }, execution: { defaultTimeoutSeconds: 30 },
       } }), { status: 200 })

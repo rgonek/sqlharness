@@ -170,6 +170,8 @@ public static class SqlHarnessConfigLoader
             errors.Add(new("journal.retention.maxAgeDays", "Must be between 1 and 3650."));
         if (config.Journal.Retention.MaxSizeMb is < 10 or > 102_400)
             errors.Add(new("journal.retention.maxSizeMb", "Must be between 10 and 102400."));
+        if (config.Journal.OperationAnnotations && !config.Journal.Enabled)
+            errors.Add(new("journal.operationAnnotations", "Requires journal.enabled to be true."));
         if (config.Dashboard.Port is < 1024 or > 65535)
             errors.Add(new("dashboard.port", "Must be between 1024 and 65535."));
         if (config.Dashboard.IdleShutdownHours is < 1 or > 168)

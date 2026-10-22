@@ -11,7 +11,7 @@ const summary = {
   notePreview: "first note line", starred: false, archived: false, exact: 1, inferred: 1, unassigned: 1,
   lastSeen: "2026-10-07T09:05:00.000Z", children: [{ session: session({ id: 7, sessionKey: "mcp:child", hasCompare: true }), exact: 1, inferred: 1, unassigned: 1 }],
 }
-const settings = { status: "valid", path: "config.json", settings: { journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } }, dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled: true } }, compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 } } }
+const settings = { status: "valid", path: "config.json", settings: { journal: { enabled: true, storeSensitive: false, operationAnnotations: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } }, dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, safetyNotifications: false, agentTranscripts: { enabled: true } }, compare: { requireContext: true }, diagnostics: { enabled: false }, mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 }, connection: { timeoutSeconds: 30 } } }
 
 test("agent detail shows membership counts, markers, annotations, and child optimization links", async () => {
   const patches: unknown[] = []

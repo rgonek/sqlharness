@@ -306,13 +306,20 @@ export function SettingsPage() {
           <CardDescription>What SQLHarness records about each operation.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <Toggle id="journal-enabled" label="Journal enabled" checked={journal.enabled} onChange={value => setJournal({ enabled: value })} />
+          <Toggle id="journal-enabled" label="Journal enabled" checked={journal.enabled} onChange={value => setJournal(value ? { enabled: true } : { enabled: false, operationAnnotations: false })} />
           <Toggle
             id="journal-sensitive"
             label="Store sensitive data"
             checked={journal.storeSensitive}
             onChange={value => (value ? setConfirmingSensitive(true) : setJournal({ storeSensitive: false }))}
           />
+          <div className="grid gap-1">
+            <Toggle id="journal-operation-annotations" label="Agent operation annotations" checked={journal.operationAnnotations}
+              onChange={value => setJournal(value ? { enabled: true, operationAnnotations: true } : { operationAnnotations: false })} />
+            <p className="text-sm text-muted-foreground">Allows agents to label operations and mark them for keeping. Requires the activity journal. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention.</p>
+            <p className="text-sm text-muted-foreground">Enabling agent annotations also enables the activity journal automatically.</p>
+            <p className="text-sm text-muted-foreground">Disabling the journal also disables agent annotations.</p>
+          </div>
           <Toggle id="retention-enabled" label="Retention enabled" checked={journal.retention.enabled} onChange={value => setRetention({ enabled: value })} />
           <NumberField id="retention-age" label="Maximum age (days)" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} />
           <NumberField id="retention-size" label="Maximum size (MB)" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} />

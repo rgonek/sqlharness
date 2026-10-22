@@ -15,7 +15,8 @@ public sealed class ProcessRunnerTests
     private const int DirectoryDeleteRetryAttempts = 10;
     private const int DirectoryDeleteRetryDelayMs = 100;
 
-    // Publisher contract, args: [0]=pidFile, [1]=childScript, [2]=childStderr, [3]=childExe.
+    // Publisher contract, args: [0]=pidFile, [1]=childScript, [2]=childStderr, [3]=childExe,
+    // with optional [4]=errorCatchStarted and [5]=resumeErrorCatch barriers for tests.
     // The child -File path is embedded in quotes because Windows PowerShell 5.1
     // Start-Process joins -ArgumentList without quoting, which silently breaks on
     // temp paths containing spaces (child dies on arrival, tree assertions vacuous).
@@ -26,6 +27,7 @@ public sealed class ProcessRunnerTests
         $ErrorActionPreference = 'Stop'
         try {
             Set-Content -LiteralPath $args[0] -Value $PID
+            if ($args.Count -gt 6 -and $args[6] -eq 'synthetic-error') { throw 'Original publisher failure.' }
             $child = Start-Process -FilePath $args[3] -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $args[1] + '"')) -PassThru -WindowStyle Hidden -RedirectStandardError $args[2]
             $published = $false
             for ($i = 0; $i -lt 50 -and -not $published; $i++) {
@@ -35,8 +37,27 @@ public sealed class ProcessRunnerTests
             if (-not $published) { throw 'Child process id could not be published.' }
             while ($true) { Start-Sleep -Seconds 1 }
         } catch {
-            Add-Content -LiteralPath $args[0] -Value ('ERROR: ' + $_.Exception.Message)
-            throw
+            $publisherError = $_
+            if ($args.Count -gt 5) {
+                Set-Content -LiteralPath $args[4] -Value 'waiting'
+                while (-not (Test-Path -LiteralPath $args[5])) { Start-Sleep -Milliseconds 10 }
+            }
+            $errorLine = 'ERROR: ' + $publisherError.Exception.Message
+            $errorPublished = $false
+            for ($i = 0; $i -lt 50 -and -not $errorPublished; $i++) {
+                try { Add-Content -LiteralPath $args[0] -Value $errorLine -ErrorAction Stop; $errorPublished = $true }
+                catch {
+                    $markerWriteError = $_.Exception
+                    if ($markerWriteError -isnot [System.IO.IOException]) {
+                        $failureMessage = 'Could not publish the original publisher error marker. Original publisher error: ' + $publisherError.Exception.Message + '. Marker write failure (' + $markerWriteError.GetType().FullName + '): ' + $markerWriteError.Message
+                        $failures = [System.Exception[]]@($publisherError.Exception, $markerWriteError)
+                        throw [System.AggregateException]::new($failureMessage, $failures)
+                    }
+                    Start-Sleep -Milliseconds 100
+                }
+            }
+            if (-not $errorPublished) { throw ('Could not publish the original publisher error: ' + $publisherError.Exception.Message) }
+            throw $publisherError
         }
         """;
 
@@ -147,6 +168,90 @@ public sealed class ProcessRunnerTests
         Assert.False(
             Directory.Exists(testDirectory),
             "Publisher directory was not cleaned up after failure.");
+    }
+
+    [WindowsFact]
+    public async Task PidPublicationError_RetriesErrorMarkerAfterTransientSharingViolation()
+    {
+        var testDirectory = Path.Combine(Path.GetTempPath(), $"sqlharness test-{Guid.NewGuid():N}");
+        var pidFile = Path.Combine(testDirectory, "processes.pid");
+        var childScript = Path.Combine(testDirectory, "child.ps1");
+        var parentScript = Path.Combine(testDirectory, "parent.ps1");
+        var childStandardError = Path.Combine(testDirectory, "child.stderr.log");
+        var missingChildExe = Path.Combine(testDirectory, "missing-child.exe");
+        var errorCatchStarted = Path.Combine(testDirectory, "error-catch-started");
+        var resumeErrorCatch = Path.Combine(testDirectory, "resume-error-catch");
+        Directory.CreateDirectory(testDirectory);
+        await File.WriteAllTextAsync(childScript, "while ($true) { Start-Sleep -Seconds 1 }");
+        await File.WriteAllTextAsync(parentScript, ParentScriptTemplate);
+        using var cancellation = new CancellationTokenSource();
+        var runner = new ProcessRunner();
+        Task<ProcessResult>? run = null;
+
+        try
+        {
+            run = runner.RunAsync(
+                "powershell.exe",
+                ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", parentScript, pidFile, childScript, childStandardError, missingChildExe, errorCatchStarted, resumeErrorCatch],
+                cancellationToken: cancellation.Token);
+
+            await WaitForFileAsync(errorCatchStarted);
+            using (var publisherLock = new FileStream(pidFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                await File.WriteAllTextAsync(resumeErrorCatch, "resume");
+                await Task.Delay(250);
+            }
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => WaitForPidsAsync(pidFile, childStandardError, run));
+            Assert.Contains("ERROR", exception.Message);
+            Assert.Contains("line(s)", exception.Message);
+        }
+        finally
+        {
+            await CleanupTreeAsync(run, cancellation, [], pidFile, testDirectory);
+        }
+    }
+
+    [WindowsFact]
+    public async Task PidPublicationError_PreservesOriginalWhenMarkerWriteFails()
+    {
+        var testDirectory = Path.Combine(Path.GetTempPath(), $"sqlharness test-{Guid.NewGuid():N}");
+        var pidFile = Path.Combine(testDirectory, "processes.pid");
+        var childScript = Path.Combine(testDirectory, "child.ps1");
+        var parentScript = Path.Combine(testDirectory, "parent.ps1");
+        var childStandardError = Path.Combine(testDirectory, "child.stderr.log");
+        var errorCatchStarted = Path.Combine(testDirectory, "error-catch-started");
+        var resumeErrorCatch = Path.Combine(testDirectory, "resume-error-catch");
+        Directory.CreateDirectory(testDirectory);
+        await File.WriteAllTextAsync(childScript, "while ($true) { Start-Sleep -Seconds 1 }");
+        await File.WriteAllTextAsync(parentScript, ParentScriptTemplate);
+        using var cancellation = new CancellationTokenSource();
+        var runner = new ProcessRunner();
+        Task<ProcessResult>? run = null;
+
+        try
+        {
+            run = runner.RunAsync(
+                "powershell.exe",
+                ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", parentScript, pidFile, childScript, childStandardError, "unused-child.exe", errorCatchStarted, resumeErrorCatch, "synthetic-error"],
+                cancellationToken: cancellation.Token);
+
+            await WaitForFileAsync(errorCatchStarted);
+            File.Delete(pidFile);
+            Directory.CreateDirectory(pidFile);
+            await File.WriteAllTextAsync(resumeErrorCatch, "resume");
+
+            var result = await run.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("Original publisher failure.", result.StandardError);
+            Assert.Contains("Marker write failure", result.StandardError);
+            Assert.Contains("UnauthorizedAccessException", result.StandardError);
+        }
+        finally
+        {
+            await CleanupTreeAsync(run, cancellation, [], pidFile, testDirectory);
+        }
     }
 
     [Fact]
@@ -359,6 +464,19 @@ public sealed class ProcessRunnerTests
             DescribePidFile(path) + Environment.NewLine +
             DescribeRunTask(run) + Environment.NewLine +
             DescribeChildStandardError(childStandardErrorPath));
+    }
+
+    private static async Task WaitForFileAsync(string path)
+    {
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            if (File.Exists(path))
+                return;
+
+            await Task.Delay(25);
+        }
+
+        throw new TimeoutException($"Publisher did not create the synchronization file: {path}");
     }
 
     // Share-tolerant read: FileShare.ReadWrite so polling never denies the publisher's
