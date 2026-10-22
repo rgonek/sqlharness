@@ -163,7 +163,8 @@ internal static partial class ParameterSetResolver
                 output[index] = new ResolvedParameterSet(
                     index.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     parsed.DisplayValues[index],
-                    dialectBound) { Inputs = [new SqlHarnessParameterInput(parsed.Name, parsed.Type, parsed.DisplayValues[index])] };
+                    dialectBound)
+                { Inputs = [new SqlHarnessParameterInput(parsed.Name, parsed.Type, parsed.DisplayValues[index])] };
             }
 
             return output;
