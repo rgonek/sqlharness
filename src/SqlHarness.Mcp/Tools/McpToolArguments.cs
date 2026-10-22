@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace SqlHarness.Mcp.Tools;
@@ -81,7 +82,7 @@ public sealed record McpSqlSourceArgument
 }
 
 /// <summary>
-/// One compare matrix dimension: a typed parameter name plus at least two
+/// One compare matrix dimension: a typed parameter name plus 1..32
 /// values in caller order. Each value travels to Core whole: a comma is an
 /// ordinary character, an empty string is a text value, and JSON null is a
 /// typed NULL of the matrix type. The Core binder owns value validation.
@@ -98,10 +99,11 @@ public sealed record McpMatrixArgument
     public required string Type { get; init; }
 
     /// <summary>
-    /// At least two distinct values: culture-invariant value text, or JSON
+    /// 1..32 distinct values: culture-invariant value text, or JSON
     /// null for a typed NULL. A parameter validation error can quote the
     /// rejected value; known credentials are still replaced before return.
     /// </summary>
+    [MinLength(1), MaxLength(32)]
     [JsonPropertyName("values")]
     public required IReadOnlyList<string?> Values { get; init; }
 }

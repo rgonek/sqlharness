@@ -849,11 +849,11 @@ public sealed class McpMappingTests : IDisposable
             Type = "int",
             Values = Enumerable.Range(0, 33).Select(value => value.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray(),
         };
-        var overLimit = await module.ExecuteAsync(await McpOperationMapper.MapMeasureAsync(
+        var overLimit = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapMeasureAsync(
             scope, new McpSqlSourceArgument { Sql = "SELECT @n" }, null, null, null,
             1, null, CancellationToken.None, matrix: tooManyValues));
-        Assert.Equal(SqlHarnessExitCode.Safety, overLimit.ExitCode);
-        Assert.Equal("The SQL parameter matrix cannot contain more than 32 values.", overLimit.SafeError);
+        Assert.Contains("Split into calls of at most 32 cases", overLimit.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("singleton remainder", overLimit.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, sessions.ConnectedSessions);
     }
 
@@ -943,12 +943,12 @@ public sealed class McpMappingTests : IDisposable
         var emptyInlineSets = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapMeasureAsync(
             scope, query, null, null, null, 5, null, CancellationToken.None,
             parameterSets: Array.Empty<McpParameterSetArgument>()));
-        Assert.Equal("Parameter sets must contain between 2 and 32 sets.", emptyInlineSets.Message);
+        Assert.Equal("Parameter sets must contain between 1 and 32 sets. Split into calls of at most 32 cases; a singleton remainder is supported.", emptyInlineSets.Message);
 
         var emptyFileList = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
             scope, query, query, null, null, 5, null, "ordered", null, CancellationToken.None,
             parameterSetFiles: Array.Empty<string>()));
-        Assert.Equal("Parameter sets must contain between 2 and 32 sets.", emptyFileList.Message);
+        Assert.Equal("Parameter sets must contain between 1 and 32 sets. Split into calls of at most 32 cases; a singleton remainder is supported.", emptyFileList.Message);
     }
 
     [Fact]
@@ -991,7 +991,6 @@ public sealed class McpMappingTests : IDisposable
         // Shape checks stay in the mapper; value checks belong to Core.
         foreach (var malformed in new[]
         {
-            new McpMatrixArgument { Name = "BatchSize", Type = "int", Values = ["1"] },
             new McpMatrixArgument { Name = " ", Type = "int", Values = ["1", "2"] },
             new McpMatrixArgument { Name = "BatchSize", Type = "", Values = ["1", "2"] },
         })

@@ -135,7 +135,7 @@ internal static partial class ParameterSetResolver
         if (matrix is not null)
         {
             if (matrix.Values is { Count: > MaximumSetCount })
-                throw new SqlHarnessSafetyException($"The SQL parameter matrix cannot contain more than {MaximumSetCount} values.");
+                throw new SqlHarnessSafetyException($"The SQL parameter matrix cannot contain more than {MaximumSetCount} values. Split into calls of at most {MaximumSetCount} cases; a singleton remainder is supported.");
 
             var parsed = SqlParameterMatrixParser.Bind(matrix, fixedParameters.Select(parameter => parameter.Name));
             var output = new ResolvedParameterSet[parsed.Values.Count];
@@ -171,8 +171,8 @@ internal static partial class ParameterSetResolver
 
         if (sets is null)
             return [];
-        if (sets.Count is < 2 or > MaximumSetCount)
-            throw new SqlHarnessSafetyException("Parameter sets must contain between 2 and 32 sets.");
+        if (sets.Count is < 1 or > MaximumSetCount)
+            throw new SqlHarnessSafetyException($"Parameter sets must contain between 1 and {MaximumSetCount} sets. Split into calls of at most {MaximumSetCount} cases; a singleton remainder is supported.");
 
         var fixedNames = new HashSet<string>(fixedParameters.Select(parameter => parameter.Name), StringComparer.OrdinalIgnoreCase);
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

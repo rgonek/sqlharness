@@ -159,22 +159,18 @@ public class SqlParameterMatrixTests
         var exception = Reject(input);
 
         Assert.Equal(
-            "The --matrix option for SQL parameter '@BatchSize' requires at least two values.",
+            "The --matrix option for SQL parameter '@BatchSize' requires at least one value.",
             exception.Message);
         AssertDoesNotEcho(exception, input);
     }
 
     [Fact]
-    public void Parse_rejects_one_value()
+    public void Parse_accepts_one_value()
     {
-        const string input = "BatchSize:int=1";
+        var matrix = SqlParameterMatrixParser.Parse("BatchSize:int=1", []);
 
-        var exception = Reject(input);
-
-        Assert.Equal(
-            "The --matrix option for SQL parameter '@BatchSize' requires at least two values.",
-            exception.Message);
-        AssertDoesNotEcho(exception, input, "1");
+        Assert.Equal(["1"], matrix.DisplayValues);
+        Assert.Equal(1, Assert.IsType<int>(Assert.Single(matrix.Values).Value));
     }
 
     [Theory]
@@ -295,7 +291,7 @@ public class SqlParameterMatrixTests
     [Theory]
     [InlineData("BatchSize:=", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("BatchSize:xml=1,,2", "The --matrix option for SQL parameter '@BatchSize' contains an empty value.")]
-    [InlineData("BatchSize:int=nope", "The --matrix option for SQL parameter '@BatchSize' requires at least two values.")]
+    [InlineData("BatchSize:int=nope", "The --matrix option for SQL parameter '@BatchSize' of type 'int' with value 'nope' is invalid.")]
     [InlineData("BatchSize:int=1,1,nope", "The --matrix option for SQL parameter '@BatchSize' contains a duplicate value.")]
     [InlineData("BatchSize:int=nope,1,1", "The --matrix option for SQL parameter '@BatchSize' of type 'int' with value 'nope' is invalid.")]
     public void Legacy_matrix_reports_the_first_failing_check(string input, string expected)
@@ -548,13 +544,13 @@ public class SqlParameterMatrixTests
     }
 
     [Fact]
-    public void Model_matrix_requires_two_values()
+    public void Model_matrix_requires_at_least_one_value()
     {
         var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterMatrixParser.Bind(
-            new SqlHarnessParameterMatrixInput("BatchSize", "int", ["1"]),
+            new SqlHarnessParameterMatrixInput("BatchSize", "int", []),
             []));
 
-        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least two values.", exception.Message);
+        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least one value.", exception.Message);
     }
 
     [Fact]
@@ -564,7 +560,7 @@ public class SqlParameterMatrixTests
             new SqlHarnessParameterMatrixInput("BatchSize", "int", null!),
             []));
 
-        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least two values.", exception.Message);
+        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least one value.", exception.Message);
     }
 
     private static SqlHarnessSafetyException Reject(string input, params string[] fixedParameters) =>

@@ -116,6 +116,7 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
             {
                 Parameters = [.. run.FixedParameters, .. set.Parameters],
                 ParameterInputs = [.. run.Template.ParameterInputs, .. set.Inputs],
+                ParameterSet = run.ParameterName is null ? set.Name : null,
                 ConditionsCaseIndex = index,
             };
             _cells.ComparisonMaximumRows = ComparisonMaximumRows;

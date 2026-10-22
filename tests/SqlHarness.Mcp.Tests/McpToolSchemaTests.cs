@@ -1827,7 +1827,7 @@ public sealed class McpToolSchemaTests : IDisposable
 
         Assert.Contains("read-only query, measure, compare, watch, and snapshot", parameters, StringComparison.Ordinal);
         Assert.Contains("Mutation rejects non-scalar inputs", parameters, StringComparison.Ordinal);
-        Assert.Contains("read-only measure and compare", parameterSetFiles, StringComparison.Ordinal);
+        Assert.Contains("read-only measure/compare", parameterSetFiles, StringComparison.Ordinal);
         Assert.Contains("Table-valued and list parameters are not supported", ToolDescription(tools, "sqlharness_mutation"), StringComparison.Ordinal);
         Assert.Contains("Mutation rejects non-scalar inputs", mutationParameters, StringComparison.Ordinal);
     }

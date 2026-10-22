@@ -622,7 +622,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 : SqlParameterInputs.ResolveMatrix(operation.Matrix, operation.TypedMatrix);
             var sets = ParameterSetResolver.Resolve(dialect, fixedParameters, matrixInput, operation.ParameterSets);
             if (sets.Count == 0)
-                throw new SqlHarnessSafetyException("A compare matrix or at least two parameter sets must be supplied.");
+                throw new SqlHarnessSafetyException("A compare matrix or at least one parameter set must be supplied.");
             foreach (var set in sets)
             {
                 var caseInputs = prepared.ParameterInputs.Concat(set.Inputs).ToArray();
@@ -1211,7 +1211,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         IReadOnlyList<SqlHarnessParameter> fixedParameters)
     {
         if (measure.TypedMatrix is null)
-            return measure.ParameterSets is { Count: > 0 } ? measure.ParameterSets : null;
+            return measure.ParameterSets;
 
         var matrix = SqlParameterInputs.ResolveMatrix(string.Empty, measure.TypedMatrix);
         var resolved = ParameterSetResolver.Resolve(dialect, fixedParameters, matrix, measure.ParameterSets);

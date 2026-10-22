@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Dialect;
 
@@ -6,6 +8,16 @@ namespace SqlHarness.Tests;
 public sealed class ParameterSetResolverTests
 {
     private static readonly ISqlDialect Dialect = SqlDialects.For(SqlEngine.SqlServer);
+
+    [Fact]
+    public void Capabilities_report_parameter_set_batch_bounds()
+    {
+        var limits = JsonSerializer.SerializeToElement(SqlHarnessCapabilitiesProvider.Get().Limits["parameterSets"]);
+
+        Assert.Equal(1, limits.GetProperty("min").GetInt32());
+        Assert.Equal(32, limits.GetProperty("max").GetInt32());
+        Assert.Equal(["namedSets", "parameterSetFiles", "matrixValues"], limits.GetProperty("appliesTo").EnumerateArray().Select(item => item.GetString()));
+    }
 
     [Fact]
     public void Matrix_becomes_one_set_per_value()
@@ -105,10 +117,13 @@ public sealed class ParameterSetResolverTests
     }
 
     [Fact]
-    public void A_single_set_is_rejected_like_a_single_matrix_value()
+    public void A_single_named_set_is_preserved()
     {
-        Assert.Throws<SqlHarnessSafetyException>(() => ParameterSetResolver.Resolve(Dialect, [], null,
+        var set = Assert.Single(ParameterSetResolver.Resolve(Dialect, [], null,
             [new("only", []) { TypedParameters = [new("ClientId", "int", "1")] }]));
+
+        Assert.Equal("only", set.Name);
+        Assert.Equal(1, Assert.IsType<int>(set.Parameters.Single().Value));
     }
 
     [Fact]

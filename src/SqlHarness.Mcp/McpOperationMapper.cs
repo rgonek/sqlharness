@@ -658,8 +658,10 @@ public static partial class McpOperationMapper
         ArgumentNullException.ThrowIfNull(matrix);
         if (string.IsNullOrWhiteSpace(matrix.Name) || string.IsNullOrWhiteSpace(matrix.Type))
             throw new McpMappingException("The matrix requires a non-empty name and type.");
-        if (matrix.Values is null || matrix.Values.Count < 2)
-            throw new McpMappingException("The matrix requires at least two values.");
+        if (matrix.Values is null || matrix.Values.Count < 1)
+            throw new McpMappingException("The matrix requires at least one value.");
+        if (matrix.Values.Count > 32)
+            throw new McpMappingException("The matrix cannot contain more than 32 values. Split into calls of at most 32 cases; a singleton remainder is supported.");
         return new SqlHarnessParameterMatrixInput(matrix.Name, matrix.Type, matrix.Values);
     }
 
@@ -703,8 +705,8 @@ public static partial class McpOperationMapper
             throw new McpMappingException("Use one of parameterSets, parameterSetFiles or matrix.");
 
         var setCount = parameterSets?.Count ?? parameterSetFiles?.Count;
-        if (setCount is not null and (< 2 or > 32))
-            throw new McpMappingException("Parameter sets must contain between 2 and 32 sets.");
+        if (setCount is not null and (< 1 or > 32))
+            throw new McpMappingException("Parameter sets must contain between 1 and 32 sets. Split into calls of at most 32 cases; a singleton remainder is supported.");
     }
 
     private static async Task<IReadOnlyList<SqlHarnessParameterSetInput>?> MapParameterSetsAsync(

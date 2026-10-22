@@ -177,9 +177,9 @@ public sealed class McpToolHandlers(
         [Description(McpToolCatalog.ParametersDescription)]
         McpParameterArgument[]? parameters = null,
         [Description(McpToolCatalog.ParameterSetFilesDescription)]
-        string[]? parameterSetFiles = null,
+        [MinLength(1), MaxLength(32)] string[]? parameterSetFiles = null,
         [Description(McpToolCatalog.ParameterSetsDescription)]
-        McpParameterSetArgument[]? parameterSets = null,
+        [MinLength(1), MaxLength(32)] McpParameterSetArgument[]? parameterSets = null,
         [Description(McpToolCatalog.MatrixDescription)]
         McpMatrixArgument? matrix = null,
         [Description("Repetitions 1..100.")]
@@ -230,9 +230,9 @@ public sealed class McpToolHandlers(
         string compareResults = "ordered",
         [Description(McpToolCatalog.MatrixDescription)]
         McpMatrixArgument? matrix = null,
-        [Description(McpToolCatalog.ParameterSetsDescription)]
+        [Description(McpToolCatalog.ParameterSetsDescription), MinLength(1), MaxLength(32)]
         McpParameterSetArgument[]? parameterSets = null,
-        [Description(McpToolCatalog.ParameterSetFilesDescription)]
+        [Description(McpToolCatalog.ParameterSetFilesDescription), MinLength(1), MaxLength(32)]
         string[]? parameterSetFiles = null,
         [Description("Require matching allowNull; otherwise reported separately. Invalid with compareResults off.")]
         bool compareNullability = false,
@@ -264,8 +264,8 @@ public sealed class McpToolHandlers(
         int? timeout = null,
         [AllowedValues("ordered", "multiset", "set", "off")] string compareResults = "ordered",
         McpMatrixArgument? matrix = null,
-        McpParameterSetArgument[]? parameterSets = null,
-        string[]? parameterSetFiles = null,
+        [MinLength(1), MaxLength(32)] McpParameterSetArgument[]? parameterSets = null,
+        [MinLength(1), MaxLength(32)] string[]? parameterSetFiles = null,
         bool compareNullability = false,
         int? maxResultBytes = null,
         [Description("Cell clip 0..4096 characters; default 2048.")]
@@ -702,10 +702,10 @@ public static class McpToolCatalog
     public const string SetupDescription = "Once per measured session; setup locals do not carry into measured SQL.";
     public const string ParametersDescription = "Scalar values: culture-invariant text or JSON null. Non-scalar parameter inputs are unsupported by this engine.";
     public const string SqlServerParametersDescription = "Scalar values: culture-invariant text or JSON null. SQL Server also accepts kind tvp with exactly one of rows/rowsFrom and kind list with exactly one of values/valuesFrom in read-only query, measure, compare, watch, and snapshot operations. Source SQL must pass read-only classification; capabilities reports limits. Mutation rejects non-scalar inputs.";
-    public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; entries may be scalar strings or typed objects; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
-    public const string SqlServerParameterSetFilesDescription = "2..32 .sqljson files under input roots; entries may be scalar strings or typed objects. SQL Server TVP/list entries are accepted by read-only measure and compare operations; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
-    public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
-    public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
+    public const string ParameterSetFilesDescription = "1..32 .sqljson files under input roots; entries are scalar or typed. Exclusive with parameterSets/matrix and fixed parameters.";
+    public const string SqlServerParameterSetFilesDescription = "1..32 .sqljson files under input roots; entries are scalar or typed. SQL Server accepts TVP/list entries for read-only measure/compare. Exclusive with other batch and fixed parameters.";
+    public const string ParameterSetsDescription = "1..32 named sets with declared types. Exclusive with parameterSetFiles/matrix and fixed parameters.";
+    public const string MatrixDescription = "1..32 distinct values for one parameter. Exclusive with parameterSets/files and fixed parameters.";
     public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. Table-valued and list parameters are not supported. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
     public const string MeasureDescription = "Measure one query across repeats. For an optimization measurement, provide both optional subject and textual scope; this is independent of compare.requireContext. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence. TVP and list parameter sets have no valueHash; their low-entropy values are excluded from unkeyed hashes.";
     public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode: pass means no elapsed regression under policy, not improvement. Observed equivalence follows the selected ordering, duplicate and nullability rules; it is not domain equivalence. Dry-run reports validation: passed, execution: not-run, and setup/baseline/candidate classifications.";

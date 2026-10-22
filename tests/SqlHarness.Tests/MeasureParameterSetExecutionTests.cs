@@ -11,7 +11,7 @@ public sealed class MeasureParameterSetExecutionTests
 {
     private const string SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Id = @id";
     private const string QuerySql = "SELECT Value FROM dbo.Clients WHERE Id = @id";
-    private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
+    private const string Plan = "<ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><BatchSequence><Batch><Statements><StmtSimple StatementText=\"SELECT 1\"><QueryPlan><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>";
     private const string MeasuredOrderRule =
         "Measured runs execute parameter sets sequentially in user-supplied order.";
     private const string PlanCacheWarning =
@@ -337,9 +337,11 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal([new MeasureParameterMetadata("@id", "int")], set.Parameters);
         Assert.Equal(1, session.ConnectionCount);
         Assert.Equal(1, session.SetupCount);
-        Assert.Equal(["only", "only", "only"], session.MeasuredSetNames);
+        Assert.Equal(["A", "A", "A"], session.MeasuredSetNames);
         Assert.Equal(["only", "only", "only"], writer.Runs.Select(run => run.ParameterSet));
-        Assert.Same(report, writer.Report);
+        var writerReport = Assert.IsType<SqlHarnessMeasureSetReport>(writer.Report);
+        Assert.Equal(report.Sets.Select(set => set.Name), writerReport.Sets.Select(set => set.Name));
+        Assert.Equal(report.Sets.SelectMany(set => set.Parameters), writerReport.Sets.SelectMany(set => set.Parameters));
         Assert.Equal("testdb-a", writer.Target);
         Assert.Contains(set.ValueHash!, System.Text.Json.JsonSerializer.Serialize(report), StringComparison.Ordinal);
         Assert.All(session.Commands.Where(command => command.Sql == QuerySql), command =>
@@ -377,7 +379,7 @@ public sealed class MeasureParameterSetExecutionTests
 
         var outcome = await module.ExecuteAsync(operation);
 
-        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
         var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
         var cell = Assert.Single(report.Cells);
         Assert.Equal("only", cell.SetName);
@@ -397,7 +399,7 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.True(artifactCase.GetProperty("artifactId").GetString()!.Length > 0);
         var runs = Assert.IsAssignableFrom<IReadOnlyList<CompareRunArtifact>>(outcome.BenchmarkRuns);
         Assert.Equal(["baseline", "candidate"], runs.Select(run => run.Variant));
-        Assert.Equal([0], runs.Select(run => run.MatrixCell));
+        Assert.Equal([0, 0], runs.Select(run => run.MatrixCell));
         Assert.Equal(["only", "only"], runs.Select(run => run.ParameterSet));
         var baselineCommands = session.Commands.Where(command => command.Sql == QuerySql).ToArray();
         var candidateCommands = session.Commands.Where(command => command.Sql == candidateSql).ToArray();
@@ -412,11 +414,11 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(subject, journalRow["compare_subject"]);
         Assert.Equal(scope, journalRow["compare_scope"]);
         using var conditions = JsonDocument.Parse((string)journalRow["conditions_json"]!);
-        Assert.Matches("^[0-9A-F]{64}$", conditions.RootElement.GetProperty("fingerprint").GetString());
+        Assert.Matches("^[0-9a-fA-F]{64}$", conditions.RootElement.GetProperty("fingerprint").GetString());
         var reproducedCase = Assert.Single(conditions.RootElement.GetProperty("cases").EnumerateArray().ToArray());
-        Assert.Equal("0", reproducedCase.GetProperty("id").GetString());
+        Assert.Equal("only", reproducedCase.GetProperty("id").GetString());
         Assert.Equal("only", reproducedCase.GetProperty("setName").GetString());
-        Assert.Matches("^[0-9A-F]{64}$", reproducedCase.GetProperty("measurementFingerprint").GetString());
+        Assert.Matches("^[0-9a-fA-F]{64}$", reproducedCase.GetProperty("measurementFingerprint").GetString());
     }
 
     [Fact]

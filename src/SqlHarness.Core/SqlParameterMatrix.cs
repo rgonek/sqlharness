@@ -60,7 +60,7 @@ internal static class SqlParameterMatrixParser
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires a type."));
 
         if (valueText.Length == 0)
-            throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires at least two values."));
+            throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires at least one value."));
 
         // Split only the value list. Declaration commas, such as decimal(10,2), belong to the type.
         var displayValues = valueText.Split(',');
@@ -89,8 +89,8 @@ internal static class SqlParameterMatrixParser
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires a type."));
 
         // A caller-built model may carry no value list at all: a safety rejection, like no values.
-        if (matrix.Values is null || matrix.Values.Count < 2)
-            throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires at least two values."));
+        if (matrix.Values is null || matrix.Values.Count < 1)
+            throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires at least one value."));
 
         var parsedValues = new List<SqlHarnessParameter>(matrix.Values.Count);
         var seen = new HashSet<MatrixValueKey>();

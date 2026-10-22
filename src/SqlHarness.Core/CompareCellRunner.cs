@@ -180,6 +180,7 @@ internal sealed record CompareCellRequest(
 
     internal List<string> KnownSecrets { get; init; } = [];
     internal IReadOnlyList<SqlHarnessParameterInput> ParameterInputs { get; init; } = [];
+    internal string? ParameterSet { get; init; }
     internal int ConditionsCaseIndex { get; init; }
     internal Action<int, IReadOnlyList<MaterializedParameterInfo>>? RecordMaterializedConditions { get; init; }
 }
@@ -256,21 +257,21 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.
             // Warmup is EXPLAIN/STATISTICS only; sidecar follows measured repetitions.
             var captureComparison = request.CompareResults != ResultComparisonMode.Off;
-            await ExecuteBenchmarkRunAsync(dialect, session, baselineExpansion.Text, baselineParameters, request.TimeoutSeconds, 0, "baseline", raw: null, captureComparison: false, sessionState, ct);
-            await ExecuteBenchmarkRunAsync(dialect, session, candidateExpansion.Text, candidateParameters, request.TimeoutSeconds, 0, "candidate", raw: null, captureComparison: false, sessionState, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, baselineExpansion.Text, baselineParameters, request.TimeoutSeconds, 0, "baseline", request.ParameterSet, raw: null, captureComparison: false, sessionState, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, candidateExpansion.Text, candidateParameters, request.TimeoutSeconds, 0, "candidate", request.ParameterSet, raw: null, captureComparison: false, sessionState, ct);
 
             var runs = new List<CollectedBenchmarkRun>(request.Repeat * 2);
             for (var repetition = 1; repetition <= request.Repeat; repetition++)
             {
                 if (repetition % 2 == 1)
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, baselineExpansion.Text, baselineParameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, candidateExpansion.Text, candidateParameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, baselineExpansion.Text, baselineParameters, request.TimeoutSeconds, repetition, "baseline", request.ParameterSet, repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, candidateExpansion.Text, candidateParameters, request.TimeoutSeconds, repetition, "candidate", request.ParameterSet, repetition == 1 ? raw : null, captureComparison, sessionState, ct));
                 }
                 else
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, candidateExpansion.Text, candidateParameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, baselineExpansion.Text, baselineParameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, candidateExpansion.Text, candidateParameters, request.TimeoutSeconds, repetition, "candidate", request.ParameterSet, repetition == 1 ? raw : null, captureComparison, sessionState, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, baselineExpansion.Text, baselineParameters, request.TimeoutSeconds, repetition, "baseline", request.ParameterSet, repetition == 1 ? raw : null, captureComparison, sessionState, ct));
                 }
             }
 
@@ -366,6 +367,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
         int timeoutSeconds,
         int repetition,
         string variant,
+        string? parameterSet,
         CanonicalResultAccumulator? raw,
         bool captureComparison,
         SessionState? sessionState,
@@ -378,7 +380,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             timeoutSeconds,
             repetition,
             variant,
-            parameterSet: null,
+            parameterSet,
             raw,
             captureComparison,
             ComparisonMaximumRows,

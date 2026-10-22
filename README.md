@@ -76,7 +76,7 @@ sqlharness compare prod-eu `
 ```
 
 - one matrix dimension only;
-- at least two typed values;
+- 1 to 32 distinct typed values;
 - sequential user-supplied order;
 - a new connection and one setup per value;
 - first failure stops the run;
@@ -285,9 +285,9 @@ Before measuring, inventory a representative parameter range offline: row count,
 
 ## Parameter sets
 
-The CLI `measure --param-set` measures one query across at least two named parameter sets. Fixed `--param` values are shared by every set; per-set parameters come from each file and must not reuse a fixed name. A single scenario stays on `--param` alone. MCP `sqlharness_measure` and `sqlharness_compare` share three mutually exclusive inputs: `parameterSets` (inline named sets), `parameterSetFiles` (named `.sqljson` files), or `matrix` (a one-parameter shorthand).
+The CLI `measure --param-set` measures one query across 1 to 32 named parameter sets. Fixed `--param` values are shared by every set; per-set parameters come from each file and must not reuse a fixed name. MCP `sqlharness_measure` and `sqlharness_compare` share three mutually exclusive inputs: `parameterSets` (inline named sets), `parameterSetFiles` (named `.sqljson` files), or `matrix` (a one-parameter shorthand).
 
-The `parameterSets` and `parameterSetFiles` forms contain 2 to 32 sets; a matrix contains 2 to 32 values. Every set must bind the same parameter names with the same declared type, size, precision and scale. Unsized declarations such as `nvarchar` may bind values with different inferred sizes. Fixed parameters combine with every set, and a set cannot repeat a fixed parameter.
+The `parameterSets` and `parameterSetFiles` forms contain 1 to 32 sets; a matrix contains 1 to 32 values. Empty explicitly supplied collections are invalid; omitting them keeps ordinary single-query behavior. Every set must bind the same parameter names with the same declared type, size, precision and scale. Unsized declarations such as `nvarchar` may bind values with different inferred sizes. Fixed parameters combine with every set, and a set cannot repeat a fixed parameter.
 
 ```powershell
 sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --param tenant:nvarchar=acme --param-set .\sets\small.sqljson --param-set .\sets\large.sqljson --repeat 5 --json

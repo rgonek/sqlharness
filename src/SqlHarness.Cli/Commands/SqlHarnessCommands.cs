@@ -309,7 +309,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Read fixed typed parameters from a bounded .sqljson file; exclusive with --param.")]
         [CommandOption("--params-json <PATH>")]
         public string? ParametersJson { get; set; }
-        [Description("2..32 named JSON sets with matching declared types; only name and parameters (64 KiB; BOM/comments/trailing commas accepted). Entries may be scalar strings or typed objects; table/list execution is not available yet. Fixed --param names must not overlap. Each set runs on its own session with setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Report per-set stability, not cross-set equivalence.")]
+        [Description("1..32 named JSON sets with matching declared types; only name and parameters (64 KiB; BOM/comments/trailing commas accepted). Entries may be scalar strings or typed objects; table/list execution is not available yet. Fixed --param names must not overlap. Each set runs on its own session with setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Report per-set stability, not cross-set equivalence.")]
         [CommandOption("--param-set <PATH>")]
         public string[] ParameterSets { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
@@ -326,8 +326,6 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         var timeout = s.Timeout ?? DefaultExecutionTimeoutSeconds;
         if (timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
         var setPaths = s.ParameterSets ?? [];
-        if (setPaths.Length == 1)
-            return Invalid("Exactly one --param-set is invalid. Use --param for one set.");
         CompareContext? measureContext;
         try
         {
@@ -393,7 +391,7 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Read fixed typed parameters from a bounded .sqljson file; exclusive with --param.")]
         [CommandOption("--params-json <PATH>")]
         public string? ParametersJson { get; set; }
-        [Description("One typed parameter: 2..32 distinct, comma-separated nonempty values in supplied order; no overlap with fixed --param. A fresh session/setup per value. First failure stops the run; completed cell artifacts remain.")]
+        [Description("One typed parameter: 1..32 distinct, comma-separated nonempty values in supplied order; no overlap with fixed --param. A fresh session/setup per value. First failure stops the run; completed cell artifacts remain.")]
         [CommandOption("--matrix <NAME:TYPE=VALUES>")]
         public string[] Matrix { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;

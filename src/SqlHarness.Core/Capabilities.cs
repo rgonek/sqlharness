@@ -197,6 +197,7 @@ public static class SqlHarnessCapabilitiesProvider
             ["comparisonRowCapPerRun"] = new { min = 0, max = CanonicalComparisonAccumulator.MaximumComparedRows },
             ["comparisonUniqueFingerprintBudgetPerCell"] = new { min = 0, max = ComparisonBudget.DefaultMaxUniqueFingerprints },
             ["repeat"] = new { min = OperationLimits.RepeatMin, max = OperationLimits.RepeatMax },
+            ["parameterSets"] = new { min = 1, max = 32, appliesTo = new[] { "namedSets", "parameterSetFiles", "matrixValues" } },
             ["nonScalarParameters"] = ParameterSetResolver.MaximumNonScalarParameters,
             ["combinedParameterRowsAndValues"] = ParameterSetResolver.MaximumCombinedRowsAndValues,
             ["materializedParameterBytes"] = ParameterSetResolver.MaximumMaterializedBytes,
