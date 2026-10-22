@@ -6,12 +6,17 @@ using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 
+using Xunit.Abstractions;
+
 namespace SqlHarness.Tests.Cli;
 
 public sealed class MeasureParameterSetCommandTests
 {
     private const string ParameterSecret = "customerId:int=424242";
     private static readonly string QueryFile = CreateQueryFile();
+    private readonly ITestOutputHelper _output;
+
+    public MeasureParameterSetCommandTests(ITestOutputHelper output) => _output = output;
 
     [Fact]
     public async Task Measure_dispatches_two_parameter_sets_in_user_order()
@@ -132,8 +137,9 @@ public sealed class MeasureParameterSetCommandTests
         var inlineFirst = JsonSerializer.Deserialize<InlineParameterSetFile>(setJson, inlineOptions)!;
         var inlineSecond = JsonSerializer.Deserialize<InlineParameterSetFile>(secondJson, inlineOptions)!;
         var module = new FakeModule();
+        var output = new StringWriter();
 
-        var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync([
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync([
             "measure", "dev", "--query", QueryFile, "--params-json", fixedFile.Path,
             "--param-set", first.Path, "--param-set", second.Path
         ]);
@@ -156,6 +162,17 @@ public sealed class MeasureParameterSetCommandTests
         Assert.Equal("large-typed-set-copy", sets[1].Name);
         Assert.Equal(5000, secondParameter.Values!.Count);
         Assert.Equal(["item-000000-abcdefghij", "item-000001-abcdefghij"], secondParameter.Values.Take(2));
+        AssertDoesNotLeak(output.ToString(), fixedJson, setJson, secondJson, "item-000000-abcdefghij", "large-typed-set");
+
+        var rawBytes = new[]
+        {
+            Encoding.UTF8.GetByteCount(fixedJson),
+            Encoding.UTF8.GetByteCount(setJson),
+            Encoding.UTF8.GetByteCount(secondJson),
+        };
+        Assert.All(rawBytes, bytes => Assert.True(bytes > 64 * 1024));
+        Assert.Single(module.Operations);
+        _output.WriteLine($"Offline CLI parameter-file workflow: occurrences=3, rawBytes={string.Join(',', rawBytes)}, totalRawBytes={rawBytes.Sum()}, decodedValues=15000, fakeModuleCalls={module.Operations.Count}, databaseCalls=0, echoedOutputBytes={Encoding.UTF8.GetByteCount(output.ToString())}; materializedParameterBytes={SqlHarnessCapabilitiesProvider.ParameterFileLimits.MaxMaterializedBytes}.");
     }
 
     [Fact]

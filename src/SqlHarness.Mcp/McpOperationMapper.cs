@@ -15,6 +15,7 @@ public sealed class McpMappingException(string message) : Exception(message);
 
 /// <summary>Enforced process ceilings reported by capabilities.</summary>
 public sealed record McpProcessLimits(int MaxResultBytes, int MaxOperationSeconds);
+public sealed record McpParameterFileIngressLimits(int MaxFileBytes, int MaxTotalBytes);
 public sealed record McpArtifactPageLimits(
     int MinPageSize,
     int MaxPageSize,
@@ -58,7 +59,9 @@ public sealed record McpCapabilitiesDocument(
     int ConnectionTimeoutSeconds = ConnectionConfig.DefaultTimeoutSeconds,
     int DefaultExecutionTimeoutSeconds = ExecutionConfig.DefaultExecutionTimeoutSeconds,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? OperationAnnotations = null,
-    McpArtifactPageLimits? ArtifactPages = null);
+    McpArtifactPageLimits? ArtifactPages = null,
+    McpParameterFileIngressLimits? ParameterFileIngress = null,
+    int MaterializedParameterBytes = 0);
 
 public sealed record AllowedProfileMutationCapability(string Profile, string Mode, bool WriterConfigured);
 
@@ -149,7 +152,9 @@ public static partial class McpOperationMapper
             Diagnostics: includeDiagnostics ? LocalDiagnostics(scope.InputRoots) : null,
             Mutations: SqlHarnessCapabilitiesProvider.MutationCapability(null, false),
             ProfileMutations: ProfileMutation(scope.TargetRequest.Profile, scope.Profiles, null),
-            ArtifactPages: ArtifactPageLimits());
+            ArtifactPages: ArtifactPageLimits(),
+            ParameterFileIngress: ParameterFileIngressLimits(),
+            MaterializedParameterBytes: SqlHarnessCapabilitiesProvider.ParameterFileLimits.MaxMaterializedBytes);
         return WithInputRootPage(document, scope.InputRoots, inputRootCursor, scope.MaxResultBytes);
     }
 
@@ -187,7 +192,9 @@ public static partial class McpOperationMapper
             ConnectionTimeoutSeconds: context.Config.Connection.TimeoutSeconds,
             DefaultExecutionTimeoutSeconds: context.Config.Execution.DefaultTimeoutSeconds,
             OperationAnnotations: context.Config.Journal.OperationAnnotations ? true : null,
-            ArtifactPages: ArtifactPageLimits());
+            ArtifactPages: ArtifactPageLimits(),
+            ParameterFileIngress: ParameterFileIngressLimits(),
+            MaterializedParameterBytes: SqlHarnessCapabilitiesProvider.ParameterFileLimits.MaxMaterializedBytes);
         return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);
     }
 
@@ -207,6 +214,10 @@ public static partial class McpOperationMapper
         var engine = string.Equals(profile.Engine, "postgres", StringComparison.OrdinalIgnoreCase) ? "postgres" : "sqlserver";
         return new SqlHarnessProfileCapability(profileName, engine, policy.Mode, policy.WriterConfigured);
     }
+
+    private static McpParameterFileIngressLimits ParameterFileIngressLimits() => new(
+        SqlHarnessCapabilitiesProvider.ParameterFileLimits.MaxFileBytes,
+        SqlHarnessCapabilitiesProvider.ParameterFileLimits.MaxTotalBytes);
 
     private static void ThrowIfInvalidInputRootCursor(IReadOnlyList<string> inputRoots, int cursor)
     {
