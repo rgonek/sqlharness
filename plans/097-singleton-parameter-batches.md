@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- DONE on branch `plan-097`; task reviews and whole-branch review approved. The original-base format check exposed inherited formatting across the full Plan 096/097 diff; formatting is corrected on `aea93d6`, and the final Windows gate plus final scoped documentation re-review passed. No integration or push. Planned at `32adaa7`, 2026-10-20.
+- DONE on branch `plan-097`; task reviews and whole-branch review approved. The original-base format check exposed inherited formatting across the full Plan 096/097 diff; formatting is corrected on `aea93d6`, and the final Windows gate plus final scoped documentation re-review passed. Locally integrated into `main` by fast-forward at `3563283`; verified product unchanged. Not pushed. Planned at `32adaa7`, 2026-10-20.
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: Existing 083 parameter semantics must be present. Execute after 096 to avoid concurrent CLI/parser edits; 096 is scheduling coordination, not a semantic predecessor.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.

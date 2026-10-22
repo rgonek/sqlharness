@@ -48,3 +48,7 @@ The earlier full Core run before the stale matrix assertions were corrected repo
 Task 3 review and the Sol low whole-branch review report no product findings on the original reviewed product. Their archived reports are `evidence/097/task-reports/task-3-review.md` and `evidence/097/task-reports/whole-review.md`; they were conditional on completion of the original-base formatting and final gate. The scoped fix-wave report `evidence/097/task-reports/whole-rereview.md` confirms the formatter changes are semantic-neutral and flags final gate/evidence consistency as pending. The base/revision descriptions are now corrected; the final gate is now green and final scoped documentation approval is complete (Sol low: Ready to merge Yes, no findings; `evidence/097/task-reports/whole-rereview-final.md`). The historical `Fixtures/OperationAnnotations/off/tools-list.json` remains unchanged; whole-branch review agreed it is archived pre-change fixture evidence, not the current served schema contract.
 
 No integration, push, live database access, paid-agent trial or Linux gate occurred.
+
+## Local integration
+
+The owner selected local merge. Main fast-forwarded from ebf7a16 to 3563283; source, tests and scripts exactly match the Windows-verified aea93d6. No integrated-tree gate was rerun because executable content is unchanged. The pre-existing main README edit was temporarily stashed and reapplied unchanged; it remains uncommitted. The plan worktree retains its pre-existing untracked noop and was preserved. No push occurred.
