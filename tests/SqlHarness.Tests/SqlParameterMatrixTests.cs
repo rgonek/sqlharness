@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.SqlServer.Types;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests;
@@ -30,6 +31,47 @@ public class SqlParameterMatrixTests
         Assert.Equal("@BatchSize", matrix.Spec.Name);
         Assert.Equal("int", matrix.Spec.Type);
         Assert.Equal(["1", "20", "100"], matrix.Spec.DisplayValues);
+    }
+
+    [Fact]
+    public void Parse_accepts_one_scalar_matrix_value()
+    {
+        var matrix = SqlParameterMatrixParser.Parse("BatchSize:int=7", []);
+
+        Assert.Equal("@BatchSize", matrix.Name);
+        Assert.Equal(["7"], matrix.DisplayValues);
+        Assert.Equal(7, Assert.IsType<int>(Assert.Single(matrix.Values).Value));
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    [InlineData(2, true)]
+    [InlineData(32, true)]
+    [InlineData(33, false)]
+    public void Matrix_parameter_set_count_boundaries_are_one_through_thirty_two(int count, bool accepted)
+    {
+        var values = Enumerable.Range(1, count).Select(value => (string?)value.ToString(CultureInfo.InvariantCulture)).ToArray();
+        var matrix = new SqlHarnessParameterMatrixInput("BatchSize", "int", values);
+
+        if (!accepted)
+        {
+            var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+                ParameterSetResolver.Resolve(SqlDialects.For(SqlEngine.SqlServer), [], matrix, null));
+            if (count == 33)
+            {
+                Assert.Contains("split", exception.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("32", exception.Message, StringComparison.Ordinal);
+                Assert.Contains("singleton", exception.Message, StringComparison.OrdinalIgnoreCase);
+            }
+            return;
+        }
+
+        var sets = ParameterSetResolver.Resolve(SqlDialects.For(SqlEngine.SqlServer), [], matrix, null);
+
+        Assert.Equal(count, sets.Count);
+        Assert.Equal(Enumerable.Range(0, count).Select(index => index.ToString(CultureInfo.InvariantCulture)), sets.Select(set => set.Name));
+        Assert.Equal(Enumerable.Range(1, count).Select(value => value.ToString(CultureInfo.InvariantCulture)), sets.Select(set => set.ParameterValue));
     }
 
     [Fact]

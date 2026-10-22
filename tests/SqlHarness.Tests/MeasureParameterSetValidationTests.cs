@@ -239,6 +239,106 @@ public sealed class MeasureParameterSetValidationTests
             sets.Select(x => new { x.Name, x.Metadata, x.ValueHash })), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    [InlineData(2, true)]
+    [InlineData(32, true)]
+    [InlineData(33, false)]
+    public void Named_parameter_set_count_boundaries_are_one_through_thirty_two(int count, bool accepted)
+    {
+        var inputs = Enumerable.Range(0, count)
+            .Select(index => new SqlHarnessParameterSetInput($"set-{index}", [$"id:int={index + 1}"]))
+            .ToArray();
+
+        if (!accepted)
+        {
+            var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+                MeasureParameterSetValidator.Prepare([], inputs, null, "select @id"));
+            if (count == 33)
+            {
+                Assert.Contains("split", exception.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("32", exception.Message, StringComparison.Ordinal);
+                Assert.Contains("singleton", exception.Message, StringComparison.OrdinalIgnoreCase);
+            }
+            return;
+        }
+
+        var prepared = MeasureParameterSetValidator.Prepare([], inputs, null, "select @id");
+
+        Assert.Equal(count, prepared.Count);
+        Assert.Equal(inputs.Select(set => set.Name), prepared.Select(set => set.Name));
+    }
+
+    [Fact]
+    public void Singleton_named_parameter_set_preserves_typed_null_identity()
+    {
+        var sets = MeasureParameterSetValidator.Prepare(
+            [],
+            [new SqlHarnessParameterSetInput("only", [])
+            {
+                TypedParameters = [new SqlHarnessParameterInput("Id", "int", null)],
+            }],
+            null,
+            "SELECT @Id");
+
+        var set = Assert.Single(sets);
+        Assert.Equal("only", set.Name);
+        Assert.Equal(DBNull.Value, Assert.Single(set.Parameters).Value);
+        Assert.Equal([new MeasureParameterMetadata("@Id", "int")], set.Metadata);
+        Assert.Matches("^[0-9A-F]{64}$", set.ValueHash);
+    }
+
+    [Fact]
+    public void Singleton_named_parameter_set_accepts_a_typed_table_parameter()
+    {
+        var set = Assert.Single(MeasureParameterSetValidator.Prepare(
+            [],
+            [new SqlHarnessParameterSetInput("only", [])
+            {
+                TypedParameters =
+                [
+                    new SqlHarnessParameterInput("Ids", "dbo.IdList", null)
+                    {
+                        Kind = "tvp",
+                        Rows = [["1"], ["2"]],
+                    },
+                ],
+            }],
+            null,
+            "SELECT * FROM @Ids"));
+
+        Assert.Equal("only", set.Name);
+        Assert.Null(set.ValueHash);
+        Assert.Equal("tvp", Assert.Single(set.Inputs).Kind);
+        Assert.Equal(2, Assert.Single(set.Inputs).Rows!.Count);
+    }
+
+    [Fact]
+    public void Singleton_named_parameter_set_accepts_a_typed_list_parameter()
+    {
+        var set = Assert.Single(MeasureParameterSetValidator.Prepare(
+            [],
+            [new SqlHarnessParameterSetInput("only", [])
+            {
+                TypedParameters =
+                [
+                    new SqlHarnessParameterInput("Ids", "int", null)
+                    {
+                        Kind = "list",
+                        Values = ["1", "2"],
+                    },
+                ],
+            }],
+            null,
+            "SELECT Id FROM dbo.Items WHERE Id IN (@Ids)"));
+
+        Assert.Equal("only", set.Name);
+        Assert.Null(set.ValueHash);
+        Assert.Equal("list", Assert.Single(set.Inputs).Kind);
+        Assert.Equal(["1", "2"], Assert.Single(set.Inputs).Values);
+    }
+
     [Fact]
     public void Prepare_rejects_duplicate_set_names_ignoring_case_without_values()
     {

@@ -34,6 +34,29 @@ public sealed class MeasureParameterSetCommandTests
         Assert.Equal(["id:int=999"], operation.ParameterSets[1].Parameters);
     }
 
+    [Theory]
+    [InlineData(32)]
+    [InlineData(33)]
+    public async Task Measure_forwards_large_named_parameter_set_file_batches_without_splitting(int count)
+    {
+        using var files = new TempJsonBatch(count);
+        var module = new FakeModule();
+        var args = new List<string> { "measure", "dev", "--query", QueryFile };
+        foreach (var path in files.Paths)
+        {
+            args.Add("--param-set");
+            args.Add(path);
+        }
+
+        var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(args.ToArray());
+
+        Assert.Equal(0, exit);
+        var operation = Assert.IsType<SqlHarnessMeasureOperation>(Assert.Single(module.Operations));
+        Assert.Equal(count, operation.ParameterSets!.Count);
+        Assert.Equal(Enumerable.Range(0, count).Select(index => $"set-{index}"), operation.ParameterSets.Select(set => set.Name));
+        Assert.Equal(Enumerable.Range(0, count).Select(index => $"id:int={index + 1}"), operation.ParameterSets.SelectMany(set => set.Parameters));
+    }
+
     [Fact]
     public async Task Measure_without_param_set_leaves_parameter_sets_null()
     {
@@ -117,7 +140,7 @@ public sealed class MeasureParameterSetCommandTests
     }
 
     [Fact]
-    public async Task Measure_rejects_exactly_one_parameter_set()
+    public async Task Measure_dispatches_exactly_one_named_parameter_set_file()
     {
         using var only = TempJson($$"""{"name":"only","parameters":["{{ParameterSecret}}"]}""");
         var module = new FakeModule();
@@ -127,11 +150,12 @@ public sealed class MeasureParameterSetCommandTests
             "measure", "dev", "--query", QueryFile, "--param-set", only.Path
         ]);
 
-        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
-        Assert.Empty(module.Operations);
-        Assert.Equal(
-            $"Exactly one --param-set is invalid. Use --param for one set.{Environment.NewLine}",
-            output.ToString());
+        Assert.Equal(0, exit);
+        var operation = Assert.IsType<SqlHarnessMeasureOperation>(Assert.Single(module.Operations));
+        var parameterSets = Assert.IsAssignableFrom<IReadOnlyList<SqlHarnessParameterSetInput>>(operation.ParameterSets);
+        Assert.Equal("only", Assert.Single(parameterSets).Name);
+        Assert.Equal([ParameterSecret], parameterSets[0].Parameters);
+        Assert.Empty(output.ToString());
         AssertDoesNotLeak(output.ToString(), only.Path, ParameterSecret, "only");
     }
 
@@ -440,6 +464,31 @@ public sealed class MeasureParameterSetCommandTests
         {
             if (File.Exists(Path))
                 File.Delete(Path);
+        }
+    }
+
+    private sealed class TempJsonBatch : IDisposable
+    {
+        private readonly IReadOnlyList<TempFile> _files;
+
+        public TempJsonBatch(int count)
+        {
+            _files = Enumerable.Range(0, count)
+                .Select(index => TempJson(JsonSerializer.Serialize(new
+                {
+                    name = $"set-{index}",
+                    parameters = new[] { $"id:int={index + 1}" },
+                })))
+                .ToArray();
+            Paths = _files.Select(file => file.Path).ToArray();
+        }
+
+        public IReadOnlyList<string> Paths { get; }
+
+        public void Dispose()
+        {
+            foreach (var file in _files)
+                file.Dispose();
         }
     }
 

@@ -294,7 +294,7 @@ public sealed class MeasureParameterSetExecutionTests
     }
 
     [Fact]
-    public async Task Empty_parameter_sets_stay_on_the_single_set_path()
+    public async Task Explicitly_empty_parameter_sets_are_rejected_before_connecting()
     {
         var session = RecordingSession.Create();
         var operation = Operation(repeat: 1) with
@@ -305,14 +305,90 @@ public sealed class MeasureParameterSetExecutionTests
 
         var outcome = await Module(session).ExecuteAsync(operation);
 
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Equal(0, session.ConnectionCount);
+        Assert.Empty(session.Commands);
+    }
+
+    [Fact]
+    public async Task Singleton_named_set_runs_once_per_repeat_and_keeps_report_and_artifact_identity()
+    {
+        const string subject = "orders-report";
+        const string scope = "whole";
+        var session = RecordingSession.Create(setCount: 1);
+        var writer = new CapturingWriter();
+        var journal = new StartCaptureJournal();
+        var singleton = new SqlHarnessParameterSetInput("only", [])
+        {
+            TypedParameters = [new SqlHarnessParameterInput("id", "int", "11")],
+        };
+        var operation = MeasureSets(3, [singleton]) with { Context = new CompareContext(subject, scope) };
+
+        var module = new JournalingModule(Module(session, writer: writer), () => journal,
+            () => JournalTestData.Session());
+        var outcome = await module.ExecuteAsync(operation);
+
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
+        var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
+        var set = Assert.Single(report.Sets);
+        Assert.Equal("only", set.Name);
+        Assert.Matches("^[0-9A-F]{64}$", set.ValueHash);
+        Assert.Equal([new MeasureParameterMetadata("@id", "int")], set.Parameters);
         Assert.Equal(1, session.ConnectionCount);
         Assert.Equal(1, session.SetupCount);
-        Assert.All(session.Commands.Where(command =>
-                command.Sql == QuerySql ||
-                command.Sql.Contains("INSERT #ids", StringComparison.Ordinal)), command =>
-            Assert.Equal(42, Assert.IsType<int>(Assert.Single(command.Parameters).Value)));
+        Assert.Equal(["only", "only", "only"], session.MeasuredSetNames);
+        Assert.Equal(["only", "only", "only"], writer.Runs.Select(run => run.ParameterSet));
+        Assert.Same(report, writer.Report);
+        Assert.Equal("testdb-a", writer.Target);
+        Assert.Contains(set.ValueHash!, System.Text.Json.JsonSerializer.Serialize(report), StringComparison.Ordinal);
+        Assert.All(session.Commands.Where(command => command.Sql == QuerySql), command =>
+            Assert.Equal(11, Assert.IsType<int>(Assert.Single(command.Parameters).Value)));
+        Assert.Equal(new CompareContext(subject, scope), journal.Start!.Context);
+    }
+
+    [Fact]
+    public async Task Compare_singleton_parameter_set_executes_both_variants_and_keeps_case_identity()
+    {
+        const string subject = "orders-report";
+        const string scope = "whole";
+        var session = RecordingSession.Create(setCount: 1);
+        var writer = new CapturingWriter();
+        var journal = new StartCaptureJournal();
+        var operation = new SqlHarnessCompareMatrixOperation(
+            Target(), SetupSql, QuerySql, QuerySql, [], 30, 1, "")
+        {
+            ParameterSets =
+            [
+                new SqlHarnessParameterSetInput("only", [])
+                {
+                    TypedParameters = [new SqlHarnessParameterInput("id", "int", "11")],
+                },
+            ],
+            Context = new CompareContext(subject, scope),
+        };
+        var module = new JournalingModule(Module(session, writer: writer), () => journal,
+            () => JournalTestData.Session());
+
+        var outcome = await module.ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        var cell = Assert.Single(report.Cells);
+        Assert.Equal("only", cell.SetName);
+        Assert.Equal(0, cell.Index);
+        Assert.Equal([new BenchmarkParameterReport("@id", "int", null, null, null)], cell.SetParameters);
+        Assert.True(cell.Compare.ResultsEquivalent);
+        Assert.NotNull(cell.Compare.ArtifactDirectory);
+        Assert.Equal(1, writer.Writes);
+        Assert.Same(report, writer.Report);
+        var runs = Assert.IsAssignableFrom<IReadOnlyList<CompareRunArtifact>>(outcome.BenchmarkRuns);
+        Assert.Equal(["baseline", "candidate"], runs.Select(run => run.Variant));
+        Assert.Equal([0], runs.Select(run => run.MatrixCell));
+        Assert.Equal(["only", "only"], writer.Runs.Select(run => run.ParameterSet));
+        Assert.Equal(1, session.ConnectionCount);
+        Assert.Equal(1, session.SetupCount);
+        Assert.Equal(new CompareContext(subject, scope), journal.Start!.Context);
     }
 
     [Fact]
@@ -497,6 +573,24 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(2, session.SetupCount);
         Assert.Equal(["A"], session.WarmupSetNames);
         Assert.Equal(["A", "A"], session.MeasuredSetNames);
+    }
+
+    [Fact]
+    public async Task Singleton_parameter_set_failure_has_one_failed_case_and_no_phantom_unexecuted_case()
+    {
+        var session = RecordingSession.Create(setCount: 1, failOnQueryNumber: 2);
+
+        var outcome = await Module(session).ExecuteAsync(MeasureSets(1, Inputs("A")));
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Empty(outcome.BenchmarkRuns!);
+        Assert.Equal(
+            new MatrixExecutionCoverage(1, 0, 0, new MatrixFailedCase(0, SetName: "A", Phase: "sql")),
+            outcome.Coverage);
+        Assert.Equal(1, session.ConnectionCount);
+        Assert.Equal(["A"], session.WarmupSetNames);
+        Assert.Empty(session.MeasuredSetNames);
     }
 
     [Fact]
@@ -871,6 +965,20 @@ public sealed class MeasureParameterSetExecutionTests
             Target = target;
             return "measure-artifacts";
         }
+    }
+
+    private sealed class StartCaptureJournal : IActivityJournal
+    {
+        public OperationStart? Start { get; private set; }
+        public JournalHandle? Begin(SessionIdentity session, OperationStart start)
+        {
+            Start = start;
+            return new(1);
+        }
+
+        public bool Complete(JournalHandle? handle, OperationEnd end) => true;
+        public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted) { }
+        public void RecordConditions(JournalHandle handle, ConditionsModel model) { }
     }
 
     private sealed class ThrowingWriter : ICompareArtifactWriter
