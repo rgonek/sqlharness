@@ -563,8 +563,7 @@ public class CompareMatrixTests
     [Theory]
     [InlineData("BatchSize:int=1,,20", "The --matrix option for SQL parameter '@BatchSize' contains an empty value.")]
     [InlineData("BatchSize:int=1,20,", "The --matrix option for SQL parameter '@BatchSize' contains an empty value.")]
-    [InlineData("BatchSize:int=1", "The --matrix option for SQL parameter '@BatchSize' requires at least two values.")]
-    public async Task Legacy_matrix_text_rejects_empty_and_single_values_before_any_connection(string matrix, string expected)
+    public async Task Legacy_matrix_text_rejects_empty_values_before_any_connection(string matrix, string expected)
     {
         using var artifacts = new DirectoryArtifactWriter();
         var factory = new MatrixSessionFactory();
@@ -575,6 +574,20 @@ public class CompareMatrixTests
         Assert.Equal(expected, outcome.SafeError);
         Assert.Null(outcome.Report);
         Assert.Equal(0, factory.ConnectCount);
+    }
+
+    [Fact]
+    public async Task Legacy_matrix_text_accepts_one_value()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        Assert.Equal("1", Assert.Single(report.Cells).ParameterValue);
+        Assert.Equal(1, factory.ConnectCount);
     }
 
     [Fact]
@@ -758,7 +771,7 @@ public class CompareMatrixTests
         var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least two values.", outcome.SafeError);
+        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least one value.", outcome.SafeError);
         Assert.Equal(0, factory.ConnectCount);
     }
 

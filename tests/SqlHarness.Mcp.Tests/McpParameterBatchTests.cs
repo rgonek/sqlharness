@@ -15,6 +15,7 @@ using SqlHarness.Mcp;
 using SqlHarness.Mcp.Tools;
 
 using Xunit;
+using Xunit.Abstractions;
 
 namespace SqlHarness.Mcp.Tests;
 
@@ -26,6 +27,10 @@ public sealed class McpParameterBatchTests
     {
         [ProfileName] = new("unreachable.invalid", "batchdb", new Dictionary<string, string> { ["tenant"] = "^frozen$" }, "integrated"),
     };
+
+    private readonly ITestOutputHelper _output;
+
+    public McpParameterBatchTests(ITestOutputHelper output) => _output = output;
 
     [Theory]
     [InlineData(false)]
@@ -96,6 +101,77 @@ public sealed class McpParameterBatchTests
         Assert.Contains("singleton remainder", tooMany.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Split_32_plus_1_measure_workflow_executes_each_named_case_once_and_keeps_operation_artifacts_separate()
+    {
+        using var temp = new McpBatchTempDirectory();
+        var sessionFactory = new BatchRecordingSessionFactory();
+        var module = new SqlHarnessModule(sessionFactory, () => Profiles);
+        await using var served = await ServedCatalog.CreateAsync(requestScope: false, moduleFactory: _ => module);
+        var all = Enumerable.Range(1, 33).Select(value => new { name = $"case-{value:D2}", parameters = new[] { new { name = "id", type = "int", value = value.ToString() } } }).ToArray();
+        var calls = new List<(string Operation, int RequestBytes, int OutputBytes, string Artifact)>();
+        long recoveryRequestBytes = 0;
+        long recoveryOutputBytes = 0;
+        var recoveryCallCount = 0;
+
+        foreach (var (operation, sets) in new[] { ("split-32", all[..32]), ("split-1", all[32..]) })
+        {
+            var arguments = new Dictionary<string, object?>
+            {
+                ["query"] = new { sql = "SELECT @id" },
+                ["parameterSets"] = sets,
+                ["repeat"] = 1,
+                ["subject"] = operation,
+                ["scope"] = "whole",
+            };
+            var (inputStart, outputStart) = served.TransportByteCounts;
+            var result = await served.Client.CallToolAsync("sqlharness_measure", arguments, cancellationToken: CancellationToken.None);
+            var (inputEnd, outputEnd) = served.TransportByteCounts;
+            Assert.False(result.IsError == true, Text(result));
+            var output = Text(result);
+            var inputBytes = checked((int)(inputEnd - inputStart));
+            var outputBytes = checked((int)(outputEnd - outputStart));
+            using var envelope = JsonDocument.Parse(output);
+            var report = envelope.RootElement.GetProperty("result");
+            Assert.True(report.TryGetProperty("artifactId", out var artifactElement), report.GetRawText());
+            var artifact = artifactElement.GetString();
+            Assert.False(string.IsNullOrWhiteSpace(artifact));
+            Assert.Equal(sets.Select(set => set.name), report.GetProperty("sets").EnumerateArray().Select(set => set.GetProperty("name").GetString()));
+            Assert.InRange(inputBytes, 1, int.MaxValue);
+            Assert.InRange(outputBytes, 1, int.MaxValue);
+            calls.Add((operation, inputBytes, outputBytes, artifact!));
+        }
+
+        Assert.Equal(2, calls.Count);
+        Assert.NotEqual(calls[0].Operation, calls[1].Operation);
+        Assert.NotEqual(calls[0].Artifact, calls[1].Artifact);
+        foreach (var call in calls)
+        {
+            var (requestStart, outputStart) = served.TransportByteCounts;
+            var artifactResult = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+            {
+                ["id"] = call.Artifact,
+                ["section"] = "summary",
+            }, cancellationToken: CancellationToken.None);
+            Assert.False(artifactResult.IsError == true, Text(artifactResult));
+            Assert.False(string.IsNullOrWhiteSpace(Text(artifactResult)));
+            var (requestEnd, outputEnd) = served.TransportByteCounts;
+            recoveryRequestBytes += requestEnd - requestStart;
+            recoveryOutputBytes += outputEnd - outputStart;
+            recoveryCallCount++;
+        }
+        var executed = sessionFactory.ExecutedValues.Order().ToArray();
+        Assert.Equal(Enumerable.Range(1, 33).SelectMany(value => new[] { value, value }), executed);
+        Assert.Equal(66, sessionFactory.QueryExecutionCount); // one warmup and one measured execution per case
+        Assert.Equal(33, sessionFactory.ConnectionCount);
+
+        var references = calls.Select(call => call.Artifact).ToArray();
+        Assert.Equal(2, references.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(references, reference => Assert.True(Directory.Exists(Path.Combine(temp.Path, "compare", reference))));
+        // The injected factory creates only in-memory fake sessions; this workflow has no live DB connection path.
+        _output.WriteLine($"Plan 097 split 32+1: workflow calls={calls.Count + recoveryCallCount} (measure={calls.Count}, artifact recovery={recoveryCallCount}), request={calls.Sum(call => call.RequestBytes) + recoveryRequestBytes} wire bytes, output={calls.Sum(call => call.OutputBytes) + recoveryOutputBytes} wire bytes; named cases=33 each reported once; fake sessions={sessionFactory.ConnectionCount}, measured query executions={sessionFactory.QueryExecutionCount} (one warmup plus one measured execution per case), live DB connections=0.");
+    }
+
     private static void AssertCollectionBounds(JsonElement parent, string name)
     {
         var schema = Properties(parent).GetProperty(name);
@@ -120,13 +196,21 @@ public sealed class McpParameterBatchTests
         private readonly CancellationTokenSource _cts = new(TimeSpan.FromSeconds(30));
         private readonly Pipe _clientToServer = new();
         private readonly Pipe _serverToClient = new();
+        private RecordingWriteStream _clientWriter = null!;
+        private RecordingWriteStream _serverWriter = null!;
         private Task _serverTask = Task.CompletedTask;
 
         public McpClient Client { get; private set; } = null!;
+        public (long Input, long Output) TransportByteCounts => (_clientWriter.BytesWritten, _serverWriter.BytesWritten);
 
         public static async Task<ServedCatalog> CreateAsync(bool requestScope, Action onConnect)
+            => await CreateAsync(requestScope, scope => new SqlHarnessModule(new ForbiddenSessionFactory(onConnect), scope.ProfileProvider));
+
+        public static async Task<ServedCatalog> CreateAsync(bool requestScope, Func<McpScope, ISqlHarnessModule> moduleFactory)
         {
             var catalog = new ServedCatalog();
+            catalog._clientWriter = new RecordingWriteStream(catalog._clientToServer.Writer.AsStream());
+            catalog._serverWriter = new RecordingWriteStream(catalog._serverToClient.Writer.AsStream());
             var options = new ModelContextProtocol.Server.McpServerOptions
             {
                 ServerInfo = new Implementation { Name = "sqlharness-tests", Version = "1.0" },
@@ -137,22 +221,22 @@ public sealed class McpParameterBatchTests
                 var process = McpProcessContext.Create(
                     new SqlHarness.Mcp.McpServerOptions { RequestScope = true, AllowedProfiles = [ProfileName] },
                     () => Profiles);
-                McpToolCatalog.Wire(options, process, moduleFactory: scope => new SqlHarnessModule(new ForbiddenSessionFactory(onConnect), scope.ProfileProvider));
+                McpToolCatalog.Wire(options, process, moduleFactory: moduleFactory);
             }
             else
             {
                 var scope = FixedScope();
-                var module = new SqlHarnessModule(new ForbiddenSessionFactory(onConnect), scope.ProfileProvider);
+                var module = moduleFactory(scope);
                 McpToolCatalog.Wire(options, scope, module);
             }
             var server = McpServer.Create(
-                new StreamServerTransport(catalog._clientToServer.Reader.AsStream(), catalog._serverToClient.Writer.AsStream(), "batch-test-server", NullLoggerFactory.Instance),
+                new StreamServerTransport(catalog._clientToServer.Reader.AsStream(), catalog._serverWriter, "batch-test-server", NullLoggerFactory.Instance),
                 options,
                 NullLoggerFactory.Instance,
                 serviceProvider: null);
             catalog._serverTask = server.RunAsync(catalog._cts.Token);
             catalog.Client = await McpClient.CreateAsync(
-                new StreamClientTransport(catalog._clientToServer.Writer.AsStream(), catalog._serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+                new StreamClientTransport(catalog._clientWriter, catalog._serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
                 new McpClientOptions
                 {
                     ClientInfo = new Implementation { Name = "batch-test-client", Version = "1.0" },
@@ -178,6 +262,79 @@ public sealed class McpParameterBatchTests
         {
             onConnect();
             throw new InvalidOperationException("Dry-run must not connect.");
+        }
+    }
+
+    private sealed class McpBatchTempDirectory : IDisposable
+    {
+        private readonly string? _previousHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "sqlharness-097-" + Guid.NewGuid().ToString("N"));
+        public McpBatchTempDirectory()
+        {
+            Directory.CreateDirectory(Path);
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", Path);
+        }
+        public void Dispose()
+        {
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", _previousHome);
+            Directory.Delete(Path, recursive: true);
+        }
+    }
+
+    private sealed class BatchRecordingSessionFactory : ISqlSessionFactory
+    {
+        public List<int> ExecutedValues { get; } = [];
+        public int ConnectionCount { get; private set; }
+        public int QueryExecutionCount { get; private set; }
+
+        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+        {
+            ConnectionCount++;
+            return Task.FromResult<ISqlSession>(new BatchRecordingSession(this, target));
+        }
+
+        private sealed class BatchRecordingSession(BatchRecordingSessionFactory owner, ResolvedTarget target) : ISqlSession
+        {
+            public IReadOnlyList<SessionMessage> Messages => [];
+            public SqlHarnessTargetIdentityReport Identity { get; set; } = new(target.Server, target.Database, target.Server, target.Database, target.Mode);
+
+            public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+            {
+                if (command.Sql.Equals("SELECT @id", StringComparison.Ordinal))
+                {
+                    owner.QueryExecutionCount++;
+                    foreach (var parameter in command.Parameters)
+                        if (parameter.Name.Equals("@id", StringComparison.OrdinalIgnoreCase))
+                            owner.ExecutedValues.Add(Convert.ToInt32(parameter.Value, System.Globalization.CultureInfo.InvariantCulture));
+                }
+                return Task.FromResult<ISqlReader>(command.Sql.StartsWith("SELECT @@OPTIONS", StringComparison.Ordinal)
+                    ? EmptyReader.SessionState()
+                    : EmptyReader.Empty());
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+
+        private sealed class EmptyReader : ISqlReader
+        {
+            private readonly string[] _names;
+            private readonly object?[][] _rows;
+            private int _row = -1;
+
+            private EmptyReader(string[] names, object?[][] rows) { _names = names; _rows = rows; }
+            public static EmptyReader Empty() => new([], []);
+            public static EmptyReader SessionState() => new(
+                ["Options", "Isolation", "LockTimeout", "DateFirst", "DateFormat", "DeadlockPriority"],
+                [[29560, 2, -1, 7, "mdy", 0]]);
+            public int FieldCount => _names.Length;
+            public int RecordsAffected => 0;
+            public string GetName(int ordinal) => _names[ordinal];
+            public Type GetFieldType(int ordinal) => _rows[0][ordinal]?.GetType() ?? typeof(object);
+            public bool GetAllowNull(int ordinal) => false;
+            public object GetValue(int ordinal) => _rows[_row][ordinal] ?? DBNull.Value;
+            public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(++_row < _rows.Length);
+            public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 }
