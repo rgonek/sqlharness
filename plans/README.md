@@ -19,7 +19,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |
 | [083](083-table-and-list-parameters.md) | Stage D table-valued parameters (inline rows or rows from a read-only query, catalog-resolved types, Structured binding) and Dapper list expansion across read-only tools; conditions, labels and SSMS scripts; mutation rejects them | 077, 079 merged | IMPLEMENTATION VERIFIED; locally integrated into `main` at `55d23ba`; final scoped Sol review approved; live UAT pending; Linux waived ([evidence](083-verification-evidence.md)) |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and in-flight batch identities while preserving applicable staging and retry/cursor state | 084 merged | DONE; locally integrated into `main` at `7f03ecb`; both task reviews, Sol low whole-branch review and final scoped re-review approved; evidence archive includes 10 tracked raw logs ([evidence](090-verification-evidence.md)) |
-| [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | IMPLEMENTED on `plan-097`; original-base format correction committed as `aea93d6`; final Windows gate passed; scoped documentation review pending ([evidence](097-verification-evidence.md)) |
 
 ## Limit-economics execution notes (2026-10-20)
 
@@ -40,6 +39,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [097](097-singleton-parameter-batches.md) | Named/file/matrix singleton batches with separate 32+1 operation identity | DONE on `plan-097`; task and Sol low whole-branch reviews approved; Windows gate and correct-base branch format passed on `aea93d6`; not integrated or pushed ([evidence](097-verification-evidence.md)) |
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | DONE; locally integrated into `main` at `d4e018c`; all reviews approved; verified product/test code unchanged; not pushed ([evidence](096-verification-evidence.md)) |
 | [101](101-dashboard-operation-annotations-setting.md) | Dashboard agent operation annotation toggle with atomic journal saves and restart guidance | DONE; locally integrated into `main` at `61ca7a4`; reviewed and Windows-verified product `13fb02e` unchanged; not pushed ([evidence](101-verification-evidence.md)) |
 | [092](092-default-execution-timeout-setting.md) | Configurable default SQL execution timeout in config.json and Dashboard Settings; fallback for CLI commands and MCP tools | DONE; locally integrated into `main` at `dbdb3e5`; Windows-verified product `b7b7b70` unchanged; all reviews approved; one non-blocking parameter-description Minor deferred; not pushed ([evidence](092-verification-evidence.md)) |
