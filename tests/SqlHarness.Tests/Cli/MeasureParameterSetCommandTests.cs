@@ -117,6 +117,59 @@ public sealed class MeasureParameterSetCommandTests
     }
 
     [Fact]
+    public async Task Measure_reads_large_typed_fixed_and_set_files_with_the_shared_parser_values()
+    {
+        var fixedJson = LargeFixedParametersJson();
+        var setJson = ParameterSetFileReaderTests.LargeTypedParameterSetJson();
+        Assert.True(Encoding.UTF8.GetByteCount(fixedJson) > 64 * 1024);
+        Assert.True(Encoding.UTF8.GetByteCount(setJson) > 64 * 1024);
+        using var fixedFile = TempJson(fixedJson);
+        using var first = TempJson(setJson);
+        using var second = TempJson(setJson.Replace("large-typed-set", "large-typed-set-copy", StringComparison.Ordinal));
+        var module = new FakeModule();
+
+        var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync([
+            "measure", "dev", "--query", QueryFile, "--params-json", fixedFile.Path,
+            "--param-set", first.Path, "--param-set", second.Path
+        ]);
+
+        Assert.Equal(0, exit);
+        var operation = Assert.IsType<SqlHarnessMeasureOperation>(Assert.Single(module.Operations));
+        var fixedParameter = Assert.Single(operation.TypedParameters!);
+        var sets = operation.ParameterSets!;
+        var firstParameter = Assert.Single(sets[0].TypedParameters!);
+        var secondParameter = Assert.Single(sets[1].TypedParameters!);
+        Assert.Equal("list", fixedParameter.Kind);
+        Assert.Equal(5000, fixedParameter.Values!.Count);
+        Assert.Equal(["item-000000-abcdefghij", "item-000001-abcdefghij"], fixedParameter.Values.Take(2));
+        Assert.Equal("list", firstParameter.Kind);
+        Assert.Equal(5000, firstParameter.Values!.Count);
+        Assert.Equal(["item-000000-abcdefghij", "item-000001-abcdefghij"], firstParameter.Values.Take(2));
+        Assert.Equal("large-typed-set-copy", sets[1].Name);
+        Assert.Equal(5000, secondParameter.Values!.Count);
+        Assert.Equal(["item-000000-abcdefghij", "item-000001-abcdefghij"], secondParameter.Values.Take(2));
+    }
+
+    [Fact]
+    public async Task Measure_rejects_fixed_and_set_files_over_32_mib_together_before_dispatch()
+    {
+        using var fixedFile = TempBytes(SizedJson(11 * 1024 * 1024, fixedParameters: true));
+        using var first = TempBytes(SizedJson(11 * 1024 * 1024));
+        using var second = TempBytes(SizedJson(11 * 1024 * 1024));
+        var module = new FakeModule();
+        var output = new StringWriter();
+
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync([
+            "measure", "dev", "--query", QueryFile, "--params-json", fixedFile.Path,
+            "--param-set", first.Path, "--param-set", second.Path
+        ]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        Assert.Empty(module.Operations);
+        Assert.Contains("32 MiB", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Measure_rejects_exactly_one_parameter_set()
     {
         using var only = TempJson($$"""{"name":"only","parameters":["{{ParameterSecret}}"]}""");
@@ -429,6 +482,32 @@ public sealed class MeasureParameterSetCommandTests
     {
         var path = Path.Combine(Path.GetTempPath(), "sqlharness-ps-" + Guid.NewGuid().ToString("n") + ".sqljson");
         File.WriteAllText(path, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        return new TempFile(path);
+    }
+
+    private static string LargeFixedParametersJson() => JsonSerializer.Serialize(new
+    {
+        parameters = new[]
+        {
+            new { name = "Ids", type = "int", kind = "list", values = Enumerable.Range(0, 5000).Select(index => $"item-{index:D6}-abcdefghij") },
+        },
+    });
+
+    private static byte[] SizedJson(int byteCount, bool fixedParameters = false)
+    {
+        var head = Encoding.UTF8.GetBytes(fixedParameters
+            ? "{\"parameters\":[{\"name\":\"id\",\"type\":\"int\",\"value\":\"1\"}]}"
+            : "{\"name\":\"aggregate\",\"parameters\":[\"id:int=1\"]}");
+        var bytes = new byte[byteCount];
+        head.CopyTo(bytes, 0);
+        bytes.AsSpan(head.Length, byteCount - head.Length).Fill((byte)' ');
+        return bytes;
+    }
+
+    private static TempFile TempBytes(byte[] bytes)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "sqlharness-ps-" + Guid.NewGuid().ToString("n") + ".sqljson");
+        File.WriteAllBytes(path, bytes);
         return new TempFile(path);
     }
 

@@ -1,13 +1,15 @@
 using System.Text;
+using System.Text.Json;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
+using SqlHarness.Mcp.Tools;
 
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
-/// T3 bounded-reader contract: SQL/plan ingress at 16 MiB, parameter sets at
-/// 64 KiB through the shared Core strict parser, inline payloads at 1 MiB,
+/// T3 bounded-reader contract: SQL/plan and parameter-file ingress at 16 MiB,
+/// inline payloads at 1 MiB,
 /// explicit roots only, and rejection of traversal, UNC, and oversized input.
 /// Snapshot capture takes no force flag.
 /// Only synthetic HOME and temp directories are used.
@@ -68,6 +70,27 @@ public sealed class McpInputReaderTests : IDisposable
         var path = Path.Combine(_root, name);
         File.WriteAllText(path, content);
         return path;
+    }
+
+    private string WriteSizedSet(string name, int byteCount)
+    {
+        const string head = "{\"name\":\"aggregate\",\"parameters\":[\"id:int=1\"]}";
+        var bytes = new byte[byteCount];
+        Encoding.UTF8.GetBytes(head).CopyTo(bytes, 0);
+        bytes.AsSpan(head.Length, byteCount - head.Length).Fill((byte)' ');
+        var path = Path.Combine(_root, name);
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
+
+    private static string LargeTypedParameterSetJson()
+    {
+        var values = Enumerable.Range(0, 5000).Select(index => $"item-{index:D6}-abcdefghij");
+        return JsonSerializer.Serialize(new
+        {
+            name = "large-typed-set",
+            parameters = new[] { new { name = "Ids", type = "int", kind = "list", values } },
+        });
     }
 
     private McpScope ScopeWithoutRoots() => McpScope.Create(
@@ -362,18 +385,72 @@ public sealed class McpInputReaderTests : IDisposable
         Assert.Contains(wrongExtension, extension.Message, StringComparison.Ordinal);
 
         var big = Path.Combine(_root, "big.sqljson");
-        var padding = new string(' ', McpLimits.MaxParameterSetBytes);
+        var padding = new string(' ', (16 * 1024 * 1024) + 1);
         File.WriteAllText(big, "{\"name\":\"s\",\"parameters\":[\"id:int=1\"]}" + padding);
         var oversized = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([big], _scope, CancellationToken.None));
         Assert.Contains(big, oversized.Message, StringComparison.Ordinal);
-        Assert.Contains("64 KiB", oversized.Message, StringComparison.Ordinal);
+        Assert.Contains("16 MiB", oversized.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Parameter_set_file_accepts_exactly_16_mib()
+    {
+        var exact = WriteSizedSet("exact-limit.sqljson", 16 * 1024 * 1024);
+
+        Assert.Equal("aggregate", Assert.Single(await McpInputReader.ReadParameterSetsAsync([exact], _scope, CancellationToken.None)).Name);
+    }
+
+    [Fact]
+    public async Task Parameter_set_file_rejects_16_mib_plus_one()
+    {
+        var over = WriteSizedSet("over-limit.sqljson", (16 * 1024 * 1024) + 1);
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([over], _scope, CancellationToken.None));
+        Assert.Contains("16 MiB", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Parameter_set_file_reads_large_typed_values_equivalent_to_the_shared_parser()
+    {
+        var json = LargeTypedParameterSetJson();
+        Assert.True(Encoding.UTF8.GetByteCount(json) > 64 * 1024);
+        var path = WriteFile("large-typed.sqljson", json);
+
+        var actual = Assert.Single(await McpInputReader.ReadParameterSetsAsync([path], _scope, CancellationToken.None));
+        var parameter = Assert.Single(actual.TypedParameters!);
+        Assert.Equal("large-typed-set", actual.Name);
+        Assert.Equal("list", parameter.Kind);
+        Assert.Equal(5000, parameter.Values!.Count);
+        Assert.Equal(["item-000000-abcdefghij", "item-000001-abcdefghij"], parameter.Values.Take(2));
+    }
+
+    [Fact]
+    public async Task Parameter_set_files_over_32_mib_total_are_rejected_before_a_session_opens()
+    {
+        var first = WriteSizedSet("aggregate-a.sqljson", 11 * 1024 * 1024);
+        var second = WriteSizedSet("aggregate-b.sqljson", 11 * 1024 * 1024);
+        var third = WriteSizedSet("aggregate-c.sqljson", 11 * 1024 * 1024);
+        var sessions = new CoreSessionFactory(blockFirstSession: false);
+        var handlers = new McpToolHandlers(_scope, new SqlHarnessModule(sessions, _scope.ProfileProvider));
+        var result = await handlers.MeasureAsync(
+            null!, new McpSqlSourceArgument { Sql = "SELECT 1" },
+            parameterSetFiles: [first, second, third], repeat: 1);
+        Assert.True(result.IsError == true);
+        Assert.Equal(0, sessions.ConnectedSessions);
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(() => McpOperationMapper.MapMeasureAsync(
+            _scope, new McpSqlSourceArgument { Sql = "SELECT 1" }, null, null, [first, second, third],
+            1, null, CancellationToken.None));
+
+        Assert.Contains("32 MiB", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, sessions.ConnectedSessions);
     }
 
     [Fact]
     public void Shared_parser_rejects_oversized_bytes_even_without_filesystem_read()
     {
         Assert.Throws<ParameterSetFileException>(() =>
-            ParameterSetFileReader.Parse(new byte[McpLimits.MaxParameterSetBytes + 1]));
+            ParameterSetFileReader.Parse(new byte[(16 * 1024 * 1024) + 1]));
     }
 
     // 002/T1 regression 1 (defect: must FAIL on unchanged src on Windows):
