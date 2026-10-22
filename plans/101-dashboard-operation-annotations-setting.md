@@ -12,7 +12,7 @@
 
 ## Status and dependencies
 
-DONE IN WORKTREE — implementation, browser acceptance, Luna xhigh task reviews, Sol low whole-branch review and scoped re-review approved; final-tree Windows gate passed (10m20s). Ready for authorized local integration from `plan-101`; no push. See [verification evidence](101-verification-evidence.md). Plan 085 and shared Settings work from 092 are integrated in the base.
+DONE — implementation, browser acceptance, Luna xhigh task reviews, Sol low whole-branch review and scoped re-review approved; final-tree Windows gate passed (10m20s). Locally integrated into `main` at `61ca7a4` (product commit `13fb02e`); the verified product/test tree is unchanged; no push. See [verification evidence](101-verification-evidence.md). Plan 085 and shared Settings work from 092 are integrated in the base.
 
 ## Fix contract
 

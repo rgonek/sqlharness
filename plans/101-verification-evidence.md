@@ -1,6 +1,6 @@
 # Plan 101 verification evidence
 
-Status: implementation and browser acceptance passed; Luna xhigh task reviews and Sol low whole-branch/scoped reviews approved. The final Windows gate passed on the tree including the reviewed automatic-journal-enable guidance. This is an uncommitted worktree result, not an integrated branch. No commit, merge, push, live database call, or real operator-config change was made.
+Status: implementation and browser acceptance passed; Luna xhigh task reviews and Sol low whole-branch/scoped reviews approved. The final Windows gate passed on the tree including the reviewed automatic-journal-enable guidance. The verified worktree was subsequently committed and integrated locally as recorded below. No push, live database call, or real operator-config change was made.
 
 ## Tested tree
 
@@ -55,3 +55,9 @@ The worktree and SDD ledger remain available because no commit or integration ha
 ## Integration authorization
 
 The owner selected option 1: commit and merge locally into `main`. Commit and integration evidence will be recorded after the operation. No push is authorized. The historical uncommitted-tree descriptions above refer to the verification state before this authorization.
+
+## Local integration completed
+
+Owner option 1 authorized commit and local merge. Product and documentation commit: `13fb02e`; raw passing-gate log archive: `61ca7a4`. `main` fast-forwarded from `2b0530b` to `61ca7a4`. The controller checked `git diff --exit-code plan-101 HEAD -- src tests` on main: exit 0. No product changes occurred after the passing final-tree Windows gate; integration closure changes documentation only, so the completed gate was not rerun. Working trees were clean at integration. No push occurred.
+
+The raw review-package Markdown intentionally preserves Git diff context markers, including whitespace-only context lines; these archived patch examples can trigger whitespace diagnostics. They are evidence artifacts rather than product formatting failures.
