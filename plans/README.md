@@ -19,7 +19,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |
 | [083](083-table-and-list-parameters.md) | Stage D table-valued parameters (inline rows or rows from a read-only query, catalog-resolved types, Structured binding) and Dapper list expansion across read-only tools; conditions, labels and SSMS scripts; mutation rejects them | 077, 079 merged | IMPLEMENTATION VERIFIED; locally integrated into `main` at `55d23ba`; final scoped Sol review approved; live UAT pending; Linux waived ([evidence](083-verification-evidence.md)) |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and in-flight batch identities while preserving applicable staging and retry/cursor state | 084 merged | DONE; locally integrated into `main` at `7f03ecb`; both task reviews, Sol low whole-branch review and final scoped re-review approved; evidence archive includes 10 tracked raw logs ([evidence](090-verification-evidence.md)) |
-| [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | TODO — P2, plan only |
+| [097](097-singleton-parameter-batches.md) | Accept a one-case named/file/matrix remainder without duplicate work; keep 32-case execution cap | Existing parameters; coordinate 096 | IMPLEMENTED on `plan-097`; Windows gate and reviews approved; controller final evidence check pending ([evidence](097-verification-evidence.md)) |
 
 ## Limit-economics execution notes (2026-10-20)
 

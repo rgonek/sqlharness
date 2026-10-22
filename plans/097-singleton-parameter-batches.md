@@ -6,7 +6,7 @@
 
 ## Status and authority
 
-- TODO — plan only. Planned at `32adaa7`, 2026-10-20.
+- IMPLEMENTED on branch `plan-097`; task reviews and whole-branch review approved subject to controller's final evidence check. Windows gate passed on product revision `6d658da`; documentation/evidence follow-up and scoped re-review are in progress. No integration or push. Planned at `32adaa7`, 2026-10-20.
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: Existing 083 parameter semantics must be present. Execute after 096 to avoid concurrent CLI/parser edits; 096 is scheduling coordination, not a semantic predecessor.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -41,22 +41,22 @@ Docs: `docs/mcp/inputs.md`, `docs/mcp/tools.md`, relevant README parameter secti
 
 ### Task 1: Freeze singleton semantics and boundary failures
 
-- [ ] Test 0/1/2/32/33 cases in inline named sets, named files and matrix forms. Singletons include scalar, typed NULL and supported TVP/list cases.
-- [ ] Use fake execution to prove one case executes its setup and measured repeats exactly once according to existing repeat semantics; a singleton compare still executes both variants.
-- [ ] Require singleton report/artifact to preserve the explicit name/index, supplied subject/scope, typed values and case identity. A failing singleton leaves no duplicate or phantom not-executed case.
+- [x] Test 0/1/2/32/33 cases in inline named sets, named files and matrix forms. Singletons include scalar, typed NULL and supported TVP/list cases.
+- [x] Use fake execution to prove one case executes its setup and measured repeats exactly once according to existing repeat semantics; a singleton compare still executes both variants.
+- [x] Require singleton report/artifact to preserve the explicit name/index, supplied subject/scope, typed values and case identity. A failing singleton leaves no duplicate or phantom not-executed case.
 - **Verify:** `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~ParameterSet|FullyQualifiedName~SqlParameterMatrixTests"` has intended RED.
 
 ### Task 2: Admit one case through all enforcing surfaces
 
-- [ ] Lower only the collection minimum from 2 to 1. Match runtime, parser/CLI, JSON schema validation and descriptions; keep maxima and other validation unchanged.
-- [ ] Update exact contract pins/capabilities to 1..32 without dropping types, labels or scope requirements.
+- [x] Lower only the collection minimum from 2 to 1. Match runtime, parser/CLI, JSON schema validation and descriptions; keep maxima and other validation unchanged.
+- [x] Update exact contract pins/capabilities to 1..32 without dropping types, labels or scope requirements.
 - **Verify:** Task 1 command GREEN; `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpParameterBatchTests"` GREEN; explicitly inspect that the filter selects the new fixed/request singleton cases.
 
 ### Task 3: Prove 32+1 completes without redundant cases
 
-- [ ] Run a deterministic fake-session or fixture-host workload of 33 uniquely identified cases split 32+1; assert every case is executed exactly once, all returned references are recoverable and the two operation identities remain separate.
-- [ ] Record calls/input/output bytes and zero live DB connections. No token-efficiency claim from arithmetic alone.
-- [ ] Remove obsolete 2..32 claims on affected current interfaces, retaining historical plan evidence unchanged.
+- [x] Run a deterministic fake-session or fixture-host workload of 33 uniquely identified cases split 32+1; assert every case is executed exactly once, all returned references are recoverable and the two operation identities remain separate.
+- [x] Record calls/input/output bytes and zero live DB connections. No token-efficiency claim from arithmetic alone.
+- [x] Remove obsolete 2..32 claims on affected current interfaces, retaining historical plan evidence unchanged.
 - **Verify:** the new 32+1 workflow regression and Common verification pass.
 
 ## Maintenance notes
@@ -79,8 +79,8 @@ Report a concrete design blocker if the live interfaces invalidate the Fix contr
 
 ## Done criteria
 
-- [ ] All task-specific regressions below pass and each task has spec/quality review.
-- [ ] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
-- [ ] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
-- [ ] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
-- [ ] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.
+- [x] All task-specific regressions below pass and each task has spec/quality review.
+- [x] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
+- [x] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
+- [x] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
+- [x] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.
