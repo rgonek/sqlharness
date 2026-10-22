@@ -9,7 +9,7 @@ public sealed class ParameterSetFileReaderTests
 {
     private const string ParameterSecret = "customerId:int=424242";
     private const string InvalidFileMessage = "valid";
-    private const string TooLargeMessage = "64 KiB";
+    private const string TooLargeMessage = "16 MiB";
 
     [Fact]
     public async Task ReadAsync_returns_name_and_parameters_in_file_order()
@@ -109,10 +109,10 @@ public sealed class ParameterSetFileReaderTests
     }
 
     [Fact]
-    public async Task ReadAsync_accepts_exact_64_kib()
+    public async Task ReadAsync_accepts_exact_16_mib()
     {
         var secret = "id:int=424242-size-secret";
-        using var file = TempBytes(SizedJson(64 * 1024, secret));
+        using var file = TempBytes(SizedJson(16 * 1024 * 1024, secret));
 
         var set = await ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None);
 
@@ -121,10 +121,10 @@ public sealed class ParameterSetFileReaderTests
     }
 
     [Fact]
-    public async Task ReadAsync_rejects_one_byte_over_64_kib_without_parameter_text()
+    public async Task ReadAsync_rejects_one_byte_over_16_mib_without_parameter_text()
     {
         var secret = "id:int=424242-size-secret";
-        using var file = TempBytes(SizedJson((64 * 1024) + 1, secret));
+        using var file = TempBytes(SizedJson((16 * 1024 * 1024) + 1, secret));
 
         var exception = await RejectBytes(file, TooLargeMessage);
 
@@ -134,11 +134,26 @@ public sealed class ParameterSetFileReaderTests
     [Fact]
     public async Task ReadAsync_rejects_larger_invalid_bytes_as_too_big()
     {
-        var bytes = new byte[(64 * 1024) + 4096];
+        var bytes = new byte[(16 * 1024 * 1024) + 4096];
         bytes.AsSpan().Fill(0xFF);
         using var file = TempBytes(bytes);
 
         await RejectBytes(file, TooLargeMessage);
+    }
+
+    [Fact]
+    public async Task ReadAsync_accepts_large_typed_list_values_from_a_file()
+    {
+        var json = LargeTypedParameterSetJson();
+        Assert.True(Encoding.UTF8.GetByteCount(json) > 64 * 1024);
+        using var file = TempJson(json);
+
+        var actual = await ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None);
+        Assert.Equal("large-typed-set", actual.Name);
+        var parameter = Assert.Single(actual.TypedParameters!);
+        Assert.Equal("list", parameter.Kind);
+        Assert.Equal(5000, parameter.Values!.Count);
+        Assert.Equal(["item-000000-abcdefghij", "item-000001-abcdefghij"], parameter.Values.Take(2));
     }
 
     [Fact]
@@ -481,6 +496,19 @@ public sealed class ParameterSetFileReaderTests
         bytes.AsSpan(head.Length, byteCount - head.Length - tail.Length).Fill((byte)' ');
         tail.CopyTo(bytes.AsSpan(byteCount - tail.Length));
         return bytes;
+    }
+
+    internal static string LargeTypedParameterSetJson()
+    {
+        var values = Enumerable.Range(0, 5000).Select(index => $"item-{index:D6}-abcdefghij");
+        return JsonSerializer.Serialize(new
+        {
+            name = "large-typed-set",
+            parameters = new[]
+            {
+                new { name = "Ids", type = "int", kind = "list", values },
+            },
+        });
     }
 
     private static TempFile TempJson(string json)

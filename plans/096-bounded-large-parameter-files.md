@@ -1,12 +1,12 @@
 # Plan 096: Make files a practical bounded path for large typed parameters
 
-> **Executor:** use staged implementation, task review and whole-branch review. This is a plan, not authorization to implement, merge, push, run paid agent trials or access a live database.
+> **Executor:** use staged implementation, task review and whole-branch review. Implementation and local integration are authorized; pushing, paid agent trials and live database access remain out of scope.
 >
 > **Drift check first:** `git diff --stat 32adaa7..HEAD -- src/SqlHarness.Core/ParameterInputFileReader.cs src/SqlHarness.Core/ParameterSetFileReader.cs src/SqlHarness.Core/ParameterSetResolver.cs src/SqlHarness.Cli/Commands/SqlHarnessCommands.cs src/SqlHarness.Mcp/McpInputReader.cs src/SqlHarness.Mcp/McpOperationMapper.cs`. Reconcile changed interfaces against the excerpts below; do not overwrite later features. Work in an isolated `.worktrees/plan-096` checkout.
 
 ## Status and authority
 
-- TODO — plan only. Planned at `32adaa7`, 2026-10-20.
+- IMPLEMENTED on `plan-096`; all task, whole-branch and final scoped reviews are approved. Locally fast-forwarded into `main` at `d4e018c` with the verified product/test code unchanged; not pushed. Implementation base `898f8b20f40246b3d0ff5263c5969ed4e2130b12`; see [verification evidence](096-verification-evidence.md).
 - Priority P2; effort M; implementation risk MED; category perf.
 - Dependencies: 083 TVP/list implementation is merged. Coordinate CLI/parser edits with 097; no dependency on output-budget plans.
 - **Spec:** the Fix contract in this file is authoritative for this change. Preserve existing safety, scope ownership, persistent-mutation classification and approval.
@@ -44,22 +44,22 @@ Docs: `docs/mcp/inputs.md`, `docs/mcp/tools.md`, `README.md`. Do not change targ
 
 ### Task 1: Prove the old file cap and freeze new boundaries
 
-- [ ] Add an offline typed TVP/list input fixture above 64 KiB but below 16 MiB; assert CLI fixed-file/set-file paths and the existing MCP set-file path admit it with equivalent typed values to inline parsing. Do not invent a new MCP fixed-file argument. Use fake session factories; no DB calls.
-- [ ] Test exactly the new limit and limit+1, a growing stream, cancellation, invalid UTF-8/JSON, duplicate fields, and unauthorized MCP paths.
-- [ ] Test combined files exceeding 32 MiB although each is valid; require rejection before a fake DB session opens. Assert fixed+sets share one allowance and nested parser wrappers are not charged twice.
+- [x] Add an offline typed TVP/list input fixture above 64 KiB but below 16 MiB; assert CLI fixed-file/set-file paths and the existing MCP set-file path admit it with equivalent typed values to inline parsing. Do not invent a new MCP fixed-file argument. Use fake session factories; no DB calls.
+- [x] Test exactly the new limit and limit+1, a growing stream, cancellation, invalid UTF-8/JSON, duplicate fields, and unauthorized MCP paths.
+- [x] Test combined files exceeding 32 MiB although each is valid; require rejection before a fake DB session opens. Assert fixed+sets share one allowance and nested parser wrappers are not charged twice.
 - **Verify:** `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~ParameterSetFileReaderTests|FullyQualifiedName~ParameterInputFileReaderTests|FullyQualifiedName~MeasureParameterSetCommandTests"` and `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "FullyQualifiedName~McpInputReaderTests|FullyQualifiedName~McpParameterFileBudgetTests"` produce intended RED. Confirm at least one new accounting regression is selected, not merely existing passing tests.
 
 ### Task 2: Centralize admission and wire both command paths
 
-- [ ] Implement the budget and bounded reader once, then wire all CLI/MCP parameter-file paths. Keep pure parse semantics distinct from accounting.
-- [ ] Do not allocate unbounded file lists or preload all files just to discover the aggregate limit. Ensure exact admitted byte counts and deterministic first error.
-- [ ] Test an admitted file whose decoded typed data later exceeds existing materialization limits; it must still fail before database execution.
+- [x] Implement the budget and bounded reader once, then wire all CLI/MCP parameter-file paths. Keep pure parse semantics distinct from accounting.
+- [x] Do not allocate unbounded file lists or preload all files just to discover the aggregate limit. Ensure exact admitted byte counts and deterministic first error.
+- [x] Test an admitted file whose decoded typed data later exceeds existing materialization limits; it must still fail before database execution.
 - **Verify:** Task 1 tests GREEN; `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter FullyQualifiedName~ParameterSetResolverTests` GREEN; affected MCP project tests GREEN.
 
 ### Task 3: Publish the separate ingress and execution bounds
 
-- [ ] Update all 64 KiB file claims on affected parameter surfaces, not unrelated SQL or frame limits. Check tool catalog still fits 32768 bytes.
-- [ ] Record a >64 KiB successful offline file workflow with no data echoed into output, raw byte counts, and that larger raw file admission is not larger allowed SQL materialization.
+- [x] Update all 64 KiB file claims on affected parameter surfaces, not unrelated SQL or frame limits. Check tool catalog still fits 32768 bytes.
+- [x] Record a >64 KiB successful offline file workflow with no data echoed into output, raw byte counts, and that larger raw file admission is not larger allowed SQL materialization.
 - **Verify:** `rg -n "64 KiB|64KiB|65536|65_536" src/SqlHarness.Core/ParameterInputFileReader.cs src/SqlHarness.Core/ParameterSetFileReader.cs src/SqlHarness.Mcp/McpLimits.cs docs/mcp/inputs.md` reviewed for remaining legitimate unrelated constants (exit 1 is normal if none remain); run Common verification.
 
 ## Maintenance notes
@@ -82,8 +82,8 @@ Report a concrete design blocker if the live interfaces invalidate the Fix contr
 
 ## Done criteria
 
-- [ ] All task-specific regressions below pass and each task has spec/quality review.
-- [ ] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
-- [ ] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch review is approved.
-- [ ] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
-- [ ] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.
+- [x] All task-specific regressions below pass and each task has spec/quality review.
+- [x] Served schemas, descriptions and capabilities agree with runtime behavior; affected human docs are updated without duplicating interface contracts into skills.
+- [x] Direct branch formatting and final Windows `just verify` exit 0; final whole-branch and scoped reviews are approved.
+- [x] Evidence distinguishes deterministic fixture measurements from actual-agent or live-database results.
+- [x] Changes stay within the listed source/test surfaces plus this plan, its evidence, plan index/history and explicitly listed docs.

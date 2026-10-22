@@ -3,10 +3,9 @@ using SqlHarness.Core;
 namespace SqlHarness.Mcp;
 
 /// <summary>
-/// Single home for MCP v1 byte budgets. SQL/plan ingress (16 MiB) matches the
-/// CLI/Core SQL bound, param-set files (64 KiB) match the strict .sqljson
-/// contract, and the 1 MiB inline frame cap means larger payloads must arrive
-/// via files under explicit operator input roots.
+/// Single home for MCP v1 byte budgets. SQL/plan/parameter files are limited
+/// to 16 MiB each, parameter files share a 32 MiB raw call budget, and the
+/// 1 MiB inline frame cap means larger payloads must arrive via rooted files.
 /// </summary>
 public static class McpLimits
 {
@@ -16,8 +15,8 @@ public static class McpLimits
     /// <summary>Maximum admitted plan document, inline or file, in UTF-8 bytes.</summary>
     public const long MaxPlanBytes = 16L * 1024 * 1024;
 
-    /// <summary>Maximum admitted .sqljson parameter-set file size in bytes.</summary>
-    public const int MaxParameterSetBytes = 64 * 1024;
+    /// <summary>Maximum admitted .sqljson parameter-file size in raw bytes.</summary>
+    public const int MaxParameterSetBytes = ParameterFileIngressBudget.MaximumFileBytes;
 
     /// <summary>
     /// Maximum inline argument payload in UTF-8 bytes. Anything larger must be

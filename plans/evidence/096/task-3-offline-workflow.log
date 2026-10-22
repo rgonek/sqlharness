@@ -1,0 +1,23 @@
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.68]   Discovering: SqlHarness.Tests
+[xUnit.net 00:00:03.65]   Discovered:  SqlHarness.Tests
+[xUnit.net 00:00:03.75]   Starting:    SqlHarness.Tests
+[xUnit.net 00:00:04.63]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_reads_large_typed_fixed_and_set_files_matching_inline_typed_values [748 ms]
+  Standard Output Messages:
+ Offline CLI parameter-file workflow: occurrences=3, rawBytes=125069,125094,125099, totalRawBytes=375262, decodedValues=15000, fakeModuleCalls=1, databaseCalls=0, echoedOutputBytes=0; materializedParameterBytes=33554432.
+
+
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 6,7496 Seconds

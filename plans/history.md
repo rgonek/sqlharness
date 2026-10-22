@@ -448,3 +448,7 @@ Plan [098](098-session-operation-pagination.md) is DONE on feature branch `plan-
 - Each new PostgreSQL major: extend diagnostic test/source coverage (037) when useful; compatible runtime shapes do not wait for a version allowlist. Review known dangerous-call checks (019) against concrete evidence rather than widening name prefixes automatically.
 
 Plan 090 local integration: owner selected local merge; `main` fast-forwarded to `7f03ecb`. Source, tests and scripts match Windows-verified `1e6b0eb`; no redundant gate ran. No push.
+
+## Plan 096 implementation branch — 2026-10-22
+
+The bounded parameter-file ingress implementation and public contract are implemented on `plan-096`; all task, whole-branch and final scoped reviews are approved. The branch keeps 16 MiB per-file and 32 MiB aggregate raw ingress separate from the unchanged 32 MiB (33,554,432-byte) decoded/materialized parameter limit. The final Windows gate and direct branch formatting evidence are recorded in [Plan 096 verification evidence](096-verification-evidence.md). It was locally fast-forwarded into `main` at `d4e018c`; the verified product/test code is unchanged and no push occurred. No live database, actual-agent trial or Linux gate occurred.

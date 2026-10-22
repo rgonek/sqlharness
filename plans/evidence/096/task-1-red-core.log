@@ -1,0 +1,248 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.01] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.48]   Discovering: SqlHarness.Tests
+[xUnit.net 00:00:01.93]   Discovered:  SqlHarness.Tests
+[xUnit.net 00:00:02.06]   Starting:    SqlHarness.Tests
+[xUnit.net 00:00:02.30]     SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_accepts_large_typed_table_and_list_values_from_a_file [FAIL]
+[xUnit.net 00:00:02.30]       SqlHarness.Core.ParameterSetFileException : Fixed parameter file 'D:\temp\sqlharness-params-091c658786d140b1b68a2d92dffe15bd.sqljson' exceeds the 64 KiB limit.
+[xUnit.net 00:00:02.30]       Stack Trace:
+[xUnit.net 00:00:02.30]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterInputFileReader.cs(18,0): at SqlHarness.Core.ParameterInputFileReader.ReadAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.30]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterInputFileReader.cs(20,0): at SqlHarness.Core.ParameterInputFileReader.ReadAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.30]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterInputFileReaderTests.cs(17,0): at SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_accepts_large_typed_table_and_list_values_from_a_file()
+[xUnit.net 00:00:02.30]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:02.34]     SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_rejects_16_mib_plus_one [FAIL]
+[xUnit.net 00:00:02.34]       Assert.Contains() Failure: Sub-string not found
+[xUnit.net 00:00:02.34]       String:    "Fixed parameter file 'D:\\temp\\sqlharness-"···
+[xUnit.net 00:00:02.34]       Not found: "16 MiB"
+[xUnit.net 00:00:02.34]       Stack Trace:
+[xUnit.net 00:00:02.34]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterInputFileReaderTests.cs(42,0): at SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_rejects_16_mib_plus_one()
+[xUnit.net 00:00:02.34]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:02.38]     SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_accepts_exactly_16_mib [FAIL]
+[xUnit.net 00:00:02.38]       SqlHarness.Core.ParameterSetFileException : Fixed parameter file 'D:\temp\sqlharness-params-c0f52e92e8f7449ea7cea5751697cf8a.sqljson' exceeds the 64 KiB limit.
+[xUnit.net 00:00:02.38]       Stack Trace:
+[xUnit.net 00:00:02.38]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterInputFileReader.cs(18,0): at SqlHarness.Core.ParameterInputFileReader.ReadAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.38]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterInputFileReader.cs(20,0): at SqlHarness.Core.ParameterInputFileReader.ReadAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.38]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterInputFileReaderTests.cs(31,0): at SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_accepts_exactly_16_mib()
+[xUnit.net 00:00:02.38]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:02.58]     SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_rejects_fixed_and_set_files_over_32_mib_together_before_dispatch [FAIL]
+[xUnit.net 00:00:02.58]       Assert.Contains() Failure: Sub-string not found
+[xUnit.net 00:00:02.58]       String:    "Fixed parameter file 'D:\\temp\\sqlharness-"···
+[xUnit.net 00:00:02.58]       Not found: "32 MiB"
+[xUnit.net 00:00:02.58]       Stack Trace:
+[xUnit.net 00:00:02.58]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\Cli\MeasureParameterSetCommandTests.cs(169,0): at SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_rejects_fixed_and_set_files_over_32_mib_together_before_dispatch()
+[xUnit.net 00:00:02.58]         --- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_comments(json: "{\"name\":\"ok\" /* secret-note-value */,\"paramet"···) [90 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_comments(json: "{\"name\":\"ok\",\"parameters\":[\"customerId:int="···) [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_comments(json: "{/* secret-note-value */\"name\":\"ok\",\"paramete"···) [7 ms]
+  Failed SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_accepts_large_typed_table_and_list_values_from_a_file [140 ms]
+  Error Message:
+   SqlHarness.Core.ParameterSetFileException : Fixed parameter file 'D:\temp\sqlharness-params-091c658786d140b1b68a2d92dffe15bd.sqljson' exceeds the 64 KiB limit.
+  Stack Trace:
+     at SqlHarness.Core.ParameterInputFileReader.ReadAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterInputFileReader.cs:line 18
+   at SqlHarness.Core.ParameterInputFileReader.ReadAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterInputFileReader.cs:line 20
+   at SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_accepts_large_typed_table_and_list_values_from_a_file() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterInputFileReaderTests.cs:line 17
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_rejects_16_mib_plus_one [48 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Fixed parameter file 'D:\\temp\\sqlharness-"···
+Not found: "16 MiB"
+  Stack Trace:
+     at SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_rejects_16_mib_plus_one() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterInputFileReaderTests.cs:line 42
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_accepts_exactly_16_mib [38 ms]
+  Error Message:
+   SqlHarness.Core.ParameterSetFileException : Fixed parameter file 'D:\temp\sqlharness-params-c0f52e92e8f7449ea7cea5751697cf8a.sqljson' exceeds the 64 KiB limit.
+  Stack Trace:
+     at SqlHarness.Core.ParameterInputFileReader.ReadAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterInputFileReader.cs:line 18
+   at SqlHarness.Core.ParameterInputFileReader.ReadAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterInputFileReader.cs:line 20
+   at SqlHarness.Tests.ParameterInputFileReaderTests.ReadAsync_accepts_exactly_16_mib() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterInputFileReaderTests.cs:line 31
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_parameter_entry_accepts_at_prefixed_name_and_binds_canonically [323 ms]
+  Failed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_rejects_fixed_and_set_files_over_32_mib_together_before_dispatch [456 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Fixed parameter file 'D:\\temp\\sqlharness-"···
+Not found: "32 MiB"
+  Stack Trace:
+     at SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_rejects_fixed_and_set_files_over_32_mib_together_before_dispatch() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\Cli\MeasureParameterSetCommandTests.cs:line 169
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:02.68]     SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_large_typed_list_values_from_a_file [FAIL]
+[xUnit.net 00:00:02.68]       SqlHarness.Core.ParameterSetFileException : Parameter set file 'D:\temp\sqlharness-ps-17e7b52abdcf4cdc85577893d837c7c3.sqljson' exceeds the 64 KiB limit.
+[xUnit.net 00:00:02.68]       Stack Trace:
+[xUnit.net 00:00:02.68]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs(85,0): at SqlHarness.Core.ParameterSetFileReader.ReadAtMostAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.68]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs(87,0): at SqlHarness.Core.ParameterSetFileReader.ReadAtMostAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.68]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs(28,0): at SqlHarness.Core.ParameterSetFileReader.ReadAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.68]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs(151,0): at SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_large_typed_list_values_from_a_file()
+[xUnit.net 00:00:02.68]         --- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_missing_fields(json: "{\"name\":\"secret-label\",\"parameters\":null}") [31 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_missing_fields(json: "{}") [6 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_missing_fields(json: "{\"name\":\"secret-label\"}") [6 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_missing_fields(json: "{\"parameters\":[\"customerId:int=424242\"]}") [7 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_missing_fields(json: "{\"name\":null,\"parameters\":[\"customerId:int=42"···) [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_duplicate_json_names [7 ms]
+  Failed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_large_typed_list_values_from_a_file [28 ms]
+  Error Message:
+   SqlHarness.Core.ParameterSetFileException : Parameter set file 'D:\temp\sqlharness-ps-17e7b52abdcf4cdc85577893d837c7c3.sqljson' exceeds the 64 KiB limit.
+  Stack Trace:
+     at SqlHarness.Core.ParameterSetFileReader.ReadAtMostAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs:line 85
+   at SqlHarness.Core.ParameterSetFileReader.ReadAtMostAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs:line 87
+   at SqlHarness.Core.ParameterSetFileReader.ReadAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs:line 28
+   at SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_large_typed_list_values_from_a_file() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs:line 151
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_valid_labels(label: "a") [18 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_valid_labels(label: "Z") [9 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_rejects_one_missing_parameter_set_without_its_path [131 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_valid_labels(label: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"···) [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_valid_labels(label: "a.b_c-d") [18 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_valid_labels(label: "0") [4 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_valid_labels(label: "9name") [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_valid_labels(label: "A1") [8 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_empty_parameters(json: "{\"name\":\"ok\",\"parameters\":[\"\"]}") [9 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_empty_parameters(json: "{\"name\":\"ok\",\"parameters\":[\"customerId:int="···) [20 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_empty_parameters(json: "{\"name\":\"ok\",\"parameters\":[]}") [17 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_illegal_path_with_the_path [2 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"···) [15 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "café") [6 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_rejects_exactly_one_parameter_set [120 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: " name") [4 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "_underscore") [4 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "has space") [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "bang!") [6 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "a\n") [6 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "@name") [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: " ") [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "-dash") [6 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: ".hidden") [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "slash\\name") [6 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "slash/name") [7 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "name ") [6 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "") [19 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_labels(label: "a\t") [19 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_trailing_content(json: "{\"name\":\"ok\",\"parameters\":[\"customerId:int="···) [9 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_trailing_content(json: "{\"name\":\"ok\",\"parameters\":[\"customerId:int="···) [8 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_trailing_content(json: "{\"name\":\"ok\",\"parameters\":[\"customerId:int="···) [5 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_invalid_parameter_set_names_path_and_unknown_property [142 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_wrong_json_shape(json: "customerId:int=424242") [18 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_wrong_json_shape(json: "{\"name\":\"ok\",\"parameters\":\"customerId:int=4"···) [16 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_wrong_json_shape(json: "null") [4 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_wrong_json_shape(json: "{\"name\":1,\"parameters\":[\"customerId:int=42424"···) [12 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_wrong_json_shape(json: "{\"name\":\"ok\",\"parameters\":[null]}") [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_wrong_json_shape(json: "{\"name\":\"ok\",\"parameters\":[{\"id\":\"424242\"···) [23 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_wrong_json_shape(json: "[\"secret-label\"]") [4 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_extra_fields [8 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_bom [7 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_unknown_properties(json: "{\"Name\":\"secret-label\",\"parameters\":[\"custo"···) [7 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_unknown_properties(json: "{\"name\":\"ok\",\"Parameters\":[\"customerId:int="···) [4 ms]
+[xUnit.net 00:00:03.18]     SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_larger_invalid_bytes_as_too_big [FAIL]
+[xUnit.net 00:00:03.18]       Assert.Contains() Failure: Sub-string not found
+[xUnit.net 00:00:03.18]       String:    "Parameter set file 'D:\\temp\\sqlharness-ps"···
+[xUnit.net 00:00:03.18]       Not found: "16 MiB"
+[xUnit.net 00:00:03.18]       Stack Trace:
+[xUnit.net 00:00:03.18]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs(469,0): at SqlHarness.Tests.ParameterSetFileReaderTests.Reject(TempFile file, String message)
+[xUnit.net 00:00:03.18]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs(141,0): at SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_larger_invalid_bytes_as_too_big()
+[xUnit.net 00:00:03.18]         --- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_unknown_properties(json: "{\"label\":\"secret-label\",\"parameters\":[\"cust"···) [6 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_trailing_commas(json: "{\"name\":\"ok\",\"parameters\":[\"customerId:int="···) [5 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_trailing_commas(json: "{\"name\":\"ok\",\"parameters\":[\"customerId:int="···) [4 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_trailing_commas(json: "{\"name\":\"ok\",\"parameters\":[\"customerId:int="···) [3 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_duplicate_properties(json: "{\"name\":\"ok\",\"parameters\":[\"customerId:int="···) [6 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_keeps_fixed_params_and_does_not_print_set_text [154 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_duplicate_properties(json: "{\"name\":\"first-secret\",\"name\":\"second-secre"···) [6 ms]
+  Failed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_larger_invalid_bytes_as_too_big [44 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Parameter set file 'D:\\temp\\sqlharness-ps"···
+Not found: "16 MiB"
+  Stack Trace:
+     at SqlHarness.Tests.ParameterSetFileReaderTests.Reject(TempFile file, String message) in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs:line 469
+   at SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_larger_invalid_bytes_as_too_big() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs:line 141
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:03.24]     SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_exact_16_mib [FAIL]
+[xUnit.net 00:00:03.24]       SqlHarness.Core.ParameterSetFileException : Parameter set file 'D:\temp\sqlharness-ps-e8827fe62424499aa762565b07ee2c92.sqljson' exceeds the 64 KiB limit.
+[xUnit.net 00:00:03.24]       Stack Trace:
+[xUnit.net 00:00:03.24]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs(85,0): at SqlHarness.Core.ParameterSetFileReader.ReadAtMostAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:03.24]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs(87,0): at SqlHarness.Core.ParameterSetFileReader.ReadAtMostAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:03.24]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs(28,0): at SqlHarness.Core.ParameterSetFileReader.ReadAsync(String path, CancellationToken cancellationToken)
+[xUnit.net 00:00:03.24]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs(117,0): at SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_exact_16_mib()
+[xUnit.net 00:00:03.24]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:03.29]     SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_one_byte_over_16_mib_without_parameter_text [FAIL]
+[xUnit.net 00:00:03.29]       Assert.Contains() Failure: Sub-string not found
+[xUnit.net 00:00:03.29]       String:    "Parameter set file 'D:\\temp\\sqlharness-ps"···
+[xUnit.net 00:00:03.29]       Not found: "16 MiB"
+[xUnit.net 00:00:03.29]       Stack Trace:
+[xUnit.net 00:00:03.29]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs(469,0): at SqlHarness.Tests.ParameterSetFileReaderTests.Reject(TempFile file, String message)
+[xUnit.net 00:00:03.29]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs(129,0): at SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_one_byte_over_16_mib_without_parameter_text()
+[xUnit.net 00:00:03.29]         --- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.Fixed_parameter_file_parser_accepts_utf8_bom_and_rejects_duplicate_root_properties [12 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_cancellation_is_not_a_parameter_set_error [4 ms]
+  Failed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_exact_16_mib [36 ms]
+  Error Message:
+   SqlHarness.Core.ParameterSetFileException : Parameter set file 'D:\temp\sqlharness-ps-e8827fe62424499aa762565b07ee2c92.sqljson' exceeds the 64 KiB limit.
+  Stack Trace:
+     at SqlHarness.Core.ParameterSetFileReader.ReadAtMostAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs:line 85
+   at SqlHarness.Core.ParameterSetFileReader.ReadAtMostAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs:line 87
+   at SqlHarness.Core.ParameterSetFileReader.ReadAsync(String path, CancellationToken cancellationToken) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\ParameterSetFileReader.cs:line 28
+   at SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_exact_16_mib() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs:line 117
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_dispatches_two_parameter_sets_in_user_order [126 ms]
+  Failed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_one_byte_over_16_mib_without_parameter_text [51 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Parameter set file 'D:\\temp\\sqlharness-ps"···
+Not found: "16 MiB"
+  Stack Trace:
+     at SqlHarness.Tests.ParameterSetFileReaderTests.Reject(TempFile file, String message) in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs:line 469
+   at SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_one_byte_over_16_mib_without_parameter_text() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\ParameterSetFileReaderTests.cs:line 129
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_reports_path_and_json_position_without_echoing_file_values [6 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.Parse_accepts_typed_table_and_list_parameters_inside_a_parameter_set [2 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_invalid_utf8 [7 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_reports_eof_position_for_unterminated_top_level_object [22 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_preserves_utf8_parameter_text_and_comment_like_strings [6 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_context_is_optional_when_compare_context_is_required [113 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_returns_source_path_for_later_parameter_diagnostics [163 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_parameter_set_io_failure_exits_safety_with_the_path [148 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_returns_name_and_parameters_in_file_order [21 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_accepts_parameters_before_name_and_trailing_whitespace [17 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.Fixed_and_parameter_set_files_reject_source_fields_from_the_other_kind [1 ms]
+[xUnit.net 00:00:04.12]     SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_reads_large_typed_fixed_and_set_files_with_the_shared_parser_values [FAIL]
+[xUnit.net 00:00:04.12]       Assert.Equal() Failure: Values differ
+[xUnit.net 00:00:04.12]       Expected: 0
+[xUnit.net 00:00:04.12]       Actual:   2
+[xUnit.net 00:00:04.12]       Stack Trace:
+[xUnit.net 00:00:04.12]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\Cli\MeasureParameterSetCommandTests.cs(136,0): at SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_reads_large_typed_fixed_and_set_files_with_the_shared_parser_values()
+[xUnit.net 00:00:04.12]         --- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_missing_file_with_the_path [1 ms]
+  Passed SqlHarness.Tests.ParameterSetFileReaderTests.ReadAsync_rejects_directory_with_the_path [4 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_set_json_keeps_the_report_and_omits_parameter_values_and_paths [88 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_without_param_set_leaves_parameter_sets_null [85 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_allows_duplicate_set_names_across_files [93 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_param_sets_still_require_a_query_file [117 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_accepts_subject_and_scope_without_compare_context_policy [97 ms]
+  Failed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_reads_large_typed_fixed_and_set_files_with_the_shared_parser_values [113 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 0
+Actual:   2
+  Stack Trace:
+     at SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_reads_large_typed_fixed_and_set_files_with_the_shared_parser_values() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Tests\Cli\MeasureParameterSetCommandTests.cs:line 136
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_rejects_invalid_context_labels_before_dispatch [82 ms]
+[xUnit.net 00:00:04.27]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_set_text_shows_cache_rotation_stability_and_artifact_without_values_or_paths [4 ms]
+  Passed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_set_json_summary_projects_medians_labels_and_capped_operators_without_values_or_plans [57 ms]
+
+Test Run Failed.
+Total tests: 94
+     Passed: 85
+     Failed: 9
+ Total time: 5,5841 Seconds

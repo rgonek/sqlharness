@@ -6,18 +6,20 @@ namespace SqlHarness.Core;
 /// <summary>Reads fixed typed parameters from a bounded .sqljson file.</summary>
 public static class ParameterInputFileReader
 {
-    public static async Task<IReadOnlyList<SqlHarnessParameterInput>> ReadAsync(string path, CancellationToken cancellationToken)
+    public static Task<IReadOnlyList<SqlHarnessParameterInput>> ReadAsync(string path, CancellationToken cancellationToken) =>
+        ReadAsync(path, new ParameterFileIngressBudget(), cancellationToken);
+
+    public static async Task<IReadOnlyList<SqlHarnessParameterInput>> ReadAsync(
+        string path, ParameterFileIngressBudget budget, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(budget);
         if (string.IsNullOrWhiteSpace(path) || !string.Equals(Path.GetExtension(path), ".sqljson", StringComparison.OrdinalIgnoreCase))
             throw new ParameterSetFileException("Fixed parameter file must use the .sqljson extension.");
         byte[] bytes;
         try
         {
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
-            if (stream.Length > ParameterSetFileReader.MaximumBytes)
-                throw new ParameterSetFileException($"Fixed parameter file '{path}' exceeds the 64 KiB limit.");
-            bytes = new byte[(int)stream.Length];
-            await stream.ReadExactlyAsync(bytes, cancellationToken);
+            bytes = await budget.ReadAsync(stream, path, cancellationToken);
         }
         catch (ParameterSetFileException)
         {
@@ -43,8 +45,8 @@ public static class ParameterInputFileReader
     public static IReadOnlyList<SqlHarnessParameterInput> Parse(byte[] bytes, string? path = null)
     {
         ArgumentNullException.ThrowIfNull(bytes);
-        if (bytes.Length > ParameterSetFileReader.MaximumBytes)
-            throw new ParameterSetFileException($"Fixed parameter file '{path}' exceeds the 64 KiB limit.");
+        if (bytes.Length > ParameterFileIngressBudget.MaximumFileBytes)
+            throw new ParameterSetFileException($"Fixed parameter file '{path}' exceeds the 16 MiB raw parameter-file limit.");
 
         var json = bytes.AsSpan().StartsWith(Encoding.UTF8.Preamble) ? bytes.AsMemory(Encoding.UTF8.Preamble.Length) : bytes.AsMemory();
         using var document = JsonDocument.Parse(json, new JsonDocumentOptions

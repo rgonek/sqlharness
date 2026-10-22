@@ -1,0 +1,9 @@
+Command: just verify -LogDirectory D:/temp/sqlharness-plan096-final-verify
+Tested revision: 478d2d227bf77c000eb9aab14cb5eaccce934c69
+Tested tree: d30b1915a7c896a90777e040f8870712b8471f7e
+Exit: 0
+Summary: verify: OK stages=5 in 9m15s
+Build: 0 warnings, 0 errors
+UI: 64 files, 372 tests passed
+Core: 4,632 passed, 11 skipped
+MCP: 501 passed, 4 skipped

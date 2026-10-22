@@ -300,6 +300,29 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public async Task Parameter_file_limits_are_published_in_descriptions_and_capabilities()
+    {
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        foreach (var name in new[] { "sqlharness_measure", "sqlharness_compare" })
+        {
+            var schema = ServedSchema(tools.Single(tool => tool.Name == name));
+            var description = Properties(schema).GetProperty("parameterSetFiles").GetProperty("description").GetString() ?? string.Empty;
+            Assert.Contains("16 MiB/file", description, StringComparison.Ordinal);
+            Assert.Contains("32 MiB total raw bytes per call", description, StringComparison.Ordinal);
+        }
+
+        var response = await served.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+        Assert.False(response.IsError == true);
+        using var document = JsonDocument.Parse(Assert.Single(response.Content.OfType<TextContentBlock>()).Text);
+        var capabilities = document.RootElement.GetProperty("result");
+        var ingress = capabilities.GetProperty("parameterFileIngress");
+        Assert.Equal(16 * 1024 * 1024, ingress.GetProperty("maxFileBytes").GetInt32());
+        Assert.Equal(32 * 1024 * 1024, ingress.GetProperty("maxTotalBytes").GetInt32());
+        Assert.Equal(32 * 1024 * 1024, capabilities.GetProperty("materializedParameterBytes").GetInt32());
+    }
+
+    [Fact]
     public async Task Operation_annotation_members_are_gated_by_the_startup_config()
     {
         Assert.False(SqlHarnessConfig.Default.Journal.OperationAnnotations);
@@ -1823,11 +1846,17 @@ public sealed class McpToolSchemaTests : IDisposable
         var tools = await ServedToolsAsync(served);
         var parameters = ArgumentDescription(tools, "sqlharness_query", "parameters");
         var parameterSetFiles = ArgumentDescription(tools, "sqlharness_measure", "parameterSetFiles");
+        var parameterSets = ArgumentDescription(tools, "sqlharness_measure", "parameterSets");
+        var matrix = ArgumentDescription(tools, "sqlharness_measure", "matrix");
         var mutationParameters = ArgumentDescription(tools, "sqlharness_mutation", "parameters");
 
         Assert.Contains("read-only query, measure, compare, watch, and snapshot", parameters, StringComparison.Ordinal);
         Assert.Contains("Mutation rejects non-scalar inputs", parameters, StringComparison.Ordinal);
         Assert.Contains("read-only measure/compare", parameterSetFiles, StringComparison.Ordinal);
+        Assert.Contains("fixed names must not overlap", parameterSetFiles, StringComparison.Ordinal);
+        Assert.Contains("matching parameter shapes", parameterSets, StringComparison.Ordinal);
+        Assert.Contains("fixed names must not overlap", parameterSets, StringComparison.Ordinal);
+        Assert.Contains("fixed names must not overlap", matrix, StringComparison.Ordinal);
         Assert.Contains("Table-valued and list parameters are not supported", ToolDescription(tools, "sqlharness_mutation"), StringComparison.Ordinal);
         Assert.Contains("Mutation rejects non-scalar inputs", mutationParameters, StringComparison.Ordinal);
     }

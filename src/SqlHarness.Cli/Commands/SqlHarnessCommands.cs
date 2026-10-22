@@ -79,16 +79,18 @@ internal static class ParameterInputCliReader
     internal static Task<IReadOnlyList<SqlHarnessParameterInput>?> ReadAsync(
         string? path,
         IReadOnlyList<string> declarations,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ParameterFileIngressBudget? budget = null)
     {
         if (string.IsNullOrWhiteSpace(path))
             return Task.FromResult<IReadOnlyList<SqlHarnessParameterInput>?>(null);
         if (declarations.Count > 0)
             throw new ParameterSetFileException("Use either --param or --params-json, not both.");
-        return ReadFileAsync(path, cancellationToken);
+        return ReadFileAsync(path, budget ?? new ParameterFileIngressBudget(), cancellationToken);
 
-        static async Task<IReadOnlyList<SqlHarnessParameterInput>?> ReadFileAsync(string file, CancellationToken ct) =>
-            await ParameterInputFileReader.ReadAsync(file, ct);
+        static async Task<IReadOnlyList<SqlHarnessParameterInput>?> ReadFileAsync(
+            string file, ParameterFileIngressBudget ingressBudget, CancellationToken ct) =>
+            await ParameterInputFileReader.ReadAsync(file, ingressBudget, ct);
     }
 }
 
@@ -309,7 +311,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Read fixed typed parameters from a bounded .sqljson file; exclusive with --param.")]
         [CommandOption("--params-json <PATH>")]
         public string? ParametersJson { get; set; }
-        [Description("1..32 named JSON sets with matching declared types; only name and parameters (64 KiB; BOM/comments/trailing commas accepted). Entries may be scalar strings or typed objects; table/list execution is not available yet. Fixed --param names must not overlap. Each set runs on its own session with setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Report per-set stability, not cross-set equivalence.")]
+        [Description("1..32 named JSON sets with matching declared types; only name and parameters (16 MiB per file; 32 MiB total raw bytes per call; BOM/comments/trailing commas accepted). Entries may be scalar strings or typed objects, including table/list values. Fixed --param names must not overlap. Each set runs on its own session with setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Report per-set stability, not cross-set equivalence.")]
         [CommandOption("--param-set <PATH>")]
         public string[] ParameterSets { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
@@ -337,8 +339,9 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         }
         try
         {
-            var typedParameters = await ParameterInputCliReader.ReadAsync(s.ParametersJson, s.Parameters, ct);
-            var parameterSets = setPaths.Length == 0 ? null : await ReadParameterSetsAsync(setPaths, ct);
+            var ingressBudget = new ParameterFileIngressBudget();
+            var typedParameters = await ParameterInputCliReader.ReadAsync(s.ParametersJson, s.Parameters, ct, ingressBudget);
+            var parameterSets = setPaths.Length == 0 ? null : await ReadParameterSetsAsync(setPaths, ingressBudget, ct);
             return await Dispatch(
                 new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, timeout, s.Repeat, parameterSets) { TypedParameters = typedParameters, DryRun = s.DryRun, Context = measureContext },
                 ResolveOutputMode(s.Json, s.JsonSummary, s.Output),
@@ -353,7 +356,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
 
     // Read every set before returning so a later failure is not skipped.
     private static async Task<IReadOnlyList<SqlHarnessParameterSetInput>> ReadParameterSetsAsync(
-        IReadOnlyList<string> paths, CancellationToken ct)
+        IReadOnlyList<string> paths, ParameterFileIngressBudget ingressBudget, CancellationToken ct)
     {
         var sets = new List<SqlHarnessParameterSetInput>(paths.Count);
         ParameterSetFileException? failure = null;
@@ -361,7 +364,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         {
             try
             {
-                sets.Add(await ParameterSetFileReader.ReadAsync(path, ct));
+                sets.Add(await ParameterSetFileReader.ReadAsync(path, ingressBudget, ct));
             }
             catch (ParameterSetFileException exception)
             {

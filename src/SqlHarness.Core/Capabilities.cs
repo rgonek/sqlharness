@@ -45,9 +45,16 @@ public sealed record SqlHarnessProfileCapability(string Name, string Engine, str
 
 public sealed record SqlHarnessMutationCapability(string DefaultMode, string Verification, int ApprovalTimeoutSeconds, bool DashboardReachable);
 
+public sealed record SqlHarnessParameterFileLimits(int MaxFileBytes, int MaxTotalBytes, int MaxMaterializedBytes);
+
 
 public static class SqlHarnessCapabilitiesProvider
 {
+    public static SqlHarnessParameterFileLimits ParameterFileLimits { get; } = new(
+        ParameterFileIngressBudget.MaximumFileBytes,
+        ParameterFileIngressBudget.MaximumTotalBytes,
+        ParameterSetResolver.MaximumMaterializedBytes);
+
     // Bump when the document shape changes. 2: engines became a short { name, summary } list;
     // parameter types, session-temp rules and engine-only limits moved behind a profile.
     // 3: report the active compare-context requirement and version/history semantics.
@@ -200,7 +207,12 @@ public static class SqlHarnessCapabilitiesProvider
             ["parameterSets"] = new { min = 1, max = 32, appliesTo = new[] { "namedSets", "parameterSetFiles", "matrixValues" } },
             ["nonScalarParameters"] = ParameterSetResolver.MaximumNonScalarParameters,
             ["combinedParameterRowsAndValues"] = ParameterSetResolver.MaximumCombinedRowsAndValues,
-            ["materializedParameterBytes"] = ParameterSetResolver.MaximumMaterializedBytes,
+            ["parameterFileIngress"] = new
+            {
+                maxFileBytes = ParameterFileLimits.MaxFileBytes,
+                maxTotalBytes = ParameterFileLimits.MaxTotalBytes,
+            },
+            ["materializedParameterBytes"] = ParameterFileLimits.MaxMaterializedBytes,
             ["finalCommandParameters"] = ParameterSetResolver.MaximumCommandParameters,
             ["targetIdentity"] = new { server = targetServer, database = "must match the resolved database (ordinal); mismatch is exit 4" },
             ["agentOutputBytes"] = new { min = 4096, max = 1048576, defaultValue = 65536 },
