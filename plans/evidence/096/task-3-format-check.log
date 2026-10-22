@@ -1,0 +1,4 @@
+[6 qformat: 14 changed C# file(s) (branch)
+D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\Tools\McpToolCatalog.cs(892,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj]
+D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs(1953,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\SqlHarness.Mcp.Tests.csproj]
+format: FAILED (dotnet format exit 2)

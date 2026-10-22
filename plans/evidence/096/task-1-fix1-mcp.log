@@ -1,0 +1,116 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Mcp.WorkflowHost -> D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.01] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.47]   Discovering: SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.82]   Discovered:  SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.91]   Starting:    SqlHarness.Mcp.Tests
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_error_lists_configured_roots_points_to_capabilities_and_echoes_the_path [177 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_error_with_too_many_roots_gives_count_and_paging_pointer_not_a_full_list [17 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Oversized_sql_files_and_inline_payloads_are_rejected [86 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Root_with_trailing_separator_still_reads_files_inside [31 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Filesystem_root_is_rejected_at_scope_creation [9 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Echoed_path_masks_url_and_unc_userinfo(path: "//admin:S3cret@srv/share/q.sql") [18 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Echoed_path_masks_url_and_unc_userinfo(path: "postgres://u:S3cret@h/db") [8 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Echoed_path_masks_url_and_unc_userinfo(path: "\\\\admin:S3cret@srv\\share\\q.sql") [7 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_error_with_several_roots_lists_each_of_them [8 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.MCP_result_redacts_an_exact_known_secret_in_a_caller_path [232 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Rejection_reasons_are_distinct_and_echo_the_caller_path [19 ms]
+[xUnit.net 00:00:01.70]     SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_accepts_exactly_16_mib [FAIL]
+[xUnit.net 00:00:01.70]       SqlHarness.Mcp.McpInputException : Parameter set file 'D:\temp\sqlharness-mcp-t3-reader-a96bee6608c347179cc68678a9342a44\inputs\exact-limit.sqljson' could not be read: Parameter set file exceeds the 64 KiB limit.
+[xUnit.net 00:00:01.70]       Stack Trace:
+[xUnit.net 00:00:01.71]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\McpInputReader.cs(102,0): at SqlHarness.Mcp.McpInputReader.ReadParameterSetsAsync(IReadOnlyList`1 paths, McpScope scope, CancellationToken ct)
+[xUnit.net 00:00:01.71]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs(422,0): at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_accepts_exactly_16_mib()
+[xUnit.net 00:00:01.71]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:01.76]     SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_rejects_16_mib_plus_one [FAIL]
+[xUnit.net 00:00:01.76]       Assert.Contains() Failure: Sub-string not found
+[xUnit.net 00:00:01.76]       String:    "Parameter set file 'D:\\temp\\sqlharness-mc"···
+[xUnit.net 00:00:01.76]       Not found: "16 MiB"
+[xUnit.net 00:00:01.76]       Stack Trace:
+[xUnit.net 00:00:01.76]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs(431,0): at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_rejects_16_mib_plus_one()
+[xUnit.net 00:00:01.76]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:01.80]     SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_reads_large_typed_values_equivalent_to_the_shared_parser [FAIL]
+[xUnit.net 00:00:01.80]       SqlHarness.Mcp.McpInputException : Parameter set file 'D:\temp\sqlharness-mcp-t3-reader-65bc91bcda084d0da84d7afca855c5af\inputs\large-typed.sqljson' could not be read: Parameter set file exceeds the 64 KiB limit.
+[xUnit.net 00:00:01.80]       Stack Trace:
+[xUnit.net 00:00:01.80]         D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\McpInputReader.cs(102,0): at SqlHarness.Mcp.McpInputReader.ReadParameterSetsAsync(IReadOnlyList`1 paths, McpScope scope, CancellationToken ct)
+[xUnit.net 00:00:01.80]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs(443,0): at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_reads_large_typed_values_equivalent_to_the_shared_parser()
+[xUnit.net 00:00:01.80]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:01.90]     SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_files_over_32_mib_total_are_rejected_before_a_session_opens [FAIL]
+[xUnit.net 00:00:01.90]       Assert.Contains() Failure: Sub-string not found
+[xUnit.net 00:00:01.91]       String:    "Parameter set file 'D:\\temp\\sqlharness-mc"···
+[xUnit.net 00:00:01.91]       Not found: "32 MiB"
+[xUnit.net 00:00:01.91]       Stack Trace:
+[xUnit.net 00:00:01.91]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs(470,0): at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_files_over_32_mib_total_are_rejected_before_a_session_opens()
+[xUnit.net 00:00:01.91]         --- End of stack trace from previous location ---
+  Failed SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_accepts_exactly_16_mib [54 ms]
+  Error Message:
+   SqlHarness.Mcp.McpInputException : Parameter set file 'D:\temp\sqlharness-mcp-t3-reader-a96bee6608c347179cc68678a9342a44\inputs\exact-limit.sqljson' could not be read: Parameter set file exceeds the 64 KiB limit.
+  Stack Trace:
+     at SqlHarness.Mcp.McpInputReader.ReadParameterSetsAsync(IReadOnlyList`1 paths, McpScope scope, CancellationToken ct) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\McpInputReader.cs:line 102
+   at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_accepts_exactly_16_mib() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs:line 422
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Root_boundary_admits_direct_files_and_rejects_extended_prefix_sibling [22 ms]
+  Failed SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_rejects_16_mib_plus_one [40 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Parameter set file 'D:\\temp\\sqlharness-mc"···
+Not found: "16 MiB"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_rejects_16_mib_plus_one() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs:line 431
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_message_preserves_the_caller_path_for_diagnostics [6 ms]
+  Failed SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_reads_large_typed_values_equivalent_to_the_shared_parser [33 ms]
+  Error Message:
+   SqlHarness.Mcp.McpInputException : Parameter set file 'D:\temp\sqlharness-mcp-t3-reader-65bc91bcda084d0da84d7afca855c5af\inputs\large-typed.sqljson' could not be read: Parameter set file exceeds the 64 KiB limit.
+  Stack Trace:
+     at SqlHarness.Mcp.McpInputReader.ReadParameterSetsAsync(IReadOnlyList`1 paths, McpScope scope, CancellationToken ct) in D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\McpInputReader.cs:line 102
+   at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_file_reads_large_typed_values_equivalent_to_the_shared_parser() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs:line 443
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Shared_parser_rejects_oversized_bytes_even_without_filesystem_read [8 ms]
+  Failed SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_files_over_32_mib_total_are_rejected_before_a_session_opens [92 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Parameter set file 'D:\\temp\\sqlharness-mc"···
+Not found: "32 MiB"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_set_files_over_32_mib_total_are_rejected_before_a_session_opens() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs:line 470
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Empty_roots_reject_plan_and_parameter_set_file_inputs [16 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Worst_case_rejection_messages_stay_within_the_default_cell_limit [8 ms]
+[xUnit.net 00:00:02.09]       Assert.Contains() Failure: Sub-string not found
+[xUnit.net 00:00:02.09]     SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_sets_use_the_shared_parser_and_size_cap [FAIL]
+[xUnit.net 00:00:02.09]       String:    "Parameter set file 'D:\\temp\\sqlharness-mc"···
+[xUnit.net 00:00:02.09]       Not found: "16 MiB"
+[xUnit.net 00:00:02.09]       Stack Trace:
+[xUnit.net 00:00:02.09]         D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs(414,0): at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_sets_use_the_shared_parser_and_size_cap()
+[xUnit.net 00:00:02.09]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:02.17]   Finished:    SqlHarness.Mcp.Tests
+  Failed SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_sets_use_the_shared_parser_and_size_cap [155 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Parameter set file 'D:\\temp\\sqlharness-mc"···
+Not found: "16 MiB"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpInputReaderTests.Parameter_sets_use_the_shared_parser_and_size_cap() in D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs:line 414
+--- End of stack trace from previous location ---
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Sql_source_requires_exactly_one_side [8 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Echoed_path_is_truncated_and_the_error_result_fits_the_minimum_budget [10 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Missing_roots_disable_every_file_input [8 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Case_only_sibling_is_rejected_on_case_sensitive_filesystems [7 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Echoed_path_preserves_caller_supplied_diagnostics [6 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_error_with_long_roots_states_the_count_when_not_even_one_fits [8 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Traversal_and_outside_roots_are_rejected [8 ms]
+  Passed SqlHarness.Mcp.Tests.McpInputReaderTests.Rooted_files_read_exactly_and_inline_passes_through [13 ms]
+
+Test Run Failed.
+Total tests: 29
+     Passed: 24
+     Failed: 5
+ Total time: 3,7876 Seconds

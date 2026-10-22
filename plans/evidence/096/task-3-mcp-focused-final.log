@@ -1,0 +1,218 @@
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Mcp.WorkflowHost -> D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-096\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+D:\Dev\sqlharness\.worktrees\plan-096\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.29]   Discovering: SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.60]   Discovered:  SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.72]   Starting:    SqlHarness.Mcp.Tests
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Compare_policy_is_frozen_per_catalog_and_rejects_hidden_or_mistyped_fields [1 s]
+  Standard Output Messages:
+ compare inputSchema UTF-8 bytes: on=4743, off=3792, delta=951
+
+
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Watch_description_makes_no_read_only_claim [33 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Query_description_states_the_static_visible_effects_boundary [37 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Missing_required_arguments_are_rejected_without_echo(tool: "sqlharness_compare", argumentsJson: "{\"candidate\":{\"sql\":\"SELECT 1\"}}") [47 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Missing_required_arguments_are_rejected_without_echo(tool: "sqlharness_measure", argumentsJson: "{\"setup\":{\"sql\":\"SELECT 1\"}}") [36 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Missing_required_arguments_are_rejected_without_echo(tool: "sqlharness_artifact", argumentsJson: "{\"id\":\"x\"}") [30 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Independently_built_catalogs_share_no_description_objects [88 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Parameter_file_limits_are_published_in_descriptions_and_capabilities [94 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_defaults_to_bounded_text_unchanged_for_sqlserver(requestMode: False) [117 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_defaults_to_bounded_text_unchanged_for_sqlserver(requestMode: True) [38 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_fits_the_32KiB_budget [37 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_include_text_false_omits_statement_text_and_predicates(requestMode: False) [34 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_include_text_false_omits_statement_text_and_predicates(requestMode: True) [30 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: null, section: "statements", accepted: True) [253 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 0, section: "statements", accepted: False) [50 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 513, section: "statements", accepted: False) [50 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 1, section: "statements", accepted: True) [64 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 512, section: "statements", accepted: True) [161 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_page_size_accepts_only_supported_windows(pageSize: 1, section: "summary", accepted: False) [39 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Inline_frame_cap_is_advertised_on_sql_and_plan_tools [46 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config [131 ms]
+  Standard Output Messages:
+ annotations-off tools/list: 28702 UTF-8 bytes (Plan 095 contract)
+ annotations-on tools/list: 32310 UTF-8 bytes of 32768
+
+
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Request_scope_schema_is_required_only_on_the_target_tools [99 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_partial_watch_and_snapshot_envelopes_conform_to_the_agent_contract [219 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Non_scalar_parameter_descriptions_name_read_only_paths_and_mutation_rejection [36 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Handler_and_dto_members_name_no_target_auth_mutation_or_force_field [3 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_capabilities_accept_the_input_root_cursor_and_still_reject_unknown_arguments_in_both_modes [70 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_preflight_leaves_no_side_effects [43 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Fixed_postgres_catalog_carries_only_postgres_guidance [51 ms]
+  Standard Output Messages:
+ tools/list bytes: 23916 of 32768.
+
+
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes [52 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_compare_binds_comma_empty_and_json_null_matrix_values_in_core [87 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_capabilities_use_one_shared_description_and_reject_include_details_in_both_modes [56 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_query_dry_run_envelopes_conform_to_the_agent_contract [35 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Injected_sdk_members_never_leak_into_schemas [33 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.All_tools_publish_no_output_schema [24 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_schema_declares_include_text_defaulting_to_true_in_both_modes [65 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Artifact_requests_raise_the_call_budget_and_reconstruct_statement_pages [755 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Catalog_registers_exactly_the_9_spec_tools [43 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_tools_list_matches_the_explicit_catalog [48 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_tools_publish_no_output_schema [49 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_query_dry_run_rejects_denylisted_functions_without_dispatch(sql: "SELECT * FROM OPENROWSET('SQLOLEDB', 's', 'SELECT "···) [81 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_query_dry_run_rejects_denylisted_functions_without_dispatch(sql: "EXEC sp_executesql N'SELECT 1';") [74 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_query_dry_run_rejects_denylisted_functions_without_dispatch(sql: "EXEC xp_cmdshell 'dir';") [40 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_clips_long_statement_text_and_marks_truncation(requestMode: False) [40 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_clips_long_statement_text_and_marks_truncation(requestMode: True) [37 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_keeps_postgres_predicates_by_default_and_omits_them_when_false(requestMode: True) [47 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_keeps_postgres_predicates_by_default_and_omits_them_when_false(requestMode: False) [47 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Unknown_nested_parameter_properties_are_rejected_without_echo [33 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Capabilities_report_configured_execution_timeout_in_fixed_and_request_scope [65 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Host_freezes_config_until_restart_and_reloads_it_for_a_new_stdio_process [559 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotations_require_the_activity_journal_at_startup [9 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Engine_guidance_changes_descriptions_only [107 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Served_capabilities_envelope_conforms_to_the_agent_contract_without_output_schema [50 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Request_scope_catalog_carries_sql_server_guidance [49 ms]
+  Standard Output Messages:
+ tools/list bytes: 29145 of 32768.
+
+
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Request_calls_resolve_each_supplied_scope_and_target_free_tools_need_none [102 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Unknown_and_foreign_artifacts_stay_content_free_with_selectors_and_large_budget [59 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Matrix_values_schema_advertises_string_or_null_items_without_a_comma_limit [52 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_returns_bracketed_credential_column_literals_unchanged(requestMode: True) [38 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Plan_tool_returns_bracketed_credential_column_literals_unchanged(requestMode: False) [30 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Cell_limit_is_forwarded_by_watch_snapshot_plan_and_artifact_tools [88 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Unknown_top_level_properties_are_rejected_without_echo(tool: "sqlharness_query", argumentsJson: "{\"sql\":\"SELECT 1\",\"bogus\":1}") [28 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.No_schema_property_names_a_target_auth_mutation_or_force_field [36 ms]
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Fixed_sql_server_catalog_carries_only_sql_server_guidance [39 ms]
+  Standard Output Messages:
+ tools/list bytes: 28702 of 32768.
+
+
+  Passed SqlHarness.Mcp.Tests.McpToolSchemaTests.Enum_required_and_default_shapes_are_correct [43 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Compare_matrix_result_with_regression_per_cell_fits_the_default_budget [125 ms]
+  Standard Output Messages:
+ compare matrix result with regression: 49619 bytes of 65536
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Call_budget_resolves_within_the_process_ceiling(call: 8192, ceiling: 262144, expected: 8192) [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Call_budget_resolves_within_the_process_ceiling(call: 900000, ceiling: 262144, expected: 262144) [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Call_budget_resolves_within_the_process_ceiling(call: 131072, ceiling: 262144, expected: 131072) [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Call_budget_resolves_within_the_process_ceiling(call: null, ceiling: 16384, expected: 16384) [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Call_budget_resolves_within_the_process_ceiling(call: null, ceiling: 262144, expected: 65536) [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Results_carry_one_text_block_and_no_structured_content [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Tools_advertise_no_output_schema [22 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Dry_run_operation_ref_is_not_eligible_even_when_a_journal_row_exists [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Plan_text_with_escaped_quotes_and_long_predicates_fits_small_budgets_and_marks_clipping [25 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Minimal_error_fallback_keeps_operation_ref_inside_budget [2 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Operation_ref_survives_minimum_budget_and_is_never_clipped [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Call_budget_is_clamped_to_the_process_ceiling [1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Minimum_budget_is_accepted_and_smaller_is_rejected [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Operation_ref_is_omitted_without_a_journal_row_or_for_other_tools(journaled: True, command: "sqlharness_plan") [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Operation_ref_is_omitted_without_a_journal_row_or_for_other_tools(journaled: False, command: "sqlharness_query") [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Artifact_plan_with_37_short_nodes_fits_one_default_budget_response [98 ms]
+  Standard Output Messages:
+ synthetic-small: nodes=37 selector=baseline/statement-0/repetition-last/includeText=false budget=65536 calls=1 emittedUtf8Bytes=9107 estimatedTokensCeilBytesDiv4=2277; fixture/discovery/input/chat unmeasured
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Operators_with_plan_refs_fit_the_budget_and_keep_callable_selectors(budget: 65536) [25 ms]
+  Standard Output Messages:
+ operators-plan-refs: budget=65536 emittedUtf8Bytes=2762 estimatedTokensCeilBytesDiv4=691
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Operators_with_plan_refs_fit_the_budget_and_keep_callable_selectors(budget: 4096) [1 ms]
+  Standard Output Messages:
+ operators-plan-refs: budget=4096 emittedUtf8Bytes=2762 estimatedTokensCeilBytesDiv4=691
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Unicode_cells_fit_the_default_budget_with_escaping_counted [2 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Query_result_byte_measurements_are_recorded_with_annotations_off_and_on [2 ms]
+  Standard Output Messages:
+ annotations-off query result SHA256: 611BF72927E6ADD8399D4F776D7B9D094FA4ED779CA8BFA59233802B89E085C1
+ query result @4096: off=285 on=335 UTF-8 bytes
+ query result @65536: off=285 on=335 UTF-8 bytes
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Artifact_plan_pages_fit_the_mcp_budget_and_continue_by_nodes_returned [11 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Compare_omits_unfittable_long_table_identity_truthfully_within_minimum_budget(longNameLength: 5000) [53 ms]
+  Standard Output Messages:
+ MCP long identity omission fixture: 1272 UTF-8 bytes (budget 4096).
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Compare_omits_unfittable_long_table_identity_truthfully_within_minimum_budget(longNameLength: 3000) [1 ms]
+  Standard Output Messages:
+ MCP long identity omission fixture: 1272 UTF-8 bytes (budget 4096).
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Compare_omits_unfittable_long_table_identity_truthfully_within_minimum_budget(longNameLength: 3500) [< 1 ms]
+  Standard Output Messages:
+ MCP long identity omission fixture: 1272 UTF-8 bytes (budget 4096).
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Artifact_plan_continuations_reconstruct_reader_nodes_within_budget(includeText: False) [202 ms]
+  Standard Output Messages:
+ synthetic-large: nodes=257 selector=baseline/statement-0/repetition-last/includeText=false/cursor=0 budget=4096 calls=19 emittedUtf8Bytes=68800 estimatedTokensCeilBytesDiv4=17200; fixture/discovery/input/chat unmeasured
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Artifact_plan_continuations_reconstruct_reader_nodes_within_budget(includeText: True) [220 ms]
+  Standard Output Messages:
+ synthetic-large: nodes=257 selector=baseline/statement-0/repetition-last/includeText=true/cursor=0 budget=4096 calls=22 emittedUtf8Bytes=78745 estimatedTokensCeilBytesDiv4=19687; fixture/discovery/input/chat unmeasured
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Minimal_success_envelope_text_bytes_fit_within_default_budget [< 1 ms]
+  Standard Output Messages:
+ minimal success result-text bytes: 204 of 65536.
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Compare_table_metric_keys_keep_identity_under_mcp_cell_clipping(maximumCellCharacters: 4) [4 ms]
+  Standard Output Messages:
+ MCP compare identity fixture (maxCellChars 4): 1369 UTF-8 bytes (budget 4096).
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Compare_table_metric_keys_keep_identity_under_mcp_cell_clipping(maximumCellCharacters: 0) [1 ms]
+  Standard Output Messages:
+ MCP compare identity fixture (maxCellChars 0): 1345 UTF-8 bytes (budget 4096).
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Request_catalog_stays_within_tools_list_budget [31 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Served_tools_list_fits_32KiB_without_full_examples_or_runtime_cuts [48 ms]
+  Standard Output Messages:
+ tools/list bytes: 27842 of 32768 (9 tools; no output schemas).
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Query_result_uses_shared_v2_compact_projection [1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Matrix_case_inventory_survives_optional_detail_at_minimum_and_default_budgets(budget: 65536) [32 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Matrix_case_inventory_survives_optional_detail_at_minimum_and_default_budgets(budget: 4096) [2 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Main_loop_descends_past_first_fit_level_when_text_exceeds [14 ms]
+[xUnit.net 00:00:08.83]   Finished:    SqlHarness.Mcp.Tests
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Long_warnings_paths_and_big_cells_fit_the_default_budget [66 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Thirty_two_mixed_matrix_pages_fit_4096_and_keep_verdicts [5 ms]
+  Standard Output Messages:
+ 32-case matrix page: 3373 bytes of 4096
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Compare_result_carries_the_regression_verdict_within_the_default_budget [4 ms]
+  Standard Output Messages:
+ compare result with regression: 1412 bytes of 65536
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Artifact_plan_adapter_reports_no_node_fit_when_one_source_node_exceeds_budget [22 ms]
+  Standard Output Messages:
+ synthetic-no-fit: nodes=1 selector=baseline/statement-0/repetition-last/includeText=true budget=4096 calls=1 emittedUtf8Bytes=462 estimatedTokensCeilBytesDiv4=116; fixture/discovery/input/chat unmeasured
+
+
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Small_compare_matrix_keeps_both_cells_without_truncation [1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Cell_limit_range_is_zero_to_operator_maximum [< 1 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Raw_path_descends_when_envelope_text_exceeds_budget [4 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Budget_counts_only_the_text_the_model_reads [507 ms]
+  Passed SqlHarness.Mcp.Tests.McpTokenBudgetTests.Artifact_plan_clipping_count_is_stable_in_the_mcp_envelope [3 ms]
+
+Test Run Successful.
+Total tests: 108
+     Passed: 108
+ Total time: 10,2642 Seconds
