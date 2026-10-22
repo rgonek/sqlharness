@@ -1,0 +1,19 @@
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.43]   Discovering: SqlHarness.Tests
+[xUnit.net 00:00:01.96]   Discovered:  SqlHarness.Tests
+[xUnit.net 00:00:02.00]   Starting:    SqlHarness.Tests
+[xUnit.net 00:00:02.22]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Shutdown_uses_guarded_loopback_post_without_token_in_url_and_does_not_follow_redirects [150 ms]
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 3,4079 Seconds

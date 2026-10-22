@@ -1,0 +1,136 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:05.40]     SqlHarness.Tests.SqlParameterMatrixTests.Matrix_parameter_set_count_boundaries_are_one_through_thirty_two(count: 33, accepted: False) [FAIL]
+[xUnit.net 00:00:05.41]     SqlHarness.Tests.SqlParameterMatrixTests.Matrix_parameter_set_count_boundaries_are_one_through_thirty_two(count: 1, accepted: True) [FAIL]
+  Failed SqlHarness.Tests.SqlParameterMatrixTests.Matrix_parameter_set_count_boundaries_are_one_through_thirty_two(count: 33, accepted: False) [4 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "The SQL parameter matrix cannot contain m"···
+Not found: "split"
+  Stack Trace:
+     at SqlHarness.Tests.SqlParameterMatrixTests.Matrix_parameter_set_count_boundaries_are_one_through_thirty_two(Int32 count, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\SqlParameterMatrixTests.cs:line 63
+   at InvokeStub_SqlParameterMatrixTests.Matrix_parameter_set_count_boundaries_are_one_through_thirty_two(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.SqlParameterMatrixTests.Matrix_parameter_set_count_boundaries_are_one_through_thirty_two(count: 1, accepted: True) [< 1 ms]
+  Error Message:
+   SqlHarness.Core.SqlHarnessSafetyException : The --matrix option for SQL parameter '@BatchSize' requires at least two values.
+  Stack Trace:
+     at SqlHarness.Core.SqlParameterMatrixParser.Bind(SqlHarnessParameterMatrixInput matrix, IEnumerable`1 fixedParameterNames) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\SqlParameterMatrix.cs:line 93
+   at SqlHarness.Core.ParameterSetResolver.Resolve(ISqlDialect dialect, IReadOnlyList`1 fixedParameters, SqlHarnessParameterMatrixInput matrix, IReadOnlyList`1 sets) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\ParameterSetResolver.cs:line 140
+   at SqlHarness.Tests.SqlParameterMatrixTests.Matrix_parameter_set_count_boundaries_are_one_through_thirty_two(Int32 count, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\SqlParameterMatrixTests.cs:line 70
+   at InvokeStub_SqlParameterMatrixTests.Matrix_parameter_set_count_boundaries_are_one_through_thirty_two(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:06.04]     SqlHarness.Tests.SqlParameterMatrixTests.Parse_accepts_one_scalar_matrix_value [FAIL]
+  Failed SqlHarness.Tests.SqlParameterMatrixTests.Parse_accepts_one_scalar_matrix_value [< 1 ms]
+  Error Message:
+   SqlHarness.Core.SqlHarnessSafetyException : The --matrix option for SQL parameter '@BatchSize' requires at least two values.
+  Stack Trace:
+     at SqlHarness.Core.SqlParameterMatrixParser.Bind(SqlHarnessParameterMatrixInput matrix, IEnumerable`1 fixedParameterNames) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\SqlParameterMatrix.cs:line 93
+   at SqlHarness.Core.SqlParameterMatrixParser.Parse(String input, IReadOnlyList`1 fixedParameters) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\SqlParameterMatrix.cs:line 38
+   at SqlHarness.Tests.SqlParameterMatrixTests.Parse_accepts_one_scalar_matrix_value() in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\SqlParameterMatrixTests.cs:line 39
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.MeasureParameterSetValidationTests.Singleton_named_parameter_set_preserves_typed_null_identity [1 ms]
+  Error Message:
+   SqlHarness.Core.SqlHarnessSafetyException : Parameter sets must contain between 2 and 32 sets.
+  Stack Trace:
+     at SqlHarness.Core.ParameterSetResolver.Resolve(ISqlDialect dialect, IReadOnlyList`1 fixedParameters, SqlHarnessParameterMatrixInput matrix, IReadOnlyList`1 sets) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\ParameterSetResolver.cs:line 175
+   at SqlHarness.Core.MeasureParameterSetValidator.Prepare(IReadOnlyList`1 fixedParameters, IReadOnlyList`1 parameterSets, String setupSql, String querySql, ISqlDialect dialect, IReadOnlyList`1 typedFixedParameters) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\MeasureParameterSets.cs:line 44
+   at SqlHarness.Tests.MeasureParameterSetValidationTests.Singleton_named_parameter_set_preserves_typed_null_identity() in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\MeasureParameterSetValidationTests.cs:line 276
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:06.27]     SqlHarness.Tests.MeasureParameterSetValidationTests.Singleton_named_parameter_set_preserves_typed_null_identity [FAIL]
+[xUnit.net 00:00:07.16]     SqlHarness.Tests.MeasureParameterSetValidationTests.Named_parameter_set_count_boundaries_are_one_through_thirty_two(count: 33, accepted: False) [FAIL]
+[xUnit.net 00:00:07.17]     SqlHarness.Tests.MeasureParameterSetValidationTests.Named_parameter_set_count_boundaries_are_one_through_thirty_two(count: 1, accepted: True) [FAIL]
+[xUnit.net 00:00:07.17]     SqlHarness.Tests.MeasureParameterSetValidationTests.Singleton_named_parameter_set_accepts_a_typed_list_parameter [FAIL]
+[xUnit.net 00:00:07.18]     SqlHarness.Tests.MeasureParameterSetValidationTests.Singleton_named_parameter_set_accepts_a_typed_table_parameter [FAIL]
+  Failed SqlHarness.Tests.MeasureParameterSetValidationTests.Named_parameter_set_count_boundaries_are_one_through_thirty_two(count: 33, accepted: False) [< 1 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Parameter sets must contain between 2 and"···
+Not found: "split"
+  Stack Trace:
+     at SqlHarness.Tests.MeasureParameterSetValidationTests.Named_parameter_set_count_boundaries_are_one_through_thirty_two(Int32 count, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\MeasureParameterSetValidationTests.cs:line 260
+   at InvokeStub_MeasureParameterSetValidationTests.Named_parameter_set_count_boundaries_are_one_through_thirty_two(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.MeasureParameterSetValidationTests.Named_parameter_set_count_boundaries_are_one_through_thirty_two(count: 1, accepted: True) [< 1 ms]
+  Error Message:
+   SqlHarness.Core.SqlHarnessSafetyException : Parameter sets must contain between 2 and 32 sets.
+  Stack Trace:
+     at SqlHarness.Core.ParameterSetResolver.Resolve(ISqlDialect dialect, IReadOnlyList`1 fixedParameters, SqlHarnessParameterMatrixInput matrix, IReadOnlyList`1 sets) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\ParameterSetResolver.cs:line 175
+   at SqlHarness.Core.MeasureParameterSetValidator.Prepare(IReadOnlyList`1 fixedParameters, IReadOnlyList`1 parameterSets, String setupSql, String querySql, ISqlDialect dialect, IReadOnlyList`1 typedFixedParameters) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\MeasureParameterSets.cs:line 44
+   at SqlHarness.Tests.MeasureParameterSetValidationTests.Named_parameter_set_count_boundaries_are_one_through_thirty_two(Int32 count, Boolean accepted) in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\MeasureParameterSetValidationTests.cs:line 267
+   at InvokeStub_MeasureParameterSetValidationTests.Named_parameter_set_count_boundaries_are_one_through_thirty_two(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.MeasureParameterSetValidationTests.Singleton_named_parameter_set_accepts_a_typed_list_parameter [< 1 ms]
+  Error Message:
+   SqlHarness.Core.SqlHarnessSafetyException : Parameter sets must contain between 2 and 32 sets.
+  Stack Trace:
+     at SqlHarness.Core.ParameterSetResolver.Resolve(ISqlDialect dialect, IReadOnlyList`1 fixedParameters, SqlHarnessParameterMatrixInput matrix, IReadOnlyList`1 sets) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\ParameterSetResolver.cs:line 175
+   at SqlHarness.Core.MeasureParameterSetValidator.Prepare(IReadOnlyList`1 fixedParameters, IReadOnlyList`1 parameterSets, String setupSql, String querySql, ISqlDialect dialect, IReadOnlyList`1 typedFixedParameters) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\MeasureParameterSets.cs:line 44
+   at SqlHarness.Tests.MeasureParameterSetValidationTests.Singleton_named_parameter_set_accepts_a_typed_list_parameter() in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\MeasureParameterSetValidationTests.cs:line 320
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.MeasureParameterSetValidationTests.Singleton_named_parameter_set_accepts_a_typed_table_parameter [< 1 ms]
+  Error Message:
+   SqlHarness.Core.SqlHarnessSafetyException : Parameter sets must contain between 2 and 32 sets.
+  Stack Trace:
+     at SqlHarness.Core.ParameterSetResolver.Resolve(ISqlDialect dialect, IReadOnlyList`1 fixedParameters, SqlHarnessParameterMatrixInput matrix, IReadOnlyList`1 sets) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\ParameterSetResolver.cs:line 175
+   at SqlHarness.Core.MeasureParameterSetValidator.Prepare(IReadOnlyList`1 fixedParameters, IReadOnlyList`1 parameterSets, String setupSql, String querySql, ISqlDialect dialect, IReadOnlyList`1 typedFixedParameters) in D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\MeasureParameterSets.cs:line 44
+   at SqlHarness.Tests.MeasureParameterSetValidationTests.Singleton_named_parameter_set_accepts_a_typed_table_parameter() in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\MeasureParameterSetValidationTests.cs:line 295
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:07.30]     SqlHarness.Tests.MeasureParameterSetExecutionTests.Singleton_named_set_runs_once_per_repeat_and_keeps_report_and_artifact_identity [FAIL]
+  Failed SqlHarness.Tests.MeasureParameterSetExecutionTests.Singleton_named_set_runs_once_per_repeat_and_keeps_report_and_artifact_identity [83 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: Success
+Actual:   Safety
+  Stack Trace:
+     at SqlHarness.Tests.MeasureParameterSetExecutionTests.Singleton_named_set_runs_once_per_repeat_and_keeps_report_and_artifact_identity() in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\MeasureParameterSetExecutionTests.cs:line 332
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:07.84]     SqlHarness.Tests.MeasureParameterSetExecutionTests.Singleton_parameter_set_failure_has_one_failed_case_and_no_phantom_unexecuted_case [FAIL]
+  Failed SqlHarness.Tests.MeasureParameterSetExecutionTests.Singleton_parameter_set_failure_has_one_failed_case_and_no_phantom_unexecuted_case [13 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: SqlExecution
+Actual:   Safety
+  Stack Trace:
+     at SqlHarness.Tests.MeasureParameterSetExecutionTests.Singleton_parameter_set_failure_has_one_failed_case_and_no_phantom_unexecuted_case() in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\MeasureParameterSetExecutionTests.cs:line 584
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:09.44]     SqlHarness.Tests.MeasureParameterSetExecutionTests.Compare_singleton_parameter_set_executes_both_variants_and_keeps_case_identity [FAIL]
+[xUnit.net 00:00:10.01]     SqlHarness.Tests.MeasureParameterSetExecutionTests.Explicitly_empty_parameter_sets_are_rejected_before_connecting [FAIL]
+  Failed SqlHarness.Tests.MeasureParameterSetExecutionTests.Compare_singleton_parameter_set_executes_both_variants_and_keeps_case_identity [45 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: Success
+Actual:   Safety
+  Stack Trace:
+     at SqlHarness.Tests.MeasureParameterSetExecutionTests.Compare_singleton_parameter_set_executes_both_variants_and_keeps_case_identity() in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\MeasureParameterSetExecutionTests.cs:line 375
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Tests.MeasureParameterSetExecutionTests.Explicitly_empty_parameter_sets_are_rejected_before_connecting [96 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: Safety
+Actual:   Success
+  Stack Trace:
+     at SqlHarness.Tests.MeasureParameterSetExecutionTests.Explicitly_empty_parameter_sets_are_rejected_before_connecting() in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\MeasureParameterSetExecutionTests.cs:line 308
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:15.24]     SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_dispatches_exactly_one_named_parameter_set_file [FAIL]
+  Failed SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_dispatches_exactly_one_named_parameter_set_file [147 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 0
+Actual:   2
+  Stack Trace:
+     at SqlHarness.Tests.Cli.MeasureParameterSetCommandTests.Measure_dispatches_exactly_one_named_parameter_set_file() in D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Tests\Cli\MeasureParameterSetCommandTests.cs:line 153
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:    13, Passed:   286, Skipped:     0, Total:   299, Duration: 11 s - SqlHarness.Tests.dll (net10.0)

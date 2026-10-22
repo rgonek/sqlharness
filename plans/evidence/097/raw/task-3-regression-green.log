@@ -1,0 +1,24 @@
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Mcp.WorkflowHost -> D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-097\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+D:\Dev\sqlharness\.worktrees\plan-097\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.37]   Discovering: SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.71]   Discovered:  SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.80]   Starting:    SqlHarness.Mcp.Tests
+[xUnit.net 00:00:02.99]   Finished:    SqlHarness.Mcp.Tests
+  Passed SqlHarness.Mcp.Tests.McpParameterBatchTests.Split_32_plus_1_measure_workflow_executes_each_named_case_once_and_keeps_operation_artifacts_separate [2 s]
+  Standard Output Messages:
+ Plan 097 split 32+1: workflow calls=4 (measure=2, artifact recovery=2), request=3200 wire bytes, output=78187 wire bytes; named cases=33 each reported once; fake sessions=33, measured query executions=66 (one warmup plus one measured execution per case), live DB connections=0.
+
+
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 4,3555 Seconds

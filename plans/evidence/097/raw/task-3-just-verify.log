@@ -1,0 +1,9 @@
+pwsh ./scripts/verify.ps1 -LogDirectory D:/temp/sqlharness-plan097-verify
+[6 q==> ui-install ok 33,5s
+==> build ok 48,8s
+==> ui-check ok 4m48s
+==> test ok 3m24s
+format: skipped (0 changed C# files)
+==> format skipped (0 changed C# files)
+verify: OK  stages=5  8m46s
+Direct process exit code: 0
