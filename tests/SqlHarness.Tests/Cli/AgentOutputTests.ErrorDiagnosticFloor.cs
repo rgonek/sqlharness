@@ -9,6 +9,29 @@ namespace SqlHarness.Tests.Cli;
 
 public sealed class AgentOutputTestsErrorDiagnosticFloor
 {
+    [Fact]
+    public void Agent_minimum_byte_budget_preserves_error_identity_when_diagnostics_must_shrink_below_floor()
+    {
+        var error = new SqlHarnessError(
+            "sql_execution_failed", "sql", new string('m', 8_000), new string('h', 8_000));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(
+            new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, error.Message, Error: error),
+            "query", new OutputCaptureWriter(output), new AgentOutputOptions(4096, 0));
+
+        using var document = JsonDocument.Parse(output.ToString());
+        var envelope = document.RootElement;
+        var reportedError = envelope.GetProperty("error");
+
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(output.ToString()) <= 4096);
+        Assert.Equal("sql_execution_failed", reportedError.GetProperty("code").GetString());
+        Assert.Equal("sql", reportedError.GetProperty("phase").GetString());
+        Assert.True(reportedError.GetProperty("message").GetString()!.Length < AgentOutputLimits.DefaultCellCharacters);
+        Assert.True(reportedError.GetProperty("hint").GetString()!.Length < AgentOutputLimits.DefaultCellCharacters);
+        Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(200)]

@@ -35,3 +35,9 @@ Raw green logs are retained in the ignored plan workspace as `task1-green-core.l
 The implementation is limited to Message/Hint clipping. No public option, envelope version/code mapping, retry behavior, database access, total response ceiling, or `Location.Path` behavior changed. One existing CLI assertion was updated from a 128-character error ceiling to the contract's default error floor; its 4096-byte and truncation assertions remain. This reconciles the pre-existing test expectation with Plan 106's explicit Contract.
 
 No unresolved Task 1 concerns. This is focused feature-branch evidence; the Windows gate and whole-branch review remain with the controller.
+
+## Minimum-budget fix round
+
+At a 4,096-byte budget, the original fallback replaced `sql_execution_failed/sql` with `output_budget_too_small/render` when both long diagnostics hit the 2,048-character floor. The follow-up bounds Message and Hint together to the available serialized budget, retains the original error code and phase, and marks omitted content while leaving the 4,096-byte ceiling unchanged.
+
+The new CLI and MCP minimum-budget tests first failed with `output_budget_too_small` instead of `sql_execution_failed` (Core/CLI 1 failed, 91 passed; MCP 1 failed, 49 passed). After the fix, Core/CLI passed 92/92 and MCP passed 50/50. Each test uses 8,000-character Message and Hint values at a 4,096-byte total budget and confirms both fields may fall below the cell floor with truthful truncation metadata. Full logs are in the ignored Task 1 workspace as `task1-fix1-red-core.log`, `task1-fix1-red-mcp.log`, `task1-fix1-green-core.log`, and `task1-fix1-green-mcp.log`.

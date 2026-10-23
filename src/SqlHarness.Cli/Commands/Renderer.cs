@@ -180,6 +180,66 @@ public sealed class Renderer
             }
         }
 
+        if (error is not null)
+        {
+            var low = 0;
+            var high = Math.Max(error.Message.Length, error.Hint?.Length ?? 0);
+            byte[]? bestErrorBytes = null;
+            while (low <= high)
+            {
+                var characterLimit = low + (high - low) / 2;
+                var message = Prefix(error.Message, characterLimit);
+                var hint = error.Hint is null ? null : Prefix(error.Hint, characterLimit);
+                var clippedFields = (message.Length < error.Message.Length ? 1 : 0) +
+                    (hint is not null && hint.Length < error.Hint!.Length ? 1 : 0);
+                var omittedItems = Math.Max(errorOmitted, clippedFields) + (report is null ? 0 : 1);
+                var budgetedError = error with { Message = message, Hint = hint };
+                var truncation = omittedItems > 0
+                    ? new { omittedItems, maxCellChars = requestedCellChars, maxOutputBytes = requestedBytes }
+                    : null;
+                var envelope = new SqlHarnessAgentEnvelope(
+                    AgentEnvelopeSchema.Version, boundedCommand, "error", (int)outcome.ExitCode, null, budgetedError,
+                    truncation,
+                    outcome.OperationRef, outcome.ParentOperationRef);
+                var candidateBytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
+                if (candidateBytes.Length + 1 <= requestedBytes)
+                {
+                    bestErrorBytes = candidateBytes;
+                    low = characterLimit + 1;
+                }
+                else
+                {
+                    high = characterLimit - 1;
+                }
+            }
+
+            if (bestErrorBytes is not null)
+            {
+                output.Write(Encoding.UTF8.GetString(bestErrorBytes));
+                output.WriteLine();
+                return;
+            }
+
+            var minimumError = error with { Message = string.Empty, Hint = null };
+            var minimumClippedFields = (error.Message.Length > 0 ? 1 : 0) +
+                (error.Hint is { Length: > 0 } ? 1 : 0);
+            var minimumOmittedItems = Math.Max(errorOmitted, minimumClippedFields) + (report is null ? 0 : 1);
+            var minimumTruncation = minimumOmittedItems > 0
+                ? new { omittedItems = minimumOmittedItems, maxCellChars = requestedCellChars, maxOutputBytes = requestedBytes }
+                : null;
+            var minimumEnvelope = new SqlHarnessAgentEnvelope(
+                AgentEnvelopeSchema.Version, boundedCommand, "error", (int)outcome.ExitCode, null, minimumError,
+                minimumTruncation,
+                outcome.OperationRef, outcome.ParentOperationRef);
+            var minimumBytes = JsonSerializer.SerializeToUtf8Bytes(minimumEnvelope, CompactJson);
+            if (minimumBytes.Length + 1 <= requestedBytes)
+            {
+                output.Write(Encoding.UTF8.GetString(minimumBytes));
+                output.WriteLine();
+                return;
+            }
+        }
+
         var minimal = new SqlHarnessAgentEnvelope(AgentEnvelopeSchema.Version, boundedCommand, "error", (int)SqlHarnessExitCode.Safety, null,
             new SqlHarnessError("output_budget_too_small", "render", "The minimum agent response does not fit the configured byte budget."),
             new { omittedItems = 1, maxOutputBytes = requestedBytes });
@@ -204,6 +264,14 @@ public sealed class Renderer
         SqlHarnessMeasureSetReport measureSet => BenchmarkSummaryProjector.Project(measureSet),
         _ => report,
     };
+
+    private static string Prefix(string value, int maximumCharacters)
+    {
+        var length = Math.Min(value.Length, maximumCharacters);
+        if (length > 0 && length < value.Length && char.IsHighSurrogate(value[length - 1]))
+            length--;
+        return value[..length];
+    }
 
     private static void RenderMeasureSet(SqlHarnessMeasureSetReport report, TextWriter output)
     {

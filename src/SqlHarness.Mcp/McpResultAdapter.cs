@@ -177,6 +177,50 @@ public static class McpResultAdapter
                 return built;
         }
 
+        if (error is not null)
+        {
+            var low = 0;
+            var high = Math.Max(error.Message.Length, error.Hint?.Length ?? 0);
+            byte[]? bestErrorBytes = null;
+            while (low <= high)
+            {
+                var characterLimit = low + (high - low) / 2;
+                var message = Prefix(error.Message, characterLimit);
+                var hint = error.Hint is null ? null : Prefix(error.Hint, characterLimit);
+                var clippedFields = (message.Length < error.Message.Length ? 1 : 0) +
+                    (hint is not null && hint.Length < error.Hint!.Length ? 1 : 0);
+                var omittedItems = Math.Max(errorOmitted, clippedFields) + (report is null ? 0 : 1);
+                var budgetedError = error with { Message = message, Hint = hint };
+                var truncation = omittedItems > 0
+                    ? new McpTruncationInfo(omittedItems, maximumCellCharacters)
+                    : null;
+                TryEnvelopeBytes("error", null, budgetedError, truncation, operationRef, out var candidateBytes);
+                if (candidateBytes.Length <= maximumBytes)
+                {
+                    bestErrorBytes = candidateBytes;
+                    low = characterLimit + 1;
+                }
+                else
+                {
+                    high = characterLimit - 1;
+                }
+            }
+
+            if (bestErrorBytes is not null)
+                return Build(bestErrorBytes, isError);
+
+            var minimumError = error with { Message = string.Empty, Hint = null };
+            var minimumClippedFields = (error.Message.Length > 0 ? 1 : 0) +
+                (error.Hint is { Length: > 0 } ? 1 : 0);
+            var minimumOmittedItems = Math.Max(errorOmitted, minimumClippedFields) + (report is null ? 0 : 1);
+            var minimumTruncation = minimumOmittedItems > 0
+                ? new McpTruncationInfo(minimumOmittedItems, maximumCellCharacters)
+                : null;
+            TryEnvelopeBytes("error", null, minimumError, minimumTruncation, operationRef, out var minimumErrorBytes);
+            if (TryBuildWithinBudget(minimumErrorBytes, isError, maximumBytes, out var preservedErrorResult))
+                return preservedErrorResult;
+        }
+
         var minimal = new McpAgentEnvelope(
             SchemaVersion,
             "error",
@@ -439,6 +483,14 @@ public static class McpResultAdapter
         omitted++;
         var length = maximumCellCharacters;
         if (length > 0 && char.IsHighSurrogate(value[length - 1]))
+            length--;
+        return value[..length];
+    }
+
+    private static string Prefix(string value, int maximumCharacters)
+    {
+        var length = Math.Min(value.Length, maximumCharacters);
+        if (length > 0 && length < value.Length && char.IsHighSurrogate(value[length - 1]))
             length--;
         return value[..length];
     }
