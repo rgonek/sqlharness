@@ -88,6 +88,61 @@ public sealed class McpTokenBudgetTests
         return outcome;
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(200)]
+    [InlineData(AgentOutputLimits.DefaultCellCharacters)]
+    [InlineData(AgentOutputLimits.MaximumCellCharacters)]
+    public void Failure_diagnostics_keep_the_default_floor_without_changing_result_cell_limits(int maximumCellCharacters)
+    {
+        const string credential = "credential-sentinel";
+        foreach (var (exitCode, code, phase) in new[]
+        {
+            (SqlHarnessExitCode.Authentication, "connection_failed", "connect"),
+            (SqlHarnessExitCode.Authentication, "authentication_failed", "authentication"),
+            (SqlHarnessExitCode.SqlExecution, "sql_execution_failed", "sql"),
+        })
+        {
+            var message = new string('m', 195) + credential + new string('m', 400) +
+                "Actionable tail: check the configured database endpoint.";
+            var hint = new string('h', 500) + "Actionable hint: verify the login and database permissions.";
+            var error = new SqlHarnessError(
+                code,
+                phase,
+                message,
+                hint,
+                new SqlHarnessErrorLocation(Path: "db/session.sql"));
+            var resultSet = new SqlHarnessResultSetReport(
+                [new SqlHarnessColumnReport(0, "value", "text", true)],
+                [[new string('c', 512)]], 1, 0);
+            var report = new SqlHarnessQueryReport(Target, "read-only", [resultSet], [], 1, 1,
+                "raw-hash", new OutputFootprint(1, 0));
+            var outcome = new SqlHarnessOutcome(exitCode, report, message, Error: error);
+            var budget = new McpResultBudget(65_536, maximumCellCharacters);
+
+            var result = McpResultAdapter.Adapt(outcome, "sqlharness_query", budget, [credential]);
+            var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+            using var document = JsonDocument.Parse(text);
+            var envelope = document.RootElement;
+            var reportedError = envelope.GetProperty("error");
+            var cell = envelope.GetProperty("result").GetProperty("resultSets")[0]
+                .GetProperty("rows")[0][0].GetString()!;
+
+            Assert.True(McpResultAdapter.MeasureBytes(result) <= budget.MaximumBytes);
+            Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+            Assert.DoesNotContain(credential, text, StringComparison.Ordinal);
+            Assert.DoesNotContain(credential[..5], text, StringComparison.Ordinal);
+            Assert.Contains("Actionable tail", reportedError.GetProperty("message").GetString(), StringComparison.Ordinal);
+            Assert.Contains("Actionable hint", reportedError.GetProperty("hint").GetString(), StringComparison.Ordinal);
+            Assert.True(reportedError.GetProperty("message").GetString()!.Length <= Math.Max(maximumCellCharacters, AgentOutputLimits.DefaultCellCharacters));
+            Assert.True(reportedError.GetProperty("hint").GetString()!.Length <= Math.Max(maximumCellCharacters, AgentOutputLimits.DefaultCellCharacters));
+            Assert.True(cell.Length <= maximumCellCharacters);
+            Assert.Equal(error.Code, reportedError.GetProperty("code").GetString());
+            Assert.Equal(error.Phase, reportedError.GetProperty("phase").GetString());
+            Assert.True(reportedError.GetProperty("location").GetProperty("path").GetString()!.Length <= maximumCellCharacters);
+        }
+    }
+
     [Fact]
     public void Query_result_byte_measurements_are_recorded_with_annotations_off_and_on()
     {

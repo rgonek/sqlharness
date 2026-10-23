@@ -138,19 +138,25 @@ public sealed class Renderer
     {
         var requestedBytes = options.MaximumBytes is >= 4096 and <= 1048576 ? options.MaximumBytes : 16 * 1024;
         var requestedCellChars = options.MaximumCellCharacters is >= 0 and <= AgentOutputLimits.MaximumCellCharacters ? options.MaximumCellCharacters : AgentOutputLimits.DefaultCellCharacters;
+        var errorCellChars = Math.Max(requestedCellChars, AgentOutputLimits.DefaultCellCharacters);
         var error = outcome.MachineError;
         var errorOmitted = 0;
-        string Clip(string value)
+        string Clip(string value, int maximumCharacters)
         {
-            if (value.Length <= requestedCellChars) return value;
+            if (value.Length <= maximumCharacters) return value;
             errorOmitted++;
-            var length = requestedCellChars;
+            var length = maximumCharacters;
             if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
             return value[..length];
         }
         if (error is not null)
-            error = error with { Message = Clip(error.Message), Hint = error.Hint is null ? null : Clip(error.Hint), Location = error.Location is null ? null : error.Location with { Path = error.Location.Path is null ? null : Clip(error.Location.Path) } };
-        var boundedCommand = Clip(command);
+            error = error with
+            {
+                Message = Clip(error.Message, errorCellChars),
+                Hint = error.Hint is null ? null : Clip(error.Hint, errorCellChars),
+                Location = error.Location is null ? null : error.Location with { Path = error.Location.Path is null ? null : Clip(error.Location.Path, requestedCellChars) },
+            };
+        var boundedCommand = Clip(command, requestedCellChars);
         var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead ? artifactRead.Section : outcome.Report;
         var status = statusOverride ?? (error is null
             ? "success"

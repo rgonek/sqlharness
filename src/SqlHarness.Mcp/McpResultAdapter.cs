@@ -369,12 +369,13 @@ public static class McpResultAdapter
             return null;
         // The three fields share one secret set, so they share one compiled pattern.
         var redaction = SecretRedactor.For(secrets);
+        var errorCellCharacters = Math.Max(maximumCellCharacters, AgentOutputLimits.DefaultCellCharacters);
         var redacted = error with
         {
-            Message = Clip(redaction.Apply(error.Message), maximumCellCharacters, ref omitted),
+            Message = Clip(redaction.Apply(error.Message), errorCellCharacters, ref omitted),
             Hint = error.Hint is null
                 ? null
-                : Clip(redaction.Apply(error.Hint), maximumCellCharacters, ref omitted),
+                : Clip(redaction.Apply(error.Hint), errorCellCharacters, ref omitted),
             Location = error.Location is null
                 ? null
                 : error.Location with

@@ -1,0 +1,60 @@
+using System.Text.Json;
+
+using SqlHarness.Cli.Commands;
+using SqlHarness.Cli.Infrastructure;
+using SqlHarness.Core;
+using SqlHarness.Core.Targets;
+
+namespace SqlHarness.Tests.Cli;
+
+public sealed class AgentOutputTestsErrorDiagnosticFloor
+{
+    [Theory]
+    [InlineData(0)]
+    [InlineData(200)]
+    [InlineData(AgentOutputLimits.DefaultCellCharacters)]
+    [InlineData(AgentOutputLimits.MaximumCellCharacters)]
+    public void Agent_errors_keep_actionable_diagnostics_without_changing_result_cell_limits(int maximumCellCharacters)
+    {
+        foreach (var (exitCode, code, phase) in new[]
+        {
+            (SqlHarnessExitCode.Authentication, "connection_failed", "connect"),
+            (SqlHarnessExitCode.Authentication, "authentication_failed", "authentication"),
+            (SqlHarnessExitCode.SqlExecution, "sql_execution_failed", "sql"),
+        })
+        {
+            var message = new string('m', 195) + "diagnostic" + new string('m', 400) +
+                "Actionable tail: check the configured database endpoint.";
+            var hint = new string('h', 500) + "Actionable hint: verify the login and database permissions.";
+            var error = new SqlHarnessError(code, phase, message, hint,
+                new SqlHarnessErrorLocation(Path: "db/session.sql"));
+            var resultSet = new SqlHarnessResultSetReport(
+                [new SqlHarnessColumnReport(0, "value", "text", true)],
+                [[new string('c', 512)]], 1, 0);
+            var report = new SqlHarnessQueryReport(
+                new SqlHarnessTargetIdentityReport("req-srv", "req-db", "srv", "db", "profile"),
+                "read-only", [resultSet], [], 1, 1, "raw-hash", new OutputFootprint(1, 0));
+            var output = new StringWriter();
+
+            new Renderer().RenderAgent(
+                new SqlHarnessOutcome(exitCode, report, message, Error: error),
+                "query", new OutputCaptureWriter(output), new AgentOutputOptions(4096, maximumCellCharacters));
+
+            using var document = JsonDocument.Parse(output.ToString());
+            var envelope = document.RootElement;
+            var reportedError = envelope.GetProperty("error");
+            var cell = envelope.GetProperty("result").GetProperty("resultSets")[0]
+                .GetProperty("rows")[0][0].GetString()!;
+
+            Assert.True(System.Text.Encoding.UTF8.GetByteCount(output.ToString()) <= 4096);
+            Assert.Contains("Actionable tail", reportedError.GetProperty("message").GetString(), StringComparison.Ordinal);
+            Assert.Contains("Actionable hint", reportedError.GetProperty("hint").GetString(), StringComparison.Ordinal);
+            Assert.True(reportedError.GetProperty("message").GetString()!.Length <= Math.Max(maximumCellCharacters, AgentOutputLimits.DefaultCellCharacters));
+            Assert.True(reportedError.GetProperty("hint").GetString()!.Length <= Math.Max(maximumCellCharacters, AgentOutputLimits.DefaultCellCharacters));
+            Assert.True(cell.Length <= maximumCellCharacters);
+            Assert.Equal(code, reportedError.GetProperty("code").GetString());
+            Assert.Equal(phase, reportedError.GetProperty("phase").GetString());
+            Assert.True(reportedError.GetProperty("location").GetProperty("path").GetString()!.Length <= maximumCellCharacters);
+        }
+    }
+}
