@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: RESEARCH COMPLETE on `f6044c8`; final Windows gate evidence is coordinator-owned and pending. Offline/synthetic study only; live acceptance remains unverified.
+- Status: RESEARCH COMPLETE. Windows `just verify` passed on executable revision `f6044c8` (docs had advanced to `56f4cd4` during the run); branch formatting passed after whitespace-only commit `14a0c7a`. Linux and live acceptance remain unverified.
 - Priority: **P3** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -89,7 +89,7 @@ Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "AgentO
 
 - [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
 - [x] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [x] No executable code/tests changed in Task 3. Scoped checks cover the notes/evidence diff and links; the separate coordinator-run Windows gate is not claimed by this task.
+- [x] No executable code/tests changed in Task 3. The coordinator's Windows `just verify` passed on `f6044c8`; branch formatting later passed on `14a0c7a`. No full gate was rerun after the formatting-only change. Scoped Task 3 checks cover the notes/evidence diff and links.
 - [x] Linux remains unverified. No completed product checks were rerun.
 - [x] Research evidence records accept/defer/reject outcomes and the remaining unknowns.
 - [x] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Deferred live acceptance remains unverified.

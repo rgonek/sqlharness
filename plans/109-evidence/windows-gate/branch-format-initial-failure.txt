@@ -1,0 +1,7 @@
+[6 qformat: 3 changed C# file(s) (branch)
+D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.WorkflowHost\WorkflowModule.cs(293,21): error WHITESPACE: Fix whitespace formatting. Replace 1 characters with '\r\n\s\s\s\s\s\s\s\s\s\s\s\s'. [D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.WorkflowHost\SqlHarness.Mcp.WorkflowHost.csproj]
+D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.WorkflowHost\WorkflowModule.cs(295,21): error WHITESPACE: Fix whitespace formatting. Replace 1 characters with '\r\n\s\s\s\s\s\s\s\s\s\s\s\s'. [D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.WorkflowHost\SqlHarness.Mcp.WorkflowHost.csproj]
+D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.Tests\AgentOptimizationWorkflowTests.cs(1257,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.Tests\SqlHarness.Mcp.Tests.csproj]
+D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.WorkflowHost\WorkflowModule.cs(492,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.WorkflowHost\SqlHarness.Mcp.WorkflowHost.csproj]
+D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.WorkflowHost\WorkflowScenarios.cs(115,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-109\tests\SqlHarness.Mcp.WorkflowHost\SqlHarness.Mcp.WorkflowHost.csproj]
+format: FAILED (dotnet format exit 2)
