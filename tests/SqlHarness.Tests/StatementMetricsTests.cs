@@ -222,6 +222,26 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
+    public void Compact_statement_evidence_keeps_udf_limitation_when_counters_are_complete()
+    {
+        var udf = JournalPlan("SELECT dbo.fn_scalar()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 28, elapsedTime: 29,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)])]);
+        var run = new CompareRunArtifact("candidate", 1, 0, 29, 0,
+            new Dictionary<string, long>(), "result", [udf], 1)
+        {
+            TableIo = [new TableIoCounters("", 0, 0, 0, 0, 0, 0, 0, 0)],
+        };
+
+        var evidence = AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind, [run]);
+
+        Assert.Equal("available", evidence.EvidenceAvailability);
+        var candidate = Assert.Single(evidence.Cases);
+        Assert.Equal("complete", candidate.CounterAttribution);
+        Assert.Contains(candidate.Limitations, limitation => limitation.Contains("Scalar UDF", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Missing_statement_attribution_is_unavailable_and_legacy_artifact_shape_stays_unchanged()
     {
         Assert.Equal(

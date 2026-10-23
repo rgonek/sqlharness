@@ -142,14 +142,26 @@ public static class AgentOutputProjection
     /// </summary>
     public static IReadOnlyList<int> CandidateDetailLimits { get; } = [int.MaxValue, 128, 64, 32, 16, 8, 4, 2, 1, 0];
 
+    /// <summary>Creates compact statement evidence from the already collected benchmark runs.</summary>
+    public static AgentStatementEvidence? StatementEvidenceFor(SqlHarnessOutcome outcome) => outcome.Report switch
+    {
+        SqlHarnessCompareReport => AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind, outcome.BenchmarkRuns),
+        SqlHarnessCompareMatrixReport => AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind, outcome.BenchmarkRuns),
+        SqlHarnessMeasureReport => AgentStatementEvidenceProjection.Create(ArtifactReader.MeasureKind, outcome.BenchmarkRuns),
+        SqlHarnessMeasureSetReport => AgentStatementEvidenceProjection.Create(ArtifactReader.MeasureSetKind, outcome.BenchmarkRuns),
+        _ => null,
+    };
+
     internal static IEnumerable<KeyValuePair<string, CompareDistribution>> BySignificance(
         IReadOnlyDictionary<string, CompareDistribution> reads) =>
         reads.OrderByDescending(pair => pair.Value.Median)
             .ThenByDescending(pair => pair.Value.Max)
             .ThenBy(pair => pair.Key, StringComparer.Ordinal);
 
-    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 65_536, AgentProjectionProfile profile = AgentProjectionProfile.Cli)
-        => ProjectCore(report, maximumCellCharacters, detailLimit, out omittedItems, maximumBytes, profile, null);
+    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 65_536, AgentProjectionProfile profile = AgentProjectionProfile.Cli, AgentStatementEvidence? statementEvidence = null)
+        => AgentBenchmarkProjection.WithStatementEvidence(
+            ProjectCore(report, maximumCellCharacters, detailLimit, out omittedItems, maximumBytes, profile, null),
+            statementEvidence);
 
     internal static object? ProjectForTesting(
         object? report,
@@ -563,8 +575,7 @@ public static class AgentOutputProjection
                         {
                             var statement = sourceStatement with
                             {
-                                Variant = Clip(sourceStatement.Variant)!,
-                                ParameterSet = Clip(sourceStatement.ParameterSet),
+                                // Selectors are evidence identity. Cell clipping must never make a row unaddressable.
                                 TopOperators = Take(sourceStatement.TopOperators).Select(op => op with
                                 {
                                     PhysicalOp = Clip(op.PhysicalOp)!,
