@@ -139,7 +139,7 @@ public sealed class Renderer
         var requestedBytes = options.MaximumBytes is >= 4096 and <= 1048576 ? options.MaximumBytes : 16 * 1024;
         var requestedCellChars = options.MaximumCellCharacters is >= 0 and <= AgentOutputLimits.MaximumCellCharacters ? options.MaximumCellCharacters : AgentOutputLimits.DefaultCellCharacters;
         var lineEndingBytes = Encoding.UTF8.GetByteCount(output.NewLine);
-        var errorCellChars = Math.Max(requestedCellChars, AgentOutputLimits.DefaultCellCharacters);
+        var errorCellChars = AgentOutputLimits.ErrorCellCharacters(requestedCellChars);
         var error = outcome.MachineError;
         var errorOmitted = 0;
         var messageOmitted = false;
@@ -150,9 +150,7 @@ public sealed class Renderer
             clipped = value.Length > maximumCharacters;
             if (!clipped) return value;
             errorOmitted++;
-            var length = maximumCharacters;
-            if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
-            return value[..length];
+            return AgentOutputLimits.PrefixErrorText(value, maximumCharacters);
         }
         if (error is not null)
             error = error with
@@ -196,8 +194,8 @@ public sealed class Renderer
             while (low <= high)
             {
                 var characterLimit = low + (high - low) / 2;
-                var message = Prefix(error.Message, characterLimit);
-                var hint = error.Hint is null ? null : Prefix(error.Hint, characterLimit);
+                var message = AgentOutputLimits.PrefixErrorText(error.Message, characterLimit);
+                var hint = error.Hint is null ? null : AgentOutputLimits.PrefixErrorText(error.Hint, characterLimit);
                 var omittedItems = (messageOmitted || message.Length < error.Message.Length ? 1 : 0) +
                     (hintOmitted || (hint is not null && hint.Length < error.Hint!.Length) ? 1 : 0) +
                     (pathOmitted ? 1 : 0) + (commandOmitted ? 1 : 0) + (report is null ? 0 : 1);
@@ -272,14 +270,6 @@ public sealed class Renderer
         SqlHarnessMeasureSetReport measureSet => BenchmarkSummaryProjector.Project(measureSet),
         _ => report,
     };
-
-    private static string Prefix(string value, int maximumCharacters)
-    {
-        var length = Math.Min(value.Length, maximumCharacters);
-        if (length > 0 && length < value.Length && char.IsHighSurrogate(value[length - 1]))
-            length--;
-        return value[..length];
-    }
 
     private static void RenderMeasureSet(SqlHarnessMeasureSetReport report, TextWriter output)
     {

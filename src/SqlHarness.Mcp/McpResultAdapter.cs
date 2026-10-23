@@ -187,8 +187,8 @@ public static class McpResultAdapter
             while (low <= high)
             {
                 var characterLimit = low + (high - low) / 2;
-                var message = Prefix(error.Message, characterLimit);
-                var hint = error.Hint is null ? null : Prefix(error.Hint, characterLimit);
+                var message = AgentOutputLimits.PrefixErrorText(error.Message, characterLimit);
+                var hint = error.Hint is null ? null : AgentOutputLimits.PrefixErrorText(error.Hint, characterLimit);
                 var omittedItems = (errorClippedFields.Message || message.Length < error.Message.Length ? 1 : 0) +
                     (errorClippedFields.Hint || (hint is not null && hint.Length < error.Hint!.Length) ? 1 : 0) +
                     (errorClippedFields.LocationPath ? 1 : 0) + (report is null ? 0 : 1);
@@ -420,7 +420,7 @@ public static class McpResultAdapter
             return null;
         // The three fields share one secret set, so they share one compiled pattern.
         var redaction = SecretRedactor.For(secrets);
-        var errorCellCharacters = Math.Max(maximumCellCharacters, AgentOutputLimits.DefaultCellCharacters);
+        var errorCellCharacters = AgentOutputLimits.ErrorCellCharacters(maximumCellCharacters);
         var message = redaction.Apply(error.Message);
         var hint = error.Hint is null ? null : redaction.Apply(error.Hint);
         var locationPath = error.Location?.Path is null ? null : redaction.Apply(error.Location.Path);
@@ -430,17 +430,17 @@ public static class McpResultAdapter
             locationPath is not null && locationPath.Length > maximumCellCharacters);
         var redacted = error with
         {
-            Message = Prefix(message, errorCellCharacters),
+            Message = AgentOutputLimits.PrefixErrorText(message, errorCellCharacters),
             Hint = hint is null
                 ? null
-                : Prefix(hint, errorCellCharacters),
+                : AgentOutputLimits.PrefixErrorText(hint, errorCellCharacters),
             Location = error.Location is null
                 ? null
                 : error.Location with
                 {
                     Path = locationPath is null
                         ? null
-                        : Prefix(locationPath, maximumCellCharacters),
+                        : AgentOutputLimits.PrefixErrorText(locationPath, maximumCellCharacters),
                 },
         };
         return redacted;
@@ -488,14 +488,6 @@ public static class McpResultAdapter
         if (projected is null && coverage is not null)
             error = (error ?? McpAgentError.Internal()) with { MatrixStop = coverage };
         return projected;
-    }
-
-    private static string Prefix(string value, int maximumCharacters)
-    {
-        var length = Math.Min(value.Length, maximumCharacters);
-        if (length > 0 && length < value.Length && char.IsHighSurrogate(value[length - 1]))
-            length--;
-        return value[..length];
     }
 
     private static bool TryEnvelopeBytes(

@@ -114,6 +114,30 @@ public sealed class McpTokenBudgetTests
         Assert.Equal(3, envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
     }
 
+    [Fact]
+    public void Oversized_error_with_multibyte_message_and_null_hint_fits_minimum_budget()
+    {
+        var error = new SqlHarnessError("sql_execution_failed", "sql", string.Concat(Enumerable.Repeat("語😀", 6_000)));
+        var budget = new McpResultBudget(4096, 0);
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, error.Message, Error: error),
+            "sqlharness_query", budget);
+
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+        var envelope = document.RootElement;
+        var reportedError = envelope.GetProperty("error");
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= budget.MaximumBytes);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+        Assert.Equal("sql_execution_failed", reportedError.GetProperty("code").GetString());
+        Assert.Equal("sql", reportedError.GetProperty("phase").GetString());
+        Assert.True(!reportedError.TryGetProperty("hint", out var hint) || hint.ValueKind == JsonValueKind.Null);
+        Assert.True(reportedError.GetProperty("message").GetString()!.Length > 0);
+        Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(200)]
