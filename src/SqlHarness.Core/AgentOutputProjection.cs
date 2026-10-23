@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -142,14 +143,26 @@ public static class AgentOutputProjection
     /// </summary>
     public static IReadOnlyList<int> CandidateDetailLimits { get; } = [int.MaxValue, 128, 64, 32, 16, 8, 4, 2, 1, 0];
 
+    /// <summary>Creates compact statement evidence from the already collected benchmark runs.</summary>
+    public static AgentStatementEvidence? StatementEvidenceFor(SqlHarnessOutcome outcome) => outcome.Report switch
+    {
+        SqlHarnessCompareReport => AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind, outcome.BenchmarkRuns),
+        SqlHarnessCompareMatrixReport => AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind, outcome.BenchmarkRuns),
+        SqlHarnessMeasureReport => AgentStatementEvidenceProjection.Create(ArtifactReader.MeasureKind, outcome.BenchmarkRuns),
+        SqlHarnessMeasureSetReport => AgentStatementEvidenceProjection.Create(ArtifactReader.MeasureSetKind, outcome.BenchmarkRuns),
+        _ => null,
+    };
+
     internal static IEnumerable<KeyValuePair<string, CompareDistribution>> BySignificance(
         IReadOnlyDictionary<string, CompareDistribution> reads) =>
         reads.OrderByDescending(pair => pair.Value.Median)
             .ThenByDescending(pair => pair.Value.Max)
             .ThenBy(pair => pair.Key, StringComparer.Ordinal);
 
-    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 65_536, AgentProjectionProfile profile = AgentProjectionProfile.Cli)
-        => ProjectCore(report, maximumCellCharacters, detailLimit, out omittedItems, maximumBytes, profile, null);
+    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 65_536, AgentProjectionProfile profile = AgentProjectionProfile.Cli, AgentStatementEvidence? statementEvidence = null)
+        => AgentBenchmarkProjection.WithStatementEvidence(
+            ProjectCore(report, maximumCellCharacters, detailLimit, out omittedItems, maximumBytes, profile, null),
+            statementEvidence);
 
     internal static object? ProjectForTesting(
         object? report,
@@ -561,29 +574,54 @@ public static class AgentOutputProjection
                         var selected = new List<ArtifactStatementMetric>();
                         foreach (var sourceStatement in statements.Statements.Take(detailLimit))
                         {
-                            var statement = sourceStatement with
+                            ArtifactStatementMetric? fittingStatement = null;
+                            foreach (var nameLimit in new[] { int.MaxValue, 256, 128, 64, 32, 16, 8, 4, 1, 0 })
                             {
-                                Variant = Clip(sourceStatement.Variant)!,
-                                ParameterSet = Clip(sourceStatement.ParameterSet),
-                                TopOperators = Take(sourceStatement.TopOperators).Select(op => op with
+                                for (var hiddenCount = sourceStatement.HiddenWork.Count; hiddenCount >= 0 && fittingStatement is null; hiddenCount--)
                                 {
-                                    PhysicalOp = Clip(op.PhysicalOp)!,
-                                    Object = Clip(op.Object),
-                                    Index = Clip(op.Index),
-                                }).ToArray(),
-                            };
-                            var candidateStatements = selected.Append(statement).ToArray();
-                            var candidate = statements with
-                            {
-                                Statements = candidateStatements,
-                                OmittedStatements = statements.OmittedStatements + statements.Statements.Count - candidateStatements.Length,
-                                Continuation = candidateStatements.Length < statements.Statements.Count
-                                    ? statements.Cursor + candidateStatements.Length
-                                    : statements.Continuation,
-                            };
-                            if (SerializedLength(candidate) + 384 > maximumBytes)
+                                    var hidden = sourceStatement.HiddenWork.Take(hiddenCount).Select(item =>
+                                    {
+                                        var name = nameLimit == int.MaxValue
+                                            ? item.Name
+                                            : string.Concat(item.Name.EnumerateRunes().Take(nameLimit).Select(rune => rune.ToString()));
+                                        return item with { Name = name, NameTruncated = item.NameTruncated || !string.Equals(name, item.Name, StringComparison.Ordinal) };
+                                    }).ToArray();
+                                    var responseOmitted = sourceStatement.HiddenWork.Count - hidden.Length;
+                                    var statement = sourceStatement with
+                                    {
+                                        // Selectors are evidence identity. Cell clipping must never make a row unaddressable.
+                                        TopOperators = Take(sourceStatement.TopOperators).Select(op => op with
+                                        {
+                                            PhysicalOp = Clip(op.PhysicalOp)!,
+                                            Object = Clip(op.Object),
+                                            Index = Clip(op.Index),
+                                        }).ToArray(),
+                                        HiddenWork = hidden,
+                                        HiddenWorkOmitted = sourceStatement.HiddenWorkOmitted is { } persistedOmitted
+                                            ? persistedOmitted + responseOmitted
+                                            : null,
+                                    };
+                                    var candidateStatements = selected.Append(statement).ToArray();
+                                    var candidate = statements with
+                                    {
+                                        Statements = candidateStatements,
+                                        OmittedStatements = statements.OmittedStatements + statements.Statements.Count - candidateStatements.Length,
+                                        Continuation = candidateStatements.Length < statements.Statements.Count
+                                            ? statements.Cursor + candidateStatements.Length
+                                            : statements.Continuation,
+                                    };
+                                    if (SerializedLength(candidate) + 384 <= maximumBytes)
+                                    {
+                                        fittingStatement = statement;
+                                        break;
+                                    }
+                                }
+                                if (fittingStatement is not null)
+                                    break;
+                            }
+                            if (fittingStatement is null)
                                 break;
-                            selected.Add(statement);
+                            selected.Add(fittingStatement);
                         }
                         if (selected.Count == 0 && statements.Statements.Count > 0)
                             throw new SqlHarnessSafetyException("The output budget cannot fit an artifact statement.");

@@ -1,0 +1,46 @@
+# Plan 110 verification evidence
+
+Date: 2026-10-23 · Branch: `plan-110` · Worktree: `D:/Dev/sqlharness/.worktrees/plan-110` · whole-branch review revision: `2bc9b472` · finalization checks cover this evidence, the plan and index metadata correction.
+
+## Scope and outcome
+
+Task 3 completed as documentation-only verification. The committed branch delta from `6d543e509734a374caf882bc8c05ffe5ccaa98b2` includes `README.md`, `docs/mcp/runtime.md`, both task evidence notes, this plan, this verification evidence, and the Plan 110 index entry. No executable source or fixtures changed. Per `docs/agents/verification.md`, no product tests or full gate were needed. No client/account setup, client reload experiment, live database, install, retry, or deployment was performed. The controller ruling copied only the requested untracked Plan 110 into this isolated checkout and left the main checkout's README, index, and unrelated plans untouched; the index here has a standalone Plan 110 history entry. A later local integration must semantically reconcile the main index to preserve pending user work.
+
+## Durable checks and results
+
+| Exact command | Expected | Observed |
+|---|---|---|
+| `Test-Path -LiteralPath docs/mcp/runtime.md; Select-String -Path docs/mcp/runtime.md -Pattern '^### Troubleshoot a timeout$'; Test-Path -LiteralPath docs/observations/mcp-timeout-layers.md; Test-Path -LiteralPath plans/110-verification-evidence.md; Test-Path -LiteralPath plans/110-mcp-timeout-troubleshooting.md` | Resolve all five new relative link targets and the README heading fragment. | PASS; all four path checks returned `True`; heading found at `docs/mcp/runtime.md:35`. |
+| `rg -n 'SqlExecution => "sql_execution_failed"|SqlExecution => "sql"' src/SqlHarness.Core/SqlHarnessError.cs` | Match the SQL example's error code and phase. | PASS; code at line 23 and phase at line 33. |
+| `rg -n -F 'CancelledCode = "cancelled"' src/SqlHarness.Mcp/McpCallOutcome.cs; rg -n -F 'CancelledMessage = "The operation was cancelled."' src/SqlHarness.Mcp/McpCallOutcome.cs; rg -n -F 'new SqlHarnessError(CancelledCode, "execution", CancelledMessage)' src/SqlHarness.Mcp/McpCallOutcome.cs` | Match the server cancellation example's code, phase, and message. | PASS; constants at lines 40/43 and result mapping at line 57. |
+| `rg -n 'MinimumTimeoutSeconds = 1|MaximumTimeoutSeconds = 300|DefaultExecutionTimeoutSeconds = 30|DefaultTimeoutSeconds = 30' src/SqlHarness.Core/SqlHarnessConfig.cs; rg -n 'timeout = defaultTimeoutSeconds' src/SqlHarness.Mcp/McpOperationMapper.cs` | Match 1..300 bounds, both 30-second defaults, and omitted-argument fallback. | PASS; connection/execution values at lines 57–68; fallback at line 754. |
+| `rg -n -F 'DefaultMaxOperationSeconds = 900' src/SqlHarness.Mcp/McpLimits.cs; rg -n -F 'Math.Min(callMaximumSeconds.Value, processMaximumSeconds)' src/SqlHarness.Mcp/McpLimits.cs` | Match the process operation default and per-call cap. | PASS; default at line 63 and cap at line 85. |
+| `rg -n -F 'completion is **UNKNOWN**' docs/mcp/runtime.md; rg -n -F 'Whether a particular client automatically reloads its configuration is client-specific and is not established here.' docs/mcp/runtime.md` | Keep client completion and client reload uncertainty explicit. | PASS; unknown outcome and unverified reload wording at lines 51/53. |
+| `git diff --name-only 6d543e509734a374caf882bc8c05ffe5ccaa98b2..HEAD` | Identify the complete committed branch documentation delta at whole-branch review. | `README.md`, `docs/mcp/runtime.md`, both Plan 110 task evidence notes, `plans/110-mcp-timeout-troubleshooting.md`, `plans/110-verification-evidence.md`, and `plans/README.md`. |
+| `git diff --check 6d543e509734a374caf882bc8c05ffe5ccaa98b2..HEAD` | No whitespace errors in the committed branch delta. | PASS, exit 0. |
+| `git diff --check --cached` | No whitespace errors in the staged finalization delta. | PASS, exit 0. |
+| `$targets = @('docs/observations/mcp-timeout-layers.md','plans/110-evidence/task-1-source-reconciliation.md','plans/110-evidence/task-2-reachable-troubleshooting.md','plans/110-verification-evidence.md','plans/110-mcp-timeout-troubleshooting.md'); $missing = $targets | Where-Object { -not (Test-Path -LiteralPath $_) }; if ($missing) { $missing; exit 1 }; $heading = Select-String -Path docs/mcp/runtime.md -Pattern '^### Troubleshoot a timeout$'; if (-not $heading) { exit 1 }; 'PASS: all five Plan 110 relative targets exist; README anchor heading found.'` | Resolve Plan 110 relative links and the README heading fragment. | PASS; all five target files exist and heading found. No links or examples changed in finalization. |
+| `git diff --check` | No whitespace errors in this final metadata correction. | PASS, exit 0. |
+
+The five relative links inspected from the full branch are `README.md` → `docs/mcp/runtime.md#troubleshoot-a-timeout`, `plans/110-mcp-timeout-troubleshooting.md` → `../docs/observations/mcp-timeout-layers.md`, `plans/110-evidence/task-2-reachable-troubleshooting.md` → `../110-verification-evidence.md`, and the `plans/README.md` row → `110-mcp-timeout-troubleshooting.md` and `110-verification-evidence.md`. The commands check all target files and the README heading. Pre-existing links were outside the check scope. Source anchors and fixture references recorded in Task 1/2 evidence were checked against current files; fixtures were read but not executed. The final metadata correction changes no links or examples; its scoped diff/link check command and result are recorded above and in the final-fix report.
+
+The timeout boundaries are distinct in source: connection and SQL command defaults are both 30 seconds and bounded 1..300; omitted SQL `timeout` uses the configured execution default; the MCP process operation budget defaults to 900 seconds and a per-call value is clamped by the process maximum. The SQL error code/phase is `sql_execution_failed`/`sql`; server deadline cancellation is `cancelled`/`execution` with the stable cancellation message. A client-side wait timeout without a SQLHarness response has no server result to interpret and remains `UNKNOWN`.
+
+## Client reload and acceptance boundary
+
+Verified from `McpHost.cs`, `McpOperationMapper.cs`, and the capabilities contract: the process loads configuration at startup, an existing process does not adopt a saved setting, and capabilities reports the value loaded in that process. Restarting `mcp serve`, reconnecting, and querying capabilities is the documented way to confirm a new process value. Whether any particular external client automatically reloads its own configuration, its local wait-timeout wording, and whether cancellation reaches SQLHarness remain unverified. No additional client case was accessible without new client/account setup. Live acceptance and installed-binary behavior remain deferred.
+
+## Review-focus assessment
+
+1. Older artifacts and absent engine-specific fields: not applicable; no artifact reader, model, or projection changed.
+2. Variant, statement, parameter-set, and repetition identity: not applicable; no execution identity or artifact behavior changed.
+3. Minimum byte budgets, clipping, and continuation: artifact-response aspects are not applicable; the existing 1..300 timeout bounds were checked and the docs preserve them without changing any budget.
+4. Errors and negative outcomes: applicable and checked. The examples use source-backed error codes/phases; a client timeout with no response remains explicitly unknown, never an empty successful result.
+5. Notes-only and synthetic evidence: applicable and preserved. The examples are labeled synthetic; the result is documentation verification, not live acceptance, deployment, installed-binary proof, or measured savings.
+
+## Review and remaining limits
+
+Task 1 review approved after the connection-timeout/load-timing fix at `63a3bc57`. Task 2 review approved at `176b7412` with no findings. Task 3 Luna xhigh spec and quality review approved at `2bc9b472`; its Linux-status Minor is corrected in this finalization. Sol low whole-branch review approved at `2bc9b472` with no Critical or Important findings; its Linux-status Minor is also corrected. The final scoped Sol low re-review approved `52e4a498` with the prior finding addressed and no new Critical/Important breakage; the residual Minor is adjudicated below. Linux verification was not run and is not required for this documentation-only scope; no Linux pass is claimed. The reported historical client behavior does not establish a client-specific timeout setting, reload behavior, causality, or server completion. Installed-binary/live-database outcomes and executable regression behavior remain unverified.
+
+
+Final scoped Sol low review of `52e4a498` addressed the Linux criterion, with no new Critical/Important breakage. Ruling: retain the phrase history entry — `plans/README.md` places Plan 110 at line 58 under `## History` (line 40), so the residual Minor claiming a queue location is factually incorrect — if wrong, the cost is misleading index-location wording, with no runtime effect. Final bookkeeping only records these actual review outcomes; no product documentation behavior changed.

@@ -149,6 +149,57 @@ public sealed class AgentOptimizationWorkflowTests
         session.AssertNoDatabaseConnections();
     }
 
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(65536)]
+    public async Task Compact_compare_keeps_partial_statement_case_and_artifact_reference(int budget)
+    {
+        await using var session = await Session.StartAsync(WorkflowScenarios.ArtifactReviewStudyId, Budget);
+        var compare = await session.Call("sqlharness_compare", CompareArguments(
+            WorkflowScenarios.ArtifactReviewBaselineSql,
+            WorkflowScenarios.ArtifactReviewCandidateV1Sql,
+            budget: budget));
+        Assert.False(compare.IsError == true, Text(compare));
+        var result = Envelope(compare).GetProperty("result");
+        var artifactId = ArtifactId(Envelope(compare));
+        Assert.False(string.IsNullOrWhiteSpace(artifactId));
+        Assert.Equal(artifactId, result.GetProperty("artifactId").GetString());
+
+        var evidence = result.GetProperty("statementEvidence");
+        Assert.Equal("collected-statement-counters", evidence.GetProperty("coverageBasis").GetString());
+        var candidateCase = evidence.GetProperty("cases").EnumerateArray().Single(item =>
+            item.GetProperty("variant").GetString() == "candidate");
+        Assert.Equal("partial", candidateCase.GetProperty("counterAttribution").GetString());
+        Assert.Equal(4, candidateCase.GetProperty("partialStatementCount").GetInt32());
+
+        int? cursor = null;
+        var affected = new List<JsonElement>();
+        do
+        {
+            var arguments = new Dictionary<string, object?>
+            {
+                ["id"] = artifactId,
+                ["section"] = "statements",
+                ["pageSize"] = 32,
+                ["maxResultBytes"] = budget,
+                ["maxCellChars"] = 0,
+            };
+            if (cursor is int next)
+                arguments["cursor"] = next;
+            var statements = await session.Call("sqlharness_artifact", arguments);
+            Assert.False(statements.IsError == true, Text(statements));
+            affected.AddRange(Envelope(statements).GetProperty("result").GetProperty("statements").EnumerateArray()
+                .Where(item => item.GetProperty("variant").GetString() == "candidate"
+                    && item.GetProperty("repetition").GetInt32() == 1));
+            cursor = Continuation(Envelope(statements));
+        }
+        while (cursor is not null);
+        Assert.Equal(4, affected.Count);
+        Assert.All(affected, item => Assert.Equal("partial", item.GetProperty("counterAttribution").GetString()));
+        await session.ShutdownAsync();
+        session.AssertNoDatabaseConnections();
+    }
+
     [Fact]
     public async Task Artifact_513_node_sdk_completion_measures_default_and_explicit_pages()
     {
@@ -232,15 +283,27 @@ public sealed class AgentOptimizationWorkflowTests
             Assert.False(compare.IsError == true, Text(compare));
             var artifactId = ArtifactId(Envelope(compare))!;
 
-            var statements = await RecordStudyCallAsync(session, calls, revision, "sqlharness_artifact",
-                new Dictionary<string, object?> { ["id"] = artifactId, ["section"] = "statements", ["pageSize"] = 32, ["maxResultBytes"] = 65536 }, 65536);
-            Assert.False(statements.IsError == true, Text(statements));
-            var statementItems = Envelope(statements).GetProperty("result").GetProperty("statements").EnumerateArray().ToArray();
-            Assert.Equal(8, statementItems.Length);
+            var statementItems = new List<JsonElement>();
+            int? statementCursor = null;
+            do
+            {
+                var arguments = new Dictionary<string, object?> { ["id"] = artifactId, ["section"] = "statements", ["pageSize"] = 32, ["maxResultBytes"] = 65536 };
+                if (statementCursor is int current)
+                    arguments["cursor"] = current;
+                var statements = await RecordStudyCallAsync(session, calls, revision, "sqlharness_artifact", arguments, 65536);
+                Assert.False(statements.IsError == true, Text(statements));
+                statementItems.AddRange(Envelope(statements).GetProperty("result").GetProperty("statements").EnumerateArray().Select(item => item.Clone()));
+                statementCursor = Continuation(Envelope(statements));
+            }
+            while (statementCursor is not null);
+            Assert.Equal(40, statementItems.Count);
             foreach (var variant in new[] { "baseline", "candidate" })
             {
                 var selected = statementItems.Where(item => item.GetProperty("variant").GetString() == variant).ToArray();
-                Assert.Equal(new[] { 0, 1, 2, 3 }, selected.Select(item => item.GetProperty("statementOrdinal").GetInt32()).ToArray());
+                Assert.Equal(20, selected.Length);
+                Assert.Equal(Enumerable.Range(1, 5), selected.Select(item => item.GetProperty("repetition").GetInt32()).Distinct().Order());
+                Assert.All(Enumerable.Range(1, 5), repetition =>
+                    Assert.Equal(new[] { 0, 1, 2, 3 }, selected.Where(item => item.GetProperty("repetition").GetInt32() == repetition).Select(item => item.GetProperty("statementOrdinal").GetInt32()).ToArray()));
                 Assert.All(selected, item =>
                 {
                     Assert.Equal(JsonValueKind.Number, item.GetProperty("cpuTimeMilliseconds").ValueKind);
@@ -249,7 +312,7 @@ public sealed class AgentOptimizationWorkflowTests
                 });
             }
             revisionHashes[revision] = statementItems
-                .Where(item => item.GetProperty("variant").GetString() == "candidate")
+                .Where(item => item.GetProperty("variant").GetString() == "candidate" && item.GetProperty("repetition").GetInt32() == 5)
                 .OrderBy(item => item.GetProperty("statementOrdinal").GetInt32())
                 .Select(item => item.GetProperty("statementHash").GetString()!)
                 .ToArray();
@@ -316,14 +379,25 @@ public sealed class AgentOptimizationWorkflowTests
             Assert.Equal(new[] { "small", "medium", "large", "edge" }, variants.Select(item => item.GetProperty("name").GetString()).ToArray());
             Assert.All(variants, item => Assert.Single(item.GetProperty("logicalReadsByTable").EnumerateObject()));
 
-            var statements = await RecordStudyCallAsync(session, calls, "named-set-attribution", "sqlharness_artifact",
-                new Dictionary<string, object?> { ["id"] = artifactId, ["section"] = "statements", ["pageSize"] = 32, ["maxResultBytes"] = 65536 }, 65536);
-            Assert.False(statements.IsError == true, Text(statements));
-            var setStatements = Envelope(statements).GetProperty("result").GetProperty("statements").EnumerateArray().ToArray();
-            Assert.Equal(16, setStatements.Length);
+            var setStatements = new List<JsonElement>();
+            int? setCursor = null;
+            do
+            {
+                var arguments = new Dictionary<string, object?> { ["id"] = artifactId, ["section"] = "statements", ["pageSize"] = 32, ["maxResultBytes"] = 65536 };
+                if (setCursor is int current)
+                    arguments["cursor"] = current;
+                var statements = await RecordStudyCallAsync(session, calls, "named-set-attribution", "sqlharness_artifact", arguments, 65536);
+                Assert.False(statements.IsError == true, Text(statements));
+                setStatements.AddRange(Envelope(statements).GetProperty("result").GetProperty("statements").EnumerateArray().Select(item => item.Clone()));
+                setCursor = Continuation(Envelope(statements));
+            }
+            while (setCursor is not null);
+            Assert.Equal(48, setStatements.Count);
             Assert.Equal(4, setStatements.Select(item => item.GetProperty("parameterSet").GetString()).Distinct(StringComparer.Ordinal).Count());
             Assert.All(new[] { "small", "medium", "large", "edge" }, name =>
-                Assert.Equal(4, setStatements.Count(item => item.GetProperty("parameterSet").GetString() == name)));
+                Assert.Equal(12, setStatements.Count(item => item.GetProperty("parameterSet").GetString() == name)));
+            Assert.All(new[] { "small", "medium", "large", "edge" }, name =>
+                Assert.Equal(new[] { 1, 2, 3 }, setStatements.Where(item => item.GetProperty("parameterSet").GetString() == name).Select(item => item.GetProperty("repetition").GetInt32()).Distinct().Order()));
             await session.ShutdownAsync();
             session.AssertNoDatabaseConnections();
         }
@@ -753,6 +827,7 @@ public sealed class AgentOptimizationWorkflowTests
         var recordsDir = Path.Combine(
             McpStdioProcessHarness.FindRepositoryRoot(),
             "tests", "SqlHarness.Mcp.Tests", "Fixtures", "OptimizationWorkflows", "records");
+        // These records freeze the current MCP contract, including per-repetition statement identities.
         Directory.CreateDirectory(recordsDir);
 
         foreach (var scenario in ScriptedScenarios)
@@ -787,12 +862,15 @@ public sealed class AgentOptimizationWorkflowTests
                     Directory.CreateDirectory(captureDirectory);
                     File.WriteAllText(Path.Combine(captureDirectory, $"{scenario}-{budget}.json"), json);
                 }
-                var path = Path.Combine(recordsDir, $"{scenario}-{budget}.json");
-                Assert.True(File.Exists(path), $"Frozen pre-change record missing: {path}");
-                _ = Normalize(File.ReadAllText(path));
-                var annotationGolden = Path.Combine(AppContext.BaseDirectory, "Fixtures", "OperationAnnotations", "off", "results", $"{scenario}-{budget}.json");
-                Assert.True(File.Exists(annotationGolden), $"Operation-annotation off golden record missing: {annotationGolden}");
-                Assert.Equal(ComparableWorkflowRecord(Normalize(File.ReadAllText(annotationGolden))), ComparableWorkflowRecord(json));
+                else
+                {
+                    var path = Path.Combine(recordsDir, $"{scenario}-{budget}.json");
+                    Assert.True(File.Exists(path), $"Frozen current-contract record missing: {path}");
+                    _ = Normalize(File.ReadAllText(path));
+                    var annotationGolden = Path.Combine(AppContext.BaseDirectory, "Fixtures", "OperationAnnotations", "off", "results", $"{scenario}-{budget}.json");
+                    Assert.True(File.Exists(annotationGolden), $"Operation-annotation off golden record missing: {annotationGolden}");
+                    Assert.Equal(ComparableWorkflowRecord(Normalize(File.ReadAllText(annotationGolden))), ComparableWorkflowRecord(json));
+                }
                 _output.WriteLine($"{scenario}@{budget}: discovery={discoveryBytes} protocolFrameBytes={protocolBytes} (machine-local; omitted from snapshot) calls={calls.Count}");
                 session.AssertNoDatabaseConnections();
             }

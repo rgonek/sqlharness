@@ -32,6 +32,26 @@ The activity journal records why a call was cancelled: `client` (the client sent
 `notifications/cancelled`), `shutdown` (stdin closed or the host stopped), or
 `deadline` (the call time budget ran out).
 
+### Troubleshoot a timeout
+
+Use the response shape to identify which limit ended the call. A SQL command timeout returns a SQLHarness envelope such as:
+
+```json
+{"schemaVersion":3,"status":"error","result":null,"error":{"code":"sql_execution_failed","phase":"sql","message":"<provider timeout message>"}}
+```
+
+The message is provider text and can vary. `timeout` controls an individual SQL command and stays within 1..300 seconds; when omitted, the process uses `execution.defaultTimeoutSeconds`. The value does not extend the MCP call budget.
+
+When SQLHarness's process or per-call operation budget expires, the server cancels the call and returns its stable cancellation envelope:
+
+```json
+{"schemaVersion":3,"status":"error","result":null,"error":{"code":"cancelled","phase":"execution","message":"The operation was cancelled."}}
+```
+
+**Synthetic client-wait case:** the external client reports a local `tools/call` wait timeout and receives no SQLHarness tool response. There is no SQLHarness envelope to inspect; server completion is **UNKNOWN**. The client may have stopped waiting while the server was still working, or cancellation may have reached SQLHarness; the client timeout alone does not establish which happened. SQLHarness does not set the external client's call ceiling. Keep using the existing stop and retry rules for the tool, including the mutation rule above.
+
+The separate `connection.timeoutSeconds` setting bounds SQL connection establishment and driver-managed authentication; it applies before SQL command execution. Azure CLI token acquisition has its own budget. For either SQLHarness setting, saving configuration does not update a running MCP process: restart `mcp serve`, reconnect the client, then request `sqlharness_capabilities` to confirm the values loaded by that process. Whether a particular client automatically reloads its configuration is client-specific and is not established here.
+
 ## Stdout and stderr
 
 Stdout carries only protocol frames. Logging goes to stderr. SDK entries sent to stderr are limited to `Warning`, `Error`, and `Critical`; their message and exception text are rendered through `SecretRedactor` with the resolved profile credentials, while category, level, and numeric event ID remain available. This replaces known credentials; other caller-provided SQL or parameter data in a diagnostic may remain visible. SQLHarness may also write stderr lines for a pre-handshake startup failure (exit 2), an unexpected transport failure (exit 1), a failed detached-dashboard launch, or a roots diagnostic naming a count (`kept N of M`) or failure class (`roots/list timed out`, `roots/list failed (<ExceptionType>)`). Clean shutdown on EOF or cancellation exits 0. Tool calls that reach the SQLHarness module (query, mutation, measure, compare, watch, snapshot, plan, artifact) are recorded in the local activity journal with the client's `clientInfo` name, version and title, the negotiated protocol revision, and a raw token estimate. Credential-redacted error messages are stored by default and may include caller-supplied SQL or data values; SQL text and full plans are stored only when `journal.storeSensitive` is enabled. The `sqlharness_capabilities` response reports plan availability as `stored` or `plans not stored` under `limits.activityJournalStorage.planStorage.state`; the dashboard exposes the same gate for its plan viewer. The MCP handler records emitted bytes from the UTF-8 text block the model reads after applying the result budget. The `ceil(bytes / 4)` value estimates output size; it is not actual model tokenization. Historical raw-only MCP rows stay unavailable and are not backfilled. Each recorded call also keeps allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`), opencode `ai.opencode/sessionID` as the agent session id, and from Codex `x-codex-turn-metadata` the model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored. `sqlharness_capabilities` is not recorded; journal diagnostics go to stderr only, and journal failures never change a tool result.
