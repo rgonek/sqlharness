@@ -208,6 +208,41 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
+    public void Reconciled_scalar_udf_counter_attribution_is_complete_with_hidden_work_reported_separately()
+    {
+        var udf = JournalPlan("SELECT dbo.fn_scalar()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 28, elapsedTime: 29,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)])]);
+        var statement = Assert.Single(JournalStatementMetricsExtractor.Extract([udf], out _));
+        var status = Assert.Single(StatementReconciler.Reconcile(
+            [statement], [new TableIoCounters("", 0, 0, 0, 0, 0, 0, 0, 0)]));
+
+        Assert.Equal(StatementCounterAttribution.Complete, StatementAttributionClassifier.Classify(status));
+        Assert.Single(statement.HiddenWork!);
+    }
+
+    [Fact]
+    public void Missing_statement_attribution_is_unavailable_and_legacy_artifact_shape_stays_unchanged()
+    {
+        Assert.Equal(
+            StatementCounterAttribution.Unavailable,
+            StatementAttributionClassifier.Classify(null));
+
+        var legacy = StatementMetricsExtractor.Extract(CollidingNodeIdPlan(), out _).First();
+        var json = JsonSerializer.Serialize(legacy, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.DoesNotContain("\"attribution\"", json);
+        Assert.DoesNotContain("\"hiddenWork\"", json);
+
+        var agent = new AgentBenchmarkVariant(null, null, null,
+            new Dictionary<string, AgentMetricDistribution>(), [],
+            BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Unavailable);
+        var agentJson = JsonSerializer.Serialize(agent, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("\"attribution\"", agentJson);
+        Assert.DoesNotContain("\"hiddenWork\"", agentJson);
+    }
+
+    [Fact]
     public void Multi_statement_tvf_flagged()
     {
         var tvf = JournalPlan("SELECT * FROM dbo.fn_multi()", 2, 2, "0x02", 0, 1,
@@ -481,7 +516,7 @@ public sealed class StatementMetricsTests
         </ShowPlanXML>
         """;
 
-    private static string JournalPlan(
+    internal static string JournalPlan(
         string text,
         int statementId,
         int statementCompId,
