@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: RESEARCH COMPLETE. Windows `just verify` passed on executable revision `f6044c8` (docs had advanced to `56f4cd4` during the run); branch formatting passed after whitespace-only commit `14a0c7a`. Sol low whole-branch review approved `a8d7914`; its three Minor documentation findings are corrected. The final scoped Sol review of those corrections is pending. Linux and live acceptance remain unverified ([verification evidence](109-verification-evidence.md)).
+- Status: RESEARCH COMPLETE. Windows `just verify` passed on executable revision `f6044c8` (docs had advanced to `56f4cd4` during the run); branch formatting passed after whitespace-only commit `14a0c7a`. Sol low whole-branch review approved `a8d7914`; its three Minor documentation findings are corrected. The final scoped Sol review approved `178de793` with all three findings addressed and no new breakage. Linux and live acceptance remain unverified ([verification evidence](109-verification-evidence.md)).
 - Priority: **P3** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -67,15 +67,15 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 1: Freeze equivalent-evidence tasks
 
-- [ ] Build offline real-SDK fixtures for a four-statement/four-set batch, repeated saved-plan review across candidate revisions, named-set per-table attribution, and multi-result assertions located after a large first result. Record calls, UTF-8 output bytes, clipping/continuations followed, exact cases/statements reviewed and byte/4 token estimates separately from actual tokenizer counts.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Build offline real-SDK fixtures for a four-statement/four-set batch, repeated saved-plan review across candidate revisions, named-set per-table attribution, and multi-result assertions located after a large first result. Record calls, UTF-8 output bytes, clipping/continuations followed, exact cases/statements reviewed and byte/4 token estimates separately from actual tokenizer counts.
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
+- [x] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
 
 ### Task 2: Evaluate candidate improvements without committing an API
 
-- [ ] Use test-only renderers/fixtures or recorded deterministic alternatives; do not change production defaults during the study. Establish the best existing request sequence first. Treat orchestration clipping, a too-small row cap, an unwritten file, unused parameters and invalid SQL as agent/orchestration errors. Negative candidate measurements and empty valid checks remain useful evidence.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Use test-only renderers/fixtures or recorded deterministic alternatives; do not change production defaults during the study. Establish the best existing request sequence first. Treat orchestration clipping, a too-small row cap, an unwritten file, unused parameters and invalid SQL as agent/orchestration errors. Negative candidate measurements and empty valid checks remain useful evidence.
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
+- [x] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
 
 ### Task 3: Write the decision and any implementation handoff
 

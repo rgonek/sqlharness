@@ -6,8 +6,9 @@ This durable record covers the research branch `plan-109` through the final docu
 
 - Task 1 review: clean after the fixture/evidence fixes in `d2a7528..2e5f266`.
 - Task 2 review: clean after the candidate-study fixes in `92f7723..f6044c8`.
+- Task 3 review: approved after schema/status fixes in `56f4cd4..27a0458`; subsequent evidence hygiene was included in the whole-branch review.
 - Sol low whole-branch review: approved for the research branch at `a8d7914`. It found no Critical or Important issues and three Minor documentation issues. This correction wave fixes all three: the formatter-failure archive link now uses `.txt`; the gate note scopes zero warnings to the .NET build and discloses the non-failing Vite chunk and Node `DEP0190` warnings; and the 31.0%/94.4% values are labeled synthetic projection estimates, with complete bounded-response comparisons required by Plans 114/115.
-- The final scoped Sol review of these corrections is pending the controller's update. The whole-branch approval does not stand in for that pending scoped review.
+- Final scoped Sol low review: approved `178de793`; all three findings addressed, no new breakage in the documentation-only fix.
 
 The reviewer declined to judge actual model-token or paid-agent savings; live database, setup execution counts and SQL Server TVP runtime behavior; runtime clipping, Unicode and continuation behavior of APIs not present on this branch; and deployment, merge, push or integrated-tree verification. No evidence here upgrades those items to verified.
 
