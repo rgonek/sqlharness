@@ -138,12 +138,17 @@ public sealed class Renderer
     {
         var requestedBytes = options.MaximumBytes is >= 4096 and <= 1048576 ? options.MaximumBytes : 16 * 1024;
         var requestedCellChars = options.MaximumCellCharacters is >= 0 and <= AgentOutputLimits.MaximumCellCharacters ? options.MaximumCellCharacters : AgentOutputLimits.DefaultCellCharacters;
+        var lineEndingBytes = Encoding.UTF8.GetByteCount(output.NewLine);
         var errorCellChars = Math.Max(requestedCellChars, AgentOutputLimits.DefaultCellCharacters);
         var error = outcome.MachineError;
         var errorOmitted = 0;
-        string Clip(string value, int maximumCharacters)
+        var messageOmitted = false;
+        var hintOmitted = false;
+        var pathOmitted = false;
+        string Clip(string value, int maximumCharacters, out bool clipped)
         {
-            if (value.Length <= maximumCharacters) return value;
+            clipped = value.Length > maximumCharacters;
+            if (!clipped) return value;
             errorOmitted++;
             var length = maximumCharacters;
             if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
@@ -152,11 +157,14 @@ public sealed class Renderer
         if (error is not null)
             error = error with
             {
-                Message = Clip(error.Message, errorCellChars),
-                Hint = error.Hint is null ? null : Clip(error.Hint, errorCellChars),
-                Location = error.Location is null ? null : error.Location with { Path = error.Location.Path is null ? null : Clip(error.Location.Path, requestedCellChars) },
+                Message = Clip(error.Message, errorCellChars, out messageOmitted),
+                Hint = error.Hint is null ? null : Clip(error.Hint, errorCellChars, out hintOmitted),
+                Location = error.Location is null ? null : error.Location with
+                {
+                    Path = error.Location.Path is null ? null : Clip(error.Location.Path, requestedCellChars, out pathOmitted),
+                },
             };
-        var boundedCommand = Clip(command, requestedCellChars);
+        var boundedCommand = Clip(command, requestedCellChars, out var commandOmitted);
         var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead ? artifactRead.Section : outcome.Report;
         var status = statusOverride ?? (error is null
             ? "success"
@@ -172,7 +180,7 @@ public sealed class Renderer
                 truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = requestedCellChars } : null,
                 outcome.OperationRef, outcome.ParentOperationRef);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
-            if (bytes.Length + 1 <= requestedBytes)
+            if (bytes.Length + lineEndingBytes <= requestedBytes)
             {
                 output.Write(Encoding.UTF8.GetString(bytes));
                 output.WriteLine();
@@ -190,9 +198,9 @@ public sealed class Renderer
                 var characterLimit = low + (high - low) / 2;
                 var message = Prefix(error.Message, characterLimit);
                 var hint = error.Hint is null ? null : Prefix(error.Hint, characterLimit);
-                var clippedFields = (message.Length < error.Message.Length ? 1 : 0) +
-                    (hint is not null && hint.Length < error.Hint!.Length ? 1 : 0);
-                var omittedItems = Math.Max(errorOmitted, clippedFields) + (report is null ? 0 : 1);
+                var omittedItems = (messageOmitted || message.Length < error.Message.Length ? 1 : 0) +
+                    (hintOmitted || (hint is not null && hint.Length < error.Hint!.Length) ? 1 : 0) +
+                    (pathOmitted ? 1 : 0) + (commandOmitted ? 1 : 0) + (report is null ? 0 : 1);
                 var budgetedError = error with { Message = message, Hint = hint };
                 var truncation = omittedItems > 0
                     ? new { omittedItems, maxCellChars = requestedCellChars, maxOutputBytes = requestedBytes }
@@ -202,7 +210,7 @@ public sealed class Renderer
                     truncation,
                     outcome.OperationRef, outcome.ParentOperationRef);
                 var candidateBytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
-                if (candidateBytes.Length + 1 <= requestedBytes)
+                if (candidateBytes.Length + lineEndingBytes <= requestedBytes)
                 {
                     bestErrorBytes = candidateBytes;
                     low = characterLimit + 1;
@@ -221,9 +229,9 @@ public sealed class Renderer
             }
 
             var minimumError = error with { Message = string.Empty, Hint = null };
-            var minimumClippedFields = (error.Message.Length > 0 ? 1 : 0) +
-                (error.Hint is { Length: > 0 } ? 1 : 0);
-            var minimumOmittedItems = Math.Max(errorOmitted, minimumClippedFields) + (report is null ? 0 : 1);
+            var minimumOmittedItems = (messageOmitted || error.Message.Length > 0 ? 1 : 0) +
+                (hintOmitted || error.Hint is { Length: > 0 } ? 1 : 0) +
+                (pathOmitted ? 1 : 0) + (commandOmitted ? 1 : 0) + (report is null ? 0 : 1);
             var minimumTruncation = minimumOmittedItems > 0
                 ? new { omittedItems = minimumOmittedItems, maxCellChars = requestedCellChars, maxOutputBytes = requestedBytes }
                 : null;
@@ -232,7 +240,7 @@ public sealed class Renderer
                 minimumTruncation,
                 outcome.OperationRef, outcome.ParentOperationRef);
             var minimumBytes = JsonSerializer.SerializeToUtf8Bytes(minimumEnvelope, CompactJson);
-            if (minimumBytes.Length + 1 <= requestedBytes)
+            if (minimumBytes.Length + lineEndingBytes <= requestedBytes)
             {
                 output.Write(Encoding.UTF8.GetString(minimumBytes));
                 output.WriteLine();
@@ -244,7 +252,7 @@ public sealed class Renderer
             new SqlHarnessError("output_budget_too_small", "render", "The minimum agent response does not fit the configured byte budget."),
             new { omittedItems = 1, maxOutputBytes = requestedBytes });
         var minimalBytes = JsonSerializer.SerializeToUtf8Bytes(minimal, CompactJson);
-        if (minimalBytes.Length + 1 <= requestedBytes)
+        if (minimalBytes.Length + lineEndingBytes <= requestedBytes)
         {
             output.Write(Encoding.UTF8.GetString(minimalBytes));
             output.WriteLine();

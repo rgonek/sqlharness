@@ -13,7 +13,8 @@ public sealed class AgentOutputTestsErrorDiagnosticFloor
     public void Agent_minimum_byte_budget_preserves_error_identity_when_diagnostics_must_shrink_below_floor()
     {
         var error = new SqlHarnessError(
-            "sql_execution_failed", "sql", new string('m', 8_000), new string('h', 8_000));
+            "sql_execution_failed", "sql", new string('m', 3_000), new string('h', 2_048),
+            new SqlHarnessErrorLocation(Path: new string('p', 50)));
         var output = new StringWriter();
 
         new Renderer().RenderAgent(
@@ -23,13 +24,15 @@ public sealed class AgentOutputTestsErrorDiagnosticFloor
         using var document = JsonDocument.Parse(output.ToString());
         var envelope = document.RootElement;
         var reportedError = envelope.GetProperty("error");
+        Assert.EndsWith(output.NewLine, output.ToString(), StringComparison.Ordinal);
 
-        Assert.True(System.Text.Encoding.UTF8.GetByteCount(output.ToString()) <= 4096);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(output.ToString()) <= 4096,
+            $"CLI output, including the writer's line ending, is {System.Text.Encoding.UTF8.GetByteCount(output.ToString())} bytes.");
         Assert.Equal("sql_execution_failed", reportedError.GetProperty("code").GetString());
         Assert.Equal("sql", reportedError.GetProperty("phase").GetString());
         Assert.True(reportedError.GetProperty("message").GetString()!.Length < AgentOutputLimits.DefaultCellCharacters);
         Assert.True(reportedError.GetProperty("hint").GetString()!.Length < AgentOutputLimits.DefaultCellCharacters);
-        Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+        Assert.Equal(4, envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
     }
 
     [Theory]

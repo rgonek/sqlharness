@@ -142,7 +142,9 @@ public static class McpResultAdapter
             ? outcome.OperationRef
             : null;
 
-        var error = ToMcpError(RedactError(outcome.MachineError, secrets, maximumCellCharacters, out var errorOmitted));
+        var redactedError = RedactError(outcome.MachineError, secrets, maximumCellCharacters, out var errorClippedFields);
+        var errorOmitted = errorClippedFields.Count;
+        var error = ToMcpError(redactedError);
         var status = StatusFor(outcome, error);
         var isError = outcome.ExitCode is not (
             SqlHarnessExitCode.Success or
@@ -187,9 +189,9 @@ public static class McpResultAdapter
                 var characterLimit = low + (high - low) / 2;
                 var message = Prefix(error.Message, characterLimit);
                 var hint = error.Hint is null ? null : Prefix(error.Hint, characterLimit);
-                var clippedFields = (message.Length < error.Message.Length ? 1 : 0) +
-                    (hint is not null && hint.Length < error.Hint!.Length ? 1 : 0);
-                var omittedItems = Math.Max(errorOmitted, clippedFields) + (report is null ? 0 : 1);
+                var omittedItems = (errorClippedFields.Message || message.Length < error.Message.Length ? 1 : 0) +
+                    (errorClippedFields.Hint || (hint is not null && hint.Length < error.Hint!.Length) ? 1 : 0) +
+                    (errorClippedFields.LocationPath ? 1 : 0) + (report is null ? 0 : 1);
                 var budgetedError = error with { Message = message, Hint = hint };
                 var truncation = omittedItems > 0
                     ? new McpTruncationInfo(omittedItems, maximumCellCharacters)
@@ -210,9 +212,9 @@ public static class McpResultAdapter
                 return Build(bestErrorBytes, isError);
 
             var minimumError = error with { Message = string.Empty, Hint = null };
-            var minimumClippedFields = (error.Message.Length > 0 ? 1 : 0) +
-                (error.Hint is { Length: > 0 } ? 1 : 0);
-            var minimumOmittedItems = Math.Max(errorOmitted, minimumClippedFields) + (report is null ? 0 : 1);
+            var minimumOmittedItems = (errorClippedFields.Message || error.Message.Length > 0 ? 1 : 0) +
+                (errorClippedFields.Hint || error.Hint is { Length: > 0 } ? 1 : 0) +
+                (errorClippedFields.LocationPath ? 1 : 0) + (report is null ? 0 : 1);
             var minimumTruncation = minimumOmittedItems > 0
                 ? new McpTruncationInfo(minimumOmittedItems, maximumCellCharacters)
                 : null;
@@ -402,31 +404,43 @@ public static class McpResultAdapter
         "watch" or "sqlharness_watch" or
         "snapshot" or "sqlharness_snapshot";
 
+    private readonly record struct ClippedErrorFields(bool Message, bool Hint, bool LocationPath)
+    {
+        public int Count => (Message ? 1 : 0) + (Hint ? 1 : 0) + (LocationPath ? 1 : 0);
+    }
+
     private static SqlHarnessError? RedactError(
         SqlHarnessError? error,
         IReadOnlyList<string> secrets,
         int maximumCellCharacters,
-        out int omitted)
+        out ClippedErrorFields clippedFields)
     {
-        omitted = 0;
+        clippedFields = default;
         if (error is null)
             return null;
         // The three fields share one secret set, so they share one compiled pattern.
         var redaction = SecretRedactor.For(secrets);
         var errorCellCharacters = Math.Max(maximumCellCharacters, AgentOutputLimits.DefaultCellCharacters);
+        var message = redaction.Apply(error.Message);
+        var hint = error.Hint is null ? null : redaction.Apply(error.Hint);
+        var locationPath = error.Location?.Path is null ? null : redaction.Apply(error.Location.Path);
+        clippedFields = new ClippedErrorFields(
+            message.Length > errorCellCharacters,
+            hint is not null && hint.Length > errorCellCharacters,
+            locationPath is not null && locationPath.Length > maximumCellCharacters);
         var redacted = error with
         {
-            Message = Clip(redaction.Apply(error.Message), errorCellCharacters, ref omitted),
-            Hint = error.Hint is null
+            Message = Prefix(message, errorCellCharacters),
+            Hint = hint is null
                 ? null
-                : Clip(redaction.Apply(error.Hint), errorCellCharacters, ref omitted),
+                : Prefix(hint, errorCellCharacters),
             Location = error.Location is null
                 ? null
                 : error.Location with
                 {
-                    Path = error.Location.Path is null
+                    Path = locationPath is null
                         ? null
-                        : Clip(redaction.Apply(error.Location.Path), maximumCellCharacters, ref omitted),
+                        : Prefix(locationPath, maximumCellCharacters),
                 },
         };
         return redacted;
@@ -474,17 +488,6 @@ public static class McpResultAdapter
         if (projected is null && coverage is not null)
             error = (error ?? McpAgentError.Internal()) with { MatrixStop = coverage };
         return projected;
-    }
-
-    private static string Clip(string value, int maximumCellCharacters, ref int omitted)
-    {
-        if (value.Length <= maximumCellCharacters)
-            return value;
-        omitted++;
-        var length = maximumCellCharacters;
-        if (length > 0 && char.IsHighSurrogate(value[length - 1]))
-            length--;
-        return value[..length];
     }
 
     private static string Prefix(string value, int maximumCharacters)

@@ -92,7 +92,8 @@ public sealed class McpTokenBudgetTests
     public void Failure_keeps_error_identity_and_truthful_truncation_at_the_minimum_byte_budget()
     {
         var error = new SqlHarnessError(
-            "sql_execution_failed", "sql", new string('m', 8_000), new string('h', 8_000));
+            "sql_execution_failed", "sql", new string('m', 3_000), new string('h', 2_048),
+            new SqlHarnessErrorLocation(Path: new string('p', 50)));
         var budget = new McpResultBudget(4096, 0);
 
         var result = McpResultAdapter.Adapt(
@@ -110,7 +111,7 @@ public sealed class McpTokenBudgetTests
         Assert.Equal("sql", reportedError.GetProperty("phase").GetString());
         Assert.True(reportedError.GetProperty("message").GetString()!.Length < AgentOutputLimits.DefaultCellCharacters);
         Assert.True(reportedError.GetProperty("hint").GetString()!.Length < AgentOutputLimits.DefaultCellCharacters);
-        Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+        Assert.Equal(3, envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
     }
 
     [Theory]
