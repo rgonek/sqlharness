@@ -4,6 +4,8 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 
 ## In progress
 
+Plan [103](103-agent-evidence-completeness.md): evidence completeness and hidden work — implementation on `plan-103`; staged/final reviews and Windows verification in progress; 082 predecessor confirmed; no merge/push ([evidence](103-verification-evidence.md)).
+
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|

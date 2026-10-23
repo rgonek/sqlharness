@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TODO — implementation; recorded 2026-10-23.
+- Status: IMPLEMENTED on `plan-103`; staged/final review and Windows verification in progress. See [evidence](103-verification-evidence.md).
 - Priority: **P1** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
