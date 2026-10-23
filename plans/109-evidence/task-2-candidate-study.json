@@ -50,7 +50,7 @@
   },
   "actualTokenizerTokenCount": null,
   "byteDiv4Estimate": "model-visible UTF-8 bytes / 4; rough estimate only",
-  "existingBestRequestSequences": [
+  "existingRequestSequences": [
     {
       "name": "candidate-revision-1",
       "callCount": 6,
@@ -409,21 +409,120 @@
     },
     {
       "name": "assertion-result-sets-only",
-      "modelVisibleUtf8Bytes": 513,
-      "estimatedTokensByteDiv4": 128.25,
+      "modelVisibleUtf8Bytes": 646,
+      "estimatedTokensByteDiv4": 161.5,
       "records": 2,
       "evidenceCompleteFor": [
+        "success status",
+        "target database",
+        "source and selected result-set counts",
         "query hash",
         "result-set ordinals",
         "both assertion result sets"
       ],
       "omitted": [
-        "first result set (96 rows)"
+        "first result set (96 rows)",
+        "unneeded query envelope details"
       ],
       "equivalentForAssertionCheck": true,
       "requires": "result-set selection or deterministic consumer projection"
     }
   ],
+  "assertionProjection": {
+    "evidenceState": "success",
+    "status": "success",
+    "database": "fixturedb",
+    "error": null,
+    "queryHash": "00D103C2108B43BD0DB3DB26069E9D5DAF30B5642FF4D39EECBC0BD6B7F60AAC",
+    "sourceResultSetCount": 3,
+    "selectedResultSetCount": 2,
+    "resultSets": [
+      {
+        "ordinal": 1,
+        "columns": [
+          {
+            "name": "assertion",
+            "valueType": "nvarchar",
+            "allowNull": false
+          },
+          {
+            "name": "passed",
+            "valueType": "bit",
+            "allowNull": false
+          }
+        ],
+        "rows": [
+          [
+            "assertion: totals",
+            true
+          ],
+          [
+            "assertion: candidate rows",
+            true
+          ]
+        ],
+        "rowCount": 2
+      },
+      {
+        "ordinal": 2,
+        "columns": [
+          {
+            "name": "assertion",
+            "valueType": "nvarchar",
+            "allowNull": false
+          },
+          {
+            "name": "value",
+            "valueType": "int",
+            "allowNull": false
+          }
+        ],
+        "rows": [
+          [
+            "assertion: final count",
+            4
+          ]
+        ],
+        "rowCount": 1
+      }
+    ]
+  },
+  "assertionBoundary": {
+    "validEmpty": {
+      "evidenceState": "success-empty",
+      "status": "success",
+      "database": "fixturedb",
+      "error": null,
+      "queryHash": "00D103C2108B43BD0DB3DB26069E9D5DAF30B5642FF4D39EECBC0BD6B7F60AAC",
+      "sourceResultSetCount": 0,
+      "selectedResultSetCount": 0,
+      "resultSets": []
+    },
+    "error": {
+      "evidenceState": "error",
+      "status": "error",
+      "database": null,
+      "error": {
+        "code": "FixtureFailure",
+        "message": "synthetic failure"
+      },
+      "queryHash": "00D103C2108B43BD0DB3DB26069E9D5DAF30B5642FF4D39EECBC0BD6B7F60AAC",
+      "sourceResultSetCount": null,
+      "selectedResultSetCount": 0,
+      "resultSets": []
+    },
+    "incomplete": {
+      "evidenceState": "incomplete",
+      "status": "success",
+      "database": null,
+      "error": null,
+      "queryHash": "00D103C2108B43BD0DB3DB26069E9D5DAF30B5642FF4D39EECBC0BD6B7F60AAC",
+      "sourceResultSetCount": null,
+      "selectedResultSetCount": 0,
+      "resultSets": []
+    },
+    "distinction": "valid empty retains evidenceState=success-empty, status=success, database identity and sourceResultSetCount=0; failure retains status=error and structured error; absent result data is incomplete, not empty success"
+  },
   "equivalentEvidenceComparisons": [
     {
       "scope": "statement CPU/elapsed discovery",
@@ -448,8 +547,8 @@
     {
       "scope": "assertion check from result sets 1 and 2",
       "baselineModelVisibleUtf8Bytes": 11469,
-      "candidateModelVisibleUtf8Bytes": 513,
-      "deltaBytes": -10956,
+      "candidateModelVisibleUtf8Bytes": 646,
+      "deltaBytes": -10823,
       "equivalent": true,
       "omission": "unneeded first result set and query envelope details",
       "candidateClipping": "not applied by deterministic renderer",
@@ -553,28 +652,47 @@
     "conclusion": "retain existing separate setup field for this fixture; a new in-batch mode or scalar-to-TVP conversion changes submitted/compiled SQL, and no attributable counters support subtraction"
   },
   "ranking": {
-    "existingBestByModelVisibleBytes": [
+    "bestExistingSequenceByScope": [
       {
-        "rank": 1,
-        "path": "late-result-assertions",
-        "bytes": 11469
+        "scope": "candidate revision review",
+        "minimumModelVisibleUtf8Bytes": 7603,
+        "sequences": [
+          {
+            "path": "candidate-revision-1",
+            "callCount": 6,
+            "modelVisibleUtf8Bytes": 7603
+          },
+          {
+            "path": "candidate-revision-2",
+            "callCount": 6,
+            "modelVisibleUtf8Bytes": 7603
+          }
+        ]
       },
       {
-        "rank": 2,
-        "path": "named-set-attribution",
-        "bytes": 10974
+        "scope": "named-set attribution",
+        "minimumModelVisibleUtf8Bytes": 10974,
+        "sequences": [
+          {
+            "path": "named-set-attribution",
+            "callCount": 3,
+            "modelVisibleUtf8Bytes": 10974
+          }
+        ]
       },
       {
-        "rank": 3,
-        "path": "candidate-revision-1",
-        "bytes": 7603
-      },
-      {
-        "rank": 4,
-        "path": "candidate-revision-2",
-        "bytes": 7603
+        "scope": "late result assertions",
+        "minimumModelVisibleUtf8Bytes": 11469,
+        "sequences": [
+          {
+            "path": "late-result-assertions",
+            "callCount": 1,
+            "modelVisibleUtf8Bytes": 11469
+          }
+        ]
       }
     ],
-    "candidateComparisons": "ranked only within equivalent evidence scope using equivalentEvidenceComparisons; pointer-only is excluded because it is incomplete"
+    "crossScopeRanking": "not computed; these sequences serve different evidence scopes",
+    "candidateComparisons": "compared only with the existing output for the matching evidence scope; pointer-only is excluded because it is incomplete"
   }
 }

@@ -388,14 +388,69 @@ public sealed class AgentOptimizationWorkflowTests
 
         long ExistingBytes(IEnumerable<JsonElement> selected) => selected.Sum(call => call.GetProperty("modelVisibleUtf8Bytes").GetInt64());
         int Utf8Bytes<T>(T value) => JsonSerializer.SerializeToUtf8Bytes(value).Length;
-        JsonElement Result(JsonElement call) => JsonDocument.Parse(call.GetProperty("text").GetString()!).RootElement.GetProperty("result").Clone();
+        JsonElement Envelope(JsonElement call) => JsonDocument.Parse(call.GetProperty("text").GetString()!).RootElement.Clone();
+        JsonElement Result(JsonElement call) => Envelope(call).GetProperty("result").Clone();
+
+        object RenderAssertionEvidence(JsonElement envelope, string queryHash)
+        {
+            var status = envelope.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : null;
+            var resultElement = default(JsonElement);
+            var hasResult = status == "success" && envelope.TryGetProperty("result", out resultElement);
+            var database = hasResult && resultElement.TryGetProperty("database", out var databaseElement)
+                ? databaseElement.GetString()
+                : null;
+            var resultSetElement = default(JsonElement);
+            var hasResultSets = hasResult
+                && resultElement.TryGetProperty("resultSets", out resultSetElement)
+                && resultSetElement.ValueKind == JsonValueKind.Array;
+            var resultSets = hasResultSets
+                ? resultSetElement.EnumerateArray().Select(set => set.Clone()).Where(set => set.GetProperty("ordinal").GetInt32() is 1 or 2).ToArray()
+                : [];
+            JsonElement? error = envelope.TryGetProperty("error", out var errorElement) ? errorElement.Clone() : null;
+            var evidenceState = status == "error"
+                ? "error"
+                : status != "success" || !hasResultSets
+                    ? "incomplete"
+                    : resultSetElement.GetArrayLength() == 0 ? "success-empty" : "success";
+            int? sourceResultSetCount = hasResultSets ? resultSetElement.GetArrayLength() : null;
+            return new { evidenceState, status, database, error, queryHash, sourceResultSetCount, selectedResultSetCount = resultSets.Length, resultSets };
+        }
 
         var revisionCalls = calls.Where(call => call.GetProperty("case").GetString() is "candidate-revision-1" or "candidate-revision-2").ToArray();
         var namedSetCalls = calls.Where(call => call.GetProperty("case").GetString() == "named-set-attribution").ToArray();
         var queryCall = Call("late-result-assertions", "sqlharness_query");
+        var queryEnvelope = Envelope(queryCall);
         var queryResult = Result(queryCall);
         var querySets = queryResult.GetProperty("resultSets").EnumerateArray().Select(element => element.Clone()).ToArray();
         var selectedAssertions = querySets.Where(set => set.GetProperty("ordinal").GetInt32() is 1 or 2).ToArray();
+        var queryHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(fixtureInputs.GetProperty("querySql").GetString()!)));
+        var assertionEvidence = RenderAssertionEvidence(queryEnvelope, queryHash);
+        var assertionProjection = JsonSerializer.SerializeToElement(assertionEvidence);
+        Assert.Equal("success", assertionProjection.GetProperty("status").GetString());
+        Assert.Equal("fixturedb", assertionProjection.GetProperty("database").GetString());
+        Assert.Equal(3, assertionProjection.GetProperty("sourceResultSetCount").GetInt32());
+        Assert.Equal(2, assertionProjection.GetProperty("selectedResultSetCount").GetInt32());
+        Assert.Contains("assertion: totals", assertionProjection.GetRawText(), StringComparison.Ordinal);
+        Assert.Contains("assertion: final count", assertionProjection.GetRawText(), StringComparison.Ordinal);
+
+        using var emptySuccessDocument = JsonDocument.Parse("""{"schemaVersion":3,"status":"success","result":{"database":"fixturedb","resultSets":[]}}""");
+        var emptySuccessProjection = JsonSerializer.SerializeToElement(RenderAssertionEvidence(emptySuccessDocument.RootElement, queryHash));
+        using var errorDocument = JsonDocument.Parse("""{"schemaVersion":3,"status":"error","error":{"code":"FixtureFailure","message":"synthetic failure"}}""");
+        var errorProjection = JsonSerializer.SerializeToElement(RenderAssertionEvidence(errorDocument.RootElement, queryHash));
+        using var missingResultDocument = JsonDocument.Parse("""{"schemaVersion":3,"status":"success"}""");
+        var missingResultProjection = JsonSerializer.SerializeToElement(RenderAssertionEvidence(missingResultDocument.RootElement, queryHash));
+        Assert.Equal("success", emptySuccessProjection.GetProperty("status").GetString());
+        Assert.Equal("fixturedb", emptySuccessProjection.GetProperty("database").GetString());
+        Assert.Equal("success-empty", emptySuccessProjection.GetProperty("evidenceState").GetString());
+        Assert.Equal(0, emptySuccessProjection.GetProperty("sourceResultSetCount").GetInt32());
+        Assert.Equal(JsonValueKind.Null, emptySuccessProjection.GetProperty("error").ValueKind);
+        Assert.Equal("error", errorProjection.GetProperty("status").GetString());
+        Assert.Equal("error", errorProjection.GetProperty("evidenceState").GetString());
+        Assert.Equal(JsonValueKind.Null, errorProjection.GetProperty("database").ValueKind);
+        Assert.Equal(JsonValueKind.Null, errorProjection.GetProperty("sourceResultSetCount").ValueKind);
+        Assert.Equal("FixtureFailure", errorProjection.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("incomplete", missingResultProjection.GetProperty("evidenceState").GetString());
+        Assert.Equal(JsonValueKind.Null, missingResultProjection.GetProperty("sourceResultSetCount").ValueKind);
 
         var statementCalls = revisionCalls.Concat(namedSetCalls)
             .Where(call => call.GetProperty("selectors").TryGetProperty("section", out var section) && section.GetString() == "statements")
@@ -479,7 +534,7 @@ public sealed class AgentOptimizationWorkflowTests
         var compactBytes = Utf8Bytes(new { records = compactRecords });
         var metricsBytes = Utf8Bytes(new { artifactId = metricsArtifactId, artifactKind = metricsArtifactKind, variants = namedSetMetrics });
         var pointerBytes = Utf8Bytes(new { pointers = metricsPointers });
-        var assertionBytes = Utf8Bytes(new { queryHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(fixtureInputs.GetProperty("querySql").GetString()!))), resultSets = selectedAssertions });
+        var assertionBytes = Utf8Bytes(assertionEvidence);
         var fullStatementBytes = ExistingBytes(statementCalls);
         var fullMetricsBytes = metricsCall.GetProperty("modelVisibleUtf8Bytes").GetInt64();
         var fullQueryBytes = queryCall.GetProperty("modelVisibleUtf8Bytes").GetInt64();
@@ -497,13 +552,21 @@ public sealed class AgentOptimizationWorkflowTests
             },
             actualTokenizerTokenCount = (int?)null,
             byteDiv4Estimate = "model-visible UTF-8 bytes / 4; rough estimate only",
-            existingBestRequestSequences = existingSequences,
+            existingRequestSequences = existingSequences,
             candidates = new object[]
             {
                 new { name = "compact-per-statement-cpu-elapsed", modelVisibleUtf8Bytes = compactBytes, estimatedTokensByteDiv4 = compactBytes / 4m, records = compactRecords.Length, evidenceCompleteFor = new[] { "artifact", "variant", "parameterSet", "statementOrdinal", "statementHash", "CPU", "elapsed" }, omitted = new[] { "TopOperators", "other statement metrics" }, equivalentToBaselineForNamedFields = true },
                 new { name = "named-set-metrics-values", modelVisibleUtf8Bytes = metricsBytes, estimatedTokensByteDiv4 = metricsBytes / 4m, records = namedSetMetrics.Length, evidenceCompleteFor = new[] { "artifactId", "parameterSet", "logicalReadsByTable" }, omitted = new[] { "statement-level CPU/elapsed and plans" }, equivalentToBaselineForNamedFields = true },
                 new { name = "named-set-metrics-pointers-only", modelVisibleUtf8Bytes = pointerBytes, estimatedTokensByteDiv4 = pointerBytes / 4m, records = metricsPointers.Length, evidenceCompleteFor = new[] { "artifactId", "section", "parameterSet navigation" }, omitted = new[] { "metric values until dereferenced" }, equivalentToBaselineForValues = false, requires = "a named-set selector or consumer-side dereference; current baseline metrics response contains all variants" },
-                new { name = "assertion-result-sets-only", modelVisibleUtf8Bytes = assertionBytes, estimatedTokensByteDiv4 = assertionBytes / 4m, records = selectedAssertions.Length, evidenceCompleteFor = new[] { "query hash", "result-set ordinals", "both assertion result sets" }, omitted = new[] { "first result set (96 rows)" }, equivalentForAssertionCheck = true, requires = "result-set selection or deterministic consumer projection" },
+                new { name = "assertion-result-sets-only", modelVisibleUtf8Bytes = assertionBytes, estimatedTokensByteDiv4 = assertionBytes / 4m, records = selectedAssertions.Length, evidenceCompleteFor = new[] { "success status", "target database", "source and selected result-set counts", "query hash", "result-set ordinals", "both assertion result sets" }, omitted = new[] { "first result set (96 rows)", "unneeded query envelope details" }, equivalentForAssertionCheck = true, requires = "result-set selection or deterministic consumer projection" },
+            },
+            assertionProjection,
+            assertionBoundary = new
+            {
+                validEmpty = emptySuccessProjection,
+                error = errorProjection,
+                incomplete = missingResultProjection,
+                distinction = "valid empty retains evidenceState=success-empty, status=success, database identity and sourceResultSetCount=0; failure retains status=error and structured error; absent result data is incomplete, not empty success",
             },
             equivalentEvidenceComparisons = new[]
             {
@@ -534,8 +597,14 @@ public sealed class AgentOptimizationWorkflowTests
             },
             ranking = new
             {
-                existingBestByModelVisibleBytes = existingSequences.OrderByDescending(path => path.modelVisibleUtf8Bytes).Select((path, index) => new { rank = index + 1, path = path.name, bytes = path.modelVisibleUtf8Bytes }).ToArray(),
-                candidateComparisons = "ranked only within equivalent evidence scope using equivalentEvidenceComparisons; pointer-only is excluded because it is incomplete",
+                bestExistingSequenceByScope = new[]
+                {
+                    new { scope = "candidate revision review", minimumModelVisibleUtf8Bytes = existingSequences.Where(path => path.name.StartsWith("candidate-revision-", StringComparison.Ordinal)).Min(path => path.modelVisibleUtf8Bytes), sequences = existingSequences.Where(path => path.name.StartsWith("candidate-revision-", StringComparison.Ordinal)).OrderBy(path => path.modelVisibleUtf8Bytes).Select(path => new { path = path.name, callCount = path.callCount, modelVisibleUtf8Bytes = path.modelVisibleUtf8Bytes }).ToArray() },
+                    new { scope = "named-set attribution", minimumModelVisibleUtf8Bytes = existingSequences.Where(path => path.name == "named-set-attribution").Min(path => path.modelVisibleUtf8Bytes), sequences = existingSequences.Where(path => path.name == "named-set-attribution").Select(path => new { path = path.name, callCount = path.callCount, modelVisibleUtf8Bytes = path.modelVisibleUtf8Bytes }).ToArray() },
+                    new { scope = "late result assertions", minimumModelVisibleUtf8Bytes = existingSequences.Where(path => path.name == "late-result-assertions").Min(path => path.modelVisibleUtf8Bytes), sequences = existingSequences.Where(path => path.name == "late-result-assertions").Select(path => new { path = path.name, callCount = path.callCount, modelVisibleUtf8Bytes = path.modelVisibleUtf8Bytes }).ToArray() },
+                },
+                crossScopeRanking = "not computed; these sequences serve different evidence scopes",
+                candidateComparisons = "compared only with the existing output for the matching evidence scope; pointer-only is excluded because it is incomplete",
             },
         };
 
