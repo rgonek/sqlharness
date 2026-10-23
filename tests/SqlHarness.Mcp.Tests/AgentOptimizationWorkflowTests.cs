@@ -206,14 +206,20 @@ public sealed class AgentOptimizationWorkflowTests
                 ["setupSql"] = WorkflowScenarios.ArtifactReviewSetupSql,
                 ["candidateRevision1"] = WorkflowScenarios.ArtifactReviewCandidateV1Sql,
                 ["candidateRevision2"] = WorkflowScenarios.ArtifactReviewCandidateV2Sql,
-                ["parameterSets"] = new[] { "small", "medium", "large", "edge" },
+                ["parameterSets"] = new[] { "small", "medium", "large", "edge" }
+                    .Select((name, index) => new Dictionary<string, object?>
+                    {
+                        ["name"] = name,
+                        ["parameters"] = new[] { new Dictionary<string, object?> { ["name"] = "Batch", ["type"] = "int", ["value"] = (index + 1).ToString() } },
+                    }).ToArray(),
                 ["querySql"] = WorkflowScenarios.ArtifactReviewQuerySql,
             },
             ["calls"] = new List<object>(),
         };
         var calls = (List<object>)capture["calls"]!;
+        var parameterSets = (Dictionary<string, object?>[])((Dictionary<string, object?>)capture["fixtureInputs"]!)["parameterSets"]!;
 
-        var revisionHashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var revisionHashes = new Dictionary<string, string[]>(StringComparer.Ordinal);
         foreach (var (scenario, revision, candidateSql) in new[]
                  {
                      (WorkflowScenarios.ArtifactReviewStudyId, "candidate-revision-1", WorkflowScenarios.ArtifactReviewCandidateV1Sql),
@@ -242,9 +248,11 @@ public sealed class AgentOptimizationWorkflowTests
                     Assert.NotEmpty(item.GetProperty("topOperators").EnumerateArray());
                 });
             }
-            revisionHashes[revision] = string.Join("|", statementItems
+            revisionHashes[revision] = statementItems
                 .Where(item => item.GetProperty("variant").GetString() == "candidate")
-                .Select(item => item.GetProperty("statementHash").GetString()));
+                .OrderBy(item => item.GetProperty("statementOrdinal").GetInt32())
+                .Select(item => item.GetProperty("statementHash").GetString()!)
+                .ToArray();
 
             for (var statement = 0; statement < 4; statement++)
             {
@@ -265,7 +273,11 @@ public sealed class AgentOptimizationWorkflowTests
                         arguments["cursor"] = current;
                     var plan = await RecordStudyCallAsync(session, calls, revision, "sqlharness_artifact", arguments, 65536);
                     Assert.False(plan.IsError == true, Text(plan));
-                    Assert.Equal(5, Envelope(plan).GetProperty("result").GetProperty("repetition").GetInt32());
+                    var planResult = Envelope(plan).GetProperty("result");
+                    Assert.Equal(artifactId, planResult.GetProperty("artifactId").GetString());
+                    Assert.Equal("candidate", planResult.GetProperty("variant").GetString());
+                    Assert.Equal(statement, planResult.GetProperty("statement").GetInt32());
+                    Assert.Equal(5, planResult.GetProperty("repetition").GetInt32());
                     cursor = Continuation(Envelope(plan));
                 }
                 while (cursor is not null);
@@ -274,16 +286,16 @@ public sealed class AgentOptimizationWorkflowTests
             await session.ShutdownAsync();
             session.AssertNoDatabaseConnections();
         }
-        Assert.NotEqual(revisionHashes["candidate-revision-1"], revisionHashes["candidate-revision-2"]);
+        var revision1Hashes = revisionHashes["candidate-revision-1"];
+        var revision2Hashes = revisionHashes["candidate-revision-2"];
+        Assert.Equal(4, revision1Hashes.Length);
+        Assert.Equal(4, revision2Hashes.Length);
+        for (var ordinal = 0; ordinal < 3; ordinal++)
+            Assert.Equal(revision1Hashes[ordinal], revision2Hashes[ordinal]);
+        Assert.NotEqual(revision1Hashes[3], revision2Hashes[3]);
 
         await using (var session = await Session.StartAsync(WorkflowScenarios.ArtifactReviewStudyId, Budget))
         {
-            var parameterSets = new[] { "small", "medium", "large", "edge" }
-                .Select((name, index) => new Dictionary<string, object?>
-                {
-                    ["name"] = name,
-                    ["parameters"] = new[] { new Dictionary<string, object?> { ["name"] = "Batch", ["type"] = "int", ["value"] = (index + 1).ToString() } },
-                }).ToArray();
             var measure = await RecordStudyCallAsync(session, calls, "named-set-attribution", "sqlharness_measure",
                 new Dictionary<string, object?>
                 {
@@ -341,12 +353,13 @@ public sealed class AgentOptimizationWorkflowTests
         {
             ["batchStatements"] = 4,
             ["setupStatements"] = 1,
-            ["setupExecutions"] = 4,
+            ["expectedSyntheticSetupInvocations"] = parameterSets.Length,
+            ["setupInvocationsObserved"] = false,
             ["namedSets"] = 4,
             ["repetitionsPerSet"] = 3,
             ["candidateRevisions"] = 2,
             ["assertionResultSetsAfterLargeFirst"] = 2,
-            ["candidateRevisionStatementHashesDiffer"] = revisionHashes["candidate-revision-1"] != revisionHashes["candidate-revision-2"],
+            ["candidateRevisionStatementHashesDiffer"] = !revision1Hashes.SequenceEqual(revision2Hashes, StringComparer.Ordinal),
         };
         var json = JsonSerializer.Serialize(capture, JsonOptions);
         var captureDirectory = Environment.GetEnvironmentVariable("SQLHARNESS_109_CAPTURE_DIR");
@@ -371,7 +384,7 @@ public sealed class AgentOptimizationWorkflowTests
         {
             ["case"] = studyCase,
             ["tool"] = tool,
-            ["selectors"] = arguments.Where(pair => pair.Key is "id" or "section" or "variant" or "statement" or "parameterSet" or "repetition" or "cursor" or "pageSize" or "maxResultBytes" or "maxRows" or "maxCellChars")
+            ["selectors"] = arguments.Where(pair => pair.Key is "id" or "section" or "variant" or "statement" or "parameterSet" or "parameterSets" or "repetition" or "includeText" or "cursor" or "pageSize" or "maxResultBytes" or "maxRows" or "maxCellChars")
                 .ToDictionary(pair => pair.Key, pair => pair.Value),
             ["requestWireUtf8Bytes"] = requestBytes,
             ["responseWireUtf8Bytes"] = responseBytes,
