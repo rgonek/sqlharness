@@ -192,6 +192,200 @@ public sealed class AgentOptimizationWorkflowTests
         session.AssertNoDatabaseConnections();
     }
 
+    [Fact]
+    public async Task Artifact_review_study_freezes_four_set_batch_revisions_and_late_assertions()
+    {
+        var capture = new Dictionary<string, object?>
+        {
+            ["study"] = "plan-109-task-1",
+            ["host"] = "SqlHarness.Mcp.WorkflowHost",
+            ["sdkClient"] = "ModelContextProtocol.Client.McpClient",
+            ["fixtureInputs"] = new Dictionary<string, object?>
+            {
+                ["batchSql"] = WorkflowScenarios.ArtifactReviewBaselineSql,
+                ["setupSql"] = WorkflowScenarios.ArtifactReviewSetupSql,
+                ["candidateRevision1"] = WorkflowScenarios.ArtifactReviewCandidateV1Sql,
+                ["candidateRevision2"] = WorkflowScenarios.ArtifactReviewCandidateV2Sql,
+                ["parameterSets"] = new[] { "small", "medium", "large", "edge" },
+                ["querySql"] = WorkflowScenarios.ArtifactReviewQuerySql,
+            },
+            ["calls"] = new List<object>(),
+        };
+        var calls = (List<object>)capture["calls"]!;
+
+        var revisionHashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (scenario, revision, candidateSql) in new[]
+                 {
+                     (WorkflowScenarios.ArtifactReviewStudyId, "candidate-revision-1", WorkflowScenarios.ArtifactReviewCandidateV1Sql),
+                     (WorkflowScenarios.ArtifactReviewStudyV2Id, "candidate-revision-2", WorkflowScenarios.ArtifactReviewCandidateV2Sql),
+                 })
+        {
+            await using var session = await Session.StartAsync(scenario, Budget);
+            var compareArguments = CompareArguments(WorkflowScenarios.ArtifactReviewBaselineSql, candidateSql, budget: 65536);
+            var compare = await RecordStudyCallAsync(session, calls, revision, "sqlharness_compare", compareArguments, 65536);
+            Assert.False(compare.IsError == true, Text(compare));
+            var artifactId = ArtifactId(Envelope(compare))!;
+
+            var statements = await RecordStudyCallAsync(session, calls, revision, "sqlharness_artifact",
+                new Dictionary<string, object?> { ["id"] = artifactId, ["section"] = "statements", ["pageSize"] = 32, ["maxResultBytes"] = 65536 }, 65536);
+            Assert.False(statements.IsError == true, Text(statements));
+            var statementItems = Envelope(statements).GetProperty("result").GetProperty("statements").EnumerateArray().ToArray();
+            Assert.Equal(8, statementItems.Length);
+            foreach (var variant in new[] { "baseline", "candidate" })
+            {
+                var selected = statementItems.Where(item => item.GetProperty("variant").GetString() == variant).ToArray();
+                Assert.Equal(new[] { 0, 1, 2, 3 }, selected.Select(item => item.GetProperty("statementOrdinal").GetInt32()).ToArray());
+                Assert.All(selected, item =>
+                {
+                    Assert.Equal(JsonValueKind.Number, item.GetProperty("cpuTimeMilliseconds").ValueKind);
+                    Assert.Equal(JsonValueKind.Number, item.GetProperty("elapsedTimeMilliseconds").ValueKind);
+                    Assert.NotEmpty(item.GetProperty("topOperators").EnumerateArray());
+                });
+            }
+            revisionHashes[revision] = string.Join("|", statementItems
+                .Where(item => item.GetProperty("variant").GetString() == "candidate")
+                .Select(item => item.GetProperty("statementHash").GetString()));
+
+            for (var statement = 0; statement < 4; statement++)
+            {
+                int? cursor = null;
+                do
+                {
+                    var arguments = new Dictionary<string, object?>
+                    {
+                        ["id"] = artifactId,
+                        ["section"] = "plan",
+                        ["variant"] = "candidate",
+                        ["statement"] = statement,
+                        ["repetition"] = 5,
+                        ["includeText"] = false,
+                        ["maxResultBytes"] = 65536,
+                    };
+                    if (cursor is int current)
+                        arguments["cursor"] = current;
+                    var plan = await RecordStudyCallAsync(session, calls, revision, "sqlharness_artifact", arguments, 65536);
+                    Assert.False(plan.IsError == true, Text(plan));
+                    Assert.Equal(5, Envelope(plan).GetProperty("result").GetProperty("repetition").GetInt32());
+                    cursor = Continuation(Envelope(plan));
+                }
+                while (cursor is not null);
+            }
+
+            await session.ShutdownAsync();
+            session.AssertNoDatabaseConnections();
+        }
+        Assert.NotEqual(revisionHashes["candidate-revision-1"], revisionHashes["candidate-revision-2"]);
+
+        await using (var session = await Session.StartAsync(WorkflowScenarios.ArtifactReviewStudyId, Budget))
+        {
+            var parameterSets = new[] { "small", "medium", "large", "edge" }
+                .Select((name, index) => new Dictionary<string, object?>
+                {
+                    ["name"] = name,
+                    ["parameters"] = new[] { new Dictionary<string, object?> { ["name"] = "Batch", ["type"] = "int", ["value"] = (index + 1).ToString() } },
+                }).ToArray();
+            var measure = await RecordStudyCallAsync(session, calls, "named-set-attribution", "sqlharness_measure",
+                new Dictionary<string, object?>
+                {
+                    ["query"] = new Dictionary<string, object?> { ["sql"] = WorkflowScenarios.ArtifactReviewBaselineSql },
+                    ["setup"] = new Dictionary<string, object?> { ["sql"] = WorkflowScenarios.ArtifactReviewSetupSql },
+                    ["subject"] = "four-statement-batch",
+                    ["scope"] = "whole",
+                    ["parameterSets"] = parameterSets,
+                    ["repeat"] = 3,
+                    ["maxResultBytes"] = 65536,
+                }, 65536);
+            Assert.False(measure.IsError == true, Text(measure));
+            var artifactId = ArtifactId(Envelope(measure))!;
+            var metrics = await RecordStudyCallAsync(session, calls, "named-set-attribution", "sqlharness_artifact",
+                new Dictionary<string, object?> { ["id"] = artifactId, ["section"] = "metrics", ["maxResultBytes"] = 65536 }, 65536);
+            Assert.False(metrics.IsError == true, Text(metrics));
+            var variants = Envelope(metrics).GetProperty("result").GetProperty("variants").EnumerateArray().ToArray();
+            Assert.Equal(new[] { "small", "medium", "large", "edge" }, variants.Select(item => item.GetProperty("name").GetString()).ToArray());
+            Assert.All(variants, item => Assert.Single(item.GetProperty("logicalReadsByTable").EnumerateObject()));
+
+            var statements = await RecordStudyCallAsync(session, calls, "named-set-attribution", "sqlharness_artifact",
+                new Dictionary<string, object?> { ["id"] = artifactId, ["section"] = "statements", ["pageSize"] = 32, ["maxResultBytes"] = 65536 }, 65536);
+            Assert.False(statements.IsError == true, Text(statements));
+            var setStatements = Envelope(statements).GetProperty("result").GetProperty("statements").EnumerateArray().ToArray();
+            Assert.Equal(16, setStatements.Length);
+            Assert.Equal(4, setStatements.Select(item => item.GetProperty("parameterSet").GetString()).Distinct(StringComparer.Ordinal).Count());
+            Assert.All(new[] { "small", "medium", "large", "edge" }, name =>
+                Assert.Equal(4, setStatements.Count(item => item.GetProperty("parameterSet").GetString() == name)));
+            await session.ShutdownAsync();
+            session.AssertNoDatabaseConnections();
+        }
+
+        await using (var session = await Session.StartAsync(WorkflowScenarios.ArtifactReviewStudyId, Budget))
+        {
+            var query = await RecordStudyCallAsync(session, calls, "late-result-assertions", "sqlharness_query",
+                new Dictionary<string, object?>
+                {
+                    ["sql"] = WorkflowScenarios.ArtifactReviewQuerySql,
+                    ["maxRows"] = 96,
+                    ["maxResultBytes"] = 16384,
+                    ["maxCellChars"] = 128,
+                }, 16384);
+            Assert.False(query.IsError == true, Text(query));
+            var result = Envelope(query).GetProperty("result");
+            var resultSets = result.GetProperty("resultSets").EnumerateArray().ToArray();
+            Assert.Equal(3, resultSets.Length);
+            Assert.Equal(96, resultSets[0].GetProperty("rows").GetArrayLength());
+            Assert.Contains("assertion: totals", resultSets[1].GetRawText(), StringComparison.Ordinal);
+            Assert.Contains("assertion: final count", resultSets[2].GetRawText(), StringComparison.Ordinal);
+            await session.ShutdownAsync();
+            session.AssertNoDatabaseConnections();
+        }
+
+        capture["equivalentEvidence"] = new Dictionary<string, object?>
+        {
+            ["batchStatements"] = 4,
+            ["setupStatements"] = 1,
+            ["setupExecutions"] = 4,
+            ["namedSets"] = 4,
+            ["repetitionsPerSet"] = 3,
+            ["candidateRevisions"] = 2,
+            ["assertionResultSetsAfterLargeFirst"] = 2,
+            ["candidateRevisionStatementHashesDiffer"] = revisionHashes["candidate-revision-1"] != revisionHashes["candidate-revision-2"],
+        };
+        var json = JsonSerializer.Serialize(capture, JsonOptions);
+        var captureDirectory = Environment.GetEnvironmentVariable("SQLHARNESS_109_CAPTURE_DIR");
+        if (!string.IsNullOrWhiteSpace(captureDirectory))
+        {
+            Directory.CreateDirectory(captureDirectory);
+            File.WriteAllText(Path.Combine(captureDirectory, "task-1-sdk-baseline.json"), json.TrimEnd() + "\n");
+        }
+        var capturedCalls = calls.Cast<Dictionary<string, object?>>().ToArray();
+        _output.WriteLine($"Plan 109 Task 1: SDK calls={calls.Count}; request wire UTF-8 bytes={capturedCalls.Sum(call => (int)call["requestWireUtf8Bytes"]!)}; response wire UTF-8 bytes={capturedCalls.Sum(call => (int)call["responseWireUtf8Bytes"]!)}; equivalent cases=4 statements, 4 named sets x 3 repetitions, 2 candidate revisions, 2 late assertion result sets.");
+    }
+
+    private static async Task<CallToolResult> RecordStudyCallAsync(
+        Session session, List<object> calls, string studyCase, string tool, Dictionary<string, object?> arguments, int budget)
+    {
+        var (result, requestBytes, responseBytes) = await session.CallWithWireBytes(tool, arguments);
+        var text = Text(result).TrimEnd();
+        var visibleBytes = Encoding.UTF8.GetByteCount(text);
+        Assert.InRange(visibleBytes, 1, budget);
+        var envelope = Envelope(result);
+        calls.Add(new Dictionary<string, object?>
+        {
+            ["case"] = studyCase,
+            ["tool"] = tool,
+            ["selectors"] = arguments.Where(pair => pair.Key is "id" or "section" or "variant" or "statement" or "parameterSet" or "repetition" or "cursor" or "pageSize" or "maxResultBytes" or "maxRows" or "maxCellChars")
+                .ToDictionary(pair => pair.Key, pair => pair.Value),
+            ["requestWireUtf8Bytes"] = requestBytes,
+            ["responseWireUtf8Bytes"] = responseBytes,
+            ["modelVisibleUtf8Bytes"] = visibleBytes,
+            ["estimatedTokensByteDiv4"] = visibleBytes / 4m,
+            ["actualTokenizerTokenCount"] = null,
+            ["continuation"] = Continuation(envelope),
+            ["omittedItems"] = Omitted(envelope),
+            ["truncation"] = envelope.TryGetProperty("truncation", out var truncation) ? truncation.Clone() : null,
+            ["text"] = text,
+        });
+        return result;
+    }
+
     private static async Task<PlanCompletion> ReadPlanCompletionAsync(Session session, string artifactId, int? pageSize, int? maxResultBytes)
     {
         var calls = new List<PlanCallCost>();

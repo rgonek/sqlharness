@@ -1,0 +1,339 @@
+{
+  "study": "plan-109-task-1",
+  "host": "SqlHarness.Mcp.WorkflowHost",
+  "sdkClient": "ModelContextProtocol.Client.McpClient",
+  "fixtureInputs": {
+    "batchSql": "SELECT Id, Region FROM dbo.Orders WHERE Batch = @Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments;",
+    "setupSql": "SET NOCOUNT ON;",
+    "candidateRevision1": "SELECT Id, Region FROM dbo.Orders WHERE Batch = @Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments WHERE Type = 1;",
+    "candidateRevision2": "SELECT Id, Region FROM dbo.Orders WHERE Batch = @Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments WHERE Type = 2;",
+    "parameterSets": [
+      "small",
+      "medium",
+      "large",
+      "edge"
+    ],
+    "querySql": "SELECT * FROM dbo.LargeFixture; SELECT * FROM dbo.AssertionFixture; SELECT * FROM dbo.FinalAssertionFixture;"
+  },
+  "calls": [
+    {
+      "case": "candidate-revision-1",
+      "tool": "sqlharness_compare",
+      "selectors": {
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 559,
+      "responseWireUtf8Bytes": 2801,
+      "modelVisibleUtf8Bytes": 1641,
+      "estimatedTokensByteDiv4": 410.25,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022target\u0022:{\u0022server\u0022:\u0022workflow-unreachable.invalid\u0022,\u0022database\u0022:\u0022fixturedb\u0022,\u0022engine\u0022:\u0022sqlserver\u0022},\u0022repetitions\u0022:5,\u0022classification\u0022:{\u0022setup\u0022:\u0022none\u0022,\u0022baseline\u0022:\u0022read-only\u0022,\u0022candidate\u0022:\u0022read-only\u0022},\u0022parameters\u0022:[],\u0022equivalence\u0022:{\u0022mode\u0022:\u0022ordered\u0022,\u0022equivalent\u0022:true,\u0022differingPositions\u0022:0,\u0022baselineOnlyCount\u0022:0,\u0022candidateOnlyCount\u0022:0,\u0022compareNullability\u0022:false,\u0022nullabilityEquivalent\u0022:null,\u0022mismatchReason\u0022:null,\u0022baselineStable\u0022:true,\u0022candidateStable\u0022:true,\u0022schemaEquivalent\u0022:true,\u0022mismatchReasons\u0022:[]},\u0022baseline\u0022:{\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:40,\u0022median\u0022:40,\u0022max\u0022:40},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:40,\u0022median\u0022:40,\u0022max\u0022:40},\u0022logicalReads\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022logicalReadsByTable\u0022:{\u0022Orders\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12}},\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},\u0022candidate\u0022:{\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022logicalReads\u0022:{\u0022min\u0022:4,\u0022median\u0022:4,\u0022max\u0022:4},\u0022logicalReadsByTable\u0022:{\u0022Orders\u0022:{\u0022min\u0022:4,\u0022median\u0022:4,\u0022max\u0022:4}},\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},\u0022noteworthyOperators\u0022:[],\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff\u0022,\u0022regression\u0022:{\u0022verdict\u0022:\u0022pass\u0022,\u0022reasons\u0022:[],\u0022policyVersion\u0022:2,\u0022elapsed\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-28,\u0022deltaPercent\u0022:-70.0},\u0022logicalReads\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-8,\u0022deltaPercent\u0022:-66.67},\u0022cpu\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-28,\u0022deltaPercent\u0022:-70.0}}}}"
+    },
+    {
+      "case": "candidate-revision-1",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff",
+        "section": "statements",
+        "pageSize": 32,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 238,
+      "responseWireUtf8Bytes": 5534,
+      "modelVisibleUtf8Bytes": 3504,
+      "estimatedTokensByteDiv4": 876,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff\u0022,\u0022artifactKind\u0022:\u0022compare\u0022,\u0022statements\u0022:[{\u0022variant\u0022:\u0022baseline\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:0,\u0022statementHash\u0022:\u0022a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022baseline\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:1,\u0022statementHash\u0022:\u0022b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022baseline\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:2,\u0022statementHash\u0022:\u00229991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022baseline\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:3,\u0022statementHash\u0022:\u0022f160a288df07f5eaf498e40b49201e72c3b96396fd0f72b615a66640fe10f7b2\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022candidate\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:0,\u0022statementHash\u0022:\u0022a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022candidate\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:1,\u0022statementHash\u0022:\u0022b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022candidate\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:2,\u0022statementHash\u0022:\u00229991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022candidate\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:3,\u0022statementHash\u0022:\u002232d2f0f69065140360c375b023cb046517dd4c72fba6a56a52b444e71b780aed\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]}],\u0022omittedStatements\u0022:0}}"
+    },
+    {
+      "case": "candidate-revision-1",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff",
+        "section": "plan",
+        "variant": "candidate",
+        "statement": 0,
+        "repetition": 5,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 289,
+      "responseWireUtf8Bytes": 1069,
+      "modelVisibleUtf8Bytes": 609,
+      "estimatedTokensByteDiv4": 152.25,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff\u0022,\u0022variant\u0022:\u0022candidate\u0022,\u0022parameterSet\u0022:null,\u0022statement\u0022:0,\u0022statementCount\u0022:4,\u0022repetition\u0022:5,\u0022selection\u0022:\u0022explicit\u0022,\u0022availableRepetitions\u0022:[1,2,3,4,5],\u0022planShapeStable\u0022:true,\u0022nodeCount\u0022:1,\u0022nodes\u0022:[{\u0022nodePath\u0022:\u00220\u0022,\u0022parentPath\u0022:null,\u0022operator\u0022:{\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022nodeId\u0022:1,\u0022logicalOp\u0022:\u0022Index Seek\u0022,\u0022objectName\u0022:\u0022[dbo].[Orders]\u0022,\u0022indexName\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022costFraction\u0022:1}}],\u0022continuation\u0022:null,\u0022missingIndexes\u0022:[],\u0022statementText\u0022:null,\u0022evidenceGaps\u0022:[]}}"
+    },
+    {
+      "case": "candidate-revision-1",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff",
+        "section": "plan",
+        "variant": "candidate",
+        "statement": 1,
+        "repetition": 5,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 289,
+      "responseWireUtf8Bytes": 1091,
+      "modelVisibleUtf8Bytes": 631,
+      "estimatedTokensByteDiv4": 157.75,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff\u0022,\u0022variant\u0022:\u0022candidate\u0022,\u0022parameterSet\u0022:null,\u0022statement\u0022:1,\u0022statementCount\u0022:4,\u0022repetition\u0022:5,\u0022selection\u0022:\u0022explicit\u0022,\u0022availableRepetitions\u0022:[1,2,3,4,5],\u0022planShapeStable\u0022:true,\u0022nodeCount\u0022:1,\u0022nodes\u0022:[{\u0022nodePath\u0022:\u00220\u0022,\u0022parentPath\u0022:null,\u0022operator\u0022:{\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022nodeId\u0022:1,\u0022logicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022objectName\u0022:\u0022[dbo].[Orders]\u0022,\u0022indexName\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022costFraction\u0022:1}}],\u0022continuation\u0022:null,\u0022missingIndexes\u0022:[],\u0022statementText\u0022:null,\u0022evidenceGaps\u0022:[]}}"
+    },
+    {
+      "case": "candidate-revision-1",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff",
+        "section": "plan",
+        "variant": "candidate",
+        "statement": 2,
+        "repetition": 5,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 289,
+      "responseWireUtf8Bytes": 1069,
+      "modelVisibleUtf8Bytes": 609,
+      "estimatedTokensByteDiv4": 152.25,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff\u0022,\u0022variant\u0022:\u0022candidate\u0022,\u0022parameterSet\u0022:null,\u0022statement\u0022:2,\u0022statementCount\u0022:4,\u0022repetition\u0022:5,\u0022selection\u0022:\u0022explicit\u0022,\u0022availableRepetitions\u0022:[1,2,3,4,5],\u0022planShapeStable\u0022:true,\u0022nodeCount\u0022:1,\u0022nodes\u0022:[{\u0022nodePath\u0022:\u00220\u0022,\u0022parentPath\u0022:null,\u0022operator\u0022:{\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022nodeId\u0022:1,\u0022logicalOp\u0022:\u0022Index Seek\u0022,\u0022objectName\u0022:\u0022[dbo].[Orders]\u0022,\u0022indexName\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022costFraction\u0022:1}}],\u0022continuation\u0022:null,\u0022missingIndexes\u0022:[],\u0022statementText\u0022:null,\u0022evidenceGaps\u0022:[]}}"
+    },
+    {
+      "case": "candidate-revision-1",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff",
+        "section": "plan",
+        "variant": "candidate",
+        "statement": 3,
+        "repetition": 5,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 289,
+      "responseWireUtf8Bytes": 1069,
+      "modelVisibleUtf8Bytes": 609,
+      "estimatedTokensByteDiv4": 152.25,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-26547f14d2284f46a92ca35483e91aff\u0022,\u0022variant\u0022:\u0022candidate\u0022,\u0022parameterSet\u0022:null,\u0022statement\u0022:3,\u0022statementCount\u0022:4,\u0022repetition\u0022:5,\u0022selection\u0022:\u0022explicit\u0022,\u0022availableRepetitions\u0022:[1,2,3,4,5],\u0022planShapeStable\u0022:true,\u0022nodeCount\u0022:1,\u0022nodes\u0022:[{\u0022nodePath\u0022:\u00220\u0022,\u0022parentPath\u0022:null,\u0022operator\u0022:{\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022nodeId\u0022:1,\u0022logicalOp\u0022:\u0022Index Seek\u0022,\u0022objectName\u0022:\u0022[dbo].[Orders]\u0022,\u0022indexName\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022costFraction\u0022:1}}],\u0022continuation\u0022:null,\u0022missingIndexes\u0022:[],\u0022statementText\u0022:null,\u0022evidenceGaps\u0022:[]}}"
+    },
+    {
+      "case": "candidate-revision-2",
+      "tool": "sqlharness_compare",
+      "selectors": {
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 559,
+      "responseWireUtf8Bytes": 2801,
+      "modelVisibleUtf8Bytes": 1641,
+      "estimatedTokensByteDiv4": 410.25,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022target\u0022:{\u0022server\u0022:\u0022workflow-unreachable.invalid\u0022,\u0022database\u0022:\u0022fixturedb\u0022,\u0022engine\u0022:\u0022sqlserver\u0022},\u0022repetitions\u0022:5,\u0022classification\u0022:{\u0022setup\u0022:\u0022none\u0022,\u0022baseline\u0022:\u0022read-only\u0022,\u0022candidate\u0022:\u0022read-only\u0022},\u0022parameters\u0022:[],\u0022equivalence\u0022:{\u0022mode\u0022:\u0022ordered\u0022,\u0022equivalent\u0022:true,\u0022differingPositions\u0022:0,\u0022baselineOnlyCount\u0022:0,\u0022candidateOnlyCount\u0022:0,\u0022compareNullability\u0022:false,\u0022nullabilityEquivalent\u0022:null,\u0022mismatchReason\u0022:null,\u0022baselineStable\u0022:true,\u0022candidateStable\u0022:true,\u0022schemaEquivalent\u0022:true,\u0022mismatchReasons\u0022:[]},\u0022baseline\u0022:{\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:40,\u0022median\u0022:40,\u0022max\u0022:40},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:40,\u0022median\u0022:40,\u0022max\u0022:40},\u0022logicalReads\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022logicalReadsByTable\u0022:{\u0022Orders\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12}},\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},\u0022candidate\u0022:{\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:12,\u0022median\u0022:12,\u0022max\u0022:12},\u0022logicalReads\u0022:{\u0022min\u0022:4,\u0022median\u0022:4,\u0022max\u0022:4},\u0022logicalReadsByTable\u0022:{\u0022Orders\u0022:{\u0022min\u0022:4,\u0022median\u0022:4,\u0022max\u0022:4}},\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},\u0022noteworthyOperators\u0022:[],\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201\u0022,\u0022regression\u0022:{\u0022verdict\u0022:\u0022pass\u0022,\u0022reasons\u0022:[],\u0022policyVersion\u0022:2,\u0022elapsed\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-28,\u0022deltaPercent\u0022:-70.0},\u0022logicalReads\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-8,\u0022deltaPercent\u0022:-66.67},\u0022cpu\u0022:{\u0022status\u0022:\u0022not-regressed\u0022,\u0022delta\u0022:-28,\u0022deltaPercent\u0022:-70.0}}}}"
+    },
+    {
+      "case": "candidate-revision-2",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201",
+        "section": "statements",
+        "pageSize": 32,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 238,
+      "responseWireUtf8Bytes": 5534,
+      "modelVisibleUtf8Bytes": 3504,
+      "estimatedTokensByteDiv4": 876,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201\u0022,\u0022artifactKind\u0022:\u0022compare\u0022,\u0022statements\u0022:[{\u0022variant\u0022:\u0022baseline\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:0,\u0022statementHash\u0022:\u0022a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022baseline\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:1,\u0022statementHash\u0022:\u0022b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022baseline\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:2,\u0022statementHash\u0022:\u00229991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022baseline\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:3,\u0022statementHash\u0022:\u0022f160a288df07f5eaf498e40b49201e72c3b96396fd0f72b615a66640fe10f7b2\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022candidate\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:0,\u0022statementHash\u0022:\u0022a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022candidate\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:1,\u0022statementHash\u0022:\u0022b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022candidate\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:2,\u0022statementHash\u0022:\u00229991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022candidate\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:3,\u0022statementHash\u0022:\u00226183663a8fa02080a6b79ef5ca8cf7094d465cfd59136cf10accba7e50a11c95\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]}],\u0022omittedStatements\u0022:0}}"
+    },
+    {
+      "case": "candidate-revision-2",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201",
+        "section": "plan",
+        "variant": "candidate",
+        "statement": 0,
+        "repetition": 5,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 289,
+      "responseWireUtf8Bytes": 1069,
+      "modelVisibleUtf8Bytes": 609,
+      "estimatedTokensByteDiv4": 152.25,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201\u0022,\u0022variant\u0022:\u0022candidate\u0022,\u0022parameterSet\u0022:null,\u0022statement\u0022:0,\u0022statementCount\u0022:4,\u0022repetition\u0022:5,\u0022selection\u0022:\u0022explicit\u0022,\u0022availableRepetitions\u0022:[1,2,3,4,5],\u0022planShapeStable\u0022:true,\u0022nodeCount\u0022:1,\u0022nodes\u0022:[{\u0022nodePath\u0022:\u00220\u0022,\u0022parentPath\u0022:null,\u0022operator\u0022:{\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022nodeId\u0022:1,\u0022logicalOp\u0022:\u0022Index Seek\u0022,\u0022objectName\u0022:\u0022[dbo].[Orders]\u0022,\u0022indexName\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022costFraction\u0022:1}}],\u0022continuation\u0022:null,\u0022missingIndexes\u0022:[],\u0022statementText\u0022:null,\u0022evidenceGaps\u0022:[]}}"
+    },
+    {
+      "case": "candidate-revision-2",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201",
+        "section": "plan",
+        "variant": "candidate",
+        "statement": 1,
+        "repetition": 5,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 289,
+      "responseWireUtf8Bytes": 1091,
+      "modelVisibleUtf8Bytes": 631,
+      "estimatedTokensByteDiv4": 157.75,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201\u0022,\u0022variant\u0022:\u0022candidate\u0022,\u0022parameterSet\u0022:null,\u0022statement\u0022:1,\u0022statementCount\u0022:4,\u0022repetition\u0022:5,\u0022selection\u0022:\u0022explicit\u0022,\u0022availableRepetitions\u0022:[1,2,3,4,5],\u0022planShapeStable\u0022:true,\u0022nodeCount\u0022:1,\u0022nodes\u0022:[{\u0022nodePath\u0022:\u00220\u0022,\u0022parentPath\u0022:null,\u0022operator\u0022:{\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022nodeId\u0022:1,\u0022logicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022objectName\u0022:\u0022[dbo].[Orders]\u0022,\u0022indexName\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022costFraction\u0022:1}}],\u0022continuation\u0022:null,\u0022missingIndexes\u0022:[],\u0022statementText\u0022:null,\u0022evidenceGaps\u0022:[]}}"
+    },
+    {
+      "case": "candidate-revision-2",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201",
+        "section": "plan",
+        "variant": "candidate",
+        "statement": 2,
+        "repetition": 5,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 289,
+      "responseWireUtf8Bytes": 1069,
+      "modelVisibleUtf8Bytes": 609,
+      "estimatedTokensByteDiv4": 152.25,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201\u0022,\u0022variant\u0022:\u0022candidate\u0022,\u0022parameterSet\u0022:null,\u0022statement\u0022:2,\u0022statementCount\u0022:4,\u0022repetition\u0022:5,\u0022selection\u0022:\u0022explicit\u0022,\u0022availableRepetitions\u0022:[1,2,3,4,5],\u0022planShapeStable\u0022:true,\u0022nodeCount\u0022:1,\u0022nodes\u0022:[{\u0022nodePath\u0022:\u00220\u0022,\u0022parentPath\u0022:null,\u0022operator\u0022:{\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022nodeId\u0022:1,\u0022logicalOp\u0022:\u0022Index Seek\u0022,\u0022objectName\u0022:\u0022[dbo].[Orders]\u0022,\u0022indexName\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022costFraction\u0022:1}}],\u0022continuation\u0022:null,\u0022missingIndexes\u0022:[],\u0022statementText\u0022:null,\u0022evidenceGaps\u0022:[]}}"
+    },
+    {
+      "case": "candidate-revision-2",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201",
+        "section": "plan",
+        "variant": "candidate",
+        "statement": 3,
+        "repetition": 5,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 289,
+      "responseWireUtf8Bytes": 1069,
+      "modelVisibleUtf8Bytes": 609,
+      "estimatedTokensByteDiv4": 152.25,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-a45811eb226b4a149bee59c4bf900201\u0022,\u0022variant\u0022:\u0022candidate\u0022,\u0022parameterSet\u0022:null,\u0022statement\u0022:3,\u0022statementCount\u0022:4,\u0022repetition\u0022:5,\u0022selection\u0022:\u0022explicit\u0022,\u0022availableRepetitions\u0022:[1,2,3,4,5],\u0022planShapeStable\u0022:true,\u0022nodeCount\u0022:1,\u0022nodes\u0022:[{\u0022nodePath\u0022:\u00220\u0022,\u0022parentPath\u0022:null,\u0022operator\u0022:{\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022nodeId\u0022:1,\u0022logicalOp\u0022:\u0022Index Seek\u0022,\u0022objectName\u0022:\u0022[dbo].[Orders]\u0022,\u0022indexName\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022costFraction\u0022:1}}],\u0022continuation\u0022:null,\u0022missingIndexes\u0022:[],\u0022statementText\u0022:null,\u0022evidenceGaps\u0022:[]}}"
+    },
+    {
+      "case": "named-set-attribution",
+      "tool": "sqlharness_measure",
+      "selectors": {
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 710,
+      "responseWireUtf8Bytes": 4283,
+      "modelVisibleUtf8Bytes": 2603,
+      "estimatedTokensByteDiv4": 650.75,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022target\u0022:{\u0022server\u0022:\u0022workflow-unreachable.invalid\u0022,\u0022database\u0022:\u0022fixturedb\u0022,\u0022engine\u0022:\u0022sqlserver\u0022},\u0022measuredOrderRule\u0022:\u0022Measured runs execute parameter sets sequentially in user-supplied order.\u0022,\u0022planCacheWarning\u0022:\u0022Parameter-set measurements use separate sessions; SQLHarness did not clear or isolate the server plan cache.\u0022,\u0022sets\u0022:[{\u0022name\u0022:\u0022small\u0022,\u0022parameters\u0022:[{\u0022name\u0022:\u0022Batch\u0022,\u0022type\u0022:\u0022int\u0022}],\u0022repetitions\u0022:3,\u0022resultsStable\u0022:true,\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:4,\u0022median\u0022:5,\u0022max\u0022:6},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:8,\u0022median\u0022:9,\u0022max\u0022:10},\u0022logicalReads\u0022:{\u0022min\u0022:100,\u0022median\u0022:100,\u0022max\u0022:100},\u0022noteworthyOperators\u0022:[],\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},{\u0022name\u0022:\u0022medium\u0022,\u0022parameters\u0022:[{\u0022name\u0022:\u0022Batch\u0022,\u0022type\u0022:\u0022int\u0022}],\u0022repetitions\u0022:3,\u0022resultsStable\u0022:true,\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:5,\u0022median\u0022:6,\u0022max\u0022:7},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:9,\u0022median\u0022:10,\u0022max\u0022:11},\u0022logicalReads\u0022:{\u0022min\u0022:200,\u0022median\u0022:200,\u0022max\u0022:200},\u0022noteworthyOperators\u0022:[],\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},{\u0022name\u0022:\u0022large\u0022,\u0022parameters\u0022:[{\u0022name\u0022:\u0022Batch\u0022,\u0022type\u0022:\u0022int\u0022}],\u0022repetitions\u0022:3,\u0022resultsStable\u0022:true,\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:6,\u0022median\u0022:7,\u0022max\u0022:8},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:10,\u0022median\u0022:11,\u0022max\u0022:12},\u0022logicalReads\u0022:{\u0022min\u0022:300,\u0022median\u0022:300,\u0022max\u0022:300},\u0022noteworthyOperators\u0022:[],\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},{\u0022name\u0022:\u0022edge\u0022,\u0022parameters\u0022:[{\u0022name\u0022:\u0022Batch\u0022,\u0022type\u0022:\u0022int\u0022}],\u0022repetitions\u0022:3,\u0022resultsStable\u0022:true,\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:7,\u0022median\u0022:8,\u0022max\u0022:9},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:11,\u0022median\u0022:12,\u0022max\u0022:13},\u0022logicalReads\u0022:{\u0022min\u0022:400,\u0022median\u0022:400,\u0022max\u0022:400},\u0022noteworthyOperators\u0022:[],\u0022warnings\u0022:[],\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022}],\u0022crossSetSummary\u0022:{\u0022minimumMedianElapsedSet\u0022:\u0022small\u0022,\u0022minimumMedianElapsedMilliseconds\u0022:9,\u0022maximumMedianElapsedSet\u0022:\u0022edge\u0022,\u0022maximumMedianElapsedMilliseconds\u0022:12,\u0022minimumMedianCpuSet\u0022:\u0022small\u0022,\u0022minimumMedianCpuMilliseconds\u0022:5,\u0022maximumMedianCpuSet\u0022:\u0022edge\u0022,\u0022maximumMedianCpuMilliseconds\u0022:8,\u0022minimumMedianReadsSet\u0022:\u0022small\u0022,\u0022minimumMedianLogicalReads\u0022:100,\u0022maximumMedianReadsSet\u0022:\u0022edge\u0022,\u0022maximumMedianLogicalReads\u0022:400,\u0022cpuTimeAvailability\u0022:\u0022measured\u0022,\u0022elapsedTimeAvailability\u0022:\u0022measured\u0022,\u0022logicalReadsAvailability\u0022:\u0022measured\u0022},\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-2ad5ab79c5744adc94e6c086473ca73f\u0022}}"
+    },
+    {
+      "case": "named-set-attribution",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-2ad5ab79c5744adc94e6c086473ca73f",
+        "section": "metrics",
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 221,
+      "responseWireUtf8Bytes": 2191,
+      "modelVisibleUtf8Bytes": 1211,
+      "estimatedTokensByteDiv4": 302.75,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-2ad5ab79c5744adc94e6c086473ca73f\u0022,\u0022artifactKind\u0022:\u0022measure-set\u0022,\u0022variants\u0022:[{\u0022name\u0022:\u0022small\u0022,\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:4,\u0022median\u0022:5,\u0022max\u0022:6},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:8,\u0022median\u0022:9,\u0022max\u0022:10},\u0022logicalReads\u0022:{\u0022min\u0022:100,\u0022median\u0022:100,\u0022max\u0022:100},\u0022logicalReadsByTable\u0022:{\u0022Orders\u0022:{\u0022min\u0022:100,\u0022median\u0022:100,\u0022max\u0022:100}},\u0022warnings\u0022:[]},{\u0022name\u0022:\u0022medium\u0022,\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:5,\u0022median\u0022:6,\u0022max\u0022:7},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:9,\u0022median\u0022:10,\u0022max\u0022:11},\u0022logicalReads\u0022:{\u0022min\u0022:200,\u0022median\u0022:200,\u0022max\u0022:200},\u0022logicalReadsByTable\u0022:{\u0022Customers\u0022:{\u0022min\u0022:200,\u0022median\u0022:200,\u0022max\u0022:200}},\u0022warnings\u0022:[]},{\u0022name\u0022:\u0022large\u0022,\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:6,\u0022median\u0022:7,\u0022max\u0022:8},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:10,\u0022median\u0022:11,\u0022max\u0022:12},\u0022logicalReads\u0022:{\u0022min\u0022:300,\u0022median\u0022:300,\u0022max\u0022:300},\u0022logicalReadsByTable\u0022:{\u0022Payments\u0022:{\u0022min\u0022:300,\u0022median\u0022:300,\u0022max\u0022:300}},\u0022warnings\u0022:[]},{\u0022name\u0022:\u0022edge\u0022,\u0022cpuTimeMilliseconds\u0022:{\u0022min\u0022:7,\u0022median\u0022:8,\u0022max\u0022:9},\u0022elapsedTimeMilliseconds\u0022:{\u0022min\u0022:11,\u0022median\u0022:12,\u0022max\u0022:13},\u0022logicalReads\u0022:{\u0022min\u0022:400,\u0022median\u0022:400,\u0022max\u0022:400},\u0022logicalReadsByTable\u0022:{\u0022Returns\u0022:{\u0022min\u0022:400,\u0022median\u0022:400,\u0022max\u0022:400}},\u0022warnings\u0022:[]}]}}"
+    },
+    {
+      "case": "named-set-attribution",
+      "tool": "sqlharness_artifact",
+      "selectors": {
+        "id": "19700101T000000000Z-workflow-fixture-2ad5ab79c5744adc94e6c086473ca73f",
+        "section": "statements",
+        "pageSize": 32,
+        "maxResultBytes": 65536
+      },
+      "requestWireUtf8Bytes": 238,
+      "responseWireUtf8Bytes": 11350,
+      "modelVisibleUtf8Bytes": 7160,
+      "estimatedTokensByteDiv4": 1790,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022artifactId\u0022:\u002219700101T000000000Z-workflow-fixture-2ad5ab79c5744adc94e6c086473ca73f\u0022,\u0022artifactKind\u0022:\u0022measure-set\u0022,\u0022statements\u0022:[{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022edge\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:0,\u0022statementHash\u0022:\u0022a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022edge\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:1,\u0022statementHash\u0022:\u0022b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022edge\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:2,\u0022statementHash\u0022:\u00229991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022edge\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:3,\u0022statementHash\u0022:\u0022f160a288df07f5eaf498e40b49201e72c3b96396fd0f72b615a66640fe10f7b2\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022large\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:0,\u0022statementHash\u0022:\u0022a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022large\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:1,\u0022statementHash\u0022:\u0022b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022large\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:2,\u0022statementHash\u0022:\u00229991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022large\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:3,\u0022statementHash\u0022:\u0022f160a288df07f5eaf498e40b49201e72c3b96396fd0f72b615a66640fe10f7b2\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022medium\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:0,\u0022statementHash\u0022:\u0022a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022medium\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:1,\u0022statementHash\u0022:\u0022b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022medium\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:2,\u0022statementHash\u0022:\u00229991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022medium\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:3,\u0022statementHash\u0022:\u0022f160a288df07f5eaf498e40b49201e72c3b96396fd0f72b615a66640fe10f7b2\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022small\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:0,\u0022statementHash\u0022:\u0022a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022small\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:1,\u0022statementHash\u0022:\u0022b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Clustered Index Scan\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[PK_Accounts]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022small\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:2,\u0022statementHash\u0022:\u00229991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]},{\u0022variant\u0022:\u0022measure\u0022,\u0022parameterSet\u0022:\u0022small\u0022,\u0022matrixCell\u0022:null,\u0022statementOrdinal\u0022:3,\u0022statementHash\u0022:\u0022f160a288df07f5eaf498e40b49201e72c3b96396fd0f72b615a66640fe10f7b2\u0022,\u0022cpuTimeMilliseconds\u0022:10,\u0022elapsedTimeMilliseconds\u0022:14,\u0022degreeOfParallelism\u0022:null,\u0022topOperators\u0022:[{\u0022nodeId\u0022:1,\u0022physicalOp\u0022:\u0022Index Seek\u0022,\u0022object\u0022:\u0022[dbo].[Orders]\u0022,\u0022index\u0022:\u0022[IX_Orders]\u0022,\u0022estimatedRows\u0022:7,\u0022actualRows\u0022:null,\u0022executions\u0022:null,\u0022nodePath\u0022:\u00220\u0022,\u0022cursor\u0022:0}]}],\u0022omittedStatements\u0022:0}}"
+    },
+    {
+      "case": "late-result-assertions",
+      "tool": "sqlharness_query",
+      "selectors": {
+        "maxRows": 96,
+        "maxResultBytes": 16384,
+        "maxCellChars": 128
+      },
+      "requestWireUtf8Bytes": 270,
+      "responseWireUtf8Bytes": 13069,
+      "modelVisibleUtf8Bytes": 11469,
+      "estimatedTokensByteDiv4": 2867.25,
+      "actualTokenizerTokenCount": null,
+      "continuation": null,
+      "omittedItems": null,
+      "truncation": null,
+      "text": "{\u0022schemaVersion\u0022:3,\u0022status\u0022:\u0022success\u0022,\u0022result\u0022:{\u0022database\u0022:\u0022fixturedb\u0022,\u0022statementClassification\u0022:\u0022read-only\u0022,\u0022resultSets\u0022:[{\u0022ordinal\u0022:0,\u0022columns\u0022:[{\u0022name\u0022:\u0022id\u0022,\u0022valueType\u0022:\u0022int\u0022,\u0022allowNull\u0022:false},{\u0022name\u0022:\u0022payload\u0022,\u0022valueType\u0022:\u0022nvarchar\u0022,\u0022allowNull\u0022:false}],\u0022rows\u0022:[[0,\u0022row-000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[1,\u0022row-001-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[2,\u0022row-002-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[3,\u0022row-003-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[4,\u0022row-004-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[5,\u0022row-005-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[6,\u0022row-006-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[7,\u0022row-007-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[8,\u0022row-008-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[9,\u0022row-009-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[10,\u0022row-010-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[11,\u0022row-011-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[12,\u0022row-012-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[13,\u0022row-013-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[14,\u0022row-014-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[15,\u0022row-015-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[16,\u0022row-016-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[17,\u0022row-017-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[18,\u0022row-018-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[19,\u0022row-019-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[20,\u0022row-020-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[21,\u0022row-021-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[22,\u0022row-022-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[23,\u0022row-023-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[24,\u0022row-024-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[25,\u0022row-025-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[26,\u0022row-026-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[27,\u0022row-027-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[28,\u0022row-028-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[29,\u0022row-029-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[30,\u0022row-030-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[31,\u0022row-031-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[32,\u0022row-032-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[33,\u0022row-033-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[34,\u0022row-034-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[35,\u0022row-035-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[36,\u0022row-036-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[37,\u0022row-037-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[38,\u0022row-038-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[39,\u0022row-039-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[40,\u0022row-040-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[41,\u0022row-041-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[42,\u0022row-042-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[43,\u0022row-043-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[44,\u0022row-044-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[45,\u0022row-045-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[46,\u0022row-046-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[47,\u0022row-047-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[48,\u0022row-048-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[49,\u0022row-049-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[50,\u0022row-050-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[51,\u0022row-051-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[52,\u0022row-052-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[53,\u0022row-053-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[54,\u0022row-054-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[55,\u0022row-055-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[56,\u0022row-056-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[57,\u0022row-057-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[58,\u0022row-058-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[59,\u0022row-059-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[60,\u0022row-060-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[61,\u0022row-061-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[62,\u0022row-062-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[63,\u0022row-063-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[64,\u0022row-064-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[65,\u0022row-065-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[66,\u0022row-066-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[67,\u0022row-067-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[68,\u0022row-068-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[69,\u0022row-069-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[70,\u0022row-070-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[71,\u0022row-071-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[72,\u0022row-072-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[73,\u0022row-073-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[74,\u0022row-074-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[75,\u0022row-075-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[76,\u0022row-076-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[77,\u0022row-077-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[78,\u0022row-078-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[79,\u0022row-079-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[80,\u0022row-080-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[81,\u0022row-081-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[82,\u0022row-082-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[83,\u0022row-083-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[84,\u0022row-084-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[85,\u0022row-085-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[86,\u0022row-086-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[87,\u0022row-087-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[88,\u0022row-088-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[89,\u0022row-089-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[90,\u0022row-090-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[91,\u0022row-091-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[92,\u0022row-092-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[93,\u0022row-093-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[94,\u0022row-094-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022],[95,\u0022row-095-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u0022]],\u0022rowCount\u0022:96},{\u0022ordinal\u0022:1,\u0022columns\u0022:[{\u0022name\u0022:\u0022assertion\u0022,\u0022valueType\u0022:\u0022nvarchar\u0022,\u0022allowNull\u0022:false},{\u0022name\u0022:\u0022passed\u0022,\u0022valueType\u0022:\u0022bit\u0022,\u0022allowNull\u0022:false}],\u0022rows\u0022:[[\u0022assertion: totals\u0022,true],[\u0022assertion: candidate rows\u0022,true]],\u0022rowCount\u0022:2},{\u0022ordinal\u0022:2,\u0022columns\u0022:[{\u0022name\u0022:\u0022assertion\u0022,\u0022valueType\u0022:\u0022nvarchar\u0022,\u0022allowNull\u0022:false},{\u0022name\u0022:\u0022value\u0022,\u0022valueType\u0022:\u0022int\u0022,\u0022allowNull\u0022:false}],\u0022rows\u0022:[[\u0022assertion: final count\u0022,4]],\u0022rowCount\u0022:1}],\u0022durationMilliseconds\u0022:4}}"
+    }
+  ],
+  "equivalentEvidence": {
+    "batchStatements": 4,
+    "setupStatements": 1,
+    "setupExecutions": 4,
+    "namedSets": 4,
+    "repetitionsPerSet": 3,
+    "candidateRevisions": 2,
+    "assertionResultSetsAfterLargeFirst": 2,
+    "candidateRevisionStatementHashesDiffer": true
+  }
+}

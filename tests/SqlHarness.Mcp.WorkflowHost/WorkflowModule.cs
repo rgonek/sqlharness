@@ -41,8 +41,93 @@ public sealed class WorkflowModule : ISqlHarnessModule
             SqlHarnessArtifactReadOperation or SqlHarnessPlanOperation => await _offline.ExecuteAsync(operation, ct),
             SqlHarnessCompareOperation compare => ExecuteCompare(compare),
             SqlHarnessCompareMatrixOperation matrix => ExecuteMatrix(matrix),
+            SqlHarnessMeasureOperation measure => ExecuteStudyMeasure(measure),
+            SqlHarnessQueryOperation query => ExecuteStudyQuery(query),
             _ => RejectDatabaseFacing(operation),
         };
+    }
+
+    private SqlHarnessOutcome ExecuteStudyMeasure(SqlHarnessMeasureOperation measure)
+    {
+        if (_scenario.Id is not (WorkflowScenarios.ArtifactReviewStudyId or WorkflowScenarios.ArtifactReviewStudyV2Id)
+            || !Matches(WorkflowScenarios.ArtifactReviewBaselineSql, measure.QuerySql)
+            || !Matches(WorkflowScenarios.ArtifactReviewSetupSql, measure.SetupSql ?? string.Empty)
+            || measure.ParameterSets is not { Count: 4 })
+            return UnknownSql();
+
+        var names = new[] { "small", "medium", "large", "edge" };
+        if (!measure.ParameterSets.Select(set => set.Name).SequenceEqual(names, StringComparer.Ordinal))
+            return UnknownSql();
+
+        var tableNames = new[] { "Orders", "Customers", "Payments", "Returns" };
+        var setReports = new List<MeasureParameterSetReport>(names.Length);
+        var runs = new List<CompareRunArtifact>(names.Length * measure.Repeat);
+        for (var setIndex = 0; setIndex < names.Length; setIndex++)
+        {
+            var name = names[setIndex];
+            var reads = (setIndex + 1) * 100L;
+            var variant = new CompareVariantReport(name,
+                new CompareDistribution(4 + setIndex, 5 + setIndex, 6 + setIndex),
+                new CompareDistribution(8 + setIndex, 9 + setIndex, 10 + setIndex),
+                new CompareDistribution(reads, reads, reads),
+                new Dictionary<string, long> { [tableNames[setIndex]] = reads }, [], [])
+            {
+                LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+                {
+                    [tableNames[setIndex]] = new(reads, reads, reads),
+                },
+            };
+            setReports.Add(new MeasureParameterSetReport(name,
+                [new MeasureParameterMetadata("Batch", "int")],
+                "fixture-value-hash-" + name, measure.Repeat, true, "fixture-result-hash-" + name,
+                variant, []));
+            for (var repetition = 1; repetition <= measure.Repeat; repetition++)
+                runs.Add(new CompareRunArtifact("measure", repetition, 5 + setIndex, 9 + setIndex, reads,
+                    new Dictionary<string, long>(StringComparer.Ordinal) { [tableNames[setIndex]] = reads },
+                    "fixture-result-hash-" + name,
+                    [PlanXml(WorkflowScenarios.ArtifactReviewBaselineSql, false, false)], 0, name)
+                {
+                    ExecutedSql = WorkflowScenarios.ArtifactReviewBaselineSql,
+                });
+        }
+
+        var crossSet = new MeasureCrossSetSummary("small", 9, "edge", 12, "small", 5, "edge", 8,
+            "small", 100, "edge", 400);
+        var planStatementCount = StatementMetricsExtractor.CountStatements(PlanXml(WorkflowScenarios.ArtifactReviewBaselineSql, false, false));
+        var projectedStatements = ArtifactStatementProjector.Project(ArtifactReader.MeasureSetKind, runs);
+        if (projectedStatements.Statements.Count != 16)
+        {
+            var message = $"The offline measure fixture generated {projectedStatements.Statements.Count} statement records (plan count={planStatementCount}, run count={runs.Count}, first run SQL length={runs[0].ExecutedSql?.Length}, first run plan count={runs[0].PlanXmls.Count}); expected 16.";
+            return new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, message,
+                Error: SqlHarnessError.From(SqlHarnessExitCode.Safety, message));
+        }
+        var report = new SqlHarnessMeasureSetReport(Target(), measure.Repeat, runs.Count, measure.ParameterSets.Count, names,
+            MeasureParameterSetReportProjector.MeasuredOrderRule,
+            MeasureParameterSetReportProjector.PlanCacheWarning, setReports, crossSet, null);
+        var directory = _writer.Write(report, runs, _scenario.ProfileName, _owner);
+        _lastArtifactDirectory = directory;
+        return Success(report with { ArtifactDirectory = directory });
+    }
+
+    private SqlHarnessOutcome ExecuteStudyQuery(SqlHarnessQueryOperation query)
+    {
+        if (_scenario.Id is not (WorkflowScenarios.ArtifactReviewStudyId or WorkflowScenarios.ArtifactReviewStudyV2Id)
+            || !Matches(WorkflowScenarios.ArtifactReviewQuerySql, query.Sql))
+            return UnknownSql();
+
+        var largeRows = Enumerable.Range(0, 96)
+            .Select(index => (IReadOnlyList<object?>)[index, "row-" + index.ToString("D3") + "-" + new string('x', 96)])
+            .ToArray();
+        var resultSets = new SqlHarnessResultSetReport[]
+        {
+            new([new(0, "id", "int", false), new(1, "payload", "nvarchar", false)], largeRows, 96, 0),
+            new([new(0, "assertion", "nvarchar", false), new(1, "passed", "bit", false)],
+                [["assertion: totals", true], ["assertion: candidate rows", true]], 2, 0),
+            new([new(0, "assertion", "nvarchar", false), new(1, "value", "int", false)],
+                [["assertion: final count", 4]], 1, 0),
+        };
+        return Success(new SqlHarnessQueryReport(Target(), "read-only", resultSets, [], -1, 4,
+            "fixture-query-result-hash", new OutputFootprint(0, 96)));
     }
 
     private SqlHarnessOutcome ExecuteCompare(SqlHarnessCompareOperation compare)
@@ -204,8 +289,10 @@ public sealed class WorkflowModule : ISqlHarnessModule
         var runs = new List<CompareRunArtifact>(10);
         for (var index = 0; index < 5; index++)
         {
-            runs.Add(Run("baseline", index + 1, baselineElapsed[index], shape.BaselineReads, table, baselinePlan, report.Baseline.MetricReport));
-            runs.Add(Run("candidate", index + 1, candidateElapsed[index], shape.CandidateReads, table, candidatePlan, report.Candidate.MetricReport));
+            runs.Add(Run("baseline", index + 1, baselineElapsed[index], shape.BaselineReads, table, baselinePlan, report.Baseline.MetricReport)
+                with { ExecutedSql = _scenario.BaselineSql });
+            runs.Add(Run("candidate", index + 1, candidateElapsed[index], shape.CandidateReads, table, candidatePlan, report.Candidate.MetricReport)
+                with { ExecutedSql = _scenario.CandidateSql });
         }
 
         return runs;
@@ -348,6 +435,7 @@ public sealed class WorkflowModule : ISqlHarnessModule
         return $"""
                     <StmtSimple StatementText="{escaped}">
                       <QueryPlan>
+                        <QueryTimeStats CpuTime="10" ElapsedTime="14" />
                         <RelOp NodeId="1" PhysicalOp="{physical}" LogicalOp="{physical}" EstimateRows="7" EstimatedTotalSubtreeCost="0.6">
                           {warnings}
                           <IndexScan>

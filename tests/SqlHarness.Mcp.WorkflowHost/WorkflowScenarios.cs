@@ -29,6 +29,18 @@ public static class WorkflowScenarios
     public const string UnavailableMetricsId = "unavailable-metrics";
     public const string RequestScopeId = "request-scope-mapping";
     public const string PlanPagingId = "plan-paging-513";
+    public const string ArtifactReviewStudyId = "artifact-review-study";
+    public const string ArtifactReviewStudyV2Id = "artifact-review-study-v2";
+
+    public const string ArtifactReviewBaselineSql =
+        "SELECT Id, Region FROM dbo.Orders WHERE Batch = @Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments;";
+    public const string ArtifactReviewSetupSql = "SET NOCOUNT ON;";
+    public const string ArtifactReviewCandidateV1Sql =
+        "SELECT Id, Region FROM dbo.Orders WHERE Batch = @Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments WHERE Type = 1;";
+    public const string ArtifactReviewCandidateV2Sql =
+        "SELECT Id, Region FROM dbo.Orders WHERE Batch = @Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments WHERE Type = 2;";
+    public const string ArtifactReviewQuerySql =
+        "SELECT * FROM dbo.LargeFixture; SELECT * FROM dbo.AssertionFixture; SELECT * FROM dbo.FinalAssertionFixture;";
 
     public const string NoImprovementBaselineSql =
         "SELECT Id, Name FROM dbo.Orders WHERE Region = @Region ORDER BY Id;";
@@ -62,6 +74,10 @@ public static class WorkflowScenarios
             NoImprovementBaselineSql, NoImprovementCandidateSql, null, null, null),
         new(PlanPagingId, "saved-plan-paging-513", 7706, false, "sqlserver",
             "SELECT Id FROM dbo.Orders;", "SELECT Id FROM dbo.Orders;", null, null, null),
+        new(ArtifactReviewStudyId, "artifact-review-study", 7707, false, "sqlserver",
+            ArtifactReviewBaselineSql, ArtifactReviewCandidateV1Sql, null, null, null),
+        new(ArtifactReviewStudyV2Id, "artifact-review-study", 7708, false, "sqlserver",
+            ArtifactReviewBaselineSql, ArtifactReviewCandidateV2Sql, null, null, null),
     ];
 
     public static WorkflowScenario Require(string id)
