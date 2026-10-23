@@ -46,7 +46,11 @@ public sealed class SmokeTests
 
         Assert.True(exit == 0, standardError);
         var help = Flatten(standardOutput);
-        Assert.Contains(AgentOutputLimits.CellCharactersDescription, help, StringComparison.Ordinal);
+        Assert.Contains("0..4096 chars", help, StringComparison.Ordinal);
+        Assert.Contains("default 2048", help, StringComparison.Ordinal);
+        Assert.Contains("redacted Message/Hint=max(limit,2048)", help, StringComparison.Ordinal);
+        Assert.Contains("path=limit", help, StringComparison.Ordinal);
+        Assert.Contains("byte budget applies", help, StringComparison.Ordinal);
     }
 
     [Fact]
