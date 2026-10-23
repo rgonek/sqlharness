@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: Documentation implemented and scoped checks complete; Task 3 review and Sol low whole-branch review pending.
+- Status: Documentation implemented; Task 1–3 reviews and Sol low whole-branch review approved; final scoped re-review pending after the metadata correction.
 - Priority: **P3** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: S; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -87,9 +87,19 @@ Documentation/research checks only unless executable fixtures change.
 - [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
 - [x] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
 - [x] If executable code/tests change, use focused suites and the required Windows implementation gate before claiming those changes verified. For notes-only work, diff/link/example checks are the complete scoped check; no product gate is claimed.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
+- [x] Linux verification was not run; it is not required for this documentation-only scope. No Linux pass is claimed. Re-run completed checks only for changed behavior or a concrete unresolved risk.
 - [x] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [x] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] Update this plan and the index with checked revision, scope, review outcomes and remaining limitations. Do not mark deferred live acceptance complete.
+
+## Review outcomes
+
+- Task 1: approved after the connection-timeout/load-timing correction at `63a3bc57`.
+- Task 2: approved at `176b7412` with no findings.
+- Task 3: Luna xhigh spec and quality approved at `2bc9b472`; its Minor about the Linux checkbox is corrected above.
+- Whole branch: Sol low approved at `2bc9b472`, with no Critical or Important findings; the Linux-status Minor is corrected above.
+- Final scoped re-review of this metadata correction: pending. No approval is claimed yet.
+
+Client-specific timeout/reload behavior, installed-binary and live-database outcomes, and executable regression behavior remain unverified because those runs were outside this documentation-only scope.
 
 ## STOP conditions
 
