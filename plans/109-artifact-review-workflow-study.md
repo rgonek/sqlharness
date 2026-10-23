@@ -105,4 +105,3 @@ Also stop and report a concrete mismatch if the central source assumption is fal
 Keep one authoritative home for each interface meaning: schemas/descriptions for arguments, capabilities for runtime policy, skill for user workflow. Changes to artifact models must retain legacy readers and bounded selectors. Coordinate shared ArtifactReader/projection edits with the other observation plans rather than running overlapping changes concurrently. Record rejected alternatives so the next audit does not propose the same work without new evidence.
 
 A completed plan is reviewable local work, not permission to merge, push, install or execute against an operator target.
-
