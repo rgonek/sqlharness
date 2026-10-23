@@ -30,3 +30,4 @@ The first gate was deliberately interrupted for the CLI-help correction; the nex
 - The invoked SDD workflow authorized isolated `.worktrees/plan-108`; the primary checkout's unrelated work was preserved. The cost of an unnecessary isolation choice is an extra checkout.
 
 No merge, push, installation, paid-agent trial or live database operation was performed. Linux, deployed-binary identity and live UAT remain unverified. Unchanged parameter-set selection is outside this variant contract. No measured agent-efficiency claim is made. Research-only criteria are not applicable to this implementation plan.
+The automatic policy review blocked SDD scratch removal; the ignored plan108 scratch directory is retained. This does not change the product/test tree or verification results.
