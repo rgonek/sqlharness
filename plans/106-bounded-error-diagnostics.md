@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: IN PROGRESS — Tasks 1–2 complete and reviewed; Task 3 contract and final review fixes are implemented. Focused suites and branch formatting pass on the final-fix commit; independent scoped review and controller-owned Windows gate remain pending ([final-fix evidence](106-evidence/final-fix.md)); recorded 2026-10-23.
+- Status: DONE on `plan-106` — Windows gate passed on `a5ec831f`; Luna high implementation, Luna xhigh task reviews and Sol low whole-branch/scoped reviews approved. Branch formatting passed; no merge, push, installation or live acceptance ([verification evidence](106-verification-evidence.md)); 2026-10-23.
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -65,33 +65,33 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 1: Pin failure behavior
 
-- [ ] Add synthetic connect/auth/SQL error tests with maxCellChars 0, 200, default and maximum, with actionable tails and credential sentinels spanning clipping boundaries. Assert result cells still obey the caller limit, secrets never appear, and error field floors remain within the total byte budget.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Add synthetic connect/auth/SQL error tests with maxCellChars 0, 200, default and maximum, with actionable tails and credential sentinels spanning clipping boundaries. Assert result cells still obey the caller limit, secrets never appear, and error field floors remain within the total byte budget.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 2: Implement one shared error clipping policy
 
-- [ ] Put the narrow policy beside existing Core output limits and use it in MCP and CLI renderer. Preserve independent envelope versions and error codes. Cover Hint=null, long/multibyte text, all-error oversized responses and minimum budgets. Do not change authentication retry policy.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Put the narrow policy beside existing Core output limits and use it in MCP and CLI renderer. Preserve independent envelope versions and error codes. Cover Hint=null, long/multibyte text, all-error oversized responses and minimum budgets. Do not change authentication retry policy.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 3: Update and verify the contract
 
 - [x] Update schema descriptions and docs/mcp/runtime.md to state cell vs error limits accurately; verify CLI/MCP description parity and focused output suites.
 - [x] Add a contract-description regression, observe RED before changing descriptions, and confirm GREEN.
 - [x] Save task evidence/report and inspect the scoped diff.
-- [ ] Obtain task review; controller owns direct branch formatting, full Windows gate and final review, then archive the exact tested revision.
+- [x] Obtain task review; controller owns direct branch formatting, full Windows gate and final review, then archive the exact tested revision.
 
 ## Verification and done criteria
 
 Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "McpTokenBudgetTests|AgentOutputTests"` and, for MCP tests, `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "McpTokenBudgetTests|AgentOutputTests"`. Both must exit 0 with the intended tests actually discovered; a zero-test run is not evidence.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan106-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
+- [x] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
+- [x] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan106-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
+- [x] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
+- [x] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
+- [x] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
 
 ## STOP conditions
 
@@ -105,3 +105,7 @@ Keep one authoritative home for each interface meaning: schemas/descriptions for
 
 A completed plan is reviewable local work, not permission to merge, push, install or execute against an operator target.
 
+
+## Completion notes
+
+Task 2 was a pure extraction after Task 1 established the behavior with real RED; baseline and post-extraction edge tests passed (recorded controller ruling). Research-only done criteria were assessed as nonapplicable. Linux remains unverified. Final review demonstrated a Location.Path minimum-budget defect; byte fallback now shortens/omits optional paths with truthful truncation while preserving the normal caller cap. All final findings and gate remediation are closed; see the linked evidence.

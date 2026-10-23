@@ -6,7 +6,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
-| [106](106-bounded-error-diagnostics.md) | Keep actionable error messages and hints readable under small result-cell limits | Tasks 1–2 reviewed on `2c0d9b36` | IN PROGRESS — Task 3 contract and final fixes implemented; focused suites and branch format green; scoped review and controller Windows gate pending ([evidence](106-evidence/final-fix.md)) |
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 
@@ -42,6 +41,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [106](106-bounded-error-diagnostics.md) | Bounded actionable error diagnostics independent of result-cell caps | DONE on `plan-106`; Windows gate passed on `a5ec831f`, branch formatting and all Luna xhigh/Sol low reviews approved; not merged or pushed ([evidence](106-verification-evidence.md)) |
 | [097](097-singleton-parameter-batches.md) | Named/file/matrix singleton batches with separate 32+1 operation identity | DONE on `plan-097`; task and Sol low whole-branch reviews approved; Windows gate and correct-base branch format passed on `aea93d6`; locally integrated into `main` at `3563283`, verified product unchanged; not pushed ([evidence](097-verification-evidence.md)) |
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | DONE; locally integrated into `main` at `d4e018c`; all reviews approved; verified product/test code unchanged; not pushed ([evidence](096-verification-evidence.md)) |
 | [101](101-dashboard-operation-annotations-setting.md) | Dashboard agent operation annotation toggle with atomic journal saves and restart guidance | DONE; locally integrated into `main` at `61ca7a4`; reviewed and Windows-verified product `13fb02e` unchanged; not pushed ([evidence](101-verification-evidence.md)) |

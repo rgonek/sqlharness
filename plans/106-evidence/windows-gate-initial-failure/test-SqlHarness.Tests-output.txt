@@ -1,0 +1,53 @@
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+Test run for C:\Users\rgone\.codex\worktrees\39fb\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:09.63]     SqlHarness.Tests.Dashboard.DashboardLockTests.Publish_replaces_a_leftover_temp_file_and_stays_owner_only_on_unix [SKIP]
+  Skipped SqlHarness.Tests.Dashboard.DashboardLockTests.Publish_replaces_a_leftover_temp_file_and_stays_owner_only_on_unix [1 ms]
+[xUnit.net 00:00:10.49]     SqlHarness.Tests.Dashboard.DashboardLockTests.Info_file_is_owner_only_on_unix [SKIP]
+  Skipped SqlHarness.Tests.Dashboard.DashboardLockTests.Info_file_is_owner_only_on_unix [1 ms]
+[xUnit.net 00:00:10.71]     SqlHarness.Tests.Dashboard.DashboardLockTests.Lock_file_and_home_are_owner_only_on_unix [SKIP]
+  Skipped SqlHarness.Tests.Dashboard.DashboardLockTests.Lock_file_and_home_are_owner_only_on_unix [1 ms]
+[xUnit.net 00:00:19.14]     SqlHarness.Tests.Journal.ActivityJournalTests.Database_and_directory_are_owner_only_on_unix [SKIP]
+  Skipped SqlHarness.Tests.Journal.ActivityJournalTests.Database_and_directory_are_owner_only_on_unix [1 ms]
+  Failed SqlHarness.Tests.Auth.ProcessRunnerTests.PidPublicationError_RetriesErrorMarkerAfterTransientSharingViolation [29 s]
+  Error Message:
+   Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(System.InvalidOperationException)
+Actual:   typeof(System.TimeoutException)
+---- System.TimeoutException : Process tree did not publish both process ids after 480 attempts.
+Pid file: 1 line(s): 32064.
+Publisher task: RanToCompletion (exit code 1).
+Child stderr:
+  Stack Trace:
+     at SqlHarness.Tests.Auth.ProcessRunnerTests.PidPublicationError_RetriesErrorMarkerAfterTransientSharingViolation() in C:\Users\rgone\.codex\worktrees\39fb\sqlharness\tests\SqlHarness.Tests\Auth\ProcessRunnerTests.cs:line 205
+   at SqlHarness.Tests.Auth.ProcessRunnerTests.PidPublicationError_RetriesErrorMarkerAfterTransientSharingViolation() in C:\Users\rgone\.codex\worktrees\39fb\sqlharness\tests\SqlHarness.Tests\Auth\ProcessRunnerTests.cs:line 213
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at SqlHarness.Tests.Auth.ProcessRunnerTests.WaitForPidsAsync(String path, String childStandardErrorPath, Task`1 run) in C:\Users\rgone\.codex\worktrees\39fb\sqlharness\tests\SqlHarness.Tests\Auth\ProcessRunnerTests.cs:line 461
+  Failed SqlHarness.Tests.SmokeTests.Query_help_explains_error_text_cell_limit [1 s]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "DESCRIPTION: Run a bounded SQL query pass"···
+Not found: "0..4096 chars, default 2048; redacted Mes"···
+  Stack Trace:
+     at SqlHarness.Tests.SmokeTests.Query_help_explains_error_text_cell_limit() in C:\Users\rgone\.codex\worktrees\39fb\sqlharness\tests\SqlHarness.Tests\SmokeTests.cs:line 49
+--- End of stack trace from previous location ---
+[xUnit.net 00:03:56.95]     SqlHarness.Tests.Cli.DoctorHomeModeTests.Doctor_warns_when_an_existing_home_is_broad [SKIP]
+[xUnit.net 00:03:56.95]     SqlHarness.Tests.Cli.DoctorHomeModeTests.Does_not_warn_about_a_private_home [SKIP]
+  Skipped SqlHarness.Tests.Cli.DoctorHomeModeTests.Doctor_warns_when_an_existing_home_is_broad [1 ms]
+  Skipped SqlHarness.Tests.Cli.DoctorHomeModeTests.Does_not_warn_about_a_private_home [1 ms]
+[xUnit.net 00:04:06.75]     SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_leaves_an_existing_broad_home_unchanged [SKIP]
+[xUnit.net 00:04:06.75]     SqlHarness.Tests.HomeDirectoryTests.HomeMode_reports_the_existing_home_mode [SKIP]
+[xUnit.net 00:04:06.75]     SqlHarness.Tests.HomeDirectoryTests.A_writer_creates_the_home_owner_only [SKIP]
+[xUnit.net 00:04:06.75]     SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_ignores_paths_outside_the_home [SKIP]
+[xUnit.net 00:04:06.75]     SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_creates_a_fresh_home_owner_only [SKIP]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_leaves_an_existing_broad_home_unchanged [1 ms]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.HomeMode_reports_the_existing_home_mode [1 ms]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.A_writer_creates_the_home_owner_only [1 ms]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_ignores_paths_outside_the_home [1 ms]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_creates_a_fresh_home_owner_only [1 ms]
+
+Failed!  - Failed:     2, Passed:  4659, Skipped:    11, Total:  4672, Duration: 4 m 9 s - SqlHarness.Tests.dll (net10.0)
+[xUnit.net 00:00:46.49]     SqlHarness.Tests.Auth.ProcessRunnerTests.PidPublicationError_RetriesErrorMarkerAfterTransientSharingViolation [FAIL]
+[xUnit.net 00:01:14.36]     SqlHarness.Tests.SmokeTests.Query_help_explains_error_text_cell_limit [FAIL]
+==> test project: tests/SqlHarness.Tests/SqlHarness.Tests.csproj exit 1
