@@ -110,7 +110,8 @@ public sealed class McpParameterBatchTests
         var directory = Path.Combine(SqlHarnessPaths.CompareDir, id);
         Directory.CreateDirectory(directory);
         var manifest = new ArtifactManifest(ArtifactReader.CurrentManifestVersion, ArtifactReader.CompareKind,
-            ArtifactReader.ReportFileName, ["statements"]) { Owner = served.Owner };
+            ArtifactReader.ReportFileName, ["statements"])
+        { Owner = served.Owner };
         File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         File.WriteAllText(Path.Combine(directory, ArtifactReader.ReportFileName), "{}");
         var hidden = Enumerable.Range(0, 16).Select(index => new ArtifactHiddenWork(

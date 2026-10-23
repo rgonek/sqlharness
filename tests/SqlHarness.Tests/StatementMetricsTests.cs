@@ -277,7 +277,7 @@ public sealed class StatementMetricsTests
     public void Compact_statement_evidence_scopes_omissions_to_the_affected_case()
     {
         var plan = JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1);
-        CompareRunArtifact Run(string variant, int repetition, IReadOnlyList<string> plans) => new(
+        static CompareRunArtifact Run(string variant, int repetition, IReadOnlyList<string> plans) => new(
             variant, repetition, 0, 1, 0, new Dictionary<string, long>(), "result", plans, 1)
         {
             TableIo = [new TableIoCounters("[@P]", 0, 0, 0, 0, 0, 0, 0, 0)],
