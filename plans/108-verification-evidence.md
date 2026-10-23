@@ -1,13 +1,32 @@
 # Plan 108 verification evidence
 
-Branch `plan-108`, base `6d543e509734a374caf882bc8c05ffe5ccaa98b2`; product/test revision `753193a935f4b86bf20a552bd564af797435420c`.
+IMPLEMENTATION COMPLETE on local branch `plan-108`. Base: `6d543e509734a374caf882bc8c05ffe5ccaa98b2`. Tested final product/test revision: `50adf82d649fee860735937225eedad238878e0c`. Subsequent changes only archive evidence and update documentation/status.
 
-The shared reader defaults omitted/empty plan variants only for measure and measure-set after manifest/owner validation. Compare still requires an explicit side. Invalid nonempty values retain Safety rejection and now name accepted variants. Both served descriptions and artifact docs were updated.
+The shared reader defaults omitted/empty plan variants to `query` only for measure and measure-set, after manifest/owner validation. Compare requires an explicit side. Invalid nonempty values retain Safety rejection and name accepted variants. Both MCP descriptions, CLI help, README and artifact docs reflect the selection rule.
 
-- Task 1: Luna high implementation `8bc2c753`; Luna xhigh spec/quality approved. RED 2 failed/72 passed; GREEN 74 passed. See [report](108-evidence/task-1-report.md) and [review](108-evidence/task-1-review.md).
-- Task 2: Luna high implementation `1f811ecb`; Luna xhigh spec/quality approved. RED 6 failed/71 passed; GREEN 77 passed. Minor kind-label assertion addressed in Task 3. See [report](108-evidence/task-2-report.md) and [review](108-evidence/task-2-review.md).
-- Task 3: Luna high implementation `9a10fbf6`; Luna xhigh spec/quality approved. Real in-memory MCP omission regression RED 1 failed, GREEN 1 passed; required focused Core/CLI 87 passed and MCP 46 passed. See [report](108-evidence/task-3-report.md), [review](108-evidence/task-3-review.md), and [scoped re-review](108-evidence/task-3-rereview.md).
-- Formatting: initial check rejected final newlines in five C# files; whitespace-only fix `753193a9` passed the formatter. A separate non-mutating branch check and the full Windows gate are currently running; this document does not claim their success yet.
-- Whole-branch Sol low review is pending.
+## Verification
 
-No merge, push, installation, paid-agent trial or live database operation was performed. Linux and live UAT remain unverified. No measured agent efficiency claim is made. Initial npm dependency advisories and Vite chunk-size warning predate the task; dependencies were not changed.
+- `just verify -LogDirectory D:/temp/sqlharness-plan108-final-verify`: exit **0**, `verify: OK`, 12m35s. [Summary](108-evidence/windows-gate.log), [raw logs](108-evidence/windows-final/build.log).
+- UI: 64 test files, **372 passed**; Core/CLI: **4660 passed, 11 skipped**; MCP: **508 passed, 4 skipped**. [UI](108-evidence/windows-final/ui-check.log), [Core/CLI](108-evidence/windows-final/test-SqlHarness.Tests.log), [MCP](108-evidence/windows-final/test-SqlHarness.Mcp.Tests.log).
+- `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 6d543e509734a374caf882bc8c05ffe5ccaa98b2`: exit **0**, six changed C# files, `format: OK`. [Direct output](108-evidence/branch-format-budget-fix.log). The gate skipped formatting because the files were already committed; this separate branch check covers them.
+- Required focused runs: **87/87** Core/CLI and **46/46** MCP. Offline real-MCP omission regression: expected RED **1 failed**, restored GREEN **1 passed**. [Task 3 report](108-evidence/task-3-report.md).
+- Budget-regression repair: existing schema/token tests passed **109/109**, including request-scope annotation-enabled tools/list within the unchanged 32768-byte ceiling. [Task 2 follow-up](108-evidence/task-2-report.md).
+- Final documentation checks: relative Markdown links and `git diff --check`; no skill frontmatter changed.
+
+## Reviews and corrections
+
+Luna high implemented all three tasks; Luna xhigh approved spec compliance and quality for each. [Task 1](108-evidence/task-1-review.md), [Task 2](108-evidence/task-2-review.md), [Task 3](108-evidence/task-3-review.md).
+
+The initial formatter rejected five final-newline differences; whitespace-only fix `753193a9` was independently re-reviewed. The whole-branch Sol low review found one Minor in CLI help/README, fixed in `3dc11e47` and approved in scoped re-review. A subsequent full-gate failure exposed request-scope tools/list at 32816 bytes. Descriptions were shortened in `50adf82d` without raising limits; Luna xhigh approved the fix and Sol low reaffirmed whole-branch approval for that revision. No findings remain open or parked.
+
+[Whole-branch review](108-evidence/whole-branch-review.md), [final scoped review and addendum](108-evidence/final-scoped-review.md), [budget re-review](108-evidence/task-2-budget-rereview.md), [ledger](108-evidence/sdd-ledger.md).
+
+The first gate was deliberately interrupted for the CLI-help correction; the next failed its budget assertion. Both remain archived as interrupted/failed evidence, not successful validation. The final gate above supersedes them. npm dependency advisories, the Vite size warning and the Node child-process deprecation warning were recorded; dependencies and unrelated infrastructure were not changed.
+
+## Decisions and boundaries
+
+- Task 1 owned minimal defaulting to reach GREEN; Task 2 owned diagnostic wording/descriptions. This avoids duplicate normalization work; the risk is task-boundary rework, not a changed contract.
+- Task 3 demonstrated RED through a temporary reversal of defaulting, restored before GREEN/commit. This avoids unrelated production edits solely for repeated TDD boilerplate; the risk is needing additional evidence.
+- The invoked SDD workflow authorized isolated `.worktrees/plan-108`; the primary checkout's unrelated work was preserved. The cost of an unnecessary isolation choice is an extra checkout.
+
+No merge, push, installation, paid-agent trial or live database operation was performed. Linux, deployed-binary identity and live UAT remain unverified. Unchanged parameter-set selection is outside this variant contract. No measured agent-efficiency claim is made. Research-only criteria are not applicable to this implementation plan.

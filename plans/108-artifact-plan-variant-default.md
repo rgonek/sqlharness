@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: IMPLEMENTED on `plan-108`; task reviews approved; Windows gate and whole-branch review pending. See [evidence](108-verification-evidence.md).
+- Status: DONE on `plan-108`; product/test `50adf82d`, Windows gate and branch format passed, all Luna xhigh task reviews and Sol low whole-branch/scoped reviews approved. Not merged or pushed. See [evidence](108-verification-evidence.md).
 - Priority: **P3** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: S; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -66,32 +66,32 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 1: Test artifact-kind selection
 
-- [ ] Add fixtures for measure and measure-set without variant, explicit query, compare without variant, invalid casing/nonempty variant, and selectors on non-plan sections. Assert the default has identical identity/repetition/statement/set semantics to explicit query.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Add fixtures for measure and measure-set without variant, explicit query, compare without variant, invalid casing/nonempty variant, and selectors on non-plan sections. Assert the default has identical identity/repetition/statement/set semantics to explicit query.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 2: Normalize after manifest validation
 
-- [ ] Resolve the unique variant in ArtifactReader after artifact kind/owner validation so CLI and MCP share semantics; keep ambiguity rejection for compare. Update both served tool descriptions and docs/mcp/artifacts.md. Do not default variant before knowing artifact kind.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Resolve the unique variant in ArtifactReader after artifact kind/owner validation so CLI and MCP share semantics; keep ambiguity rejection for compare. Update both served tool descriptions and docs/mcp/artifacts.md. Do not default variant before knowing artifact kind.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 3: Verify bounded errors and compatibility
 
-- [ ] Run focused tests covering scope mismatch, absent saved plans, invalid selectors and minimum budgets. Add an offline MCP request omitting variant; assert success only for measure kinds. Obtain review and Windows gate evidence.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Run focused tests covering scope mismatch, absent saved plans, invalid selectors and minimum budgets. Add an offline MCP request omitting variant; assert success only for measure kinds. Obtain review and Windows gate evidence.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ## Verification and done criteria
 
 Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "ArtifactReaderTests|ArtifactCommandTests|McpTokenBudgetTests"` and, for MCP tests, `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "ArtifactReaderTests|ArtifactCommandTests|McpTokenBudgetTests"`. Both must exit 0 with the intended tests actually discovered; a zero-test run is not evidence.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan108-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
+- [x] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
+- [x] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan108-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
+- [x] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
+- [x] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
+- [x] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
 
 ## STOP conditions
 
@@ -104,4 +104,3 @@ Also stop and report a concrete mismatch if the central source assumption is fal
 Keep one authoritative home for each interface meaning: schemas/descriptions for arguments, capabilities for runtime policy, skill for user workflow. Changes to artifact models must retain legacy readers and bounded selectors. Coordinate shared ArtifactReader/projection edits with the other observation plans rather than running overlapping changes concurrently. Record rejected alternatives so the next audit does not propose the same work without new evidence.
 
 A completed plan is reviewable local work, not permission to merge, push, install or execute against an operator target.
-

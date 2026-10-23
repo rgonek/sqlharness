@@ -22,3 +22,11 @@ Added artifact-kind-specific invalid plan variant messages in the shared `Artifa
 ## Concerns
 
 No task-scope or correctness concern identified. Offline request-level MCP omission coverage and the full gate remain for Task 3/controller.
+
+## Gate regression follow-up
+
+Shortened both served `variant` descriptions to `measure/set default to query; compare needs baseline/candidate.` (63 ASCII characters each). This retains the measure and measure-set `query` default and the compare baseline/candidate requirement while reducing request-schema size.
+
+- Prior full-gate failure: request-scope annotation-enabled `tools/list` was 32,816 bytes against the 32,768-byte ceiling; the same test reported locked-scope tools/list at 32,373 bytes.
+- Focused verification: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-restore --filter "FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpTokenBudgetTests"` — exit 0, 109 passed, 0 failed, 0 skipped. The schema test passed its request-scope tools/list `<= 32,768` assertion. It prints the locked-scope exact size (32,373) but does not print the request-scope exact size.
+- No full gate or formatter run; controller owns those checks.

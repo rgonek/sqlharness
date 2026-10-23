@@ -28,4 +28,3 @@ None.
 **Task quality:** Approved
 
 **Reasoning:** The narrow reader change implements the required empty mapped-variant default, and the added tests exercise its observable selection semantics and rejection boundaries. The reported focused evidence is clear; no broader gate is required for this task review.
-
