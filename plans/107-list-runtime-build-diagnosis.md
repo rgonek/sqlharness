@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: DIAGNOSIS COMPLETE — known-source compare failures confirmed; follow-up implementation and historical deployment attribution remain open. Task 3 docs-only closeout recorded 2026-10-23. Tested source/focused-test evidence is in [Task 3 diagnosis](107-evidence/task-3-diagnosis.md); Windows gate evidence is recorded after final verification.
+- Status: DIAGNOSIS COMPLETE — known-source compare failures confirmed; follow-up implementation and historical deployment attribution remain open. Task 3 docs-only closeout recorded 2026-10-23. Windows `just verify` passed on `19035a07f16f04e77977ab5f1f15ecc01090ca21`; results and nonempty stage logs are in [the Task 3 diagnosis](107-evidence/task-3-diagnosis.md) and [gate evidence](107-evidence/windows-gate-20261023-task3/).
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
