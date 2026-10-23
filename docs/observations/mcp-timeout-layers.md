@@ -49,3 +49,37 @@ Before deciding, collect comparable cases from other clients and verify their re
 behavior. A future documentation check should use synthetic examples for all three
 limits and avoid attributing a recovery to a configuration change without evidence.
 This entry authorizes no implementation, automatic retries, installation or publication.
+
+## Follow-up 2026-10-23 - execution-dominant records
+
+Recorded against repository HEAD `fdc161d1`. Status: collecting observations, not approved for
+implementation. The original observation above remains unchanged.
+
+One investigation comparison returned `sql_execution_failed` with an execution-timeout message and
+failed transaction cleanup; the connection was discarded. After the operator explicitly resumed,
+a comparison with a larger SQL timeout completed. That later success does not establish the cause
+of the earlier timeout or prove that changing the timeout was the reason for recovery.
+
+The retrospective inspected existing phase aggregates and event summaries for the failed comparison
+and two selected successful comparisons, through bounded read-only journal access. The timeout was
+execution-dominant and had a successful connection event. Execution also dominated the selected
+successful comparisons; artifact and other phases were recorded separately. The list-validation
+rejection had only other-phase coverage and no connection events.
+
+This localizes delay to execution in those records; it does not distinguish SQL plan quality,
+server load, authentication, network or client behavior as the underlying cause. Detailed connection
+payloads were not read because the phase aggregates and successful connection summaries did not
+warrant a connection-cause diagnosis. Current capture settings were not used as proof of historical
+capture. No raw event export, operation/connection identity, timestamp or workload timing is retained
+in this record. No live SQL was rerun during the retro.
+
+Classification: diagnostic observation with unresolved cause, not a demonstrated timeout-policy
+or infrastructure defect. Confidence is high in the available phase patterns, limited for causality.
+[Plan 068](../../plans/068-operation-phase-timings-and-diagnostics.md) owns phase/event diagnostics;
+[plan 092](../../plans/092-default-execution-timeout-setting.md) owns the default timeout setting.
+Their local source status does not identify the installed build used earlier.
+
+Cheapest next check: correlate the already retained execution phases with saved statement evidence
+before considering new diagnostics. Further attribution needs evidence that the existing records do
+not provide. No automatic retry, timeout increase, dashboard action or installation is proposed.
+See the [report entry](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-23---multi-scope-read-batch-candidate-and-changing-evidence-coverage).

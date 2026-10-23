@@ -59,6 +59,7 @@ the tool. Keep workload values out.
 | 2026-10-20 sync-range batch with lookup join (unmapped) | optimization | reject | 1 | pre-measurement source context, case x metric table (baseline only), read-attribution explanation, rejected candidates (1 measured, 2 reasoned), unmeasured out-of-SQL lever, unexplained telemetry gap, evidence links | ~9 / ~22 | yes (selection via historical telemetry plus source match, index and join-shape rejection by reasoning, stopping decision) | 2 (overstated text match; inference presented as measurement) | external context; explicit measured vs inferred labeling; no API decision |
 | 2026-10-20 multi-statement read batch, function replaced by ranked CTE (unmapped) | optimization | adopt (proposed, not applied) | 1 | pre-measurement source context with parameter type table, bottleneck explanation, change description, case x metric table (before → after, equality), plan check, limits and uncovered branches, question for a human | ~15 / ~20 | yes (source context, equivalence reasoning for branches without data, untrusted-constraint risk) | 3 clarifications (overstated review coverage x2; unlabeled hypothesis) | external context; explicit review coverage; tool-known hidden work not on agent path; no API decision |
 | 2026-10-20 static-list aggregation (unmapped) | optimization | adopt (proposed, not applied) | 1 | source context, variant x metric table, equality, plans, limits, evidence links | ~7 / ~10 | yes (source applicability, callers, rewrite rationale, deferral) | 1 clarification; 1 interim metadata revision | external context and review coverage; no API decision |
+| 2026-10-23 multi-scope read-batch candidate (unmapped) | optimization | partial | 5 | scope x outcome table, exception list, metric trade-offs, equivalence, limits, evidence links | not recorded (derived metrics; exact statement audit not recorded) | yes (source applicability, sampling limits, adoption decision) | not recorded; parameter correction and coverage-driven outcome revisions identified | preserve outcome history and evidence scope; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -840,3 +841,65 @@ Recorded against repository HEAD `6f39a292`. Status: collecting observations, no
   follow-up](../../observations/plan-memory-and-compilation-evidence.md#follow-up-2026-10-20--static-list-aggregation).
   Should later synthesis distinguish interim metadata revisions from corrections to a delivered
   final report? Cheapest check: compare this entry with the existing template; no new benchmark.
+
+### 2026-10-23 - multi-scope read-batch candidate and changing evidence coverage
+
+Recorded against repository HEAD `fdc161d1`. Status: collecting observations, not approved for implementation.
+
+`Kind:` optimization · `Outcome:` partial · `Scopes:` 5 · `System label:` unmapped.
+
+- **Actual report:** The final chat report summarized a broadened comparison in a scope x outcome
+  table, distinguishing lower, unchanged and higher logical reads. It listed exceptions, stated
+  observed result/duplicate/nullability equivalence, separated CPU and elapsed improvements from
+  read regressions, retained spill limitations and linked private evidence. It did not claim an
+  adopted product change. Earlier reports covered smaller samples and a narrower candidate history.
+- **Report blocks:** scope x outcome table; exception list; metric trade-offs; result equivalence;
+  limits; evidence links; no product changes. No human question in the final investigation report.
+- **Evidence and interpretation:** Compare operations supplied repeated distributions and strict
+  multiset/nullability outcomes. Query rows supplied target confirmation, configuration and case
+  selection. Saved plan nodes supported explanations of repeated lookups; an independent two-way
+  EXCEPT checked intermediate logical rows. The applicability of the SQL, candidate construction,
+  sampling limits and decision not to adopt were authored from source and agent reasoning, rather
+  than supplied as a journal report. A later larger sample changed the conclusion; it did not
+  invalidate the earlier explicitly scoped measurements.
+- **Content provenance:** Numeric outcome cells and exception percentages were derived from
+  journal-backed comparisons, with aggregation in private local scripts and transcription into
+  chat. Exact numeric/prose statement counts: not recorded. Direct query-row claims in the final
+  report: not recorded separately; configuration influenced its scope. Plan interpretation and
+  source applicability are external context, and the adoption decision has no journal operation.
+- **Corrections:** Complete count across interim and final messages: not recorded. Identified
+  revisions include correcting an assumed visibility window using configuration, rejecting an
+  initially promising shape after a second case regressed, and narrowing another candidate's
+  conclusion after broader coverage. These coverage-driven revisions are distinct from a false
+  metric or an installed-tool defect. A later retro clarification separates reproduced runtime
+  list failures from the implementation already present in HEAD; installed-build identity remains
+  unverified. An internal summary-count mistake was corrected before delivery and is not a
+  correction to a delivered report.
+- **Dashboard usefulness:** Retain the tested candidate identity, case coverage, conditional outcome,
+  exception list, policy verdicts, review limits and earlier conclusions with their evidence scope.
+  Dashboard use and actual reconstruction benefit: not recorded. A journal-only rendering would
+  omit source applicability and the authored adoption decision.
+- **Observed workflow cost:** Retained investigation journal coverage: 112 operations (50 artifact,
+  48 compare, 2 measure, 12 query). This includes one failed compare, two rejected compares and one
+  rejected measure. Capabilities/catalog and one pre-journal file rejection are outside this count.
+  The cost and agent-slip interpretation is recorded in [artifact review cost](../../observations/artifact-review-workflow-cost.md).
+- **Cost coverage:** Recorded output counters were inspected; input/discovery overhead, repository
+  reads, orchestration, final prose and whole-workflow cost were not measured. Retro adds two
+  synthetic offline dry runs, three bounded read-only journal invocations and source reads; exact
+  retro discovery/read token cost is not recorded. No live SQL was rerun for this retro and no
+  modeled replacement or token-saving claim is made.
+- **Diagnostic qualification:** A bounded review of the timeout and selected successful operations
+  found execution-dominant phase aggregates and successful connection events. This localizes work,
+  not its cause; see the [timeout follow-up](../../observations/mcp-timeout-layers.md#follow-up-2026-10-23---execution-dominant-records).
+  Full plan hierarchies were not reviewed for every case; grants and compilation were not fully
+  audited. Complete tree retrieval is not full performance-evidence review.
+- **Optional API implications:** Preserve outcome history and explicit evidence coverage alongside
+  metrics. Whether one report API can express that history remains a synthesis question; no API
+  readiness, implementation decision or savings conclusion follows.
+- **Related coverage and cheapest next check:** Compare this entry with the earlier limited-sample
+  reports and existing collection template; do not infer universal acceptance from a few successful
+  cases. See [runtime list divergence](../../observations/list-parameter-runtime-divergence.md),
+  [review cost](../../observations/artifact-review-workflow-cost.md) and the existing
+  [memory/compilation observation](../../observations/plan-memory-and-compilation-evidence.md).
+- **Operator decision:** Record the four accepted observations, commit and push documentation only.
+  No plan, implementation, skill modification, installation or private-evidence publication approved.
