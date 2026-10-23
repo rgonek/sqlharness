@@ -31,3 +31,11 @@ The first gate was deliberately interrupted for the CLI-help correction; the nex
 
 No merge, push, installation, paid-agent trial or live database operation was performed. Linux, deployed-binary identity and live UAT remain unverified. Unchanged parameter-set selection is outside this variant contract. No measured agent-efficiency claim is made. Research-only criteria are not applicable to this implementation plan.
 The automatic policy review blocked SDD scratch removal; the ignored plan108 scratch directory is retained. This does not change the product/test tree or verification results.
+
+## Verified integration with current main
+
+The user authorized local integration only. Current `main` was `e66e76bc`, including Plans 103, 107 and 110. Luna high merged it into Plan 108 at `fb20489855894ad65ddb8d23af5449acb2dd5161`, resolving documentation conflicts while preserving both intents. Sol low approved the integration without findings; [implementation report](108-evidence/integration/integration-report.md) and [review](108-evidence/integration/integration-review.md).
+
+The exact combined product/test tree at `fb204898` passed the Windows gate: `just verify -LogDirectory D:/temp/sqlharness-plan108-integration-verify`, exit 0, 8m49s. UI: 372 passed; Core/CLI: 4679 passed, 11 skipped; MCP: 512 passed, 4 skipped. Separate branch formatting against `e66e76bc` passed for six C# files. [Gate summary](108-evidence/integration/windows-gate.log), [format](108-evidence/integration/branch-format.log), [Core/CLI](108-evidence/integration/windows-final/test-SqlHarness.Tests.log), [MCP](108-evidence/integration/windows-final/test-SqlHarness.Mcp.Tests.log).
+
+Focused integration checks passed 83 reader tests and 109 MCP schema/token-budget tests. Subsequent evidence/status changes are documentation only. The verified integration is ready for local main transfer; no push is authorized.
