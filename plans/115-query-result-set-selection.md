@@ -4,7 +4,7 @@
 
 ## Evidence and goal
 
-Plan 109's deterministic projection retained the success status, target database, query hash, source result-set count, original ordinals and both assertion result sets in 646 UTF-8 bytes. The existing query response for the same fixture used 11,469 bytes because it also included an unrelated 96-row first set and envelope detail. This is a 10,823-byte (94.4%) reduction for that assertion check only. See [decision evidence](109-evidence/task-3-decision.md) and [reproduction record](109-evidence/task-3-reproduction.md).
+Plan 109's offline synthetic study estimated a 94.4% reduction in its test-only projections: 646 UTF-8 bytes for the selected assertion result sets and retained status, target database, query hash, source result-set count and original ordinals, versus 11,469 bytes for the existing query response to the same fixture. The larger projection also included an unrelated 96-row first set and envelope detail. This is not an estimate of complete API savings: the future response schema and MCP envelope add fields. Before making a savings claim, compare complete bounded task responses as required by the final evaluation below. See [decision evidence](109-evidence/task-3-decision.md) and [reproduction record](109-evidence/task-3-reproduction.md).
 
 Allow a caller to retrieve selected result sets from the already executed query response. This is an output-selection feature; it does not promise less SQL execution or row materialization.
 

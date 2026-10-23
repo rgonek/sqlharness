@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: RESEARCH COMPLETE. Windows `just verify` passed on executable revision `f6044c8` (docs had advanced to `56f4cd4` during the run); branch formatting passed after whitespace-only commit `14a0c7a`. Linux and live acceptance remain unverified.
+- Status: RESEARCH COMPLETE. Windows `just verify` passed on executable revision `f6044c8` (docs had advanced to `56f4cd4` during the run); branch formatting passed after whitespace-only commit `14a0c7a`. Sol low whole-branch review approved `a8d7914`; its three Minor documentation findings are corrected. The final scoped Sol review of those corrections is pending. Linux and live acceptance remain unverified ([verification evidence](109-verification-evidence.md)).
 - Priority: **P3** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.

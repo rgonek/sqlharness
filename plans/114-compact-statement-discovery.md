@@ -4,7 +4,7 @@
 
 ## Evidence and goal
 
-Plan 109's offline synthetic study measured 9,781 UTF-8 bytes for 32 compact statement records versus 14,168 bytes for equivalent CPU/elapsed discovery from the current statements output, a reduction of 4,387 bytes (31.0%). The compact projection preserves artifact, variant, parameter set, statement ordinal/hash, CPU and elapsed. It omits top operators and other statement metrics. See [decision evidence](109-evidence/task-3-decision.md) and [reproduction record](109-evidence/task-3-reproduction.md).
+Plan 109's offline synthetic study estimated a 31.0% reduction in its test-only projections: 9,781 UTF-8 bytes for 32 compact statement records versus 14,168 bytes for equivalent CPU/elapsed discovery from the current statements output. The compact projection preserves artifact, variant, parameter set, statement ordinal/hash, CPU and elapsed. It omits top operators and other statement metrics. This is not an estimate of complete API savings: the future response schema and MCP envelope add fields. Before making a savings claim, compare complete bounded task responses as required by the final evaluation below. See [decision evidence](109-evidence/task-3-decision.md) and [reproduction record](109-evidence/task-3-reproduction.md).
 
 Add an opt-in saved-artifact read for per-statement CPU/elapsed discovery without operator summaries. Keep exact saved-artifact evidence available through the current `statements` and `plan` reads.
 
