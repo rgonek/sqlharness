@@ -11,6 +11,8 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 
 ## Pending
 
+Plan [104](104-stable-local-object-io-aggregation.md): **BLOCKED at preflight** — existing name normalization loses the distinction required by its positive-classification contract; Luna xhigh review confirms the STOP condition. No product changes. See [evidence](104-evidence/preflight-review.md).
+
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
