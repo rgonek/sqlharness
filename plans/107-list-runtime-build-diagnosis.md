@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TODO — diagnostic; recorded 2026-10-23.
+- Status: DIAGNOSIS COMPLETE — known-source compare failures confirmed; follow-up implementation and historical deployment attribution remain open. Task 3 docs-only closeout recorded 2026-10-23. Tested source/focused-test evidence is in [Task 3 diagnosis](107-evidence/task-3-diagnosis.md); Windows gate evidence is recorded after final verification.
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -68,32 +68,32 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 1: Establish evidence and build identity
 
-- [ ] Record HEAD, candidate executable path/hash/version/buildId and any already available process-start evidence. Do not dump configs or credentials. A PATH executable is not proof of the process loaded by an existing client; label unresolved identity honestly. Reuse retained synthetic request shapes; no historical workload replay.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Record HEAD, candidate executable path/hash/version/buildId and any already available process-start evidence. Do not dump configs or credentials. A PATH executable is not proof of the process loaded by an existing client; label unresolved identity honestly. Reuse retained synthetic request shapes; no historical workload replay.
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
+- [x] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
 
 ### Task 2: Compare exact offline request paths
 
-- [ ] Run known-source isolated test-host MCP dry runs for identical baseline/candidate SQL, one named set with one int list value, no scalar parameters, using both IN @Ids and IN (@Ids). Add singleton/multi-value/empty-list cases, multiple sets, setup reuse and a genuine caller-supplied @Ids1 collision which must remain rejected. Compare Core and real-SDK MCP paths, with connection attempts asserted zero.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Run known-source isolated test-host MCP dry runs for identical baseline/candidate SQL, one named set with one int list value, no scalar parameters, using both IN @Ids and IN (@Ids). Add singleton/multi-value/empty-list cases, multiple sets, setup reuse and a genuine caller-supplied @Ids1 collision which must remain rejected. Compare Core and real-SDK MCP paths, with connection attempts asserted zero.
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
+- [x] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
 
 ### Task 3: Publish a bounded diagnosis
 
-- [ ] Save requests without private targets, outcomes, source/build identity confidence and focused-test logs under plans/107-evidence/. If no failing current-source path exists, close diagnosis with the unresolved deployment check explicitly assigned, not a fictitious product fix. If tests are added, obtain review and Windows verification before claiming implementation completion; a notes-only result uses scoped docs checks.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Save requests without private targets, outcomes, source/build identity confidence and focused-test logs under plans/107-evidence/. Known-source failures are present; source correction is assigned to the narrow implementation follow-up, and historical deployment attribution remains assigned as an unresolved check. No tests or production behavior changed in Task 3.
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
+- [x] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
 
 ## Verification and done criteria
 
 Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "CompareTests|ListParameterExpanderTests|McpParameterBatchTests"` and, for MCP tests, `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "CompareTests|ListParameterExpanderTests|McpParameterBatchTests"`. Both must exit 0 with the intended tests actually discovered; a zero-test run is not evidence.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] If executable code/tests change, use focused suites and the required Windows implementation gate before claiming those changes verified. For notes-only work, diff/link/example checks are the complete scoped check; no product gate is claimed.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
+- [x] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
+- [x] No executable code/tests changed in Task 3; scoped documentation checks were used. Earlier focused suite evidence is recorded and is not presented as proof of a fixed product behavior.
+- [x] Linux remains unverified. No completed check was rerun without a changed behavior or concrete unresolved risk.
+- [x] Diagnosis evidence includes confirmed rejection outcomes and explicitly unknown source/deployment causes.
+- [x] Updated this plan and the index with tested source, scope, review-focus outcomes and remaining limitations. Historical deployment attribution remains deferred.
 
 ## STOP conditions
 
