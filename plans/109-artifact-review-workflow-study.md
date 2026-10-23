@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TODO — research; recorded 2026-10-23.
+- Status: RESEARCH COMPLETE on `f6044c8`; final Windows gate evidence is coordinator-owned and pending. Offline/synthetic study only; live acceptance remains unverified.
 - Priority: **P3** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -79,20 +79,20 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 3: Write the decision and any implementation handoff
 
-- [ ] Save the baseline, candidate outputs and runnable commands under plans/109-evidence/. For each candidate record accept/defer/reject with measured completeness and bytes. An accepted candidate gets a separate numbered implementation plan pinning its schema and compatibility; a rejected candidate is still a completed research deliverable. Do not remove query/compare/artifact or require exhaustive plan reads just to reduce calls.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Save the baseline, candidate outputs and runnable commands under plans/109-evidence/. Record accept/defer/reject with measured completeness and bytes. Accepted candidates have separate numbered implementation plans pinning schema and compatibility. No query/compare/artifact tool is removed.
+- [x] Record inspected sources, commands, expected and observed outcomes; preserve unresolved limits and causes explicitly.
+- [x] Save the decision and reproduction evidence, inspect the diff, and make no production behavior changes.
 
 ## Verification and done criteria
 
 Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "AgentOptimizationWorkflowTests|McpTokenBudgetTests"` and, for MCP tests, `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "AgentOptimizationWorkflowTests|McpTokenBudgetTests"`. Both must exit 0 with the intended tests actually discovered; a zero-test run is not evidence.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] If executable code/tests change, use focused suites and the required Windows implementation gate before claiming those changes verified. For notes-only work, diff/link/example checks are the complete scoped check; no product gate is claimed.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
+- [x] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
+- [x] No executable code/tests changed in Task 3. Scoped checks cover the notes/evidence diff and links; the separate coordinator-run Windows gate is not claimed by this task.
+- [x] Linux remains unverified. No completed product checks were rerun.
+- [x] Research evidence records accept/defer/reject outcomes and the remaining unknowns.
+- [x] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Deferred live acceptance remains unverified.
 
 ## STOP conditions
 

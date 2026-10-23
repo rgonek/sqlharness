@@ -19,6 +19,8 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |
 | [083](083-table-and-list-parameters.md) | Stage D table-valued parameters (inline rows or rows from a read-only query, catalog-resolved types, Structured binding) and Dapper list expansion across read-only tools; conditions, labels and SSMS scripts; mutation rejects them | 077, 079 merged | IMPLEMENTATION VERIFIED; locally integrated into `main` at `55d23ba`; final scoped Sol review approved; live UAT pending; Linux waived ([evidence](083-verification-evidence.md)) |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and in-flight batch identities while preserving applicable staging and retry/cursor state | 084 merged | DONE; locally integrated into `main` at `7f03ecb`; both task reviews, Sol low whole-branch review and final scoped re-review approved; evidence archive includes 10 tracked raw logs ([evidence](090-verification-evidence.md)) |
+| [114](114-compact-statement-discovery.md) | Opt-in per-statement CPU/elapsed discovery without operator summaries | 109 research accepted | TODO — implementation authorization is separate |
+| [115](115-query-result-set-selection.md) | Optional query response selection by original result-set ordinal | 109 research accepted | TODO — implementation authorization is separate |
 
 ## Limit-economics execution notes (2026-10-20)
 
@@ -52,6 +54,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 | [099](099-shadcn-cli-restoration.md) | Stable shadcn CLI devDependency, supported stylesheet import and contributor workflow | DONE; locally integrated into `main` at `c479210`; Windows-verified product unchanged; all reviews approved ([evidence](099-verification-evidence.md)) |
 | [100](100-shadcn-primitive-adoption.md) | Complete dashboard control inventory, accessible shadcn composition, disclosures and standard tables | DONE; locally integrated into `main` at `74f248c`; Windows-verified product revision `3caacc3` unchanged; all task and whole-branch reviews approved ([evidence](100-verification-evidence.md)) |
 | [098](098-session-operation-pagination.md) | Reach ordinary-session operations beyond the initial 500 through bounded cursor pages | DONE; locally integrated into `main` at `aca7979`; Windows-verified product `effc0bf` unchanged; all reviews approved; not pushed ([evidence](098-verification-evidence.md)) |
+| [109](109-artifact-review-workflow-study.md) | Synthetic artifact-review discovery-cost study and implementation decisions | RESEARCH COMPLETE on `f6044c8`; final Windows gate evidence is coordinator-owned/pending; live-agent and live-DB acceptance unverified ([evidence](109-evidence/task-3-decision.md)) |
 
 Evidence from completed plans, former queues, rejected proposals and audit decisions are in the [history](history.md). Read it when investigating earlier decisions or evidence, not before every task.
 
