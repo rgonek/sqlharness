@@ -693,61 +693,129 @@ internal static class StatementMetricsExtractor
 
 internal static class ArtifactStatementProjector
 {
+    private const int MaximumEvidenceStatements = 512;
+    private const int MaximumHiddenWorkItemsPerStatement = 16;
+    private const int MaximumEvidenceTextBytes = 512;
+
     internal static ArtifactStatementsSection Project(string artifactKind, IReadOnlyList<CompareRunArtifact> runs)
     {
-        var extracted = new List<(CompareRunArtifact Run, StatementMetrics Metric)>();
-        var omittedFromPlans = 0;
+        var extracted = new List<ArtifactStatementMetric>();
+        var omitted = 0;
         foreach (var run in runs)
         {
-            var ordinalOffset = 0;
-            var pairsByDocument = StatementSpanPairer.PairDocuments(run.ExecutedSql, run.PlanXmls);
-            for (var documentIndex = 0; documentIndex < run.PlanXmls.Count; documentIndex++)
+            var metrics = JournalStatementMetricsExtractor.Extract(run.PlanXmls, out var omittedFromRun);
+            omitted += omittedFromRun;
+            var statuses = StatementReconciler.Reconcile(metrics, run.TableIo);
+            var legacyMetrics = LegacyMetrics(run);
+            for (var index = 0; index < metrics.Count; index++)
             {
-                var statements = StatementMetricsExtractor.Extract(
-                    run.PlanXmls[documentIndex], run.ExecutedSql, pairsByDocument[documentIndex], out var omitted);
-                omittedFromPlans += omitted;
-                extracted.AddRange(statements.Select(statement => (run, statement with
+                if (extracted.Count == MaximumEvidenceStatements)
                 {
-                    StatementOrdinal = statement.StatementOrdinal + ordinalOffset,
-                })));
-                ordinalOffset += statements.Count + omitted;
+                    omitted += metrics.Count - index;
+                    break;
+                }
+
+                var metric = metrics[index];
+                var attribution = omittedFromRun > 0 ? StatementStatus.Partial : statuses[index];
+                legacyMetrics.TryGetValue((metric.PlanDocumentOrdinal, metric.PlanStatementIndex), out var legacyMetric);
+                var hidden = (metric.HiddenWork ?? [])
+                    .Where(work => work.Kind is "scalar-udf" or "multi-statement-tvf")
+                    .Take(MaximumHiddenWorkItemsPerStatement)
+                    .Select(work =>
+                    {
+                        var (name, truncated) = Clip(work.Name);
+                        return new ArtifactHiddenWork(work.Kind, name, truncated, work.Executions, work.SharePercent);
+                    })
+                    .ToArray();
+                extracted.Add(new ArtifactStatementMetric(
+                    run.Variant,
+                    run.ParameterSet,
+                    run.MatrixCell,
+                    metric.StatementOrdinal,
+                    legacyMetric?.StatementHash ?? metric.StatementHash,
+                    metric.CpuTimeMilliseconds,
+                    metric.ElapsedTimeMilliseconds,
+                    metric.DegreeOfParallelism,
+                    legacyMetric?.TopOperators ?? metric.TopOperators)
+                {
+                    Repetition = run.Repetition,
+                    CounterAttribution = AttributionText(StatementAttributionClassifier.Classify(attribution)),
+                    StatementIdentityComplete = metric.IdentityComplete == true,
+                    PlanDocumentOrdinal = metric.PlanDocumentOrdinal,
+                    PlanStatementIndex = metric.PlanStatementIndex,
+                    PlanHash = metric.PlanHash,
+                    Executions = metric.Executions,
+                    UdfElapsedMilliseconds = metric.UdfElapsedMs,
+                    HiddenWork = hidden,
+                    Limitations = Limitations(hidden),
+                });
             }
         }
-
-        var aggregated = extracted
-            .GroupBy(item => (item.Run.Variant, item.Run.ParameterSet, item.Run.MatrixCell, item.Metric.StatementOrdinal))
-            .Select(group =>
-            {
-                var samples = group.ToArray();
-                var first = samples[0].Metric;
-                var dops = samples.Select(sample => sample.Metric.DegreeOfParallelism).OfType<int>().ToArray();
-                return new ArtifactStatementMetric(
-                    group.Key.Variant,
-                    group.Key.ParameterSet,
-                    group.Key.MatrixCell,
-                    group.Key.StatementOrdinal,
-                    first.StatementHash,
-                    Median(samples.Select(sample => sample.Metric.CpuTimeMilliseconds)),
-                    Median(samples.Select(sample => sample.Metric.ElapsedTimeMilliseconds)),
-                    dops.Length == 0 ? null : dops.Max(),
-                    first.TopOperators);
-            })
+        var ordered = extracted
             .OrderBy(statement => statement.Variant, StringComparer.Ordinal)
             .ThenBy(statement => statement.MatrixCell)
             .ThenBy(statement => statement.ParameterSet, StringComparer.Ordinal)
+            .ThenBy(statement => statement.Repetition)
             .ThenBy(statement => statement.StatementOrdinal)
             .ToArray();
 
         return new ArtifactStatementsSection(
             string.Empty,
             artifactKind,
-            aggregated.Take(StatementMetricsExtractor.MaximumStatements).ToArray(),
-            omittedFromPlans + Math.Max(0, aggregated.Length - StatementMetricsExtractor.MaximumStatements));
+            ordered,
+            omitted)
+        {
+            EvidenceVersion = 1,
+            EvidenceAvailability = ordered.Length == 0 ? "unavailable" : "available",
+            CoverageBasis = "collected-statement-counters",
+            CoverageDescription = "Attribution describes collected statement-counter coverage only; it does not establish complete query cost.",
+        };
     }
 
-    private static long? Median(IEnumerable<long?> values)
+    private static IReadOnlyList<string> Limitations(IReadOnlyList<ArtifactHiddenWork> hidden)
     {
-        var present = values.OfType<long>().ToArray();
-        return present.Length == 0 ? null : Distribution.From(present).Median;
+        if (hidden.Count == 0) return [];
+        var limitations = new List<string>();
+        if (hidden.Any(work => work.Kind == "scalar-udf"))
+            limitations.Add("Scalar UDF work may not be fully represented by collected statement counters.");
+        if (hidden.Any(work => work.Kind == "multi-statement-tvf"))
+            limitations.Add("Multi-statement TVF work may not be fully represented by collected statement counters.");
+        return limitations;
+    }
+
+    private static string AttributionText(StatementCounterAttribution attribution) => attribution switch
+    {
+        StatementCounterAttribution.Complete => "complete",
+        StatementCounterAttribution.Partial => "partial",
+        _ => "unavailable",
+    };
+
+    private static (string Value, bool Truncated) Clip(string value)
+    {
+        var output = new StringBuilder(Math.Min(value.Length, MaximumEvidenceTextBytes));
+        var bytes = 0;
+        foreach (var rune in value.EnumerateRunes())
+        {
+            var runeBytes = rune.Utf8SequenceLength;
+            if (bytes + runeBytes > MaximumEvidenceTextBytes)
+                return (output.ToString(), true);
+            output.Append(rune.ToString());
+            bytes += runeBytes;
+        }
+        return (output.ToString(), false);
+    }
+
+    private static IReadOnlyDictionary<(int? DocumentOrdinal, int? StatementIndex), StatementMetrics> LegacyMetrics(CompareRunArtifact run)
+    {
+        var result = new Dictionary<(int? DocumentOrdinal, int? StatementIndex), StatementMetrics>();
+        var pairsByDocument = StatementSpanPairer.PairDocuments(run.ExecutedSql, run.PlanXmls);
+        for (var documentIndex = 0; documentIndex < run.PlanXmls.Count; documentIndex++)
+        {
+            var statements = StatementMetricsExtractor.Extract(
+                run.PlanXmls[documentIndex], run.ExecutedSql, pairsByDocument[documentIndex], out _);
+            foreach (var statement in statements)
+                result.TryAdd((documentIndex, statement.StatementOrdinal), statement);
+        }
+        return result;
     }
 }

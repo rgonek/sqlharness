@@ -619,6 +619,114 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Statements_section_preserves_repetition_identity_attribution_and_hidden_work()
+    {
+        using var temp = new TempDirectory();
+        var longFunctionName = string.Concat(Enumerable.Repeat("𝒇", 140));
+        var scalar = StatementMetricsTests.JournalPlan("SELECT dbo.fn_scalar()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 28, elapsedTime: 29,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)])])
+            .Replace("UdfElapsedTime=\"28\"", $"UdfElapsedTime=\"28\" FunctionName=\"dbo.{longFunctionName}\"", StringComparison.Ordinal);
+        var report = CompareReport();
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 30, 40, 0, new Dictionary<string, long>(), "hash", [scalar], 0)
+            {
+                TableIo = [new TableIoCounters("", 0, 0, 0, 0, 0, 0, 0, 0)],
+            },
+            new CompareRunArtifact("baseline", 2, 31, 41, 0, new Dictionary<string, long>(), "hash", [scalar], 0)
+            {
+                TableIo = [new TableIoCounters("", 0, 0, 0, 0, 0, 0, 0, 0)],
+            },
+        };
+
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, runs, "wind");
+        var section = Assert.IsType<ArtifactStatementsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "statements"));
+
+        using var sectionJson = JsonDocument.Parse(JsonSerializer.Serialize(section, ArtifactDirectoryPublisher.JsonOptions));
+        Assert.Equal(1, sectionJson.RootElement.GetProperty("evidenceVersion").GetInt32());
+        Assert.Equal("collected-statement-counters", sectionJson.RootElement.GetProperty("coverageBasis").GetString());
+        Assert.Contains("does not establish complete query cost", sectionJson.RootElement.GetProperty("coverageDescription").GetString(), StringComparison.Ordinal);
+        Assert.Equal([1, 2], section.Statements.Select(item =>
+        {
+            using var rowJson = JsonDocument.Parse(JsonSerializer.Serialize(item, ArtifactDirectoryPublisher.JsonOptions));
+            return rowJson.RootElement.GetProperty("repetition").GetInt32();
+        }).ToArray());
+        Assert.All(section.Statements, item =>
+        {
+            using var rowJson = JsonDocument.Parse(JsonSerializer.Serialize(item, ArtifactDirectoryPublisher.JsonOptions));
+            Assert.Equal("complete", rowJson.RootElement.GetProperty("counterAttribution").GetString());
+            Assert.True(rowJson.RootElement.GetProperty("statementIdentityComplete").GetBoolean());
+            Assert.Equal("scalar-udf", rowJson.RootElement.GetProperty("hiddenWork")[0].GetProperty("kind").GetString());
+            Assert.True(rowJson.RootElement.GetProperty("hiddenWork")[0].GetProperty("nameTruncated").GetBoolean());
+            Assert.InRange(Encoding.UTF8.GetByteCount(rowJson.RootElement.GetProperty("hiddenWork")[0].GetProperty("name").GetString()!), 1, 512);
+            Assert.NotEmpty(rowJson.RootElement.GetProperty("limitations").EnumerateArray());
+        });
+    }
+
+    [Fact]
+    public void Legacy_statement_rows_and_postgres_artifacts_report_unavailable_attribution()
+    {
+        using var temp = new TempDirectory();
+        const string legacyId = "legacy-statements";
+        var legacyDirectory = Path.Combine(temp.Path, legacyId);
+        Directory.CreateDirectory(legacyDirectory);
+        File.WriteAllText(Path.Combine(legacyDirectory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"statements\"]}");
+        File.WriteAllText(Path.Combine(legacyDirectory, "statements.json"),
+            "{\"statements\":[{\"variant\":\"baseline\",\"statementOrdinal\":0,\"statementHash\":\"" + new string('a', 64) + "\",\"topOperators\":[]}],\"omittedStatements\":0}");
+
+        var legacy = Assert.IsType<ArtifactStatementsSection>(
+            ArtifactReader.ReadSection(temp.Path, legacyId, "statements"));
+        using var legacyJson = JsonDocument.Parse(JsonSerializer.Serialize(legacy, ArtifactDirectoryPublisher.JsonOptions));
+        Assert.Equal("unavailable", legacyJson.RootElement.GetProperty("statements")[0]
+            .GetProperty("counterAttribution").GetString());
+
+        var postgres = new CompareRunArtifact("baseline", 1, 0, 1, 0,
+            new Dictionary<string, long>(), "hash", ["{\"Plan\":{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"orders\"}}"], 0);
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(CompareReport(), [postgres], "postgres");
+        var pgSection = Assert.IsType<ArtifactStatementsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "statements"));
+        using var pgJson = JsonDocument.Parse(JsonSerializer.Serialize(pgSection, ArtifactDirectoryPublisher.JsonOptions));
+        Assert.Equal("unavailable", pgJson.RootElement.GetProperty("evidenceAvailability").GetString());
+        Assert.Empty(pgSection.Statements);
+    }
+
+    [Fact]
+    public void Statements_section_marks_incomplete_identity_partial_and_keeps_node_collisions_separate()
+    {
+        using var temp = new TempDirectory();
+        var plan = StatementMetricsTests.CollidingNodeIdPlan();
+        var run = new CompareRunArtifact("candidate", 7, 1, 2, 3,
+            new Dictionary<string, long>(), "hash", [plan], 0, "large")
+        {
+            MatrixCell = 3,
+            TableIo = [new TableIoCounters("Orders", 1, 3, 0, 0, 0, 0, 0, 0)],
+        };
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(CompareReport(), [run], "identity");
+        var section = Assert.IsType<ArtifactStatementsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "statements"));
+
+        Assert.Equal(2, section.Statements.Count);
+        Assert.All(section.Statements, item =>
+        {
+            Assert.Equal("candidate", item.Variant);
+            Assert.Equal("large", item.ParameterSet);
+            Assert.Equal(3, item.MatrixCell);
+            using var rowJson = JsonDocument.Parse(JsonSerializer.Serialize(item, ArtifactDirectoryPublisher.JsonOptions));
+            Assert.Equal(7, rowJson.RootElement.GetProperty("repetition").GetInt32());
+            Assert.Equal("partial", rowJson.RootElement.GetProperty("counterAttribution").GetString());
+            Assert.False(rowJson.RootElement.GetProperty("statementIdentityComplete").GetBoolean());
+        });
+        Assert.Equal(2, section.Statements.SelectMany(item => item.TopOperators)
+            .Where(item => item.NodeId == 1).Count());
+    }
+
+    [Fact]
     public void Statements_section_accepts_a_continuation_cursor()
     {
         using var temp = new TempDirectory();
@@ -628,13 +736,25 @@ public class ArtifactReaderTests
         File.WriteAllText(Path.Combine(directory, "manifest.json"),
             "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"statements\"]}");
         var statements = Enumerable.Range(0, 300).Select(ordinal => new ArtifactStatementMetric(
-            "baseline", null, null, ordinal, new string('a', 64), 1, 2, 1, [])).ToArray();
+            "baseline", null, null, ordinal, new string('a', 64), 1, 2, 1, [])
+        {
+            Repetition = ordinal + 1,
+            CounterAttribution = "partial",
+            StatementIdentityComplete = false,
+        }).ToArray();
         File.WriteAllText(Path.Combine(directory, "statements.json"), JsonSerializer.Serialize(
-            new ArtifactStatementsSection(id, "compare", statements, 0),
+            new ArtifactStatementsSection(id, "compare", statements, 0)
+            {
+                EvidenceVersion = 1,
+                EvidenceAvailability = "available",
+                CoverageBasis = "collected-statement-counters",
+                CoverageDescription = "Attribution describes collected statement-counter coverage only; it does not establish complete query cost.",
+            },
             new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 
         var first = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(temp.Path, id, "statements"));
         Assert.Equal(128, first.Statements.Count);
+        Assert.Equal(1, first.Statements[0].Repetition);
         Assert.Equal(128, first.Continuation);
         var projected = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(first, 512, 128, out _, 65536));
         Assert.Equal(128, projected.Statements.Count);
@@ -642,6 +762,7 @@ public class ArtifactReaderTests
 
         var second = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(temp.Path, id, "statements", cursor: 128));
         Assert.Equal(128, second.Statements[0].StatementOrdinal);
+        Assert.Equal(129, second.Statements[0].Repetition);
         var projectedSecond = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(second, 512, 128, out _, 65536));
         Assert.Equal(256, projectedSecond.Continuation);
 

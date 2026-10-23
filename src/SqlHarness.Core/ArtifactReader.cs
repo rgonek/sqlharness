@@ -109,7 +109,37 @@ public sealed record ArtifactStatementMetric(
     long? CpuTimeMilliseconds,
     long? ElapsedTimeMilliseconds,
     int? DegreeOfParallelism,
-    IReadOnlyList<StatementOperatorSummary> TopOperators);
+    IReadOnlyList<StatementOperatorSummary> TopOperators)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Repetition { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CounterAttribution { get; init; } = "unavailable";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? StatementIdentityComplete { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? PlanDocumentOrdinal { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? PlanStatementIndex { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PlanHash { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? Executions { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? UdfElapsedMilliseconds { get; init; }
+
+    public IReadOnlyList<ArtifactHiddenWork> HiddenWork { get; init; } = [];
+    public IReadOnlyList<string> Limitations { get; init; } = [];
+}
+
+public sealed record ArtifactHiddenWork(string Kind, string Name, bool NameTruncated, long? Executions, double? SharePercent);
 
 public sealed record ArtifactStatementsSection(
     string ArtifactId,
@@ -117,6 +147,17 @@ public sealed record ArtifactStatementsSection(
     IReadOnlyList<ArtifactStatementMetric> Statements,
     int OmittedStatements)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? EvidenceVersion { get; init; }
+
+    public string EvidenceAvailability { get; init; } = "unavailable";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CoverageBasis { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CoverageDescription { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? Continuation { get; init; }
 
@@ -740,15 +781,40 @@ public static class ArtifactReader
                 ReadBoundedText(path, MaxReportBytes), ArtifactDirectoryPublisher.JsonOptions);
             if (section is null || section.Statements is null || section.OmittedStatements < 0
                 || section.Statements.Any(statement => statement is null || statement.StatementHash is null
-                    || statement.Variant is null || statement.TopOperators is null))
+                    || statement.Variant is null || statement.TopOperators is null
+                    || statement.HiddenWork is null || statement.Limitations is null))
+                throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
+            if (section.EvidenceVersion is < 1 or > 1
+                || section.EvidenceAvailability is not ("available" or "unavailable")
+                || section.Statements.Any(statement => statement.CounterAttribution is not ("complete" or "partial" or "unavailable")))
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
             if (cursor > section.Statements.Count)
                 throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
+            var statements = section.Statements.Skip(cursor).Take(pageSize).Select(statement =>
+                section.EvidenceVersion is null
+                    ? statement with
+                    {
+                        CounterAttribution = "unavailable",
+                        StatementIdentityComplete = null,
+                        Repetition = null,
+                        PlanDocumentOrdinal = null,
+                        PlanStatementIndex = null,
+                        PlanHash = null,
+                        Executions = null,
+                        UdfElapsedMilliseconds = null,
+                        HiddenWork = [],
+                        Limitations = []
+                    }
+                    : NormalizeEvidence(statement)).ToArray();
             return section with
             {
                 ArtifactId = artifactId,
                 ArtifactKind = manifest.ArtifactKind,
-                Statements = section.Statements.Skip(cursor).Take(pageSize).ToArray(),
+                Statements = statements,
+                EvidenceAvailability = section.EvidenceVersion is null || section.Statements.Count == 0
+                    ? "unavailable" : section.EvidenceAvailability,
+                CoverageBasis = section.EvidenceVersion is null ? null : section.CoverageBasis,
+                CoverageDescription = section.EvidenceVersion is null ? null : section.CoverageDescription,
                 Continuation = cursor + Math.Min(pageSize, section.Statements.Count - cursor) < section.Statements.Count
                     ? cursor + Math.Min(pageSize, section.Statements.Count - cursor)
                     : null,
@@ -767,6 +833,17 @@ public static class ArtifactReader
         {
             throw new ArtifactReadException("Artifact storage is unavailable.", SqlHarnessExitCode.LocalStorage);
         }
+    }
+
+    private static ArtifactStatementMetric NormalizeEvidence(ArtifactStatementMetric statement)
+    {
+        var identityComplete = statement.StatementIdentityComplete == true && statement.Repetition is > 0;
+        return statement with
+        {
+            StatementIdentityComplete = identityComplete,
+            CounterAttribution = statement.CounterAttribution == "complete" && !identityComplete
+                ? "partial" : statement.CounterAttribution,
+        };
     }
 
     private static IReadOnlyList<NoteworthyOperatorSummary> FlattenMeasureSet(SqlHarnessMeasureSetReport report) =>

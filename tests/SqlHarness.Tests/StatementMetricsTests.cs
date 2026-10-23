@@ -377,7 +377,7 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
-    public void Statement_metrics_projection_keeps_node_path_after_repetition_aggregation()
+    public void Statement_metrics_projection_preserves_node_paths_for_each_repetition()
     {
         var xml = NestedRelOpPlan();
         var runs = new[]
@@ -387,14 +387,16 @@ public sealed class StatementMetricsTests
         };
 
         var section = ArtifactStatementProjector.Project(ArtifactReader.CompareKind, runs);
-        var statement = Assert.Single(section.Statements);
-        var operators = statement.TopOperators.ToDictionary(op => op.NodeId);
-
-        Assert.Equal(0, statement.StatementOrdinal);
-        Assert.Equal("0", operators[0].NodePath);
-        Assert.Equal("0/0", operators[1].NodePath);
-        Assert.Equal("0/1", operators[2].NodePath);
-        Assert.Equal(1, operators[1].Cursor);
+        Assert.Equal([1, 2], section.Statements.Select(statement => statement.Repetition).ToArray());
+        Assert.All(section.Statements, statement =>
+        {
+            var operators = statement.TopOperators.ToDictionary(op => op.NodeId);
+            Assert.Equal(0, statement.StatementOrdinal);
+            Assert.Equal("0", operators[0].NodePath);
+            Assert.Equal("0/0", operators[1].NodePath);
+            Assert.Equal("0/1", operators[2].NodePath);
+            Assert.Equal(1, operators[1].Cursor);
+        });
     }
 
     [Fact]
