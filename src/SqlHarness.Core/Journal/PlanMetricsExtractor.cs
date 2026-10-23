@@ -47,6 +47,7 @@ internal sealed record PlanDiagnosticSource(
 internal static class PlanMetricsExtractor
 {
     internal const int MaximumCharacters = 16 * 1024 * 1024;
+    private static readonly XNamespace ShowplanNamespace = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
 
     internal static IReadOnlyList<PlanDiagnosticSource> ExtractDiagnosticSources(IEnumerable<string> documents)
     {
@@ -80,15 +81,15 @@ internal static class PlanMetricsExtractor
             MaxCharactersInDocument = MaximumCharacters,
         });
         var root = XDocument.Load(reader);
-        if (root.Root?.Name.LocalName != "ShowPlanXML")
+        if (root.Root?.Name != ShowplanNamespace + "ShowPlanXML")
             return [];
-        var statements = root.Descendants().Where(element => element.Name.LocalName == "StmtSimple").ToArray();
-        return root.Descendants().Where(element => element.Name.LocalName == "QueryPlan")
+        var statements = root.Descendants(ShowplanNamespace + "StmtSimple").ToArray();
+        return root.Descendants(ShowplanNamespace + "QueryPlan")
             .Select(queryPlan =>
             {
-                var statement = queryPlan.Ancestors().FirstOrDefault(element => element.Name.LocalName == "StmtSimple");
+                var statement = queryPlan.Ancestors(ShowplanNamespace + "StmtSimple").FirstOrDefault();
                 var statementIndex = statement is null ? (int?)null : Array.IndexOf(statements, statement);
-                var grant = queryPlan.Descendants().FirstOrDefault(element => element.Name.LocalName == "MemoryGrantInfo");
+                var grant = queryPlan.Descendants(ShowplanNamespace + "MemoryGrantInfo").FirstOrDefault();
                 return new PlanDiagnosticSource(
                     statement is null ? "batch" : "statement",
                     documentOrdinal,
@@ -175,12 +176,14 @@ internal static class PlanMetricsExtractor
         });
         var root = XDocument.Load(reader);
         var elements = root.Descendants().ToArray();
-        XElement[] Named(string localName) => elements.Where(element => element.Name.LocalName == localName).ToArray();
+        if (root.Root?.Name != ShowplanNamespace + "ShowPlanXML")
+            return PlanMetrics.Empty;
+        XElement[] Named(string localName) => elements.Where(element => element.Name == ShowplanNamespace + localName).ToArray();
 
         var queryPlans = Named("QueryPlan");
         var grants = Named("MemoryGrantInfo");
         var waits = Named("Wait")
-            .Where(wait => wait.Parent?.Name.LocalName == "WaitStats")
+            .Where(wait => wait.Parent?.Name == ShowplanNamespace + "WaitStats")
             .GroupBy(wait => Attribute(wait, "WaitType") ?? "UNKNOWN", StringComparer.Ordinal)
             .Select(group => new PlanWait(
                 group.Key,
@@ -273,8 +276,9 @@ internal static class PlanMetricsExtractor
     /// elements owned by an operator, never in statement text or parameter values.
     /// </summary>
     private static bool IsOperatorImplicitConversion(XElement element) =>
-        element.Name.LocalName != "RelOp"
-        && element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "RelOp")
+        element.Name.Namespace == ShowplanNamespace
+        && element.Name != ShowplanNamespace + "RelOp"
+        && element.Ancestors(ShowplanNamespace + "RelOp").Any()
         && element.Attributes().Any(attribute =>
             attribute.Value.Contains("CONVERT_IMPLICIT", StringComparison.OrdinalIgnoreCase));
 

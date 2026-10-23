@@ -43,3 +43,15 @@ GREEN after implementation, on the final Task 1 tree:
 - `git diff --check` — exit 0.
 
 No live DB, merge, push, install, full `just verify`, or branch-format run was performed. Those full-plan checks remain for the controlling implementation workflow. Task review is pending.
+
+## Review fix round 1/5
+
+The source extractor now validates the canonical SQL Server Showplan namespace on the `ShowPlanXML` root and diagnostic elements. Wrong-root and wrong-diagnostic-namespace fixtures remain unavailable in both extraction and artifact projection.
+
+RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter "FullyQualifiedName~Noncanonical_showplan_namespaces_do_not_produce_sql_server_diagnostics"` failed because wrong-namespace XML yielded RequestedMemory=8, GrantedMemory=6, MaxUsedMemory=5, CompileTime=9, and CompileCPU=4.
+
+GREEN command: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~ArtifactReaderTests|FullyQualifiedName~StatementMetricsTests"`
+
+GREEN result: `Passed!  - Failed: 0, Passed: 115, Skipped: 0, Total: 115, Duration: 11 s - SqlHarness.Tests.dll (net10.0)`.
+
+The review's Minor about direct assertions for DOP, maximum grant usage, and compile CPU remains deferred to final review per controller direction.

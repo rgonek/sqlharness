@@ -833,6 +833,43 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Noncanonical_showplan_namespaces_do_not_produce_sql_server_diagnostics()
+    {
+        const string wrongRootNamespace = """
+            <ShowPlanXML xmlns="urn:unrelated" xmlns:sql="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <sql:BatchSequence><sql:Batch><sql:Statements>
+                <sql:StmtSimple StatementText="SELECT 1"><sql:QueryPlan CompileTime="9" CompileCPU="4">
+                  <sql:MemoryGrantInfo RequestedMemory="8" GrantedMemory="6" MaxUsedMemory="5" />
+                </sql:QueryPlan></sql:StmtSimple>
+              </sql:Statements></sql:Batch></sql:BatchSequence>
+            </ShowPlanXML>
+            """;
+        const string wrongDiagnosticNamespace = """
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" xmlns:other="urn:unrelated">
+              <BatchSequence><Batch><Statements>
+                <other:StmtSimple StatementText="SELECT 2"><other:QueryPlan CompileTime="9" CompileCPU="4">
+                  <other:MemoryGrantInfo RequestedMemory="8" GrantedMemory="6" MaxUsedMemory="5" />
+                </other:QueryPlan></other:StmtSimple>
+              </Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+
+        foreach (var plan in new[] { wrongRootNamespace, wrongDiagnosticNamespace })
+        {
+            var run = new CompareRunArtifact("measure", 1, 1, 1, 1,
+                new Dictionary<string, long>(), "hash", [plan], 0);
+            var section = ArtifactStatementProjector.Project(ArtifactReader.MeasureKind, [run]);
+
+            Assert.Equal(PlanMetrics.Empty, PlanMetricsExtractor.Extract(plan));
+            Assert.Equal("unavailable", section.PlanDiagnosticsAvailability);
+            Assert.Equal("unavailable", Assert.Single(section.PlanDiagnosticCases).Availability);
+            Assert.Null(Assert.Single(section.PlanDiagnosticCases).Source);
+            Assert.Empty(section.RunPlanDiagnostics);
+            Assert.All(section.Statements, statement => Assert.Empty(statement.PlanDiagnostics!));
+        }
+    }
+
+    [Fact]
     public void Statements_section_preserves_repetition_identity_attribution_and_hidden_work()
     {
         using var temp = new TempDirectory();
