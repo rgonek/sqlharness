@@ -1268,7 +1268,7 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("execution: not-run", query, StringComparison.Ordinal);
             Assert.Contains("subject+textual scope", measure, StringComparison.Ordinal);
             Assert.Contains("independent of compare.requireContext", measure, StringComparison.Ordinal);
-            Assert.Contains("Ordered sets", measure, StringComparison.Ordinal);
+            Assert.Contains("Ordered sets: isolated sessions/setup", measure, StringComparison.Ordinal);
             Assert.Contains("sessions/setup", measure, StringComparison.Ordinal);
             Assert.Contains("failure stops, completed sets retained", measure, StringComparison.Ordinal);
             Assert.Contains("Stability: per-set, not cross-set equivalence", measure, StringComparison.Ordinal);
