@@ -701,17 +701,23 @@ internal static class ArtifactStatementProjector
     {
         var extracted = new List<ArtifactStatementMetric>();
         var omitted = 0;
+        var omittedByCase = new Dictionary<(string Variant, string? ParameterSet, int? MatrixCell), int>();
         foreach (var run in runs)
         {
+            var caseKey = (run.Variant, run.ParameterSet, run.MatrixCell);
             var metrics = JournalStatementMetricsExtractor.Extract(run.PlanXmls, out var omittedFromRun);
             omitted += omittedFromRun;
+            if (omittedFromRun > 0)
+                omittedByCase[caseKey] = omittedByCase.GetValueOrDefault(caseKey) + omittedFromRun;
             var statuses = StatementReconciler.Reconcile(metrics, run.TableIo);
             var legacyMetrics = LegacyMetrics(run);
             for (var index = 0; index < metrics.Count; index++)
             {
                 if (extracted.Count == MaximumEvidenceStatements)
                 {
-                    omitted += metrics.Count - index;
+                    var omittedForRun = metrics.Count - index;
+                    omitted += omittedForRun;
+                    omittedByCase[caseKey] = omittedByCase.GetValueOrDefault(caseKey) + omittedForRun;
                     break;
                 }
 
@@ -772,6 +778,8 @@ internal static class ArtifactStatementProjector
             EvidenceAvailability = ordered.Length == 0 ? "unavailable" : "available",
             CoverageBasis = "collected-statement-counters",
             CoverageDescription = "Attribution describes collected statement-counter coverage only; it does not establish complete query cost.",
+            OmittedByCase = omittedByCase.Select(pair => new ArtifactStatementOmission(
+                pair.Key.Variant, pair.Key.ParameterSet, pair.Key.MatrixCell, pair.Value)).ToArray(),
         };
     }
 

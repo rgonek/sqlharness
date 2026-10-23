@@ -274,6 +274,30 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
+    public void Compact_statement_evidence_scopes_omissions_to_the_affected_case()
+    {
+        var plan = JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1);
+        CompareRunArtifact Run(string variant, int repetition, IReadOnlyList<string> plans) => new(
+            variant, repetition, 0, 1, 0, new Dictionary<string, long>(), "result", plans, 1)
+        {
+            TableIo = [new TableIoCounters("[@P]", 0, 0, 0, 0, 0, 0, 0, 0)],
+        };
+        var many = Enumerable.Range(0, 513)
+            .Select(index => JournalPlan($"SELECT {index}", index + 1, index + 1, $"0x{index + 1:X}", 0, 1))
+            .ToArray();
+        var evidence = AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind,
+        [
+            Run("candidate", 1, [plan]),
+            Run("baseline", 1, many),
+            Run("unavailable", 1, []),
+        ]);
+
+        Assert.Equal("complete", Assert.Single(evidence.Cases, item => item.Variant == "candidate").CounterAttribution);
+        Assert.Equal("partial", Assert.Single(evidence.Cases, item => item.Variant == "baseline").CounterAttribution);
+        Assert.Equal("unavailable", Assert.Single(evidence.Cases, item => item.Variant == "unavailable").CounterAttribution);
+    }
+
+    [Fact]
     public void Missing_statement_attribution_is_unavailable_and_legacy_artifact_shape_stays_unchanged()
     {
         Assert.Equal(

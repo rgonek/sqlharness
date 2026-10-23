@@ -167,7 +167,12 @@ public sealed record ArtifactStatementsSection(
 
     [JsonIgnore]
     public int Cursor { get; init; }
+
+    [JsonIgnore]
+    internal IReadOnlyList<ArtifactStatementOmission> OmittedByCase { get; init; } = [];
 }
+
+internal sealed record ArtifactStatementOmission(string Variant, string? ParameterSet, int? MatrixCell, int Count);
 
 /// <summary>One safe reference to a saved compare cell, addressed only by its artifact id.</summary>
 /// <summary>A bounded page of saved case outcomes in the same schema as agent matrix inventories.</summary>

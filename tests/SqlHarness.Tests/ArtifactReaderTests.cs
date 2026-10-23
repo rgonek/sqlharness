@@ -796,6 +796,55 @@ public class ArtifactReaderTests
     }
 
     [Theory]
+    [InlineData(4096)]
+    [InlineData(65536)]
+    public void Statement_projection_budgets_hidden_work_and_counts_response_omissions(int budget)
+    {
+        var hidden = Enumerable.Range(0, 16).Select(index => new ArtifactHiddenWork(
+            "multi-statement-tvf", $"[dbo].[函\"\\\n{index}-{new string('界', 160)}]", false, index + 1, null)).ToArray();
+        var statement = new ArtifactStatementMetric("candidate", "set-a", 7, 3, new string('a', 64),
+            1, 2, 1, [])
+        {
+            Repetition = 2,
+            CounterAttribution = "complete",
+            StatementIdentityComplete = true,
+            PlanDocumentOrdinal = 4,
+            PlanStatementIndex = 1,
+            PlanHash = new string('b', 64),
+            HiddenWork = hidden,
+            HiddenWorkOmitted = 2,
+            Limitations = ["Multi-statement TVF work may not be fully represented by collected statement counters."],
+        };
+        var section = new ArtifactStatementsSection("artifact", "compare", [statement], 0)
+        {
+            EvidenceAvailability = "available",
+            CoverageBasis = "collected-statement-counters",
+        };
+
+        var projected = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(
+            section, 128, int.MaxValue, out _, budget, AgentProjectionProfile.Mcp));
+        var returned = Assert.Single(projected.Statements);
+        var serialized = JsonSerializer.SerializeToUtf8Bytes(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.InRange(serialized.Length, 1, budget);
+        Assert.Equal(("candidate", "set-a", 7, 3, 2, "complete", true),
+            (returned.Variant, returned.ParameterSet, returned.MatrixCell, returned.StatementOrdinal, returned.Repetition, returned.CounterAttribution, returned.StatementIdentityComplete));
+        Assert.Equal(2 + hidden.Length - returned.HiddenWork.Count, returned.HiddenWorkOmitted);
+        Assert.All(returned.HiddenWork, item =>
+        {
+            var source = hidden[checked((int)item.Executions!.Value - 1)];
+            Assert.Equal(item.NameTruncated, !string.Equals(item.Name, source.Name, StringComparison.Ordinal));
+            Assert.StartsWith(item.Name, source.Name, StringComparison.Ordinal);
+        });
+        Assert.Contains(returned.Limitations, item => item.Contains("Multi-statement TVF", StringComparison.Ordinal));
+        Assert.Equal(Enumerable.Range(1, returned.HiddenWork.Count).Select(index => (long)index), returned.HiddenWork.Select(item => item.Executions!.Value));
+
+        var legacy = section with { Statements = [statement with { HiddenWorkOmitted = null }] };
+        var legacyProjected = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(
+            legacy, 128, int.MaxValue, out _, 4096, AgentProjectionProfile.Mcp));
+        Assert.Null(Assert.Single(legacyProjected.Statements).HiddenWorkOmitted);
+    }
+
+    [Theory]
     [InlineData(null, 128)]
     [InlineData(1, 1)]
     [InlineData(512, 512)]

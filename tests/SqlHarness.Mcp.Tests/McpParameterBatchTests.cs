@@ -102,6 +102,73 @@ public sealed class McpParameterBatchTests
     }
 
     [Fact]
+    public async Task Served_artifact_statement_keeps_identity_and_hidden_work_omissions_at_minimum_and_default_budgets()
+    {
+        using var temp = new McpBatchTempDirectory();
+        await using var served = await ServedCatalog.CreateAsync(requestScope: false, () => { });
+        const string id = "hidden-work-budget";
+        var directory = Path.Combine(SqlHarnessPaths.CompareDir, id);
+        Directory.CreateDirectory(directory);
+        var manifest = new ArtifactManifest(ArtifactReader.CurrentManifestVersion, ArtifactReader.CompareKind,
+            ArtifactReader.ReportFileName, ["statements"]) { Owner = served.Owner };
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        File.WriteAllText(Path.Combine(directory, ArtifactReader.ReportFileName), "{}");
+        var hidden = Enumerable.Range(0, 16).Select(index => new ArtifactHiddenWork(
+            "multi-statement-tvf", $"[dbo].[函\"\\\n{index}-{new string('界', 160)}]", false, index + 1, null)).ToArray();
+        var statement = new ArtifactStatementMetric("candidate", "set-a", 7, 3, new string('a', 64),
+            1, 2, 1, [])
+        {
+            Repetition = 2,
+            CounterAttribution = "complete",
+            StatementIdentityComplete = true,
+            PlanDocumentOrdinal = 4,
+            PlanStatementIndex = 1,
+            PlanHash = new string('b', 64),
+            HiddenWork = hidden,
+            HiddenWorkOmitted = 0,
+            Limitations = ["Multi-statement TVF work may not be fully represented by collected statement counters."],
+        };
+        File.WriteAllText(Path.Combine(directory, "statements.json"), JsonSerializer.Serialize(
+            new ArtifactStatementsSection(id, ArtifactReader.CompareKind, [statement], 0)
+            {
+                EvidenceVersion = 1,
+                EvidenceAvailability = "available",
+                CoverageBasis = "collected-statement-counters",
+            }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        foreach (var budget in new[] { 4096, (int?)null })
+        {
+            var arguments = new Dictionary<string, object?> { ["id"] = id, ["section"] = "statements" };
+            if (budget is int bytes) arguments["maxResultBytes"] = bytes;
+            var response = await served.Client.CallToolAsync("sqlharness_artifact", arguments, cancellationToken: CancellationToken.None);
+            var text = Text(response);
+            Assert.False(response.IsError == true, text);
+            using var document = JsonDocument.Parse(text);
+            var result = document.RootElement.GetProperty("result");
+            var row = Assert.Single(result.GetProperty("statements").EnumerateArray());
+            Assert.Equal(("candidate", "set-a", 7, 3, 2, "complete", true),
+                (row.GetProperty("variant").GetString(), row.GetProperty("parameterSet").GetString(),
+                    row.GetProperty("matrixCell").GetInt32(), row.GetProperty("statementOrdinal").GetInt32(),
+                    row.GetProperty("repetition").GetInt32(), row.GetProperty("counterAttribution").GetString(),
+                    row.GetProperty("statementIdentityComplete").GetBoolean()));
+            var returnedHidden = row.GetProperty("hiddenWork").EnumerateArray().ToArray();
+            Assert.Equal(hidden.Length - returnedHidden.Length, row.GetProperty("hiddenWorkOmitted").GetInt32());
+            Assert.All(returnedHidden, item =>
+            {
+                var execution = checked((int)item.GetProperty("executions").GetInt64());
+                var name = item.GetProperty("name").GetString()!;
+                var source = hidden[execution - 1].Name;
+                Assert.Equal(item.GetProperty("nameTruncated").GetBoolean(), !string.Equals(name, source, StringComparison.Ordinal));
+                Assert.StartsWith(name, source, StringComparison.Ordinal);
+            });
+            Assert.Contains(row.GetProperty("limitations").EnumerateArray().Select(item => item.GetString()),
+                item => item!.Contains("Multi-statement TVF", StringComparison.Ordinal));
+            Assert.Equal(Enumerable.Range(1, returnedHidden.Length).Select(index => (long)index),
+                returnedHidden.Select(item => item.GetProperty("executions").GetInt64()));
+        }
+    }
+
+    [Fact]
     public async Task Split_32_plus_1_measure_workflow_executes_each_named_case_once_and_keeps_operation_artifacts_separate()
     {
         using var temp = new McpBatchTempDirectory();
@@ -201,6 +268,7 @@ public sealed class McpParameterBatchTests
         private Task _serverTask = Task.CompletedTask;
 
         public McpClient Client { get; private set; } = null!;
+        public ArtifactOwner Owner { get; private set; } = null!;
         public (long Input, long Output) TransportByteCounts => (_clientWriter.BytesWritten, _serverWriter.BytesWritten);
 
         public static async Task<ServedCatalog> CreateAsync(bool requestScope, Action onConnect)
@@ -226,6 +294,7 @@ public sealed class McpParameterBatchTests
             else
             {
                 var scope = FixedScope();
+                catalog.Owner = scope.Owner;
                 var module = moduleFactory(scope);
                 McpToolCatalog.Wire(options, scope, module);
             }

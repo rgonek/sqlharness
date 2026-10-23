@@ -373,6 +373,8 @@ internal static class AgentStatementEvidenceProjection
         var runsByCase = runs
             .GroupBy(run => (run.Variant, run.ParameterSet, run.MatrixCell))
             .ToDictionary(group => group.Key, group => group.ToArray());
+        var omittedByCase = section.OmittedByCase
+            .ToDictionary(item => (item.Variant, item.ParameterSet, item.MatrixCell), item => item.Count);
         var caseKeys = statementsByCase.Keys.Concat(runsByCase.Keys).ToHashSet();
 
         var groups = caseKeys
@@ -385,7 +387,7 @@ internal static class AgentStatementEvidenceProjection
                     .Sum(group => Math.Max(0, group.Count() - rows.Count(row => row.Repetition == group.Key)));
                 var partial = rows.Count(row => row.CounterAttribution == "partial");
                 var unavailable = rows.Count(row => row.CounterAttribution == "unavailable");
-                var attribution = partial > 0 || section.OmittedStatements > 0 || (missingRunCount > 0 && rows.Length > 0)
+                var attribution = partial > 0 || (rows.Length > 0 && omittedByCase.GetValueOrDefault(key) > 0) || (missingRunCount > 0 && rows.Length > 0)
                     ? "partial"
                     : rows.Length > 0 && unavailable == 0 && rows.All(row => row.CounterAttribution == "complete")
                         ? "complete"
