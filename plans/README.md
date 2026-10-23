@@ -4,8 +4,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 
 ## In progress
 
-Plan [103](103-agent-evidence-completeness.md): evidence completeness and hidden work — implementation on `plan-103`; staged/final reviews and Windows verification in progress; 082 predecessor confirmed; no merge/push ([evidence](103-verification-evidence.md)).
-
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
@@ -43,6 +41,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [103](103-agent-evidence-completeness.md) | Versioned statement evidence, attribution completeness and bounded hidden-work limitations for agents | DONE on `plan-103`; Luna task reviews and Sol low whole-branch/scoped reviews approved; Windows gate and branch formatting passed on `874b4fc9`; not merged/pushed ([evidence](103-verification-evidence.md)) |
 | [097](097-singleton-parameter-batches.md) | Named/file/matrix singleton batches with separate 32+1 operation identity | DONE on `plan-097`; task and Sol low whole-branch reviews approved; Windows gate and correct-base branch format passed on `aea93d6`; locally integrated into `main` at `3563283`, verified product unchanged; not pushed ([evidence](097-verification-evidence.md)) |
 | [096](096-bounded-large-parameter-files.md) | Practical typed-parameter files: bounded 16 MiB/file and 32 MiB aggregate raw ingress; retain materialization safeguards | DONE; locally integrated into `main` at `d4e018c`; all reviews approved; verified product/test code unchanged; not pushed ([evidence](096-verification-evidence.md)) |
 | [101](101-dashboard-operation-annotations-setting.md) | Dashboard agent operation annotation toggle with atomic journal saves and restart guidance | DONE; locally integrated into `main` at `61ca7a4`; reviewed and Windows-verified product `13fb02e` unchanged; not pushed ([evidence](101-verification-evidence.md)) |

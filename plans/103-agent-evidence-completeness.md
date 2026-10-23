@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: IMPLEMENTED on `plan-103`; staged/final review and Windows verification in progress. See [evidence](103-verification-evidence.md).
+- Status: DONE on `plan-103`; task and whole-branch reviews approved, Windows gate and explicit branch formatting passed on `874b4fc9`; not merged or pushed. See [evidence](103-verification-evidence.md).
 - Priority: **P1** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -69,32 +69,32 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 1: Capture current evidence loss
 
-- [ ] Add synthetic scalar-UDF and multi-statement-TVF fixtures following StatementMetricsTests and Journal/JournalBenchmarkBuilderTests. Assert the extractor/journal evidence and currently absent artifact/agent fields separately. Include a multi-set comparison with only one affected statement and a PostgreSQL/legacy artifact with unavailable SQL Server attribution.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Add synthetic scalar-UDF and multi-statement-TVF fixtures following StatementMetricsTests and Journal/JournalBenchmarkBuilderTests. Assert the extractor/journal evidence and currently absent artifact/agent fields separately. Include a multi-set comparison with only one affected statement and a PostgreSQL/legacy artifact with unavailable SQL Server attribution.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 2: Persist and serve controlled evidence
 
-- [ ] Extend Artifacts.cs persistence and ArtifactReader.cs models instead of opening the journal/dashboard API to the agent. Reuse the reconciled attribution semantics without rerunning SQL or coupling artifact reads to journal retention. Page evidence with the existing source/byte budgets. Test old manifests, incomplete identity, long function names, continuation, and two statements sharing operator node IDs.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Extend Artifacts.cs persistence and ArtifactReader.cs models instead of opening the journal/dashboard API to the agent. Reuse the reconciled attribution semantics without rerunning SQL or coupling artifact reads to journal retention. Page evidence with the existing source/byte budgets. Test old manifests, incomplete identity, long function names, continuation, and two statements sharing operator node IDs.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 3: Expose compact limitations and verify the workflow
 
-- [ ] Update AgentBenchmarkOutput, projection, MCP descriptions/runtime capabilities only where semantics require it, and docs/mcp/artifacts.md. Add real-SDK offline workflow coverage where the agent can retrieve the affected statement evidence at minimum/default budgets; clipped detail must not change partial into complete. Run focused tests, staged task review and final branch review, then the Windows gate.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Update AgentBenchmarkOutput, projection, MCP descriptions/runtime capabilities only where semantics require it, and docs/mcp/artifacts.md. Add real-SDK offline workflow coverage where the agent can retrieve the affected statement evidence at minimum/default budgets; clipped detail must not change partial into complete. Run focused tests, staged task review and final branch review, then the Windows gate.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ## Verification and done criteria
 
 Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "StatementMetricsTests|ArtifactReaderTests|AgentOptimizationWorkflowTests|McpTokenBudgetTests"` and, for MCP tests, `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "StatementMetricsTests|ArtifactReaderTests|AgentOptimizationWorkflowTests|McpTokenBudgetTests"`. Both must exit 0 with the intended tests actually discovered; a zero-test run is not evidence.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan103-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
+- [x] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
+- [x] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan103-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
+- [x] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
+- [x] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
+- [x] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
 
 ## STOP conditions
 
