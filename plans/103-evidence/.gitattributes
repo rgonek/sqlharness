@@ -1,0 +1,2 @@
+# Preserve raw verification output verbatim.
+*.log -whitespace
