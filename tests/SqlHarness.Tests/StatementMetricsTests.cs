@@ -242,6 +242,38 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
+    public void Compact_statement_evidence_marks_missing_repetition_and_entire_case()
+    {
+        var plan = JournalPlan("SELECT dbo.fn_scalar()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 28, elapsedTime: 29,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)])]);
+        CompareRunArtifact CompleteRun(string variant, int repetition) => new(
+            variant, repetition, 0, 29, 0, new Dictionary<string, long>(), "result", [plan], 1)
+        {
+            TableIo = [new TableIoCounters("", 0, 0, 0, 0, 0, 0, 0, 0)],
+        };
+        CompareRunArtifact MissingRun(string variant, int repetition) => new(
+            variant, repetition, 0, 0, 0, new Dictionary<string, long>(), "result", [], 1);
+
+        var evidence = AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind,
+        [
+            CompleteRun("candidate", 1),
+            MissingRun("candidate", 2),
+            MissingRun("baseline", 1),
+        ]);
+
+        var candidate = Assert.Single(evidence.Cases, item => item.Variant == "candidate");
+        Assert.Equal("partial", candidate.CounterAttribution);
+        Assert.Contains(candidate.Limitations,
+            limitation => limitation.Contains("statement evidence is missing for 1 of 2 runs", StringComparison.OrdinalIgnoreCase));
+
+        var baseline = Assert.Single(evidence.Cases, item => item.Variant == "baseline");
+        Assert.Equal("unavailable", baseline.CounterAttribution);
+        Assert.Contains(baseline.Limitations,
+            limitation => limitation.Contains("statement evidence is missing for 1 of 1 runs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Missing_statement_attribution_is_unavailable_and_legacy_artifact_shape_stays_unchanged()
     {
         Assert.Equal(

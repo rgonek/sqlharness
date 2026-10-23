@@ -35,3 +35,23 @@ The offline budget/retrieval workflow also passed directly at both requested bud
 ## Scope and remaining verification
 
 No database was contacted. No artifact scan, storage diagnostic, grant, journal-retention dependency, full `just verify`, or branch formatter was added or run. The full gate and branch formatting remain with the controller after review. The collected-counter coverage label is not a total-cost or equivalence claim, and saved statement artifacts remain the source for the exact per-repetition detail.
+
+## Round 1 review fix: missing run evidence
+
+The reviewer found that cases were initially derived from extracted statement rows, so an empty repetition or a wholly empty case could disappear. The projection now unions every collected run case with extracted cases, compares expected versus observed runs by repetition, marks a case with some surviving evidence `partial`, and marks an entirely empty case `unavailable`. Each affected case receives a limitation such as `Statement evidence is missing for 1 of 2 runs.` This keeps the correction local to the affected variant/set/cell and does not call missing evidence complete.
+
+RED command, before the projection change:
+
+```powershell
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore -m:1 -p:SkipDashboardUi=true --filter "FullyQualifiedName~Compact_statement_evidence_marks_missing_repetition_and_entire_case" --logger "console;verbosity=minimal"
+```
+
+The new regression failed as expected: candidate attribution was `complete` when the second repetition had no statement evidence. Its input also contains a baseline case with no evidence alongside the candidate case.
+
+Final covering focused command, after the fix:
+
+```powershell
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore -m:1 -p:SkipDashboardUi=true --filter "StatementMetricsTests|AgentOutputTests" --logger "console;verbosity=minimal"
+```
+
+Actual discovery passed 116/116 tests, including the missing repetition/empty case regression, scalar UDF limitation regression, and agent output coverage. No full gate was run for this focused review fix.

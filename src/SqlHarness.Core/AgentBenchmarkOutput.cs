@@ -370,21 +370,29 @@ internal static class AgentStatementEvidenceProjection
         var statementsByCase = section.Statements
             .GroupBy(statement => (statement.Variant, statement.ParameterSet, statement.MatrixCell))
             .ToDictionary(group => group.Key, group => group.ToArray());
-        var caseKeys = statementsByCase.Keys.ToHashSet();
-        if (section.OmittedStatements > 0)
-            caseKeys.UnionWith(runs.Select(run => (run.Variant, run.ParameterSet, run.MatrixCell)));
+        var runsByCase = runs
+            .GroupBy(run => (run.Variant, run.ParameterSet, run.MatrixCell))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var caseKeys = statementsByCase.Keys.Concat(runsByCase.Keys).ToHashSet();
 
         var groups = caseKeys
             .Select(key =>
             {
                 var rows = statementsByCase.GetValueOrDefault(key, []);
+                var caseRuns = runsByCase.GetValueOrDefault(key, []);
+                var missingRunCount = caseRuns
+                    .GroupBy(run => run.Repetition)
+                    .Sum(group => Math.Max(0, group.Count() - rows.Count(row => row.Repetition == group.Key)));
                 var partial = rows.Count(row => row.CounterAttribution == "partial");
                 var unavailable = rows.Count(row => row.CounterAttribution == "unavailable");
-                var attribution = partial > 0 || section.OmittedStatements > 0
+                var attribution = partial > 0 || section.OmittedStatements > 0 || (missingRunCount > 0 && rows.Length > 0)
                     ? "partial"
                     : rows.Length > 0 && unavailable == 0 && rows.All(row => row.CounterAttribution == "complete")
                         ? "complete"
                         : "unavailable";
+                var limitations = rows.SelectMany(row => row.Limitations).ToList();
+                if (missingRunCount > 0)
+                    limitations.Add($"Statement evidence is missing for {missingRunCount} of {caseRuns.Length} runs.");
                 return new AgentStatementEvidenceCase(
                     key.Variant,
                     key.ParameterSet,
@@ -393,7 +401,7 @@ internal static class AgentStatementEvidenceProjection
                     rows.Length,
                     partial,
                     unavailable,
-                    rows.SelectMany(row => row.Limitations).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+                    limitations.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
             })
             .OrderByDescending(item => item.CounterAttribution == "partial")
             .ThenBy(item => item.Variant, StringComparer.Ordinal)
