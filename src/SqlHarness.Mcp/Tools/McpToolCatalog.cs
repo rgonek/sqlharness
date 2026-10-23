@@ -385,7 +385,7 @@ public sealed class McpToolHandlers(
         string section,
         [Description("Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.")]
         int? cursor = null,
-        [Description("Plan variant: baseline, candidate, or query.")]
+        [Description("Plan variant: query for measure and measure-set (default when omitted); baseline or candidate for compare (required).")]
         string? variant = null,
         [Description("Zero-based statement ordinal for section=plan.")]
         int statement = 0,

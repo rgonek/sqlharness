@@ -134,6 +134,39 @@ public class ArtifactReaderTests
             planSelector: new ArtifactPlanSelector(variant)));
 
         Assert.Equal(SqlHarnessExitCode.Safety, error.ExitCode);
+        Assert.Contains("query", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("measure", "candidate", "query")]
+    [InlineData("measure-set", "baseline", "query")]
+    [InlineData("compare", "query", "baseline, candidate")]
+    public void Plan_section_invalid_variant_reports_values_for_manifest_kind(
+        string artifactKind, string variant, string acceptedValues)
+    {
+        using var temp = new TempDirectory();
+        const string id = "plan-invalid-variant-diagnostic";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(new
+        {
+            manifestVersion = 1,
+            artifactKind,
+            reportFile = "report.json",
+            sections = new[] { "plan" },
+            owner = new { profile = "p", vars = new Dictionary<string, string>(), engine = "sqlserver", server = "s", database = "d" },
+        }));
+
+        var wrongOwner = new ArtifactOwner("other", new Dictionary<string, string>(), "sqlserver", "s", "d");
+        var scopeError = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(
+            temp.Path, id, "plan", wrongOwner, planSelector: new ArtifactPlanSelector(variant)));
+        Assert.Contains("not available in the current scope", scopeError.Message, StringComparison.Ordinal);
+
+        var error = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(
+            temp.Path, id, "plan", planSelector: new ArtifactPlanSelector(variant)));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, error.ExitCode);
+        Assert.Contains(acceptedValues, error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

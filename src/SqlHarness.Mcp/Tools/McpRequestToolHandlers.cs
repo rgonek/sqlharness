@@ -193,7 +193,8 @@ public sealed class McpRequestToolHandlers(
         [Description(McpToolCatalog.ArtifactSectionDescription)][AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells", "plan")] string section,
         [Description("Request target.")] McpRequestScopeArgument target,
         [Description("Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.")] int? cursor = null,
-        [Description("Plan variant: baseline, candidate, or query.")] string? variant = null,
+        [Description("Plan variant: query for measure and measure-set (default when omitted); baseline or candidate for compare (required).")]
+        string? variant = null,
         [Description("Zero-based statement ordinal for section=plan.")] int statement = 0,
         [Description("Measure parameter set for section=plan.")] string? parameterSet = null,
         [Description(McpToolCatalog.RepetitionDescription)] int? repetition = null,

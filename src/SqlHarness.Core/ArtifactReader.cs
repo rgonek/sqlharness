@@ -465,7 +465,17 @@ public static class ArtifactReader
             MeasureSetKind => selector.Variant == "query",
             _ => false,
         };
-        if (!validVariant) throw new ArtifactReadException("The artifact plan variant is invalid.", SqlHarnessExitCode.Safety);
+        if (!validVariant)
+        {
+            var message = manifest.ArtifactKind switch
+            {
+                CompareKind => "The artifact plan variant is invalid for compare; supported values: baseline, candidate.",
+                MeasureKind => "The artifact plan variant is invalid for measure; supported value: query.",
+                MeasureSetKind => "The artifact plan variant is invalid for measure-set; supported value: query.",
+                _ => "The artifact plan variant is invalid.",
+            };
+            throw new ArtifactReadException(message, SqlHarnessExitCode.Safety);
+        }
         var storedVariant = selector.Variant == "query" && manifest.ArtifactKind is (MeasureKind or MeasureSetKind)
             ? "measure"
             : selector.Variant;
