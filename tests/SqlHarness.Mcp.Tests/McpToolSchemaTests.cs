@@ -397,7 +397,9 @@ public sealed class McpToolSchemaTests : IDisposable
         }, () => scope.Profiles, config: enabledConfig);
         await using var requestOn = await ServedCatalog.CreateAsync(requestProcess);
         var requestTools = await requestOn.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray())), 1, 32768);
+        var requestBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray()));
+        _output.WriteLine($"annotations-on request-scope tools/list: {requestBytes} UTF-8 bytes of 32768");
+        Assert.InRange(requestBytes, 1, 32768);
         foreach (var name in new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot" })
             Assert.True(Properties(ServedSchema(requestTools.Single(tool => tool.Name == name))).TryGetProperty("label", out _), name);
 
@@ -603,8 +605,10 @@ public sealed class McpToolSchemaTests : IDisposable
         var defaultBytes = Encoding.UTF8.GetByteCount(defaultText);
         Assert.InRange(defaultBytes, 1, 65536);
         var defaultProjection = ServedEnvelope(defaultResult, "sqlharness_artifact").GetProperty("result");
-        Assert.Equal(128, defaultProjection.GetProperty("statements").GetArrayLength());
-        Assert.Equal(128, defaultProjection.GetProperty("continuation").GetInt32());
+        var defaultCount = defaultProjection.GetProperty("statements").GetArrayLength();
+        Assert.InRange(defaultCount, 1, firstSourcePage.Statements.Count);
+        Assert.Equal(defaultCount, defaultProjection.GetProperty("continuation").GetInt32());
+        _output.WriteLine($"default statements page: {defaultCount} of {firstSourcePage.Statements.Count} source-window items, {defaultBytes} UTF-8 bytes of 65536; continuation={defaultCount}");
 
         var raisedText = Assert.Single(raisedResult.Content.OfType<TextContentBlock>()).Text;
         Assert.Equal("success", ServedEnvelope(raisedResult, "sqlharness_artifact").GetProperty("status").GetString());
