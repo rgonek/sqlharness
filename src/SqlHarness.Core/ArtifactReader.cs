@@ -243,7 +243,7 @@ public static class ArtifactReader
             OperatorsSection => ReadOperators(directory, artifactId, manifest, cursor ?? 0, pageSize ?? DefaultOperatorsPageSourceItems),
             StatementsSection => ReadStatements(directory, artifactId, manifest, cursor ?? 0, pageSize ?? DefaultStatementsPageSourceItems),
             MatrixCellsSection => ReadMatrixCells(directory, artifactId, cursor ?? 0, pageSize ?? DefaultMatrixCellsPageSourceItems),
-            PlanSection => ReadPlan(directory, artifactId, manifest, planSelector ?? new ArtifactPlanSelector(DefaultVariant(manifest.ArtifactKind)), cursor ?? 0, includeText, pageSize ?? MaxPlanPageSourceNodes),
+            PlanSection => ReadPlan(directory, artifactId, manifest, planSelector, cursor ?? 0, includeText, pageSize ?? MaxPlanPageSourceNodes),
             _ => throw new ArtifactReadException(
                 $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.",
                 SqlHarnessExitCode.Safety),
@@ -450,18 +450,14 @@ public static class ArtifactReader
         };
     }
 
-    private static string DefaultVariant(string artifactKind) => artifactKind switch
-    {
-        CompareKind => "baseline",
-        MeasureKind or MeasureSetKind => "query",
-        _ => throw new ArtifactReadException("A parameter-set variant must be selected for this artifact.", SqlHarnessExitCode.Safety),
-    };
-
     private static ArtifactPlanSection ReadPlan(string directory, string artifactId, ArtifactManifest manifest,
-        ArtifactPlanSelector selector, int cursor, bool includeText, int pageSize)
+        ArtifactPlanSelector? selector, int cursor, bool includeText, int pageSize)
     {
+        selector ??= new ArtifactPlanSelector("");
         if (selector.Statement < 0 || selector.Repetition is < 1)
             throw new ArtifactReadException("The artifact plan selector is invalid.", SqlHarnessExitCode.Safety);
+        if (string.IsNullOrEmpty(selector.Variant) && manifest.ArtifactKind is (MeasureKind or MeasureSetKind))
+            selector = selector with { Variant = "query" };
         var validVariant = manifest.ArtifactKind switch
         {
             CompareKind => selector.Variant is "baseline" or "candidate",

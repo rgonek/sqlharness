@@ -70,24 +70,104 @@ public class ArtifactReaderTests
             reportFile = "report.json",
             sections = new[] { "plan" },
         }));
-        const string planName = "measure-001-000-000.plan.json";
-        File.WriteAllText(Path.Combine(directory, "plans", planName),
-            "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\"}}]}");
-        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), JsonSerializer.Serialize(new
+        const string firstPlanName = "measure-001-000-000.plan.json";
+        const string secondPlanName = "measure-002-000-000.plan.json";
+        const string planJson = "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\"}},{\"root\":{\"physicalOp\":\"Filter\"}}]}";
+        File.WriteAllText(Path.Combine(directory, "plans", firstPlanName), planJson);
+        File.WriteAllText(Path.Combine(directory, "plans", secondPlanName), planJson);
+        File.WriteAllLines(Path.Combine(directory, "runs.jsonl"), new[]
         {
-            variant = "measure",
-            repetition = 1,
-            parameterSet,
-            planJsonFiles = new[] { planName },
-        }));
+            JsonSerializer.Serialize(new
+            {
+                variant = "measure",
+                repetition = 1,
+                parameterSet,
+                planJsonFiles = new[] { firstPlanName },
+            }),
+            JsonSerializer.Serialize(new
+            {
+                variant = "measure",
+                repetition = 2,
+                parameterSet,
+                planJsonFiles = new[] { secondPlanName },
+            }),
+        });
 
+        var defaulted = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("", Statement: 1, ParameterSet: parameterSet, Repetition: 1)));
         var section = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
-            planSelector: new ArtifactPlanSelector("query", ParameterSet: parameterSet)));
+            planSelector: new ArtifactPlanSelector("query", Statement: 1, ParameterSet: parameterSet, Repetition: 1)));
 
+        Assert.Equal(section.ArtifactId, defaulted.ArtifactId);
+        Assert.Equal("query", defaulted.Variant);
+        Assert.Equal(section.ParameterSet, defaulted.ParameterSet);
+        Assert.Equal(section.Statement, defaulted.Statement);
+        Assert.Equal(section.StatementCount, defaulted.StatementCount);
+        Assert.Equal(1, defaulted.Statement);
+        Assert.Equal(section.Repetition, defaulted.Repetition);
+        Assert.Equal(1, defaulted.Repetition);
+        Assert.Equal(section.Selection, defaulted.Selection);
+        Assert.Equal(section.AvailableRepetitions, defaulted.AvailableRepetitions);
+        Assert.Equal(new[] { 1, 2 }, defaulted.AvailableRepetitions);
+        Assert.Equal(section.NodeCount, defaulted.NodeCount);
+        Assert.Equal(section.Nodes, defaulted.Nodes);
         Assert.Equal("query", section.Variant);
         Assert.Equal(parameterSet, section.ParameterSet);
         Assert.Equal(1, section.Repetition);
-        Assert.Equal("Scan", Assert.Single(section.Nodes).Operator.PhysicalOp);
+        Assert.Equal("Filter", Assert.Single(section.Nodes).Operator.PhysicalOp);
+    }
+
+    [Theory]
+    [InlineData("Query")]
+    [InlineData("baseline")]
+    [InlineData(" query")]
+    public void Plan_section_does_not_repair_explicit_nonempty_measure_variants(string variant)
+    {
+        using var temp = new TempDirectory();
+        const string id = "plan-invalid-measure-variant";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"measure\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+
+        var error = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector(variant)));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, error.ExitCode);
+    }
+
+    [Fact]
+    public void Compare_plan_section_requires_an_explicit_variant()
+    {
+        using var temp = new TempDirectory();
+        const string id = "plan-empty-compare-variant";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+
+        var omittedError = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan"));
+        var emptyError = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("")));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, omittedError.ExitCode);
+        Assert.Equal(SqlHarnessExitCode.Safety, emptyError.ExitCode);
+    }
+
+    [Fact]
+    public void Non_plan_sections_reject_plan_selectors_before_reading_the_section()
+    {
+        using var temp = new TempDirectory();
+        const string id = "non-plan-selector";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"measure\",\"reportFile\":\"report.json\",\"sections\":[\"summary\"]}");
+
+        var error = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "summary",
+            planSelector: new ArtifactPlanSelector("")));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, error.ExitCode);
     }
 
     [Fact]
