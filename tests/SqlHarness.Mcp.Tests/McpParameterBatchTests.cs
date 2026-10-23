@@ -84,6 +84,75 @@ public sealed class McpParameterBatchTests
     }
 
     [Fact]
+    public async Task Served_compare_characterizes_current_offline_list_failures_for_both_IN_forms()
+    {
+        var attempts = 0;
+        await using var served = await ServedCatalog.CreateAsync(requestScope: false, () => Interlocked.Increment(ref attempts));
+        var forms = new[] { "SELECT 1 WHERE 1 IN @Ids", "SELECT 1 WHERE 1 IN (@Ids)" };
+        var scenarios = new[]
+        {
+            ("singleton", new string?[] { "7" }, false, false, false),
+            ("multi-value", new string?[] { "7", "8" }, false, false, false),
+            ("empty-list", Array.Empty<string?>(), false, false, false),
+            ("multiple-sets", new string?[] { "7" }, true, false, false),
+            ("setup-reuse", new string?[] { "7", "8" }, false, true, false),
+            ("caller-Ids1-collision", new string?[] { "7" }, false, false, true),
+        };
+        var observed = 0;
+        var mismatches = new List<string>();
+        foreach (var sql in forms)
+        foreach (var (name, values, multipleSets, setupReuse, collision) in scenarios)
+        {
+            var parameters = new List<object?>
+            {
+                new { name = "Ids", type = "int", kind = "list", values },
+            };
+            if (collision)
+                parameters.Add(new { name = "Ids1", type = "int", value = "99" });
+            var sets = new List<object?> { new { name = "only", parameters } };
+            if (multipleSets)
+                sets.Add(new { name = "second", parameters = new[] { new { name = "Ids", type = "int", kind = "list", values = new string?[] { "9", "10" } } } });
+
+            var querySql = setupReuse
+                ? sql.Contains("(@Ids)", StringComparison.Ordinal) ? "SELECT Id FROM #ids WHERE Id IN (@Ids)" : "SELECT Id FROM #ids WHERE Id IN @Ids"
+                : sql;
+            var setupSql = sql.Contains("(@Ids)", StringComparison.Ordinal)
+                ? "SELECT Id INTO #ids FROM dbo.Items WHERE Id IN (@Ids)"
+                : "SELECT Id INTO #ids FROM dbo.Items WHERE Id IN @Ids";
+            var arguments = new Dictionary<string, object?>
+            {
+                ["baseline"] = new { sql = querySql },
+                ["candidate"] = new { sql = querySql },
+                ["subject"] = "plan107-diagnostic",
+                ["scope"] = "whole",
+                ["parameterSets"] = sets,
+                ["repeat"] = 1,
+                ["dryRun"] = true,
+            };
+            if (setupReuse)
+                arguments["setup"] = new { sql = setupSql };
+
+            var result = await served.Client.CallToolAsync("sqlharness_compare", arguments, cancellationToken: CancellationToken.None);
+            var text = Text(result);
+            var envelope = Envelope(result);
+            var status = envelope.GetProperty("error").GetProperty("code").GetString();
+            var expectedCurrentError = sql.Contains("(@Ids)", StringComparison.Ordinal)
+                ? values.Length == 0 ? "List expansion parameter '@Ids' collides" : "List expansion parameter '@Ids1' collides"
+                : "ParseError";
+            _output.WriteLine($"CASE {name} form={sql} expected-current=safety_rejected/{expectedCurrentError} expected-contract={(collision ? "safety_rejected" : "success")} request={JsonSerializer.Serialize(arguments)} observed={text}");
+            var errorMessage = envelope.GetProperty("error").GetProperty("message").GetString() ?? string.Empty;
+            if (!string.Equals("safety_rejected", status, StringComparison.OrdinalIgnoreCase)
+                || !errorMessage.Contains(expectedCurrentError, StringComparison.OrdinalIgnoreCase))
+                mismatches.Add($"{name} expected current safety rejection containing '{expectedCurrentError}', observed {text}");
+            observed++;
+        }
+
+        Assert.Equal(0, Volatile.Read(ref attempts));
+        _output.WriteLine($"Plan107 known-source offline diagnostic: {observed} cases; connection attempts=0; source assembly={typeof(McpParameterBatchTests).Assembly.GetName().Version}; source informational version={typeof(McpParameterBatchTests).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false).Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion}.");
+        Assert.Empty(mismatches);
+    }
+
+    [Fact]
     public async Task Explicit_empty_collection_is_rejected_and_33_cases_get_split_guidance()
     {
         var scope = FixedScope();

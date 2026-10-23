@@ -106,6 +106,71 @@ public class SqlHarnessCompareTests
         Assert.Equal("@Ids1", Assert.Single(Assert.IsType<SqlHarnessDryRunReport>(outcome.Report).Parameters).Name);
     }
 
+    [Theory]
+    [InlineData("SELECT 1 WHERE 1 IN @Ids", "ParseError")]
+    [InlineData("SELECT 1 WHERE 1 IN (@Ids)", "List expansion parameter '@Ids1' collides")]
+    public async Task Compare_dry_run_characterizes_current_named_set_list_failure(string sql, string expectedError)
+    {
+        var operation = new SqlHarnessCompareMatrixOperation(
+            Target(), null, sql, sql, [], 30, 1, "")
+        {
+            ParameterSets =
+            [
+                new SqlHarnessParameterSetInput("singleton", []) { TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["7"] }] },
+                new SqlHarnessParameterSetInput("multiple", []) { TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["7", "8"] }] },
+                new SqlHarnessParameterSetInput("empty", []) { TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = [] }] },
+            ],
+            DryRun = true,
+            Context = new CompareContext("plan107-diagnostic", "whole"),
+        };
+
+        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains(expectedError, outcome.SafeError ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("IN @Ids", "ParseError")]
+    [InlineData("IN (@Ids)", "List expansion parameter '@Ids1' collides")]
+    public async Task Compare_dry_run_characterizes_current_setup_list_reuse_failure(string inClause, string expectedError)
+    {
+        var setup = $"SELECT Id INTO #ids FROM dbo.Items WHERE Id {inClause}";
+        var query = $"SELECT Id FROM #ids WHERE Id {inClause}";
+        var operation = new SqlHarnessCompareMatrixOperation(Target(), setup, query, query, [], 30, 1, "")
+        {
+            ParameterSets = [new SqlHarnessParameterSetInput("one", [])
+            {
+                TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["7", "8"] }],
+            }],
+            DryRun = true,
+            Context = new CompareContext("plan107-diagnostic", "whole"),
+        };
+
+        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains(expectedError, outcome.SafeError ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Compare_dry_run_rejects_caller_scalar_that_collides_with_generated_list_name()
+    {
+        var operation = new SqlHarnessCompareMatrixOperation(
+            Target(), null, "SELECT 1 WHERE 1 IN (@Ids)", "SELECT 1 WHERE 1 IN (@Ids)", [], 30, 1, "")
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Ids1", "int", "99")],
+            ParameterSets = [new SqlHarnessParameterSetInput("one", []) { TypedParameters = [new SqlHarnessParameterInput("Ids", "int", null) { Kind = "list", Values = ["7"] }] }],
+            DryRun = true,
+            Context = new CompareContext("plan107-diagnostic", "whole"),
+        };
+
+        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("@Ids1", outcome.SafeError ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task Compare_report_includes_setup_and_variant_isolation_notices()
     {

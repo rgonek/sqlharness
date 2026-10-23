@@ -1,0 +1,418 @@
+[
+  {
+    "case": "singleton",
+    "form": "SELECT 1 WHERE 1 IN @Ids",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7"
+              ]
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  },
+  {
+    "case": "multi-value",
+    "form": "SELECT 1 WHERE 1 IN @Ids",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7",
+                "8"
+              ]
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  },
+  {
+    "case": "empty-list",
+    "form": "SELECT 1 WHERE 1 IN @Ids",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": []
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  },
+  {
+    "case": "multiple-sets",
+    "form": "SELECT 1 WHERE 1 IN @Ids",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "second",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "9",
+                "10"
+              ]
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  },
+  {
+    "case": "setup-reuse",
+    "form": "SELECT 1 WHERE 1 IN @Ids",
+    "request": {
+      "baseline": {
+        "sql": "SELECT Id FROM #ids WHERE Id IN @Ids"
+      },
+      "candidate": {
+        "sql": "SELECT Id FROM #ids WHERE Id IN @Ids"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7",
+                "8"
+              ]
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true,
+      "setup": {
+        "sql": "SELECT Id INTO #ids FROM dbo.Items WHERE Id IN @Ids"
+      }
+    }
+  },
+  {
+    "case": "caller-Ids1-collision",
+    "form": "SELECT 1 WHERE 1 IN @Ids",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN @Ids"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7"
+              ]
+            },
+            {
+              "name": "Ids1",
+              "type": "int",
+              "value": "99"
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  },
+  {
+    "case": "singleton",
+    "form": "SELECT 1 WHERE 1 IN (@Ids)",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7"
+              ]
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  },
+  {
+    "case": "multi-value",
+    "form": "SELECT 1 WHERE 1 IN (@Ids)",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7",
+                "8"
+              ]
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  },
+  {
+    "case": "empty-list",
+    "form": "SELECT 1 WHERE 1 IN (@Ids)",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": []
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  },
+  {
+    "case": "multiple-sets",
+    "form": "SELECT 1 WHERE 1 IN (@Ids)",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "second",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "9",
+                "10"
+              ]
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  },
+  {
+    "case": "setup-reuse",
+    "form": "SELECT 1 WHERE 1 IN (@Ids)",
+    "request": {
+      "baseline": {
+        "sql": "SELECT Id FROM #ids WHERE Id IN (@Ids)"
+      },
+      "candidate": {
+        "sql": "SELECT Id FROM #ids WHERE Id IN (@Ids)"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7",
+                "8"
+              ]
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true,
+      "setup": {
+        "sql": "SELECT Id INTO #ids FROM dbo.Items WHERE Id IN (@Ids)"
+      }
+    }
+  },
+  {
+    "case": "caller-Ids1-collision",
+    "form": "SELECT 1 WHERE 1 IN (@Ids)",
+    "request": {
+      "baseline": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "candidate": {
+        "sql": "SELECT 1 WHERE 1 IN (@Ids)"
+      },
+      "subject": "plan107-diagnostic",
+      "scope": "whole",
+      "parameterSets": [
+        {
+          "name": "only",
+          "parameters": [
+            {
+              "name": "Ids",
+              "type": "int",
+              "kind": "list",
+              "values": [
+                "7"
+              ]
+            },
+            {
+              "name": "Ids1",
+              "type": "int",
+              "value": "99"
+            }
+          ]
+        }
+      ],
+      "repeat": 1,
+      "dryRun": true
+    }
+  }
+]
