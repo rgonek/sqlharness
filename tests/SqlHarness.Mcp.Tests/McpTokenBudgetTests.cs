@@ -69,6 +69,103 @@ public sealed class McpTokenBudgetTests
             new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = "^[a-z]+$" }, "integrated"),
     });
 
+    [Fact]
+    public async Task Offline_artifact_requests_default_omitted_variant_only_for_measure_kinds()
+    {
+        var savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        var home = Path.Combine(Path.GetTempPath(), "sqlharness-artifact-variant-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(home);
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", home);
+        var pipes = new[] { new Pipe(), new Pipe() };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        Task serverTask = Task.CompletedTask;
+        try
+        {
+            var profileName = "artifact-variant-default";
+            var scope = McpScope.Create(new McpServerOptions { Profile = profileName }, new Dictionary<string, TargetProfile>
+            {
+                [profileName] = new("offline.invalid", "fixture", new Dictionary<string, string>(), "integrated"),
+            });
+            foreach (var artifactKind in new[] { "measure", "measure-set", "compare" })
+            {
+                var id = "omitted-variant-" + artifactKind;
+                var directory = Path.Combine(SqlHarnessPaths.CompareDir, id);
+                Directory.CreateDirectory(Path.Combine(directory, "plans"));
+                File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(
+                    new ArtifactManifest(ArtifactReader.CurrentManifestVersion, artifactKind, "report.json", ["plan"])
+                    { Owner = scope.Owner }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                File.WriteAllText(Path.Combine(directory, "plans", "measure-001-000-000.plan.json"),
+                    "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\"}}]}");
+                File.WriteAllText(Path.Combine(directory, "runs.jsonl"),
+                    "{\"variant\":\"measure\",\"repetition\":1,\"planJsonFiles\":[\"measure-001-000-000.plan.json\"]}");
+            }
+
+            var clientToServer = pipes[0];
+            var serverToClient = pipes[1];
+            var serverOptions = new ModelContextProtocol.Server.McpServerOptions
+            {
+                ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "artifact-variant-test" },
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
+            };
+            McpToolCatalog.Wire(serverOptions, scope, scope.CreateModule());
+            var server = McpServer.Create(
+                new StreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream(), "artifact-variant-server", NullLoggerFactory.Instance),
+                serverOptions, NullLoggerFactory.Instance, serviceProvider: null);
+            serverTask = server.RunAsync(cts.Token);
+            await using var client = await McpClient.CreateAsync(
+                new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+                new McpClientOptions
+                {
+                    ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
+                    ProtocolVersion = McpHost.FallbackProtocolVersion,
+                }, NullLoggerFactory.Instance, cts.Token);
+
+            foreach (var artifactKind in new[] { "measure", "measure-set" })
+            {
+                var result = await client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+                {
+                    ["id"] = "omitted-variant-" + artifactKind,
+                    ["section"] = "plan",
+                }, cancellationToken: cts.Token);
+                using var envelope = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+                Assert.Equal("success", envelope.RootElement.GetProperty("status").GetString());
+                Assert.Equal("query", envelope.RootElement.GetProperty("result").GetProperty("variant").GetString());
+            }
+
+            var compareResult = await client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+            {
+                ["id"] = "omitted-variant-compare",
+                ["section"] = "plan",
+            }, cancellationToken: cts.Token);
+            using var compareEnvelope = JsonDocument.Parse(Assert.Single(compareResult.Content.OfType<TextContentBlock>()).Text);
+            Assert.Equal("error", compareEnvelope.RootElement.GetProperty("status").GetString());
+            Assert.Contains("baseline, candidate", compareEnvelope.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            try
+            {
+                await serverTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", savedHome);
+            try
+            {
+                Directory.Delete(home, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
     private static SqlHarnessOutcome LargeQueryOutcome(int targetBytes)
     {
         var rows = new List<IReadOnlyList<object?>>();

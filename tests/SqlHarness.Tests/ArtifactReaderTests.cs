@@ -166,6 +166,7 @@ public class ArtifactReaderTests
             temp.Path, id, "plan", planSelector: new ArtifactPlanSelector(variant)));
 
         Assert.Equal(SqlHarnessExitCode.Safety, error.ExitCode);
+        Assert.Contains($"for {artifactKind}", error.Message, StringComparison.Ordinal);
         Assert.Contains(acceptedValues, error.Message, StringComparison.Ordinal);
     }
 
