@@ -15,6 +15,7 @@
 ## Status and priority
 
 - Status: DIAGNOSIS COMPLETE — known-source compare failures confirmed; follow-up implementation and historical deployment attribution remain open. Task 1, Task 2, Task 2 re-review, Task 3, and whole-branch reviews are archived in the [review archive](107-evidence/reviews/README.md). Reviews are approved; the two whole-branch wording Minors are corrected in the diagnosis, approved by the final scoped Sol low re-review. Windows `just verify` passed on `19035a07f16f04e77977ab5f1f15ecc01090ca21`; results and nonempty stage logs are in [the Task 3 diagnosis](107-evidence/task-3-diagnosis.md) and [gate evidence](107-evidence/windows-gate-20261023-task3/).
+- Local integration: merged into `main` at `ca0f601a`; combined Windows gate and Sol low integration review approved ([integration evidence](107-evidence/integration-main.md)). No push.
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
