@@ -1258,6 +1258,8 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("After redaction, error Message/Hint use max(requested cell limit, 2048)", capabilities, StringComparison.Ordinal);
             Assert.Contains("capped at 4096 chars and response bytes", capabilities, StringComparison.Ordinal);
             Assert.Contains("Location.Path uses the requested limit", capabilities, StringComparison.Ordinal);
+            Assert.Contains("preserve the error code and phase", capabilities, StringComparison.Ordinal);
+            Assert.Contains("report omitted content in truncation", capabilities, StringComparison.Ordinal);
             foreach (var tool in ExpectedTools.Where(name => name != "sqlharness_capabilities"))
             {
                 var description = ArgumentDescription(tools, tool, "maxCellChars");
