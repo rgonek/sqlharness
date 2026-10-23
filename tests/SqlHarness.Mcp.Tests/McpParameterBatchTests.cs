@@ -148,8 +148,19 @@ public sealed class McpParameterBatchTests
         }
 
         Assert.Equal(0, Volatile.Read(ref attempts));
-        _output.WriteLine($"Plan107 known-source offline diagnostic: {observed} cases; connection attempts=0; source assembly={typeof(McpParameterBatchTests).Assembly.GetName().Version}; source informational version={typeof(McpParameterBatchTests).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false).Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion}.");
+        _output.WriteLine($"Plan107 known-source offline diagnostic: {observed} cases; connection attempts=0.");
+        _output.WriteLine($"Test assembly identity: {AssemblyIdentity(typeof(McpParameterBatchTests).Assembly)}");
+        _output.WriteLine($"Loaded MCP runtime assembly: {AssemblyIdentity(typeof(McpToolCatalog).Assembly)}");
+        _output.WriteLine($"Loaded Core runtime assembly: {AssemblyIdentity(typeof(SqlHarnessModule).Assembly)}");
         Assert.Empty(mismatches);
+    }
+
+    private static string AssemblyIdentity(System.Reflection.Assembly assembly)
+    {
+        var informationalVersion = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .Cast<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .SingleOrDefault()?.InformationalVersion ?? "(missing)";
+        return $"{assembly.GetName().Name} informationalVersion={informationalVersion} location={assembly.Location} mvid={assembly.ManifestModule.ModuleVersionId}";
     }
 
     [Fact]
