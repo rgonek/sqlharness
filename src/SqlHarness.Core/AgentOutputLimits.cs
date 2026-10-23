@@ -5,6 +5,7 @@ public static class AgentOutputLimits
 {
     public const int DefaultCellCharacters = 2048;
     public const int MaximumCellCharacters = 4096;
+    public const string CellCharactersDescription = "0..4096 chars, default 2048; redacted Message/Hint=max(limit,2048); path=limit; byte budget applies.";
 
     /// <summary>Applies the default diagnostic floor to a caller's cell limit.</summary>
     public static int ErrorCellCharacters(int requestedCellCharacters) =>

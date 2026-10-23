@@ -1,5 +1,7 @@
 using System.Diagnostics;
 
+using SqlHarness.Core;
+
 namespace SqlHarness.Tests;
 
 public sealed class SmokeTests
@@ -35,6 +37,16 @@ public sealed class SmokeTests
         Assert.Contains("--max-duration", standardOutput, StringComparison.Ordinal);
         Assert.Contains("--file", standardOutput, StringComparison.Ordinal);
         Assert.Contains("--json", standardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Query_help_explains_error_text_cell_limit()
+    {
+        var (exit, standardOutput, standardError) = await RunCliAsync("query", "--help");
+
+        Assert.True(exit == 0, standardError);
+        var help = Flatten(standardOutput);
+        Assert.Contains(AgentOutputLimits.CellCharactersDescription, help, StringComparison.Ordinal);
     }
 
     [Fact]

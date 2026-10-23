@@ -397,7 +397,9 @@ public sealed class McpToolSchemaTests : IDisposable
         }, () => scope.Profiles, config: enabledConfig);
         await using var requestOn = await ServedCatalog.CreateAsync(requestProcess);
         var requestTools = await requestOn.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray())), 1, 32768);
+        var requestBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray()));
+        Assert.InRange(requestBytes, 1, McpLimits.ToolsListBudgetBytes);
+        _output.WriteLine($"request annotations-on tools/list: {requestBytes} UTF-8 bytes of {McpLimits.ToolsListBudgetBytes}.");
         foreach (var name in new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot" })
             Assert.True(Properties(ServedSchema(requestTools.Single(tool => tool.Name == name))).TryGetProperty("label", out _), name);
 
@@ -1231,6 +1233,38 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("bounded statement text and predicates", plan.Description ?? string.Empty, StringComparison.Ordinal);
             Assert.Contains("returns metadata only", plan.Description ?? string.Empty, StringComparison.Ordinal);
             Assert.DoesNotContain("Sanitized projection only", plan.Description ?? string.Empty, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Cell_limit_argument_describes_error_diagnostic_floor_in_both_modes()
+    {
+        var scope = ScopeWithInputRoot();
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => scope.Profiles);
+        await using var fixedServed = await ServedCatalog.CreateAsync(scope);
+        await using var requestServed = await ServedCatalog.CreateAsync(process);
+
+        foreach (var (mode, served) in new[] { ("fixed", fixedServed), ("request", requestServed) })
+        {
+            var tools = await ServedToolsAsync(served);
+            var toolsListBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools));
+            _output.WriteLine($"{mode} tools/list: {toolsListBytes} UTF-8 bytes of {McpLimits.ToolsListBudgetBytes}.");
+            Assert.InRange(toolsListBytes, 1, McpLimits.ToolsListBudgetBytes);
+            var capabilities = ToolDescription(tools, "sqlharness_capabilities");
+            Assert.Contains("After redaction, error Message/Hint use max(requested cell limit, 2048)", capabilities, StringComparison.Ordinal);
+            Assert.Contains("capped at 4096 chars and response bytes", capabilities, StringComparison.Ordinal);
+            Assert.Contains("Location.Path uses the requested limit", capabilities, StringComparison.Ordinal);
+            foreach (var tool in ExpectedTools.Where(name => name != "sqlharness_capabilities"))
+            {
+                var description = ArgumentDescription(tools, tool, "maxCellChars");
+                Assert.Equal(McpToolCatalog.CellCharactersDescription, description);
+                Assert.Contains("0..4096", description, StringComparison.Ordinal);
+                Assert.Contains("default 2048", description, StringComparison.Ordinal);
+            }
         }
     }
 

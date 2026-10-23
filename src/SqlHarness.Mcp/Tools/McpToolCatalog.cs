@@ -95,7 +95,7 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -127,7 +127,7 @@ public sealed class McpToolHandlers(
         string? expectDatabase = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -188,7 +188,7 @@ public sealed class McpToolHandlers(
         int? timeout = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -238,7 +238,7 @@ public sealed class McpToolHandlers(
         bool compareNullability = false,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -268,7 +268,7 @@ public sealed class McpToolHandlers(
         [MinLength(1), MaxLength(32)] string[]? parameterSetFiles = null,
         bool compareNullability = false,
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         int? maxOperationSeconds = null,
         bool dryRun = false,
@@ -304,7 +304,7 @@ public sealed class McpToolHandlers(
         string? maxDuration = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -342,7 +342,7 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -364,7 +364,7 @@ public sealed class McpToolHandlers(
         string? file = null,
         [Description("includeText (default true) returns bounded statement text and predicates; false returns metadata only.")]
         bool includeText = true,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_plan", ctx, async token =>
@@ -395,7 +395,7 @@ public sealed class McpToolHandlers(
         int? repetition = null,
         [Description("Return bounded statement text and predicates in section=plan.")]
         bool includeText = false,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Maximum result bytes, 4096..1048576, capped by the process limit.")]
         [Range(McpLimits.MinCallToolResultBudgetBytes, McpLimits.MaxCallToolResultBudgetBytes)]
@@ -691,7 +691,8 @@ public static class McpToolCatalog
 {
     /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
     public const string CapabilitiesDescription =
-        "Runtime configuration: scopeMode, compareContext, connectionTimeoutSeconds, defaultExecutionTimeoutSeconds, engines, allowedProfiles, inputRoots, processLimits and configurationRef. Timeout values are seconds; Azure CLI token acquisition has a separate budget. Omitted SQL timeouts use defaultExecutionTimeoutSeconds. Reuse for this process; refresh after reconnect or restart.";
+        "Runtime configuration: scopeMode, compareContext, connectionTimeoutSeconds, defaultExecutionTimeoutSeconds, engines, allowedProfiles, inputRoots, processLimits and configurationRef. After redaction, error Message/Hint use max(requested cell limit, 2048), capped at 4096 chars and response bytes; Location.Path uses the requested limit. Timeout values are seconds; Azure CLI token acquisition has a separate budget. Omitted SQL timeouts use defaultExecutionTimeoutSeconds. Reuse for this process; refresh after reconnect or restart.";
+    public const string CellCharactersDescription = "0..4096; default 2048.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     public const string OperationLabelDescription = "Optional plain-text label for this operation (up to 120 Unicode code points).";

@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TODO — implementation; recorded 2026-10-23.
+- Status: IN PROGRESS — Tasks 1–2 complete and reviewed; Task 3 contract changes and focused suites are green, with task review and controller-owned final gate pending; recorded 2026-10-23.
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -77,9 +77,10 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 3: Update and verify the contract
 
-- [ ] Update schema descriptions and docs/mcp/runtime.md to state cell vs error limits accurately. Verify CLI/MCP parity only for the chosen semantics. Run focused tests, task/final reviews, direct branch formatting and Windows gate; archive the exact tested revision.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Update schema descriptions and docs/mcp/runtime.md to state cell vs error limits accurately; verify CLI/MCP description parity and focused output suites.
+- [x] Add a contract-description regression, observe RED before changing descriptions, and confirm GREEN.
+- [x] Save task evidence/report and inspect the scoped diff.
+- [ ] Obtain task review; controller owns direct branch formatting, full Windows gate and final review, then archive the exact tested revision.
 
 ## Verification and done criteria
 
