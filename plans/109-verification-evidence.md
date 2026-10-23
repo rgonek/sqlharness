@@ -43,3 +43,9 @@ The 31.0% and 94.4% figures compare the study's deterministic test-only projecti
 - [Decision evidence](109-evidence/task-3-decision.md)
 - [Plan 114](114-compact-statement-discovery.md)
 - [Plan 115](115-query-result-set-selection.md)
+
+## Local integration
+
+The operator selected local integration (option 1). `main` fast-forwarded from `677b2f93` to the reviewed branch head `08803639`; no push was performed. `git diff --quiet 08803639 HEAD -- src tests` exited 0 after the merge. The integrated executable tree is identical to the reviewed branch; its prior Windows gate and branch-format evidence remain applicable. No additional product gate was run for this documentation-only integration record.
+
+The unrelated dirty root README and Plans 103-108/110-113 were retained and checked by SHA-256. The original dirty plan index and original untracked Plan 109 were backed up in `.git/plan109-integration-backup` and a dedicated stash before merging. The local observation queue is retained as an uncommitted index edit, reconciled with the completed Plan 109 history entry and follow-ups 114/115; the superseded original Plan 109 remains recoverable in the backup/stash.
