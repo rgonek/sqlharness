@@ -372,6 +372,191 @@ public sealed class AgentOptimizationWorkflowTests
         _output.WriteLine($"Plan 109 Task 1: SDK calls={calls.Count}; request wire UTF-8 bytes={capturedCalls.Sum(call => (int)call["requestWireUtf8Bytes"]!)}; response wire UTF-8 bytes={capturedCalls.Sum(call => (int)call["responseWireUtf8Bytes"]!)}; equivalent cases=4 statements, 4 named sets x 3 repetitions, 2 candidate revisions, 2 late assertion result sets.");
     }
 
+    [Fact]
+    public void Artifact_review_study_compares_deterministic_equivalent_evidence_renderers()
+    {
+        var repositoryRoot = McpStdioProcessHarness.FindRepositoryRoot();
+        var baselinePath = Path.Combine(repositoryRoot, "plans", "109-evidence", "task-1-sdk-baseline.json");
+        using var baseline = JsonDocument.Parse(File.ReadAllText(baselinePath));
+        var fixtureInputs = baseline.RootElement.GetProperty("fixtureInputs");
+        var calls = baseline.RootElement.GetProperty("calls").EnumerateArray().ToArray();
+
+        JsonElement Call(string caseName, string tool, string section = "") => calls.Single(call =>
+            call.GetProperty("case").GetString() == caseName
+            && call.GetProperty("tool").GetString() == tool
+            && (section.Length == 0 || call.GetProperty("selectors").GetProperty("section").GetString() == section));
+
+        long ExistingBytes(IEnumerable<JsonElement> selected) => selected.Sum(call => call.GetProperty("modelVisibleUtf8Bytes").GetInt64());
+        int Utf8Bytes<T>(T value) => JsonSerializer.SerializeToUtf8Bytes(value).Length;
+        JsonElement Result(JsonElement call) => JsonDocument.Parse(call.GetProperty("text").GetString()!).RootElement.GetProperty("result").Clone();
+
+        var revisionCalls = calls.Where(call => call.GetProperty("case").GetString() is "candidate-revision-1" or "candidate-revision-2").ToArray();
+        var namedSetCalls = calls.Where(call => call.GetProperty("case").GetString() == "named-set-attribution").ToArray();
+        var queryCall = Call("late-result-assertions", "sqlharness_query");
+        var queryResult = Result(queryCall);
+        var querySets = queryResult.GetProperty("resultSets").EnumerateArray().Select(element => element.Clone()).ToArray();
+        var selectedAssertions = querySets.Where(set => set.GetProperty("ordinal").GetInt32() is 1 or 2).ToArray();
+
+        var statementCalls = revisionCalls.Concat(namedSetCalls)
+            .Where(call => call.GetProperty("selectors").TryGetProperty("section", out var section) && section.GetString() == "statements")
+            .ToArray();
+        var compactRecords = statementCalls.SelectMany(call =>
+        {
+            var result = Result(call);
+            var artifactId = result.GetProperty("artifactId").GetString();
+            return result.GetProperty("statements").EnumerateArray().Select(item => new
+            {
+                artifactId,
+                variant = item.GetProperty("variant").GetString(),
+                parameterSet = item.TryGetProperty("parameterSet", out var parameterSet) ? parameterSet.GetString() : null,
+                statementOrdinal = item.GetProperty("statementOrdinal").GetInt32(),
+                statementHash = item.GetProperty("statementHash").GetString(),
+                repetition = (int?)null,
+                cpuTimeMilliseconds = item.GetProperty("cpuTimeMilliseconds").Clone(),
+                elapsedTimeMilliseconds = item.GetProperty("elapsedTimeMilliseconds").Clone(),
+            });
+        }).ToArray();
+        Assert.Equal(32, compactRecords.Length);
+        Assert.All(statementCalls.SelectMany(call => Result(call).GetProperty("statements").EnumerateArray()), item =>
+            Assert.True(item.GetProperty("topOperators").GetArrayLength() > 0));
+
+        var metricsCall = Call("named-set-attribution", "sqlharness_artifact", "metrics");
+        var metrics = Result(metricsCall);
+        var metricsArtifactId = metrics.GetProperty("artifactId").GetString()!;
+        var metricsArtifactKind = metrics.GetProperty("artifactKind").GetString();
+        var namedSetMetrics = metrics.GetProperty("variants").EnumerateArray().Select(item => new
+        {
+            parameterSet = item.GetProperty("name").GetString(),
+            cpuTimeMilliseconds = item.GetProperty("cpuTimeMilliseconds").Clone(),
+            elapsedTimeMilliseconds = item.GetProperty("elapsedTimeMilliseconds").Clone(),
+            logicalReads = item.GetProperty("logicalReads").Clone(),
+            logicalReadsByTable = item.GetProperty("logicalReadsByTable").Clone(),
+            warnings = item.GetProperty("warnings").Clone(),
+        }).ToArray();
+        Assert.Equal(new[] { "small", "medium", "large", "edge" }, namedSetMetrics.Select(item => item.parameterSet));
+
+        var metricsPointers = namedSetMetrics.Select(item => new
+        {
+            artifactId = metricsArtifactId,
+            section = "metrics",
+            parameterSet = item.parameterSet,
+        }).ToArray();
+
+        var setupSql = fixtureInputs.GetProperty("setupSql").GetString()!;
+        var batchSql = fixtureInputs.GetProperty("batchSql").GetString()!;
+        var inBatchSql = setupSql + batchSql;
+        var tvpForm = new
+        {
+            sql = "SELECT o.Id, o.Region FROM dbo.Orders AS o JOIN @Batches AS b ON b.Batch = o.Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments;",
+            parameter = new { name = "Batches", type = "dbo.BatchIds READONLY", rows = new[] { new { Batch = 1 }, new { Batch = 2 }, new { Batch = 3 }, new { Batch = 4 } } },
+        };
+
+        var existingSequences = new[]
+        {
+            new { name = "candidate-revision-1", calls = revisionCalls.Where(call => call.GetProperty("case").GetString() == "candidate-revision-1").ToArray() },
+            new { name = "candidate-revision-2", calls = revisionCalls.Where(call => call.GetProperty("case").GetString() == "candidate-revision-2").ToArray() },
+            new { name = "named-set-attribution", calls = namedSetCalls },
+            new { name = "late-result-assertions", calls = new[] { queryCall } },
+        }.Select(path => new
+        {
+            path.name,
+            callCount = path.calls.Length,
+            modelVisibleUtf8Bytes = ExistingBytes(path.calls),
+            estimatedTokensByteDiv4 = ExistingBytes(path.calls) / 4m,
+            requestWireUtf8Bytes = path.calls.Sum(call => call.GetProperty("requestWireUtf8Bytes").GetInt64()),
+            responseWireUtf8Bytes = path.calls.Sum(call => call.GetProperty("responseWireUtf8Bytes").GetInt64()),
+            selectors = path.calls.Select(call => new
+            {
+                tool = call.GetProperty("tool").GetString(),
+                selectors = call.GetProperty("selectors").Clone(),
+                modelVisibleUtf8Bytes = call.GetProperty("modelVisibleUtf8Bytes").GetInt64(),
+                continuation = call.GetProperty("continuation").Clone(),
+                omittedItems = call.GetProperty("omittedItems").Clone(),
+                truncation = call.GetProperty("truncation").Clone(),
+            }).ToArray(),
+        }).ToArray();
+
+        var compactBytes = Utf8Bytes(new { records = compactRecords });
+        var metricsBytes = Utf8Bytes(new { artifactId = metricsArtifactId, artifactKind = metricsArtifactKind, variants = namedSetMetrics });
+        var pointerBytes = Utf8Bytes(new { pointers = metricsPointers });
+        var assertionBytes = Utf8Bytes(new { queryHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(fixtureInputs.GetProperty("querySql").GetString()!))), resultSets = selectedAssertions });
+        var fullStatementBytes = ExistingBytes(statementCalls);
+        var fullMetricsBytes = metricsCall.GetProperty("modelVisibleUtf8Bytes").GetInt64();
+        var fullQueryBytes = queryCall.GetProperty("modelVisibleUtf8Bytes").GetInt64();
+
+        var output = new
+        {
+            study = "plan-109-task-2",
+            source = "plans/109-evidence/task-1-sdk-baseline.json",
+            renderer = "deterministic test-only JSON projections over retained real SDK output",
+            inputIdentities = new
+            {
+                batchSqlSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(fixtureInputs.GetProperty("batchSql").GetString()!))),
+                querySqlSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(fixtureInputs.GetProperty("querySql").GetString()!))),
+                parameterSets = fixtureInputs.GetProperty("parameterSets").Clone(),
+            },
+            actualTokenizerTokenCount = (int?)null,
+            byteDiv4Estimate = "model-visible UTF-8 bytes / 4; rough estimate only",
+            existingBestRequestSequences = existingSequences,
+            candidates = new object[]
+            {
+                new { name = "compact-per-statement-cpu-elapsed", modelVisibleUtf8Bytes = compactBytes, estimatedTokensByteDiv4 = compactBytes / 4m, records = compactRecords.Length, evidenceCompleteFor = new[] { "artifact", "variant", "parameterSet", "statementOrdinal", "statementHash", "CPU", "elapsed" }, omitted = new[] { "TopOperators", "other statement metrics" }, equivalentToBaselineForNamedFields = true },
+                new { name = "named-set-metrics-values", modelVisibleUtf8Bytes = metricsBytes, estimatedTokensByteDiv4 = metricsBytes / 4m, records = namedSetMetrics.Length, evidenceCompleteFor = new[] { "artifactId", "parameterSet", "logicalReadsByTable" }, omitted = new[] { "statement-level CPU/elapsed and plans" }, equivalentToBaselineForNamedFields = true },
+                new { name = "named-set-metrics-pointers-only", modelVisibleUtf8Bytes = pointerBytes, estimatedTokensByteDiv4 = pointerBytes / 4m, records = metricsPointers.Length, evidenceCompleteFor = new[] { "artifactId", "section", "parameterSet navigation" }, omitted = new[] { "metric values until dereferenced" }, equivalentToBaselineForValues = false, requires = "a named-set selector or consumer-side dereference; current baseline metrics response contains all variants" },
+                new { name = "assertion-result-sets-only", modelVisibleUtf8Bytes = assertionBytes, estimatedTokensByteDiv4 = assertionBytes / 4m, records = selectedAssertions.Length, evidenceCompleteFor = new[] { "query hash", "result-set ordinals", "both assertion result sets" }, omitted = new[] { "first result set (96 rows)" }, equivalentForAssertionCheck = true, requires = "result-set selection or deterministic consumer projection" },
+            },
+            equivalentEvidenceComparisons = new[]
+            {
+                new { scope = "statement CPU/elapsed discovery", baselineModelVisibleUtf8Bytes = fullStatementBytes, candidateModelVisibleUtf8Bytes = compactBytes, deltaBytes = compactBytes - fullStatementBytes, equivalent = true, omission = "operators and other statement metrics", candidateClipping = "not applied by deterministic renderer", baselineContinuationOrOmission = "none" },
+                new { scope = "all named-set metric values", baselineModelVisibleUtf8Bytes = fullMetricsBytes, candidateModelVisibleUtf8Bytes = metricsBytes, deltaBytes = metricsBytes - fullMetricsBytes, equivalent = true, omission = "none from metrics section; statement page is separate evidence", candidateClipping = "not applied by deterministic renderer", baselineContinuationOrOmission = "none" },
+                new { scope = "assertion check from result sets 1 and 2", baselineModelVisibleUtf8Bytes = fullQueryBytes, candidateModelVisibleUtf8Bytes = assertionBytes, deltaBytes = assertionBytes - fullQueryBytes, equivalent = true, omission = "unneeded first result set and query envelope details", candidateClipping = "not applied by deterministic renderer", baselineContinuationOrOmission = "none" },
+                new { scope = "named-set metrics pointer only", baselineModelVisibleUtf8Bytes = fullMetricsBytes, candidateModelVisibleUtf8Bytes = pointerBytes, deltaBytes = pointerBytes - fullMetricsBytes, equivalent = false, omission = "all metric values until dereferenced", candidateClipping = "not applied by deterministic renderer", baselineContinuationOrOmission = "none" },
+            },
+            identities = new
+            {
+                candidateRevisionArtifactIds = revisionCalls.Where(call => call.GetProperty("tool").GetString() == "sqlharness_compare").Select(call => Result(call).GetProperty("artifactId").GetString()).ToArray(),
+                candidateStatementHashes = revisionCalls.Where(call => call.GetProperty("tool").GetString() == "sqlharness_artifact" && call.GetProperty("selectors").TryGetProperty("section", out var section) && section.GetString() == "statements")
+                    .Select(call => new { artifactId = call.GetProperty("selectors").GetProperty("id").GetString(), statements = Result(call).GetProperty("statements").EnumerateArray().Where(item => item.GetProperty("variant").GetString() == "candidate").Select(item => new { ordinal = item.GetProperty("statementOrdinal").GetInt32(), hash = item.GetProperty("statementHash").GetString() }).ToArray() }).ToArray(),
+                reuseRule = "artifactId + variant + parameterSet + statementOrdinal/hash + repetition; compact statement records do not carry repetition and therefore are not reusable repetition evidence; identical SQL text across candidate artifact revisions is not reused because artifact identity differs",
+            },
+            setupComparison = new
+            {
+                existingSetupSql = setupSql,
+                measuredBatchSql = batchSql,
+                existingSetupIsSeparateInput = !batchSql.Contains(setupSql, StringComparison.Ordinal),
+                setupPrependedBatch = inBatchSql,
+                setupPrependedBatchPreservesMeasuredSql = inBatchSql == batchSql,
+                setupInvocationCardinality = new { expectedSyntheticSetupInvocations = fixtureInputs.GetProperty("parameterSets").GetArrayLength(), observed = false },
+                cannotSubtractSetupFromWholeBatchCounters = true,
+                tvpAlternative = tvpForm,
+                tvpPreservesCurrentScalarInputAndCompilationForm = false,
+                conclusion = "retain existing separate setup field for this fixture; a new in-batch mode or scalar-to-TVP conversion changes submitted/compiled SQL, and no attributable counters support subtraction",
+            },
+            ranking = new
+            {
+                existingBestByModelVisibleBytes = existingSequences.OrderByDescending(path => path.modelVisibleUtf8Bytes).Select((path, index) => new { rank = index + 1, path = path.name, bytes = path.modelVisibleUtf8Bytes }).ToArray(),
+                candidateComparisons = "ranked only within equivalent evidence scope using equivalentEvidenceComparisons; pointer-only is excluded because it is incomplete",
+            },
+        };
+
+        Assert.True(compactBytes < fullStatementBytes, $"Compact renderer bytes {compactBytes} should be below full statement bytes {fullStatementBytes}.");
+        Assert.True(assertionBytes < fullQueryBytes);
+        Assert.Equal(2, selectedAssertions.Length);
+        Assert.Contains("assertion: totals", selectedAssertions[0].GetRawText(), StringComparison.Ordinal);
+        Assert.Contains("assertion: final count", selectedAssertions[1].GetRawText(), StringComparison.Ordinal);
+        Assert.True(setupSql == "SET NOCOUNT ON;" && !batchSql.Contains(setupSql, StringComparison.Ordinal));
+        Assert.NotEqual(batchSql, tvpForm.sql);
+
+        var outputJson = JsonSerializer.Serialize(output, JsonOptions);
+        var captureDirectory = Environment.GetEnvironmentVariable("SQLHARNESS_109_CAPTURE_DIR");
+        if (!string.IsNullOrWhiteSpace(captureDirectory))
+        {
+            Directory.CreateDirectory(captureDirectory);
+            File.WriteAllText(Path.Combine(captureDirectory, "task-2-candidate-study.json"), outputJson.TrimEnd() + "\n");
+        }
+        _output.WriteLine($"Plan 109 Task 2: existing paths={existingSequences.Sum(path => path.callCount)} calls; compact CPU/elapsed={compactBytes} bytes; metrics values={metricsBytes} bytes; pointer-only={pointerBytes} bytes (incomplete until dereferenced); assertion sets={assertionBytes} bytes; actual tokenizer unavailable.");
+    }
+
     private static async Task<CallToolResult> RecordStudyCallAsync(
         Session session, List<object> calls, string studyCase, string tool, Dictionary<string, object?> arguments, int budget)
     {

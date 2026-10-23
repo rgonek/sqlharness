@@ -1,0 +1,580 @@
+{
+  "study": "plan-109-task-2",
+  "source": "plans/109-evidence/task-1-sdk-baseline.json",
+  "renderer": "deterministic test-only JSON projections over retained real SDK output",
+  "inputIdentities": {
+    "batchSqlSha256": "B98A30EF2E1FDF00E8FDABF925EC6ABCB5F1699B58462EE581FEF6B549DE979B",
+    "querySqlSha256": "00D103C2108B43BD0DB3DB26069E9D5DAF30B5642FF4D39EECBC0BD6B7F60AAC",
+    "parameterSets": [
+      {
+        "name": "small",
+        "parameters": [
+          {
+            "name": "Batch",
+            "type": "int",
+            "value": "1"
+          }
+        ]
+      },
+      {
+        "name": "medium",
+        "parameters": [
+          {
+            "name": "Batch",
+            "type": "int",
+            "value": "2"
+          }
+        ]
+      },
+      {
+        "name": "large",
+        "parameters": [
+          {
+            "name": "Batch",
+            "type": "int",
+            "value": "3"
+          }
+        ]
+      },
+      {
+        "name": "edge",
+        "parameters": [
+          {
+            "name": "Batch",
+            "type": "int",
+            "value": "4"
+          }
+        ]
+      }
+    ]
+  },
+  "actualTokenizerTokenCount": null,
+  "byteDiv4Estimate": "model-visible UTF-8 bytes / 4; rough estimate only",
+  "existingBestRequestSequences": [
+    {
+      "name": "candidate-revision-1",
+      "callCount": 6,
+      "modelVisibleUtf8Bytes": 7603,
+      "estimatedTokensByteDiv4": 1900.75,
+      "requestWireUtf8Bytes": 1953,
+      "responseWireUtf8Bytes": 12633,
+      "selectors": [
+        {
+          "tool": "sqlharness_compare",
+          "selectors": {
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 1641,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-b1312aaf6eed4275b38a6f5b0b4a4682",
+            "section": "statements",
+            "pageSize": 32,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 3504,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-b1312aaf6eed4275b38a6f5b0b4a4682",
+            "section": "plan",
+            "variant": "candidate",
+            "statement": 0,
+            "repetition": 5,
+            "includeText": false,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 609,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-b1312aaf6eed4275b38a6f5b0b4a4682",
+            "section": "plan",
+            "variant": "candidate",
+            "statement": 1,
+            "repetition": 5,
+            "includeText": false,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 631,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-b1312aaf6eed4275b38a6f5b0b4a4682",
+            "section": "plan",
+            "variant": "candidate",
+            "statement": 2,
+            "repetition": 5,
+            "includeText": false,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 609,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-b1312aaf6eed4275b38a6f5b0b4a4682",
+            "section": "plan",
+            "variant": "candidate",
+            "statement": 3,
+            "repetition": 5,
+            "includeText": false,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 609,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        }
+      ]
+    },
+    {
+      "name": "candidate-revision-2",
+      "callCount": 6,
+      "modelVisibleUtf8Bytes": 7603,
+      "estimatedTokensByteDiv4": 1900.75,
+      "requestWireUtf8Bytes": 1953,
+      "responseWireUtf8Bytes": 12633,
+      "selectors": [
+        {
+          "tool": "sqlharness_compare",
+          "selectors": {
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 1641,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-19cb6e216c384956a597e173218d747f",
+            "section": "statements",
+            "pageSize": 32,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 3504,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-19cb6e216c384956a597e173218d747f",
+            "section": "plan",
+            "variant": "candidate",
+            "statement": 0,
+            "repetition": 5,
+            "includeText": false,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 609,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-19cb6e216c384956a597e173218d747f",
+            "section": "plan",
+            "variant": "candidate",
+            "statement": 1,
+            "repetition": 5,
+            "includeText": false,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 631,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-19cb6e216c384956a597e173218d747f",
+            "section": "plan",
+            "variant": "candidate",
+            "statement": 2,
+            "repetition": 5,
+            "includeText": false,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 609,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-19cb6e216c384956a597e173218d747f",
+            "section": "plan",
+            "variant": "candidate",
+            "statement": 3,
+            "repetition": 5,
+            "includeText": false,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 609,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        }
+      ]
+    },
+    {
+      "name": "named-set-attribution",
+      "callCount": 3,
+      "modelVisibleUtf8Bytes": 10974,
+      "estimatedTokensByteDiv4": 2743.5,
+      "requestWireUtf8Bytes": 1169,
+      "responseWireUtf8Bytes": 17824,
+      "selectors": [
+        {
+          "tool": "sqlharness_measure",
+          "selectors": {
+            "parameterSets": [
+              {
+                "name": "small",
+                "parameters": [
+                  {
+                    "name": "Batch",
+                    "type": "int",
+                    "value": "1"
+                  }
+                ]
+              },
+              {
+                "name": "medium",
+                "parameters": [
+                  {
+                    "name": "Batch",
+                    "type": "int",
+                    "value": "2"
+                  }
+                ]
+              },
+              {
+                "name": "large",
+                "parameters": [
+                  {
+                    "name": "Batch",
+                    "type": "int",
+                    "value": "3"
+                  }
+                ]
+              },
+              {
+                "name": "edge",
+                "parameters": [
+                  {
+                    "name": "Batch",
+                    "type": "int",
+                    "value": "4"
+                  }
+                ]
+              }
+            ],
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 2603,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-ecf57ceb96b348d2bf5fc1f4c5a07c86",
+            "section": "metrics",
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 1211,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        },
+        {
+          "tool": "sqlharness_artifact",
+          "selectors": {
+            "id": "19700101T000000000Z-workflow-fixture-ecf57ceb96b348d2bf5fc1f4c5a07c86",
+            "section": "statements",
+            "pageSize": 32,
+            "maxResultBytes": 65536
+          },
+          "modelVisibleUtf8Bytes": 7160,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        }
+      ]
+    },
+    {
+      "name": "late-result-assertions",
+      "callCount": 1,
+      "modelVisibleUtf8Bytes": 11469,
+      "estimatedTokensByteDiv4": 2867.25,
+      "requestWireUtf8Bytes": 270,
+      "responseWireUtf8Bytes": 13069,
+      "selectors": [
+        {
+          "tool": "sqlharness_query",
+          "selectors": {
+            "maxRows": 96,
+            "maxResultBytes": 16384,
+            "maxCellChars": 128
+          },
+          "modelVisibleUtf8Bytes": 11469,
+          "continuation": null,
+          "omittedItems": null,
+          "truncation": null
+        }
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "name": "compact-per-statement-cpu-elapsed",
+      "modelVisibleUtf8Bytes": 9781,
+      "estimatedTokensByteDiv4": 2445.25,
+      "records": 32,
+      "evidenceCompleteFor": [
+        "artifact",
+        "variant",
+        "parameterSet",
+        "statementOrdinal",
+        "statementHash",
+        "CPU",
+        "elapsed"
+      ],
+      "omitted": [
+        "TopOperators",
+        "other statement metrics"
+      ],
+      "equivalentToBaselineForNamedFields": true
+    },
+    {
+      "name": "named-set-metrics-values",
+      "modelVisibleUtf8Bytes": 1195,
+      "estimatedTokensByteDiv4": 298.75,
+      "records": 4,
+      "evidenceCompleteFor": [
+        "artifactId",
+        "parameterSet",
+        "logicalReadsByTable"
+      ],
+      "omitted": [
+        "statement-level CPU/elapsed and plans"
+      ],
+      "equivalentToBaselineForNamedFields": true
+    },
+    {
+      "name": "named-set-metrics-pointers-only",
+      "modelVisibleUtf8Bytes": 534,
+      "estimatedTokensByteDiv4": 133.5,
+      "records": 4,
+      "evidenceCompleteFor": [
+        "artifactId",
+        "section",
+        "parameterSet navigation"
+      ],
+      "omitted": [
+        "metric values until dereferenced"
+      ],
+      "equivalentToBaselineForValues": false,
+      "requires": "a named-set selector or consumer-side dereference; current baseline metrics response contains all variants"
+    },
+    {
+      "name": "assertion-result-sets-only",
+      "modelVisibleUtf8Bytes": 513,
+      "estimatedTokensByteDiv4": 128.25,
+      "records": 2,
+      "evidenceCompleteFor": [
+        "query hash",
+        "result-set ordinals",
+        "both assertion result sets"
+      ],
+      "omitted": [
+        "first result set (96 rows)"
+      ],
+      "equivalentForAssertionCheck": true,
+      "requires": "result-set selection or deterministic consumer projection"
+    }
+  ],
+  "equivalentEvidenceComparisons": [
+    {
+      "scope": "statement CPU/elapsed discovery",
+      "baselineModelVisibleUtf8Bytes": 14168,
+      "candidateModelVisibleUtf8Bytes": 9781,
+      "deltaBytes": -4387,
+      "equivalent": true,
+      "omission": "operators and other statement metrics",
+      "candidateClipping": "not applied by deterministic renderer",
+      "baselineContinuationOrOmission": "none"
+    },
+    {
+      "scope": "all named-set metric values",
+      "baselineModelVisibleUtf8Bytes": 1211,
+      "candidateModelVisibleUtf8Bytes": 1195,
+      "deltaBytes": -16,
+      "equivalent": true,
+      "omission": "none from metrics section; statement page is separate evidence",
+      "candidateClipping": "not applied by deterministic renderer",
+      "baselineContinuationOrOmission": "none"
+    },
+    {
+      "scope": "assertion check from result sets 1 and 2",
+      "baselineModelVisibleUtf8Bytes": 11469,
+      "candidateModelVisibleUtf8Bytes": 513,
+      "deltaBytes": -10956,
+      "equivalent": true,
+      "omission": "unneeded first result set and query envelope details",
+      "candidateClipping": "not applied by deterministic renderer",
+      "baselineContinuationOrOmission": "none"
+    },
+    {
+      "scope": "named-set metrics pointer only",
+      "baselineModelVisibleUtf8Bytes": 1211,
+      "candidateModelVisibleUtf8Bytes": 534,
+      "deltaBytes": -677,
+      "equivalent": false,
+      "omission": "all metric values until dereferenced",
+      "candidateClipping": "not applied by deterministic renderer",
+      "baselineContinuationOrOmission": "none"
+    }
+  ],
+  "identities": {
+    "candidateRevisionArtifactIds": [
+      "19700101T000000000Z-workflow-fixture-b1312aaf6eed4275b38a6f5b0b4a4682",
+      "19700101T000000000Z-workflow-fixture-19cb6e216c384956a597e173218d747f"
+    ],
+    "candidateStatementHashes": [
+      {
+        "artifactId": "19700101T000000000Z-workflow-fixture-b1312aaf6eed4275b38a6f5b0b4a4682",
+        "statements": [
+          {
+            "ordinal": 0,
+            "hash": "a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410"
+          },
+          {
+            "ordinal": 1,
+            "hash": "b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88"
+          },
+          {
+            "ordinal": 2,
+            "hash": "9991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86"
+          },
+          {
+            "ordinal": 3,
+            "hash": "32d2f0f69065140360c375b023cb046517dd4c72fba6a56a52b444e71b780aed"
+          }
+        ]
+      },
+      {
+        "artifactId": "19700101T000000000Z-workflow-fixture-19cb6e216c384956a597e173218d747f",
+        "statements": [
+          {
+            "ordinal": 0,
+            "hash": "a38482ce14202fc498a30edf6a66a90bf35e8b2fdcdf3a9b09ce78aa97eb4410"
+          },
+          {
+            "ordinal": 1,
+            "hash": "b7a2ce7a17c0865c289a63935067dabb04371a72ee2a98d637f2755775f85f88"
+          },
+          {
+            "ordinal": 2,
+            "hash": "9991745654f03d0e11cca80692092f881b5c55d5d16bdbd227670964e49dbe86"
+          },
+          {
+            "ordinal": 3,
+            "hash": "6183663a8fa02080a6b79ef5ca8cf7094d465cfd59136cf10accba7e50a11c95"
+          }
+        ]
+      }
+    ],
+    "reuseRule": "artifactId \u002B variant \u002B parameterSet \u002B statementOrdinal/hash \u002B repetition; compact statement records do not carry repetition and therefore are not reusable repetition evidence; identical SQL text across candidate artifact revisions is not reused because artifact identity differs"
+  },
+  "setupComparison": {
+    "existingSetupSql": "SET NOCOUNT ON;",
+    "measuredBatchSql": "SELECT Id, Region FROM dbo.Orders WHERE Batch = @Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments;",
+    "existingSetupIsSeparateInput": true,
+    "setupPrependedBatch": "SET NOCOUNT ON;SELECT Id, Region FROM dbo.Orders WHERE Batch = @Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments;",
+    "setupPrependedBatchPreservesMeasuredSql": false,
+    "setupInvocationCardinality": {
+      "expectedSyntheticSetupInvocations": 4,
+      "observed": false
+    },
+    "cannotSubtractSetupFromWholeBatchCounters": true,
+    "tvpAlternative": {
+      "sql": "SELECT o.Id, o.Region FROM dbo.Orders AS o JOIN @Batches AS b ON b.Batch = o.Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments;",
+      "parameter": {
+        "name": "Batches",
+        "type": "dbo.BatchIds READONLY",
+        "rows": [
+          {
+            "Batch": 1
+          },
+          {
+            "Batch": 2
+          },
+          {
+            "Batch": 3
+          },
+          {
+            "Batch": 4
+          }
+        ]
+      }
+    },
+    "tvpPreservesCurrentScalarInputAndCompilationForm": false,
+    "conclusion": "retain existing separate setup field for this fixture; a new in-batch mode or scalar-to-TVP conversion changes submitted/compiled SQL, and no attributable counters support subtraction"
+  },
+  "ranking": {
+    "existingBestByModelVisibleBytes": [
+      {
+        "rank": 1,
+        "path": "late-result-assertions",
+        "bytes": 11469
+      },
+      {
+        "rank": 2,
+        "path": "named-set-attribution",
+        "bytes": 10974
+      },
+      {
+        "rank": 3,
+        "path": "candidate-revision-1",
+        "bytes": 7603
+      },
+      {
+        "rank": 4,
+        "path": "candidate-revision-2",
+        "bytes": 7603
+      }
+    ],
+    "candidateComparisons": "ranked only within equivalent evidence scope using equivalentEvidenceComparisons; pointer-only is excluded because it is incomplete"
+  }
+}
