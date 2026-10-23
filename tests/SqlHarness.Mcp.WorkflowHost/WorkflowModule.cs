@@ -290,9 +290,11 @@ public sealed class WorkflowModule : ISqlHarnessModule
         for (var index = 0; index < 5; index++)
         {
             runs.Add(Run("baseline", index + 1, baselineElapsed[index], shape.BaselineReads, table, baselinePlan, report.Baseline.MetricReport)
-                with { ExecutedSql = _scenario.BaselineSql });
+                with
+            { ExecutedSql = _scenario.BaselineSql });
             runs.Add(Run("candidate", index + 1, candidateElapsed[index], shape.CandidateReads, table, candidatePlan, report.Candidate.MetricReport)
-                with { ExecutedSql = _scenario.CandidateSql });
+                with
+            { ExecutedSql = _scenario.CandidateSql });
         }
 
         return runs;
