@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TODO — implementation; recorded 2026-10-23.
+- Status: IMPLEMENTED on `plan-108`; task reviews approved; Windows gate and whole-branch review pending. See [evidence](108-verification-evidence.md).
 - Priority: **P3** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: S; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
