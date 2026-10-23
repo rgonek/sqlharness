@@ -8,4 +8,4 @@ These reports are copied from the plan's SDD review workspace so review decision
 - [Task 3 review](task-3-review.md)
 - [Whole-branch review](whole-branch-review.md)
 
-Task 1, Task 2 and its re-review, and Task 3 were approved. The whole-branch review approved the diagnostic scope with two nonblocking wording Minors. Those two wording corrections are now in [the diagnosis](../task-3-diagnosis.md); a final scoped re-review is pending.
+Task 1, Task 2 and its re-review, and Task 3 were approved. The whole-branch review approved the diagnostic scope with two nonblocking wording Minors. Those two wording corrections are now in [the diagnosis](../task-3-diagnosis.md); the [final scoped Sol low re-review](final-scoped-review.md) approved both corrections.
