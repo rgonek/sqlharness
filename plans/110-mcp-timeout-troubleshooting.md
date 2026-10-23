@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: Documentation implemented; Task 1–3 reviews and Sol low whole-branch review approved; final scoped re-review pending after the metadata correction.
+- Status: DONE — documentation only; Task 1–3 and Sol low whole-branch reviews approved; final scoped Sol review approved `52e4a498` with no Critical/Important findings.
 - Priority: **P3** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: S; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -97,7 +97,7 @@ Documentation/research checks only unless executable fixtures change.
 - Task 2: approved at `176b7412` with no findings.
 - Task 3: Luna xhigh spec and quality approved at `2bc9b472`; its Minor about the Linux checkbox is corrected above.
 - Whole branch: Sol low approved at `2bc9b472`, with no Critical or Important findings; the Linux-status Minor is corrected above.
-- Final scoped re-review of this metadata correction: pending. No approval is claimed yet.
+- Final scoped Sol low re-review approved `52e4a498`: prior finding addressed, no new Critical/Important breakage. One residual Minor was adjudicated against the actual History heading; see verification evidence.
 
 Client-specific timeout/reload behavior, installed-binary and live-database outcomes, and executable regression behavior remain unverified because those runs were outside this documentation-only scope.
 
