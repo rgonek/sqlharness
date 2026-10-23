@@ -88,6 +88,40 @@ public sealed class McpTokenBudgetTests
         return outcome;
     }
 
+    [Theory]
+    [MemberData(nameof(LongErrorPaths))]
+    public void Failure_minimum_budget_preserves_identity_when_optional_path_exceeds_byte_budget(string path)
+    {
+        var error = new SqlHarnessError(
+            "sql_execution_failed", "sql", "brief diagnostic", Location: new SqlHarnessErrorLocation(Path: path));
+        var budget = new McpResultBudget(4096, AgentOutputLimits.MaximumCellCharacters);
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, error.Message, Error: error),
+            "sqlharness_query", budget);
+
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+        var envelope = document.RootElement;
+        var reportedError = envelope.GetProperty("error");
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= budget.MaximumBytes);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+        Assert.Equal("sql_execution_failed", reportedError.GetProperty("code").GetString());
+        Assert.Equal("sql", reportedError.GetProperty("phase").GetString());
+        Assert.Equal(1, envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
+        var reportedPath = reportedError.GetProperty("location").ValueKind == JsonValueKind.Object
+            ? reportedError.GetProperty("location").GetProperty("path")
+            : default;
+        Assert.True(reportedPath.ValueKind == JsonValueKind.Undefined || reportedPath.ValueKind == JsonValueKind.Null || reportedPath.GetString()!.Length < path.Length);
+    }
+
+    public static IEnumerable<object[]> LongErrorPaths =>
+    [
+        [new string('p', AgentOutputLimits.MaximumCellCharacters)],
+        [string.Concat(Enumerable.Repeat("語\\n", AgentOutputLimits.MaximumCellCharacters / 2))],
+    ];
+
     [Fact]
     public void Failure_keeps_error_identity_and_truthful_truncation_at_the_minimum_byte_budget()
     {

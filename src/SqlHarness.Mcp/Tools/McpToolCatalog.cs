@@ -691,7 +691,7 @@ public static class McpToolCatalog
 {
     /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
     public const string CapabilitiesDescription =
-        "Runtime config: scopeMode, compareContext, timeouts, engines, allowedProfiles, inputRoots, processLimits, configurationRef. After redaction, error Message/Hint use max(requested cell limit, 2048), capped at 4096 chars and response bytes; Location.Path uses the requested limit. Tiny byte budgets preserve the error code and phase and report omitted content in truncation. Timeouts are seconds; Azure CLI token acquisition has a separate budget. Omitted SQL timeouts use defaultExecutionTimeoutSeconds. Reuse per process; refresh after reconnect/restart.";
+        "Runtime config: scopeMode, compareContext, connectionTimeoutSeconds, SQL timeouts, engines, allowedProfiles, inputRoots, processLimits, configurationRef. After redaction, Message/Hint use max(requested cell limit, 2048), capped at 4096 chars and response bytes; Location.Path uses the requested limit. Tiny budgets keep error code/phase and count omissions. Timeouts are seconds; Azure CLI token acquisition has a separate budget. Omitted SQL timeouts use defaultExecutionTimeoutSeconds. Reuse per process; refresh after reconnect/restart.";
     public const string CellCharactersDescription = "0..4096; default 2048.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";

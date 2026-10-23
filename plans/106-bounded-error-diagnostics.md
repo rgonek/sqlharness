@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: IN PROGRESS — Tasks 1–2 complete and reviewed; Task 3 contract changes and focused suites are green, with task review and controller-owned final gate pending; recorded 2026-10-23.
+- Status: IN PROGRESS — Tasks 1–2 complete and reviewed; Task 3 contract and final review fixes are implemented. Focused suites and branch formatting pass on the final-fix commit; independent scoped review and controller-owned Windows gate remain pending ([final-fix evidence](106-evidence/final-fix.md)); recorded 2026-10-23.
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.

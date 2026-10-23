@@ -182,17 +182,26 @@ public static class McpResultAdapter
         if (error is not null)
         {
             var low = 0;
-            var high = Math.Max(error.Message.Length, error.Hint?.Length ?? 0);
+            var high = Math.Max(Math.Max(error.Message.Length, error.Hint?.Length ?? 0), error.Location?.Path?.Length ?? 0);
             byte[]? bestErrorBytes = null;
             while (low <= high)
             {
                 var characterLimit = low + (high - low) / 2;
                 var message = AgentOutputLimits.PrefixErrorText(error.Message, characterLimit);
                 var hint = error.Hint is null ? null : AgentOutputLimits.PrefixErrorText(error.Hint, characterLimit);
+                var locationPath = error.Location?.Path is null
+                    ? null
+                    : AgentOutputLimits.PrefixErrorText(error.Location.Path, characterLimit);
                 var omittedItems = (errorClippedFields.Message || message.Length < error.Message.Length ? 1 : 0) +
                     (errorClippedFields.Hint || (hint is not null && hint.Length < error.Hint!.Length) ? 1 : 0) +
-                    (errorClippedFields.LocationPath ? 1 : 0) + (report is null ? 0 : 1);
-                var budgetedError = error with { Message = message, Hint = hint };
+                    (errorClippedFields.LocationPath || (locationPath is not null && locationPath.Length < error.Location!.Path!.Length) ? 1 : 0) +
+                    (report is null ? 0 : 1);
+                var budgetedError = error with
+                {
+                    Message = message,
+                    Hint = hint,
+                    Location = error.Location is null ? null : error.Location with { Path = locationPath },
+                };
                 var truncation = omittedItems > 0
                     ? new McpTruncationInfo(omittedItems, maximumCellCharacters)
                     : null;
@@ -211,10 +220,15 @@ public static class McpResultAdapter
             if (bestErrorBytes is not null)
                 return Build(bestErrorBytes, isError);
 
-            var minimumError = error with { Message = string.Empty, Hint = null };
+            var minimumError = error with
+            {
+                Message = string.Empty,
+                Hint = null,
+                Location = error.Location is null ? null : error.Location with { Path = null },
+            };
             var minimumOmittedItems = (errorClippedFields.Message || error.Message.Length > 0 ? 1 : 0) +
                 (errorClippedFields.Hint || error.Hint is { Length: > 0 } ? 1 : 0) +
-                (errorClippedFields.LocationPath ? 1 : 0) + (report is null ? 0 : 1);
+                (errorClippedFields.LocationPath || error.Location?.Path is not null ? 1 : 0) + (report is null ? 0 : 1);
             var minimumTruncation = minimumOmittedItems > 0
                 ? new McpTruncationInfo(minimumOmittedItems, maximumCellCharacters)
                 : null;

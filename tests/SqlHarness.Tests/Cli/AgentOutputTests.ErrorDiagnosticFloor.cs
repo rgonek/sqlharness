@@ -9,6 +9,39 @@ namespace SqlHarness.Tests.Cli;
 
 public sealed class AgentOutputTestsErrorDiagnosticFloor
 {
+    [Theory]
+    [MemberData(nameof(LongPaths))]
+    public void Agent_minimum_budget_preserves_error_identity_when_optional_path_exceeds_byte_budget(string path)
+    {
+        var error = new SqlHarnessError(
+            "sql_execution_failed", "sql", "brief diagnostic", Location: new SqlHarnessErrorLocation(Path: path));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(
+            new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, error.Message, Error: error),
+            "query", new OutputCaptureWriter(output), new AgentOutputOptions(4096, AgentOutputLimits.MaximumCellCharacters));
+
+        var rendered = output.ToString();
+        using var document = JsonDocument.Parse(rendered);
+        var envelope = document.RootElement;
+        var reportedError = envelope.GetProperty("error");
+
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(rendered) <= 4096);
+        Assert.Equal("sql_execution_failed", reportedError.GetProperty("code").GetString());
+        Assert.Equal("sql", reportedError.GetProperty("phase").GetString());
+        Assert.Equal(1, envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
+        var reportedPath = reportedError.GetProperty("location").ValueKind == JsonValueKind.Object
+            ? reportedError.GetProperty("location").GetProperty("path")
+            : default;
+        Assert.True(reportedPath.ValueKind == JsonValueKind.Undefined || reportedPath.ValueKind == JsonValueKind.Null || reportedPath.GetString()!.Length < path.Length);
+    }
+
+    public static IEnumerable<object[]> LongPaths =>
+    [
+        [new string('p', AgentOutputLimits.MaximumCellCharacters)],
+        [string.Concat(Enumerable.Repeat("語\\n", AgentOutputLimits.MaximumCellCharacters / 2))],
+    ];
+
     [Fact]
     public void Agent_minimum_budget_bounds_multibyte_error_with_null_hint_and_keeps_identity()
     {

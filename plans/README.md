@@ -6,7 +6,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
-| [106](106-bounded-error-diagnostics.md) | Keep actionable error messages and hints readable under small result-cell limits | Tasks 1–2 reviewed on `2c0d9b36` | IN PROGRESS — Task 3 contract/docs and focused suites green; task review, branch format and final Windows gate pending ([evidence](106-evidence/task-3.md)) |
+| [106](106-bounded-error-diagnostics.md) | Keep actionable error messages and hints readable under small result-cell limits | Tasks 1–2 reviewed on `2c0d9b36` | IN PROGRESS — Task 3 contract and final fixes implemented; focused suites and branch format green; scoped review and controller Windows gate pending ([evidence](106-evidence/final-fix.md)) |
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 
