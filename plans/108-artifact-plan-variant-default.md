@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: DONE on `plan-108`; product/test `50adf82d`, Windows gate and branch format passed, all Luna xhigh task reviews and Sol low whole-branch/scoped reviews approved. Not merged or pushed. See [evidence](108-verification-evidence.md).
+- Status: DONE; locally integrated into `main` at `29bdcde0`; combined product/test `fb204898` passed the Windows gate and branch format; Luna task reviews and Sol low integration review approved. Not pushed. See [evidence](108-verification-evidence.md).
 - Priority: **P3** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: S; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
