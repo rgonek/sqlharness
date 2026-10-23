@@ -76,7 +76,12 @@ public sealed record StatementMetrics(
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int? StatementCompId { get; init; }
+
+    [JsonIgnore]
+    internal IReadOnlyList<StatementMetricSource> Sources { get; init; } = [];
 }
+
+internal sealed record StatementMetricSource(int PlanDocumentOrdinal, int PlanStatementIndex);
 
 public sealed record StatementObjectCounters(
     string Object,
@@ -439,6 +444,7 @@ internal static class JournalStatementMetricsExtractor
             DocumentOrdinal = first.DocumentOrdinal,
             PlanDocumentOrdinal = first.DocumentOrdinal,
             PlanStatementIndex = first.StatementIndex,
+            Sources = group.Select(item => new StatementMetricSource(item.DocumentOrdinal, item.StatementIndex)).ToArray(),
             StatementId = first.StatementId,
             StatementCompId = first.StatementCompId,
         };
@@ -702,9 +708,22 @@ internal static class ArtifactStatementProjector
         var extracted = new List<ArtifactStatementMetric>();
         var omitted = 0;
         var omittedByCase = new Dictionary<(string Variant, string? ParameterSet, int? MatrixCell), int>();
+        var runDiagnostics = new List<ArtifactRunPlanDiagnostic>();
+        var diagnosticCases = new List<ArtifactPlanDiagnosticAvailability>();
+        var diagnosticSourceCount = 0;
         foreach (var run in runs)
         {
             var caseKey = (run.Variant, run.ParameterSet, run.MatrixCell);
+            var diagnosticSources = PlanMetricsExtractor.ExtractDiagnosticSources(run.PlanXmls);
+            diagnosticSourceCount += diagnosticSources.Count;
+            diagnosticCases.Add(new ArtifactPlanDiagnosticAvailability(
+                run.Variant, run.ParameterSet, run.MatrixCell, run.Repetition,
+                diagnosticSources.Count == 0 ? "unavailable" : "available",
+                diagnosticSources.Count == 0 ? null : "sql-server-showplan-query-plan"));
+            runDiagnostics.AddRange(diagnosticSources
+                .Where(source => source.Scope == "batch")
+                .Select(source => new ArtifactRunPlanDiagnostic(
+                    run.Variant, run.ParameterSet, run.MatrixCell, run.Repetition, ToArtifactDiagnostic(source))));
             var metrics = JournalStatementMetricsExtractor.Extract(run.PlanXmls, out var omittedFromRun);
             omitted += omittedFromRun;
             if (omittedFromRun > 0)
@@ -724,6 +743,11 @@ internal static class ArtifactStatementProjector
                 var metric = metrics[index];
                 var attribution = omittedFromRun > 0 ? StatementStatus.Partial : statuses[index];
                 legacyMetrics.TryGetValue((metric.PlanDocumentOrdinal, metric.PlanStatementIndex), out var legacyMetric);
+                var statementDiagnostics = diagnosticSources
+                    .Where(source => source.Scope == "statement"
+                        && metric.Sources.Any(location => location.PlanDocumentOrdinal == source.PlanDocumentOrdinal
+                            && location.PlanStatementIndex == source.PlanStatementIndex))
+                    .ToArray();
                 var allHidden = (metric.HiddenWork ?? [])
                     .Where(work => work.Kind is "scalar-udf" or "multi-statement-tvf")
                     .ToArray();
@@ -757,6 +781,8 @@ internal static class ArtifactStatementProjector
                     HiddenWork = hidden,
                     HiddenWorkOmitted = allHidden.Length - hidden.Length,
                     Limitations = Limitations(allHidden),
+                    PlanDiagnostics = statementDiagnostics.Take(16).Select(ToArtifactDiagnostic).ToArray(),
+                    OmittedPlanDiagnostics = statementDiagnostics.Length > 16 ? statementDiagnostics.Length - 16 : null,
                 });
             }
         }
@@ -778,10 +804,27 @@ internal static class ArtifactStatementProjector
             EvidenceAvailability = ordered.Length == 0 ? "unavailable" : "available",
             CoverageBasis = "collected-statement-counters",
             CoverageDescription = "Attribution describes collected statement-counter coverage only; it does not establish complete query cost.",
+            PlanDiagnosticsAvailability = diagnosticSourceCount == 0 ? "unavailable" : "available",
+            RunPlanDiagnostics = runDiagnostics.Take(512).ToArray(),
+            PlanDiagnosticCases = diagnosticCases.Take(512).ToArray(),
+            OmittedRunPlanDiagnostics = Math.Max(0, runDiagnostics.Count - 512),
+            OmittedPlanDiagnosticCases = Math.Max(0, diagnosticCases.Count - 512),
             OmittedByCase = omittedByCase.Select(pair => new ArtifactStatementOmission(
                 pair.Key.Variant, pair.Key.ParameterSet, pair.Key.MatrixCell, pair.Value)).ToArray(),
         };
     }
+
+    private static ArtifactPlanDiagnostic ToArtifactDiagnostic(PlanDiagnosticSource source) => new(
+        "sql-server-showplan-query-plan",
+        source.Scope,
+        source.PlanDocumentOrdinal,
+        source.PlanStatementIndex,
+        source.DegreeOfParallelism,
+        source.GrantRequestedKb,
+        source.GrantGrantedKb,
+        source.GrantMaxUsedKb,
+        source.CompileTimeMs,
+        source.CompileCpuMs);
 
     private static IReadOnlyList<string> Limitations(IReadOnlyList<HiddenWork> hidden)
     {

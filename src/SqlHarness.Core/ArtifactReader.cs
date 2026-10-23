@@ -141,7 +141,40 @@ public sealed record ArtifactStatementMetric(
     public int? HiddenWorkOmitted { get; init; }
 
     public IReadOnlyList<string> Limitations { get; init; } = [];
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ArtifactPlanDiagnostic>? PlanDiagnostics { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? OmittedPlanDiagnostics { get; init; }
 }
+
+public sealed record ArtifactPlanDiagnostic(
+    string Source,
+    string Scope,
+    int PlanDocumentOrdinal,
+    int? PlanStatementIndex,
+    int? DegreeOfParallelism,
+    long? GrantRequestedKb,
+    long? GrantGrantedKb,
+    long? GrantMaxUsedKb,
+    long? CompileTimeMs,
+    long? CompileCpuMs);
+
+public sealed record ArtifactRunPlanDiagnostic(
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int? MatrixCell,
+    int Repetition,
+    ArtifactPlanDiagnostic Diagnostic);
+
+public sealed record ArtifactPlanDiagnosticAvailability(
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int? MatrixCell,
+    int Repetition,
+    string Availability,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Source);
 
 public sealed record ArtifactHiddenWork(string Kind, string Name, bool NameTruncated, long? Executions, double? SharePercent);
 
@@ -151,6 +184,17 @@ public sealed record ArtifactStatementsSection(
     IReadOnlyList<ArtifactStatementMetric> Statements,
     int OmittedStatements)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PlanDiagnosticsAvailability { get; init; }
+
+    public IReadOnlyList<ArtifactRunPlanDiagnostic> RunPlanDiagnostics { get; init; } = [];
+
+    public IReadOnlyList<ArtifactPlanDiagnosticAvailability> PlanDiagnosticCases { get; init; } = [];
+
+    public int OmittedRunPlanDiagnostics { get; init; }
+
+    public int OmittedPlanDiagnosticCases { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? EvidenceVersion { get; init; }
 
@@ -795,12 +839,29 @@ public static class ArtifactReader
             var section = JsonSerializer.Deserialize<ArtifactStatementsSection>(
                 ReadBoundedText(path, MaxReportBytes), ArtifactDirectoryPublisher.JsonOptions);
             if (section is null || section.Statements is null || section.OmittedStatements < 0
+                || section.RunPlanDiagnostics is null || section.PlanDiagnosticCases is null
+                || section.OmittedRunPlanDiagnostics < 0 || section.OmittedPlanDiagnosticCases < 0
                 || section.Statements.Any(statement => statement is null || statement.StatementHash is null
                     || statement.Variant is null || statement.TopOperators is null
-                    || statement.HiddenWork is null || statement.Limitations is null))
+                    || statement.HiddenWork is null || statement.Limitations is null
+                    || statement.PlanDiagnostics?.Any(diagnostic => diagnostic is null
+                        || diagnostic.Source != "sql-server-showplan-query-plan"
+                        || diagnostic.Scope != "statement"
+                        || diagnostic.PlanDocumentOrdinal < 0
+                        || diagnostic.PlanStatementIndex is < 0) == true
+                    || statement.OmittedPlanDiagnostics is < 0))
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
             if (section.EvidenceVersion is < 1 or > 1
                 || section.EvidenceAvailability is not ("available" or "unavailable")
+                || section.PlanDiagnosticsAvailability is not (null or "available" or "unavailable")
+                || section.RunPlanDiagnostics.Any(item => item is null || item.Variant is null
+                    || item.Repetition < 1 || item.Diagnostic is null || item.Diagnostic.Scope != "batch"
+                    || item.Diagnostic.Source != "sql-server-showplan-query-plan"
+                    || item.Diagnostic.PlanDocumentOrdinal < 0 || item.Diagnostic.PlanStatementIndex is not null)
+                || section.PlanDiagnosticCases.Any(item => item is null || item.Variant is null
+                    || item.Repetition < 1 || item.Availability is not ("available" or "unavailable")
+                    || item.Availability == "available" && item.Source != "sql-server-showplan-query-plan"
+                    || item.Availability == "unavailable" && item.Source is not null)
                 || section.Statements.Any(statement => statement.CounterAttribution is not ("complete" or "partial" or "unavailable")
                     || statement.HiddenWorkOmitted is < 0))
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
@@ -819,7 +880,8 @@ public static class ArtifactReader
                         Executions = null,
                         UdfElapsedMilliseconds = null,
                         HiddenWork = [],
-                        Limitations = []
+                        Limitations = [],
+                        PlanDiagnostics = null
                     }
                     : NormalizeEvidence(statement)).ToArray();
             return section with
@@ -831,6 +893,9 @@ public static class ArtifactReader
                     ? "unavailable" : section.EvidenceAvailability,
                 CoverageBasis = section.EvidenceVersion is null ? null : section.CoverageBasis,
                 CoverageDescription = section.EvidenceVersion is null ? null : section.CoverageDescription,
+                PlanDiagnosticsAvailability = section.PlanDiagnosticsAvailability ?? "unavailable",
+                RunPlanDiagnostics = section.EvidenceVersion is null ? [] : section.RunPlanDiagnostics,
+                PlanDiagnosticCases = section.EvidenceVersion is null ? [] : section.PlanDiagnosticCases,
                 Continuation = cursor + Math.Min(pageSize, section.Statements.Count - cursor) < section.Statements.Count
                     ? cursor + Math.Min(pageSize, section.Statements.Count - cursor)
                     : null,

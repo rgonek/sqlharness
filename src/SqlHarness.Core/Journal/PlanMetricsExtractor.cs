@@ -28,6 +28,17 @@ public sealed record PlanMetrics(
     public static PlanMetrics Empty { get; } = new(null, null, null, null, null, null, 0, false, false, 0, [], null);
 }
 
+internal sealed record PlanDiagnosticSource(
+    string Scope,
+    int PlanDocumentOrdinal,
+    int? PlanStatementIndex,
+    int? DegreeOfParallelism,
+    long? GrantRequestedKb,
+    long? GrantGrantedKb,
+    long? GrantMaxUsedKb,
+    long? CompileTimeMs,
+    long? CompileCpuMs);
+
 /// <summary>
 /// Journal-only plan diagnostics from actual Showplan XML (SQL Server) or
 /// EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) (Postgres). Never throws: an
@@ -36,6 +47,61 @@ public sealed record PlanMetrics(
 internal static class PlanMetricsExtractor
 {
     internal const int MaximumCharacters = 16 * 1024 * 1024;
+
+    internal static IReadOnlyList<PlanDiagnosticSource> ExtractDiagnosticSources(IEnumerable<string> documents)
+    {
+        var result = new List<PlanDiagnosticSource>();
+        var ordinal = 0;
+        foreach (var document in documents)
+        {
+            try
+            {
+                result.AddRange(ExtractDiagnosticSources(document, ordinal));
+            }
+            catch (Exception exception) when (IsExtractionFailure(exception))
+            {
+                // One unreadable plan document does not hide valid sibling sources.
+            }
+            ordinal++;
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<PlanDiagnosticSource> ExtractDiagnosticSources(string document, int documentOrdinal)
+    {
+        if (string.IsNullOrWhiteSpace(document) || document.Length > MaximumCharacters
+            || document.AsSpan().TrimStart()[0] is '{' or '[')
+            return [];
+
+        using var reader = XmlReader.Create(new StringReader(document), new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = MaximumCharacters,
+        });
+        var root = XDocument.Load(reader);
+        if (root.Root?.Name.LocalName != "ShowPlanXML")
+            return [];
+        var statements = root.Descendants().Where(element => element.Name.LocalName == "StmtSimple").ToArray();
+        return root.Descendants().Where(element => element.Name.LocalName == "QueryPlan")
+            .Select(queryPlan =>
+            {
+                var statement = queryPlan.Ancestors().FirstOrDefault(element => element.Name.LocalName == "StmtSimple");
+                var statementIndex = statement is null ? (int?)null : Array.IndexOf(statements, statement);
+                var grant = queryPlan.Descendants().FirstOrDefault(element => element.Name.LocalName == "MemoryGrantInfo");
+                return new PlanDiagnosticSource(
+                    statement is null ? "batch" : "statement",
+                    documentOrdinal,
+                    statementIndex,
+                    Int(queryPlan, "DegreeOfParallelism"),
+                    Long(grant ?? queryPlan, "RequestedMemory"),
+                    Long(grant ?? queryPlan, "GrantedMemory"),
+                    Long(grant ?? queryPlan, "MaxUsedMemory"),
+                    Long(queryPlan, "CompileTime"),
+                    Long(queryPlan, "CompileCPU"));
+            })
+            .ToArray();
+    }
 
     internal static PlanMetrics Extract(IEnumerable<string> documents)
     {

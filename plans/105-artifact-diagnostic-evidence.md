@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TODO — implementation; recorded 2026-10-23.
+- Status: IN PROGRESS — Task 1 persisted shape implemented and focused suites green; task review pending; recorded 2026-10-23.
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: L; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -67,8 +67,8 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 1: Define and test the persisted diagnostic shape
 
-- [ ] Use Showplan fixtures with present, absent and zero metrics; two statements with different grants; multiple repetitions/sets; UDF/TVF partial coverage; PostgreSQL unavailable SQL Server diagnostics. Freeze the expected units, source and aggregation of every field. Test extraction-to-new-artifact-to-offline-read without a live database.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Use Showplan fixtures with present, absent and zero metrics; two statements with different grants; multiple repetitions/sets; UDF/TVF partial coverage; PostgreSQL unavailable SQL Server diagnostics. Freeze the expected units, source and aggregation of every field. Test extraction-to-new-artifact-to-offline-read without a live database.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
 - [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 2: Implement optional saved numeric evidence

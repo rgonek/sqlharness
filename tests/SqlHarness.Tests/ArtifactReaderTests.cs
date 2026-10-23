@@ -733,6 +733,106 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Statements_section_persists_source_scoped_plan_diagnostics_for_offline_reads()
+    {
+        using var temp = new TempDirectory();
+        const string sqlServerPlan = """
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><Statements>
+                <StmtSimple StatementText="SELECT first"><QueryPlan DegreeOfParallelism="2" CompileTime="7" CompileCPU="3">
+                  <MemoryGrantInfo RequestedMemory="8" GrantedMemory="6" MaxUsedMemory="4" />
+                  <RelOp NodeId="0" PhysicalOp="Index Seek" />
+                </QueryPlan></StmtSimple>
+                <StmtSimple StatementText="SELECT second"><QueryPlan DegreeOfParallelism="1" CompileTime="0" CompileCPU="0">
+                  <MemoryGrantInfo RequestedMemory="0" GrantedMemory="0" MaxUsedMemory="0" />
+                  <RelOp NodeId="0" PhysicalOp="Index Seek" />
+                </QueryPlan></StmtSimple>
+              </Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+        const string absentPlan = """
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><Statements><StmtSimple StatementText="SELECT absent"><QueryPlan><RelOp NodeId="0" PhysicalOp="Index Seek" /></QueryPlan></StmtSimple></Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+        const string secondDocumentPlan = """
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><Statements>
+                <StmtSimple StatementText="SELECT third"><QueryPlan CompileTime="14" CompileCPU="5">
+                  <MemoryGrantInfo RequestedMemory="16" GrantedMemory="14" MaxUsedMemory="12" />
+                  <RelOp NodeId="0" PhysicalOp="Index Seek" />
+                </QueryPlan></StmtSimple>
+              </Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+        const string batchPlan = """
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><QueryPlan CompileTime="11" CompileCPU="8">
+                <MemoryGrantInfo RequestedMemory="12" GrantedMemory="10" MaxUsedMemory="9" />
+                <RelOp NodeId="0" PhysicalOp="Index Seek" />
+              </QueryPlan></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+        const string postgresPlan = """[{"Plan":{"Node Type":"Seq Scan","Relation Name":"items"}}]""";
+        var hiddenPlan = StatementMetricsTests.JournalPlan("SELECT dbo.fn_scalar() FROM dbo.fn_multi()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 4, elapsedTime: 10,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)]), ("Table-valued function", "[dbo].[fn_multi]", [(0L, 0L, 0L)])]);
+        var report = CompareReport();
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 30, 40, 0, new Dictionary<string, long>(), "hash-a", [sqlServerPlan, secondDocumentPlan], 0, "set-a"),
+            new CompareRunArtifact("baseline", 2, 31, 41, 0, new Dictionary<string, long>(), "hash-b", [absentPlan], 0, "set-a"),
+            new CompareRunArtifact("baseline", 3, 33, 43, 0, new Dictionary<string, long>(), "hash-d", [hiddenPlan], 0, "set-a")
+            {
+                TableIo = [new TableIoCounters("Orders", 1, 3, 0, 0, 0, 0, 0, 0)],
+            },
+            new CompareRunArtifact("candidate", 1, 32, 42, 0, new Dictionary<string, long>(), "hash-c", [postgresPlan], 0, "set-b"),
+            new CompareRunArtifact("baseline", 4, 34, 44, 0, new Dictionary<string, long>(), "hash-e", [batchPlan], 0, "set-a"),
+        };
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, runs, "wind");
+
+        var section = Assert.IsType<ArtifactStatementsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "statements"));
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(section, ArtifactDirectoryPublisher.JsonOptions));
+        var rows = json.RootElement.GetProperty("statements").EnumerateArray().ToArray();
+
+        Assert.Equal(5, rows.Length);
+        var first = Assert.Single(rows, row => row.GetProperty("parameterSet").GetString() == "set-a"
+            && row.GetProperty("repetition").GetInt32() == 1 && row.GetProperty("statementOrdinal").GetInt32() == 0);
+        var second = Assert.Single(rows, row => row.GetProperty("parameterSet").GetString() == "set-a"
+            && row.GetProperty("repetition").GetInt32() == 1 && row.GetProperty("statementOrdinal").GetInt32() == 1);
+        var absent = Assert.Single(rows, row => row.GetProperty("parameterSet").GetString() == "set-a"
+            && row.GetProperty("repetition").GetInt32() == 2);
+        Assert.Equal(8, first.GetProperty("planDiagnostics")[0].GetProperty("grantRequestedKb").GetInt64());
+        Assert.Equal(6, first.GetProperty("planDiagnostics")[0].GetProperty("grantGrantedKb").GetInt64());
+        Assert.Equal(7, first.GetProperty("planDiagnostics")[0].GetProperty("compileTimeMs").GetInt64());
+        Assert.Equal(0, second.GetProperty("planDiagnostics")[0].GetProperty("grantGrantedKb").GetInt64());
+        Assert.Equal(0, second.GetProperty("planDiagnostics")[0].GetProperty("compileTimeMs").GetInt64());
+        var third = Assert.Single(rows, row => row.GetProperty("repetition").GetInt32() == 1
+            && row.GetProperty("statementOrdinal").GetInt32() == 2);
+        Assert.Equal(14, third.GetProperty("planDiagnostics")[0].GetProperty("grantGrantedKb").GetInt64());
+        Assert.Equal(1, third.GetProperty("planDiagnostics")[0].GetProperty("planDocumentOrdinal").GetInt32());
+        Assert.True(absent.GetProperty("planDiagnostics")[0].GetProperty("grantGrantedKb").ValueKind == JsonValueKind.Null);
+        Assert.Equal("statement", first.GetProperty("planDiagnostics")[0].GetProperty("scope").GetString());
+        Assert.Equal("sql-server-showplan-query-plan", first.GetProperty("planDiagnostics")[0].GetProperty("source").GetString());
+        var partial = Assert.Single(rows, row => row.GetProperty("repetition").GetInt32() == 3);
+        Assert.Equal("partial", partial.GetProperty("counterAttribution").GetString());
+        Assert.Contains(partial.GetProperty("hiddenWork").EnumerateArray(), item => item.GetProperty("kind").GetString() == "scalar-udf");
+        Assert.Contains(partial.GetProperty("hiddenWork").EnumerateArray(), item => item.GetProperty("kind").GetString() == "multi-statement-tvf");
+        Assert.Equal(JsonValueKind.Null, partial.GetProperty("planDiagnostics")[0].GetProperty("compileTimeMs").ValueKind);
+        var batch = Assert.Single(section.RunPlanDiagnostics);
+        Assert.Equal("baseline", batch.Variant);
+        Assert.Equal("set-a", batch.ParameterSet);
+        Assert.Equal(4, batch.Repetition);
+        Assert.Equal("batch", batch.Diagnostic.Scope);
+        Assert.Equal(11, batch.Diagnostic.CompileTimeMs);
+        var postgresCase = Assert.Single(section.PlanDiagnosticCases, item => item.Variant == "candidate");
+        Assert.Equal("unavailable", postgresCase.Availability);
+        Assert.Null(postgresCase.Source);
+    }
+
+    [Fact]
     public void Statements_section_preserves_repetition_identity_attribution_and_hidden_work()
     {
         using var temp = new TempDirectory();
