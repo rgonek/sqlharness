@@ -136,6 +136,10 @@ public sealed record ArtifactStatementMetric(
     public double? UdfElapsedMilliseconds { get; init; }
 
     public IReadOnlyList<ArtifactHiddenWork> HiddenWork { get; init; } = [];
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? HiddenWorkOmitted { get; init; }
+
     public IReadOnlyList<string> Limitations { get; init; } = [];
 }
 
@@ -786,7 +790,8 @@ public static class ArtifactReader
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
             if (section.EvidenceVersion is < 1 or > 1
                 || section.EvidenceAvailability is not ("available" or "unavailable")
-                || section.Statements.Any(statement => statement.CounterAttribution is not ("complete" or "partial" or "unavailable")))
+                || section.Statements.Any(statement => statement.CounterAttribution is not ("complete" or "partial" or "unavailable")
+                    || statement.HiddenWorkOmitted is < 0))
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
             if (cursor > section.Statements.Count)
                 throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);

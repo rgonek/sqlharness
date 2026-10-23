@@ -718,8 +718,10 @@ internal static class ArtifactStatementProjector
                 var metric = metrics[index];
                 var attribution = omittedFromRun > 0 ? StatementStatus.Partial : statuses[index];
                 legacyMetrics.TryGetValue((metric.PlanDocumentOrdinal, metric.PlanStatementIndex), out var legacyMetric);
-                var hidden = (metric.HiddenWork ?? [])
+                var allHidden = (metric.HiddenWork ?? [])
                     .Where(work => work.Kind is "scalar-udf" or "multi-statement-tvf")
+                    .ToArray();
+                var hidden = allHidden
                     .Take(MaximumHiddenWorkItemsPerStatement)
                     .Select(work =>
                     {
@@ -747,7 +749,8 @@ internal static class ArtifactStatementProjector
                     Executions = metric.Executions,
                     UdfElapsedMilliseconds = metric.UdfElapsedMs,
                     HiddenWork = hidden,
-                    Limitations = Limitations(hidden),
+                    HiddenWorkOmitted = allHidden.Length - hidden.Length,
+                    Limitations = Limitations(allHidden),
                 });
             }
         }
@@ -772,7 +775,7 @@ internal static class ArtifactStatementProjector
         };
     }
 
-    private static IReadOnlyList<string> Limitations(IReadOnlyList<ArtifactHiddenWork> hidden)
+    private static IReadOnlyList<string> Limitations(IReadOnlyList<HiddenWork> hidden)
     {
         if (hidden.Count == 0) return [];
         var limitations = new List<string>();

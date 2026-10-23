@@ -667,6 +667,29 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Statements_section_reports_hidden_work_rows_omitted_by_the_per_statement_cap()
+    {
+        using var temp = new TempDirectory();
+        var functions = Enumerable.Range(0, 18)
+            .Select(index => ("Table-valued function", $"[dbo].[fn_{index:D2}]", new[] { (0L, 0L, 0L) }))
+            .ToArray();
+        var plan = StatementMetricsTests.JournalPlan("SELECT * FROM dbo.fn_many()", 1, 1, "0x01", 0, 1,
+            operators: functions);
+        var run = new CompareRunArtifact("baseline", 1, 1, 2, 0, new Dictionary<string, long>(), "hash", [plan], 0);
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(CompareReport(), [run], "many-hidden");
+
+        var section = Assert.IsType<ArtifactStatementsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "statements"));
+        using var rowJson = JsonDocument.Parse(JsonSerializer.Serialize(
+            Assert.Single(section.Statements), ArtifactDirectoryPublisher.JsonOptions));
+
+        Assert.Equal(16, rowJson.RootElement.GetProperty("hiddenWork").GetArrayLength());
+        Assert.Equal(2, rowJson.RootElement.GetProperty("hiddenWorkOmitted").GetInt32());
+        Assert.Contains("Multi-statement TVF", rowJson.RootElement.GetProperty("limitations")[0].GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Legacy_statement_rows_and_postgres_artifacts_report_unavailable_attribution()
     {
         using var temp = new TempDirectory();
