@@ -1,6 +1,6 @@
 # Plan 103 verification evidence
 
-Status: DONE on `plan-103`; all task/whole-branch/scoped reviews approved; Windows verification and explicit branch format passed. Not merged or pushed; no installation, paid-agent run or live database access.
+Status: DONE; locally integrated into `main` at `1301aa7b`; all task/whole-branch/scoped reviews approved; Windows verification and explicit branch format passed. Not pushed; no installation, paid-agent run or live database access.
 
 Branch base: `6d543e509734a374caf882bc8c05ffe5ccaa98b2`. Isolated managed worktree: `C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/3aed/sqlharness`. Source checkout dirty README/index and unrelated untracked plans preserved. Plan 082 implementation merge `dd375124` inspected; plan drift scan against `677b2f93` was empty for the named product paths.
 
@@ -43,3 +43,9 @@ Test-only revisions `e497b69e` and `874b4fc9` retain semantic description assert
 No unresolved review findings remain. The catalog has only 96 bytes of derived request-scope headroom; existing schema tests enforce the unchanged 32768-byte ceiling for future changes. Attribution remains counter coverage, not complete SQL cost. Older/engine-absent evidence stays unavailable, and bounded lists retain explicit omissions. Research-only checklist clauses are not applicable; this was an offline implementation plan.
 
 Linux and live database/installed-binary acceptance remain unverified. Synthetic/offline tests establish the implemented contract only; they do not establish measured agent-token savings or complete SQL execution cost coverage.
+
+## Local main integration (2026-10-23)
+
+User authorized local integration. `main` fast-forwarded from `6d543e50` to reviewed branch head `1301aa7b`; no merge conflicts or new executable changes. `git diff --quiet 874b4fc9 HEAD -- src tests scripts` exited 0 after integration, preserving the exact Windows-verified product/test tree. Existing gate evidence is reused; no redundant full gate was run for integration bookkeeping only, in accordance with repository verification policy.
+
+The unrelated dirty root README and other untracked plans are preserved. The local planning queue was temporarily stashed by path; its unrelated entries are restored as uncommitted edits, while Plan 103 is represented by its completed history entry. The superseded untracked Plan 103 draft and original index are backed up under `D:/temp/sqlharness-plan103-main-integration-20261023-202657`. The managed feature worktree is retained. No push occurred. Linux/live acceptance boundaries remain unchanged.

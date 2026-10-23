@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: DONE on `plan-103`; task and whole-branch reviews approved, Windows gate and explicit branch formatting passed on `874b4fc9`; not merged or pushed. See [evidence](103-verification-evidence.md).
+- Status: DONE; locally integrated into `main` by fast-forward to `1301aa7b`; approved task/whole-branch reviews and Windows-verified product/test tree `874b4fc9` preserved; not pushed. See [evidence](103-verification-evidence.md).
 - Priority: **P1** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
