@@ -19,4 +19,4 @@ Added a compact timeout guide to `docs/mcp/runtime.md` and linked it from the RE
 
 ## Checks
 
-Commands and results are recorded in the Task 2 report at `.superpowers/sdd/110-mcp-timeout-troubleshooting/task-2-report.md`. No product code, client configuration, live database, retry, or installation was changed or exercised.
+Commands and results are recorded in [Plan 110 verification evidence](../110-verification-evidence.md). The earlier local report pointer was ephemeral and is replaced by this durable record. No product code, client configuration, live database, retry, or installation was changed or exercised.
