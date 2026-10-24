@@ -32,7 +32,10 @@ Replaces the two stacked `SqlBlock`s:
 
 New card above the variant tabs.
 
-- Rows: union of table names from both sides (`operation_table_io`, median per run).
+- Rows: union of persisted table labels from both sides (`operation_table_io`, median per run). Core performs
+  raw-name classification and collision-safe anonymous table-variable aggregation per run. Dashboard comparison
+  and export preserve those labels and never reinterpret `#8hex`; historical rows without producer provenance
+  retain their saved names and values.
 - Columns: Logical reads B | C | Change %, Scan count B | C; physical and read-ahead in an expandable section.
 - A table on only one side is labelled "only in baseline"/"only in candidate". No percentage when baseline is 0 or null.
 - Total row; default sort by absolute change.

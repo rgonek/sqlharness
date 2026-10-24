@@ -26,7 +26,9 @@ without `compare` (query/watch/snapshot exploration, cost monitoring) keep their
        not put side by side (show "conditions differ" and the SQL diff only);
      - case selector with labels (`@CustomerId = 42`) plus `All cases`; aggregate toggle **Sum / Mean** (sum default);
      - "Mixed" warning naming the worst case when any case regresses;
-     - per-table table: table, scans before/after, logical reads before/after, change; table variables and
+     - per-table table: persisted table label, scans before/after, logical reads before/after, change; Core
+       supplies collision-safe table-variable aggregates and the dashboard preserves exact saved identities.
+       Historical stored `#8hex` names remain unchanged; dashboard code does not infer object kind from a label.
        worktables collapsed into one row with a count; zero-read rows collapsed;
      - actions: copy summary (Markdown, same table incl. scans), scripts for both versions (two forms each, from
        stage A), SQL diff, plans, open operation.

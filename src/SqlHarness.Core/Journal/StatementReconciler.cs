@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 namespace SqlHarness.Core;
 
 public enum StatementStatus
@@ -30,8 +28,6 @@ internal static class StatementAttributionClassifier
 /// <summary>Compares plan-derived statement counters with the engine's batch IO counters.</summary>
 internal static class StatementReconciler
 {
-    private static readonly Regex BackingTableVariable = new(@"^#?[0-9A-Fa-f]{8}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
     internal static IReadOnlyList<StatementStatus> Reconcile(
         IReadOnlyList<StatementMetrics> statements,
         IReadOnlyList<TableIoCounters> observed)
@@ -43,7 +39,8 @@ internal static class StatementReconciler
         if (observed.Count == 0)
             return Enumerable.Repeat(StatementStatus.Unavailable, statements.Count).ToArray();
 
-        var planObjects = new Dictionary<string, CounterTotals>(StringComparer.OrdinalIgnoreCase);
+        var keyComparer = ReconciliationKeyComparer.Instance;
+        var planObjects = new Dictionary<ReconciliationKey, CounterTotals>(keyComparer);
         foreach (var statement in statements)
         {
             foreach (var counters in statement.Objects ?? [])
@@ -55,16 +52,19 @@ internal static class StatementReconciler
             }
         }
 
-        var observedObjects = new Dictionary<string, CounterTotals>(StringComparer.OrdinalIgnoreCase);
+        var observedObjects = new Dictionary<ReconciliationKey, CounterTotals>(keyComparer);
         foreach (var counters in observed)
         {
-            var key = Normalize(counters.Table, null);
+            var identity = counters.Identity ?? StatisticsIoTableIdentity.Unknown(counters.Table);
+            var key = identity.Kind == StatisticsIoTableKind.AnonymousTableVariable
+                ? ReconciliationKey.AnonymousVariables
+                : ReconciliationKey.Object(NormalizeObservedName(counters.Table));
             if (!observedObjects.TryGetValue(key, out var total))
                 observedObjects[key] = total = new CounterTotals();
             total.Add(counters.LogicalReads, counters.LobLogicalReads, counters.ScanCount);
         }
 
-        var mismatched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var mismatched = new HashSet<ReconciliationKey>(keyComparer);
         foreach (var pair in planObjects)
         {
             if (!observedObjects.TryGetValue(pair.Key, out var actual) || !pair.Value.Equals(actual))
@@ -85,20 +85,47 @@ internal static class StatementReconciler
         }).ToArray();
     }
 
-    private static string Normalize(string name, string? kind)
+    private static string NormalizeObservedName(string name)
+    {
+        var unwrapped = name.Trim().Replace("[", string.Empty, StringComparison.Ordinal)
+            .Replace("]", string.Empty, StringComparison.Ordinal);
+        var dot = unwrapped.LastIndexOf('.');
+        return dot >= 0 ? unwrapped[(dot + 1)..] : unwrapped;
+    }
+
+    private static ReconciliationKey Normalize(string name, string? kind)
     {
         var value = name.Trim();
         var unwrapped = value.Replace("[", string.Empty, StringComparison.Ordinal)
             .Replace("]", string.Empty, StringComparison.Ordinal);
         if (string.Equals(kind, "table-variable", StringComparison.OrdinalIgnoreCase)
-            || unwrapped.StartsWith('@') || BackingTableVariable.IsMatch(unwrapped))
-            return "table variables";
+            || unwrapped.StartsWith('@'))
+            return ReconciliationKey.AnonymousVariables;
         if (unwrapped.Equals("Worktable", StringComparison.OrdinalIgnoreCase)
             || unwrapped.Equals("Workfile", StringComparison.OrdinalIgnoreCase))
-            return unwrapped;
+            return ReconciliationKey.Object(unwrapped);
 
         var dot = unwrapped.LastIndexOf('.');
-        return dot >= 0 ? unwrapped[(dot + 1)..] : unwrapped;
+        return ReconciliationKey.Object(dot >= 0 ? unwrapped[(dot + 1)..] : unwrapped);
+    }
+
+    private readonly record struct ReconciliationKey(bool IsAnonymousVariableGroup, string Name)
+    {
+        internal static ReconciliationKey AnonymousVariables => new(true, string.Empty);
+        internal static ReconciliationKey Object(string name) => new(false, name);
+    }
+
+    private sealed class ReconciliationKeyComparer : IEqualityComparer<ReconciliationKey>
+    {
+        internal static readonly ReconciliationKeyComparer Instance = new();
+
+        public bool Equals(ReconciliationKey left, ReconciliationKey right) =>
+            left.IsAnonymousVariableGroup == right.IsAnonymousVariableGroup
+            && StringComparer.OrdinalIgnoreCase.Equals(left.Name, right.Name);
+
+        public int GetHashCode(ReconciliationKey key) => HashCode.Combine(
+            key.IsAnonymousVariableGroup,
+            StringComparer.OrdinalIgnoreCase.GetHashCode(key.Name));
     }
 
     private sealed class CounterTotals

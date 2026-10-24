@@ -25,9 +25,13 @@ public sealed record SqlHarnessCapabilities(
 /// <summary>
 /// One engine's operation guidance: facts a caller needs at the call site that the shared command
 /// descriptions leave out. Query covers safety and effects (empty when the engine has nothing to add
-/// beyond the shared description), Setup the native session-temp and parameterized-setup rules.
+/// beyond the shared description), Setup the native session-temp and parameterized-setup rules, and
+/// TableIo the engine-specific identity rules for table IO evidence.
 /// </summary>
-public sealed record SqlHarnessEngineGuidance(string Query, string Setup);
+public sealed record SqlHarnessEngineGuidance(
+    string Query,
+    string Setup,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TableIo = null);
 
 public sealed record SqlHarnessCompareContextCapability(
     bool RequireContext,
@@ -61,7 +65,8 @@ public static class SqlHarnessCapabilitiesProvider
     // 4: add the persistent mutation command and remove query mutation switches.
     // 6: report whether plan documents are available through the sensitive journal gate.
     // 8: add the opt-in operationAnnotations member.
-    public const int ContractVersion = 8;
+    // 9: add SQL Server table IO identity rules to engine guidance.
+    public const int ContractVersion = 9;
 
     public static SqlHarnessCompareContextCapability CompareContextPolicy(CompareConfig? config = null)
     {
@@ -97,7 +102,8 @@ public static class SqlHarnessCapabilitiesProvider
             new Dictionary<string, object>(StringComparer.Ordinal),
             new SqlHarnessEngineGuidance(
                 "Read-only Query (allowMutation=false) and CompareSetup admit IF/ELSE/BEGIN…END, WHILE with BREAK/CONTINUE, TRY/CATCH, value-less batch RETURN, THROW, RAISERROR without LOG, PRINT, local transactions/savepoints, and LOCAL cursors over admitted SELECTs. Allowed SET options only: NOCOUNT, XACT_ABORT, ARITHABORT, ANSI_NULLS, ANSI_WARNINGS, ANSI_PADDING, QUOTED_IDENTIFIER, CONCAT_NULL_YIELDS_NULL, NUMERIC_ROUNDABORT, DATEFIRST, DATEFORMAT, LOCK_TIMEOUT, DEADLOCK_PRIORITY (LOW, NORMAL, or numeric <= 0), and TRANSACTION ISOLATION LEVEL. Other SET options remain denied, including STATISTICS, SHOWPLAN_*, NOEXEC, PARSEONLY, FMTONLY, ROWCOUNT, IDENTITY_INSERT, CONTEXT_INFO, LANGUAGE, FORCEPLAN, IMPLICIT_TRANSACTIONS, REMOTE_PROC_TRANSACTIONS, and OFFSETS. EXEC/EXECUTE, WAITFOR, GOTO, labels, value-bearing RETURN, RAISERROR WITH LOG, distributed or marked transactions, GLOBAL cursors, cursor variables, SCROLL_LOCKS, and cursor FOR UPDATE remain denied. Every branch and nested statement is classified. Transactions left open at a logical batch boundary are rolled back with a warning; failed cleanup discards the connection and fails the operation. Setup options persist for that case; measured commands restore the state captured after setup.",
-                "Create #temps before the first parameter reference, populate afterwards."),
+                "Create #temps before the first parameter reference, populate afterwards.",
+                "SQL Server STATISTICS IO recognizes an exact raw bare # plus eight hexadecimal characters as the anonymous table-variable group before name normalization. Explicit local-temp suffixes retain local-temp identity and normalize to their base name. Other raw forms and legacy values without producer identity remain Unknown with exact names; old saved labels are never reclassified. Anonymous counters aggregate within each run before distributions. This is an empirically characterized rule, not a Microsoft cross-version guarantee."),
             DefaultTargetServer,
             [
                 "DECLARE scalar variables with analyzed initializers",
@@ -233,11 +239,11 @@ public static class SqlHarnessCapabilitiesProvider
                 sections = ArtifactReader.SupportedSections,
                 manifestVersion = ArtifactReader.CurrentManifestVersion,
                 maxReportBytes = ArtifactReader.MaxReportBytes,
-                pagedSections = "matrix-cells,operators,plan,statements",
+                pagedSections = "matrix-cells,operators,plan,statements,statement-summary",
                 planSelectors = "variant,statement,parameterSet,repetition,includeText",
                 planSourceWindowNodes = ArtifactReader.MaxPlanPageSourceNodes,
                 planPaging = "each plan response is byte-budgeted; continuation advances by nodes returned",
-                diagnosticEvidence = "metrics provides bounded source-scoped grant/compile and STATISTICS IO ScanCount distributions; statements provides per-statement plan diagnostics and object IO with continuation; missing values are partial or unavailable, not zero",
+                diagnosticEvidence = "metrics provides bounded source-scoped grant/compile and STATISTICS IO ScanCount distributions; statement-summary provides discovery-only statement CPU/elapsed values; statements provides exact per-statement diagnostics and object IO with continuation; missing values are partial or unavailable, not zero",
             },
             ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing; one terminal record", history = "none; every change emitted" },
         };

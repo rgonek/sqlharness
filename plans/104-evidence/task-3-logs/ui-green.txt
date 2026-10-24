@@ -1,0 +1,15 @@
+
+> ui@0.0.0 test
+> vitest run src/lib/tableIoDelta.test.ts src/lib/prMarkdown.test.ts
+
+
+ RUN  v5.0.3 D:/Dev/sqlharness/.worktrees/plan-104/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  2 passed (2)
+      Tests  9 passed (9)
+   Start at  14:15:12
+   Duration  5.69s (environment 66%, setup 22%, import 5%, transform 4%, tests 1%, worker 1%)
+
+    Isolate  2 workers spawned · ~2.00s startup each (spawn + environment, per file)
+             at least ~2.00s faster with isolate: false — reuses workers across files instead of one per file

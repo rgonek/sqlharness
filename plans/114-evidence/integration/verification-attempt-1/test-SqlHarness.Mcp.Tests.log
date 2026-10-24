@@ -1,0 +1,42 @@
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+Test run for C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\0474\sqlharness\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:06.15]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [SKIP]
+[xUnit.net 00:00:06.16]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [SKIP]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [1 ms]
+[xUnit.net 00:00:06.17]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [SKIP]
+[xUnit.net 00:00:06.93]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [SKIP]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [1 ms]
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config [79 ms]
+  Error Message:
+   Assert.InRange() Failure: Value not in range
+Range:  (1 - 32768)
+Actual: 33055
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\0474\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 404
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\0474\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 414
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\0474\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 414
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\0474\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 414
+--- End of stack trace from previous location ---
+  Standard Output Messages:
+ annotations-off tools/list: 28991 UTF-8 bytes (Plan 095 contract)
+ annotations-on tools/list: 32599 UTF-8 bytes of 32768
+
+
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes [46 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Zero-based cursor by section: matrix-cell"···
+Not found: "continuation"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\0474\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 1496
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\0474\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 1435
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\0474\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 1435
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     2, Passed:   525, Skipped:     4, Total:   531, Duration: 5 m 10 s - SqlHarness.Mcp.Tests.dll (net10.0)
+[xUnit.net 00:04:35.31]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config [FAIL]
+[xUnit.net 00:04:35.62]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes [FAIL]
+==> test project: tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj exit 1

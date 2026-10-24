@@ -21,15 +21,16 @@ test("zero baseline gives no percentage", () => {
   expect(tableIoDelta([io("T", 0)], [io("T", 5)]).rows[0].logicalDelta).toBeNull()
 })
 
-test("uses data plus LOB reads for totals and combines table-variable rows", () => {
+test("preserves distinct object identities while retaining data plus LOB totals", () => {
   const before = [
     { ...io("#12345678", 10), lobLogicalReads: 4, totalLogicalReads: 14 },
     { ...io("#ABCDEF12", 20), lobLogicalReads: 8, totalLogicalReads: 28 },
   ]
   const after = [{ ...io("#87654321", 10), lobLogicalReads: 4, totalLogicalReads: 14 }]
   const result = tableIoDelta(before, after)
-  expect(result.rows.map(row => row.table)).toEqual(["table variables"])
-  expect(result.rows[0].baseline).toMatchObject({ logicalReads: 30, lobLogicalReads: 12, totalLogicalReads: 42, scans: 2 })
+  expect(result.rows.map(row => row.table)).toHaveLength(3)
+  expect(result.rows.map(row => row.table)).toEqual(expect.arrayContaining(["#12345678", "#ABCDEF12", "#87654321"]))
+  expect(result.rows.find(row => row.table === "#12345678")?.baseline).toMatchObject({ logicalReads: 10, lobLogicalReads: 4, totalLogicalReads: 14, scans: 1 })
   expect(result.total).toEqual({ baseline: 42, candidate: 14, delta: -2 / 3 })
 })
 

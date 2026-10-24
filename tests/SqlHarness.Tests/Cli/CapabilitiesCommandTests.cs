@@ -24,7 +24,7 @@ public sealed class CapabilitiesCommandTests
         Assert.Empty(module.Operations);
         using var document = JsonDocument.Parse(output.ToString());
         var root = document.RootElement;
-        Assert.Equal(8, root.GetProperty("contractVersion").GetInt32());
+        Assert.Equal(9, root.GetProperty("contractVersion").GetInt32());
         Assert.False(root.TryGetProperty("operationAnnotations", out _));
         var mutations = root.GetProperty("mutations");
         Assert.Equal("never", mutations.GetProperty("defaultMode").GetString());
@@ -72,8 +72,8 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public void Contract_version_is_pinned()
     {
-        Assert.Equal(8, SqlHarnessCapabilitiesProvider.ContractVersion);
-        Assert.Equal(8, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+        Assert.Equal(9, SqlHarnessCapabilitiesProvider.ContractVersion);
+        Assert.Equal(9, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
     }
 
     [Fact]
@@ -319,6 +319,7 @@ public sealed class CapabilitiesCommandTests
         Assert.Contains("least-privilege", guidance.Query, StringComparison.Ordinal);
         Assert.Contains("READ ONLY", guidance.Query, StringComparison.Ordinal);
         Assert.Contains("sslMode", caps.Limits["targetIdentity"].ToString()!, StringComparison.Ordinal);
+        Assert.Null(guidance.TableIo);
         Assert.DoesNotContain("#temp", all, StringComparison.Ordinal);
         Assert.DoesNotContain("sqlserver", all, StringComparison.Ordinal);
     }
@@ -331,6 +332,10 @@ public sealed class CapabilitiesCommandTests
         var all = Serialize(caps);
 
         Assert.Contains("#temp", guidance.Setup, StringComparison.Ordinal);
+        Assert.Contains("exact raw bare # plus eight hexadecimal characters", guidance.TableIo, StringComparison.Ordinal);
+        Assert.Contains("Explicit local-temp suffixes retain local-temp identity", guidance.TableIo, StringComparison.Ordinal);
+        Assert.Contains("not a Microsoft cross-version guarantee", guidance.TableIo, StringComparison.Ordinal);
+        Assert.Contains("\"tableIo\"", all, StringComparison.Ordinal);
         foreach (var token in PostgresOnlyTokens)
             Assert.DoesNotContain(token, all, StringComparison.Ordinal);
         Assert.DoesNotContain("postgres", all, StringComparison.OrdinalIgnoreCase);
@@ -411,7 +416,8 @@ public sealed class CapabilitiesCommandTests
 
         Assert.Contains("source-scoped grant/compile", guidance, StringComparison.Ordinal);
         Assert.Contains("STATISTICS IO ScanCount", guidance, StringComparison.Ordinal);
-        Assert.Contains("statements provides per-statement plan diagnostics and object IO with continuation", guidance, StringComparison.Ordinal);
+        Assert.Contains("statement-summary provides discovery-only statement CPU/elapsed values", guidance, StringComparison.Ordinal);
+        Assert.Contains("statements provides exact per-statement diagnostics and object IO with continuation", guidance, StringComparison.Ordinal);
         Assert.Contains("partial or unavailable, not zero", guidance, StringComparison.Ordinal);
     }
 

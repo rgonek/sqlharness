@@ -191,7 +191,7 @@ public sealed class McpRequestToolHandlers(
 
     public Task<CallToolResult> ArtifactAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Saved artifact ID.")] string id,
-        [Description(McpToolCatalog.ArtifactSectionDescription)][AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells", "plan")] string section,
+        [Description(McpToolCatalog.ArtifactSectionDescription)][AllowedValues("summary", "metrics", "operators", "statements", "statement-summary", "matrix-cells", "plan")] string section,
         [Description("Request target.")] McpRequestScopeArgument target,
         [Description(McpToolCatalog.ArtifactCursorDescription)] int? cursor = null,
         [Description(McpToolCatalog.ArtifactVariantDescription)]

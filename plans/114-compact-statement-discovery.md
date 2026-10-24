@@ -1,6 +1,6 @@
 # Plan 114: Add compact per-statement CPU and elapsed discovery
 
-> **Status:** accepted research follow-up from Plan 109; TODO. This file is an implementation handoff, not authorization to implement, merge, push, use a live database, or run paid-agent trials.
+> **Status:** DONE; locally integrated into `main` at `48a80042` (2026-10-24). Integration and catalog follow-up reviews approved; combined Windows gate passed at `574fbfa8`, final branch formatting passed, and the later product/test delta is whitespace-only. Not pushed.
 
 ## Evidence and goal
 

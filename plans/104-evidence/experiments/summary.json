@@ -1,0 +1,1443 @@
+{
+    "format":  "sqlharness-plan104-experiment-v1",
+    "sqlServer":  "localhost/tempdb (Windows integrated auth; no credentials recorded)",
+    "sqlcmdArguments":  [
+                            "-S localhost",
+                            "-E",
+                            "-C",
+                            "-d tempdb",
+                            "-l 5",
+                            "-t 30",
+                            "-b",
+                            "-y 0"
+                        ],
+    "startedUtc":  "2026-10-24T07:59:27.7079778Z",
+    "endedUtc":  "2026-10-24T07:59:32.5590678Z",
+    "exitCode":  0,
+    "inputSqlSha256":  "65d46a34caf6adbad5846a92608cbfac31d5d9d1c19590fdcc811e89b3e596ce",
+    "stdoutSha256":  "fbc411f542336854ae53594f94948f6565957c169e827aa788e054ce0dc62fcc",
+    "stderrSha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "rawStdout":  "matrix.stdout.txt",
+    "rawStderr":  "matrix.stderr.txt",
+    "cases":  [
+                  {
+                      "name":  "table_variable_alone_repeat3",
+                      "statisticsIo":  [
+                                           {
+                                               "tableRaw":  "#A3D092CF",
+                                               "scanCount":  0,
+                                               "logicalReads":  1001,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  3
+                                           },
+                                           {
+                                               "tableRaw":  "#A3D092CF",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  6
+                                           },
+                                           {
+                                               "tableRaw":  "#A4C4B708",
+                                               "scanCount":  0,
+                                               "logicalReads":  1001,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  8
+                                           },
+                                           {
+                                               "tableRaw":  "#A4C4B708",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  11
+                                           },
+                                           {
+                                               "tableRaw":  "#A5B8DB41",
+                                               "scanCount":  0,
+                                               "logicalReads":  1001,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  13
+                                           },
+                                           {
+                                               "tableRaw":  "#A5B8DB41",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  16
+                                           }
+                                       ],
+                      "metadataRows":  [
+
+                                       ]
+                  },
+                  {
+                      "name":  "two_table_variables_repeat3",
+                      "statisticsIo":  [
+                                           {
+                                               "tableRaw":  "#A89547EC",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  19
+                                           },
+                                           {
+                                               "tableRaw":  "#A9896C25",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  21
+                                           },
+                                           {
+                                               "tableRaw":  "#A9896C25",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  24
+                                           },
+                                           {
+                                               "tableRaw":  "#A89547EC",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  25
+                                           },
+                                           {
+                                               "tableRaw":  "#AC65D8D0",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  27
+                                           },
+                                           {
+                                               "tableRaw":  "#AD59FD09",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  29
+                                           },
+                                           {
+                                               "tableRaw":  "#AD59FD09",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  32
+                                           },
+                                           {
+                                               "tableRaw":  "#AC65D8D0",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  33
+                                           },
+                                           {
+                                               "tableRaw":  "#AE4E2142",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  35
+                                           },
+                                           {
+                                               "tableRaw":  "#AF42457B",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  37
+                                           },
+                                           {
+                                               "tableRaw":  "#AF42457B",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  40
+                                           },
+                                           {
+                                               "tableRaw":  "#AE4E2142",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  41
+                                           }
+                                       ],
+                      "metadataRows":  [
+
+                                       ]
+                  },
+                  {
+                      "name":  "explicit_hex_temp_repeat3",
+                      "statisticsIo":  [
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000003",
+                                               "scanCount":  0,
+                                               "logicalReads":  1001,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  44
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000003",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  47
+                                           },
+                                           {
+                                               "tableRaw":  "sysschobjs",
+                                               "scanCount":  0,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  50
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000003",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  53
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000003",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  56
+                                           }
+                                       ],
+                      "metadataRows":  [
+                                           "CATALOG_HEX -1338611276 #ABCDEF12___________________________________________________________________________________________________________000000000003"
+                                       ]
+                  },
+                  {
+                      "name":  "conventional_temp_repeat3",
+                      "statisticsIo":  [
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000004",
+                                               "scanCount":  0,
+                                               "logicalReads":  1001,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  59
+                                           },
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000004",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  62
+                                           },
+                                           {
+                                               "tableRaw":  "sysschobjs",
+                                               "scanCount":  0,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  65
+                                           },
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000004",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  68
+                                           },
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000004",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  71
+                                           }
+                                       ],
+                      "metadataRows":  [
+                                           "CATALOG_CONVENTIONAL -1322611219 #p104_temp__________________________________________________________________________________________________________000000000004"
+                                       ]
+                  },
+                  {
+                      "name":  "mixed_variable_and_hex_temp_repeat3",
+                      "statisticsIo":  [
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000005",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  74
+                                           },
+                                           {
+                                               "tableRaw":  "#B406FA98",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  76
+                                           },
+                                           {
+                                               "tableRaw":  "#B406FA98",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  79
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000005",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  82
+                                           },
+                                           {
+                                               "tableRaw":  "sysschobjs",
+                                               "scanCount":  0,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  85
+                                           },
+                                           {
+                                               "tableRaw":  "#B4FB1ED1",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  87
+                                           },
+                                           {
+                                               "tableRaw":  "#B4FB1ED1",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  90
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000005",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  93
+                                           },
+                                           {
+                                               "tableRaw":  "#B5EF430A",
+                                               "scanCount":  0,
+                                               "logicalReads":  500,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  95
+                                           },
+                                           {
+                                               "tableRaw":  "#B5EF430A",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  98
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000005",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  101
+                                           }
+                                       ],
+                      "metadataRows":  [
+                                           "CATALOG_MIXED_HEX -1306611162 #ABCDEF12___________________________________________________________________________________________________________000000000005"
+                                       ]
+                  },
+                  {
+                      "name":  "nested_dynamic_batch_loop3",
+                      "statisticsIo":  [
+                                           {
+                                               "tableRaw":  "#B6E36743",
+                                               "scanCount":  0,
+                                               "logicalReads":  1001,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  104
+                                           },
+                                           {
+                                               "tableRaw":  "#B6E36743",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  107
+                                           },
+                                           {
+                                               "tableRaw":  "#B7D78B7C",
+                                               "scanCount":  0,
+                                               "logicalReads":  1001,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  109
+                                           },
+                                           {
+                                               "tableRaw":  "#B7D78B7C",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  112
+                                           },
+                                           {
+                                               "tableRaw":  "#B8CBAFB5",
+                                               "scanCount":  0,
+                                               "logicalReads":  1001,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  114
+                                           },
+                                           {
+                                               "tableRaw":  "#B8CBAFB5",
+                                               "scanCount":  1,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  117
+                                           }
+                                       ],
+                      "metadataRows":  [
+
+                                       ]
+                  },
+                  {
+                      "name":  "session_temp_procedure_repeat3",
+                      "statisticsIo":  [
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000006",
+                                               "scanCount":  0,
+                                               "logicalReads":  333,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  120
+                                           },
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000007",
+                                               "scanCount":  0,
+                                               "logicalReads":  333,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  122
+                                           },
+                                           {
+                                               "tableRaw":  "#BC9C4099",
+                                               "scanCount":  0,
+                                               "logicalReads":  333,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  124
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000006",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  127
+                                           },
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000007",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  130
+                                           },
+                                           {
+                                               "tableRaw":  "#BC9C4099",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  133
+                                           },
+                                           {
+                                               "tableRaw":  "sysschobjs",
+                                               "scanCount":  0,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  136
+                                           },
+                                           {
+                                               "tableRaw":  "sysschobjs",
+                                               "scanCount":  0,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  139
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000006",
+                                               "scanCount":  0,
+                                               "logicalReads":  333,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  141
+                                           },
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000007",
+                                               "scanCount":  0,
+                                               "logicalReads":  333,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  143
+                                           },
+                                           {
+                                               "tableRaw":  "#BC9C4099",
+                                               "scanCount":  0,
+                                               "logicalReads":  333,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  145
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000006",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  148
+                                           },
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000007",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  151
+                                           },
+                                           {
+                                               "tableRaw":  "#BC9C4099",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  154
+                                           },
+                                           {
+                                               "tableRaw":  "sysschobjs",
+                                               "scanCount":  0,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  157
+                                           },
+                                           {
+                                               "tableRaw":  "sysschobjs",
+                                               "scanCount":  0,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  160
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000006",
+                                               "scanCount":  0,
+                                               "logicalReads":  333,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  162
+                                           },
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000007",
+                                               "scanCount":  0,
+                                               "logicalReads":  333,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  164
+                                           },
+                                           {
+                                               "tableRaw":  "#BC9C4099",
+                                               "scanCount":  0,
+                                               "logicalReads":  333,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  166
+                                           },
+                                           {
+                                               "tableRaw":  "#ABCDEF12___________________________________________________________________________________________________________000000000006",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  169
+                                           },
+                                           {
+                                               "tableRaw":  "#p104_temp__________________________________________________________________________________________________________000000000007",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  172
+                                           },
+                                           {
+                                               "tableRaw":  "#BC9C4099",
+                                               "scanCount":  1,
+                                               "logicalReads":  1,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  175
+                                           },
+                                           {
+                                               "tableRaw":  "sysschobjs",
+                                               "scanCount":  0,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  178
+                                           },
+                                           {
+                                               "tableRaw":  "sysschobjs",
+                                               "scanCount":  0,
+                                               "logicalReads":  2,
+                                               "lobLogicalReads":  0,
+                                               "sourceLine":  181
+                                           }
+                                       ],
+                      "metadataRows":  [
+                                           "PROC_CATALOG_HEX -1114610478 #ABCDEF12___________________________________________________________________________________________________________000000000006",
+                                           "PROC_CATALOG_CONVENTIONAL -1098610421 #p104_temp__________________________________________________________________________________________________________000000000007",
+                                           "PROC_CATALOG_HEX -1114610478 #ABCDEF12___________________________________________________________________________________________________________000000000006",
+                                           "PROC_CATALOG_CONVENTIONAL -1098610421 #p104_temp__________________________________________________________________________________________________________000000000007",
+                                           "PROC_CATALOG_HEX -1114610478 #ABCDEF12___________________________________________________________________________________________________________000000000006",
+                                           "PROC_CATALOG_CONVENTIONAL -1098610421 #p104_temp__________________________________________________________________________________________________________000000000007"
+                                       ]
+                  }
+              ],
+    "plans":  [
+                  {
+                      "file":  "plan-001.xml",
+                      "case":  "table_variable_alone_repeat3",
+                      "statementText":  "INSERT @v SELECT TOP (1000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-002.xml",
+                      "case":  "table_variable_alone_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-003.xml",
+                      "case":  "table_variable_alone_repeat3",
+                      "statementText":  "INSERT @v SELECT TOP (1000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-004.xml",
+                      "case":  "table_variable_alone_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-005.xml",
+                      "case":  "table_variable_alone_repeat3",
+                      "statementText":  "INSERT @v SELECT TOP (1000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-006.xml",
+                      "case":  "table_variable_alone_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-007.xml",
+                      "case":  "two_table_variables_repeat3",
+                      "statementText":  "INSERT @v1 SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "false",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v1]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-008.xml",
+                      "case":  "two_table_variables_repeat3",
+                      "statementText":  "INSERT @v2 SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "false",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v2]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-009.xml",
+                      "case":  "two_table_variables_repeat3",
+                      "statementText":  "SELECT (SELECT COUNT_BIG(*) FROM @v1) + (SELECT COUNT_BIG(*) FROM @v2)",
+                      "retrievedFromCache":  "false",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v1]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      },
+                                      {
+                                          "table":  "[@v2]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-010.xml",
+                      "case":  "two_table_variables_repeat3",
+                      "statementText":  "INSERT @v1 SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v1]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-011.xml",
+                      "case":  "two_table_variables_repeat3",
+                      "statementText":  "INSERT @v2 SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v2]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-012.xml",
+                      "case":  "two_table_variables_repeat3",
+                      "statementText":  "SELECT (SELECT COUNT_BIG(*) FROM @v1) + (SELECT COUNT_BIG(*) FROM @v2)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v1]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      },
+                                      {
+                                          "table":  "[@v2]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-013.xml",
+                      "case":  "two_table_variables_repeat3",
+                      "statementText":  "INSERT @v1 SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v1]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-014.xml",
+                      "case":  "two_table_variables_repeat3",
+                      "statementText":  "INSERT @v2 SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v2]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-015.xml",
+                      "case":  "two_table_variables_repeat3",
+                      "statementText":  "SELECT (SELECT COUNT_BIG(*) FROM @v1) + (SELECT COUNT_BIG(*) FROM @v2)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v1]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      },
+                                      {
+                                          "table":  "[@v2]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-016.xml",
+                      "case":  "explicit_hex_temp_repeat3",
+                      "statementText":  "INSERT #ABCDEF12 SELECT TOP (1000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-017.xml",
+                      "case":  "explicit_hex_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #ABCDEF12 WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-018.xml",
+                      "case":  "explicit_hex_temp_repeat3",
+                      "statementText":  "SELECT N\u0027CATALOG_HEX\u0027, o.object_id, o.name FROM tempdb.sys.objects AS o WHERE o.object_id = OBJECT_ID(N\u0027tempdb..#ABCDEF12\u0027)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[sysschobjs]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[sys]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-019.xml",
+                      "case":  "explicit_hex_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #ABCDEF12 WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-020.xml",
+                      "case":  "explicit_hex_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #ABCDEF12 WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-021.xml",
+                      "case":  "conventional_temp_repeat3",
+                      "statementText":  "INSERT #p104_temp SELECT TOP (1000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-022.xml",
+                      "case":  "conventional_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #p104_temp WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-023.xml",
+                      "case":  "conventional_temp_repeat3",
+                      "statementText":  "SELECT N\u0027CATALOG_CONVENTIONAL\u0027, o.object_id, o.name FROM tempdb.sys.objects AS o WHERE o.object_id = OBJECT_ID(N\u0027tempdb..#p104_temp\u0027)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[sysschobjs]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[sys]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-024.xml",
+                      "case":  "conventional_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #p104_temp WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-025.xml",
+                      "case":  "conventional_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #p104_temp WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-026.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "INSERT #ABCDEF12 SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-027.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "INSERT @v SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-028.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-029.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #ABCDEF12 WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-030.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "SELECT N\u0027CATALOG_MIXED_HEX\u0027, o.object_id, o.name FROM tempdb.sys.objects AS o WHERE o.object_id = OBJECT_ID(N\u0027tempdb..#ABCDEF12\u0027)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[sysschobjs]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[sys]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-031.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "INSERT @v SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-032.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-033.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #ABCDEF12 WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-034.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "INSERT @v SELECT TOP (500) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-035.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-036.xml",
+                      "case":  "mixed_variable_and_hex_temp_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #ABCDEF12 WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-037.xml",
+                      "case":  "nested_dynamic_batch_loop3",
+                      "statementText":  "INSERT @v SELECT TOP (1000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-038.xml",
+                      "case":  "nested_dynamic_batch_loop3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-039.xml",
+                      "case":  "nested_dynamic_batch_loop3",
+                      "statementText":  "INSERT @v SELECT TOP (1000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-040.xml",
+                      "case":  "nested_dynamic_batch_loop3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-041.xml",
+                      "case":  "nested_dynamic_batch_loop3",
+                      "statementText":  "INSERT @v SELECT TOP (1000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-042.xml",
+                      "case":  "nested_dynamic_batch_loop3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v WHERE id \u003e 0",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-043.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "INSERT #ABCDEF12 SELECT TOP (333) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-044.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "INSERT #p104_temp SELECT TOP (333) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-045.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "INSERT @v SELECT TOP (333) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-046.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #ABCDEF12",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-047.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #p104_temp",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-048.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-049.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT N\u0027PROC_CATALOG_HEX\u0027, o.object_id, o.name FROM tempdb.sys.objects AS o WHERE o.object_id = OBJECT_ID(N\u0027tempdb..#ABCDEF12\u0027)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[sysschobjs]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[sys]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-050.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT N\u0027PROC_CATALOG_CONVENTIONAL\u0027, o.object_id, o.name FROM tempdb.sys.objects AS o WHERE o.object_id = OBJECT_ID(N\u0027tempdb..#p104_temp\u0027)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[sysschobjs]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[sys]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-051.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "INSERT #ABCDEF12 SELECT TOP (333) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-052.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "INSERT #p104_temp SELECT TOP (333) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-053.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "INSERT @v SELECT TOP (333) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-054.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #ABCDEF12",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-055.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #p104_temp",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-056.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-057.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT N\u0027PROC_CATALOG_HEX\u0027, o.object_id, o.name FROM tempdb.sys.objects AS o WHERE o.object_id = OBJECT_ID(N\u0027tempdb..#ABCDEF12\u0027)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[sysschobjs]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[sys]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-058.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT N\u0027PROC_CATALOG_CONVENTIONAL\u0027, o.object_id, o.name FROM tempdb.sys.objects AS o WHERE o.object_id = OBJECT_ID(N\u0027tempdb..#p104_temp\u0027)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[sysschobjs]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[sys]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-059.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "INSERT #ABCDEF12 SELECT TOP (333) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-060.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "INSERT #p104_temp SELECT TOP (333) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-061.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "INSERT @v SELECT TOP (333) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) FROM (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) a(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) b(n) CROSS JOIN (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-062.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #ABCDEF12",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#ABCDEF12]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-063.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM #p104_temp",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[#p104_temp]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[dbo]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-064.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT COUNT_BIG(*) FROM @v",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[@v]",
+                                          "database":  "",
+                                          "schema":  ""
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-065.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT N\u0027PROC_CATALOG_HEX\u0027, o.object_id, o.name FROM tempdb.sys.objects AS o WHERE o.object_id = OBJECT_ID(N\u0027tempdb..#ABCDEF12\u0027)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[sysschobjs]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[sys]"
+                                      }
+                                  ]
+                  },
+                  {
+                      "file":  "plan-066.xml",
+                      "case":  "session_temp_procedure_repeat3",
+                      "statementText":  "SELECT N\u0027PROC_CATALOG_CONVENTIONAL\u0027, o.object_id, o.name FROM tempdb.sys.objects AS o WHERE o.object_id = OBJECT_ID(N\u0027tempdb..#p104_temp\u0027)",
+                      "retrievedFromCache":  "true",
+                      "objects":  [
+                                      {
+                                          "table":  "[sysschobjs]",
+                                          "database":  "[tempdb]",
+                                          "schema":  "[sys]"
+                                      }
+                                  ]
+                  }
+              ]
+}

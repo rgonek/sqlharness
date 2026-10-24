@@ -8,6 +8,134 @@ public sealed class BenchmarkSummaryTests
 {
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Compare_table_variable_reads_are_summed_within_each_run_before_distributions(int repeat)
+    {
+        var runs = Enumerable.Range(1, repeat).Select(repetition =>
+        {
+            // Build each run through the real raw STATISTICS IO parser. SQL Server
+            // generates a fresh anonymous name for each table variable each time.
+            var variableA = StatisticsIoParser.Parse($"Table '#{repetition:X8}'. Scan count 1, logical reads 30, lob logical reads 0.");
+            var variableB = StatisticsIoParser.Parse($"Table '#{repetition + 20:X8}'. Scan count 1, logical reads 70, lob logical reads 0.");
+            var absent = repetition == 1
+                ? StatisticsIoParser.Parse("Table 'AbsentObject'. Scan count 1, logical reads 9, lob logical reads 0.")
+                : new StatisticsIo(0, new Dictionary<string, long>());
+            var explicitTemp = StatisticsIoParser.Parse($"Table '#ExplicitTemp______________________________________________________________________________________________________00000001C{repetition:X3}'. Scan count 1, logical reads 11, lob logical reads 0.");
+            var stable = StatisticsIoParser.Parse("Table 'dbo.Stable'. Scan count 1, logical reads 7, lob logical reads 0.");
+            var escaped = StatisticsIoParser.Parse("Table 'dbo.O''Brien________________________________________________________________________________________________________'. Scan count 1, logical reads 13, lob logical reads 0.");
+            var tables = new Dictionary<string, long>(StringComparer.Ordinal);
+            var identities = new Dictionary<StatisticsIoTableIdentity, long>();
+            foreach (var parsed in new[] { variableA, variableB, absent, explicitTemp, stable, escaped })
+            {
+                foreach (var pair in parsed.Tables)
+                    tables[pair.Key] = tables.GetValueOrDefault(pair.Key) + pair.Value;
+                foreach (var pair in parsed.TypedTables ?? new Dictionary<StatisticsIoTableIdentity, long>())
+                    identities[pair.Key] = identities.GetValueOrDefault(pair.Key) + pair.Value;
+            }
+            var artifact = new CompareRunArtifact("measure", repetition, 0, 0, tables.Values.Sum(), tables, "hash", [], 0)
+            {
+                LogicalReadsByTableIdentity = identities,
+            };
+            return new CollectedBenchmarkRun(artifact, [], []);
+        }).ToArray();
+
+        var variant = BenchmarkReports.CreateVariantReport("measure", runs);
+
+        Assert.Equal(100, variant.LogicalReadsByTable["table variables"].Median);
+        Assert.Equal(new CompareDistribution(100, 100, 100), variant.LogicalReadsByTable["table variables"]);
+        Assert.Equal(new CompareDistribution(7, 7, 7), variant.LogicalReadsByTable["dbo.Stable"]);
+        Assert.Equal(new CompareDistribution(0, repeat == 2 ? 4 : 0, 9), variant.LogicalReadsByTable["AbsentObject"]);
+        Assert.Equal(new CompareDistribution(11, 11, 11), variant.LogicalReadsByTable["#ExplicitTemp"]);
+        Assert.Equal(new CompareDistribution(13, 13, 13), variant.LogicalReadsByTable["dbo.O'Brien________________________________________________________________________________________________________"]);
+    }
+
+    [Fact]
+    public void Compare_omits_typed_io_distribution_when_a_run_has_incomplete_provenance()
+    {
+        var parsed = StatisticsIoParser.Parse("Table '#A1B2C3D4'. Scan count 1, logical reads 100, lob logical reads 0.");
+        var complete = new CompareRunArtifact("measure", 1, 0, 0, parsed.LogicalReads, parsed.Tables, "hash-1", [], 0)
+        {
+            LogicalReadsByTableIdentity = parsed.TypedTables,
+        };
+        // A prior/incomplete run has only its legacy string map. Its name cannot
+        // establish anonymous-variable provenance, and missing evidence is not zero.
+        var incomplete = new CompareRunArtifact(
+            "measure", 2, 0, 0, 0,
+            new Dictionary<string, long>(StringComparer.Ordinal) { ["#D4C3B2A1"] = 100 },
+            "hash-2", [], 0);
+
+        var variant = BenchmarkReports.CreateVariantReport("measure", [
+            new CollectedBenchmarkRun(complete, [], []),
+            new CollectedBenchmarkRun(incomplete, [], []),
+        ]);
+
+        Assert.DoesNotContain("table variables", variant.LogicalReadsByTable.Keys);
+        Assert.Contains("TableIoDistributionUnavailable", variant.Warnings);
+    }
+
+    [Fact]
+    public void Compare_preserves_real_names_that_resemble_aggregate_labels()
+    {
+        var identities = new Dictionary<StatisticsIoTableIdentity, long>
+        {
+            [StatisticsIoTableIdentity.AnonymousTableVariable] = 30,
+            [StatisticsIoTableIdentity.Unknown("table variables")] = 7,
+            [StatisticsIoTableIdentity.Unknown("table variables (object)")] = 13,
+            [StatisticsIoTableIdentity.Unknown("table variables (aggregate)")] = 17,
+        };
+        var artifact = new CompareRunArtifact("measure", 1, 0, 0, 50,
+            new Dictionary<string, long> { ["#A1B2C3D4"] = 30, ["table variables"] = 7, ["table variables (object)"] = 13 },
+            "hash", [], 0)
+        {
+            LogicalReadsByTableIdentity = identities,
+        };
+
+        var variant = BenchmarkReports.CreateVariantReport("measure", [new CollectedBenchmarkRun(artifact, [], [])]);
+
+        Assert.Equal(4, variant.LogicalReadsByTable.Count);
+        Assert.Equal(7, variant.LogicalReadsByTable["table variables"].Median);
+        Assert.Equal(13, variant.LogicalReadsByTable["table variables (object)"].Median);
+        Assert.Equal(17, variant.LogicalReadsByTable["table variables (aggregate)"].Median);
+        Assert.Equal(30, variant.LogicalReadsByTable["table variables (aggregate 2)"].Median);
+        Assert.Equal(7, variant.TotalLogicalReadsByTable["table variables"]);
+        Assert.Equal(13, variant.TotalLogicalReadsByTable["table variables (object)"]);
+        Assert.Equal(17, variant.TotalLogicalReadsByTable["table variables (aggregate)"]);
+        Assert.Equal(30, variant.TotalLogicalReadsByTable["table variables (aggregate 2)"]);
+    }
+
+    [Fact]
+    public void Compare_variants_share_collision_safe_aggregate_labels()
+    {
+        static CollectedBenchmarkRun Run(string variant, params (StatisticsIoTableIdentity Identity, long Reads)[] rows)
+        {
+            var typed = rows.ToDictionary(row => row.Identity, row => row.Reads);
+            var raw = rows.ToDictionary(
+                row => row.Identity.Kind == StatisticsIoTableKind.AnonymousTableVariable ? "#A1B2C3D4" : row.Identity.Name,
+                row => row.Reads,
+                StringComparer.Ordinal);
+            var artifact = new CompareRunArtifact(variant, 1, 0, 0, typed.Values.Sum(), raw, "hash", [], 0)
+            {
+                LogicalReadsByTableIdentity = typed,
+            };
+            return new CollectedBenchmarkRun(artifact, [], []);
+        }
+
+        var baseline = Run("baseline", (StatisticsIoTableIdentity.AnonymousTableVariable, 30));
+        var candidate = Run("candidate",
+            (StatisticsIoTableIdentity.AnonymousTableVariable, 30),
+            (StatisticsIoTableIdentity.Unknown("table variables"), 7));
+        var labels = BenchmarkReports.AllocateTableLabels([baseline, candidate]);
+
+        var baselineReport = BenchmarkReports.CreateVariantReport("baseline", [baseline], labels);
+        var candidateReport = BenchmarkReports.CreateVariantReport("candidate", [candidate], labels);
+
+        Assert.Equal(30, baselineReport.LogicalReadsByTable["table variables (aggregate)"].Median);
+        Assert.Equal(30, candidateReport.LogicalReadsByTable["table variables (aggregate)"].Median);
+        Assert.Equal(7, candidateReport.LogicalReadsByTable["table variables"].Median);
+    }
+
     [Fact]
     public void Compare_projection_is_bounded_and_retains_core_metrics()
     {

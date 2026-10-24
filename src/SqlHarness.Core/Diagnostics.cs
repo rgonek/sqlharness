@@ -5,7 +5,79 @@ using System.Xml.Linq;
 
 namespace SqlHarness.Core;
 
-internal sealed record StatisticsIo(long LogicalReads, IReadOnlyDictionary<string, long> Tables);
+internal enum StatisticsIoTableKind { Unknown, LocalTemp, AnonymousTableVariable }
+
+internal readonly record struct StatisticsIoTableIdentity(StatisticsIoTableKind Kind, string Name)
+{
+    internal static StatisticsIoTableIdentity Unknown(string name) => new(StatisticsIoTableKind.Unknown, name);
+    internal static StatisticsIoTableIdentity LocalTemp(string name) => new(StatisticsIoTableKind.LocalTemp, name);
+    internal static StatisticsIoTableIdentity AnonymousTableVariable => new(StatisticsIoTableKind.AnonymousTableVariable, "");
+    internal string DisplayName => Kind == StatisticsIoTableKind.AnonymousTableVariable ? "table variables" : Name;
+
+    internal static StatisticsIoTableIdentity FromRawName(string rawName)
+    {
+        if (AnonymousTableVariableName.IsMatch(rawName))
+            return AnonymousTableVariable;
+
+        var normalized = TempTableKey.Normalize(rawName);
+        return normalized != rawName && rawName.Contains('#')
+            ? LocalTemp(normalized)
+            : Unknown(rawName);
+    }
+
+    internal static IReadOnlyDictionary<StatisticsIoTableIdentity, string> AllocateDisplayNames(
+        IEnumerable<StatisticsIoTableIdentity> identities)
+    {
+        var ordered = identities.Distinct()
+            .OrderBy(identity => identity.Kind == StatisticsIoTableKind.Unknown ? 0 : 1)
+            .ThenBy(identity => identity.DisplayName, StringComparer.Ordinal)
+            .ThenBy(identity => identity.Kind)
+            .ToArray();
+        var reserved = ordered.Where(identity => identity.Kind != StatisticsIoTableKind.AnonymousTableVariable)
+            .Select(identity => identity.DisplayName)
+            .ToHashSet(StringComparer.Ordinal);
+        var labels = new Dictionary<StatisticsIoTableIdentity, string>();
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var identity in ordered.Where(identity => identity.Kind != StatisticsIoTableKind.AnonymousTableVariable))
+        {
+            var label = identity.DisplayName;
+            if (!used.Add(label))
+            {
+                var suffix = identity.Kind == StatisticsIoTableKind.LocalTemp ? "local temp" : "object";
+                label = UniqueLabel(label, suffix, used, reserved);
+                used.Add(label);
+            }
+            labels[identity] = label;
+        }
+
+        foreach (var identity in ordered.Where(identity => identity.Kind == StatisticsIoTableKind.AnonymousTableVariable))
+        {
+            var label = !used.Contains(identity.DisplayName) && !reserved.Contains(identity.DisplayName)
+                ? identity.DisplayName
+                : UniqueLabel(identity.DisplayName, "aggregate", used, reserved);
+            used.Add(label);
+            labels[identity] = label;
+        }
+        return labels;
+    }
+
+    private static string UniqueLabel(string name, string suffix, HashSet<string> used, HashSet<string> reserved)
+    {
+        var candidate = $"{name} ({suffix})";
+        var ordinal = 2;
+        while (used.Contains(candidate) || reserved.Contains(candidate))
+            candidate = $"{name} ({suffix} {ordinal++})";
+        return candidate;
+    }
+
+    private static readonly Regex AnonymousTableVariableName = new(
+        @"^#[0-9A-Fa-f]{8}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+}
+
+internal sealed record StatisticsIo(long LogicalReads, IReadOnlyDictionary<string, long> Tables)
+{
+    internal IReadOnlyDictionary<StatisticsIoTableIdentity, long>? TypedTables { get; init; }
+}
 
 internal static partial class TempTableKey
 {
@@ -38,10 +110,13 @@ internal static class StatisticsIoParser
     internal static StatisticsIo Parse(string text)
     {
         var tables = new Dictionary<string, long>(StringComparer.Ordinal);
+        var typedTables = new Dictionary<StatisticsIoTableIdentity, long>();
 
         foreach (Match match in IoLine.Matches(text))
         {
-            var table = TempTableKey.Normalize(match.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal));
+            var rawTable = match.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal);
+            var identity = StatisticsIoTableIdentity.FromRawName(rawTable);
+            var table = TempTableKey.Normalize(rawTable);
             var reads = ParseLong(match.Groups["logical"].Value);
             var lobMatch = LobLogicalReads.Match(match.Groups["tail"].Value);
             if (lobMatch.Success)
@@ -50,9 +125,10 @@ internal static class StatisticsIoParser
             }
 
             tables[table] = tables.GetValueOrDefault(table) + reads;
+            typedTables[identity] = typedTables.GetValueOrDefault(identity) + reads;
         }
 
-        return new StatisticsIo(tables.Values.Sum(), tables);
+        return new StatisticsIo(tables.Values.Sum(), tables) { TypedTables = typedTables };
     }
 
     private static long ParseLong(string value) => long.Parse(value, NumberStyles.None, CultureInfo.InvariantCulture);
@@ -67,7 +143,11 @@ internal sealed record TableIoCounters(
     long ReadAheadReads,
     long LobLogicalReads,
     long LobPhysicalReads,
-    long LobReadAheadReads);
+    long LobReadAheadReads)
+{
+    internal StatisticsIoTableIdentity? Identity { get; init; }
+    internal string? RawTableName { get; init; }
+}
 
 /// <summary>
 /// Per-table SQL Server STATISTICS IO counters for the activity journal only:
@@ -89,31 +169,45 @@ internal static class StatisticsIoDetailParser
 
     internal static IReadOnlyList<TableIoCounters> Parse(string text)
     {
-        var tables = new Dictionary<string, TableIoCounters>(StringComparer.Ordinal);
-        var order = new List<string>();
+        var tables = new Dictionary<StatisticsIoTableIdentity, TableIoCounters>();
+        var order = new List<StatisticsIoTableIdentity>();
+        foreach (var counters in ParseRows(text))
+            Add(tables, order, counters);
+
+        return order.Select(identity => tables[identity]).ToArray();
+    }
+
+    internal static IReadOnlyList<TableIoCounters> ParseRows(string text)
+        => ParseRows(text, out _);
+
+    internal static IReadOnlyList<TableIoCounters> ParseRows(string text, out bool complete)
+    {
+        var counters = new List<TableIoCounters>();
+        complete = true;
         foreach (Match line in TableLine.Matches(text))
         {
-            if (TryParse(line, out var counters))
-                Add(tables, order, counters);
+            if (TryParse(line, out var row))
+                counters.Add(row);
+            else if (!IsKnownNonIoTableLine(line.Groups["counters"].Value))
+                complete = false;
         }
-
-        return order.Select(table => tables[table]).ToArray();
+        return counters;
     }
 
-    internal static bool TryParseMessage(string text, out IReadOnlyList<TableIoCounters> counters)
-    {
-        counters = Parse(text);
-        return counters.Count > 0;
-    }
+    private static bool IsKnownNonIoTableLine(string counters) =>
+        counters.TrimStart().StartsWith("Segment reads", StringComparison.OrdinalIgnoreCase)
+        || counters.TrimStart().StartsWith("Segment skipped", StringComparison.OrdinalIgnoreCase);
 
     internal static void Add(
-        Dictionary<string, TableIoCounters> tables,
-        List<string> order,
+        Dictionary<StatisticsIoTableIdentity, TableIoCounters> tables,
+        List<StatisticsIoTableIdentity> order,
         TableIoCounters counters)
     {
-        if (tables.TryGetValue(counters.Table, out var existing))
+        var identity = counters.Identity ?? StatisticsIoTableIdentity.Unknown(counters.Table);
+        counters = counters with { Identity = identity };
+        if (tables.TryGetValue(identity, out var existing))
         {
-            tables[counters.Table] = existing with
+            tables[identity] = existing with
             {
                 ScanCount = existing.ScanCount + counters.ScanCount,
                 LogicalReads = existing.LogicalReads + counters.LogicalReads,
@@ -127,14 +221,16 @@ internal static class StatisticsIoDetailParser
         }
         else
         {
-            tables[counters.Table] = counters;
-            order.Add(counters.Table);
+            tables[identity] = counters;
+            order.Add(identity);
         }
     }
 
     private static bool TryParse(Match line, out TableIoCounters counters)
     {
-        var table = TempTableKey.Normalize(line.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal));
+        var rawTable = line.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal);
+        var identity = StatisticsIoTableIdentity.FromRawName(rawTable);
+        var table = TempTableKey.Normalize(rawTable);
         var values = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         foreach (var segment in line.Groups["counters"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
@@ -143,8 +239,7 @@ internal static class StatisticsIoDetailParser
                 values[match.Groups["name"].Value.Trim()] = value;
         }
 
-        // Like StatisticsIoParser, a line without logical reads (localized output,
-        // columnstore segment lines) is not a counter line; recording it would turn unknown into zero.
+        // A line without logical reads is unavailable evidence; never turn it into zero.
         if (!values.ContainsKey("logical reads"))
         {
             counters = null!;
@@ -161,7 +256,11 @@ internal static class StatisticsIoDetailParser
             Get("read-ahead reads"),
             Get("lob logical reads"),
             Get("lob physical reads"),
-            Get("lob read-ahead reads"));
+            Get("lob read-ahead reads"))
+        {
+            Identity = identity,
+            RawTableName = table,
+        };
         return true;
     }
 }
@@ -169,8 +268,9 @@ internal static class StatisticsIoDetailParser
 /// <summary>Incrementally aggregates SQL Server STATISTICS IO messages while the session retains its bounded text window.</summary>
 internal sealed class TableIoAccumulator
 {
-    private readonly Dictionary<string, TableIoCounters> _tables = new(StringComparer.Ordinal);
-    private readonly List<string> _order = [];
+    private readonly Dictionary<StatisticsIoTableIdentity, TableIoCounters> _tables = [];
+    private readonly List<StatisticsIoTableIdentity> _order = [];
+    private readonly Dictionary<string, long> _rawLogicalReads = new(StringComparer.Ordinal);
 
     internal bool Complete { get; private set; } = true;
 
@@ -180,23 +280,38 @@ internal sealed class TableIoAccumulator
         if (messageNumber != 3615)
             return;
 
-        if (message.Length > SessionMessageBuffer.MaxCharactersPerCommand ||
-            !StatisticsIoDetailParser.TryParseMessage(message, out var counters))
+        if (message.Length > SessionMessageBuffer.MaxCharactersPerCommand)
         {
             Complete = false;
             return;
         }
 
+        var counters = StatisticsIoDetailParser.ParseRows(message, out var messageComplete);
+        if (counters.Count == 0)
+        {
+            Complete = false;
+            return;
+        }
+        if (!messageComplete)
+            Complete = false;
+
         foreach (var counter in counters)
+        {
+            var rawName = counter.RawTableName ?? counter.Table;
+            _rawLogicalReads[rawName] = _rawLogicalReads.GetValueOrDefault(rawName) + counter.LogicalReads + counter.LobLogicalReads;
             StatisticsIoDetailParser.Add(_tables, _order, counter);
+        }
     }
 
-    internal IReadOnlyList<TableIoCounters> Snapshot() => _order.Select(table => _tables[table]).ToArray();
+    internal IReadOnlyList<TableIoCounters> Snapshot() => _order.Select(identity => _tables[identity]).ToArray();
+
+    internal IReadOnlyDictionary<string, long> RawLogicalReadsByTable => new Dictionary<string, long>(_rawLogicalReads, StringComparer.Ordinal);
 
     internal void Reset()
     {
         _tables.Clear();
         _order.Clear();
+        _rawLogicalReads.Clear();
         Complete = true;
     }
 }

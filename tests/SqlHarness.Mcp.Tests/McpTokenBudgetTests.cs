@@ -20,8 +20,9 @@ namespace SqlHarness.Mcp.Tests;
 /// <summary>
 /// T4 token budgets, measured on the result text read by the model:
 /// 64 KiB (65536 B) by default, accepted range 4096..1048576, cell limit
-/// 2048/4096, and a 32 KiB (32768 B) tools/list catalog. Budgets are met by
-/// bounding content, never by cutting runtime validation or truncating JSON.
+/// 2048/4096, and a 36 KiB tools/list catalog regression-test ceiling. Result
+/// budgets are met by bounding content, never by cutting runtime validation or
+/// truncating JSON; the catalog ceiling is not enforced at runtime.
 /// All data is synthetic; no database is opened.
 /// </summary>
 // 008/T3 (R5 ctx-inclusion race): this class creates served toolsets through
@@ -81,6 +82,35 @@ public sealed class McpTokenBudgetTests
         Assert.Equal("error", envelope.GetProperty("status").GetString());
         Assert.Equal("output_budget_too_small", envelope.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal("render", envelope.GetProperty("error").GetProperty("phase").GetString());
+    }
+
+    [Fact]
+    public void Compact_statement_projection_skips_an_unfittable_identity_whole_and_counts_it()
+    {
+        var section = new ArtifactStatementSummarySection("artifact", "compare",
+        [
+            new ArtifactStatementSummaryMetric(new string('v', 5000), "large", null, 0, new string('h', 64), 1, 2),
+            new ArtifactStatementSummaryMetric("candidate", null, 3, 1, new string('c', 64), null, 4),
+        ], 0)
+        { Cursor = 0 };
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null),
+            "sqlharness_artifact", new McpResultBudget(4096, 0));
+
+        ResultTextBytes(result, 4096);
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var envelope = document.RootElement;
+        Assert.Equal("success", envelope.GetProperty("status").GetString());
+        var projection = envelope.GetProperty("result");
+        Assert.Equal(1, projection.GetProperty("omittedStatements").GetInt32());
+        Assert.Null(projection.TryGetProperty("continuation", out var continuation) ? continuation.GetInt32() : null);
+        var retained = Assert.Single(projection.GetProperty("statements").EnumerateArray());
+        Assert.Equal("candidate", retained.GetProperty("variant").GetString());
+        Assert.Equal(1, retained.GetProperty("statementOrdinal").GetInt32());
+        Assert.DoesNotContain(new string('v', 64), document.RootElement.GetRawText(), StringComparison.Ordinal);
+        Assert.True(envelope.TryGetProperty("truncation", out var truncation));
+        Assert.True(truncation.GetProperty("omittedItems").GetInt32() >= 1);
     }
 
     private static McpProcessContext RequestProcess() => McpProcessContext.Create(new McpServerOptions
@@ -526,7 +556,7 @@ public sealed class McpTokenBudgetTests
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(
             McpToolCatalog.CreateTools(RequestProcess()).Select(tool => tool.ProtocolTool)));
 
-        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"request-mode tools/list is {bytes} bytes.");
+        Assert.True(bytes <= McpLimits.ToolsListRegressionTestBudgetBytes, $"request-mode tools/list is {bytes} bytes of the regression-test ceiling.");
     }
 
     [Fact]
@@ -1227,7 +1257,7 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
-    public async Task Served_tools_list_fits_32KiB_without_full_examples_or_runtime_cuts()
+    public async Task Served_tools_list_fits_36KiB_regression_ceiling_without_full_examples_or_runtime_cuts()
     {
         var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
         {
@@ -1265,9 +1295,9 @@ public sealed class McpTokenBudgetTests
         var catalogJson = JsonSerializer.Serialize(
             tools.Select(tool => tool.ProtocolTool), McpJsonUtilities.DefaultOptions);
         var bytes = Encoding.UTF8.GetByteCount(catalogJson);
-        _output.WriteLine($"tools/list bytes: {bytes} of {McpLimits.ToolsListBudgetBytes} ({tools.Count} tools; no output schemas).");
+        _output.WriteLine($"tools/list bytes: {bytes} of {McpLimits.ToolsListRegressionTestBudgetBytes} regression-test ceiling ({tools.Count} tools; no output schemas).");
         Assert.Equal(McpLimits.MaxToolsWithoutOperationAnnotations, tools.Count);
-        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"tools/list is {bytes} bytes.");
+        Assert.True(bytes <= McpLimits.ToolsListRegressionTestBudgetBytes, $"tools/list is {bytes} bytes of the regression-test ceiling.");
         Assert.DoesNotContain("AGENTS.md", catalogJson, StringComparison.Ordinal);
         foreach (var tool in tools)
             Assert.Null(tool.ProtocolTool.OutputSchema);

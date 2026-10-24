@@ -2,6 +2,8 @@
 
 Read the selected plan and its spec before executing. A queue entry is not approval for implementation, publication or a live DB. We execute each assigned plan in full; general work and SQL Server take priority over PostgreSQL-only work.
 
+Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrated into `main` at `56f3dae4` (2026-10-24)** — Luna xhigh and Sol low integration reviews approved; combined Windows gate passed on `d2f2b060` (Core 4717, MCP 524, UI 372 passed), branch format 21 files passed. Earlier timeout and retry logs retained. No push/install; Linux/live UAT unverified. See [integration evidence](104-evidence/integration/verification.md).
+
 ## In progress
 
 | Plan | Scope | Dependencies | Status |
@@ -20,7 +22,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |
 | [083](083-table-and-list-parameters.md) | Stage D table-valued parameters (inline rows or rows from a read-only query, catalog-resolved types, Structured binding) and Dapper list expansion across read-only tools; conditions, labels and SSMS scripts; mutation rejects them | 077, 079 merged | IMPLEMENTATION VERIFIED; locally integrated into `main` at `55d23ba`; final scoped Sol review approved; live UAT pending; Linux waived ([evidence](083-verification-evidence.md)) |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and in-flight batch identities while preserving applicable staging and retry/cursor state | 084 merged | DONE; locally integrated into `main` at `7f03ecb`; both task reviews, Sol low whole-branch review and final scoped re-review approved; evidence archive includes 10 tracked raw logs ([evidence](090-verification-evidence.md)) |
-| [114](114-compact-statement-discovery.md) | Opt-in per-statement CPU/elapsed discovery without operator summaries | 109 research accepted | TODO — implementation authorization is separate |
 
 ## Limit-economics execution notes (2026-10-20)
 
@@ -33,15 +34,14 @@ These plans keep finite response/process ceilings, frame/input-root safety, mate
 Plans 063, 070, 071, 072, 073, 074, 076, 079, 080, 081, 085, and 087 are DONE; see their evidence in [history](history.md). Plan 081 is locally integrated into `main` at `e88c7fd`; its integrated gate passed on the exact product tree before commit, and all task, security, whole-branch, and integration reviews are approved ([evidence](081-verification-evidence.md)). Plan 088 is DONE and locally integrated into `main`; all task reviews, the Sol low whole-branch review, and the final scoped re-review are approved. Its Windows gate passed on `f503c22`, and the merge retained that product tree without a separate integrated-tree gate ([history](history.md), [evidence](088-verification-evidence.md)). Plan 071 uses Monaco behind a provider-neutral SQL editor contract, with direct Monaco API lifecycle management for the diff widget. Plan 080's scoped re-review approved all findings, and local integration completed at `42a1e365` with the verified product unchanged; the redundant gate was stopped at the owner's request. Plan 085 is locally integrated at `e41c990`; its verified product tree is unchanged by the docs-only Plan 092 merge ([history](history.md), [evidence](085-verification-evidence.md)). Coordinate work that changes shared MCP, journal, and dashboard contracts through the selected plan.
 
 
-Plan 082 is DONE and locally merged into `main` at `dd37512`. All task reviews and the final Sol low scoped re-review are approved. The Windows gate and branch formatting passed on `b9f6092`; the merge preserves that verified product tree. Synthetic UAT confirmed the focused verdict. Linux was explicitly skipped; see [verification evidence](082-verification-evidence.md) and [history](history.md).
-
 Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up Plans 089, 090 and 091 cover the parked detail limit and the two deferred Minors. Plan 091 closes its diagnostic Minor; Plan 090 closes the title-backfill follow-up and is locally integrated into `main` at `7f03ecb`. See [084 evidence](084-verification-evidence.md) and [history](history.md).
 
 ## History
 
 | Plan | Scope | Branch status |
 |---|---|---|
-| [115](115-query-result-set-selection.md) | Optional query response selection by original result-set ordinal | IMPLEMENTATION COMPLETE on `plan-115`; Luna task and Sol low whole-branch/scoped reviews approved; Windows gate and branch format passed on `3ffc574b`; not merged or pushed ([evidence](115-verification-evidence.md)) |
+| [114](114-compact-statement-discovery.md) | Compact statement CPU/elapsed discovery | DONE; locally integrated into `main` at `48a80042`; reviews approved; combined Windows gate and final branch format passed; post-gate product delta whitespace-only; not pushed ([evidence](114-evidence/integration/implementation-report.md)) |
+| [115](115-query-result-set-selection.md) | Optional query response selection by original result-set ordinal | IMPLEMENTATION COMPLETE on `plan-115`; reviews approved; feature Windows gate passed; local merge candidate includes `main` 104/114 changes; integrated Windows gate follows ([evidence](115-verification-evidence.md)) |
 | [106](106-bounded-error-diagnostics.md) | Bounded actionable error diagnostics independent of result-cell caps | DONE; previously integrated into `main` at `59fc0359`; this merge combines it with Plan 105; not pushed ([evidence](106-verification-evidence.md)) |
 | [105](105-artifact-diagnostic-evidence.md) | Bounded statement IO, scans and source-scoped grant/compile diagnostics | DONE; locally integrated into `main` at `42e7e284`; combined `fcd2a3a5` passed Windows gate and branch format; all reviews approved; not pushed ([integration evidence](105-evidence/integration/verification.md)) |
 | [103](103-agent-evidence-completeness.md) | Versioned statement evidence, attribution completeness and bounded hidden-work limitations for agents | DONE; locally integrated into `main` at `1301aa7b`; Luna task reviews and Sol low whole-branch/scoped reviews approved; Windows-verified product/test tree `874b4fc9` unchanged; not pushed ([evidence](103-verification-evidence.md)) |

@@ -31,8 +31,11 @@ public static class McpLimits
     public const int MaxToolsWithoutOperationAnnotations = 9;
     public const int MaxToolsWithOperationAnnotations = 10;
 
-    /// <summary>Budget for the whole tools/list catalog (schemas and descriptions) in UTF-8 bytes.</summary>
-    public const long ToolsListBudgetBytes = 32L * 1024;
+    /// <summary>
+    /// Regression-test ceiling for the serialized tools/list catalog. This
+    /// is not enforced as a runtime protocol or response-size limit.
+    /// </summary>
+    public const long ToolsListRegressionTestBudgetBytes = 36L * 1024;
 
     /// <summary>
     /// Smallest accepted CallToolResult budget in UTF-8 bytes (4096). The

@@ -24,6 +24,23 @@ public class StatisticsParserTests
     }
 
     [Fact]
+    public void Detail_parser_groups_anonymous_variables_without_merging_a_real_aggregate_name()
+    {
+        var parsed = StatisticsIoDetailParser.Parse("""
+            Table '#A1B2C3D4'. Scan count 1, logical reads 30, lob logical reads 0.
+            Table '#B2C3D4E5'. Scan count 2, logical reads 70, lob logical reads 1.
+            Table 'table variables'. Scan count 3, logical reads 7, lob logical reads 0.
+            """);
+
+        Assert.Equal(2, parsed.Count);
+        var anonymous = Assert.Single(parsed, row => row.Identity == StatisticsIoTableIdentity.AnonymousTableVariable);
+        Assert.Equal(100, anonymous.LogicalReads);
+        Assert.Equal(1, anonymous.LobLogicalReads);
+        Assert.Equal(101, anonymous.LogicalReads + anonymous.LobLogicalReads);
+        Assert.Equal(7, Assert.Single(parsed, row => row.Identity == StatisticsIoTableIdentity.Unknown("table variables")).LogicalReads);
+    }
+
+    [Fact]
     public void Io_detail_parser_normalizes_and_sums_repeated_temp_table_keys()
     {
         var parsed = StatisticsIoDetailParser.Parse("""

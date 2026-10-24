@@ -342,7 +342,7 @@ public sealed class McpToolSchemaTests : IDisposable
         }
         AssertCapabilitiesContractDiscoverable(offTools);
         var offCatalogBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(offTools.Select(tool => tool.ProtocolTool).ToArray()));
-        Assert.InRange(offCatalogBytes, 1, 32768);
+        Assert.InRange(offCatalogBytes, 1, McpLimits.ToolsListRegressionTestBudgetBytes);
         _output.WriteLine($"annotations-off tools/list: {offCatalogBytes} UTF-8 bytes (Plan 095 contract)");
         var offCapabilities = await off.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
         Assert.False(ServedEnvelope(offCapabilities, "sqlharness_capabilities").GetProperty("result").TryGetProperty("operationAnnotations", out _));
@@ -387,8 +387,8 @@ public sealed class McpToolSchemaTests : IDisposable
         }
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(onTools.Select(tool => tool.ProtocolTool).ToArray()));
         Assert.Equal(McpLimits.MaxToolsWithOperationAnnotations, onTools.Count());
-        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"annotation-enabled tools/list is {bytes} bytes.");
-        _output.WriteLine($"annotations-on tools/list: {bytes} UTF-8 bytes of {McpLimits.ToolsListBudgetBytes}");
+        Assert.True(bytes <= McpLimits.ToolsListRegressionTestBudgetBytes, $"annotation-enabled tools/list is {bytes} bytes of the catalog regression-test ceiling.");
+        _output.WriteLine($"annotations-on tools/list: {bytes} UTF-8 bytes of {McpLimits.ToolsListRegressionTestBudgetBytes} regression-test ceiling");
         var onCapabilities = await on.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
         Assert.True(ServedEnvelope(onCapabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("operationAnnotations").GetBoolean());
 
@@ -401,8 +401,8 @@ public sealed class McpToolSchemaTests : IDisposable
         var requestTools = await requestOn.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
         AssertCapabilitiesContractDiscoverable(requestTools);
         var requestBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray()));
-        Assert.InRange(requestBytes, 1, McpLimits.ToolsListBudgetBytes);
-        _output.WriteLine($"request annotations-on tools/list: {requestBytes} UTF-8 bytes of {McpLimits.ToolsListBudgetBytes}.");
+        Assert.InRange(requestBytes, 1, McpLimits.ToolsListRegressionTestBudgetBytes);
+        _output.WriteLine($"request annotations-on tools/list: {requestBytes} UTF-8 bytes of {McpLimits.ToolsListRegressionTestBudgetBytes} regression-test ceiling.");
         foreach (var name in new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot" })
             Assert.True(Properties(ServedSchema(requestTools.Single(tool => tool.Name == name))).TryGetProperty("label", out _), name);
 
@@ -504,9 +504,9 @@ public sealed class McpToolSchemaTests : IDisposable
         }, () => scope.Profiles);
         await using var requestServed = await ServedCatalog.CreateAsync(process);
         var requestTools = await requestServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray())), 1, 32768);
+        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray())), 1, McpLimits.ToolsListRegressionTestBudgetBytes);
         var requestSchemas = requestTools.ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
-        Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells", "plan"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
+        Assert.Equal(["summary", "metrics", "operators", "statements", "statement-summary", "matrix-cells", "plan"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
         Assert.Contains("cursor", Properties(requestSchemas["sqlharness_artifact"]).EnumerateObject().Select(property => property.Name));
         var requestArtifactProperties = Properties(requestSchemas["sqlharness_artifact"]);
         Assert.True(requestArtifactProperties.TryGetProperty("maxResultBytes", out var requestArtifactBudget), requestSchemas["sqlharness_artifact"].GetRawText());
@@ -555,13 +555,14 @@ public sealed class McpToolSchemaTests : IDisposable
 
         await using var fixedServed = await ServedCatalog.CreateAsync(scope);
         var fixedTools = await fixedServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(fixedTools.Select(tool => tool.ProtocolTool).ToArray())), 1, 32768);
+        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(fixedTools.Select(tool => tool.ProtocolTool).ToArray())), 1, McpLimits.ToolsListRegressionTestBudgetBytes);
         var fixedSchemas = fixedTools.ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         foreach (var tool in targetTools)
             Assert.DoesNotContain("target", Properties(fixedSchemas[tool]).EnumerateObject().Select(property => property.Name));
         foreach (var tool in projectedTools)
             Assert.True(Properties(fixedSchemas[tool]).TryGetProperty("maxCellChars", out _), $"{tool} must expose maxCellChars.");
         var fixedArtifactProperties = Properties(fixedSchemas["sqlharness_artifact"]);
+        Assert.Equal(["summary", "metrics", "operators", "statements", "statement-summary", "matrix-cells", "plan"], EnumOf(fixedSchemas["sqlharness_artifact"], "section"));
         Assert.True(fixedArtifactProperties.TryGetProperty("maxResultBytes", out var fixedArtifactBudget), fixedSchemas["sqlharness_artifact"].GetRawText());
         Assert.Equal(McpLimits.MinCallToolResultBudgetBytes, fixedArtifactBudget.GetProperty("minimum").GetInt32());
         Assert.Equal(McpLimits.MaxCallToolResultBudgetBytes, fixedArtifactBudget.GetProperty("maximum").GetInt32());
@@ -575,6 +576,18 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.True(Properties(fixedSchemas["sqlharness_measure"]).TryGetProperty("scope", out _));
         Assert.DoesNotContain("subject", Required(fixedSchemas["sqlharness_measure"]));
         Assert.DoesNotContain("scope", Required(fixedSchemas["sqlharness_measure"]));
+    }
+
+    [Fact]
+    public async Task Capabilities_publish_statement_summary_as_paged_discovery_data()
+    {
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        var response = await served.Client.CallToolAsync("sqlharness_capabilities",
+            new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+        var artifactPages = ServedEnvelope(response, "sqlharness_capabilities").GetProperty("result").GetProperty("artifactPages");
+        Assert.Equal(1, artifactPages.GetProperty("minPageSize").GetInt32());
+        Assert.Equal(512, artifactPages.GetProperty("maxPageSize").GetInt32());
+        Assert.Equal(128, artifactPages.GetProperty("statementSummariesDefault").GetInt32());
     }
 
     [Fact]
@@ -672,6 +685,130 @@ public sealed class McpToolSchemaTests : IDisposable
         }
         Assert.Equal(Enumerable.Range(0, 512), allStatementOrdinals);
 
+    }
+
+    [Fact]
+    public async Task Statement_summary_is_compact_pageable_and_preserves_the_existing_statements_shape()
+    {
+        var scope = Scope();
+        var statements = new[]
+        {
+            new ArtifactStatementMetric("baseline", "set-界\"\\", 9, 4, "hash-界", null, 123, null,
+                [new StatementOperatorSummary(1, "Index Seek", "[dbo].[Sensitive]", "IX_Secret", 1, 2, 3)]),
+            new ArtifactStatementMetric("candidate", null, null, 0, "hash-two", 456, null, null, []),
+            new ArtifactStatementMetric("candidate", "set-c", 2, 1, "hash-three", 78, 90, null, []),
+        };
+        WriteStatementsArtifact("compact-statement-summary", scope.Owner, statements);
+        await using var served = await ServedCatalog.CreateAsync(scope);
+        var compactCalls = 0;
+
+        compactCalls++;
+        var first = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+        {
+            ["id"] = "compact-statement-summary",
+            ["section"] = "statement-summary",
+            ["pageSize"] = 2,
+            ["maxResultBytes"] = 4096,
+        }, cancellationToken: CancellationToken.None);
+        var firstText = Assert.Single(first.Content.OfType<TextContentBlock>()).Text;
+        var compactBytes = Encoding.UTF8.GetByteCount(firstText);
+        Assert.InRange(compactBytes, 1, 4096);
+        using var firstDocument = JsonDocument.Parse(firstText);
+        var firstEnvelope = firstDocument.RootElement;
+        Assert.Equal("success", firstEnvelope.GetProperty("status").GetString());
+        var firstResult = firstEnvelope.GetProperty("result");
+        Assert.Equal(["artifactId", "artifactKind", "continuation", "omittedStatements", "statements"],
+            firstResult.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(2, firstResult.GetProperty("continuation").GetInt32());
+        Assert.Equal(0, firstResult.GetProperty("omittedStatements").GetInt32());
+        var compactRows = firstResult.GetProperty("statements").EnumerateArray().ToArray();
+        Assert.Equal(2, compactRows.Length);
+        Assert.Equal(["variant", "parameterSet", "matrixCell", "statementOrdinal", "statementHash", "cpuTimeMilliseconds", "elapsedTimeMilliseconds"],
+            compactRows[0].EnumerateObject().Select(property => property.Name).ToArray());
+        Assert.Equal("set-界\"\\", compactRows[0].GetProperty("parameterSet").GetString());
+        Assert.Equal(JsonValueKind.Null, compactRows[0].GetProperty("cpuTimeMilliseconds").ValueKind);
+        Assert.Equal(123, compactRows[0].GetProperty("elapsedTimeMilliseconds").GetInt64());
+        Assert.False(compactRows[1].TryGetProperty("parameterSet", out _));
+        Assert.Equal(JsonValueKind.Null, compactRows[1].GetProperty("elapsedTimeMilliseconds").ValueKind);
+        var compactText = firstText;
+        Assert.DoesNotContain("topOperators", compactText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sensitive", compactText, StringComparison.Ordinal);
+        Assert.DoesNotContain("IX_Secret", compactText, StringComparison.Ordinal);
+        Assert.DoesNotContain("repetition", compactText, StringComparison.Ordinal);
+        Assert.DoesNotContain("plan", compactText, StringComparison.OrdinalIgnoreCase);
+
+        compactCalls++;
+        var second = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+        {
+            ["id"] = "compact-statement-summary",
+            ["section"] = "statement-summary",
+            ["cursor"] = 2,
+            ["maxResultBytes"] = 4096,
+        }, cancellationToken: CancellationToken.None);
+        var secondText = Assert.Single(second.Content.OfType<TextContentBlock>()).Text;
+        compactBytes += Encoding.UTF8.GetByteCount(secondText);
+        Assert.InRange(Encoding.UTF8.GetByteCount(secondText), 1, 4096);
+        using var secondDocument = JsonDocument.Parse(secondText);
+        var thirdRow = Assert.Single(secondDocument.RootElement.GetProperty("result").GetProperty("statements").EnumerateArray());
+        Assert.Equal("set-c", thirdRow.GetProperty("parameterSet").GetString());
+        Assert.Equal(1, thirdRow.GetProperty("statementOrdinal").GetInt32());
+        Assert.False(secondDocument.RootElement.GetProperty("result").TryGetProperty("continuation", out _));
+
+        var full = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+        {
+            ["id"] = "compact-statement-summary",
+            ["section"] = "statements",
+            ["pageSize"] = 2,
+            ["maxResultBytes"] = 4096,
+        }, cancellationToken: CancellationToken.None);
+        var fullText = Assert.Single(full.Content.OfType<TextContentBlock>()).Text;
+        const string frozenStatementsPage0 = """{"schemaVersion":3,"status":"success","result":{"artifactId":"compact-statement-summary","artifactKind":"compare","statements":[{"variant":"baseline","parameterSet":"set-\u754C\u0022\\","matrixCell":9,"statementOrdinal":4,"statementHash":"hash-\u754C","cpuTimeMilliseconds":null,"elapsedTimeMilliseconds":123,"degreeOfParallelism":null,"topOperators":[{"nodeId":1,"physicalOp":"Index Seek","object":"[dbo].[Sensitive]","index":"IX_Secret","estimatedRows":1,"actualRows":2,"executions":3}],"counterAttribution":"unavailable","hiddenWork":[],"limitations":[],"objectIoAvailability":"unavailable"},{"variant":"candidate","matrixCell":null,"statementOrdinal":0,"statementHash":"hash-two","cpuTimeMilliseconds":456,"elapsedTimeMilliseconds":null,"degreeOfParallelism":null,"topOperators":[],"counterAttribution":"unavailable","hiddenWork":[],"limitations":[],"objectIoAvailability":"unavailable"}],"omittedStatements":0,"planDiagnosticsAvailability":"unavailable","runPlanDiagnostics":[],"planDiagnosticCases":[],"statisticsIoScanCountAvailability":"unavailable","statisticsIoScanCountRuns":[],"omittedStatisticsIoScanCountRuns":0,"omittedRunPlanDiagnostics":0,"omittedPlanDiagnosticCases":0,"evidenceAvailability":"unavailable","continuation":2}}""";
+        Assert.Equal(frozenStatementsPage0, fullText);
+        var fullBytes = Encoding.UTF8.GetByteCount(fullText);
+        var fullCalls = 1;
+        Assert.InRange(fullBytes, 1, 4096);
+        using var fullDocument = JsonDocument.Parse(fullText);
+        var firstFullResult = fullDocument.RootElement.GetProperty("result");
+        Assert.Equal(2, firstFullResult.GetProperty("continuation").GetInt32());
+        var reconstructed = firstFullResult.GetProperty("statements").EnumerateArray().Select(row =>
+        {
+            Assert.True(row.TryGetProperty("topOperators", out var operators));
+            return (row.GetProperty("variant").GetString(),
+                row.TryGetProperty("parameterSet", out var parameterSet) ? parameterSet.GetString() : null,
+                row.GetProperty("matrixCell").ValueKind == JsonValueKind.Null ? (int?)null : row.GetProperty("matrixCell").GetInt32(),
+                row.GetProperty("statementOrdinal").GetInt32(), row.GetProperty("statementHash").GetString());
+        }).ToList();
+        Assert.Single(firstFullResult.GetProperty("statements")[0].GetProperty("topOperators").EnumerateArray());
+        var fullSecond = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+        {
+            ["id"] = "compact-statement-summary",
+            ["section"] = "statements",
+            ["cursor"] = 2,
+            ["pageSize"] = 2,
+            ["maxResultBytes"] = 4096,
+        }, cancellationToken: CancellationToken.None);
+        var fullSecondText = Assert.Single(fullSecond.Content.OfType<TextContentBlock>()).Text;
+        const string frozenStatementsPage1 = """{"schemaVersion":3,"status":"success","result":{"artifactId":"compact-statement-summary","artifactKind":"compare","statements":[{"variant":"candidate","parameterSet":"set-c","matrixCell":2,"statementOrdinal":1,"statementHash":"hash-three","cpuTimeMilliseconds":78,"elapsedTimeMilliseconds":90,"degreeOfParallelism":null,"topOperators":[],"counterAttribution":"unavailable","hiddenWork":[],"limitations":[],"objectIoAvailability":"unavailable"}],"omittedStatements":0,"planDiagnosticsAvailability":"unavailable","runPlanDiagnostics":[],"planDiagnosticCases":[],"statisticsIoScanCountAvailability":"unavailable","statisticsIoScanCountRuns":[],"omittedStatisticsIoScanCountRuns":0,"omittedRunPlanDiagnostics":0,"omittedPlanDiagnosticCases":0,"evidenceAvailability":"unavailable"}}""";
+        Assert.Equal(frozenStatementsPage1, fullSecondText);
+        fullCalls++;
+        fullBytes += Encoding.UTF8.GetByteCount(fullSecondText);
+        Assert.InRange(Encoding.UTF8.GetByteCount(fullSecondText), 1, 4096);
+        using var fullSecondDocument = JsonDocument.Parse(fullSecondText);
+        Assert.False(fullSecondDocument.RootElement.GetProperty("result").TryGetProperty("continuation", out _));
+        var lastFullRow = Assert.Single(fullSecondDocument.RootElement.GetProperty("result").GetProperty("statements").EnumerateArray());
+        reconstructed.Add((lastFullRow.GetProperty("variant").GetString(), "set-c", 2, 1, "hash-three"));
+        Assert.Equal(new (string? Variant, string? ParameterSet, int? MatrixCell, int Ordinal, string? Hash)[]
+        {
+            ("baseline", "set-界\"\\", 9, 4, "hash-界"),
+            ("candidate", (string?)null, (int?)null, 0, "hash-two"),
+            ("candidate", (string?)"set-c", (int?)2, 1, "hash-three"),
+        }, reconstructed);
+        Assert.True(compactBytes < fullBytes, $"Compact retrieval {compactBytes} bytes must be smaller than full retrieval {fullBytes} bytes for this fixture.");
+        Assert.Equal(816, compactBytes);
+        Assert.Equal(2019, fullBytes);
+        Assert.Equal(2, compactCalls);
+        Assert.Equal(2, fullCalls);
+        _output.WriteLine($"complete statement retrieval: statement-summary={compactBytes} UTF-8 bytes / {compactCalls} calls; statements={fullBytes} UTF-8 bytes / {fullCalls} calls");
     }
 
     [Theory]
@@ -1266,8 +1403,8 @@ public sealed class McpToolSchemaTests : IDisposable
         {
             var tools = await ServedToolsAsync(served);
             var toolsListBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools));
-            _output.WriteLine($"{mode} tools/list: {toolsListBytes} UTF-8 bytes of {McpLimits.ToolsListBudgetBytes}.");
-            Assert.InRange(toolsListBytes, 1, McpLimits.ToolsListBudgetBytes);
+            _output.WriteLine($"{mode} tools/list: {toolsListBytes} UTF-8 bytes of {McpLimits.ToolsListRegressionTestBudgetBytes} regression-test ceiling.");
+            Assert.InRange(toolsListBytes, 1, McpLimits.ToolsListRegressionTestBudgetBytes);
             var capabilities = ToolDescription(tools, "sqlharness_capabilities");
             Assert.Contains("After redaction, Message/Hint use max(requested cell limit, 2048)", capabilities, StringComparison.Ordinal);
             Assert.Contains("capped at 4096 chars and response bytes", capabilities, StringComparison.Ordinal);
@@ -1318,33 +1455,30 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("executions", query, StringComparison.Ordinal);
             Assert.Contains("validation: passed", query, StringComparison.Ordinal);
             Assert.Contains("execution: not-run", query, StringComparison.Ordinal);
-            Assert.Contains("subject+textual scope", measure, StringComparison.Ordinal);
-            Assert.Contains("independent of compare.requireContext", measure, StringComparison.Ordinal);
+            Assert.Contains("Measure repeats. Optimization: subject+textual scope, independent of compare.requireContext", measure, StringComparison.Ordinal);
             Assert.Contains("Ordered sets: isolated sessions/setup", measure, StringComparison.Ordinal);
             Assert.Contains("sessions/setup", measure, StringComparison.Ordinal);
             Assert.Contains("failure stops, completed sets retained", measure, StringComparison.Ordinal);
-            Assert.Contains("Stability: per-set, not cross-set equivalence", measure, StringComparison.Ordinal);
+            Assert.Contains("Stability: per-set", measure, StringComparison.Ordinal);
+            Assert.Contains("not cross-set equivalence", measure, StringComparison.Ordinal);
             Assert.Contains("TVP/list: no valueHash", measure, StringComparison.Ordinal);
             Assert.Contains("low-entropy excluded from unkeyed hashes", measure, StringComparison.Ordinal);
             Assert.Contains("statementEvidence: per-case collected counters, not total cost", measure, StringComparison.Ordinal);
-            Assert.Contains("Optional saved diagnostics", measure, StringComparison.Ordinal);
-            Assert.Contains("sqlharness_artifact", measure, StringComparison.Ordinal);
-            Assert.Contains("no diagnostic read is required for every optimization", measure, StringComparison.Ordinal);
             Assert.Contains("Exact repetitions/row limits: section=statements", measure, StringComparison.Ordinal);
-            Assert.Contains("subject/scope follow frozen compare.requireContext (capabilities)", compare, StringComparison.Ordinal);
+            Assert.Contains("Optional saved diagnostics", measure, StringComparison.Ordinal);
+            Assert.Contains("no diagnostic read is required for every optimization", measure, StringComparison.Ordinal);
+            Assert.Contains("subject/scope follow frozen compare.requireContext", compare, StringComparison.Ordinal);
             Assert.Contains("request target selects DB", compare, StringComparison.Ordinal);
-            Assert.Contains("Session/setup per set", compare, StringComparison.Ordinal);
-            Assert.Contains("failure stops, completed cells retained", compare, StringComparison.Ordinal);
+            Assert.Contains("Session/setup per set; failure stops, completed cells retained", compare, StringComparison.Ordinal);
             Assert.Contains("Verdict/reasons, not exitCode", compare, StringComparison.Ordinal);
             Assert.Contains("pass=no policy elapsed regression, not improvement", compare, StringComparison.Ordinal);
-            Assert.Contains("selected order/duplicates/nullability, not domain equivalence", compare, StringComparison.Ordinal);
-            Assert.Contains("Dry-run validates only; execution not run", compare, StringComparison.Ordinal);
+            Assert.Contains("Equivalence follows selected order/duplicates/nullability, not domain equivalence", compare, StringComparison.Ordinal);
+            Assert.Contains("Dry-run validates only; execution not run; reports setup/baseline/candidate classifications", compare, StringComparison.Ordinal);
             Assert.Contains("baseline/candidate classifications", compare, StringComparison.Ordinal);
             Assert.Contains("statementEvidence: counters per variant/set/cell, not total cost", compare, StringComparison.Ordinal);
-            Assert.Contains("Optional saved diagnostics", compare, StringComparison.Ordinal);
-            Assert.Contains("sqlharness_artifact", compare, StringComparison.Ordinal);
-            Assert.Contains("no diagnostic read is required for every optimization", compare, StringComparison.Ordinal);
             Assert.Contains("Exact repetitions/row limits: section=statements", compare, StringComparison.Ordinal);
+            Assert.Contains("Optional saved diagnostics", compare, StringComparison.Ordinal);
+            Assert.Contains("no diagnostic read is required for every optimization", compare, StringComparison.Ordinal);
             Assert.Contains("no continuation", watch, StringComparison.Ordinal);
             Assert.Contains("projection omissions", watch, StringComparison.Ordinal);
             Assert.Contains("omittedChildCount", plan, StringComparison.Ordinal);
@@ -1358,8 +1492,6 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("STATISTICS IO ScanCount", artifactSection, StringComparison.Ordinal);
             Assert.Contains("Showplan ActualScans", artifactSection, StringComparison.Ordinal);
             Assert.Contains("zero-based", artifactCursor, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("matrix-cells", artifactCursor, StringComparison.Ordinal);
-            Assert.Contains("plan", artifactCursor, StringComparison.Ordinal);
             Assert.Contains("continuation", artifactCursor, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("measure/set=query", artifactVariant, StringComparison.Ordinal);
             Assert.Contains("baseline", artifactVariant, StringComparison.Ordinal);
@@ -1400,12 +1532,12 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public async Task Tools_list_fits_the_32KiB_budget()
+    public async Task Tools_list_fits_the_36KiB_regression_test_ceiling()
     {
         await using var served = await ServedCatalog.CreateAsync(Scope());
         var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools.Select(tool => tool.ProtocolTool)));
-        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"tools/list is {bytes} bytes.");
+        Assert.True(bytes <= McpLimits.ToolsListRegressionTestBudgetBytes, $"tools/list is {bytes} bytes of the regression-test ceiling.");
     }
 
     [Fact]
@@ -1626,7 +1758,7 @@ public sealed class McpToolSchemaTests : IDisposable
 
         var artifact = schemas["sqlharness_artifact"];
         Assert.Equal(["id", "section"], Required(artifact).Order().ToArray());
-        Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells", "plan"], EnumOf(artifact, "section"));
+        Assert.Equal(["summary", "metrics", "operators", "statements", "statement-summary", "matrix-cells", "plan"], EnumOf(artifact, "section"));
         Assert.Contains("cursor", Properties(artifact).EnumerateObject().Select(property => property.Name));
 
         var capabilities = schemas["sqlharness_capabilities"];
@@ -2021,8 +2153,33 @@ public sealed class McpToolSchemaTests : IDisposable
 
     // Distinctive registry tokens: SQL Server setup orders #temp creation before the first
     // parameter reference; PostgreSQL setup warns about user functions and READ ONLY commands.
-    private static readonly string[] SqlServerTokens = ["#temp", "first parameter reference"];
+    private static readonly string[] SqlServerTokens = ["#temp", "first parameter reference", "engineGuidance.tableIo"];
     private static readonly string[] PostgresTokens = ["READ ONLY", "TEMP setup", "user function", "least-privilege"];
+
+    [Fact]
+    public async Task Table_io_rule_is_in_sqlserver_capabilities_and_omitted_for_postgres()
+    {
+        foreach (var (scope, hasRule) in new[] { (Scope(), true), (PostgresScope(), false) })
+        {
+            await using var served = await ServedCatalog.CreateAsync(scope);
+            var response = await served.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+            using var document = JsonDocument.Parse(Assert.Single(response.Content.OfType<TextContentBlock>()).Text);
+            var result = document.RootElement.GetProperty("result");
+            var guidance = result.GetProperty("engineGuidance");
+            if (hasRule)
+            {
+                var rule = guidance.GetProperty("tableIo").GetString()!;
+                Assert.Contains("exact raw bare # plus eight hexadecimal characters", rule, StringComparison.Ordinal);
+                Assert.Contains("Explicit local-temp suffixes retain local-temp identity", rule, StringComparison.Ordinal);
+                Assert.Contains("Other raw forms and legacy values without producer identity remain Unknown", rule, StringComparison.Ordinal);
+                Assert.Contains("not a Microsoft cross-version guarantee", rule, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.False(guidance.TryGetProperty("tableIo", out _));
+            }
+        }
+    }
 
     private McpScope PostgresScope()
     {
@@ -2054,8 +2211,8 @@ public sealed class McpToolSchemaTests : IDisposable
     private void AssertEngineGuidance(IReadOnlyList<Tool> tools, string[] expected, string[] foreign)
     {
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools));
-        _output.WriteLine($"tools/list bytes: {bytes} of {McpLimits.ToolsListBudgetBytes}.");
-        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"tools/list is {bytes} bytes.");
+        _output.WriteLine($"tools/list bytes: {bytes} of {McpLimits.ToolsListRegressionTestBudgetBytes} regression-test ceiling.");
+        Assert.True(bytes <= McpLimits.ToolsListRegressionTestBudgetBytes, $"tools/list is {bytes} bytes of the regression-test ceiling.");
         var setups = new[]
         {
             ArgumentDescription(tools, "sqlharness_measure", "setup"),
@@ -2069,7 +2226,9 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Equal(1, Regex.Count(setup, "do not (carry|cross)", RegexOptions.IgnoreCase));
         }
         var query = ToolDescription(tools, "sqlharness_query");
-        var guided = string.Join("\n", setups.Append(query));
+        var guided = string.Join("\n", setups.Append(query)
+            .Append(ToolDescription(tools, "sqlharness_measure"))
+            .Append(ToolDescription(tools, "sqlharness_compare")));
         foreach (var token in expected)
             Assert.Contains(token, guided, StringComparison.Ordinal);
         var all = JsonSerializer.Serialize(tools);

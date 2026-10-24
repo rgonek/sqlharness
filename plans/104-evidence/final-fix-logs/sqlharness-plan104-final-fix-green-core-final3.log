@@ -1,0 +1,20 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:04.05]     SqlHarness.Tests.Cli.CapabilitiesCommandTests.Capabilities_reports_build_engines_limits_and_command_support_without_dispatch [FAIL]
+  Failed SqlHarness.Tests.Cli.CapabilitiesCommandTests.Capabilities_reports_build_engines_limits_and_command_support_without_dispatch [123 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 8
+Actual:   9
+  Stack Trace:
+     at SqlHarness.Tests.Cli.CapabilitiesCommandTests.Capabilities_reports_build_engines_limits_and_command_support_without_dispatch() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\Cli\CapabilitiesCommandTests.cs:line 27
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     1, Passed:   141, Skipped:     0, Total:   142, Duration: 3 s - SqlHarness.Tests.dll (net10.0)
