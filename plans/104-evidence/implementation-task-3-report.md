@@ -36,4 +36,12 @@ Updated the installed `measure` and `compare` MCP descriptions, `docs/mcp/tools.
 
 ## Concerns and deferred checks
 
-No Task 3 review or whole-branch review has been recorded yet; the controller owns those reviews and final formatting/gate. Linux and live SQL acceptance remain unverified/deferred. No live database, merge, push, install, or force-tracking action was taken.
+The first Task 3 review found the historical metrics fixture gap, now addressed in fix round 1; controller final review, whole-branch review, formatting, and gate remain pending. Linux and live SQL acceptance remain unverified/deferred. No live database, merge, push, install, or force-tracking action was taken.
+
+## Review fix round 1 — historical table metrics
+
+Added literal pre-Plan 104 artifact fixtures at `tests/SqlHarness.Tests/Fixtures/LegacyTableIo/manifest.json` and `report.json`. The manifest is version 1 and the report has no producer-provenance fields. The fixture contains a raw `#8hex` metric key plus a preexisting `table variables` key on both compare sides, with independent distributions and totals.
+
+Added `ArtifactReaderTests.Prior_format_metrics_keep_legacy_table_names_and_distributions`. It reads the fixture through `ArtifactReader.ReadSection(..., "metrics")` and asserts exact keys, unchanged distributions, and per-side headline total parity. The reader required no change. Per the review instruction, this is a compatibility fixture; no RED run was manufactured for unchanged reader behavior.
+
+Verification: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~ArtifactReaderTests"` — exit 0, 84 passed, 0 skipped. Raw output: [artifact-reader-legacy-metrics.txt](task-3-logs/artifact-reader-legacy-metrics.txt).

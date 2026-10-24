@@ -486,6 +486,38 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Prior_format_metrics_keep_legacy_table_names_and_distributions()
+    {
+        using var temp = new TempDirectory();
+        const string id = "pre-plan104-table-io";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        var fixtureDirectory = Path.Combine(AppContext.BaseDirectory, "Fixtures", "LegacyTableIo");
+        File.Copy(Path.Combine(fixtureDirectory, "manifest.json"), Path.Combine(directory, "manifest.json"));
+        File.Copy(Path.Combine(fixtureDirectory, "report.json"), Path.Combine(directory, "report.json"));
+
+        var metrics = Assert.IsType<ArtifactMetricsSection>(ArtifactReader.ReadSection(temp.Path, id, "metrics"));
+
+        var baseline = metrics.Variants[0];
+        Assert.Equal("baseline", baseline.Name);
+        Assert.Equal(new CompareDistribution(17, 19, 23), baseline.LogicalReads);
+        Assert.Equal(2, baseline.LogicalReadsByTable.Count);
+        Assert.Equal(new CompareDistribution(10, 12, 14), baseline.LogicalReadsByTable["#A1B2C3D4"]);
+        Assert.Equal(new CompareDistribution(7, 7, 9), baseline.LogicalReadsByTable["table variables"]);
+        Assert.Equal(baseline.LogicalReads.Median,
+            baseline.LogicalReadsByTable.Values.Sum(distribution => distribution.Median));
+
+        var candidate = metrics.Variants[1];
+        Assert.Equal("candidate", candidate.Name);
+        Assert.Equal(new CompareDistribution(20, 21, 25), candidate.LogicalReads);
+        Assert.Equal(2, candidate.LogicalReadsByTable.Count);
+        Assert.Equal(new CompareDistribution(14, 15, 16), candidate.LogicalReadsByTable["#ABCDEF12"]);
+        Assert.Equal(new CompareDistribution(6, 6, 9), candidate.LogicalReadsByTable["table variables"]);
+        Assert.Equal(candidate.LogicalReads.Median,
+            candidate.LogicalReadsByTable.Values.Sum(distribution => distribution.Median));
+    }
+
+    [Fact]
     public void Not_found_table_gives_no_verdict()
     {
         using var temp = new TempDirectory();
