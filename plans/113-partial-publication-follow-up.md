@@ -84,7 +84,7 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ## Verification and done criteria
 
-Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "ArtifactDirectoryPublisherTests|CompareMatrixTests|JournalingBenchmarkTests"` and, for MCP tests, `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "ArtifactDirectoryPublisherTests|CompareMatrixTests|JournalingBenchmarkTests"`. Both must exit 0 with the intended tests actually discovered; a zero-test run is not evidence.
+Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "ArtifactDirectoryPublisherTests|CompareMatrixTests|JournalingBenchmarkTests"`; the relevant Core fixtures must be discovered and pass. The matching MCP filter is recorded for discovery, but is **not applicable as a pass criterion** for these Core-owned filesystem-publication and completed-run journal behaviors: no matching MCP suite exists, and this contract accepts the Core offline fixtures as the evidence source. A zero-test MCP run is not success evidence. Any separate adjacent MCP projection tests are supporting envelope checks only. Record the resulting limitation: MCP integration of these outcomes is not verified by this plan's focused suites.
 
 - [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
 - [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
