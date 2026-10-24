@@ -1409,6 +1409,119 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public async Task Query_result_set_selector_schema_and_description_match_in_fixed_and_request_modes()
+    {
+        await using var fixedServed = await ServedCatalog.CreateAsync(Scope());
+        await using var requestServed = await ServedCatalog.CreateAsync(RequestProcess());
+        foreach (var served in new[] { fixedServed, requestServed })
+        {
+            var tools = await ServedToolsAsync(served);
+            var query = Assert.Single(tools, tool => tool.Name == "sqlharness_query");
+            var selector = Properties(query.InputSchema).GetProperty("resultSetOrdinals");
+            Assert.Equal(JsonValueKind.Null, selector.GetProperty("default").ValueKind);
+            Assert.Equal(64, selector.GetProperty("maxItems").GetInt32());
+            Assert.Equal(0, selector.GetProperty("minimum").GetInt32());
+            Assert.Equal("integer", selector.GetProperty("items").GetProperty("type").GetString());
+            Assert.Contains("max 64", selector.GetProperty("description").GetString(), StringComparison.Ordinal);
+            Assert.Contains("null preserves output", query.Description, StringComparison.Ordinal);
+            Assert.Contains("source order", query.Description, StringComparison.Ordinal);
+            var capabilities = Assert.Single(tools, tool => tool.Name == "sqlharness_capabilities");
+            Assert.Contains("resultSetOrdinals", capabilities.Description, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Query_result_set_selection_preserves_errors_and_rejects_missing_success_evidence()
+    {
+        var queryArguments = new Dictionary<string, object?>
+        {
+            ["sql"] = "SELECT 1",
+            ["resultSetOrdinals"] = new[] { 0 },
+        };
+        var missingModule = new CannedModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
+        await using (var missing = await ServedCatalog.CreateAsync(Scope(), missingModule))
+        {
+            var result = await missing.Client.CallToolAsync("sqlharness_query", queryArguments, cancellationToken: CancellationToken.None);
+            Assert.True(result.IsError == true, string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text)));
+            var envelope = ServedEnvelope(result, "sqlharness_query");
+            Assert.Equal("error", envelope.GetProperty("status").GetString());
+            Assert.Contains("did not contain result-set evidence", envelope.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        }
+
+        var failedModule = new CannedModule(new SqlHarnessOutcome(
+            SqlHarnessExitCode.SqlExecution,
+            null,
+            "fixture query failed",
+            Error: SqlHarnessError.From(SqlHarnessExitCode.SqlExecution, "fixture query failed")));
+        await using (var failed = await ServedCatalog.CreateAsync(Scope(), failedModule))
+        {
+            var result = await failed.Client.CallToolAsync("sqlharness_query", queryArguments, cancellationToken: CancellationToken.None);
+            Assert.True(result.IsError == true, string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text)));
+            var envelope = ServedEnvelope(result, "sqlharness_query");
+            Assert.Equal("error", envelope.GetProperty("status").GetString());
+            Assert.Equal("fixture query failed", envelope.GetProperty("error").GetProperty("message").GetString());
+        }
+
+        var zeroSetReport = new SqlHarnessQueryReport(
+            ConformanceTarget, "read-only", [], [], 0, 1, "zero-set-fixture", new OutputFootprint(0, 0));
+        await using (var zeroSets = await ServedCatalog.CreateAsync(
+            Scope(), new CannedModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, zeroSetReport, null))))
+        {
+            var result = await zeroSets.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
+            {
+                ["sql"] = "SELECT 1",
+                ["resultSetOrdinals"] = Array.Empty<int>(),
+            }, cancellationToken: CancellationToken.None);
+            Assert.False(result.IsError == true, string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text)));
+            var envelope = ServedEnvelope(result, "sqlharness_query");
+            Assert.Equal("success", envelope.GetProperty("status").GetString());
+            var query = envelope.GetProperty("result");
+            Assert.Empty(query.GetProperty("resultSets").EnumerateArray());
+            Assert.Equal(0, query.GetProperty("sourceResultSetCount").GetInt32());
+            Assert.Empty(query.GetProperty("selectedResultSetOrdinals").EnumerateArray());
+            Assert.Equal(0, query.GetProperty("omittedResultSetCount").GetInt32());
+        }
+    }
+
+    [Fact]
+    public async Task Query_result_set_selection_reports_clipping_and_omissions_for_unicode_rows_at_minimum_budget()
+    {
+        var rows = Enumerable.Range(0, 180)
+            .Select(index => (IReadOnlyList<object?>)[index, new string('界', 90) + "\\\"row-" + index.ToString("D3")])
+            .ToArray();
+        var set = new SqlHarnessResultSetReport(
+            [new SqlHarnessColumnReport(0, "id", "int", false), new SqlHarnessColumnReport(1, "detail", "text", true)],
+            rows,
+            rows.Length,
+            0);
+        var report = new SqlHarnessQueryReport(ConformanceTarget, "read-only", [set], [], 0, 1, "budget-fixture", new OutputFootprint(0, rows.Length));
+        await using var served = await ServedCatalog.CreateAsync(
+            Scope(), new CannedModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null)));
+        var result = await served.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = "SELECT 1",
+            ["resultSetOrdinals"] = new[] { 0 },
+            ["maxResultBytes"] = McpLimits.MinCallToolResultBudgetBytes,
+            ["maxCellChars"] = 64,
+            ["maxRows"] = 500,
+        }, cancellationToken: CancellationToken.None);
+
+        Assert.False(result.IsError == true, string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text)));
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.MinCallToolResultBudgetBytes);
+        var query = ServedEnvelope(result, "sqlharness_query").GetProperty("result");
+        Assert.Equal(1, query.GetProperty("sourceResultSetCount").GetInt32());
+        Assert.Equal(new[] { 0 }, query.GetProperty("selectedResultSetOrdinals").EnumerateArray().Select(value => value.GetInt32()).ToArray());
+        var selected = Assert.Single(query.GetProperty("resultSets").EnumerateArray());
+        Assert.Equal(0, selected.GetProperty("ordinal").GetInt32());
+        Assert.Equal(rows.Length, selected.GetProperty("rowCount").GetInt32());
+        Assert.True(selected.GetProperty("omittedRowCount").GetInt32() > 0);
+        Assert.True(selected.GetProperty("projectionOmittedRowCount").GetInt32() > 0);
+        Assert.True(selected.GetProperty("clippedCells").GetArrayLength() > 0);
+        Assert.True(selected.GetProperty("rows").GetArrayLength() < rows.Length);
+        Assert.True(selected.GetProperty("rows")[0][1].GetString()!.Length <= 64);
+    }
+
+    [Fact]
     public async Task Enum_required_and_default_shapes_are_correct()
     {
         var schemas = await ServedSchemasAsync(Scope());

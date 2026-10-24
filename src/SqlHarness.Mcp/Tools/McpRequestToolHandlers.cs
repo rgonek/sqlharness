@@ -47,11 +47,12 @@ public sealed class McpRequestToolHandlers(
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
         [Description(McpToolCatalog.CellCharactersDescription)] int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")] int? maxOperationSeconds = null,
+        [Description(McpToolCatalog.ResultSetOrdinalsDescription), Range(0, int.MaxValue), MaxLength(64)] int[]? resultSetOrdinals = null,
         [Description("Offline validation only; no execution or writes.")] bool dryRun = false,
         CancellationToken ct = default,
         [Description(McpToolCatalog.OperationLabelDescription)] string? label = null,
         [Description(McpToolCatalog.OperationKeepDescription)] bool? keep = null) =>
-        Invoke(ctx, "sqlharness_query", target, ["target", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"], handler => handler.QueryAsync(ctx, sql, file, parameters, timeout, maxRows, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct, label, keep));
+        Invoke(ctx, "sqlharness_query", target, ["target", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "resultSetOrdinals", "dryRun"], handler => handler.QueryAsync(ctx, sql, file, parameters, timeout, maxRows, maxResultBytes, maxCellChars, maxOperationSeconds, resultSetOrdinals, dryRun, ct, label, keep));
 
     public Task<CallToolResult> MutationAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Request target.")] McpRequestScopeArgument target,

@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
+using System.Text;
 
 using Microsoft.Extensions.AI;
 
@@ -99,17 +101,35 @@ public sealed class McpToolHandlers(
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
+        [Description(McpToolCatalog.ResultSetOrdinalsDescription), Range(0, int.MaxValue), MaxLength(64)]
+        int[]? resultSetOrdinals = null,
         [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default,
         [Description(McpToolCatalog.OperationLabelDescription)] string? label = null,
-        [Description(McpToolCatalog.OperationKeepDescription)] bool? keep = null) =>
-        RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
+        [Description(McpToolCatalog.OperationKeepDescription)] bool? keep = null)
+    {
+        AgentQuerySelection? querySelection = null;
+        return RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun", .. AnnotationArgumentNames()]);
+            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "resultSetOrdinals", "dryRun", .. AnnotationArgumentNames()]);
+            ValidateQueryResultSetOrdinals(resultSetOrdinals);
             var operation = await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token, dryRun, _defaultExecutionTimeoutSeconds);
-            return await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
-        }, ct);
+            var outcome = await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
+            if (resultSetOrdinals is null || outcome.ExitCode != SqlHarnessExitCode.Success)
+                return outcome;
+            if (outcome.Report is not SqlHarnessQueryReport query || query.ResultSets is null)
+                return new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, "The successful query response did not contain result-set evidence.");
+
+            var ordered = resultSetOrdinals.Order().ToArray();
+            if (ordered.Any(ordinal => ordinal >= query.ResultSets.Count))
+                return new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null,
+                    $"resultSetOrdinals values must be less than the source result-set count ({query.ResultSets.Count}).");
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(operation.Sql)));
+            querySelection = new AgentQuerySelection(query.ResultSets.Count, ordered, hash);
+            return outcome;
+        }, ct, querySelection: () => querySelection);
+    }
 
     public Task<CallToolResult> MutationAsync(
         RequestContext<CallToolRequestParams> ctx,
@@ -499,6 +519,18 @@ public sealed class McpToolHandlers(
     private string[] AnnotationArgumentNames() =>
         _operationAnnotationsEnabled ? McpToolCatalog.OperationAnnotationArguments : [];
 
+    private static void ValidateQueryResultSetOrdinals(IReadOnlyList<int>? ordinals)
+    {
+        if (ordinals is null)
+            return;
+        if (ordinals.Count > 64)
+            throw new McpMappingException("resultSetOrdinals accepts at most 64 values.");
+        if (ordinals.Any(ordinal => ordinal < 0))
+            throw new McpMappingException("resultSetOrdinals values must be zero or greater.");
+        if (ordinals.Distinct().Count() != ordinals.Count)
+            throw new McpMappingException("resultSetOrdinals values must be unique.");
+    }
+
     private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct, int? maxCellChars = null, McpResultBudget? resolvedBudget = null)
     {
         McpResultBudget budget;
@@ -559,7 +591,8 @@ public sealed class McpToolHandlers(
         int? maxCellChars,
         int? maxOperationSeconds,
         Func<CancellationToken, TimeSpan, Task<SqlHarnessOutcome>> run,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<AgentQuerySelection?>? querySelection = null)
     {
         McpResultBudget budget;
         TimeSpan callBudget;
@@ -607,7 +640,7 @@ public sealed class McpToolHandlers(
             // checking the linked request budget before adapting that outcome.
             linked.Token.ThrowIfCancellationRequested();
             await progress.ReportAsync(context, command, McpProgressReporter.Finished, linked.Token);
-            return await McpResultAdapter.AdaptAndCompleteAsync(outcome, command, budget);
+            return await McpResultAdapter.AdaptAndCompleteAsync(outcome, command, budget, querySelection?.Invoke());
         }
         catch (OperationCanceledException)
         {
@@ -691,7 +724,7 @@ public static class McpToolCatalog
 {
     /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
     public const string CapabilitiesDescription =
-        "Runtime config: scopeMode, compareContext, connectionTimeoutSeconds, SQL timeouts, engines, allowedProfiles, inputRoots, processLimits, configurationRef. After redaction, Message/Hint use max(requested cell limit, 2048), capped at 4096 chars and response bytes; Location.Path uses the requested limit. Tiny budgets keep error code/phase and count omissions. Timeouts are seconds; Azure CLI token acquisition has a separate budget. Omitted SQL timeouts use defaultExecutionTimeoutSeconds. Reuse per process; refresh after reconnect/restart.";
+        "Runtime: scopeMode, compareContext, connectionTimeoutSeconds, engines, allowedProfiles, inputRoots, processLimits, configurationRef. Query accepts resultSetOrdinals. Message/Hint max(requested cell limit, 2048), capped at 4096; Location.Path uses the requested limit. Tiny budgets keep error code/phase and count omissions.";
     public const string CellCharactersDescription = "0..4096; default 2048.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
@@ -719,7 +752,8 @@ public static class McpToolCatalog
     public const string ArtifactPageSizeDescription = "Page max 512; defaults matrix-cells/operators 32, statements/plan 128. Byte budget may return fewer; use continuation.";
     public const string ArtifactDescription = "Saved artifact; statements continuation gives exact source identities.";
     public const string WatchDescription = "Poll a bounded query until its stop condition or duration limit. Poll output has no continuation; inspect emitted polls, source omissions, and projection omissions in this response.";
-    public const string QueryDescription = "A query duration is one execution's elapsed time, not benchmark evidence. Estimated plan rows are optimizer estimates; actualRows are observed rows and executions is the operator count. Dry-run reports validation: passed and execution: not-run.";
+    public const string ResultSetOrdinalsDescription = "Zero-based ordinals; max 64.";
+    public const string QueryDescription = "resultSetOrdinals selects up to 64 unique source ordinals after execution; null preserves output, [] selects none, source order retained. Success adds sourceResultSetCount, selectedResultSetOrdinals and queryHash (uppercase exact resolved SQL UTF-8 SHA-256).";
     public const string PlanDescription = "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only. Clipped nodes report omittedChildCount and omittedSubtreeCount.";
     public const string RepetitionDescription = "Measured repetition for section=plan; default is the identified last measured run. A run without a saved plan reports missing evidence, never an earlier plan.";
     private const string AnnotationToolName = "sqlharness_annotate";

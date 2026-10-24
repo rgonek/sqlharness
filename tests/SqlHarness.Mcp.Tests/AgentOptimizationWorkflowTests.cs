@@ -576,6 +576,133 @@ public sealed class AgentOptimizationWorkflowTests
     }
 
     [Fact]
+    public async Task Query_result_set_selector_returns_original_non_prefix_ordinals_and_complete_selection_metadata()
+    {
+        await using var session = await Session.StartAsync(WorkflowScenarios.ArtifactReviewStudyId, Budget);
+        var baseline = await session.Call("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = WorkflowScenarios.ArtifactReviewQuerySql,
+            ["parameters"] = new object[]
+            {
+                new Dictionary<string, object?> { ["name"] = "batch", ["type"] = "int", ["value"] = "7" },
+            },
+            ["maxRows"] = 96,
+            ["maxResultBytes"] = 16384,
+            ["maxCellChars"] = 128,
+        });
+        Assert.False(baseline.IsError == true, Text(baseline));
+        var baselineQuery = Envelope(baseline).GetProperty("result");
+        Assert.False(baselineQuery.TryGetProperty("sourceResultSetCount", out _));
+        Assert.False(baselineQuery.TryGetProperty("selectedResultSetOrdinals", out _));
+        Assert.False(baselineQuery.TryGetProperty("queryHash", out _));
+
+        var result = await session.Call("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = WorkflowScenarios.ArtifactReviewQuerySql,
+            ["parameters"] = new object[]
+            {
+                new Dictionary<string, object?> { ["name"] = "batch", ["type"] = "int", ["value"] = "7" },
+            },
+            ["resultSetOrdinals"] = new[] { 2, 1 },
+            ["maxRows"] = 96,
+            ["maxResultBytes"] = 16384,
+            ["maxCellChars"] = 128,
+        });
+
+        Assert.False(result.IsError == true, Text(result));
+        var envelope = Envelope(result);
+        Assert.Equal("success", envelope.GetProperty("status").GetString());
+        var query = envelope.GetProperty("result");
+        Assert.Equal(3, query.GetProperty("sourceResultSetCount").GetInt32());
+        Assert.Equal(new[] { 1, 2 }, query.GetProperty("selectedResultSetOrdinals").EnumerateArray()
+            .Select(value => value.GetInt32()).ToArray());
+        Assert.Equal("00D103C2108B43BD0DB3DB26069E9D5DAF30B5642FF4D39EECBC0BD6B7F60AAC",
+            query.GetProperty("queryHash").GetString());
+        Assert.Equal(new[] { 1, 2 }, query.GetProperty("resultSets").EnumerateArray()
+            .Select(value => value.GetProperty("ordinal").GetInt32()).ToArray());
+        Assert.Equal(1, query.GetProperty("omittedResultSetCount").GetInt32());
+        Assert.Contains("assertion: totals", query.GetRawText(), StringComparison.Ordinal);
+        Assert.Contains("assertion: final count", query.GetRawText(), StringComparison.Ordinal);
+        var fullResponseBytes = McpResultAdapter.MeasureBytes(baseline);
+        var selectedResponseBytes = McpResultAdapter.MeasureBytes(result);
+        Assert.True(selectedResponseBytes < fullResponseBytes);
+        _output.WriteLine($"Plan 115 complete bounded MCP response UTF-8 bytes: full={fullResponseBytes}, selected={selectedResponseBytes}, delta={selectedResponseBytes - fullResponseBytes}; source ordinals=1,2; fixture=Plan 109 frozen three-set assertion query.");
+
+        foreach (var ordinal in new[] { 0, 1, 2 })
+        {
+            var single = await session.Call("sqlharness_query", new Dictionary<string, object?>
+            {
+                ["sql"] = WorkflowScenarios.ArtifactReviewQuerySql,
+                ["resultSetOrdinals"] = new[] { ordinal },
+                ["maxRows"] = 96,
+                ["maxResultBytes"] = 16384,
+                ["maxCellChars"] = 128,
+            });
+            Assert.False(single.IsError == true, Text(single));
+            var singleQuery = Envelope(single).GetProperty("result");
+            Assert.Equal(new[] { ordinal }, singleQuery.GetProperty("selectedResultSetOrdinals").EnumerateArray()
+                .Select(value => value.GetInt32()).ToArray());
+            Assert.Equal(ordinal, Assert.Single(singleQuery.GetProperty("resultSets").EnumerateArray())
+                .GetProperty("ordinal").GetInt32());
+        }
+
+        await session.ShutdownAsync();
+        session.AssertNoDatabaseConnections();
+        var calls = session.WorkflowHostStats().GetProperty("queryCalls").EnumerateArray().ToArray();
+        Assert.Equal(5, calls.Length);
+        foreach (var call in calls.Take(2))
+        {
+            Assert.Equal(WorkflowScenarios.ArtifactReviewQuerySql, call.GetProperty("sql").GetString());
+            var parameter = Assert.Single(call.GetProperty("parameters").EnumerateArray());
+            Assert.Equal("batch", parameter.GetProperty("name").GetString());
+            Assert.Equal("int", parameter.GetProperty("type").GetString());
+            Assert.Equal("7", parameter.GetProperty("value").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task Query_result_set_selector_distinguishes_empty_selection_from_invalid_and_out_of_range_ordinals()
+    {
+        await using var session = await Session.StartAsync(WorkflowScenarios.ArtifactReviewStudyId, Budget);
+        var empty = await session.Call("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = WorkflowScenarios.ArtifactReviewQuerySql,
+            ["resultSetOrdinals"] = Array.Empty<int>(),
+        });
+        Assert.False(empty.IsError == true, Text(empty));
+        var emptyQuery = Envelope(empty).GetProperty("result");
+        Assert.Equal("success", Envelope(empty).GetProperty("status").GetString());
+        Assert.Empty(emptyQuery.GetProperty("resultSets").EnumerateArray());
+        Assert.Equal(3, emptyQuery.GetProperty("sourceResultSetCount").GetInt32());
+        Assert.Empty(emptyQuery.GetProperty("selectedResultSetOrdinals").EnumerateArray());
+        Assert.Equal(3, emptyQuery.GetProperty("omittedResultSetCount").GetInt32());
+
+        foreach (var ordinals in new[] { new[] { 1, 1 }, new[] { -1 }, Enumerable.Range(0, 65).ToArray() })
+        {
+            var invalid = await session.Call("sqlharness_query", new Dictionary<string, object?>
+            {
+                ["sql"] = WorkflowScenarios.ArtifactReviewQuerySql,
+                ["resultSetOrdinals"] = ordinals,
+            });
+            Assert.True(invalid.IsError == true, Text(invalid));
+            Assert.Equal("error", Envelope(invalid).GetProperty("status").GetString());
+            Assert.Contains("resultSetOrdinals", Envelope(invalid).GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        }
+
+        var outOfRange = await session.Call("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = WorkflowScenarios.ArtifactReviewQuerySql,
+            ["resultSetOrdinals"] = new[] { 3 },
+        });
+        Assert.True(outOfRange.IsError == true, Text(outOfRange));
+        Assert.Contains("source result-set count (3)", Envelope(outOfRange).GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+
+        await session.ShutdownAsync();
+        session.AssertNoDatabaseConnections();
+        Assert.Equal(2, session.WorkflowHostStats().GetProperty("queryCalls").GetArrayLength());
+    }
+
+    [Fact]
     public void Artifact_review_study_compares_deterministic_equivalent_evidence_renderers()
     {
         var repositoryRoot = McpStdioProcessHarness.FindRepositoryRoot();
@@ -1401,10 +1528,15 @@ public sealed class AgentOptimizationWorkflowTests
 
         public void AssertNoDatabaseConnections()
         {
+            Assert.Equal(0, WorkflowHostStats().GetProperty("connectionAttempts").GetInt32());
+        }
+
+        public JsonElement WorkflowHostStats()
+        {
             var stats = Path.Combine(Home, "workflow-host-stats.json");
-            Assert.True(File.Exists(stats), "The host did not record connection attempts.");
+            Assert.True(File.Exists(stats), "The host did not record workflow statistics.");
             using var document = JsonDocument.Parse(File.ReadAllText(stats));
-            Assert.Equal(0, document.RootElement.GetProperty("connectionAttempts").GetInt32());
+            return document.RootElement.Clone();
         }
 
         public async ValueTask DisposeAsync()

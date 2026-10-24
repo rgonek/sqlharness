@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
 
 using ModelContextProtocol.Server;
 
@@ -109,7 +110,9 @@ public static class Program
         {
             File.WriteAllText(
                 Path.Combine(home, "workflow-host-stats.json"),
-                $$"""{"connectionAttempts":{{module.ConnectionAttempts}}}""");
+                JsonSerializer.Serialize(
+                    new { connectionAttempts = module.ConnectionAttempts, queryCalls = module.QueryCalls },
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         }
 
         return exit;

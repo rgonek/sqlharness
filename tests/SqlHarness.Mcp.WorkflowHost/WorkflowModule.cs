@@ -32,6 +32,7 @@ public sealed class WorkflowModule : ISqlHarnessModule
     }
 
     public int ConnectionAttempts { get; private set; }
+    public List<WorkflowQueryCall> QueryCalls { get; } = [];
 
     public async Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
     {
@@ -111,6 +112,9 @@ public sealed class WorkflowModule : ISqlHarnessModule
 
     private SqlHarnessOutcome ExecuteStudyQuery(SqlHarnessQueryOperation query)
     {
+        QueryCalls.Add(new WorkflowQueryCall(
+            query.Sql,
+            (query.TypedParameters ?? []).Select(parameter => new WorkflowQueryParameter(parameter.Name, parameter.Type, parameter.Value)).ToArray()));
         if (_scenario.Id is not (WorkflowScenarios.ArtifactReviewStudyId or WorkflowScenarios.ArtifactReviewStudyV2Id)
             || !Matches(WorkflowScenarios.ArtifactReviewQuerySql, query.Sql))
             return UnknownSql();
@@ -530,3 +534,6 @@ public sealed class WorkflowModule : ISqlHarnessModule
         }
     }
 }
+
+public sealed record WorkflowQueryCall(string Sql, IReadOnlyList<WorkflowQueryParameter> Parameters);
+public sealed record WorkflowQueryParameter(string Name, string? Type, string? Value);

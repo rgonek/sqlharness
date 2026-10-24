@@ -129,7 +129,8 @@ public static class McpResultAdapter
         SqlHarnessOutcome outcome,
         string command,
         McpResultBudget? budget = null,
-        IReadOnlyList<string>? knownSecrets = null)
+        IReadOnlyList<string>? knownSecrets = null,
+        AgentQuerySelection? querySelection = null)
     {
         ArgumentNullException.ThrowIfNull(outcome);
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
@@ -162,7 +163,7 @@ public static class McpResultAdapter
             try
             {
                 projectedReport = AgentOutputProjection.Project(
-                    report, maximumCellCharacters, detailLimit, out omitted, maximumBytes, AgentProjectionProfile.Mcp, statementEvidence);
+                    report, maximumCellCharacters, detailLimit, out omitted, maximumBytes, AgentProjectionProfile.Mcp, statementEvidence, querySelection);
             }
             catch (ArtifactStatementProjectionException)
             {
@@ -323,9 +324,10 @@ public static class McpResultAdapter
     internal static async Task<CallToolResult> AdaptAndCompleteAsync(
         SqlHarnessOutcome outcome,
         string command,
-        McpResultBudget? budget = null)
+        McpResultBudget? budget = null,
+        AgentQuerySelection? querySelection = null)
     {
-        var result = Adapt(outcome, command, budget);
+        var result = Adapt(outcome, command, budget, querySelection: querySelection);
         if (outcome.EmissionReceipt is { } receipt)
             await receipt.CompleteAsync(EmittedFootprint(result), CancellationToken.None).ConfigureAwait(false);
         return result;
