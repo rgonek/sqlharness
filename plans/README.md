@@ -37,12 +37,11 @@ Plans 063, 070, 071, 072, 073, 074, 076, 079, 080, 081, 085, and 087 are DONE; s
 
 Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up Plans 089, 090 and 091 cover the parked detail limit and the two deferred Minors. Plan 091 closes its diagnostic Minor; Plan 090 closes the title-backfill follow-up and is locally integrated into `main` at `7f03ecb`. See [084 evidence](084-verification-evidence.md) and [history](history.md).
 
-| [114](114-compact-statement-discovery.md) | Compact statement CPU/elapsed discovery | DONE; locally integrated into `main` at `48a80042`; reviews approved; combined Windows gate and final branch format passed; post-gate product delta whitespace-only; not pushed ([evidence](114-evidence/integration/implementation-report.md)) |
-
 ## History
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [114](114-compact-statement-discovery.md) | Compact statement CPU/elapsed discovery | DONE; locally integrated into `main` at `48a80042`; reviews approved; combined Windows gate and final branch format passed; post-gate product delta whitespace-only; not pushed ([evidence](114-evidence/integration/implementation-report.md)) |
 | [106](106-bounded-error-diagnostics.md) | Bounded actionable error diagnostics independent of result-cell caps | DONE; previously integrated into `main` at `59fc0359`; this merge combines it with Plan 105; not pushed ([evidence](106-verification-evidence.md)) |
 | [105](105-artifact-diagnostic-evidence.md) | Bounded statement IO, scans and source-scoped grant/compile diagnostics | DONE; locally integrated into `main` at `42e7e284`; combined `fcd2a3a5` passed Windows gate and branch format; all reviews approved; not pushed ([integration evidence](105-evidence/integration/verification.md)) |
 | [103](103-agent-evidence-completeness.md) | Versioned statement evidence, attribution completeness and bounded hidden-work limitations for agents | DONE; locally integrated into `main` at `1301aa7b`; Luna task reviews and Sol low whole-branch/scoped reviews approved; Windows-verified product/test tree `874b4fc9` unchanged; not pushed ([evidence](103-verification-evidence.md)) |
