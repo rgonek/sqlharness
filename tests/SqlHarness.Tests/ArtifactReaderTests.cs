@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using SqlHarness.Core;
 
@@ -903,6 +904,194 @@ public class ArtifactReaderTests
         Assert.Equal(2, diagnostic.GetProperty("sampleCount").GetInt32());
         Assert.Equal(10, diagnostic.GetProperty("grantRequestedKb").GetProperty("distribution").GetProperty("median").GetInt64());
         Assert.Equal(3, diagnostic.GetProperty("compileCpuMs").GetProperty("distribution").GetProperty("median").GetInt64());
+    }
+
+    [Theory]
+    [InlineData("corrupt")]
+    [InlineData("oversized")]
+    [InlineData("unreadable")]
+    public void Metrics_refuse_corrupt_oversized_or_unreadable_advertised_statement_evidence(string failure)
+    {
+        using var temp = new TempDirectory();
+        var report = CompareReport();
+        var run = new CompareRunArtifact("baseline", 1, 10, 12, 20,
+            new Dictionary<string, long>(), "hash", [FixturePlan()], 0);
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, [run], "bad-statements");
+        var statementsPath = Path.Combine(directory, "statements.json");
+        switch (failure)
+        {
+            case "corrupt":
+                File.WriteAllText(statementsPath, "GARBAGE-" + Secret);
+                break;
+            case "oversized":
+                using (var stream = new FileStream(statementsPath, FileMode.Create, FileAccess.Write))
+                    stream.SetLength(ArtifactReader.MaxReportBytes + 1);
+                break;
+            case "unreadable":
+                File.Delete(statementsPath);
+                Directory.CreateDirectory(statementsPath);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(failure));
+        }
+
+        var exception = Assert.Throws<ArtifactReadException>(
+            () => ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "metrics"));
+
+        Assert.DoesNotContain(Secret, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Metrics_keep_valid_legacy_statement_artifacts_without_diagnostic_fields_unavailable()
+    {
+        using var temp = new TempDirectory();
+        var report = CompareReport();
+        var run = new CompareRunArtifact("baseline", 1, 10, 12, 20,
+            new Dictionary<string, long>(), "hash", [FixturePlan()], 0);
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, [run], "legacy-statements");
+        File.WriteAllText(Path.Combine(directory, "statements.json"), """
+            {"artifactId":"legacy","artifactKind":"compare","statements":[
+              {"variant":"baseline","matrixCell":null,"statementOrdinal":0,"statementHash":"legacy-hash",
+               "cpuTimeMilliseconds":null,"elapsedTimeMilliseconds":null,"degreeOfParallelism":null,"topOperators":[]}
+            ],"omittedStatements":0}
+            """);
+
+        var metrics = Assert.IsType<ArtifactMetricsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "metrics"));
+
+        Assert.Equal("unavailable", metrics.PlanDiagnosticDistributionsAvailability);
+        Assert.Empty(metrics.PlanDiagnosticDistributions);
+        Assert.Equal("unavailable", metrics.StatisticsIoScanCountAvailability);
+        Assert.Empty(metrics.StatisticsIoScanCountDistributions);
+    }
+
+    [Fact]
+    public void Plan_diagnostic_distributions_keep_each_query_plan_source_across_repetitions()
+    {
+        using var temp = new TempDirectory();
+        static string Plans(long first, long second) => $$"""
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch>
+                <Statements><StmtSimple StatementText="SELECT 1">
+                  <QueryPlan CompileTime="{{first}}"><MemoryGrantInfo RequestedMemory="{{first}}" /><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan>
+                  <QueryPlan CompileTime="{{second}}"><MemoryGrantInfo RequestedMemory="{{second}}" /><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan>
+                </StmtSimple></Statements>
+                <QueryPlan CompileTime="{{first}}"><MemoryGrantInfo RequestedMemory="{{first}}" /><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan>
+                <QueryPlan CompileTime="{{second}}"><MemoryGrantInfo RequestedMemory="{{second}}" /><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan>
+              </Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 10, 12, 20, new Dictionary<string, long>(), "hash-1", [Plans(10, 20)], 0),
+            new CompareRunArtifact("baseline", 2, 11, 13, 21, new Dictionary<string, long>(), "hash-2", [Plans(12, 22)], 0),
+        };
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(CompareReport(), runs, "distinct-query-plans");
+
+        var statements = Assert.IsType<ArtifactStatementsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "statements"));
+        using var statementsJson = JsonDocument.Parse(JsonSerializer.Serialize(statements, ArtifactDirectoryPublisher.JsonOptions));
+        var statementDiagnostics = statementsJson.RootElement.GetProperty("statements").EnumerateArray()
+            .SelectMany(row => row.GetProperty("planDiagnostics").EnumerateArray())
+            .ToArray();
+        Assert.Equal(new[] { 0, 1 }, statementDiagnostics.Select(item => item.GetProperty("planQueryOrdinal").GetInt32()).Distinct().Order());
+        Assert.Equal(new long[] { 10, 20, 12, 22 }, statementDiagnostics.Select(item => item.GetProperty("compileTimeMs").GetInt64()));
+        Assert.Equal(new[] { 2, 3 }, statementsJson.RootElement.GetProperty("runPlanDiagnostics").EnumerateArray()
+            .Select(item => item.GetProperty("diagnostic").GetProperty("planQueryOrdinal").GetInt32()).Distinct().Order());
+
+        var metrics = Assert.IsType<ArtifactMetricsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "metrics"));
+        using var metricsJson = JsonDocument.Parse(JsonSerializer.Serialize(metrics, ArtifactDirectoryPublisher.JsonOptions));
+        var distributions = metricsJson.RootElement.GetProperty("planDiagnosticDistributions").EnumerateArray()
+            .Where(item => item.GetProperty("variant").GetString() == "baseline")
+            .OrderBy(item => item.GetProperty("scope").GetString(), StringComparer.Ordinal)
+            .ThenBy(item => item.GetProperty("planQueryOrdinal").GetInt32())
+            .ToArray();
+
+        Assert.Equal(4, distributions.Length);
+        Assert.Equal(new[] { 2, 3, 0, 1 }, distributions.Select(item => item.GetProperty("planQueryOrdinal").GetInt32()));
+        Assert.All(distributions, item => Assert.Equal(2, item.GetProperty("sampleCount").GetInt32()));
+        Assert.Equal(new long[] { 10, 20, 10, 20 }, distributions.Select(item => item.GetProperty("compileTimeMs").GetProperty("distribution").GetProperty("min").GetInt64()));
+        Assert.Equal(new long[] { 12, 22, 12, 22 }, distributions.Select(item => item.GetProperty("compileTimeMs").GetProperty("distribution").GetProperty("max").GetInt64()));
+    }
+
+    [Fact]
+    public void Metrics_do_not_aggregate_ambiguous_legacy_query_plan_sources()
+    {
+        using var temp = new TempDirectory();
+        static string Plans(long first, long second) => $$"""
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch>
+                <Statements><StmtSimple StatementText="SELECT 1">
+                  <QueryPlan CompileTime="{{first}}"><MemoryGrantInfo RequestedMemory="{{first}}" /><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan>
+                  <QueryPlan CompileTime="{{second}}"><MemoryGrantInfo RequestedMemory="{{second}}" /><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan>
+                </StmtSimple></Statements>
+                <QueryPlan CompileTime="{{first}}"><MemoryGrantInfo RequestedMemory="{{first}}" /><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan>
+                <QueryPlan CompileTime="{{second}}"><MemoryGrantInfo RequestedMemory="{{second}}" /><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan>
+              </Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 10, 12, 20, new Dictionary<string, long>(), "hash-1", [Plans(10, 20)], 0),
+            new CompareRunArtifact("baseline", 2, 11, 13, 21, new Dictionary<string, long>(), "hash-2", [Plans(12, 22)], 0),
+        };
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(CompareReport(), runs, "legacy-ambiguous-query-plans");
+        var statementsPath = Path.Combine(directory, "statements.json");
+        var statementsJson = JsonNode.Parse(File.ReadAllText(statementsPath))!.AsObject();
+        foreach (var statement in statementsJson["statements"]!.AsArray())
+        foreach (var diagnostic in statement!["planDiagnostics"]!.AsArray())
+            diagnostic!.AsObject().Remove("planQueryOrdinal");
+        foreach (var diagnostic in statementsJson["runPlanDiagnostics"]!.AsArray())
+            diagnostic!["diagnostic"]!.AsObject().Remove("planQueryOrdinal");
+        File.WriteAllText(statementsPath, statementsJson.ToJsonString(ArtifactDirectoryPublisher.JsonOptions));
+
+        var metrics = Assert.IsType<ArtifactMetricsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "metrics"));
+
+        Assert.Equal("partial", metrics.PlanDiagnosticDistributionsAvailability);
+        Assert.Empty(metrics.PlanDiagnosticDistributions);
+        Assert.True(metrics.OmittedPlanDiagnosticDistributions > 0);
+    }
+
+    [Fact]
+    public void Metrics_preserve_unique_legacy_query_plan_sources_without_an_ordinal()
+    {
+        using var temp = new TempDirectory();
+        static string Plan(long value) => $$"""
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><Statements><StmtSimple StatementText="SELECT 1">
+                <QueryPlan CompileTime="{{value}}"><MemoryGrantInfo RequestedMemory="{{value}}" /><RelOp NodeId="0" PhysicalOp="Constant Scan" /></QueryPlan>
+              </StmtSimple></Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 10, 12, 20, new Dictionary<string, long>(), "hash-1", [Plan(10)], 0),
+            new CompareRunArtifact("baseline", 2, 11, 13, 21, new Dictionary<string, long>(), "hash-2", [Plan(12)], 0),
+        };
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(CompareReport(), runs, "legacy-unique-query-plan");
+        var statementsPath = Path.Combine(directory, "statements.json");
+        var statementsJson = JsonNode.Parse(File.ReadAllText(statementsPath))!.AsObject();
+        foreach (var statement in statementsJson["statements"]!.AsArray())
+        foreach (var diagnostic in statement!["planDiagnostics"]!.AsArray())
+            diagnostic!.AsObject().Remove("planQueryOrdinal");
+        File.WriteAllText(statementsPath, statementsJson.ToJsonString(ArtifactDirectoryPublisher.JsonOptions));
+
+        var metrics = Assert.IsType<ArtifactMetricsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "metrics"));
+
+        Assert.Equal("available", metrics.PlanDiagnosticDistributionsAvailability);
+        var distribution = Assert.Single(metrics.PlanDiagnosticDistributions);
+        Assert.Equal(2, distribution.SampleCount);
+        Assert.Null(distribution.PlanQueryOrdinal);
+        Assert.Equal(10, distribution.CompileTimeMs.Distribution!.Min);
+        Assert.Equal(12, distribution.CompileTimeMs.Distribution!.Max);
     }
 
     [Fact]

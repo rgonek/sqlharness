@@ -1259,6 +1259,7 @@ public sealed class McpToolSchemaTests : IDisposable
             var watch = ToolDescription(tools, "sqlharness_watch");
             var plan = ToolDescription(tools, "sqlharness_plan");
             var artifact = ToolDescription(tools, "sqlharness_artifact");
+            var artifactSection = ArgumentDescription(tools, "sqlharness_artifact", "section");
 
             Assert.Contains("not benchmark evidence", query, StringComparison.Ordinal);
             Assert.Contains("estimated", query, StringComparison.OrdinalIgnoreCase);
@@ -1295,11 +1296,10 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("projection omissions", watch, StringComparison.Ordinal);
             Assert.Contains("omittedChildCount", plan, StringComparison.Ordinal);
             Assert.Contains("omittedSubtreeCount", plan, StringComparison.Ordinal);
-            Assert.Contains("returned continuation", artifact, StringComparison.Ordinal);
-            Assert.Contains("omittedChildCount", artifact, StringComparison.Ordinal);
-            Assert.Contains("planDiagnostics", artifact, StringComparison.Ordinal);
-            Assert.Contains("lobLogicalReads", artifact, StringComparison.Ordinal);
-            Assert.Contains("exact identities", artifact, StringComparison.Ordinal);
+            Assert.Contains("Saved artifact", artifact, StringComparison.Ordinal);
+            Assert.Contains("planDiagnostics", artifactSection, StringComparison.Ordinal);
+            Assert.Contains("planQueryOrdinal", artifactSection, StringComparison.Ordinal);
+            Assert.Contains("lobLogicalReads", artifactSection, StringComparison.Ordinal);
         }
     }
 

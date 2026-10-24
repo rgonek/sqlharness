@@ -856,6 +856,7 @@ internal static class ArtifactStatementProjector
         "sql-server-showplan-query-plan",
         source.Scope,
         source.PlanDocumentOrdinal,
+        source.PlanQueryOrdinal,
         source.PlanStatementIndex,
         source.DegreeOfParallelism,
         source.GrantRequestedKb,

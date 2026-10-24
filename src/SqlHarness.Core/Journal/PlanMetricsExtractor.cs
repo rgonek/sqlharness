@@ -31,6 +31,7 @@ public sealed record PlanMetrics(
 internal sealed record PlanDiagnosticSource(
     string Scope,
     int PlanDocumentOrdinal,
+    int PlanQueryOrdinal,
     int? PlanStatementIndex,
     int? DegreeOfParallelism,
     long? GrantRequestedKb,
@@ -85,7 +86,7 @@ internal static class PlanMetricsExtractor
             return [];
         var statements = root.Descendants(ShowplanNamespace + "StmtSimple").ToArray();
         return root.Descendants(ShowplanNamespace + "QueryPlan")
-            .Select(queryPlan =>
+            .Select((queryPlan, queryPlanOrdinal) =>
             {
                 var statement = queryPlan.Ancestors(ShowplanNamespace + "StmtSimple").FirstOrDefault();
                 var statementIndex = statement is null ? (int?)null : Array.IndexOf(statements, statement);
@@ -93,6 +94,7 @@ internal static class PlanMetricsExtractor
                 return new PlanDiagnosticSource(
                     statement is null ? "batch" : "statement",
                     documentOrdinal,
+                    queryPlanOrdinal,
                     statementIndex,
                     Int(queryPlan, "DegreeOfParallelism"),
                     Long(grant ?? queryPlan, "RequestedMemory"),

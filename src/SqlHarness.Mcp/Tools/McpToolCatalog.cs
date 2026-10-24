@@ -378,26 +378,26 @@ public sealed class McpToolHandlers(
 
     public Task<CallToolResult> ArtifactAsync(
         RequestContext<CallToolRequestParams> ctx,
-        [Description("Artifact directory name from a saved report.")]
+        [Description("Saved artifact ID.")]
         string id,
         [Description(McpToolCatalog.ArtifactSectionDescription)]
         [AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells", "plan")]
         string section,
-        [Description("Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.")]
+        [Description("Cursor.")]
         int? cursor = null,
-        [Description("Executable section=plan selector: measure/set uses query; compare uses baseline or candidate. metrics and statements return all stored source identities.")]
+        [Description("Plan variant.")]
         string? variant = null,
-        [Description("Executable section=plan selector: zero-based statement ordinal within the selected repetition. Not used for metrics or statements.")]
+        [Description("Plan statement ordinal.")]
         int statement = 0,
-        [Description("Executable section=plan selector: exact measure parameter-set name. Not used for metrics or statements.")]
+        [Description("Plan parameter set.")]
         string? parameterSet = null,
-        [Description("Executable section=plan selector: exact measured repetition; omitted selects the last measured repetition. Not used for metrics or statements.")]
+        [Description("Plan repetition; default: last.")]
         int? repetition = null,
-        [Description("Return bounded statement text and predicates in section=plan.")]
+        [Description("Include plan text and predicates.")]
         bool includeText = false,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description("Cell text clip, max 4096.")]
         int? maxCellChars = null,
-        [Description("Maximum result bytes, 4096..1048576, capped by the process limit.")]
+        [Description("Result byte budget.")]
         [Range(McpLimits.MinCallToolResultBudgetBytes, McpLimits.MaxCallToolResultBudgetBytes)]
         int? maxResultBytes = null,
         [Description(McpToolCatalog.ArtifactPageSizeDescription)]
@@ -709,9 +709,9 @@ public static class McpToolCatalog
     public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. Table-valued and list parameters are not supported. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
     public const string MeasureDescription = "Measure repeats. Optimization: subject+textual scope, independent of compare.requireContext. Ordered sets: isolated sessions/setup; failure stops, completed sets retained. Stability: per-set, not cross-set equivalence. TVP/list: no valueHash; low-entropy excluded from unkeyed hashes. statementEvidence: per-case collected counters, not total cost. Optional saved diagnostics: read artifactId with sqlharness_artifact section=metrics or statements when memory, compile, or per-statement IO evidence is needed; no diagnostic read is required for every optimization. Exact repetitions/row limits: section=statements.";
     public const string CompareDescription = "Compare baseline/candidate measures+rows. subject/scope follow frozen compare.requireContext (capabilities); request target selects DB. Session/setup per set; failure stops, completed cells retained. Verdict/reasons, not exitCode: pass=no policy elapsed regression, not improvement. Equivalence follows selected order/duplicates/nullability, not domain equivalence. Dry-run validates only; execution not run; reports setup/baseline/candidate classifications. statementEvidence: counters per variant/set/cell, not total cost. Optional saved diagnostics: read artifactId with sqlharness_artifact section=metrics or statements when memory, compile, or per-statement IO evidence is needed; no diagnostic read is required for every optimization. Exact repetitions/row limits: section=statements.";
-    public const string ArtifactSectionDescription = "Safe saved section. metrics includes bounded source-scoped grant/compile distributions and STATISTICS IO ScanCount distributions when captured. statements includes per-statement planDiagnostics and bounded objects with logicalReads, lobLogicalReads, and separate showplanActualScans; run-level STATISTICS IO counts remain distinct. Use statements continuation for exact identities when metrics reports omissions. Missing diagnostics are unavailable/partial, not zero. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
-    public const string ArtifactPageSizeDescription = "Source page size 1..512 for matrix-cells, operators, statements, or plan; defaults are 32, 32, 128, 128. The byte budget may return fewer items; continue from its cursor.";
-    public const string ArtifactDescription = "Offline saved-artifact read. maxResultBytes defaults to 65536, capped by process limit. Use returned continuation for pages. Plan clipping reports omittedChildCount/omittedSubtreeCount.";
+    public const string ArtifactSectionDescription = "metrics: grant/compile by planDocumentOrdinal/planQueryOrdinal; statements: planDiagnostics, logicalReads, lobLogicalReads, showplanActualScans. Missing data: unavailable/partial, not zero.";
+    public const string ArtifactPageSizeDescription = "Page size; max 512.";
+    public const string ArtifactDescription = "Saved artifact.";
     public const string WatchDescription = "Poll a bounded query until its stop condition or duration limit. Poll output has no continuation; inspect emitted polls, source omissions, and projection omissions in this response.";
     public const string QueryDescription = "A query duration is one execution's elapsed time, not benchmark evidence. Estimated plan rows are optimizer estimates; actualRows are observed rows and executions is the operator count. Dry-run reports validation: passed and execution: not-run.";
     public const string PlanDescription = "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only. Clipped nodes report omittedChildCount and omittedSubtreeCount.";

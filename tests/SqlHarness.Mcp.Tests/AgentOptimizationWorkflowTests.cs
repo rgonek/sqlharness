@@ -176,10 +176,11 @@ public sealed class AgentOptimizationWorkflowTests
 
         async Task<(List<JsonElement> Rows, List<int> ResponseBytes)> ReadStatementsAsync(int budget, int firstCursor)
         {
+            const int maximumPages = 4;
             var rows = new List<JsonElement>();
             var responseBytes = new List<int>();
             int? cursor = firstCursor;
-            while (rows.Count < 4)
+            while (rows.Count < 4 && responseBytes.Count < maximumPages)
             {
                 var arguments = new Dictionary<string, object?>
                 {
@@ -198,10 +199,16 @@ public sealed class AgentOptimizationWorkflowTests
                 var envelope = Envelope(result);
                 rows.AddRange(envelope.GetProperty("result").GetProperty("statements").EnumerateArray().Select(row => row.Clone()));
                 var next = Continuation(envelope);
+                Assert.True(rows.Count >= 4 || next is int,
+                    $"Statement pagination exhausted after {rows.Count} of 4 expected rows.");
                 if (next is int continuation)
                     Assert.True(continuation > (cursor ?? 0), $"Statement continuation did not advance from {cursor} to {continuation}.");
+                else
+                    Assert.Equal(4, rows.Count);
                 cursor = next;
             }
+
+            Assert.Equal(4, rows.Count);
 
             return (rows, responseBytes);
         }
@@ -213,7 +220,12 @@ public sealed class AgentOptimizationWorkflowTests
             var planDiagnostics = metrics.GetProperty("planDiagnosticDistributions").EnumerateArray()
                 .ToArray();
             Assert.NotEmpty(planDiagnostics);
-            Assert.All(planDiagnostics, item => Assert.Equal("sql-server-showplan-query-plan", item.GetProperty("source").GetString()));
+            Assert.All(planDiagnostics, item =>
+            {
+                Assert.Equal("sql-server-showplan-query-plan", item.GetProperty("source").GetString());
+                Assert.True(item.TryGetProperty("planDocumentOrdinal", out _));
+                Assert.True(item.TryGetProperty("planQueryOrdinal", out _));
+            });
             if (metrics.GetProperty("planDiagnosticDistributionsAvailability").GetString() == "partial")
                 Assert.True(metrics.GetProperty("omittedPlanDiagnosticDistributions").GetInt32() > 0);
             var statementRead = Assert.Single(metrics.GetProperty("statisticsIoScanCountDistributions").EnumerateArray(),

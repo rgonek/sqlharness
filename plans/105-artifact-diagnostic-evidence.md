@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: IN PROGRESS — Task 1 persisted shape implemented and focused suites green; task review pending; recorded 2026-10-23.
+- Status: IN PROGRESS — final review fixes implemented and focused regression suites green; independent final review and the fresh Windows gate remain pending; recorded 2026-10-24 ([final-fixes evidence](105-evidence/final-fixes.md)).
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: L; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.

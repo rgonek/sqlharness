@@ -189,18 +189,18 @@ public sealed class McpRequestToolHandlers(
         }, maxCellChars);
 
     public Task<CallToolResult> ArtifactAsync(RequestContext<CallToolRequestParams> ctx,
-        [Description("Artifact directory name from a saved report.")] string id,
+        [Description("Saved artifact ID.")] string id,
         [Description(McpToolCatalog.ArtifactSectionDescription)][AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells", "plan")] string section,
         [Description("Request target.")] McpRequestScopeArgument target,
-        [Description("Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.")] int? cursor = null,
-        [Description("measure/set default to query; compare needs baseline/candidate.")]
+        [Description("Cursor.")] int? cursor = null,
+        [Description("Plan variant.")]
         string? variant = null,
-        [Description("Zero-based statement ordinal for section=plan.")] int statement = 0,
-        [Description("Measure parameter set for section=plan.")] string? parameterSet = null,
-        [Description(McpToolCatalog.RepetitionDescription)] int? repetition = null,
-        [Description("Return bounded statement text and predicates in section=plan.")] bool includeText = false,
-        [Description("Cell clip 0..4096 characters; default 2048.")] int? maxCellChars = null,
-        [Description("Maximum result bytes, 4096..1048576, capped by the process limit.")]
+        [Description("Plan statement ordinal.")] int statement = 0,
+        [Description("Plan parameter set.")] string? parameterSet = null,
+        [Description("Plan repetition; default: last.")] int? repetition = null,
+        [Description("Include plan text and predicates.")] bool includeText = false,
+        [Description("Cell text clip, max 4096.")] int? maxCellChars = null,
+        [Description("Result byte budget.")]
         [Range(McpLimits.MinCallToolResultBudgetBytes, McpLimits.MaxCallToolResultBudgetBytes)] int? maxResultBytes = null,
         [Description(McpToolCatalog.ArtifactPageSizeDescription)][Range(1, ArtifactReader.MaxPageSourceItems)] int? pageSize = null,
         CancellationToken ct = default) =>
