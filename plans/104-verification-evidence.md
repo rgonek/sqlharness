@@ -2,7 +2,11 @@
 
 Date: 2026-10-24. Worktree: `D:/Dev/sqlharness/.worktrees/plan-104`, branch `plan-104`; product base `ab46345a2bfc2c89db4646c33895edf11ceede5a`.
 
-## Current implementation outcome
+## Current integration outcome
+
+**Locally integrated into `main` at `56f3dae4`.** The combined product passed Windows verification on `d2f2b060` (Core 4717/11 skipped, MCP 524/4 skipped, UI 372; exit 0), branch formatting and both integration reviews. Main received the identical verified product by fast-forward; later closeout changes are documentation only. Unrelated local work was restored. See [integration evidence](104-evidence/integration/verification.md), including the initial process-test timeout, isolated retry and full successful rerun. No push or installation.
+
+## Historical feature-branch implementation outcome
 
 **DONE on feature branch `plan-104`; final Windows gate passed on `f22137e8a0ad89258ac52496bbe62cf87fd09318`.** The user accepted the experimental raw-name recognition rule without a patch-version allowlist. Producer classification precedes normalization; anonymous-variable counters are summed within each run before cross-run distributions. Explicit local objects, legacy Unknown identities and real names colliding with the aggregate remain separate. Compare and journal share collision-safe labels across their respective operation contexts. Incomplete provenance stays unavailable rather than becoming zero. Dashboard/export preserve finalized stored identities.
 

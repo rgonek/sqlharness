@@ -1,6 +1,6 @@
 # Plan 104 integration verification
 
-Status: combined product verified; controller main fast-forward pending.
+Status: locally integrated into `main` at `56f3dae45eec56806f45f160aaa0c68d50cb3b9e`; its product/test/docs tree is identical to the tested combined merge.
 
 - Main parent: `9718b052f40335d3647cd96750d80431248f9140` (Plan 105 integrated).
 - Feature parent: `e5c9ed70e2fc8bdaf35bde36cffabb1f38f1c07c`.
@@ -15,6 +15,13 @@ Fresh final logs: [console/direct exit](verification/console.log), [build](verif
 
 The [first combined gate](verification-attempt1/console.log) failed only on unchanged `ProcessRunnerTests.PidPublicationError_PreservesOriginalWhenMarkerWriteFails` timing out at its five-second wait. The test and Auth source are identical to main parent `9718b052`. An [isolated exact-test retry](pid-publication-repro.log) passed without code edits, then the complete gate above passed. The timing cause is unproven; this is not a claim to have fixed that test or its runtime. Earlier failures are retained separately from final GREEN.
 
-The controller preserved the six dirty/untracked main files byte-for-byte at `D:/temp/sqlharness-plan104-main-preserve-20261024` with SHA-256 manifest and the original working patch. Main fast-forward and restoration will be recorded below. The originally untracked Plan 104 will remain available in that backup when the implemented plan takes its tracked path.
+The controller preserved the six dirty/untracked main files byte-for-byte at `D:/temp/sqlharness-plan104-main-preserve-20261024` with SHA-256 manifest and the original working patch. Main received the verified result by fast-forward. The original user patch was restored: README remains byte-identical to the snapshot, the 35-line local index additions remain outside the commit (only their Plan 104 status is updated), and studies 111/112/113 remain byte-identical/untracked. The originally untracked Plan 104 will remain available in that backup when the implemented plan takes its tracked path.
 
 No push, installation, Linux, installed-binary or implementation live-DB acceptance is claimed. The experimental SQL Server recognition rule retains its documented cross-version limit. The unchanged UI check script emits Node DEP0190; UI checks exit 0.
+
+## Main integration checks
+
+- [Fast-forward log](main-fastforward.log): main `9718b052` → `56f3dae4`.
+- `git diff --exit-code d2f2b060 HEAD -- src tests docs`: exit 0 after the fast-forward.
+- The original untracked Plan 104 is preserved byte-identically at `D:/temp/sqlharness-plan104-main-preserve-20261024/original-untracked-plan104.md`; the implemented plan now occupies its tracked repository path.
+- The unrelated README patch and local planning additions remain unstaged; no unrelated user work is included in closeout.

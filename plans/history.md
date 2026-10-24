@@ -1,5 +1,9 @@
 # Plan history
 
+## Plan 104 locally integrated — 2026-10-24
+
+Plan [104](104-stable-local-object-io-aggregation.md) is locally integrated into `main` at `56f3dae4`, preserving Plan 105 from main parent `9718b052`. Luna high resolved the catalog/schema conflicts; Luna xhigh and Sol low approved integration. The exact combined product `d2f2b060` passed Windows `just verify` (Core 4717 passed/11 skipped, MCP 524 passed/4 skipped, UI 372, exit 0; 9m53s) and branch format (21 C# files, exit 0). An initial unchanged process-test timeout, isolated passing retry and final full passing gate are archived; no source or timeout change was made for that failure. Main fast-forward preserved the verified product. Unrelated dirty README/index work and untracked studies were restored; the original untracked Plan 104 is backed up. One nonblocking retrieval-hint note remains deferred. No push, installation, Linux or implementation live-DB acceptance. See [integration evidence](104-evidence/integration/verification.md).
+
 ## Plan 104 merge prepared in `plan-104` worktree — 2026-10-24
 
 Plan 104 feature commit `e5c9ed70` was merged with current main `9718b052` in the isolated `plan-104` worktree. Two MCP catalog conflicts were resolved by preserving Plan 105 selectors, budgets and diagnostic evidence together with Plan 104 per-set IO semantics and SQL Server-only guidance. Schema tests passed 65/65, Core artifact/capabilities/IO tests 288/288, and MCP token/output/workflow tests 117/117 with actual test discovery. The annotation-enabled request-scope tools/list stays within the existing 32,768-byte limit. The combined Windows gate, whole-branch review and local main fast-forward remain pending with the controller; no main checkout update, push, installation, or DB activity occurred. See [integration evidence](104-evidence/integration/implementation-report.md).

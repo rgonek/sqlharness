@@ -2,7 +2,7 @@
 
 Read the selected plan and its spec before executing. A queue entry is not approval for implementation, publication or a live DB. We execute each assigned plan in full; general work and SQL Server take priority over PostgreSQL-only work.
 
-Plan [104](104-stable-local-object-io-aggregation.md): **DONE on feature branch `plan-104`; merge prepared against main `9718b052` (2026-10-24)** — feature reviews and Windows gate passed at `f22137e8`; bounded overlap checks are recorded in the [integration report](104-evidence/integration/implementation-report.md). Branch format passed on merge commit `d2f2b060` (21 C# files); combined Windows gate and integration reviews remain controller-owned and pending. The main checkout is unchanged. No push/install. Linux/live UAT unverified. See [feature evidence](104-verification-evidence.md).
+Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrated into `main` at `56f3dae4` (2026-10-24)** — Luna xhigh and Sol low integration reviews approved; combined Windows gate passed on `d2f2b060` (Core 4717, MCP 524, UI 372 passed), branch format 21 files passed. Earlier timeout and retry logs retained. No push/install; Linux/live UAT unverified. See [integration evidence](104-evidence/integration/verification.md).
 
 ## In progress
 

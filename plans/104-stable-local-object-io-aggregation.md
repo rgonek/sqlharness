@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: DONE on feature branch `plan-104`; merge prepared with main `9718b052` on 2026-10-24 in the isolated worktree. All three tasks and Luna xhigh reviews complete; Sol low whole-branch fix rereview approved. Windows feature gate passed on `f22137e8`; branch format checked 21 C# files and passed. Empirical rule accepted without a patch-version gate; Linux and implementation live UAT remain unverified. Branch format passed on merge commit `d2f2b060` (21 C# files). Combined integration gate/reviews and local main fast-forward are controller-owned and pending. See [feature evidence](104-verification-evidence.md) and [integration evidence](104-evidence/integration/implementation-report.md).
+- Status: DONE; locally integrated into `main` at `56f3dae4` (2026-10-24). Luna xhigh and Sol low integration reviews approved. Combined Windows gate passed on `d2f2b060`: Core 4717 passed/11 skipped, MCP 524 passed/4 skipped, UI 372 passed; branch format 21 files, exit 0. First gate timeout and successful retry retained; no timeout or limit increases. No push/install. Linux and implementation live UAT remain unverified. See [integration evidence](104-evidence/integration/verification.md).
 - Priority: **P1** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
