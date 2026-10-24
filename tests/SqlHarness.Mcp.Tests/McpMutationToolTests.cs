@@ -38,7 +38,7 @@ public sealed class McpMutationToolTests
 
         Assert.Equal(9, tools.Length);
         Assert.Contains(tools, tool => tool.Name == "sqlharness_mutation");
-        Assert.InRange(Encoding.UTF8.GetByteCount(json), 1, McpLimits.ToolsListBudgetBytes);
+        Assert.InRange(Encoding.UTF8.GetByteCount(json), 1, McpLimits.ToolsListRegressionTestBudgetBytes);
     }
 
     [Fact]

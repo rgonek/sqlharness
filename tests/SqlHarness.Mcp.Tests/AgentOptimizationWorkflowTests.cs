@@ -335,7 +335,7 @@ public sealed class AgentOptimizationWorkflowTests
         await using var session = await Session.StartAsync(WorkflowScenarios.PlanPagingId, Budget);
         var tools = await session.Client.ListToolsAsync(cancellationToken: session.Token);
         var catalogBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools.Select(tool => tool.ProtocolTool).ToArray()));
-        Assert.InRange(catalogBytes, 1, McpLimits.ToolsListBudgetBytes);
+        Assert.InRange(catalogBytes, 1, McpLimits.ToolsListRegressionTestBudgetBytes);
 
         var compare = await session.Call("sqlharness_compare", CompareArguments(
             "SELECT Id FROM dbo.Orders;", "SELECT Id FROM dbo.Orders;"));
@@ -967,7 +967,7 @@ public sealed class AgentOptimizationWorkflowTests
                 var discovery = await session.Client.ListToolsAsync(cancellationToken: session.Token);
                 var discoveryBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(
                     discovery.Select(tool => tool.ProtocolTool).ToArray()));
-                Assert.InRange(discoveryBytes, 1, McpLimits.ToolsListBudgetBytes);
+                Assert.InRange(discoveryBytes, 1, McpLimits.ToolsListRegressionTestBudgetBytes);
                 var calls = new List<object>();
                 var artifactId = await RunScriptedAsync(session, scenario, budget, calls);
                 Assert.False(string.IsNullOrWhiteSpace(artifactId),

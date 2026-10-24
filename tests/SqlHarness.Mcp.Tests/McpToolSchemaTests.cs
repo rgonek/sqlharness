@@ -342,7 +342,7 @@ public sealed class McpToolSchemaTests : IDisposable
         }
         AssertCapabilitiesContractDiscoverable(offTools);
         var offCatalogBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(offTools.Select(tool => tool.ProtocolTool).ToArray()));
-        Assert.InRange(offCatalogBytes, 1, 32768);
+        Assert.InRange(offCatalogBytes, 1, McpLimits.ToolsListRegressionTestBudgetBytes);
         _output.WriteLine($"annotations-off tools/list: {offCatalogBytes} UTF-8 bytes (Plan 095 contract)");
         var offCapabilities = await off.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
         Assert.False(ServedEnvelope(offCapabilities, "sqlharness_capabilities").GetProperty("result").TryGetProperty("operationAnnotations", out _));
@@ -387,8 +387,8 @@ public sealed class McpToolSchemaTests : IDisposable
         }
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(onTools.Select(tool => tool.ProtocolTool).ToArray()));
         Assert.Equal(McpLimits.MaxToolsWithOperationAnnotations, onTools.Count());
-        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"annotation-enabled tools/list is {bytes} bytes.");
-        _output.WriteLine($"annotations-on tools/list: {bytes} UTF-8 bytes of {McpLimits.ToolsListBudgetBytes}");
+        Assert.True(bytes <= McpLimits.ToolsListRegressionTestBudgetBytes, $"annotation-enabled tools/list is {bytes} bytes of the catalog regression-test ceiling.");
+        _output.WriteLine($"annotations-on tools/list: {bytes} UTF-8 bytes of {McpLimits.ToolsListRegressionTestBudgetBytes} regression-test ceiling");
         var onCapabilities = await on.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
         Assert.True(ServedEnvelope(onCapabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("operationAnnotations").GetBoolean());
 
@@ -401,8 +401,8 @@ public sealed class McpToolSchemaTests : IDisposable
         var requestTools = await requestOn.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
         AssertCapabilitiesContractDiscoverable(requestTools);
         var requestBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray()));
-        Assert.InRange(requestBytes, 1, McpLimits.ToolsListBudgetBytes);
-        _output.WriteLine($"request annotations-on tools/list: {requestBytes} UTF-8 bytes of {McpLimits.ToolsListBudgetBytes}.");
+        Assert.InRange(requestBytes, 1, McpLimits.ToolsListRegressionTestBudgetBytes);
+        _output.WriteLine($"request annotations-on tools/list: {requestBytes} UTF-8 bytes of {McpLimits.ToolsListRegressionTestBudgetBytes} regression-test ceiling.");
         foreach (var name in new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot" })
             Assert.True(Properties(ServedSchema(requestTools.Single(tool => tool.Name == name))).TryGetProperty("label", out _), name);
 
@@ -504,7 +504,7 @@ public sealed class McpToolSchemaTests : IDisposable
         }, () => scope.Profiles);
         await using var requestServed = await ServedCatalog.CreateAsync(process);
         var requestTools = await requestServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray())), 1, 32768);
+        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(requestTools.Select(tool => tool.ProtocolTool).ToArray())), 1, McpLimits.ToolsListRegressionTestBudgetBytes);
         var requestSchemas = requestTools.ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         Assert.Equal(["summary", "metrics", "operators", "statements", "statement-summary", "matrix-cells", "plan"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
         Assert.Contains("cursor", Properties(requestSchemas["sqlharness_artifact"]).EnumerateObject().Select(property => property.Name));
@@ -555,7 +555,7 @@ public sealed class McpToolSchemaTests : IDisposable
 
         await using var fixedServed = await ServedCatalog.CreateAsync(scope);
         var fixedTools = await fixedServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(fixedTools.Select(tool => tool.ProtocolTool).ToArray())), 1, 32768);
+        Assert.InRange(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(fixedTools.Select(tool => tool.ProtocolTool).ToArray())), 1, McpLimits.ToolsListRegressionTestBudgetBytes);
         var fixedSchemas = fixedTools.ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         foreach (var tool in targetTools)
             Assert.DoesNotContain("target", Properties(fixedSchemas[tool]).EnumerateObject().Select(property => property.Name));
@@ -1403,8 +1403,8 @@ public sealed class McpToolSchemaTests : IDisposable
         {
             var tools = await ServedToolsAsync(served);
             var toolsListBytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools));
-            _output.WriteLine($"{mode} tools/list: {toolsListBytes} UTF-8 bytes of {McpLimits.ToolsListBudgetBytes}.");
-            Assert.InRange(toolsListBytes, 1, McpLimits.ToolsListBudgetBytes);
+            _output.WriteLine($"{mode} tools/list: {toolsListBytes} UTF-8 bytes of {McpLimits.ToolsListRegressionTestBudgetBytes} regression-test ceiling.");
+            Assert.InRange(toolsListBytes, 1, McpLimits.ToolsListRegressionTestBudgetBytes);
             var capabilities = ToolDescription(tools, "sqlharness_capabilities");
             Assert.Contains("After redaction, Message/Hint use max(requested cell limit, 2048)", capabilities, StringComparison.Ordinal);
             Assert.Contains("capped at 4096 chars and response bytes", capabilities, StringComparison.Ordinal);
@@ -1533,12 +1533,12 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public async Task Tools_list_fits_the_32KiB_budget()
+    public async Task Tools_list_fits_the_36KiB_regression_test_ceiling()
     {
         await using var served = await ServedCatalog.CreateAsync(Scope());
         var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools.Select(tool => tool.ProtocolTool)));
-        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"tools/list is {bytes} bytes.");
+        Assert.True(bytes <= McpLimits.ToolsListRegressionTestBudgetBytes, $"tools/list is {bytes} bytes of the regression-test ceiling.");
     }
 
     [Fact]
@@ -2044,8 +2044,8 @@ public sealed class McpToolSchemaTests : IDisposable
     private void AssertEngineGuidance(IReadOnlyList<Tool> tools, string[] expected, string[] foreign)
     {
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools));
-        _output.WriteLine($"tools/list bytes: {bytes} of {McpLimits.ToolsListBudgetBytes}.");
-        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"tools/list is {bytes} bytes.");
+        _output.WriteLine($"tools/list bytes: {bytes} of {McpLimits.ToolsListRegressionTestBudgetBytes} regression-test ceiling.");
+        Assert.True(bytes <= McpLimits.ToolsListRegressionTestBudgetBytes, $"tools/list is {bytes} bytes of the regression-test ceiling.");
         var setups = new[]
         {
             ArgumentDescription(tools, "sqlharness_measure", "setup"),

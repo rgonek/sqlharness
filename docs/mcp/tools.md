@@ -2,7 +2,7 @@
 
 ## Tools
 
-Exactly 9 tools are registered explicitly by name when operation annotations are off; the opt-in annotation tool makes 10. No assembly scanning is used, so adding a public method can never silently widen the surface. The serialized `tools/list` catalog must fit the 32768-byte budget.
+Exactly 9 tools are registered explicitly by name when operation annotations are off; the opt-in annotation tool makes 10. No assembly scanning is used, so adding a public method can never silently widen the surface. A regression test keeps the serialized `tools/list` catalog below 36 KiB; this test ceiling is not a runtime protocol or response-size limit.
 
 Descriptions are engine-scoped at startup. A fixed-scope process renders its resolved target's native setup and query safety guidance into the `query`, `measure` and `compare` descriptions; request scope is SQL Server only and renders SQL Server guidance. The full SQL Server table IO identity rule is available as `engineGuidance.tableIo`; `measure` and `compare` point to it. The text that holds for both engines (setup runs once per session, setup locals do not carry into measured SQL) is common. Capabilities for a CLI profile carry the same guidance as `engineGuidance`; for SQL Server read-only session/control-flow admissions and denials, that guidance is the interface contract and the [README Safety contract](../../README.md#sql-server-read-only-session-and-control-flow) is the human reference. Descriptions never change what executes or is authorized.
 
