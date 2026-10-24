@@ -22,7 +22,6 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |
 | [083](083-table-and-list-parameters.md) | Stage D table-valued parameters (inline rows or rows from a read-only query, catalog-resolved types, Structured binding) and Dapper list expansion across read-only tools; conditions, labels and SSMS scripts; mutation rejects them | 077, 079 merged | IMPLEMENTATION VERIFIED; locally integrated into `main` at `55d23ba`; final scoped Sol review approved; live UAT pending; Linux waived ([evidence](083-verification-evidence.md)) |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and in-flight batch identities while preserving applicable staging and retry/cursor state | 084 merged | DONE; locally integrated into `main` at `7f03ecb`; both task reviews, Sol low whole-branch review and final scoped re-review approved; evidence archive includes 10 tracked raw logs ([evidence](090-verification-evidence.md)) |
-| [114](114-compact-statement-discovery.md) | Opt-in per-statement CPU/elapsed discovery without operator summaries | 109 research accepted | Integration candidate on `plan-114`, including `main` at `51ee23b`; integration and catalog follow-up reviews approved; Windows gate and branch formatter passed; awaiting controller review and local-main fast-forward ([evidence](114-evidence/integration/implementation-report.md)) |
 | [115](115-query-result-set-selection.md) | Optional query response selection by original result-set ordinal | 109 research accepted | TODO — implementation authorization is separate |
 
 ## Limit-economics execution notes (2026-10-20)
@@ -37,6 +36,8 @@ Plans 063, 070, 071, 072, 073, 074, 076, 079, 080, 081, 085, and 087 are DONE; s
 
 
 Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up Plans 089, 090 and 091 cover the parked detail limit and the two deferred Minors. Plan 091 closes its diagnostic Minor; Plan 090 closes the title-backfill follow-up and is locally integrated into `main` at `7f03ecb`. See [084 evidence](084-verification-evidence.md) and [history](history.md).
+
+| [114](114-compact-statement-discovery.md) | Compact statement CPU/elapsed discovery | DONE; locally integrated into `main` at `48a80042`; reviews approved; combined Windows gate and final branch format passed; post-gate product delta whitespace-only; not pushed ([evidence](114-evidence/integration/implementation-report.md)) |
 
 ## History
 

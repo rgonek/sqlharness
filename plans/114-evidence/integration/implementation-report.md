@@ -28,3 +28,7 @@ Integration source reviews and the scoped catalog follow-up reviews are approved
 The candidate is ready for controller review and local fast-forward into the primary checkout. This worktree does not claim that fast-forward has happened.
 
 No live database, Linux gate, push, or primary-checkout mutation is part of this integration task.
+
+## Local primary integration
+
+On 2026-10-24 the operator selected local merge. The primary checkout `D:/Dev/sqlharness` fast-forwarded from `51ee23bc` to `48a80042`. Exact `src`/`tests` equality with the reviewed final candidate was verified (exit 0); comparison against the full-gate revision `574fbfa8` ignoring end-of-line whitespace also exited 0. No redundant full gate was run after this unchanged-candidate fast-forward. The caller's local README, plan-index additions and untracked plans are preserved separately from the integration commits. No push or publication occurred.
