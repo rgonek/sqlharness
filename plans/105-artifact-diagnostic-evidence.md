@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: DONE locally on `plan-105` — all task and Sol low reviews approved; Windows gate and branch format passed on `f6a7f492`; not merged/pushed; Linux/live acceptance unverified. See [verification evidence](105-verification-evidence.md).
+- Status: DONE — locally integrated into `main` at `42e7e284`; combined Plan 105+106 tree `fcd2a3a5` passed Windows gate and 24-file branch format; all integration reviews approved; not pushed; Linux/live unverified. See [integration verification](105-evidence/integration/verification.md).
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: L; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.

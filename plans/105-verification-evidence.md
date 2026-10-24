@@ -1,14 +1,14 @@
 # Plan 105 verification evidence
 
-Status: DONE locally on `plan-105`; implementation, independent reviews, Windows gate and branch formatting complete. Not merged, pushed, installed or exercised against a live database.
+Status: DONE — locally integrated into `main` at `42e7e284`, after combined Plan 105+106 Windows verification and integration reviews. Not pushed, installed or exercised against a live database.
 
 ## Scope and revision
 
-Worktree: `D:/Dev/sqlharness/.worktrees/plan-105`. Base: `3365166212f4e6a5767e3fe2bec3f838faec5fe0`. Tested product/test revision: `f6a7f492`; subsequent completion changes are documentation/evidence only.
+Worktree: `D:/Dev/sqlharness/.worktrees/plan-105`. Base: `3365166212f4e6a5767e3fe2bec3f838faec5fe0`. Feature-tested product/test revision: `f6a7f492`; its immediate completion commits were documentation/evidence only. The later combined Plan 105+106 merge was independently tested as `fcd2a3a5`, as recorded below.
 
 Saved artifacts now expose source-scoped Showplan grants/compile fields, statement logical/LOB IO and ActualScans, independent STATISTICS IO ScanCount records, exact QueryPlan identities, legacy unavailable/partial semantics and bounded retrieval. Corrupt advertised saved diagnostics produce an artifact failure rather than successful absent evidence. A projection fit failure tries smaller detail candidates; truly unfit exact identity returns a render-budget error.
 
-## Final Windows gate
+## Feature-branch Windows gate before integration
 
 `just verify -LogDirectory D:/temp/sqlharness-plan105-final-verify-f6a7f492-retry` exited **0**, five stages, 8m54s.
 
@@ -42,3 +42,8 @@ Luna high implemented; Luna xhigh reviewed each task; Sol low reviewed the whole
 ## Boundaries
 
 Linux, live database acceptance, installed-binary behavior and paid-agent/model-token savings remain unverified. Byte measurements are offline synthetic UTF-8 counts, not token savings. Missing fields are not measured zero; diagnostic distributions may be partial under capture/response limits. Plan 104 was recommended but not implemented here. No mutation, merge, push or installation occurred.
+## Local main integration, 2026-10-24
+
+Local main advanced with Plan 106 before merge authorization. The combined merge `fcd2a3a5` (parents `1195297d` and `ab46345a`) preserves both plans and passed the full Windows gate: UI 372, Core 4700 with 11 skipped, MCP 523 with 4 skipped; all zero failures. Explicit branch format checked 24 C# files and exited 0. Luna xhigh integration task review and Sol low integration whole review approve the combined source. See [integration checks and raw logs](105-evidence/integration/verification.md).
+
+Main was fast-forwarded from `ab46345a` to `42e7e284`, whose source/tests/scripts are identical to the tested merge; following closeout changes are metadata only. No redundant gate is claimed on the primary checkout. Existing local changes are preserved separately; the untracked original Plan 105 draft was retained outside the repository before the tracked completed plan arrived. No push occurred.

@@ -21,4 +21,6 @@ Focused integration checks also passed: Core/CLI 189/189 and MCP 132/132. Catalo
 
 ## Delivery boundary
 
-The combined tree is ready for the operator-authorized local fast-forward to main. After that operation, code/test equivalence to this tested merge must be checked; evidence-only commits do not require repeating the unchanged product gate. No push, installation, Linux gate or live database action occurred. Feature-only results recorded earlier in the Plan 105 report remain historical, separate from this combined-tree gate.
+Main was fast-forwarded from `ab46345a` to `42e7e284`. Code/tests/scripts were checked identical to the tested `fcd2a3a5` merge; subsequent closeout commits change only documentation/evidence. The final primary-checkout equivalence check covers those metadata commits without repeating the unchanged product gate. No push, installation, Linux gate or live database action occurred. Feature-only results recorded earlier in the Plan 105 report remain historical, separate from this combined-tree gate.
+
+Local preservation backup: `D:/temp/sqlharness-plan105-main-final-20261024-142056`. It contains the original README/index, raw local patches, hashes, the colliding untracked Plan 105 draft, and the scoped-stash identity. Restoration checks are recorded there as `restoration-check.json` after the saved local queue is reapplied. Other untracked plans and root README changes are retained; Plan 105 status in the local observation queue is updated to DONE.
