@@ -25,3 +25,7 @@ dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-restore 
 The exact serialized tools/list sizes were 28,662 bytes with annotations disabled, 32,270 bytes for annotations-enabled fixed scope, and 32,713 bytes for annotations-enabled request scope. Both enabled catalogs remain below 32,768 bytes.
 
 `git diff --check` passed. This repair did not run the full Windows gate or formatter; those remain with the controller. No live database, UI, merge, or push was involved.
+
+## Formatter-only follow-up
+
+The controller's branch-format run later reported only four indentation corrections in `ArtifactReaderTests.cs` and a final CRLF in `McpToolCatalog.cs`. Those exact whitespace changes were committed separately with [format evidence](../../../plans/105-evidence/final-format-fix.md). No tests or formatter were rerun for that whitespace-only follow-up.

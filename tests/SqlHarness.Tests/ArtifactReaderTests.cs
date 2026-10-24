@@ -1044,8 +1044,8 @@ public class ArtifactReaderTests
         var statementsPath = Path.Combine(directory, "statements.json");
         var statementsJson = JsonNode.Parse(File.ReadAllText(statementsPath))!.AsObject();
         foreach (var statement in statementsJson["statements"]!.AsArray())
-        foreach (var diagnostic in statement!["planDiagnostics"]!.AsArray())
-            diagnostic!.AsObject().Remove("planQueryOrdinal");
+            foreach (var diagnostic in statement!["planDiagnostics"]!.AsArray())
+                diagnostic!.AsObject().Remove("planQueryOrdinal");
         foreach (var diagnostic in statementsJson["runPlanDiagnostics"]!.AsArray())
             diagnostic!["diagnostic"]!.AsObject().Remove("planQueryOrdinal");
         File.WriteAllText(statementsPath, statementsJson.ToJsonString(ArtifactDirectoryPublisher.JsonOptions));
@@ -1079,8 +1079,8 @@ public class ArtifactReaderTests
         var statementsPath = Path.Combine(directory, "statements.json");
         var statementsJson = JsonNode.Parse(File.ReadAllText(statementsPath))!.AsObject();
         foreach (var statement in statementsJson["statements"]!.AsArray())
-        foreach (var diagnostic in statement!["planDiagnostics"]!.AsArray())
-            diagnostic!.AsObject().Remove("planQueryOrdinal");
+            foreach (var diagnostic in statement!["planDiagnostics"]!.AsArray())
+                diagnostic!.AsObject().Remove("planQueryOrdinal");
         File.WriteAllText(statementsPath, statementsJson.ToJsonString(ArtifactDirectoryPublisher.JsonOptions));
 
         var metrics = Assert.IsType<ArtifactMetricsSection>(
