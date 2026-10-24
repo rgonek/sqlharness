@@ -1260,6 +1260,12 @@ public sealed class McpToolSchemaTests : IDisposable
             var plan = ToolDescription(tools, "sqlharness_plan");
             var artifact = ToolDescription(tools, "sqlharness_artifact");
             var artifactSection = ArgumentDescription(tools, "sqlharness_artifact", "section");
+            var artifactCursor = ArgumentDescription(tools, "sqlharness_artifact", "cursor");
+            var artifactVariant = ArgumentDescription(tools, "sqlharness_artifact", "variant");
+            var artifactStatement = ArgumentDescription(tools, "sqlharness_artifact", "statement");
+            var artifactParameterSet = ArgumentDescription(tools, "sqlharness_artifact", "parameterSet");
+            var artifactRepetition = ArgumentDescription(tools, "sqlharness_artifact", "repetition");
+            var artifactPageSize = ArgumentDescription(tools, "sqlharness_artifact", "pageSize");
 
             Assert.Contains("not benchmark evidence", query, StringComparison.Ordinal);
             Assert.Contains("estimated", query, StringComparison.OrdinalIgnoreCase);
@@ -1277,6 +1283,7 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("low-entropy excluded from unkeyed hashes", measure, StringComparison.Ordinal);
             Assert.Contains("statementEvidence: per-case collected counters, not total cost", measure, StringComparison.Ordinal);
             Assert.Contains("Optional saved diagnostics", measure, StringComparison.Ordinal);
+            Assert.Contains("sqlharness_artifact", measure, StringComparison.Ordinal);
             Assert.Contains("no diagnostic read is required for every optimization", measure, StringComparison.Ordinal);
             Assert.Contains("Exact repetitions/row limits: section=statements", measure, StringComparison.Ordinal);
             Assert.Contains("subject/scope follow frozen compare.requireContext (capabilities)", compare, StringComparison.Ordinal);
@@ -1290,6 +1297,7 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("baseline/candidate classifications", compare, StringComparison.Ordinal);
             Assert.Contains("statementEvidence: counters per variant/set/cell, not total cost", compare, StringComparison.Ordinal);
             Assert.Contains("Optional saved diagnostics", compare, StringComparison.Ordinal);
+            Assert.Contains("sqlharness_artifact", compare, StringComparison.Ordinal);
             Assert.Contains("no diagnostic read is required for every optimization", compare, StringComparison.Ordinal);
             Assert.Contains("Exact repetitions/row limits: section=statements", compare, StringComparison.Ordinal);
             Assert.Contains("no continuation", watch, StringComparison.Ordinal);
@@ -1297,9 +1305,33 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("omittedChildCount", plan, StringComparison.Ordinal);
             Assert.Contains("omittedSubtreeCount", plan, StringComparison.Ordinal);
             Assert.Contains("Saved artifact", artifact, StringComparison.Ordinal);
+            Assert.Contains("exact source identities", artifact, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("continuation", artifact, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("planDiagnostics", artifactSection, StringComparison.Ordinal);
             Assert.Contains("planQueryOrdinal", artifactSection, StringComparison.Ordinal);
             Assert.Contains("lobLogicalReads", artifactSection, StringComparison.Ordinal);
+            Assert.Contains("STATISTICS IO ScanCount", artifactSection, StringComparison.Ordinal);
+            Assert.Contains("Showplan ActualScans", artifactSection, StringComparison.Ordinal);
+            Assert.Contains("zero-based", artifactCursor, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("matrix-cells", artifactCursor, StringComparison.Ordinal);
+            Assert.Contains("plan", artifactCursor, StringComparison.Ordinal);
+            Assert.Contains("continuation", artifactCursor, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("measure/set=query", artifactVariant, StringComparison.Ordinal);
+            Assert.Contains("baseline", artifactVariant, StringComparison.Ordinal);
+            Assert.Contains("candidate", artifactVariant, StringComparison.Ordinal);
+            Assert.Contains("zero-based", artifactStatement, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("plan", artifactStatement, StringComparison.Ordinal);
+            Assert.Contains("parameter-set", artifactParameterSet, StringComparison.Ordinal);
+            Assert.Contains("plan", artifactParameterSet, StringComparison.Ordinal);
+            Assert.Contains("plan", artifactRepetition, StringComparison.Ordinal);
+            Assert.Contains("last", artifactRepetition, StringComparison.Ordinal);
+            Assert.Contains("matrix-cells", artifactPageSize, StringComparison.Ordinal);
+            Assert.Contains("32", artifactPageSize, StringComparison.Ordinal);
+            Assert.Contains("statements", artifactPageSize, StringComparison.Ordinal);
+            Assert.Contains("128", artifactPageSize, StringComparison.Ordinal);
+            Assert.Contains("512", artifactPageSize, StringComparison.Ordinal);
+            Assert.Contains("byte budget", artifactPageSize, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("fewer", artifactPageSize, StringComparison.OrdinalIgnoreCase);
         }
     }
 

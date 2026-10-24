@@ -192,12 +192,12 @@ public sealed class McpRequestToolHandlers(
         [Description("Saved artifact ID.")] string id,
         [Description(McpToolCatalog.ArtifactSectionDescription)][AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells", "plan")] string section,
         [Description("Request target.")] McpRequestScopeArgument target,
-        [Description("Cursor.")] int? cursor = null,
-        [Description("Plan variant.")]
+        [Description(McpToolCatalog.ArtifactCursorDescription)] int? cursor = null,
+        [Description(McpToolCatalog.ArtifactVariantDescription)]
         string? variant = null,
-        [Description("Plan statement ordinal.")] int statement = 0,
-        [Description("Plan parameter set.")] string? parameterSet = null,
-        [Description("Plan repetition; default: last.")] int? repetition = null,
+        [Description(McpToolCatalog.ArtifactStatementDescription)] int statement = 0,
+        [Description(McpToolCatalog.ArtifactParameterSetDescription)] string? parameterSet = null,
+        [Description(McpToolCatalog.ArtifactRepetitionDescription)] int? repetition = null,
         [Description("Include plan text and predicates.")] bool includeText = false,
         [Description("Cell text clip, max 4096.")] int? maxCellChars = null,
         [Description("Result byte budget.")]
