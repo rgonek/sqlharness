@@ -10,6 +10,6 @@ Ruling: Native worktree started from older HEAD; fast-forward feature branch to 
 
 - Task 1 implementation: Luna xhigh review approved. Archived at [task-1-review.md](task-1-review.md).
 - Whole branch: Sol low review approved after the documentation and evidence fixes in this change. Archived at [whole-branch-review.md](whole-branch-review.md).
-- Final scoped docs review: approved; `git diff --check` and changed-document link/inventory checks passed. Review recorded in `final-fix-report.md`.
+- Final scoped docs review: approved; `git diff --check` and changed-document link/inventory checks passed. Review recorded in [final-scoped-review.md](final-scoped-review.md).
 
 The reviews found no blocking implementation issue. This work remains on feature branch `plan-114`; no integration or push occurred.
