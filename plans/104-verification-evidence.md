@@ -1,11 +1,15 @@
-# Plan 104 renewed investigation evidence
+# Plan 104 implementation and investigation evidence
 
 Date: 2026-10-24
 Worktree: `D:/Dev/sqlharness/.worktrees/plan-104`, branch `plan-104`.
 
 ## Outcome
 
-**Current outcome: implementation incomplete; general recognition policy unresolved.** Original Tasks 1–3 are not complete, and no product behavior changed. The subsequent experiment captured a raw-name distinction before normalization on SQL Server `17.0.1145.4`; that is candidate provenance for the tested build, not a generally supported object-kind contract. The earlier STOP and “no discriminator” statements below record the pre-experiment investigation and must be read as historical conclusions about the evidence available then.
+**Current outcome: implementation in progress under the accepted experimental rule.** The user accepted producer-side raw-name recognition without a patch-version allowlist. Tasks 1–3 are implemented and independently reviewed, including fixes for incomplete provenance, partial-message completeness and a literal historical metrics fixture. Branch formatting passes on product revision `029e1905`; final Windows verification is running and the whole-branch review remains pending. The experiments characterize SQL Server `17.0.1145.4`; they do not establish a Microsoft cross-version naming guarantee. No merge, push, installation or implementation live UAT has occurred.
+
+## Historical investigation (before implementation authorization)
+
+The following STOP and no-product-change conclusions record earlier revisions only. The accepted experimental rule in the plan supersedes their unresolved-policy outcome and the proposed exact-build allowlist. Preserve their source facts, evidence and limitations as historical records.
 
 Luna high investigated suffix provenance, additive typed fields and conservative ambiguity handling. Luna xhigh independently reviewed those proposals and confirmed the STOP. An unpopulated typed field would not repair real capture. An availability-only fallback needs a separate report/journal/dashboard/export contract and does not satisfy the original aggregate-median assertions. See the [proposal](104-evidence/resolution-proposal.md) and binding [resolution review](104-evidence/resolution-review.md).
 

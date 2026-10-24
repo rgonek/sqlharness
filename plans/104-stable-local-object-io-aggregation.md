@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: IMPLEMENTATION IN PROGRESS (2026-10-24) — the user accepts the experimentally characterized raw-name rule as the implementation basis. No patch-version allowlist; retain producer-derived provenance and legacy Unknown behavior. Tasks 1–3 and final implementation verification are pending.
+- Status: IMPLEMENTATION IN PROGRESS (2026-10-24) — the user accepts the experimentally characterized raw-name rule as the implementation basis. No patch-version allowlist; retain producer-derived provenance and legacy Unknown behavior. Tasks 1–3 are implemented and independently reviewed; final formatting, Windows gate and whole-branch review remain pending.
 - Priority: **P1** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -86,9 +86,9 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 3: Verify consumers and compatibility
 
-- [ ] Check single measure, named-set measure, compare and artifact metrics. Add fixtures proving unchanged totals and clipping identities, truthful grouping, legacy artifact readability and no lost later fitting entries. Document the aggregate meaning in affected contracts and run the focused suite, task reviews, final review and Windows gate.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Check single measure, named-set measure, compare and artifact metrics. Add fixtures proving unchanged totals and clipping identities, truthful grouping, legacy artifact readability and no lost later fitting entries. Document the aggregate meaning in affected contracts and run the focused suite, task reviews, final review and Windows gate.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ## Verification and done criteria
 
