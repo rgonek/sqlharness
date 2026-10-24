@@ -1,6 +1,6 @@
 # Plan 114: Add compact per-statement CPU and elapsed discovery
 
-> **Status:** Implemented on feature branch `plan-114`; Windows `just verify` and branch formatting pass. Awaiting independent task and whole-branch review; not integrated or pushed.
+> **Status:** Complete on feature branch `plan-114`; Windows `just verify`, direct branch formatting, Luna xhigh task review, Sol low whole-branch review, and final scoped documentation review approved. Not integrated or pushed.
 
 ## Evidence and goal
 
