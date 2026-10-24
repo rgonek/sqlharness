@@ -1275,7 +1275,9 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("TVP/list: no valueHash", measure, StringComparison.Ordinal);
             Assert.Contains("low-entropy excluded from unkeyed hashes", measure, StringComparison.Ordinal);
             Assert.Contains("statementEvidence: per-case collected counters, not total cost", measure, StringComparison.Ordinal);
-            Assert.Contains("Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements", measure, StringComparison.Ordinal);
+            Assert.Contains("Optional saved diagnostics", measure, StringComparison.Ordinal);
+            Assert.Contains("no diagnostic read is required for every optimization", measure, StringComparison.Ordinal);
+            Assert.Contains("Exact repetitions/row limits: section=statements", measure, StringComparison.Ordinal);
             Assert.Contains("subject/scope follow frozen compare.requireContext (capabilities)", compare, StringComparison.Ordinal);
             Assert.Contains("request target selects DB", compare, StringComparison.Ordinal);
             Assert.Contains("Session/setup per set", compare, StringComparison.Ordinal);
@@ -1286,13 +1288,18 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("Dry-run validates only; execution not run", compare, StringComparison.Ordinal);
             Assert.Contains("baseline/candidate classifications", compare, StringComparison.Ordinal);
             Assert.Contains("statementEvidence: counters per variant/set/cell, not total cost", compare, StringComparison.Ordinal);
-            Assert.Contains("Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements", compare, StringComparison.Ordinal);
+            Assert.Contains("Optional saved diagnostics", compare, StringComparison.Ordinal);
+            Assert.Contains("no diagnostic read is required for every optimization", compare, StringComparison.Ordinal);
+            Assert.Contains("Exact repetitions/row limits: section=statements", compare, StringComparison.Ordinal);
             Assert.Contains("no continuation", watch, StringComparison.Ordinal);
             Assert.Contains("projection omissions", watch, StringComparison.Ordinal);
             Assert.Contains("omittedChildCount", plan, StringComparison.Ordinal);
             Assert.Contains("omittedSubtreeCount", plan, StringComparison.Ordinal);
             Assert.Contains("returned continuation", artifact, StringComparison.Ordinal);
             Assert.Contains("omittedChildCount", artifact, StringComparison.Ordinal);
+            Assert.Contains("planDiagnostics", artifact, StringComparison.Ordinal);
+            Assert.Contains("lobLogicalReads", artifact, StringComparison.Ordinal);
+            Assert.Contains("exact identities", artifact, StringComparison.Ordinal);
         }
     }
 

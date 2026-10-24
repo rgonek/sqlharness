@@ -31,6 +31,7 @@ public static class WorkflowScenarios
     public const string PlanPagingId = "plan-paging-513";
     public const string ArtifactReviewStudyId = "artifact-review-study";
     public const string ArtifactReviewStudyV2Id = "artifact-review-study-v2";
+    public const string ArtifactDiagnosticEvidenceId = "artifact-diagnostic-evidence";
 
     public const string ArtifactReviewBaselineSql =
         "SELECT Id, Region FROM dbo.Orders WHERE Batch = @Batch; SELECT COUNT_BIG(*) FROM dbo.Orders; SELECT Id FROM dbo.Customers; SELECT SUM(Amount) FROM dbo.Payments;";
@@ -78,6 +79,8 @@ public static class WorkflowScenarios
             ArtifactReviewBaselineSql, ArtifactReviewCandidateV1Sql, null, null, null),
         new(ArtifactReviewStudyV2Id, "artifact-review-study", 7708, false, "sqlserver",
             ArtifactReviewBaselineSql, ArtifactReviewCandidateV2Sql, null, null, null),
+        new(ArtifactDiagnosticEvidenceId, "artifact-diagnostic-evidence", 7709, false, "sqlserver",
+            ArtifactReviewBaselineSql, ArtifactReviewCandidateV1Sql, null, null, null),
     ];
 
     public static WorkflowScenario Require(string id)

@@ -149,6 +149,109 @@ public sealed class AgentOptimizationWorkflowTests
         session.AssertNoDatabaseConnections();
     }
 
+    [Fact]
+    public async Task Artifact_diagnostics_support_offline_memory_tradeoffs_and_multi_statement_io_at_both_budgets()
+    {
+        await using var session = await Session.StartAsync(WorkflowScenarios.ArtifactDiagnosticEvidenceId, Budget);
+        var compare = await session.Call("sqlharness_compare", CompareArguments(
+            WorkflowScenarios.ArtifactReviewBaselineSql,
+            WorkflowScenarios.ArtifactReviewCandidateV1Sql,
+            budget: 65536));
+        Assert.False(compare.IsError == true, Text(compare));
+        var artifactId = ArtifactId(Envelope(compare));
+
+        async Task<JsonElement> ReadMetricsAsync(int budget)
+        {
+            var result = await session.Call("sqlharness_artifact", new Dictionary<string, object?>
+            {
+                ["id"] = artifactId,
+                ["section"] = "metrics",
+                ["maxResultBytes"] = budget,
+            });
+            Assert.False(result.IsError == true, Text(result));
+            Assert.InRange(Encoding.UTF8.GetByteCount(Text(result)), 1, budget);
+            _output.WriteLine($"metrics budget={budget} responseUtf8Bytes={Encoding.UTF8.GetByteCount(Text(result))}");
+            return Envelope(result).GetProperty("result").Clone();
+        }
+
+        async Task<(List<JsonElement> Rows, List<int> ResponseBytes)> ReadStatementsAsync(int budget)
+        {
+            var rows = new List<JsonElement>();
+            var responseBytes = new List<int>();
+            int? cursor = 20;
+            while (rows.Count < 4)
+            {
+                var arguments = new Dictionary<string, object?>
+                {
+                    ["id"] = artifactId,
+                    ["section"] = "statements",
+                    ["pageSize"] = 1,
+                    ["maxResultBytes"] = budget,
+                };
+                if (cursor is int current)
+                    arguments["cursor"] = current;
+                var result = await session.Call("sqlharness_artifact", arguments);
+                Assert.False(result.IsError == true, Text(result));
+                var text = Text(result);
+                responseBytes.Add(Encoding.UTF8.GetByteCount(text));
+                Assert.InRange(responseBytes[^1], 1, budget);
+                var envelope = Envelope(result);
+                rows.AddRange(envelope.GetProperty("result").GetProperty("statements").EnumerateArray().Select(row => row.Clone()));
+                var next = Continuation(envelope);
+                if (next is int continuation)
+                    Assert.True(continuation > (cursor ?? 0), $"Statement continuation did not advance from {cursor} to {continuation}.");
+                cursor = next;
+            }
+
+            return (rows, responseBytes);
+        }
+
+        var defaultMetrics = await ReadMetricsAsync(65536);
+        var minimumMetrics = await ReadMetricsAsync(4096);
+        foreach (var metrics in new[] { defaultMetrics, minimumMetrics })
+        {
+            var planDiagnostics = metrics.GetProperty("planDiagnosticDistributions").EnumerateArray()
+                .ToArray();
+            Assert.NotEmpty(planDiagnostics);
+            Assert.All(planDiagnostics, item => Assert.Equal("sql-server-showplan-query-plan", item.GetProperty("source").GetString()));
+            if (metrics.GetProperty("planDiagnosticDistributionsAvailability").GetString() == "partial")
+                Assert.True(metrics.GetProperty("omittedPlanDiagnosticDistributions").GetInt32() > 0);
+            var statementRead = Assert.Single(metrics.GetProperty("statisticsIoScanCountDistributions").EnumerateArray(),
+                item => item.GetProperty("variant").GetString() == "candidate" && item.GetProperty("table").GetString() == "Orders");
+            Assert.Equal("sql-server-statistics-io", statementRead.GetProperty("source").GetString());
+            Assert.Equal(5, statementRead.GetProperty("scanCount").GetProperty("median").GetInt64());
+        }
+
+        var defaultStatements = await ReadStatementsAsync(65536);
+        var minimumStatements = await ReadStatementsAsync(4096);
+        foreach (var statements in new[] { defaultStatements, minimumStatements })
+        {
+            var selected = statements.Rows.Where(row => row.GetProperty("variant").GetString() == "candidate"
+                && row.GetProperty("repetition").GetInt32() == 1).OrderBy(row => row.GetProperty("statementOrdinal").GetInt32()).ToArray();
+            Assert.Equal(4, selected.Length);
+            Assert.Equal(Enumerable.Range(0, 4), selected.Select(row => row.GetProperty("statementOrdinal").GetInt32()));
+            for (var ordinal = 0; ordinal < selected.Length; ordinal++)
+            {
+                var row = selected[ordinal];
+                Assert.Equal("available", row.GetProperty("objectIoAvailability").GetString());
+                var objects = row.GetProperty("objects");
+                var io = Assert.Single(objects.EnumerateArray());
+                Assert.Equal(new[] { "[dbo].[Orders]", "[dbo].[Orders]", "[dbo].[Customers]", "[dbo].[Payments]" }[ordinal], io.GetProperty("object").GetString());
+                Assert.Equal(100 + ordinal * 10, io.GetProperty("logicalReads").GetInt64());
+                Assert.Equal(ordinal * 2, io.GetProperty("lobLogicalReads").GetInt64());
+                Assert.Equal(3 + ordinal, io.GetProperty("showplanActualScans").GetInt64());
+                Assert.Equal("sql-server-showplan-query-plan", row.GetProperty("planDiagnostics")[0].GetProperty("source").GetString());
+                Assert.Equal(100 + ordinal * 50, row.GetProperty("planDiagnostics")[0].GetProperty("grantRequestedKb").GetInt64());
+                Assert.Equal(1 + ordinal, row.GetProperty("planDiagnostics")[0].GetProperty("degreeOfParallelism").GetInt32());
+            }
+            Assert.True(statements.ResponseBytes.Count > 1, "The statement inventory should require continuation at both budgets.");
+        }
+
+        _output.WriteLine($"Offline diagnostic retrieval: metrics UTF-8 bytes min/default={Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(minimumMetrics))}/{Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(defaultMetrics))}; statements min/default calls={minimumStatements.ResponseBytes.Count}/{defaultStatements.ResponseBytes.Count}, response bytes={minimumStatements.ResponseBytes.Sum()}/{defaultStatements.ResponseBytes.Sum()}; all 4 statement identities and source/value pairs matched.");
+        await session.ShutdownAsync();
+        session.AssertNoDatabaseConnections();
+    }
+
     [Theory]
     [InlineData(4096)]
     [InlineData(65536)]

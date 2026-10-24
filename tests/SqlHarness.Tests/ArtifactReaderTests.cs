@@ -806,14 +806,22 @@ public class ArtifactReaderTests
             && row.GetProperty("repetition").GetInt32() == 2);
         Assert.Equal(8, first.GetProperty("planDiagnostics")[0].GetProperty("grantRequestedKb").GetInt64());
         Assert.Equal(6, first.GetProperty("planDiagnostics")[0].GetProperty("grantGrantedKb").GetInt64());
+        Assert.Equal(4, first.GetProperty("planDiagnostics")[0].GetProperty("grantMaxUsedKb").GetInt64());
+        Assert.Equal(2, first.GetProperty("planDiagnostics")[0].GetProperty("degreeOfParallelism").GetInt32());
         Assert.Equal(7, first.GetProperty("planDiagnostics")[0].GetProperty("compileTimeMs").GetInt64());
+        Assert.Equal(3, first.GetProperty("planDiagnostics")[0].GetProperty("compileCpuMs").GetInt64());
+        Assert.Equal(1, second.GetProperty("planDiagnostics")[0].GetProperty("degreeOfParallelism").GetInt32());
         Assert.Equal(0, second.GetProperty("planDiagnostics")[0].GetProperty("grantGrantedKb").GetInt64());
+        Assert.Equal(0, second.GetProperty("planDiagnostics")[0].GetProperty("grantMaxUsedKb").GetInt64());
         Assert.Equal(0, second.GetProperty("planDiagnostics")[0].GetProperty("compileTimeMs").GetInt64());
+        Assert.Equal(0, second.GetProperty("planDiagnostics")[0].GetProperty("compileCpuMs").GetInt64());
         var third = Assert.Single(rows, row => row.GetProperty("repetition").GetInt32() == 1
             && row.GetProperty("statementOrdinal").GetInt32() == 2);
         Assert.Equal(14, third.GetProperty("planDiagnostics")[0].GetProperty("grantGrantedKb").GetInt64());
         Assert.Equal(1, third.GetProperty("planDiagnostics")[0].GetProperty("planDocumentOrdinal").GetInt32());
         Assert.True(absent.GetProperty("planDiagnostics")[0].GetProperty("grantGrantedKb").ValueKind == JsonValueKind.Null);
+        Assert.Equal(JsonValueKind.Null, absent.GetProperty("planDiagnostics")[0].GetProperty("grantMaxUsedKb").ValueKind);
+        Assert.Equal(JsonValueKind.Null, absent.GetProperty("planDiagnostics")[0].GetProperty("compileCpuMs").ValueKind);
         Assert.Equal("statement", first.GetProperty("planDiagnostics")[0].GetProperty("scope").GetString());
         Assert.Equal("sql-server-showplan-query-plan", first.GetProperty("planDiagnostics")[0].GetProperty("source").GetString());
         var partial = Assert.Single(rows, row => row.GetProperty("repetition").GetInt32() == 3);
@@ -895,6 +903,62 @@ public class ArtifactReaderTests
         Assert.Equal(2, diagnostic.GetProperty("sampleCount").GetInt32());
         Assert.Equal(10, diagnostic.GetProperty("grantRequestedKb").GetProperty("distribution").GetProperty("median").GetInt64());
         Assert.Equal(3, diagnostic.GetProperty("compileCpuMs").GetProperty("distribution").GetProperty("median").GetInt64());
+    }
+
+    [Fact]
+    public void Statement_object_io_distinguishes_zero_partial_and_absent_counters_and_reports_omissions()
+    {
+        using var temp = new TempDirectory();
+        static string Plan(string objects) => """
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><Statements><StmtSimple StatementText="SELECT values"><QueryPlan>
+            """ + objects + """
+              </QueryPlan></StmtSimple></Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+        static string ObjectOperator(string table, string counters) => $"""
+            <RelOp NodeId="0" PhysicalOp="Table Scan"><RunTimeInformation><RunTimeCountersPerThread Thread="0" {counters} /></RunTimeInformation><TableScan><Object Table="{table}" /></TableScan></RelOp>
+            """;
+        var zeroPlan = Plan(ObjectOperator("[dbo].[Zero]", "ActualRows=\"1\" ActualExecutions=\"1\" ActualLogicalReads=\"0\" ActualLobLogicalReads=\"0\" ActualScans=\"0\""));
+        var partialPlan = Plan(ObjectOperator("[dbo].[Partial]", "ActualRows=\"1\" ActualExecutions=\"1\" ActualLogicalReads=\"9\""));
+        var absentPlan = Plan(ObjectOperator("[dbo].[Absent]", "ActualRows=\"1\" ActualExecutions=\"1\""));
+        var manyObjectsPlan = Plan(string.Concat(Enumerable.Range(0, 65).Select(index => ObjectOperator(
+            $"[dbo].[Object{index:D2}]",
+            "ActualRows=\"1\" ActualExecutions=\"1\" ActualLogicalReads=\"1\" ActualLobLogicalReads=\"0\" ActualScans=\"0\""))));
+        var runs = new[] { zeroPlan, partialPlan, absentPlan, manyObjectsPlan }
+            .Select((plan, index) => new CompareRunArtifact("baseline", index + 1, 1, 2, 0,
+                new Dictionary<string, long>(), $"hash-{index}", [plan], 0)).ToArray();
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(CompareReport(), runs, "io-completeness");
+        var section = Assert.IsType<ArtifactStatementsSection>(
+            ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "statements"));
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(section, ArtifactDirectoryPublisher.JsonOptions));
+        var rows = json.RootElement.GetProperty("statements").EnumerateArray().ToArray();
+
+        var zero = Assert.Single(rows, row => row.GetProperty("repetition").GetInt32() == 1);
+        Assert.Equal("available", zero.GetProperty("objectIoAvailability").GetString());
+        var zeroObject = Assert.Single(zero.GetProperty("objects").EnumerateArray());
+        Assert.Equal(0, zeroObject.GetProperty("logicalReads").GetInt64());
+        Assert.Equal(0, zeroObject.GetProperty("lobLogicalReads").GetInt64());
+        Assert.Equal(0, zeroObject.GetProperty("showplanActualScans").GetInt64());
+
+        var partial = Assert.Single(rows, row => row.GetProperty("repetition").GetInt32() == 2);
+        Assert.Equal("partial", partial.GetProperty("objectIoAvailability").GetString());
+        var partialObject = Assert.Single(partial.GetProperty("objects").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, partialObject.GetProperty("logicalReads").ValueKind);
+        Assert.Equal(JsonValueKind.Null, partialObject.GetProperty("lobLogicalReads").ValueKind);
+        Assert.Equal(JsonValueKind.Null, partialObject.GetProperty("showplanActualScans").ValueKind);
+
+        var absent = Assert.Single(rows, row => row.GetProperty("repetition").GetInt32() == 3);
+        Assert.Equal("partial", absent.GetProperty("objectIoAvailability").GetString());
+        var absentObject = Assert.Single(absent.GetProperty("objects").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, absentObject.GetProperty("logicalReads").ValueKind);
+        Assert.Equal(JsonValueKind.Null, absentObject.GetProperty("lobLogicalReads").ValueKind);
+        Assert.Equal(JsonValueKind.Null, absentObject.GetProperty("showplanActualScans").ValueKind);
+
+        var manyObjects = Assert.Single(rows, row => row.GetProperty("repetition").GetInt32() == 4);
+        Assert.Equal(64, manyObjects.GetProperty("objects").GetArrayLength());
+        Assert.Equal(1, manyObjects.GetProperty("omittedObjects").GetInt32());
     }
 
     [Fact]
