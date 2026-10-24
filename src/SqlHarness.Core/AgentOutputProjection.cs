@@ -1033,7 +1033,8 @@ public static class AgentOutputProjection
             }
         }
 
-        var omitted = baseOmittedResultSets + source.Count - kept;
+        var omittedResultSetCount = baseOmittedResultSets + source.Count - kept;
+        var omitted = omittedResultSetCount;
         var sets = new AgentCompactResultSet[kept];
         for (var ordinal = 0; ordinal < kept; ordinal++)
         {
@@ -1061,7 +1062,7 @@ public static class AgentOutputProjection
         }
 
         omittedItems = omitted;
-        return QueryShell(query, sets, omitted, messages, warnings, selection);
+        return QueryShell(query, sets, omittedResultSetCount, messages, warnings, selection);
     }
 
     /// <summary>

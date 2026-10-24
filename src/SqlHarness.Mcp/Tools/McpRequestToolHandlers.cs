@@ -47,7 +47,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
         [Description(McpToolCatalog.CellCharactersDescription)] int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")] int? maxOperationSeconds = null,
-        [Description(McpToolCatalog.ResultSetOrdinalsDescription), Range(0, int.MaxValue), MaxLength(64)] int[]? resultSetOrdinals = null,
+        [Description(McpToolCatalog.ResultSetOrdinalsDescription), MaxLength(64)] int[]? resultSetOrdinals = null,
         [Description("Offline validation only; no execution or writes.")] bool dryRun = false,
         CancellationToken ct = default,
         [Description(McpToolCatalog.OperationLabelDescription)] string? label = null,

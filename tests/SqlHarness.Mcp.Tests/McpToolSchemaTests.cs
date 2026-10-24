@@ -1420,8 +1420,9 @@ public sealed class McpToolSchemaTests : IDisposable
             var selector = Properties(query.InputSchema).GetProperty("resultSetOrdinals");
             Assert.Equal(JsonValueKind.Null, selector.GetProperty("default").ValueKind);
             Assert.Equal(64, selector.GetProperty("maxItems").GetInt32());
-            Assert.Equal(0, selector.GetProperty("minimum").GetInt32());
             Assert.Equal("integer", selector.GetProperty("items").GetProperty("type").GetString());
+            Assert.Equal(0, selector.GetProperty("items").GetProperty("minimum").GetInt32());
+            Assert.False(selector.TryGetProperty("minimum", out _));
             Assert.Contains("max 64", selector.GetProperty("description").GetString(), StringComparison.Ordinal);
             Assert.Contains("null preserves output", query.Description, StringComparison.Ordinal);
             Assert.Contains("source order", query.Description, StringComparison.Ordinal);
@@ -1510,6 +1511,7 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.MinCallToolResultBudgetBytes);
         var query = ServedEnvelope(result, "sqlharness_query").GetProperty("result");
         Assert.Equal(1, query.GetProperty("sourceResultSetCount").GetInt32());
+        Assert.Equal(0, query.GetProperty("omittedResultSetCount").GetInt32());
         Assert.Equal(new[] { 0 }, query.GetProperty("selectedResultSetOrdinals").EnumerateArray().Select(value => value.GetInt32()).ToArray());
         var selected = Assert.Single(query.GetProperty("resultSets").EnumerateArray());
         Assert.Equal(0, selected.GetProperty("ordinal").GetInt32());
@@ -1519,6 +1521,33 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.True(selected.GetProperty("clippedCells").GetArrayLength() > 0);
         Assert.True(selected.GetProperty("rows").GetArrayLength() < rows.Length);
         Assert.True(selected.GetProperty("rows")[0][1].GetString()!.Length <= 64);
+        Assert.True(ServedEnvelope(result, "sqlharness_query").GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+
+        var inventory = Assert.IsType<AgentCompactQuery>(AgentOutputProjection.Project(
+            report,
+            maximumCellCharacters: 64,
+            detailLimit: 0,
+            out var omittedItems,
+            maximumBytes: McpLimits.MinCallToolResultBudgetBytes,
+            profile: AgentProjectionProfile.Mcp,
+            querySelection: new AgentQuerySelection(1, [0], "FIXTURE-HASH")));
+        Assert.Equal(0, inventory.OmittedResultSetCount);
+        Assert.True(omittedItems > inventory.OmittedResultSetCount);
+
+        var legacyInventory = Assert.IsType<AgentCompactQuery>(AgentOutputProjection.Project(
+            report,
+            maximumCellCharacters: 64,
+            detailLimit: 0,
+            out var legacyOmittedItems,
+            maximumBytes: McpLimits.MinCallToolResultBudgetBytes,
+            profile: AgentProjectionProfile.Mcp));
+        Assert.Null(legacyInventory.OmittedResultSetCount);
+        Assert.True(legacyOmittedItems > 0);
+        using var legacyJson = JsonDocument.Parse(JsonSerializer.Serialize(legacyInventory, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        Assert.False(legacyJson.RootElement.TryGetProperty("omittedResultSetCount", out _));
+        Assert.False(legacyJson.RootElement.TryGetProperty("sourceResultSetCount", out _));
+        Assert.False(legacyJson.RootElement.TryGetProperty("selectedResultSetOrdinals", out _));
+        Assert.False(legacyJson.RootElement.TryGetProperty("queryHash", out _));
     }
 
     [Fact]

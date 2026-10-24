@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.AI;
 
@@ -101,7 +102,7 @@ public sealed class McpToolHandlers(
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
-        [Description(McpToolCatalog.ResultSetOrdinalsDescription), Range(0, int.MaxValue), MaxLength(64)]
+        [Description(McpToolCatalog.ResultSetOrdinalsDescription), MaxLength(64)]
         int[]? resultSetOrdinals = null,
         [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
@@ -906,6 +907,19 @@ public static class McpToolCatalog
                     "parameters" => engine == SqlEngine.SqlServer ? SqlServerParametersDescription : ParametersDescription,
                     "parameterSetFiles" => engine == SqlEngine.SqlServer ? SqlServerParameterSetFilesDescription : ParameterSetFilesDescription,
                     _ => null,
+                },
+                TransformSchemaNode = (context, schema) =>
+                {
+                    if (context.TypeInfo.Type == typeof(int[]) &&
+                        schema is JsonObject objectSchema &&
+                        objectSchema["description"]?.GetValue<string>() == ResultSetOrdinalsDescription &&
+                        objectSchema["items"] is JsonObject itemSchema)
+                    {
+                        objectSchema.Remove("minimum");
+                        itemSchema["minimum"] = 0;
+                    }
+
+                    return schema;
                 },
                 IncludeParameter = parameter =>
                     _operationAnnotationsEnabled || !OperationAnnotationArguments.Contains(parameter.Name, StringComparer.Ordinal),
