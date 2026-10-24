@@ -157,11 +157,15 @@ measure view, plus the conditions rendered as a readable list instead of raw JSO
 - Parse `STATISTICS IO` into per-table aggregates **as messages arrive** instead of after a bounded window, so
   dropping retained message text no longer drops table IO; keep the message buffer cap for the raw text only.
   Record when parsing itself was incomplete.
-- Normalize table-variable names (`#` + 8 hex) into one "table variables" group per run **before** cross-run
-  medians; keep named `#temp` normalization as today. Worktable/Workfile stay separate system rows.
+- Classify the characterized raw SQL Server `STATISTICS IO` name before local-temp suffix normalization.
+  Sum recognized anonymous table-variable counters into one collision-safe per-run aggregate before cross-run
+  medians; preserve explicit local-temp and unknown identities. The rule is empirically characterized, not a
+  vendor naming guarantee. Keep historical summaries as stored, and do not infer provenance from their names.
+  Worktable/Workfile stay separate system rows.
 - Logical reads = data logical reads + LOB logical reads, everywhere; per-table rows show both columns; the
   headline equals the per-run sum of the same quantity (median of run totals, labelled as such). The Markdown copy
-  includes scan counts and the same grouping.
+  includes scan counts and the same grouping. Persisted labels are authoritative to dashboard comparisons and
+  exports; consumers preserve exact names and do not classify `#8hex` strings again.
 
 ### Plan changes
 

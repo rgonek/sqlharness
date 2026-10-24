@@ -57,7 +57,7 @@ These are **experiment facts for the recorded build and cases**, not Microsoft-d
 
 ## Practical recommendation
 
-**Research recommendation/policy:** keep the Plan 104 parser-boundary classifier limited to the characterized SQL Server `17.0.1145.4` build (the experiment's reported build). Preserve the original raw name separately from the typed aggregate identity. Use `Unknown` for unsupported forms and for legacy artifacts with no raw provenance. Keep the existing local-temp suffix normalizer for recognized suffixed rows, but do not infer variable identity from a catalog lookup or from a normalized/display name. Require renewed characterization before extending the rule to another build or raw-name shape. This recommendation follows the Plan 104 contract; it is not a vendor guarantee.
+**Historical research recommendation — superseded by the accepted Plan 104 rule (2026-10-24):** keep the Plan 104 parser-boundary classifier limited to the characterized SQL Server `17.0.1145.4` build. The user subsequently accepted implementation from the characterized evidence without a patch-version allowlist. Current behavior recognizes the exact raw signature before normalization on the tested build and does not impose an exact-build runtime gate. The build and cases remain an evidence limit, not a Microsoft guarantee. Preserve the original raw name separately from the typed aggregate identity; use `Unknown` for unsupported forms and legacy artifacts with no raw provenance; never infer variable identity from catalog, normalized, or display names. The source facts and tested-build boundary above remain valid.
 
 ## Method and source boundary
 

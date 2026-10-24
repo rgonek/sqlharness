@@ -1397,32 +1397,72 @@ public class ArtifactReaderTests
     {
         using var temp = new TempDirectory();
         var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch);
+        var historicalRows = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+        {
+            ["#A1B2C3D4"] = new(10, 20, 30),
+            ["dbo.Stable"] = new(4, 5, 6),
+        };
         var measure = new SqlHarnessMeasureReport(
             new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
-            5, 5, true, Variant("query"), null);
+            5, 5, true, Variant("query") with { LogicalReadsByTable = historicalRows }, null);
         var measureSet = new SqlHarnessMeasureSetReport(
             new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
             5, 10, 1, ["small", "large"], "Measured in user order.", "Shared plan cache.",
             [
                 new MeasureParameterSetReport("small", [new MeasureParameterMetadata("n", "int")],
-                    "vh1", 5, true, "RH", Variant("query"), ["ph1"]),
+                    "vh1", 5, true, "RH", Variant("query") with
+                    {
+                        LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+                        {
+                            ["table variables (aggregate)"] = new(30, 30, 30),
+                            ["table variables"] = new(7, 7, 7),
+                        },
+                    }, ["ph1"]),
                 new MeasureParameterSetReport("large", [new MeasureParameterMetadata("n", "int")],
-                    "vh2", 5, false, "RH", Variant("query"), ["ph2"]),
+                    "vh2", 5, false, "RH", Variant("query") with
+                    {
+                        LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+                        {
+                            ["#D4C3B2A1"] = new(50, 50, 50),
+                        },
+                    }, ["ph2"]),
             ],
             new MeasureCrossSetSummary("small", 3, "large", 3, "small", 2, "large", 2, "small", 4, "large", 4),
             null);
         var run = new CompareRunArtifact("query", 1, 1, 2, 3,
             new Dictionary<string, long>(), "HASH", [FixturePlan()], 0);
+        var compare = CompareReport() with
+        {
+            Baseline = Variant("baseline") with { LogicalReadsByTable = historicalRows },
+            Candidate = Variant("candidate") with
+            {
+                LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+                {
+                    ["table variables (aggregate)"] = new(30, 30, 30),
+                    ["table variables"] = new(7, 7, 7),
+                },
+            },
+        };
 
         var measureId = Path.GetFileName(writer.Write(measure, [run], "m"));
         var setId = Path.GetFileName(writer.Write(measureSet, [run, run with { ParameterSet = "large" }], "s"));
+        var compareId = Path.GetFileName(writer.Write(compare, [run with { Variant = "baseline" }, run with { Variant = "candidate" }], "c"));
 
         var measureMetrics = Assert.IsType<ArtifactMetricsSection>(ArtifactReader.ReadSection(temp.Path, measureId, "metrics"));
         Assert.Equal(["query"], measureMetrics.Variants.Select(variant => variant.Name).ToArray());
+        Assert.Equal(historicalRows, Assert.Single(measureMetrics.Variants).LogicalReadsByTable);
         Assert.Null(measureMetrics.Equivalence);
 
         var setMetrics = Assert.IsType<ArtifactMetricsSection>(ArtifactReader.ReadSection(temp.Path, setId, "metrics"));
         Assert.Equal(["small", "large"], setMetrics.Variants.Select(variant => variant.Name).ToArray());
+        Assert.Equal(30, setMetrics.Variants[0].LogicalReadsByTable["table variables (aggregate)"].Median);
+        Assert.Equal(7, setMetrics.Variants[0].LogicalReadsByTable["table variables"].Median);
+        Assert.Equal(50, setMetrics.Variants[1].LogicalReadsByTable["#D4C3B2A1"].Median);
+
+        var compareMetrics = Assert.IsType<ArtifactMetricsSection>(ArtifactReader.ReadSection(temp.Path, compareId, "metrics"));
+        Assert.Equal(historicalRows, compareMetrics.Variants[0].LogicalReadsByTable);
+        Assert.Equal(30, compareMetrics.Variants[1].LogicalReadsByTable["table variables (aggregate)"].Median);
+        Assert.Equal(7, compareMetrics.Variants[1].LogicalReadsByTable["table variables"].Median);
 
         var setOperators = Assert.IsType<ArtifactOperatorsSection>(ArtifactReader.ReadSection(temp.Path, setId, "operators"));
         Assert.Equal(ArtifactReader.MeasureSetKind, setOperators.ArtifactKind);

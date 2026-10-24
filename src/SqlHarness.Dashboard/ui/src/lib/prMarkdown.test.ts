@@ -50,7 +50,7 @@ test("builds readable PR Markdown with compare metrics, per-table IO, plans, and
   expect(markdown).toContain("```diff\n@@ -1,1 +1,1 @@\n-SELECT 1\n+SELECT 2\n```")
 })
 
-test("groups table variables and reports data, LOB, total reads, and scans", () => {
+test("preserves exact saved IO identities and reports data, LOB, total reads, and scans", () => {
   const tableVariable = (table: string) => ({ ...variant().tableIo[0], table, logicalReads: 10, lobLogicalReads: 4, totalLogicalReads: 14 })
   const markdown = buildPrMarkdown({
     subject: "orders", scope: "whole", baselineVersion: "v0", candidateVersion: "v1", engine: "sqlserver", status: "succeeded",
@@ -61,8 +61,10 @@ test("groups table variables and reports data, LOB, total reads, and scans", () 
     }, regression: null, equivalence: { mode: "Ordered", equivalent: true } }], plans: new Map(), sqlDiff: null,
   })
   expect(markdown).toContain("| Table | Logical (baseline) | Logical (candidate) | LOB logical (baseline) | LOB logical (candidate) | Total (baseline) | Total (candidate) | Scans (baseline) | Scans (candidate) | Change |")
-  expect(markdown.match(/\| table variables \|/g)).toHaveLength(1)
-  expect(markdown).toContain("| table variables | 20 | 10 | 8 | 4 | 28 | 14 | 2 | 1 | -50% |")
+  expect(markdown).toContain("| #12345678 | 10 | — | 4 | — | 14 | — | 1 | — | — |")
+  expect(markdown).toContain("| #ABCDEF12 | 10 | — | 4 | — | 14 | — | 1 | — | — |")
+  expect(markdown).toContain("| #87654321 | — | 10 | — | 4 | — | 14 | — | 1 | — |")
+  expect(markdown).toContain("| Total | 20 | 10 | 8 | 4 | 28 | 14 | 2 | 1 | -50% |")
 })
 
 test("includes plan deltas for every changed statement ordinal", () => {
