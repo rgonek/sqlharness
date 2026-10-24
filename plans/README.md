@@ -2,6 +2,8 @@
 
 Read the selected plan and its spec before executing. A queue entry is not approval for implementation, publication or a live DB. We execute each assigned plan in full; general work and SQL Server take priority over PostgreSQL-only work.
 
+Plan [104](104-stable-local-object-io-aggregation.md): **DONE on feature branch `plan-104` (2026-10-24)** — task and whole-branch reviews approved; Windows gate passed on `f22137e8` (Core 4705, MCP 522, UI 372 passed), branch format 21 files passed. Empirical recognition accepted; Linux/live UAT unverified. No merge/push/install. See [evidence](104-verification-evidence.md).
+
 ## In progress
 
 | Plan | Scope | Dependencies | Status |
@@ -10,8 +12,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 
 ## Pending
-
-Plan [104](104-stable-local-object-io-aggregation.md): **IMPLEMENTATION IN PROGRESS (2026-10-24)** — the user accepted the experimentally characterized raw-name rule without a patch-version allowlist. Producer provenance and per-run aggregation are implemented; task reviews, consumer compatibility and final verification are in progress. See [experiments](104-evidence/experiments-report.md) and [source research](104-evidence/sqlserver-internal-naming-research.md).
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
@@ -34,8 +34,6 @@ These plans keep finite response/process ceilings, frame/input-root safety, mate
 
 Plans 063, 070, 071, 072, 073, 074, 076, 079, 080, 081, 085, and 087 are DONE; see their evidence in [history](history.md). Plan 081 is locally integrated into `main` at `e88c7fd`; its integrated gate passed on the exact product tree before commit, and all task, security, whole-branch, and integration reviews are approved ([evidence](081-verification-evidence.md)). Plan 088 is DONE and locally integrated into `main`; all task reviews, the Sol low whole-branch review, and the final scoped re-review are approved. Its Windows gate passed on `f503c22`, and the merge retained that product tree without a separate integrated-tree gate ([history](history.md), [evidence](088-verification-evidence.md)). Plan 071 uses Monaco behind a provider-neutral SQL editor contract, with direct Monaco API lifecycle management for the diff widget. Plan 080's scoped re-review approved all findings, and local integration completed at `42a1e365` with the verified product unchanged; the redundant gate was stopped at the owner's request. Plan 085 is locally integrated at `e41c990`; its verified product tree is unchanged by the docs-only Plan 092 merge ([history](history.md), [evidence](085-verification-evidence.md)). Coordinate work that changes shared MCP, journal, and dashboard contracts through the selected plan.
 
-
-Plan [104](104-stable-local-object-io-aggregation.md): **IMPLEMENTATION IN PROGRESS (2026-10-24)** — user accepts the empirical raw-name rule; Task 1 producer/benchmark implementation underway, followed by shared journal/persistence and consumer verification. See [experiment evidence](104-evidence/experiments-report.md).
 
 Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-accepted detail-cap limitation; the Sol dissent remains recorded. Follow-up Plans 089, 090 and 091 cover the parked detail limit and the two deferred Minors. Plan 091 closes its diagnostic Minor; Plan 090 closes the title-backfill follow-up and is locally integrated into `main` at `7f03ecb`. See [084 evidence](084-verification-evidence.md) and [history](history.md).
 

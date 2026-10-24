@@ -1,11 +1,32 @@
 # Plan 104 implementation and investigation evidence
 
-Date: 2026-10-24
-Worktree: `D:/Dev/sqlharness/.worktrees/plan-104`, branch `plan-104`.
+Date: 2026-10-24. Worktree: `D:/Dev/sqlharness/.worktrees/plan-104`, branch `plan-104`; product base `ab46345a2bfc2c89db4646c33895edf11ceede5a`.
 
-## Outcome
+## Current implementation outcome
 
-**Current outcome: implementation in progress under the accepted experimental rule.** The user accepted producer-side raw-name recognition without a patch-version allowlist. Tasks 1–3 are implemented and independently reviewed, including fixes for incomplete provenance, partial-message completeness and a literal historical metrics fixture. Branch formatting passes on product revision `029e1905`; final Windows verification is running and the whole-branch review remains pending. The experiments characterize SQL Server `17.0.1145.4`; they do not establish a Microsoft cross-version naming guarantee. No merge, push, installation or implementation live UAT has occurred.
+**DONE on feature branch `plan-104`; final Windows gate passed on `f22137e8a0ad89258ac52496bbe62cf87fd09318`.** The user accepted the experimental raw-name recognition rule without a patch-version allowlist. Producer classification precedes normalization; anonymous-variable counters are summed within each run before cross-run distributions. Explicit local objects, legacy Unknown identities and real names colliding with the aggregate remain separate. Compare and journal share collision-safe labels across their respective operation contexts. Incomplete provenance stays unavailable rather than becoming zero. Dashboard/export preserve finalized stored identities.
+
+The full SQL Server rule is reachable through `engineGuidance.tableIo` (capabilities contract 9); PostgreSQL omits it. Existing tool/catalog/result ceilings remain unchanged. Literal historical artifact fixtures preserve saved metric keys, distributions and totals. No artifact schema migration was added.
+
+The characterization covered SQL Server `17.0.1145.4`; it does not establish a Microsoft cross-version naming guarantee. Linux, installed-binary and implementation live UAT remain unverified. Earlier bounded experiments are characterization evidence, not post-implementation target acceptance. No merge, push or installation occurred.
+
+## Reviews and verification
+
+| Scope | Evidence | Outcome |
+|---|---|---|
+| Task 1 producer/per-run grouping | [report](104-evidence/implementation-task-1-report.md), [review](104-evidence/implementation-task-1-review.md), [rereview](104-evidence/implementation-task-1-rereview.md) | Luna high implementation; Luna xhigh approved after incomplete-provenance fix |
+| Task 2 shared aggregation/journal/reconciliation | [report](104-evidence/implementation-task-2-report.md), [review](104-evidence/implementation-task-2-review.md), [rereview](104-evidence/implementation-task-2-rereview.md) | Luna high implementation; Luna xhigh approved after partial-message fix |
+| Task 3 consumers/contracts/legacy compatibility | [report](104-evidence/implementation-task-3-report.md), [review](104-evidence/implementation-task-3-review.md), [rereview](104-evidence/implementation-task-3-rereview.md) | Luna high implementation; Luna xhigh approved after literal historical-metrics fixture |
+| Whole branch and single fix wave | [initial review](104-evidence/final-whole-review.md), [fix report](104-evidence/final-fix-report.md), [scoped rereview](104-evidence/final-whole-rereview.md) | Sol low approved after plan-side identity fix and full-gate remediations |
+| Focused final fixes | [Core log](104-evidence/final-fix-logs/sqlharness-plan104-final-fix-green-core-final4.log), [MCP log](104-evidence/final-fix-logs/sqlharness-plan104-final-fix-green-mcp-final3.log) | Core 142/142, MCP 65/65; actual test discovery |
+| Final branch formatting | [raw log](104-evidence/final-fix-logs/sqlharness-plan104-final-fix-branch-format.log) | `-Mode branch -BaseRef ab46345a`, 21 C# files, exit 0 |
+| Full post-fix Windows gate | [console/direct exit](104-evidence/final-checks/post-fix-gate/console.log), [metadata](104-evidence/final-checks/post-fix-gate/metadata.txt), [Core](104-evidence/final-checks/post-fix-gate/test-SqlHarness.Tests.log), [MCP](104-evidence/final-checks/post-fix-gate/test-SqlHarness.Mcp.Tests.log), [UI](104-evidence/final-checks/post-fix-gate/ui-check.log), [build](104-evidence/final-checks/post-fix-gate/build.log) | Exit 0, 5 stages, 8m00s; Core 4705 passed/11 skipped, MCP 522 passed/4 skipped, UI 372 passed; build 0 warnings/errors |
+
+The first full gate on product `029e1905` failed: one Core fixture lacked intended producer provenance; MCP exposed SQL Server wording in PostgreSQL and exceeded the annotation catalog ceiling. Its [raw logs](104-evidence/final-checks/pre-fix-gate/console.log) are preserved. The single final fix wave resolved these failures, a plan-side hex-name inference and the real-name/aggregate collision; all dispositions are in the scoped rereview. Failed intermediate focused runs remain archived, distinct from final GREEN.
+
+The gate explicitly skipped UI installation (unchanged lockfile) and working-tree formatting (no C# edits); the separate final branch formatter checked 21 changed C# files. Unix permissions, live stdio and other-platform smoke skips remain skips, not passed acceptance. The unchanged UI check script emits Node DEP0190; the UI check exits 0 and all 372 tests pass.
+
+The [execution ledger](104-evidence/execution-ledger.md) preserves the full chronology and rulings. The isolated branch and local recovery workspace are retained; this evidence establishes feature-branch readiness only.
 
 ## Historical investigation (before implementation authorization)
 
@@ -35,7 +56,9 @@ The experiment shows that the raw IO name retains candidate provenance before no
 
 ## Independent review disposition
 
-Luna xhigh accepted the [Task 1 diagnostic evidence](104-evidence/task-1-review.md), while explicitly retaining original Task 1 BLOCKED/NOT DONE. Sol low accepted the [whole-branch diagnostic delivery](104-evidence/whole-review.md) for `ab46345a..95b95ad2` with no blocking findings. Neither review approves original implementation or a future fallback. All new relative Markdown links resolve, the branch diff check exits 0, and the reproduction patch applies. The [execution ledger](104-evidence/execution-ledger.md) records resumption and rulings. The SDD workspace is retained for the incomplete plan.
+Luna xhigh accepted the [Task 1 diagnostic evidence](104-evidence/task-1-review.md), while explicitly retaining original Task 1 BLOCKED/NOT DONE. Sol low accepted the [whole-branch diagnostic delivery](104-evidence/whole-review.md) for `ab46345a..95b95ad2` with no blocking findings. Neither review approves original implementation or a future fallback. All new relative Markdown links resolve, the branch diff check exits 0, and the reproduction patch applies. The gate explicitly skipped UI installation (unchanged lockfile) and working-tree formatting (no C# edits); the separate final branch formatter checked 21 changed C# files. Unix permissions, live stdio and other-platform smoke skips remain skips, not passed acceptance. The unchanged UI check script emits Node DEP0190; the UI check exits 0 and all 372 tests pass.
+
+The [execution ledger](104-evidence/execution-ledger.md) records resumption and rulings. The SDD workspace is retained for the incomplete plan.
 
 ## Subsequent live experiments and primary-source research
 

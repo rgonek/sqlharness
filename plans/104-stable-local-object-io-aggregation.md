@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: IMPLEMENTATION IN PROGRESS (2026-10-24) — the user accepts the experimentally characterized raw-name rule as the implementation basis. No patch-version allowlist; retain producer-derived provenance and legacy Unknown behavior. Tasks 1–3 are implemented and independently reviewed; final formatting, Windows gate and whole-branch review remain pending.
+- Status: DONE on feature branch `plan-104` (2026-10-24). All three tasks and Luna xhigh reviews complete; Sol low whole-branch fix rereview approved. Windows `just verify` passed on `f22137e8`; branch format checked 21 C# files and passed. Empirical rule accepted without a patch-version gate; Linux and implementation live UAT remain unverified. No merge, push or installation. See [evidence](104-verification-evidence.md).
 - Priority: **P1** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -94,12 +94,12 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "BenchmarkRunTests|BenchmarkSummaryTests|ArtifactReaderTests|AgentOutputTests|McpTokenBudgetTests"` and, for MCP tests, `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "BenchmarkRunTests|BenchmarkSummaryTests|ArtifactReaderTests|AgentOutputTests|McpTokenBudgetTests"`. Both must exit 0 with the intended tests actually discovered; a zero-test run is not evidence.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan104-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
+- [x] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
+- [x] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan104-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
+- [x] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
+- [x] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
+- [x] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
 
 ## STOP conditions
 
