@@ -1,0 +1,59 @@
+  Determining projects to restore...
+  Restored D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\SqlHarness.Cli.csproj (in 3,07 sec).
+  Restored D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj (in 3,07 sec).
+  Restored D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\SqlHarness.Tests.csproj (in 3,07 sec).
+  Restored D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\SqlHarness.Core.csproj (in 3,07 sec).
+  Restored D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj (in 3,08 sec).
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  
+  added 510 packages, and audited 511 packages in 2m
+  
+  144 packages are looking for funding
+    run `npm fund` for details
+  
+  5 vulnerabilities (1 low, 3 high, 1 critical)
+  
+  To address issues that do not require attention, run:
+    npm audit fix
+  
+  To address all issues (including breaking changes), run:
+    npm audit fix --force
+  
+  Run `npm audit` for details.
+  
+  > ui@0.0.0 build
+  > vite build
+  
+  [36mvite v8.3.3 [32mbuilding client environment for production...[36m[39m
+  transforming...
+  Γ£ô 4015 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                                                0.48 kB Γöé gzip:   0.31 kB
+  dist/assets/geist-cyrillic-ext-wght-normal-DjL33-gN.woff2      7.42 kB
+  dist/assets/geist-vietnamese-wght-normal-6IgcOCM7.woff2        8.00 kB
+  dist/assets/geist-cyrillic-wght-normal-BEAKL7Jp.woff2         15.08 kB
+  dist/assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2        16.51 kB
+  dist/assets/geist-latin-wght-normal-BgDaEnEv.woff2            29.40 kB
+  dist/assets/editor.worker-DWPaKKV_.js                        303.93 kB
+  dist/assets/PlanGraphView-DLioOiRN.css                        15.41 kB Γöé gzip:   2.56 kB
+  dist/assets/index-CsQgV1wu.css                                81.27 kB Γöé gzip:  14.16 kB
+  dist/assets/monaco-DjpsE8to.css                               99.09 kB Γöé gzip:  14.20 kB
+  dist/assets/PlanGraphView-CCaUTihX.js                        175.36 kB Γöé gzip:  55.62 kB
+  dist/assets/index-BwMHxntX.js                              1,487.16 kB Γöé gzip: 447.66 kB
+  dist/assets/monaco-CZKyKxZP.js                             2,724.40 kB Γöé gzip: 700.44 kB
+  
+  [33m[plugin builtin:vite-reporter] 
+  (!) Some chunks are larger than 500 kB after minification. Consider:
+  - Using dynamic import() to code-split the application
+  - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+  - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+  [32mΓ£ô built in 4.91s[39m
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:    30, Skipped:     0, Total:    30, Duration: 1 s - SqlHarness.Tests.dll (net10.0)

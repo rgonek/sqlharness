@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: BLOCKED at preflight (2026-10-23) — positive object classification is unavailable in the current aggregation inputs; no implementation started. See [preflight evidence](104-evidence/preflight-review.md).
+- Status: BLOCKED after renewed investigation (2026-10-24) — current capture inputs do not positively distinguish generated variable counters from explicit hex-shaped temp names. Luna high investigated alternatives; Luna xhigh confirmed the STOP. Product implementation remains unstarted; see [resolution review](104-evidence/resolution-review.md) and [original preflight](104-evidence/preflight-review.md).
 - Priority: **P1** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
