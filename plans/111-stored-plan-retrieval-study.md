@@ -73,9 +73,9 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 2: Evaluate bounded transfer designs
 
-- [ ] Use static plan fixtures larger than 4096 characters and malformed/oversized XML. Compare selected server-side fields versus internal complete-document distillation without model round-trip. Specify target locking, catalog selector validation, parsing/document caps, cancellation and no raw XML response. Assess whether any existing tool can express this without adding a new one.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Use static plan fixtures larger than 4096 characters and malformed/oversized XML. Compare selected server-side fields versus internal complete-document distillation without model round-trip. Specify target locking, catalog selector validation, parsing/document caps, cancellation and no raw XML response. Assess whether any existing tool can express this without adding a new one. ([Task 2 evidence](111-evidence/task-2-bounded-transfer.md))
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
+- [x] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix. Task report: `.superpowers/sdd/111-stored-plan-retrieval-study/task-2-report.md` (local execution record).
 
 ### Task 3: Record go/no-go and handoff
 

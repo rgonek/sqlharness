@@ -17,7 +17,7 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
-| [111](111-stored-plan-retrieval-study.md) | Research a bounded catalog-plan retrieval path and compare supplied-plan, rooted-file and internal-distillation alternatives | Coordinate 112 write-evidence study; no hard predecessor | IN PROGRESS — research; Task 1 complete; Tasks 2–3 open |
+| [111](111-stored-plan-retrieval-study.md) | Research a bounded catalog-plan retrieval path and compare supplied-plan, rooted-file and internal-distillation alternatives | Coordinate 112 write-evidence study; no hard predecessor | IN PROGRESS — research; Tasks 1–2 complete; Task 3 open |
 | [036](036-live-database-ci-lane.md) | Direction: opt-in CI lane against throwaway PG/SQL Server containers | 016 (028 for pins) | TODO |
 | [077](077-agent-sql-optimization-evidence.md) | Lean MCP JSON and actionable SQL optimization evidence; portable real-MCP fixture requests and paired agent trials verify the complete workflow | 055–061/065–067/076 DONE; coordinate 063/073 | IN PROGRESS — implementation merged locally into main (`4bd57e4`); actual-agent acceptance unverified (nine provider HTTP 402 errors) |
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |
