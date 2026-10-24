@@ -603,8 +603,13 @@ public sealed class McpOutputTests
                     new RegressionDiagnostic("unavailable", null, null, null, null),
                     new RegressionDiagnostic("unavailable", null, null, null, null)),
             };
+            // This hand-built fixture writes only report.json; advertise only the sections it serves.
+            var manifest = ArtifactManifest.ForReport(report, owner) with
+            {
+                Sections = [ArtifactReader.SummarySection, ArtifactReader.MetricsSection],
+            };
             File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(
-                ArtifactManifest.ForReport(report, owner), new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             File.WriteAllText(Path.Combine(directory, "report.json"), JsonSerializer.Serialize(
                 report, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 
@@ -646,6 +651,7 @@ public sealed class McpOutputTests
 
             var section = Assert.IsType<ArtifactMetricsSection>(ArtifactReader.ReadSection(parent, id, "metrics", owner));
             Assert.Equal(id, section.ArtifactId);
+            Assert.Equal("unavailable", section.PlanDiagnosticDistributionsAvailability);
             Assert.Throws<ArtifactReadException>(() =>
                 ArtifactReader.ReadSection(parent, id, "metrics", owner with { Server = "sql-b" }));
         }
