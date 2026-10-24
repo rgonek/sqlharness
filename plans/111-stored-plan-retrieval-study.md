@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TODO — research; recorded 2026-10-23.
+- Status: RESEARCH COMPLETE — final whole-branch review pending; implementation deferred pending recurrence. No feature or deployment was authorized.
 - Priority: **P4** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -79,20 +79,20 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 3: Record go/no-go and handoff
 
-- [ ] Save findings and fixture commands under plans/111-evidence/. Choose guidance-only, a separate executor-ready implementation plan, or defer for insufficient recurrence. A successful study may conclude no feature. Separate deployment/live permissions from offline source feasibility.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Save findings and fixture commands under plans/111-evidence/. Decision: defer implementation for insufficient recurrence. Offline feasibility is established for the SQL Server Showplan example, but no repeated demand, real response cost, model-token savings, or cross-engine design is established. No separate executor-ready implementation plan is warranted yet. Keep the existing caller-supplied/rooted-file path as the available workflow; deployment/live permissions remain separate.
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved. ([Task 3 decision evidence](111-evidence/task-3-go-no-go.md))
+- [x] Save the task's evidence and inspect the diff. No production behavior changed. Task report: `.superpowers/sdd/111-stored-plan-retrieval-study/task-3-report.md` (local execution record).
 
 ## Verification and done criteria
 
 Documentation/research checks only unless executable fixtures change.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] If executable code/tests change, use focused suites and the required Windows implementation gate before claiming those changes verified. For notes-only work, diff/link/example checks are the complete scoped check; no product gate is claimed.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
+- [x] All task outcomes and relevant source paths are recorded; the final status distinguishes research, deferred implementation and unverified live acceptance.
+- [x] No executable code/tests changed. For notes-only work, diff/link/example checks are the complete scoped check; no product gate is claimed.
+- [x] Linux remains unverified. Existing checks were not rerun because no behavior changed.
+- [x] Research evidence includes a defer decision and explicit unknown outcomes; no product change was invented.
+- [x] Updated this plan and the index with the assessed revision, scope, task review outcomes and remaining limitations. The final whole-branch review remains pending and deferred live acceptance is not complete.
 
 ## STOP conditions
 
