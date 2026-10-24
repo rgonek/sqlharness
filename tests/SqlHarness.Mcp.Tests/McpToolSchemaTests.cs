@@ -239,11 +239,38 @@ public sealed class McpToolSchemaTests : IDisposable
     private static readonly SqlHarnessTargetIdentityReport ConformanceTarget = new("req-srv", "req-db", "srv", "db", "profile");
     private sealed class CannedModule(SqlHarnessOutcome outcome) : ISqlHarnessModule
     {
+        public int CallCount { get; private set; }
+
         public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
-            Task.FromResult(outcome);
+            ExecuteCannedAsync();
+
+        private Task<SqlHarnessOutcome> ExecuteCannedAsync()
+        {
+            CallCount++;
+            return Task.FromResult(outcome);
+        }
+
         public Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(
             SqlHarnessWatchOperation operation, TextWriter writer, CancellationToken ct = default) =>
             throw new NotSupportedException("MCP must never use the NDJSON watch path.");
+    }
+
+    private sealed class EmissionCapture
+    {
+        public int CompletionCount { get; private set; }
+        public OutputFootprint? EmittedFootprint { get; private set; }
+
+        public SqlHarnessEmissionReceipt Receipt { get; }
+
+        public EmissionCapture()
+        {
+            Receipt = new SqlHarnessEmissionReceipt((emitted, _) =>
+            {
+                CompletionCount++;
+                EmittedFootprint = emitted;
+                return Task.FromResult(SqlHarnessExitCode.Success);
+            });
+        }
     }
 
     private static JsonElement ServedEnvelope(CallToolResult result, string tool)
@@ -1641,6 +1668,74 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Equal(0, query.GetProperty("omittedResultSetCount").GetInt32());
         }
     }
+
+    [Fact]
+    public async Task Missing_query_result_evidence_preserves_operation_reference_and_emission_receipt()
+    {
+        var emission = new EmissionCapture();
+        var outcome = SuccessfulQueryOutcome(report: null, emission);
+        var module = new CannedModule(outcome);
+        await using var served = await ServedCatalog.CreateAsync(Scope(), module);
+
+        var result = await served.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = "SELECT 1",
+            ["resultSetOrdinals"] = new[] { 0 },
+        }, cancellationToken: CancellationToken.None);
+
+        Assert.True(result.IsError == true);
+        var envelope = ServedEnvelope(result, "sqlharness_query");
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
+        Assert.Equal("safety_rejected", envelope.GetProperty("error").GetProperty("code").GetString());
+        Assert.Contains("did not contain result-set evidence", envelope.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Equal(outcome.OperationRef, envelope.GetProperty("operationRef").GetString());
+        Assert.Equal(1, module.CallCount);
+        Assert.Equal(1, emission.CompletionCount);
+        Assert.Equal(McpResultAdapter.EmittedFootprint(result), emission.EmittedFootprint);
+    }
+
+    [Fact]
+    public async Task Out_of_range_query_selector_preserves_operation_reference_and_emission_receipt()
+    {
+        var report = new SqlHarnessQueryReport(
+            ConformanceTarget,
+            "read-only",
+            [new SqlHarnessResultSetReport([], [], 0, 0)],
+            [],
+            0,
+            1,
+            "selector-receipt-fixture",
+            new OutputFootprint(0, 0));
+        var emission = new EmissionCapture();
+        var outcome = SuccessfulQueryOutcome(report, emission);
+        var module = new CannedModule(outcome);
+        await using var served = await ServedCatalog.CreateAsync(Scope(), module);
+
+        var result = await served.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = "SELECT 1",
+            ["resultSetOrdinals"] = new[] { 1 },
+        }, cancellationToken: CancellationToken.None);
+
+        Assert.True(result.IsError == true);
+        var envelope = ServedEnvelope(result, "sqlharness_query");
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
+        Assert.Equal("safety_rejected", envelope.GetProperty("error").GetProperty("code").GetString());
+        Assert.Contains("source result-set count (1)", envelope.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Equal(outcome.OperationRef, envelope.GetProperty("operationRef").GetString());
+        Assert.Equal(1, module.CallCount);
+        Assert.Equal(1, emission.CompletionCount);
+        Assert.Equal(McpResultAdapter.EmittedFootprint(result), emission.EmittedFootprint);
+    }
+
+    private static SqlHarnessOutcome SuccessfulQueryOutcome(SqlHarnessQueryReport? report, EmissionCapture emission) =>
+        new(SqlHarnessExitCode.Success, report, null, EmissionReceipt: emission.Receipt)
+        {
+            OperationRef = "0123456789abcdef0123456789abcdef",
+            ParentOperationRef = "fedcba9876543210fedcba9876543210",
+            Journaled = true,
+            OperationRefEligible = true,
+        };
 
     [Fact]
     public async Task Query_result_set_selection_reports_clipping_and_omissions_for_unicode_rows_at_minimum_budget()

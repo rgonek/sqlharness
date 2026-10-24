@@ -122,17 +122,29 @@ public sealed class McpToolHandlers(
             if (outcome.Report is SqlHarnessDryRunReport)
                 return outcome;
             if (outcome.Report is not SqlHarnessQueryReport query || query.ResultSets is null)
-                return new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, "The successful query response did not contain result-set evidence.");
+                return QuerySelectionFailure(outcome, "The successful query response did not contain result-set evidence.");
 
             var ordered = resultSetOrdinals.Order().ToArray();
             if (ordered.Any(ordinal => ordinal >= query.ResultSets.Count))
-                return new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null,
+                return QuerySelectionFailure(outcome,
                     $"resultSetOrdinals values must be less than the source result-set count ({query.ResultSets.Count}).");
             var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(operation.Sql)));
             querySelection = new AgentQuerySelection(query.ResultSets.Count, ordered, hash);
             return outcome;
         }, ct, querySelection: () => querySelection);
     }
+
+    private static SqlHarnessOutcome QuerySelectionFailure(SqlHarnessOutcome original, string message) =>
+        new(SqlHarnessExitCode.Safety, null, message,
+            EmissionReceipt: original.EmissionReceipt,
+            Error: SqlHarnessError.From(SqlHarnessExitCode.Safety, message))
+        {
+            OperationRef = original.OperationRef,
+            Journaled = original.Journaled,
+            OperationRefEligible = original.OperationRefEligible,
+            ParentOperationRef = original.ParentOperationRef,
+            Coverage = original.Coverage,
+        };
 
     public Task<CallToolResult> MutationAsync(
         RequestContext<CallToolRequestParams> ctx,
