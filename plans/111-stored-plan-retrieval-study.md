@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: RESEARCH COMPLETE — Tasks 1–3 and Sol low whole-branch review approved; final scoped re-review pending. Implementation deferred pending recurrence. No feature or deployment was authorized.
+- Status: RESEARCH COMPLETE — Tasks 1–3, Sol low whole-branch review and final scoped re-review approved. Implementation deferred pending recurrence. No feature or deployment was authorized.
 - Priority: **P4** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -92,7 +92,7 @@ Documentation/research checks only unless executable fixtures change.
 - [x] No executable code/tests changed. For notes-only work, diff/link/example checks are the complete scoped check; no product gate is claimed.
 - [x] Linux remains unverified. Existing checks were not rerun because no behavior changed.
 - [x] Research evidence includes a defer decision and explicit unknown outcomes; no product change was invented.
-- [x] Updated this plan and the index with the assessed revision, scope, task and whole-branch review outcomes, and remaining limitations. The Sol low whole-branch review is approved; final scoped re-review remains pending and deferred live acceptance is not complete.
+- [x] Updated this plan and the index with the assessed revision, scope, task and whole-branch review outcomes, and remaining limitations. The Sol low whole-branch review and final scoped re-review are approved; deferred live acceptance is not complete.
 
 ## STOP conditions
 

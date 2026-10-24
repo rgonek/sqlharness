@@ -11,4 +11,4 @@ These archived records preserve the Task 1–3 scoped check results and review o
 - [Task 3 review](task-3-review.md)
 - [Sol low whole-branch review](whole-branch-review.md)
 
-Task 1–3 scoped reviews and the Sol low whole-branch review are approved. The final scoped re-review is pending; no future approval is implied.
+Task 1–3 scoped reviews, the Sol low whole-branch review and the [final scoped re-review](final-scoped-review.md) are approved. The final scoped review covers `7529781d..df0b31ad`; subsequent completion metadata and this report archive do not change product behavior.
