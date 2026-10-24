@@ -126,7 +126,10 @@ public sealed class StatementMetricsTests
                 },
                 new[]
                 {
-                    new TableIoCounters("table variables", 2, 6029, 0, 0, 0, 0, 0, 0),
+                    new TableIoCounters("table variables", 2, 6029, 0, 0, 0, 0, 0, 0)
+                    {
+                        Identity = StatisticsIoTableIdentity.AnonymousTableVariable,
+                    },
                     new TableIoCounters("#p082_seed_1019", 1, 3000, 0, 0, 0, 0, 0, 0),
                 }),
             (
@@ -137,7 +140,10 @@ public sealed class StatementMetricsTests
                 },
                 new[]
                 {
-                    new TableIoCounters("table variables", 1, 6019, 0, 0, 0, 0, 0, 0),
+                    new TableIoCounters("table variables", 1, 6019, 0, 0, 0, 0, 0, 0)
+                    {
+                        Identity = StatisticsIoTableIdentity.AnonymousTableVariable,
+                    },
                     new TableIoCounters("#p082_seed_1019", 1, 3000, 0, 0, 0, 0, 0, 0),
                 }),
         };
@@ -280,7 +286,10 @@ public sealed class StatementMetricsTests
         static CompareRunArtifact Run(string variant, int repetition, IReadOnlyList<string> plans) => new(
             variant, repetition, 0, 1, 0, new Dictionary<string, long>(), "result", plans, 1)
         {
-            TableIo = [new TableIoCounters("[@P]", 0, 0, 0, 0, 0, 0, 0, 0)],
+            TableIo = [new TableIoCounters("[@P]", 0, 0, 0, 0, 0, 0, 0, 0)
+            {
+                Identity = StatisticsIoTableIdentity.AnonymousTableVariable,
+            }],
         };
         var many = Enumerable.Range(0, 513)
             .Select(index => JournalPlan($"SELECT {index}", index + 1, index + 1, $"0x{index + 1:X}", 0, 1))

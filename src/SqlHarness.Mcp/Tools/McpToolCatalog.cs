@@ -708,8 +708,8 @@ public static class McpToolCatalog
     public const string ParameterSetsDescription = "1..32 named sets with matching parameter shapes; exclusive with parameterSetFiles/matrix; fixed names must not overlap.";
     public const string MatrixDescription = "1..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; fixed names must not overlap.";
     public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. Table-valued and list parameters are not supported. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
-    public const string MeasureDescription = "Measure repeats. SQL Server table IO aggregates recognized anonymous variables per run into collision-safe labels before distributions; explicit/unknown identities stay distinct. Saved legacy names (including #8hex) retain their stored meaning. Optimization: subject+textual scope, independent of compare.requireContext. Ordered sets: isolated sessions/setup; failure stops, completed sets retained. Stability: per-set, not cross-set equivalence. TVP/list: no valueHash; low-entropy excluded from unkeyed hashes. statementEvidence: per-case collected counters, not total cost. Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements.";
-    public const string CompareDescription = "Compare baseline/candidate measures+rows. SQL Server table IO aggregates recognized anonymous variables per run into collision-safe labels before distributions; dashboard and exports preserve saved labels, including legacy #8hex names. subject/scope follow frozen compare.requireContext (capabilities); request target selects DB. Session/setup per set; failure stops, completed cells retained. Verdict/reasons, not exitCode: pass=no policy elapsed regression, not improvement. Equivalence follows selected order/duplicates/nullability, not domain equivalence. Dry-run validates only; execution not run; reports setup/baseline/candidate classifications. statementEvidence: counters per variant/set/cell, not total cost. Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements.";
+    public const string MeasureDescription = "Measure repeats. Optimization key is subject+textual scope, independent of compare.requireContext. Sets: isolated sessions/setup; stop on failure, retain completed results. Stability: per-set, not cross-set equivalence. TVP/list: no valueHash; low-entropy excluded from unkeyed hashes. statementEvidence: per-case counters, not total cost. Exact runs/limits: artifactId; sqlharness_artifact section=statements.";
+    public const string CompareDescription = "Compare baseline/candidate measures+rows. Subject/scope follow compare.requireContext; request target selects DB. Per set: one session/setup; stop on failure, retain completed cells. Verdict/reasons, not exitCode: pass means policy elapsed regression was not met, not improvement. Equivalence follows selected order/duplicates/nullability, not domain equivalence. Dry-run validates without executing and reports setup/baseline/candidate classifications. statementEvidence: per-variant/set/cell counters, not total cost. Exact runs/limits: artifactId; sqlharness_artifact section=statements.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
     public const string ArtifactPageSizeDescription = "Source page size 1..512 for matrix-cells, operators, statements, or plan; defaults are 32, 32, 128, 128. The byte budget may return fewer items; continue from its cursor.";
     public const string ArtifactDescription = "Offline saved-artifact read. maxResultBytes defaults to 65536, capped by process limit. Use returned continuation for pages. Plan clipping reports omittedChildCount/omittedSubtreeCount.";
@@ -755,8 +755,8 @@ public static class McpToolCatalog
             factory.Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             factory.Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query against the supplied request scope. " + QueryDescription), true, false, null, true, true),
             factory.Tool(ToolNames[2], nameof(McpRequestToolHandlers.MutationAsync), MutationDescription, null, false, null, true),
-            factory.Tool(ToolNames[3], nameof(McpRequestToolHandlers.MeasureAsync), factory.QueryDescription(MeasureDescription), null, false, null, true, true),
-            factory.Tool(ToolNames[4], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), factory.QueryDescription(CompareDescription), null, false, null, true, true),
+            factory.Tool(ToolNames[3], nameof(McpRequestToolHandlers.MeasureAsync), factory.BenchmarkDescription(MeasureDescription), null, false, null, true, true),
+            factory.Tool(ToolNames[4], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), factory.BenchmarkDescription(CompareDescription), null, false, null, true, true),
             factory.Tool(ToolNames[5], nameof(McpRequestToolHandlers.WatchAsync), WatchDescription, true, false, null, true, true),
             factory.Tool(ToolNames[6], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true, true),
             factory.Tool(ToolNames[7], nameof(McpRequestToolHandlers.PlanAsync), PlanDescription, true, false, true, false),
@@ -808,8 +808,8 @@ public static class McpToolCatalog
             factory.Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             factory.Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root. " + QueryDescription), true, false, null, true, true),
             factory.Tool(ToolNames[2], nameof(McpToolHandlers.MutationAsync), MutationDescription, null, false, null, true),
-            factory.Tool(ToolNames[3], nameof(McpToolHandlers.MeasureAsync), factory.QueryDescription(MeasureDescription), null, false, null, true, true),
-            factory.Tool(ToolNames[4], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), factory.QueryDescription(CompareDescription), null, false, null, true, true),
+            factory.Tool(ToolNames[3], nameof(McpToolHandlers.MeasureAsync), factory.BenchmarkDescription(MeasureDescription), null, false, null, true, true),
+            factory.Tool(ToolNames[4], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), factory.BenchmarkDescription(CompareDescription), null, false, null, true, true),
             factory.Tool(ToolNames[5], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until or untilUnchanged, within interval/maxDuration bounds. " + WatchDescription, true, false, null, true, true),
             factory.Tool(ToolNames[6], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true, true),
             factory.Tool(ToolNames[7], nameof(McpToolHandlers.PlanAsync), PlanDescription, true, false, true, false),
@@ -850,12 +850,14 @@ public static class McpToolCatalog
     {
         private readonly object _handlers;
         private readonly SqlHarnessEngineGuidance _guidance;
+        private readonly SqlEngine _engine;
         private readonly AIJsonSchemaCreateOptions _schemaOptions;
         private readonly bool _operationAnnotationsEnabled;
 
         public ToolFactory(object handlers, SqlEngine engine, bool operationAnnotationsEnabled = false)
         {
             _handlers = handlers;
+            _engine = engine;
             _operationAnnotationsEnabled = operationAnnotationsEnabled;
             _guidance = SqlHarnessCapabilitiesProvider.GuidanceFor(engine);
             var setup = SetupDescription + " " + _guidance.Setup;
@@ -874,6 +876,15 @@ public static class McpToolCatalog
         }
 
         public string QueryDescription(string common) => string.IsNullOrEmpty(_guidance.Query) ? common : common + " " + _guidance.Query;
+
+        public string BenchmarkDescription(string common)
+        {
+            var description = QueryDescription(common);
+            if (_engine != SqlEngine.SqlServer)
+                return description;
+
+            return description + " IO: engineGuidance.tableIo.";
+        }
 
         public McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive, bool? idempotent, bool? openWorld, bool annotationCapable = false) =>
             McpServerTool.Create(

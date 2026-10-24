@@ -1,0 +1,29 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Mcp.WorkflowHost -> D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:01.41]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config [FAIL]
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config [825 ms]
+  Error Message:
+   Assert.InRange() Failure: Value not in range
+Range:  (1 - 32768)
+Actual: 32786
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 404
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 414
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 414
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Operation_annotation_members_are_gated_by_the_startup_config() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 414
+--- End of stack trace from previous location ---
+  Standard Output Messages:
+ annotations-off tools/list: 28735 UTF-8 bytes (Plan 095 contract)
+ annotations-on tools/list: 32343 UTF-8 bytes of 32768
+
+
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 860 ms - SqlHarness.Mcp.Tests.dll (net10.0)

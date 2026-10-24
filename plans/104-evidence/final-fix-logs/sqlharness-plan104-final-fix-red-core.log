@@ -1,0 +1,63 @@
+  Determining projects to restore...
+  Restored D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj (in 894 ms).
+  Restored D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj (in 894 ms).
+  Restored D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\SqlHarness.Cli.csproj (in 894 ms).
+  Restored D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\SqlHarness.Core.csproj (in 894 ms).
+  1 of 5 projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:01.75]     SqlHarness.Tests.Journal.StatementReconcilerTests.Mixed_variable_and_explicit_hex_temp_reconcile_as_separate_producer_identities [FAIL]
+[xUnit.net 00:00:01.76]     SqlHarness.Tests.Journal.StatementReconcilerTests.Anonymous_group_does_not_collide_with_real_object_named_table_variables [FAIL]
+  Failed SqlHarness.Tests.Journal.StatementReconcilerTests.Mixed_variable_and_explicit_hex_temp_reconcile_as_separate_producer_identities [53 ms]
+  Error Message:
+   Assert.Equal() Failure: Collections differ
+                             ↓ (pos 0)
+Expected: <generated>       [Confirmed, Confirmed]
+Actual:   StatementStatus[] [Partial, Partial]
+                             ↑ (pos 0)
+  Stack Trace:
+     at SqlHarness.Tests.Journal.StatementReconcilerTests.Mixed_variable_and_explicit_hex_temp_reconcile_as_separate_producer_identities() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\Journal\StatementReconcilerTests.cs:line 88
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.Journal.StatementReconcilerTests.Anonymous_group_does_not_collide_with_real_object_named_table_variables [< 1 ms]
+  Error Message:
+   Assert.Equal() Failure: Collections differ
+                             ↓ (pos 0)
+Expected: <generated>       [Partial, Partial]
+Actual:   StatementStatus[] [Confirmed, Confirmed]
+                             ↑ (pos 0)
+  Stack Trace:
+     at SqlHarness.Tests.Journal.StatementReconcilerTests.Anonymous_group_does_not_collide_with_real_object_named_table_variables() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\Journal\StatementReconcilerTests.cs:line 105
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:01.78]     SqlHarness.Tests.Journal.StatementReconcilerTests.Explicit_hex_shaped_local_temp_reconciles_by_its_producer_identity [FAIL]
+  Failed SqlHarness.Tests.Journal.StatementReconcilerTests.Explicit_hex_shaped_local_temp_reconciles_by_its_producer_identity [< 1 ms]
+  Error Message:
+   Assert.Equal() Failure: Collections differ
+                             ↓ (pos 0)
+Expected: <generated>       [Confirmed]
+Actual:   StatementStatus[] [Partial]
+                             ↑ (pos 0)
+  Stack Trace:
+     at SqlHarness.Tests.Journal.StatementReconcilerTests.Explicit_hex_shaped_local_temp_reconciles_by_its_producer_identity() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\Journal\StatementReconcilerTests.cs:line 71
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:03.10]     SqlHarness.Tests.StatementMetricsTests.Compact_statement_evidence_scopes_omissions_to_the_affected_case [FAIL]
+  Failed SqlHarness.Tests.StatementMetricsTests.Compact_statement_evidence_scopes_omissions_to_the_affected_case [198 ms]
+  Error Message:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "complete"
+Actual:   "partial"
+           ↑ (pos 0)
+  Stack Trace:
+     at SqlHarness.Tests.StatementMetricsTests.Compact_statement_evidence_scopes_omissions_to_the_affected_case() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\StatementMetricsTests.cs:line 295
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     4, Passed:    35, Skipped:     0, Total:    39, Duration: 1 s - SqlHarness.Tests.dll (net10.0)
