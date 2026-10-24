@@ -46,7 +46,7 @@ Microsoft documents that a local temp table created in a stored procedure or con
 
 The live output and corresponding actual plan object references provide direct corroboration for the recognized signature on the tested build. Microsoft Press also documents cached explicit temp tables whose catalog names become bare `#` plus eight hex characters after procedure scope. That is a counterexample to classifying from `tempdb.sys.objects`; it is not an observed active STATISTICS IO spelling. Keep classification at the raw STATISTICS IO producer and never substitute catalog state. Current capture code does not preserve a per-counter link to a plan object, so plan XML is independent validation rather than a production identity source. The exact-build boundary is necessary because the public sources do not define the IO naming rule. Use the capture's existing ProductVersion metadata; if unavailable, keep the identity Unknown. A later build can be enabled after its IO behavior is characterized.
 
-The primary-source survey and transport boundary are recorded in [SQL Server internal naming research](../../../plans/104-evidence/sqlserver-internal-naming-research.md) and [STATISTICS IO transport research](../../../plans/104-evidence/statistics-io-transport-research.md).
+The primary-source survey and transport boundary are recorded in [SQL Server internal naming research](sqlserver-internal-naming-research.md) and [STATISTICS IO transport research](statistics-io-transport-research.md).
 
 ## Required regression evidence before closing implementation
 
