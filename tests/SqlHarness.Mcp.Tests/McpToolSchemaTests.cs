@@ -1432,6 +1432,32 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public async Task Query_dry_run_accepts_valid_result_set_selectors_in_fixed_and_request_modes_without_database_connections()
+    {
+        await using var fixedServed = await ServedCatalog.CreateAsync(Scope());
+        await using var requestServed = await ServedCatalog.CreateAsync(RequestProcess());
+        var target = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } };
+        foreach (var (served, requestTarget) in new[] { (fixedServed, (object?)null), (requestServed, target) })
+        {
+            foreach (var ordinals in new[] { Array.Empty<int>(), new[] { 0 } })
+            {
+                var arguments = new Dictionary<string, object?>
+                {
+                    ["sql"] = "SELECT 1",
+                    ["dryRun"] = true,
+                    ["resultSetOrdinals"] = ordinals,
+                };
+                if (requestTarget is not null)
+                    arguments["target"] = requestTarget;
+                var result = await served.Client.CallToolAsync("sqlharness_query", arguments, cancellationToken: CancellationToken.None);
+
+                Assert.False(result.IsError == true, string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text)));
+                Assert.Equal("success", ServedEnvelope(result, "sqlharness_query").GetProperty("status").GetString());
+            }
+        }
+    }
+
+    [Fact]
     public async Task Query_result_set_selection_preserves_errors_and_rejects_missing_success_evidence()
     {
         var queryArguments = new Dictionary<string, object?>

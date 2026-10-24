@@ -119,6 +119,8 @@ public sealed class McpToolHandlers(
             var outcome = await module.ExecuteAsync(McpOperationAnnotations.Apply(operation, label, keep, _operationAnnotationsEnabled), token);
             if (resultSetOrdinals is null || outcome.ExitCode != SqlHarnessExitCode.Success)
                 return outcome;
+            if (outcome.Report is SqlHarnessDryRunReport)
+                return outcome;
             if (outcome.Report is not SqlHarnessQueryReport query || query.ResultSets is null)
                 return new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, "The successful query response did not contain result-set evidence.");
 
