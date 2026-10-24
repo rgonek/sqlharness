@@ -1,0 +1,4 @@
+pwsh ./scripts/verify.ps1 -LogDirectory D:/temp/sqlharness-plan108-final-verify
+[6 q==> ui-install ok 55,9s
+==> build ok 1m08s
+EXIT_CODE=1

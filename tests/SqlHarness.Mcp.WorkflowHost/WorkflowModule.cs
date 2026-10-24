@@ -95,9 +95,9 @@ public sealed class WorkflowModule : ISqlHarnessModule
             "small", 100, "edge", 400);
         var planStatementCount = StatementMetricsExtractor.CountStatements(PlanXml(WorkflowScenarios.ArtifactReviewBaselineSql, false, false));
         var projectedStatements = ArtifactStatementProjector.Project(ArtifactReader.MeasureSetKind, runs);
-        if (projectedStatements.Statements.Count != 16)
+        if (projectedStatements.Statements.Count != 48)
         {
-            var message = $"The offline measure fixture generated {projectedStatements.Statements.Count} statement records (plan count={planStatementCount}, run count={runs.Count}, first run SQL length={runs[0].ExecutedSql?.Length}, first run plan count={runs[0].PlanXmls.Count}); expected 16.";
+            var message = $"The offline measure fixture generated {projectedStatements.Statements.Count} statement records (plan count={planStatementCount}, run count={runs.Count}, first run SQL length={runs[0].ExecutedSql?.Length}, first run plan count={runs[0].PlanXmls.Count}); expected 48.";
             return new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, message,
                 Error: SqlHarnessError.From(SqlHarnessExitCode.Safety, message));
         }
@@ -106,7 +106,7 @@ public sealed class WorkflowModule : ISqlHarnessModule
             MeasureParameterSetReportProjector.PlanCacheWarning, setReports, crossSet, null);
         var directory = _writer.Write(report, runs, _scenario.ProfileName, _owner);
         _lastArtifactDirectory = directory;
-        return Success(report with { ArtifactDirectory = directory });
+        return Success(report with { ArtifactDirectory = directory }, runs);
     }
 
     private SqlHarnessOutcome ExecuteStudyQuery(SqlHarnessQueryOperation query)
@@ -173,9 +173,10 @@ public sealed class WorkflowModule : ISqlHarnessModule
 
     private SqlHarnessOutcome Persist(SqlHarnessCompareReport report, PairShape shape)
     {
-        var directory = Write(report, shape);
+        var runs = BuildRuns(report, shape);
+        var directory = _writer.Write(report, runs, _scenario.ProfileName, _owner);
         _lastArtifactDirectory = directory;
-        return Success(report with { ArtifactDirectory = directory });
+        return Success(report with { ArtifactDirectory = directory }, runs);
     }
 
     private string Write(SqlHarnessCompareReport report, PairShape shape)
@@ -294,7 +295,12 @@ public sealed class WorkflowModule : ISqlHarnessModule
             { ExecutedSql = _scenario.BaselineSql });
             runs.Add(Run("candidate", index + 1, candidateElapsed[index], shape.CandidateReads, table, candidatePlan, report.Candidate.MetricReport)
                 with
-            { ExecutedSql = _scenario.CandidateSql });
+            {
+                ExecutedSql = _scenario.CandidateSql,
+                TableIo = _scenario.Id == WorkflowScenarios.ArtifactReviewStudyId && index == 0
+                    ? [new TableIoCounters("Orders", 1, 999, 0, 0, 0, 0, 0, 0)]
+                    : [],
+            });
         }
 
         return runs;
@@ -472,8 +478,8 @@ public sealed class WorkflowModule : ISqlHarnessModule
             Error: SqlHarnessError.From(SqlHarnessExitCode.Safety, ConnectionForbiddenMessage));
     }
 
-    private SqlHarnessOutcome Success(object report) =>
-        new(SqlHarnessExitCode.Success, report, null);
+    private SqlHarnessOutcome Success(object report, IReadOnlyList<CompareRunArtifact>? runs = null) =>
+        new(SqlHarnessExitCode.Success, report, null) { BenchmarkRuns = runs };
 
     internal void NoteConnectionAttempt()
     {

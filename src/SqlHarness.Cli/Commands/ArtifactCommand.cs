@@ -30,7 +30,7 @@ public sealed class ArtifactCommand(ISqlHarnessModule module, OutputContext outp
         public int? Cursor { get; set; }
 
         [CommandOption("--variant <VARIANT>")]
-        [Description("Plan variant: baseline, candidate, or query.")]
+        [Description("Plan variant: query for measure and measure-set (default when omitted); baseline or candidate for compare (required).")]
         public string? Variant { get; set; }
 
         [CommandOption("--statement <INDEX>")]
@@ -58,7 +58,7 @@ public sealed class ArtifactCommand(ISqlHarnessModule module, OutputContext outp
         public string? Output { get; set; }
 
         [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(65536)] public int MaxOutputBytes { get; set; } = 65536;
-        [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(AgentOutputLimits.DefaultCellCharacters)] public int MaxCellChars { get; set; } = AgentOutputLimits.DefaultCellCharacters;
+        [CommandOption("--max-cell-chars <CHARS>")][Description(AgentOutputLimits.CellCharactersDescription)][DefaultValue(AgentOutputLimits.DefaultCellCharacters)] public int MaxCellChars { get; set; } = AgentOutputLimits.DefaultCellCharacters;
     }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct)

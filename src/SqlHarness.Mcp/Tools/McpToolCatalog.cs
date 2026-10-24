@@ -95,7 +95,7 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -127,7 +127,7 @@ public sealed class McpToolHandlers(
         string? expectDatabase = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -188,7 +188,7 @@ public sealed class McpToolHandlers(
         int? timeout = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -238,7 +238,7 @@ public sealed class McpToolHandlers(
         bool compareNullability = false,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -268,7 +268,7 @@ public sealed class McpToolHandlers(
         [MinLength(1), MaxLength(32)] string[]? parameterSetFiles = null,
         bool compareNullability = false,
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         int? maxOperationSeconds = null,
         bool dryRun = false,
@@ -304,7 +304,7 @@ public sealed class McpToolHandlers(
         string? maxDuration = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -342,7 +342,7 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -364,7 +364,7 @@ public sealed class McpToolHandlers(
         string? file = null,
         [Description("includeText (default true) returns bounded statement text and predicates; false returns metadata only.")]
         bool includeText = true,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_plan", ctx, async token =>
@@ -385,7 +385,7 @@ public sealed class McpToolHandlers(
         string section,
         [Description("Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.")]
         int? cursor = null,
-        [Description("Plan variant: baseline, candidate, or query.")]
+        [Description("measure/set default to query; compare needs baseline/candidate.")]
         string? variant = null,
         [Description("Zero-based statement ordinal for section=plan.")]
         int statement = 0,
@@ -395,7 +395,7 @@ public sealed class McpToolHandlers(
         int? repetition = null,
         [Description("Return bounded statement text and predicates in section=plan.")]
         bool includeText = false,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Maximum result bytes, 4096..1048576, capped by the process limit.")]
         [Range(McpLimits.MinCallToolResultBudgetBytes, McpLimits.MaxCallToolResultBudgetBytes)]
@@ -691,7 +691,8 @@ public static class McpToolCatalog
 {
     /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
     public const string CapabilitiesDescription =
-        "Runtime configuration: scopeMode, compareContext, connectionTimeoutSeconds, defaultExecutionTimeoutSeconds, engines, allowedProfiles, inputRoots, processLimits and configurationRef. Timeout values are seconds; Azure CLI token acquisition has a separate budget. Omitted SQL timeouts use defaultExecutionTimeoutSeconds. Reuse for this process; refresh after reconnect or restart.";
+        "Runtime config: scopeMode, compareContext, connectionTimeoutSeconds, SQL timeouts, engines, allowedProfiles, inputRoots, processLimits, configurationRef. After redaction, Message/Hint use max(requested cell limit, 2048), capped at 4096 chars and response bytes; Location.Path uses the requested limit. Tiny budgets keep error code/phase and count omissions. Timeouts are seconds; Azure CLI token acquisition has a separate budget. Omitted SQL timeouts use defaultExecutionTimeoutSeconds. Reuse per process; refresh after reconnect/restart.";
+    public const string CellCharactersDescription = "0..4096; default 2048.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     public const string OperationLabelDescription = "Optional plain-text label for this operation (up to 120 Unicode code points).";
@@ -707,8 +708,8 @@ public static class McpToolCatalog
     public const string ParameterSetsDescription = "1..32 named sets with matching parameter shapes; exclusive with parameterSetFiles/matrix; fixed names must not overlap.";
     public const string MatrixDescription = "1..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; fixed names must not overlap.";
     public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. Table-valued and list parameters are not supported. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
-    public const string MeasureDescription = "Measure one query across repeats. For an optimization measurement, provide both optional subject and textual scope; this is independent of compare.requireContext. Each parameter set runs on its own session with its own setup bound to that set; sets run in order and the first failure stops the run, keeping completed sets. Results report per-set stability, not cross-set equivalence. TVP and list parameter sets have no valueHash; their low-entropy values are excluded from unkeyed hashes.";
-    public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode: pass means no elapsed regression under policy, not improvement. Observed equivalence follows the selected ordering, duplicate and nullability rules; it is not domain equivalence. Dry-run reports validation: passed, execution: not-run, and setup/baseline/candidate classifications.";
+    public const string MeasureDescription = "Measure repeats. Optimization: subject+textual scope, independent of compare.requireContext. Ordered sets: isolated sessions/setup; failure stops, completed sets retained. Stability: per-set, not cross-set equivalence. TVP/list: no valueHash; low-entropy excluded from unkeyed hashes. statementEvidence: per-case collected counters, not total cost. Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements.";
+    public const string CompareDescription = "Compare baseline/candidate measures+rows. subject/scope follow frozen compare.requireContext (capabilities); request target selects DB. Session/setup per set; failure stops, completed cells retained. Verdict/reasons, not exitCode: pass=no policy elapsed regression, not improvement. Equivalence follows selected order/duplicates/nullability, not domain equivalence. Dry-run validates only; execution not run; reports setup/baseline/candidate classifications. statementEvidence: counters per variant/set/cell, not total cost. Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
     public const string ArtifactPageSizeDescription = "Source page size 1..512 for matrix-cells, operators, statements, or plan; defaults are 32, 32, 128, 128. The byte budget may return fewer items; continue from its cursor.";
     public const string ArtifactDescription = "Offline saved-artifact read. maxResultBytes defaults to 65536, capped by process limit. Use returned continuation for pages. Plan clipping reports omittedChildCount/omittedSubtreeCount.";

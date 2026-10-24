@@ -69,6 +69,103 @@ public sealed class McpTokenBudgetTests
             new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = "^[a-z]+$" }, "integrated"),
     });
 
+    [Fact]
+    public async Task Offline_artifact_requests_default_omitted_variant_only_for_measure_kinds()
+    {
+        var savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        var home = Path.Combine(Path.GetTempPath(), "sqlharness-artifact-variant-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(home);
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", home);
+        var pipes = new[] { new Pipe(), new Pipe() };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        Task serverTask = Task.CompletedTask;
+        try
+        {
+            var profileName = "artifact-variant-default";
+            var scope = McpScope.Create(new McpServerOptions { Profile = profileName }, new Dictionary<string, TargetProfile>
+            {
+                [profileName] = new("offline.invalid", "fixture", new Dictionary<string, string>(), "integrated"),
+            });
+            foreach (var artifactKind in new[] { "measure", "measure-set", "compare" })
+            {
+                var id = "omitted-variant-" + artifactKind;
+                var directory = Path.Combine(SqlHarnessPaths.CompareDir, id);
+                Directory.CreateDirectory(Path.Combine(directory, "plans"));
+                File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(
+                    new ArtifactManifest(ArtifactReader.CurrentManifestVersion, artifactKind, "report.json", ["plan"])
+                    { Owner = scope.Owner }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                File.WriteAllText(Path.Combine(directory, "plans", "measure-001-000-000.plan.json"),
+                    "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\"}}]}");
+                File.WriteAllText(Path.Combine(directory, "runs.jsonl"),
+                    "{\"variant\":\"measure\",\"repetition\":1,\"planJsonFiles\":[\"measure-001-000-000.plan.json\"]}");
+            }
+
+            var clientToServer = pipes[0];
+            var serverToClient = pipes[1];
+            var serverOptions = new ModelContextProtocol.Server.McpServerOptions
+            {
+                ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "artifact-variant-test" },
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
+            };
+            McpToolCatalog.Wire(serverOptions, scope, scope.CreateModule());
+            var server = McpServer.Create(
+                new StreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream(), "artifact-variant-server", NullLoggerFactory.Instance),
+                serverOptions, NullLoggerFactory.Instance, serviceProvider: null);
+            serverTask = server.RunAsync(cts.Token);
+            await using var client = await McpClient.CreateAsync(
+                new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+                new McpClientOptions
+                {
+                    ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
+                    ProtocolVersion = McpHost.FallbackProtocolVersion,
+                }, NullLoggerFactory.Instance, cts.Token);
+
+            foreach (var artifactKind in new[] { "measure", "measure-set" })
+            {
+                var result = await client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+                {
+                    ["id"] = "omitted-variant-" + artifactKind,
+                    ["section"] = "plan",
+                }, cancellationToken: cts.Token);
+                using var envelope = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+                Assert.Equal("success", envelope.RootElement.GetProperty("status").GetString());
+                Assert.Equal("query", envelope.RootElement.GetProperty("result").GetProperty("variant").GetString());
+            }
+
+            var compareResult = await client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+            {
+                ["id"] = "omitted-variant-compare",
+                ["section"] = "plan",
+            }, cancellationToken: cts.Token);
+            using var compareEnvelope = JsonDocument.Parse(Assert.Single(compareResult.Content.OfType<TextContentBlock>()).Text);
+            Assert.Equal("error", compareEnvelope.RootElement.GetProperty("status").GetString());
+            Assert.Contains("baseline, candidate", compareEnvelope.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            try
+            {
+                await serverTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", savedHome);
+            try
+            {
+                Directory.Delete(home, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
     private static SqlHarnessOutcome LargeQueryOutcome(int targetBytes)
     {
         var rows = new List<IReadOnlyList<object?>>();
@@ -86,6 +183,145 @@ public sealed class McpTokenBudgetTests
             outcome = outcome with { Report = report };
         }
         return outcome;
+    }
+
+    [Theory]
+    [MemberData(nameof(LongErrorPaths))]
+    public void Failure_minimum_budget_preserves_identity_when_optional_path_exceeds_byte_budget(string path)
+    {
+        var error = new SqlHarnessError(
+            "sql_execution_failed", "sql", "brief diagnostic", Location: new SqlHarnessErrorLocation(Path: path));
+        var budget = new McpResultBudget(4096, AgentOutputLimits.MaximumCellCharacters);
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, error.Message, Error: error),
+            "sqlharness_query", budget);
+
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+        var envelope = document.RootElement;
+        var reportedError = envelope.GetProperty("error");
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= budget.MaximumBytes);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+        Assert.Equal("sql_execution_failed", reportedError.GetProperty("code").GetString());
+        Assert.Equal("sql", reportedError.GetProperty("phase").GetString());
+        Assert.Equal(1, envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
+        var reportedPath = reportedError.GetProperty("location").ValueKind == JsonValueKind.Object
+            ? reportedError.GetProperty("location").GetProperty("path")
+            : default;
+        Assert.True(reportedPath.ValueKind == JsonValueKind.Undefined || reportedPath.ValueKind == JsonValueKind.Null || reportedPath.GetString()!.Length < path.Length);
+    }
+
+    public static IEnumerable<object[]> LongErrorPaths =>
+    [
+        [new string('p', AgentOutputLimits.MaximumCellCharacters)],
+        [string.Concat(Enumerable.Repeat("語\\n", AgentOutputLimits.MaximumCellCharacters / 2))],
+    ];
+
+    [Fact]
+    public void Failure_keeps_error_identity_and_truthful_truncation_at_the_minimum_byte_budget()
+    {
+        var error = new SqlHarnessError(
+            "sql_execution_failed", "sql", new string('m', 3_000), new string('h', 2_048),
+            new SqlHarnessErrorLocation(Path: new string('p', 50)));
+        var budget = new McpResultBudget(4096, 0);
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, error.Message, Error: error),
+            "sqlharness_query", budget);
+
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+        var envelope = document.RootElement;
+        var reportedError = envelope.GetProperty("error");
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= budget.MaximumBytes);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+        Assert.Equal("sql_execution_failed", reportedError.GetProperty("code").GetString());
+        Assert.Equal("sql", reportedError.GetProperty("phase").GetString());
+        Assert.True(reportedError.GetProperty("message").GetString()!.Length < AgentOutputLimits.DefaultCellCharacters);
+        Assert.True(reportedError.GetProperty("hint").GetString()!.Length < AgentOutputLimits.DefaultCellCharacters);
+        Assert.Equal(3, envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
+    }
+
+    [Fact]
+    public void Oversized_error_with_multibyte_message_and_null_hint_fits_minimum_budget()
+    {
+        var error = new SqlHarnessError("sql_execution_failed", "sql", string.Concat(Enumerable.Repeat("語😀", 6_000)));
+        var budget = new McpResultBudget(4096, 0);
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, error.Message, Error: error),
+            "sqlharness_query", budget);
+
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+        var envelope = document.RootElement;
+        var reportedError = envelope.GetProperty("error");
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= budget.MaximumBytes);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+        Assert.Equal("sql_execution_failed", reportedError.GetProperty("code").GetString());
+        Assert.Equal("sql", reportedError.GetProperty("phase").GetString());
+        Assert.True(!reportedError.TryGetProperty("hint", out var hint) || hint.ValueKind == JsonValueKind.Null);
+        Assert.True(reportedError.GetProperty("message").GetString()!.Length > 0);
+        Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(200)]
+    [InlineData(AgentOutputLimits.DefaultCellCharacters)]
+    [InlineData(AgentOutputLimits.MaximumCellCharacters)]
+    public void Failure_diagnostics_keep_the_default_floor_without_changing_result_cell_limits(int maximumCellCharacters)
+    {
+        const string credential = "credential-sentinel";
+        foreach (var (exitCode, code, phase) in new[]
+        {
+            (SqlHarnessExitCode.Authentication, "connection_failed", "connect"),
+            (SqlHarnessExitCode.Authentication, "authentication_failed", "authentication"),
+            (SqlHarnessExitCode.SqlExecution, "sql_execution_failed", "sql"),
+        })
+        {
+            var message = new string('m', 195) + credential + new string('m', 400) +
+                "Actionable tail: check the configured database endpoint.";
+            var hint = new string('h', 500) + "Actionable hint: verify the login and database permissions.";
+            var error = new SqlHarnessError(
+                code,
+                phase,
+                message,
+                hint,
+                new SqlHarnessErrorLocation(Path: "db/session.sql"));
+            var resultSet = new SqlHarnessResultSetReport(
+                [new SqlHarnessColumnReport(0, "value", "text", true)],
+                [[new string('c', 512)]], 1, 0);
+            var report = new SqlHarnessQueryReport(Target, "read-only", [resultSet], [], 1, 1,
+                "raw-hash", new OutputFootprint(1, 0));
+            var outcome = new SqlHarnessOutcome(exitCode, report, message, Error: error);
+            var budget = new McpResultBudget(65_536, maximumCellCharacters);
+
+            var result = McpResultAdapter.Adapt(outcome, "sqlharness_query", budget, [credential]);
+            var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+            using var document = JsonDocument.Parse(text);
+            var envelope = document.RootElement;
+            var reportedError = envelope.GetProperty("error");
+            var cell = envelope.GetProperty("result").GetProperty("resultSets")[0]
+                .GetProperty("rows")[0][0].GetString()!;
+
+            Assert.True(McpResultAdapter.MeasureBytes(result) <= budget.MaximumBytes);
+            Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+            Assert.DoesNotContain(credential, text, StringComparison.Ordinal);
+            Assert.DoesNotContain(credential[..5], text, StringComparison.Ordinal);
+            Assert.Contains("Actionable tail", reportedError.GetProperty("message").GetString(), StringComparison.Ordinal);
+            Assert.Contains("Actionable hint", reportedError.GetProperty("hint").GetString(), StringComparison.Ordinal);
+            Assert.True(reportedError.GetProperty("message").GetString()!.Length <= Math.Max(maximumCellCharacters, AgentOutputLimits.DefaultCellCharacters));
+            Assert.True(reportedError.GetProperty("hint").GetString()!.Length <= Math.Max(maximumCellCharacters, AgentOutputLimits.DefaultCellCharacters));
+            Assert.True(cell.Length <= maximumCellCharacters);
+            Assert.Equal(error.Code, reportedError.GetProperty("code").GetString());
+            Assert.Equal(error.Phase, reportedError.GetProperty("phase").GetString());
+            Assert.True(reportedError.GetProperty("location").GetProperty("path").GetString()!.Length <= maximumCellCharacters);
+        }
     }
 
     [Fact]

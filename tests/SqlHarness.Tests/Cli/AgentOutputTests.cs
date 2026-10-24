@@ -551,7 +551,7 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
-    public async Task Agent_validation_errors_respect_configured_budget_and_cell_limit()
+    public async Task Agent_validation_errors_respect_configured_budget_and_error_floor()
     {
         var output = new StringWriter();
         var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
@@ -564,7 +564,7 @@ public sealed class AgentOutputTests
         Assert.Empty(module.Operations);
         Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 4096);
         using var json = JsonDocument.Parse(output.ToString());
-        Assert.True(json.RootElement.GetProperty("error").GetProperty("message").GetString()!.Length <= 128);
+        Assert.True(json.RootElement.GetProperty("error").GetProperty("message").GetString()!.Length <= Math.Max(128, AgentOutputLimits.DefaultCellCharacters));
         Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }
 

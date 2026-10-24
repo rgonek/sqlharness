@@ -60,6 +60,85 @@ public sealed class JournalBenchmarkBuilderTests
     }
 
     [Fact]
+    public void Journal_keeps_hidden_work_separate_from_reconciled_statement_counter_attribution()
+    {
+        var udf = StatementMetricsTests.JournalPlan("SELECT dbo.fn_scalar()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 28, elapsedTime: 29,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)])]);
+        var tvf = StatementMetricsTests.JournalPlan("SELECT * FROM dbo.fn_multi()", 2, 2, "0x02", 0, 1,
+            operators: [("Table-valued function", "[dbo].[fn_multi]", [(0L, 0L, 0L)])]);
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            Run("measure", 1, 1, 10, 0, plans: [udf], io: [new TableIoCounters("", 0, 0, 0, 0, 0, 0, 0, 0)]),
+            Run("measure", 2, 1, 10, 0, set: "tvf", plans: [tvf], io: [new TableIoCounters("[dbo].[fn_multi]", 0, 0, 0, 0, 0, 0, 0, 0)]),
+        ]);
+
+        var scalarStatement = Assert.Single(record.Statements, item => item.ParameterSet is null);
+        var tvfStatement = Assert.Single(record.Statements, item => item.ParameterSet == "tvf");
+        Assert.Equal(StatementStatus.Confirmed, scalarStatement.Status);
+        Assert.Equal(StatementCounterAttribution.Complete,
+            StatementAttributionClassifier.Classify(scalarStatement.Status));
+        Assert.Equal("scalar-udf", Assert.Single(scalarStatement.HiddenWork).Kind);
+        Assert.Equal(StatementStatus.Confirmed, tvfStatement.Status);
+        Assert.Equal(StatementCounterAttribution.Complete,
+            StatementAttributionClassifier.Classify(tvfStatement.Status));
+        Assert.Equal("multi-statement-tvf", Assert.Single(tvfStatement.HiddenWork).Kind);
+    }
+
+    [Fact]
+    public void Multi_set_reconciliation_marks_only_the_statement_with_mismatched_counters_partial()
+    {
+        static string Plan(long ordersReads) => $"""
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements>
+            <StmtSimple StatementText="SELECT Value FROM dbo.Orders" StatementId="1" StatementCompId="1" QueryPlanHash="0x01"><QueryPlan><RelOp NodeId="0" PhysicalOp="Table Scan"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualExecutions="1" ActualLogicalReads="{ordersReads}" ActualLobLogicalReads="0" ActualScans="1" /></RunTimeInformation><TableScan><Object Table="[dbo].[Orders]" /></TableScan></RelOp></QueryPlan></StmtSimple>
+            <StmtSimple StatementText="SELECT Value FROM dbo.Products" StatementId="2" StatementCompId="2" QueryPlanHash="0x02"><QueryPlan><RelOp NodeId="0" PhysicalOp="Table Scan"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualExecutions="1" ActualLogicalReads="3" ActualLobLogicalReads="0" ActualScans="1" /></RunTimeInformation><TableScan><Object Table="[dbo].[Products]" /></TableScan></RelOp></QueryPlan></StmtSimple>
+            </Statements></Batch></BatchSequence></ShowPlanXML>
+            """;
+
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            Run("baseline", 1, 1, 10, 8, set: "small", cell: 0, plans: [Plan(5)], io: [
+                new TableIoCounters("Orders", 1, 5, 0, 0, 0, 0, 0, 0), new TableIoCounters("Products", 1, 3, 0, 0, 0, 0, 0, 0)]),
+            Run("baseline", 1, 1, 10, 12, set: "large", cell: 1, plans: [Plan(5)], io: [
+                new TableIoCounters("Orders", 1, 9, 0, 0, 0, 0, 0, 0), new TableIoCounters("Products", 1, 3, 0, 0, 0, 0, 0, 0)]),
+        ]);
+
+        var small = record.Statements.Where(item => item.ParameterSet == "small").OrderBy(item => item.StatementOrdinal).ToArray();
+        var large = record.Statements.Where(item => item.ParameterSet == "large").OrderBy(item => item.StatementOrdinal).ToArray();
+        Assert.Equal(["baseline", "baseline"], small.Select(item => item.Variant));
+        Assert.All(small, item => Assert.Equal(0, item.MatrixCell));
+        Assert.All(large, item => Assert.Equal(1, item.MatrixCell));
+        Assert.Equal(
+            ("baseline", "small", (int?)0, 0, (int?)1),
+            (small[0].Variant, small[0].ParameterSet!, small[0].MatrixCell, small[0].StatementOrdinal, small[0].PlanRepetition));
+        Assert.Equal(
+            ("baseline", "large", (int?)1, 1, (int?)1),
+            (large[1].Variant, large[1].ParameterSet!, large[1].MatrixCell, large[1].StatementOrdinal, large[1].PlanRepetition));
+        Assert.All(small, item => Assert.Equal(StatementCounterAttribution.Complete,
+            StatementAttributionClassifier.Classify(item.Status)));
+        Assert.Equal(StatementCounterAttribution.Partial,
+            StatementAttributionClassifier.Classify(large[0].Status));
+        Assert.Equal(StatementCounterAttribution.Complete,
+            StatementAttributionClassifier.Classify(large[1].Status));
+    }
+
+    [Fact]
+    public void Postgres_plan_has_no_sql_server_statement_attribution_evidence()
+    {
+        const string explain = """{"Plan":{"Node Type":"Seq Scan","Relation Name":"orders","Actual Rows":3}}""";
+        var unavailable = new BenchmarkRunMetrics(
+            BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Measured, null, false, null, null,
+            BenchmarkMetricReport.Measured, BenchmarkMetricText.PostgresLogicalReadsSource,
+            BenchmarkMetricText.PostgresRelationBufferSource, false, BenchmarkMetricReport.ResultStatement,
+            BenchmarkMetricText.StatementRows, []);
+
+        var record = JournalBenchmarkBuilder.Build([Run("measure", 1, 0, 1, 0, plans: [explain], metrics: unavailable, io: [])]);
+
+        Assert.Empty(record.Statements);
+        Assert.Equal(StatementCounterAttribution.Unavailable, StatementAttributionClassifier.Classify(null));
+    }
+
+    [Fact]
     public void Omitted_statement_count_is_journaled_and_retained_status_fails_closed()
     {
         var oversized = new string('x', JournalStatementMetricsExtractor.MaximumBytes + 1);

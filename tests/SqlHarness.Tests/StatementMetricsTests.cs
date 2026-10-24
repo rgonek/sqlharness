@@ -208,6 +208,117 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
+    public void Reconciled_scalar_udf_counter_attribution_is_complete_with_hidden_work_reported_separately()
+    {
+        var udf = JournalPlan("SELECT dbo.fn_scalar()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 28, elapsedTime: 29,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)])]);
+        var statement = Assert.Single(JournalStatementMetricsExtractor.Extract([udf], out _));
+        var status = Assert.Single(StatementReconciler.Reconcile(
+            [statement], [new TableIoCounters("", 0, 0, 0, 0, 0, 0, 0, 0)]));
+
+        Assert.Equal(StatementCounterAttribution.Complete, StatementAttributionClassifier.Classify(status));
+        Assert.Single(statement.HiddenWork!);
+    }
+
+    [Fact]
+    public void Compact_statement_evidence_keeps_udf_limitation_when_counters_are_complete()
+    {
+        var udf = JournalPlan("SELECT dbo.fn_scalar()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 28, elapsedTime: 29,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)])]);
+        var run = new CompareRunArtifact("candidate", 1, 0, 29, 0,
+            new Dictionary<string, long>(), "result", [udf], 1)
+        {
+            TableIo = [new TableIoCounters("", 0, 0, 0, 0, 0, 0, 0, 0)],
+        };
+
+        var evidence = AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind, [run]);
+
+        Assert.Equal("available", evidence.EvidenceAvailability);
+        var candidate = Assert.Single(evidence.Cases);
+        Assert.Equal("complete", candidate.CounterAttribution);
+        Assert.Contains(candidate.Limitations, limitation => limitation.Contains("Scalar UDF", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Compact_statement_evidence_marks_missing_repetition_and_entire_case()
+    {
+        var plan = JournalPlan("SELECT dbo.fn_scalar()", 1, 1, "0x01", 0, 1,
+            udfElapsedTime: 28, elapsedTime: 29,
+            operators: [("Compute Scalar", "", [(0L, 0L, 0L)])]);
+        CompareRunArtifact CompleteRun(string variant, int repetition) => new(
+            variant, repetition, 0, 29, 0, new Dictionary<string, long>(), "result", [plan], 1)
+        {
+            TableIo = [new TableIoCounters("", 0, 0, 0, 0, 0, 0, 0, 0)],
+        };
+        CompareRunArtifact MissingRun(string variant, int repetition) => new(
+            variant, repetition, 0, 0, 0, new Dictionary<string, long>(), "result", [], 1);
+
+        var evidence = AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind,
+        [
+            CompleteRun("candidate", 1),
+            MissingRun("candidate", 2),
+            MissingRun("baseline", 1),
+        ]);
+
+        var candidate = Assert.Single(evidence.Cases, item => item.Variant == "candidate");
+        Assert.Equal("partial", candidate.CounterAttribution);
+        Assert.Contains(candidate.Limitations,
+            limitation => limitation.Contains("statement evidence is missing for 1 of 2 runs", StringComparison.OrdinalIgnoreCase));
+
+        var baseline = Assert.Single(evidence.Cases, item => item.Variant == "baseline");
+        Assert.Equal("unavailable", baseline.CounterAttribution);
+        Assert.Contains(baseline.Limitations,
+            limitation => limitation.Contains("statement evidence is missing for 1 of 1 runs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Compact_statement_evidence_scopes_omissions_to_the_affected_case()
+    {
+        var plan = JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1);
+        static CompareRunArtifact Run(string variant, int repetition, IReadOnlyList<string> plans) => new(
+            variant, repetition, 0, 1, 0, new Dictionary<string, long>(), "result", plans, 1)
+        {
+            TableIo = [new TableIoCounters("[@P]", 0, 0, 0, 0, 0, 0, 0, 0)],
+        };
+        var many = Enumerable.Range(0, 513)
+            .Select(index => JournalPlan($"SELECT {index}", index + 1, index + 1, $"0x{index + 1:X}", 0, 1))
+            .ToArray();
+        var evidence = AgentStatementEvidenceProjection.Create(ArtifactReader.CompareKind,
+        [
+            Run("candidate", 1, [plan]),
+            Run("baseline", 1, many),
+            Run("unavailable", 1, []),
+        ]);
+
+        Assert.Equal("complete", Assert.Single(evidence.Cases, item => item.Variant == "candidate").CounterAttribution);
+        Assert.Equal("partial", Assert.Single(evidence.Cases, item => item.Variant == "baseline").CounterAttribution);
+        Assert.Equal("unavailable", Assert.Single(evidence.Cases, item => item.Variant == "unavailable").CounterAttribution);
+    }
+
+    [Fact]
+    public void Missing_statement_attribution_is_unavailable_and_legacy_artifact_shape_stays_unchanged()
+    {
+        Assert.Equal(
+            StatementCounterAttribution.Unavailable,
+            StatementAttributionClassifier.Classify(null));
+
+        var legacy = StatementMetricsExtractor.Extract(CollidingNodeIdPlan(), out _).First();
+        var json = JsonSerializer.Serialize(legacy, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.DoesNotContain("\"attribution\"", json);
+        Assert.DoesNotContain("\"hiddenWork\"", json);
+
+        var agent = new AgentBenchmarkVariant(null, null, null,
+            new Dictionary<string, AgentMetricDistribution>(), [],
+            BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Unavailable);
+        var agentJson = JsonSerializer.Serialize(agent, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("\"attribution\"", agentJson);
+        Assert.DoesNotContain("\"hiddenWork\"", agentJson);
+    }
+
+    [Fact]
     public void Multi_statement_tvf_flagged()
     {
         var tvf = JournalPlan("SELECT * FROM dbo.fn_multi()", 2, 2, "0x02", 0, 1,
@@ -342,7 +453,7 @@ public sealed class StatementMetricsTests
     }
 
     [Fact]
-    public void Statement_metrics_projection_keeps_node_path_after_repetition_aggregation()
+    public void Statement_metrics_projection_preserves_node_paths_for_each_repetition()
     {
         var xml = NestedRelOpPlan();
         var runs = new[]
@@ -352,14 +463,16 @@ public sealed class StatementMetricsTests
         };
 
         var section = ArtifactStatementProjector.Project(ArtifactReader.CompareKind, runs);
-        var statement = Assert.Single(section.Statements);
-        var operators = statement.TopOperators.ToDictionary(op => op.NodeId);
-
-        Assert.Equal(0, statement.StatementOrdinal);
-        Assert.Equal("0", operators[0].NodePath);
-        Assert.Equal("0/0", operators[1].NodePath);
-        Assert.Equal("0/1", operators[2].NodePath);
-        Assert.Equal(1, operators[1].Cursor);
+        Assert.Equal([1, 2], section.Statements.Select(statement => statement.Repetition).ToArray());
+        Assert.All(section.Statements, statement =>
+        {
+            var operators = statement.TopOperators.ToDictionary(op => op.NodeId);
+            Assert.Equal(0, statement.StatementOrdinal);
+            Assert.Equal("0", operators[0].NodePath);
+            Assert.Equal("0/0", operators[1].NodePath);
+            Assert.Equal("0/1", operators[2].NodePath);
+            Assert.Equal(1, operators[1].Cursor);
+        });
     }
 
     [Fact]
@@ -481,7 +594,7 @@ public sealed class StatementMetricsTests
         </ShowPlanXML>
         """;
 
-    private static string JournalPlan(
+    internal static string JournalPlan(
         string text,
         int statementId,
         int statementCompId,

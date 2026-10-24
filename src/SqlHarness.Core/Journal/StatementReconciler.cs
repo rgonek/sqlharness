@@ -9,6 +9,24 @@ public enum StatementStatus
     Unavailable,
 }
 
+/// <summary>Completeness of collected per-statement runtime counters; it does not describe hidden function work.</summary>
+public enum StatementCounterAttribution
+{
+    Complete,
+    Partial,
+    Unavailable,
+}
+
+internal static class StatementAttributionClassifier
+{
+    internal static StatementCounterAttribution Classify(StatementStatus? status) => status switch
+    {
+        StatementStatus.Confirmed => StatementCounterAttribution.Complete,
+        StatementStatus.Partial => StatementCounterAttribution.Partial,
+        _ => StatementCounterAttribution.Unavailable,
+    };
+}
+
 /// <summary>Compares plan-derived statement counters with the engine's batch IO counters.</summary>
 internal static class StatementReconciler
 {
