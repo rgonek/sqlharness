@@ -72,9 +72,9 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 2: Run focused offline confirmation if needed
 
-- [ ] Run the focused Windows suites. Prefer existing tests; add only a missing meaningful boundary (destination appearing, staging disappearing, non-access-denied exception, or partial journal retention), with injected file operations and no real workload. Record tests skipped on non-Windows separately.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Run the focused Windows suites. Existing Core fixtures cover the relevant retry and journal boundaries, so no tests were added. Record tests skipped on non-Windows separately. [Task 2 evidence](113-evidence/task-2-focused-offline-confirmation.md)
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved. See [Task 2 evidence](113-evidence/task-2-focused-offline-confirmation.md).
+- [x] Save the task's evidence and inspect the diff. No production behavior changed; the ignored full report is at `.superpowers/sdd/113-partial-publication-follow-up/task-2-report.md`.
 
 ### Task 3: Decide whether residual diagnosis is justified
 
