@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: IN PROGRESS — final review fixes implemented and focused regression suites green; independent final review and the fresh Windows gate remain pending; recorded 2026-10-24 ([final-fixes evidence](105-evidence/final-fixes.md)).
+- Status: DONE locally on `plan-105` — all task and Sol low reviews approved; Windows gate and branch format passed on `f6a7f492`; not merged/pushed; Linux/live acceptance unverified. See [verification evidence](105-verification-evidence.md).
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: L; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -69,30 +69,30 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 - [x] Use Showplan fixtures with present, absent and zero metrics; two statements with different grants; multiple repetitions/sets; UDF/TVF partial coverage; PostgreSQL unavailable SQL Server diagnostics. Freeze the expected units, source and aggregation of every field. Test extraction-to-new-artifact-to-offline-read without a live database.
 - [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 2: Implement optional saved numeric evidence
 
-- [ ] Reuse existing extractors without reading raw XML through the public artifact tool or relying on the journal. Keep parsing bounded; preserve repetitions and statement identity, explicitly report fallback batch scope. Extend Artifacts and ArtifactReader on 103's model; read older artifacts as unavailable. Use existing section paging and projection byte accounting for object lists; expose executable selectors in tool descriptions.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Reuse existing extractors without reading raw XML through the public artifact tool or relying on the journal. Keep parsing bounded; preserve repetitions and statement identity, explicitly report fallback batch scope. Extend Artifacts and ArtifactReader on 103's model; read older artifacts as unavailable. Use existing section paging and projection byte accounting for object lists; expose executable selectors in tool descriptions.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 3: Validate useful retrieval and cost
 
-- [ ] Extend AgentOptimizationWorkflowTests with a memory/compile tradeoff and a multi-statement IO task. Assert exact retrieved evidence and bytes at min/default budgets, including continuations and no-node/item-fits behavior. Update docs/mcp/artifacts.md and affected schemas/capabilities; do not require these reads for every optimization. Run focused tests, independent task/final reviews and Windows gate.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Extend AgentOptimizationWorkflowTests with a memory/compile tradeoff and a multi-statement IO task. Assert exact retrieved evidence and bytes at min/default budgets, including continuations and no-node/item-fits behavior. Update docs/mcp/artifacts.md and affected schemas/capabilities; do not require these reads for every optimization. Run focused tests, independent task/final reviews and Windows gate.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ## Verification and done criteria
 
 Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "StatementMetricsTests|ArtifactWriterTests|ArtifactReaderTests|AgentOutputTests|AgentOptimizationWorkflowTests|McpTokenBudgetTests"` and, for MCP tests, `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter "StatementMetricsTests|ArtifactWriterTests|ArtifactReaderTests|AgentOutputTests|AgentOptimizationWorkflowTests|McpTokenBudgetTests"`. Both must exit 0 with the intended tests actually discovered; a zero-test run is not evidence.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan105-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
+- [x] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
+- [x] Run `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef <recorded-base>` and retain its direct exit code/log. Run `just verify -LogDirectory D:/temp/sqlharness-plan105-final-verify`; both must exit 0 on the final product tree. Obtain independent whole-branch review after task reviews and resolve blocking findings before declaring implementation complete.
+- [x] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
+- [x] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
+- [x] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
 
 ## STOP conditions
 

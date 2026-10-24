@@ -42,3 +42,15 @@ Metrics had source-tagged SQL Server Showplan diagnostic distributions at both b
 - Review-fix GREEN command: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-restore --filter "FullyQualifiedName~Artifact_diagnostics_support_offline_memory_tradeoffs_and_multi_statement_io_at_both_budgets" --logger "console;verbosity=detailed"` — passed 1/1. Captured output: `metrics budget=65536 responseUtf8Bytes=7491`; `metrics budget=4096 responseUtf8Bytes=3063`; `Offline diagnostic retrieval: metrics UTF-8 bytes min/default=2963/7443; statements min/default calls=8/8, response bytes=22835/35299; all four statement identities for both variants and grant/compile source values matched.`
 - `git diff --check` — passed before final report creation.
 - The full Windows verification gate and branch formatting remain assigned to the controller for the final reviewed tree. Linux and live database acceptance were not run.
+## Final-shape capture on f6a7f492
+
+The earlier captures above describe the reviewed Task 3 shape before the QueryPlan identity fix. The final production shape includes `planQueryOrdinal`. A single detailed rerun of the existing workflow test on the already Windows-verified binaries (`--no-build`) passed 1/1 and captured the final response bytes below. This refresh changes no product or test code.
+
+| Measurement | 4096-byte budget | 65536-byte budget |
+|---|---:|---:|
+| Metrics response text UTF-8 bytes | 3105 | 7659 |
+| Metrics result JSON UTF-8 bytes (without envelope) | 3005 | 7611 |
+| Statement responses, calls across both variants | 8 | 8 |
+| Statement responses, total UTF-8 bytes across calls | 23003 | 35467 |
+
+Every individual response fit its call budget, and all four exact statement identities for both variants and the grant/compile source values matched. These are offline synthetic UTF-8 byte measurements, not model-token savings or live database acceptance. See the [raw detailed run](verification/workflow-final.log) and [direct exit code](verification/workflow-final.exit).
