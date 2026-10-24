@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TODO — diagnostic; recorded 2026-10-23.
+- Status: diagnostic tasks complete; final review pending (2026-10-24).
 - Priority: **P4** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: S; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -66,9 +66,9 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 1: Verify landed behavior and evidence
 
-- [ ] Inspect 076 implementation and the current publisher/test paths; record actual source revision, retry predicates and existing test coverage under plans/113-evidence/. Update historical status references only after verifying the claims. Preserve the original historical event rather than rewriting it as a confirmed cause.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Inspect 076 implementation and the current publisher/test paths; record actual source revision, retry predicates and existing test coverage under plans/113-evidence/. Update historical status references only after verifying the claims. Preserve the original historical event rather than rewriting it as a confirmed cause.
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
+- [x] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
 
 ### Task 2: Run focused offline confirmation if needed
 
@@ -78,20 +78,20 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 3: Decide whether residual diagnosis is justified
 
-- [ ] If no later recurrence exists, close with 'mitigation present; original cause unresolved; no further change'. If recurrence evidence exists, propose a bounded operator-run process-handle/event capture procedure for that occurrence; do not install monitors, scan unrelated processes or retry a benchmark. A new reproducible defect gets its own implementation plan.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] No later recurrence was found in the inspected observation and Plan 076 record; disposition: 'mitigation present; original cause unresolved; no further change'. The finding is bounded to those records and does not imply a global absence of recurrence. See [decision evidence](113-evidence/task-3-decision.md).
+- [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
+- [x] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
 
 ## Verification and done criteria
 
 Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "ArtifactDirectoryPublisherTests|CompareMatrixTests|JournalingBenchmarkTests"`; the relevant Core fixtures must be discovered and pass. The matching MCP filter is recorded for discovery, but is **not applicable as a pass criterion** for these Core-owned filesystem-publication and completed-run journal behaviors: no matching MCP suite exists, and this contract accepts the Core offline fixtures as the evidence source. A zero-test MCP run is not success evidence. Any separate adjacent MCP projection tests are supporting envelope checks only. Record the resulting limitation: MCP integration of these outcomes is not verified by this plan's focused suites.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] If executable code/tests change, use focused suites and the required Windows implementation gate before claiming those changes verified. For notes-only work, diff/link/example checks are the complete scoped check; no product gate is claimed.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspected the diff and resolved every new relative Markdown link (see [final verification](113-verification-evidence.md)).
+- [x] All task outcomes and relevant source paths are recorded; status distinguishes diagnosis from implementation and deferred live acceptance.
+- [x] Notes-only work: diff/link checks are the scoped check; no product gate is claimed.
+- [x] Linux remains unverified; no completed executable check was rerun because behavior was unchanged.
+- [x] Diagnosis evidence records the disposition and keeps the cause unknown; no product change was invented.
+- [x] Updated this plan and the index with the tested revision, scope, review state and limitations. Deferred live acceptance remains unverified; final review is pending.
 
 ## STOP conditions
 

@@ -9,7 +9,7 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
-| [113](113-partial-publication-follow-up.md) | Reconcile partial-matrix retention and publication-denial evidence | Task 2 focused offline evidence complete; Task 3 residual-diagnosis decision pending ([evidence](113-evidence/task-2-focused-offline-confirmation.md)) | IN PROGRESS |
+| [113](113-partial-publication-follow-up.md) | Reconcile partial-matrix retention and publication-denial evidence | Diagnostic tasks complete; bounded finding is no later recurrence in the inspected observation and Plan 076 record; final review pending ([decision](113-evidence/task-3-decision.md), [verification](113-verification-evidence.md)) | IN PROGRESS |
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 
 
