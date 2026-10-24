@@ -174,11 +174,11 @@ public sealed class AgentOptimizationWorkflowTests
             return Envelope(result).GetProperty("result").Clone();
         }
 
-        async Task<(List<JsonElement> Rows, List<int> ResponseBytes)> ReadStatementsAsync(int budget)
+        async Task<(List<JsonElement> Rows, List<int> ResponseBytes)> ReadStatementsAsync(int budget, int firstCursor)
         {
             var rows = new List<JsonElement>();
             var responseBytes = new List<int>();
-            int? cursor = 20;
+            int? cursor = firstCursor;
             while (rows.Count < 4)
             {
                 var arguments = new Dictionary<string, object?>
@@ -222,11 +222,19 @@ public sealed class AgentOptimizationWorkflowTests
             Assert.Equal(5, statementRead.GetProperty("scanCount").GetProperty("median").GetInt64());
         }
 
-        var defaultStatements = await ReadStatementsAsync(65536);
-        var minimumStatements = await ReadStatementsAsync(4096);
-        foreach (var statements in new[] { defaultStatements, minimumStatements })
+        var defaultBaselineStatements = await ReadStatementsAsync(65536, 0);
+        var defaultCandidateStatements = await ReadStatementsAsync(65536, 20);
+        var minimumBaselineStatements = await ReadStatementsAsync(4096, 0);
+        var minimumCandidateStatements = await ReadStatementsAsync(4096, 20);
+        foreach (var (variant, statements) in new[]
         {
-            var selected = statements.Rows.Where(row => row.GetProperty("variant").GetString() == "candidate"
+            ("baseline", defaultBaselineStatements),
+            ("candidate", defaultCandidateStatements),
+            ("baseline", minimumBaselineStatements),
+            ("candidate", minimumCandidateStatements),
+        })
+        {
+            var selected = statements.Rows.Where(row => row.GetProperty("variant").GetString() == variant
                 && row.GetProperty("repetition").GetInt32() == 1).OrderBy(row => row.GetProperty("statementOrdinal").GetInt32()).ToArray();
             Assert.Equal(4, selected.Length);
             Assert.Equal(Enumerable.Range(0, 4), selected.Select(row => row.GetProperty("statementOrdinal").GetInt32()));
@@ -240,14 +248,20 @@ public sealed class AgentOptimizationWorkflowTests
                 Assert.Equal(100 + ordinal * 10, io.GetProperty("logicalReads").GetInt64());
                 Assert.Equal(ordinal * 2, io.GetProperty("lobLogicalReads").GetInt64());
                 Assert.Equal(3 + ordinal, io.GetProperty("showplanActualScans").GetInt64());
-                Assert.Equal("sql-server-showplan-query-plan", row.GetProperty("planDiagnostics")[0].GetProperty("source").GetString());
-                Assert.Equal(100 + ordinal * 50, row.GetProperty("planDiagnostics")[0].GetProperty("grantRequestedKb").GetInt64());
-                Assert.Equal(1 + ordinal, row.GetProperty("planDiagnostics")[0].GetProperty("degreeOfParallelism").GetInt32());
+                var diagnostic = Assert.Single(row.GetProperty("planDiagnostics").EnumerateArray());
+                Assert.Equal("sql-server-showplan-query-plan", diagnostic.GetProperty("source").GetString());
+                Assert.Equal(1 + ordinal, diagnostic.GetProperty("degreeOfParallelism").GetInt32());
+                var isCandidate = variant == "candidate";
+                Assert.Equal((isCandidate ? 120 : 240) + ordinal * 50, diagnostic.GetProperty("grantRequestedKb").GetInt64());
+                Assert.Equal((isCandidate ? 90 : 200) + ordinal * 40, diagnostic.GetProperty("grantGrantedKb").GetInt64());
+                Assert.Equal((isCandidate ? 60 : 160) + ordinal * 30, diagnostic.GetProperty("grantMaxUsedKb").GetInt64());
+                Assert.Equal((isCandidate ? 20 : 5) + ordinal, diagnostic.GetProperty("compileTimeMs").GetInt64());
+                Assert.Equal((isCandidate ? 10 : 2) + ordinal, diagnostic.GetProperty("compileCpuMs").GetInt64());
             }
             Assert.True(statements.ResponseBytes.Count > 1, "The statement inventory should require continuation at both budgets.");
         }
 
-        _output.WriteLine($"Offline diagnostic retrieval: metrics UTF-8 bytes min/default={Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(minimumMetrics))}/{Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(defaultMetrics))}; statements min/default calls={minimumStatements.ResponseBytes.Count}/{defaultStatements.ResponseBytes.Count}, response bytes={minimumStatements.ResponseBytes.Sum()}/{defaultStatements.ResponseBytes.Sum()}; all 4 statement identities and source/value pairs matched.");
+        _output.WriteLine($"Offline diagnostic retrieval: metrics UTF-8 bytes min/default={Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(minimumMetrics))}/{Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(defaultMetrics))}; statements min/default calls={minimumBaselineStatements.ResponseBytes.Count + minimumCandidateStatements.ResponseBytes.Count}/{defaultBaselineStatements.ResponseBytes.Count + defaultCandidateStatements.ResponseBytes.Count}, response bytes={minimumBaselineStatements.ResponseBytes.Sum() + minimumCandidateStatements.ResponseBytes.Sum()}/{defaultBaselineStatements.ResponseBytes.Sum() + defaultCandidateStatements.ResponseBytes.Sum()}; all four statement identities for both variants and grant/compile source values matched.");
         await session.ShutdownAsync();
         session.AssertNoDatabaseConnections();
     }

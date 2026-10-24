@@ -283,8 +283,8 @@ public sealed class WorkflowModule : ISqlHarnessModule
     {
         var planPagingFixture = _scenario.Id == WorkflowScenarios.PlanPagingId;
         var diagnosticFixture = _scenario.Id == WorkflowScenarios.ArtifactDiagnosticEvidenceId;
-        var baselinePlan = PlanXml(_scenario.BaselineSql, warningOnSecond: false, planPagingFixture, diagnosticFixture);
-        var candidatePlan = PlanXml(_scenario.CandidateSql, warningOnSecond: shape.WarningOnCandidate, planPagingFixture, diagnosticFixture);
+        var baselinePlan = PlanXml(_scenario.BaselineSql, warningOnSecond: false, planPagingFixture, diagnosticFixture, candidateDiagnosticProfile: false);
+        var candidatePlan = PlanXml(_scenario.CandidateSql, warningOnSecond: shape.WarningOnCandidate, planPagingFixture, diagnosticFixture, candidateDiagnosticProfile: true);
         var baselineElapsed = ElapsedSamples(shape.BaselineElapsed, shape.UnstableBaseline);
         var candidateElapsed = ElapsedSamples(shape.CandidateElapsed, false);
         var table = _scenario.Id == WorkflowScenarios.CollidingOperatorsId ? "Accounts" : "Orders";
@@ -410,7 +410,12 @@ public sealed class WorkflowModule : ISqlHarnessModule
             Engine: _scenario.Engine);
     }
 
-    private static string PlanXml(string sql, bool warningOnSecond, bool planPagingFixture, bool diagnosticFixture = false)
+    private static string PlanXml(
+        string sql,
+        bool warningOnSecond,
+        bool planPagingFixture,
+        bool diagnosticFixture = false,
+        bool candidateDiagnosticProfile = false)
     {
         if (planPagingFixture)
         {
@@ -422,7 +427,8 @@ public sealed class WorkflowModule : ISqlHarnessModule
         var statements = sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (statements.Length == 0)
             statements = [sql];
-        var body = string.Join("", statements.Select((text, index) => RelOp(text, warningOnSecond && index == 1, index, diagnosticFixture)));
+        var body = string.Join("", statements.Select((text, index) => RelOp(
+            text, warningOnSecond && index == 1, index, diagnosticFixture, candidateDiagnosticProfile)));
         return """
             <?xml version="1.0" encoding="utf-8"?>
             <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
@@ -437,7 +443,12 @@ public sealed class WorkflowModule : ISqlHarnessModule
             """;
     }
 
-    private static string RelOp(string statementText, bool warning, int statementOrdinal, bool diagnosticFixture)
+    private static string RelOp(
+        string statementText,
+        bool warning,
+        int statementOrdinal,
+        bool diagnosticFixture,
+        bool candidateDiagnosticProfile)
     {
         var escaped = System.Security.SecurityElement.Escape(statementText) ?? statementText;
         var warnings = warning
@@ -453,10 +464,10 @@ public sealed class WorkflowModule : ISqlHarnessModule
             : table.Contains("Customers", StringComparison.Ordinal) ? "[IX_Customers]"
             : table.Contains("Payments", StringComparison.Ordinal) ? "[IX_Payments]" : "[IX_Orders]";
         var queryPlanAttributes = diagnosticFixture
-            ? $" DegreeOfParallelism=\"{1 + statementOrdinal}\" CompileTime=\"{20 - statementOrdinal * 3}\" CompileCPU=\"{10 + statementOrdinal}\""
+            ? $" DegreeOfParallelism=\"{1 + statementOrdinal}\" CompileTime=\"{(candidateDiagnosticProfile ? 20 : 5) + statementOrdinal}\" CompileCPU=\"{(candidateDiagnosticProfile ? 10 : 2) + statementOrdinal}\""
             : string.Empty;
         var memoryGrant = diagnosticFixture
-            ? $"<MemoryGrantInfo RequestedMemory=\"{100 + statementOrdinal * 50}\" GrantedMemory=\"{80 + statementOrdinal * 40}\" MaxUsedMemory=\"{60 + statementOrdinal * 30}\" />"
+            ? $"<MemoryGrantInfo RequestedMemory=\"{(candidateDiagnosticProfile ? 120 : 240) + statementOrdinal * 50}\" GrantedMemory=\"{(candidateDiagnosticProfile ? 90 : 200) + statementOrdinal * 40}\" MaxUsedMemory=\"{(candidateDiagnosticProfile ? 60 : 160) + statementOrdinal * 30}\" />"
             : string.Empty;
         var counters = diagnosticFixture
             ? $"<RunTimeInformation><RunTimeCountersPerThread Thread=\"0\" ActualRows=\"1\" ActualExecutions=\"1\" ActualLogicalReads=\"{100 + statementOrdinal * 10}\" ActualLobLogicalReads=\"{statementOrdinal * 2}\" ActualScans=\"{3 + statementOrdinal}\" /></RunTimeInformation>"
