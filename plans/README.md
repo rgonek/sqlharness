@@ -10,7 +10,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [105](105-artifact-diagnostic-evidence.md) | Source-scoped persisted statement grants and compilation evidence with offline artifact reads | 103 merged; 104 recommended only | IN PROGRESS — Task 1 focused suites green, task review pending ([evidence](105-evidence/task-1-shape.md)) |
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 
-| [105](105-artifact-diagnostic-evidence.md) | Bounded statement IO, scans, grant/compilation diagnostics | 103 implemented; 104 recommended | IN PROGRESS / STOP — Task 1 reviewed at `5985772e`; Task 2 uncommitted: 4096-byte MCP failure after two fix attempts; Task 3/final gate pending ([evidence](105-evidence/task-2-debugging.md)) |
+| [105](105-artifact-diagnostic-evidence.md) | Bounded statement IO, scans, grant/compilation diagnostics | 103 implemented; 104 recommended | IN PROGRESS — Task 1 reviewed; Task 2 implementation committed, independent review pending; Task 3/final gate pending ([evidence](105-evidence/task-2-debugging.md)) |
 
 ## Pending
 

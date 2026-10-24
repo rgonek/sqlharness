@@ -385,13 +385,13 @@ public sealed class McpToolHandlers(
         string section,
         [Description("Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.")]
         int? cursor = null,
-        [Description("measure/set default to query; compare needs baseline/candidate.")]
+        [Description("Executable section=plan selector: measure/set uses query; compare uses baseline or candidate. metrics and statements return all stored source identities.")]
         string? variant = null,
-        [Description("Zero-based statement ordinal for section=plan.")]
+        [Description("Executable section=plan selector: zero-based statement ordinal within the selected repetition. Not used for metrics or statements.")]
         int statement = 0,
-        [Description("Measure parameter set for section=plan.")]
+        [Description("Executable section=plan selector: exact measure parameter-set name. Not used for metrics or statements.")]
         string? parameterSet = null,
-        [Description(McpToolCatalog.RepetitionDescription)]
+        [Description("Executable section=plan selector: exact measured repetition; omitted selects the last measured repetition. Not used for metrics or statements.")]
         int? repetition = null,
         [Description("Return bounded statement text and predicates in section=plan.")]
         bool includeText = false,
@@ -709,7 +709,7 @@ public static class McpToolCatalog
     public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. Table-valued and list parameters are not supported. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
     public const string MeasureDescription = "Measure repeats. Optimization: subject+textual scope, independent of compare.requireContext. Ordered sets: isolated sessions/setup; failure stops, completed sets retained. Stability: per-set, not cross-set equivalence. TVP/list: no valueHash; low-entropy excluded from unkeyed hashes. statementEvidence: per-case collected counters, not total cost. Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements.";
     public const string CompareDescription = "Compare baseline/candidate measures+rows. subject/scope follow frozen compare.requireContext (capabilities); request target selects DB. Session/setup per set; failure stops, completed cells retained. Verdict/reasons, not exitCode: pass=no policy elapsed regression, not improvement. Equivalence follows selected order/duplicates/nullability, not domain equivalence. Dry-run validates only; execution not run; reports setup/baseline/candidate classifications. statementEvidence: counters per variant/set/cell, not total cost. Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements.";
-    public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
+    public const string ArtifactSectionDescription = "Safe saved section. metrics includes source-scoped grant/compile distributions and STATISTICS IO ScanCount distributions when captured; statements includes bounded per-object logical reads, LOB reads, and separate Showplan ActualScans. Missing diagnostics are unavailable/partial, not zero. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
     public const string ArtifactPageSizeDescription = "Source page size 1..512 for matrix-cells, operators, statements, or plan; defaults are 32, 32, 128, 128. The byte budget may return fewer items; continue from its cursor.";
     public const string ArtifactDescription = "Offline saved-artifact read. maxResultBytes defaults to 65536, capped by process limit. Use returned continuation for pages. Plan clipping reports omittedChildCount/omittedSubtreeCount.";
     public const string WatchDescription = "Poll a bounded query until its stop condition or duration limit. Poll output has no continuation; inspect emitted polls, source omissions, and projection omissions in this response.";

@@ -59,6 +59,30 @@ public sealed class McpTokenBudgetTests
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
     }
 
+    [Fact]
+    public void Artifact_statement_that_cannot_fit_the_minimum_budget_returns_a_render_error()
+    {
+        var section = new ArtifactStatementsSection("artifact", "compare",
+        [
+            new ArtifactStatementMetric(new string('v', 5000), null, null, 0, new string('h', 64), 1, 2, 1, [])
+            {
+                Repetition = 1,
+                StatementIdentityComplete = true,
+            },
+        ], 0);
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null),
+            "sqlharness_artifact", new McpResultBudget(4096, 0));
+
+        ResultTextBytes(result, 4096);
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var envelope = document.RootElement;
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
+        Assert.Equal("output_budget_too_small", envelope.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("render", envelope.GetProperty("error").GetProperty("phase").GetString());
+    }
+
     private static McpProcessContext RequestProcess() => McpProcessContext.Create(new McpServerOptions
     {
         RequestScope = true,

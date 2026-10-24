@@ -88,7 +88,10 @@ public sealed record StatementObjectCounters(
     string Kind,
     long LogicalReads,
     long LobLogicalReads,
-    long Scans);
+    long Scans)
+{
+    public bool Complete { get; init; } = true;
+}
 
 public sealed record HiddenWork(string Kind, string Name, long? Executions, double? SharePercent);
 
@@ -520,7 +523,10 @@ internal static class JournalStatementMetricsExtractor
             Complete &= complete;
         }
 
-        public StatementObjectCounters ToRecord() => new(Object, Kind, LogicalReads, LobLogicalReads, Scans);
+        public StatementObjectCounters ToRecord() => new(Object, Kind, LogicalReads, LobLogicalReads, Scans)
+        {
+            Complete = Complete,
+        };
     }
 }
 
@@ -711,6 +717,25 @@ internal static class ArtifactStatementProjector
         var runDiagnostics = new List<ArtifactRunPlanDiagnostic>();
         var diagnosticCases = new List<ArtifactPlanDiagnosticAvailability>();
         var diagnosticSourceCount = 0;
+        var scanEvidenceRuns = runs.Take(512).Select(run =>
+        {
+            var tables = run.TableIoComplete == true
+                ? run.TableIo.GroupBy(item => item.Table, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase).ToArray()
+                : [];
+            return new ArtifactStatisticsIoRun(
+                run.Variant,
+                run.ParameterSet,
+                run.MatrixCell,
+                run.Repetition,
+                run.TableIoComplete == true ? "available" : "unavailable",
+                tables.Take(64).ToDictionary(group => group.Key, group => group.Sum(item => item.ScanCount), StringComparer.OrdinalIgnoreCase),
+                Math.Max(0, tables.Length - 64));
+        }).ToArray();
+        var scanAvailability = runs.Count == 0 || scanEvidenceRuns.All(item => item.Availability == "unavailable")
+            ? "unavailable"
+            : scanEvidenceRuns.Length == runs.Count && scanEvidenceRuns.All(item => item.Availability == "available")
+                ? "available" : "partial";
         foreach (var run in runs)
         {
             var caseKey = (run.Variant, run.ParameterSet, run.MatrixCell);
@@ -741,6 +766,7 @@ internal static class ArtifactStatementProjector
                 }
 
                 var metric = metrics[index];
+                var statementObjects = metric.Objects ?? [];
                 var attribution = omittedFromRun > 0 ? StatementStatus.Partial : statuses[index];
                 legacyMetrics.TryGetValue((metric.PlanDocumentOrdinal, metric.PlanStatementIndex), out var legacyMetric);
                 var statementDiagnostics = diagnosticSources
@@ -783,6 +809,15 @@ internal static class ArtifactStatementProjector
                     Limitations = Limitations(allHidden),
                     PlanDiagnostics = statementDiagnostics.Take(16).Select(ToArtifactDiagnostic).ToArray(),
                     OmittedPlanDiagnostics = statementDiagnostics.Length > 16 ? statementDiagnostics.Length - 16 : null,
+                    ObjectIoAvailability = statementObjects.Count == 0 ? "unavailable"
+                        : metric.CountersComplete == true && statementObjects.All(item => item.Complete) ? "available" : "partial",
+                    Objects = statementObjects.Take(64).Select(item => new ArtifactStatementObjectIo(
+                        item.Object,
+                        item.Kind,
+                        item.Complete ? item.LogicalReads : null,
+                        item.Complete ? item.LobLogicalReads : null,
+                        item.Complete ? item.Scans : null)).ToArray(),
+                    OmittedObjects = statementObjects.Count > 64 ? statementObjects.Count - 64 : null,
                 });
             }
         }
@@ -809,6 +844,9 @@ internal static class ArtifactStatementProjector
             PlanDiagnosticCases = diagnosticCases.Take(512).ToArray(),
             OmittedRunPlanDiagnostics = Math.Max(0, runDiagnostics.Count - 512),
             OmittedPlanDiagnosticCases = Math.Max(0, diagnosticCases.Count - 512),
+            StatisticsIoScanCountAvailability = scanAvailability,
+            StatisticsIoScanCountRuns = scanEvidenceRuns,
+            OmittedStatisticsIoScanCountRuns = Math.Max(0, runs.Count - scanEvidenceRuns.Length),
             OmittedByCase = omittedByCase.Select(pair => new ArtifactStatementOmission(
                 pair.Key.Variant, pair.Key.ParameterSet, pair.Key.MatrixCell, pair.Value)).ToArray(),
         };

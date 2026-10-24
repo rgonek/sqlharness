@@ -833,6 +833,71 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Saved_numeric_diagnostics_keep_statement_io_and_run_distributions_source_scoped()
+    {
+        using var temp = new TempDirectory();
+        static string Plan(long requested, long reads, long lobReads, long scans) => $$"""
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><Statements>
+                <StmtSimple StatementText="SELECT * FROM dbo.Orders"><QueryPlan CompileTime="7" CompileCPU="3">
+                  <MemoryGrantInfo RequestedMemory="{{requested}}" GrantedMemory="6" MaxUsedMemory="4" />
+                  <RelOp NodeId="0" PhysicalOp="Index Seek">
+                    <RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="1" ActualExecutions="1" ActualLogicalReads="{{reads}}" ActualLobLogicalReads="{{lobReads}}" ActualScans="{{scans}}" /></RunTimeInformation>
+                    <IndexScan><Object Table="[dbo].[Orders]" /></IndexScan>
+                  </RelOp>
+                </QueryPlan></StmtSimple>
+              </Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 10, 12, 20, new Dictionary<string, long>(), "hash-1", [Plan(8, 5, 2, 3)], 0, "set-a")
+            {
+                TableIo = [new TableIoCounters("Orders", 2, 0, 0, 0, 0, 0, 0, 0)],
+                TableIoComplete = true,
+            },
+            new CompareRunArtifact("baseline", 2, 11, 13, 21, new Dictionary<string, long>(), "hash-2", [Plan(12, 7, 4, 5)], 0, "set-a")
+            {
+                TableIo = [new TableIoCounters("Orders", 6, 0, 0, 0, 0, 0, 0, 0)],
+                TableIoComplete = true,
+            },
+        };
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(CompareReport(), runs, "wind");
+        var artifactId = Path.GetFileName(directory);
+        var statements = ArtifactReader.ReadSection(temp.Path, artifactId, "statements");
+        var metrics = ArtifactReader.ReadSection(temp.Path, artifactId, "metrics");
+
+        using var statementJson = JsonDocument.Parse(JsonSerializer.Serialize(statements, ArtifactDirectoryPublisher.JsonOptions));
+        var row = Assert.Single(statementJson.RootElement.GetProperty("statements").EnumerateArray(),
+            item => item.GetProperty("repetition").GetInt32() == 1);
+        Assert.Equal("available", row.GetProperty("objectIoAvailability").GetString());
+        var objectIo = Assert.Single(row.GetProperty("objects").EnumerateArray());
+        Assert.Equal(5, objectIo.GetProperty("logicalReads").GetInt64());
+        Assert.Equal(2, objectIo.GetProperty("lobLogicalReads").GetInt64());
+        Assert.Equal(3, objectIo.GetProperty("showplanActualScans").GetInt64());
+        var projectedStatements = Assert.IsType<ArtifactStatementsSection>(
+            AgentOutputProjection.Project(Assert.IsType<ArtifactStatementsSection>(statements), 512, 128, out _, 65536));
+        Assert.Equal(5, Assert.Single(projectedStatements.Statements, item => item.Repetition == 1).Objects![0].LogicalReads);
+
+        using var metricsJson = JsonDocument.Parse(JsonSerializer.Serialize(metrics, ArtifactDirectoryPublisher.JsonOptions));
+        var variant = Assert.Single(metricsJson.RootElement.GetProperty("variants").EnumerateArray(),
+            item => item.GetProperty("name").GetString() == "baseline");
+        var scan = Assert.Single(metricsJson.RootElement.GetProperty("statisticsIoScanCountDistributions").EnumerateArray());
+        Assert.Equal("Orders", scan.GetProperty("table").GetString());
+        Assert.Equal("available", scan.GetProperty("availability").GetString());
+        Assert.Equal(2, scan.GetProperty("sampleCount").GetInt32());
+        Assert.Equal(4, scan.GetProperty("scanCount").GetProperty("median").GetInt64());
+        var diagnostic = Assert.Single(metricsJson.RootElement.GetProperty("planDiagnosticDistributions").EnumerateArray());
+        Assert.Equal("statement", diagnostic.GetProperty("scope").GetString());
+        Assert.Equal("set-a", diagnostic.GetProperty("parameterSet").GetString());
+        Assert.Equal(2, diagnostic.GetProperty("sampleCount").GetInt32());
+        Assert.Equal(10, diagnostic.GetProperty("grantRequestedKb").GetProperty("distribution").GetProperty("median").GetInt64());
+        Assert.Equal(3, diagnostic.GetProperty("compileCpuMs").GetProperty("distribution").GetProperty("median").GetInt64());
+    }
+
+    [Fact]
     public void Noncanonical_showplan_namespaces_do_not_produce_sql_server_diagnostics()
     {
         const string wrongRootNamespace = """
@@ -957,6 +1022,8 @@ public class ArtifactReaderTests
         using var legacyJson = JsonDocument.Parse(JsonSerializer.Serialize(legacy, ArtifactDirectoryPublisher.JsonOptions));
         Assert.Equal("unavailable", legacyJson.RootElement.GetProperty("statements")[0]
             .GetProperty("counterAttribution").GetString());
+        Assert.Equal("unavailable", legacyJson.RootElement.GetProperty("statements")[0]
+            .GetProperty("objectIoAvailability").GetString());
 
         var postgres = new CompareRunArtifact("baseline", 1, 0, 1, 0,
             new Dictionary<string, long>(), "hash", ["{\"Plan\":{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"orders\"}}"], 0);
