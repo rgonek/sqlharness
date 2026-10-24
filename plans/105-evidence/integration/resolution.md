@@ -20,3 +20,7 @@ Plan 105 (`1195297d`) was merged with local main `ab46345a` in this worktree. Me
 During integration, the first focused MCP run exposed request-scope catalog size 32,907 bytes and loss of the explicit `parameter-set` selector phrase. The artifact descriptions were compacted while retaining their selector meaning; the subsequent schema run caught cell-description parity, which was restored to the shared description. The final focused suites and catalog-size check above passed.
 
 This evidence is scoped to the focused integration checks. The combined Windows gate, branch formatting and independent reviews remain controller-owned. Linux, live database acceptance, installation and push remain unverified/not performed. The previously recorded ProcessRunner five-second transient was not changed or re-investigated.
+
+The amendment from `4c3028e2` to `fcd2a3a5` restored the already tracked Plan 106 report exactly from incoming main and made this resolution self-contained. It changed evidence/metadata only; compiled source and tests remained unchanged. The integration task review approved the source integration, and its provenance Minor is addressed by this clarification.
+
+Final controller outcome: both integration reviews approved, explicit branch format checked 24 C# files with exit 0, and the full combined Windows gate passed on `fcd2a3a5` (UI372, Core4700/11 skipped, MCP523/4 skipped). See [combined verification](verification.md). Local main fast-forward is authorized and next; no push.
