@@ -1,6 +1,6 @@
 # Plan 114: Add compact per-statement CPU and elapsed discovery
 
-> **Status:** Integration candidate on `plan-114`, merged with `main` at `51ee23bcc1dcc44355c1a364fbfd6584c0a06dcd`. Task and whole-branch integration source reviews approved; combined Windows gate and branch formatter are pending before local-main fast-forward. This is not yet integrated into the primary checkout.
+> **Status:** Integration candidate on `plan-114`, merged with `main` at `51ee23bcc1dcc44355c1a364fbfd6584c0a06dcd`. Integration and catalog follow-up source reviews approved; the combined Windows gate and branch formatter passed. Awaiting controller review and local-main fast-forward; this is not yet integrated into the primary checkout.
 
 ## Evidence and goal
 
