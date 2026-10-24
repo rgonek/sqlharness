@@ -25,3 +25,7 @@ No push, installation, Linux, installed-binary or implementation live-DB accepta
 - `git diff --exit-code d2f2b060 HEAD -- src tests docs`: exit 0 after the fast-forward.
 - The original untracked Plan 104 is preserved byte-identically at `D:/temp/sqlharness-plan104-main-preserve-20261024/original-untracked-plan104.md`; the implemented plan now occupies its tracked repository path.
 - The unrelated README patch and local planning additions remain unstaged; no unrelated user work is included in closeout.
+
+## Cleanup and final closeout
+
+The completed `plan-104` worktree and fully merged branch were removed without force. Its 54-file SDD recovery workspace was moved intact to `D:/temp/sqlharness-plan104-main-preserve-20261024/sdd-workspace`; all file hashes matched after relocation, with the manifest retained beside it. The tracked execution ledger records the final integration. Main closeout `8ba7b3d4` changed only Plan 104 documentation/evidence; product/test/docs remain identical to the verified merge. No unrelated user work was committed.
