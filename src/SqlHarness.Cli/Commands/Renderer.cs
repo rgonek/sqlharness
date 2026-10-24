@@ -138,19 +138,31 @@ public sealed class Renderer
     {
         var requestedBytes = options.MaximumBytes is >= 4096 and <= 1048576 ? options.MaximumBytes : 16 * 1024;
         var requestedCellChars = options.MaximumCellCharacters is >= 0 and <= AgentOutputLimits.MaximumCellCharacters ? options.MaximumCellCharacters : AgentOutputLimits.DefaultCellCharacters;
+        var lineEndingBytes = Encoding.UTF8.GetByteCount(output.NewLine);
+        var errorCellChars = AgentOutputLimits.ErrorCellCharacters(requestedCellChars);
         var error = outcome.MachineError;
         var errorOmitted = 0;
-        string Clip(string value)
+        var messageOmitted = false;
+        var hintOmitted = false;
+        var pathOmitted = false;
+        string Clip(string value, int maximumCharacters, out bool clipped)
         {
-            if (value.Length <= requestedCellChars) return value;
+            clipped = value.Length > maximumCharacters;
+            if (!clipped) return value;
             errorOmitted++;
-            var length = requestedCellChars;
-            if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
-            return value[..length];
+            return AgentOutputLimits.PrefixErrorText(value, maximumCharacters);
         }
         if (error is not null)
-            error = error with { Message = Clip(error.Message), Hint = error.Hint is null ? null : Clip(error.Hint), Location = error.Location is null ? null : error.Location with { Path = error.Location.Path is null ? null : Clip(error.Location.Path) } };
-        var boundedCommand = Clip(command);
+            error = error with
+            {
+                Message = Clip(error.Message, errorCellChars, out messageOmitted),
+                Hint = error.Hint is null ? null : Clip(error.Hint, errorCellChars, out hintOmitted),
+                Location = error.Location is null ? null : error.Location with
+                {
+                    Path = error.Location.Path is null ? null : Clip(error.Location.Path, requestedCellChars, out pathOmitted),
+                },
+            };
+        var boundedCommand = Clip(command, requestedCellChars, out var commandOmitted);
         var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead ? artifactRead.Section : outcome.Report;
         var status = statusOverride ?? (error is null
             ? "success"
@@ -166,9 +178,84 @@ public sealed class Renderer
                 truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = requestedCellChars } : null,
                 outcome.OperationRef, outcome.ParentOperationRef);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
-            if (bytes.Length + 1 <= requestedBytes)
+            if (bytes.Length + lineEndingBytes <= requestedBytes)
             {
                 output.Write(Encoding.UTF8.GetString(bytes));
+                output.WriteLine();
+                return;
+            }
+        }
+
+        if (error is not null)
+        {
+            var low = 0;
+            var high = Math.Max(Math.Max(error.Message.Length, error.Hint?.Length ?? 0), error.Location?.Path?.Length ?? 0);
+            byte[]? bestErrorBytes = null;
+            while (low <= high)
+            {
+                var characterLimit = low + (high - low) / 2;
+                var message = AgentOutputLimits.PrefixErrorText(error.Message, characterLimit);
+                var hint = error.Hint is null ? null : AgentOutputLimits.PrefixErrorText(error.Hint, characterLimit);
+                var locationPath = error.Location?.Path is null
+                    ? null
+                    : AgentOutputLimits.PrefixErrorText(error.Location.Path, characterLimit);
+                var omittedItems = (messageOmitted || message.Length < error.Message.Length ? 1 : 0) +
+                    (hintOmitted || (hint is not null && hint.Length < error.Hint!.Length) ? 1 : 0) +
+                    (pathOmitted || (locationPath is not null && locationPath.Length < error.Location!.Path!.Length) ? 1 : 0) +
+                    (commandOmitted ? 1 : 0) + (report is null ? 0 : 1);
+                var budgetedError = error with
+                {
+                    Message = message,
+                    Hint = hint,
+                    Location = error.Location is null ? null : error.Location with { Path = locationPath },
+                };
+                var truncation = omittedItems > 0
+                    ? new { omittedItems, maxCellChars = requestedCellChars, maxOutputBytes = requestedBytes }
+                    : null;
+                var envelope = new SqlHarnessAgentEnvelope(
+                    AgentEnvelopeSchema.Version, boundedCommand, "error", (int)outcome.ExitCode, null, budgetedError,
+                    truncation,
+                    outcome.OperationRef, outcome.ParentOperationRef);
+                var candidateBytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
+                if (candidateBytes.Length + lineEndingBytes <= requestedBytes)
+                {
+                    bestErrorBytes = candidateBytes;
+                    low = characterLimit + 1;
+                }
+                else
+                {
+                    high = characterLimit - 1;
+                }
+            }
+
+            if (bestErrorBytes is not null)
+            {
+                output.Write(Encoding.UTF8.GetString(bestErrorBytes));
+                output.WriteLine();
+                return;
+            }
+
+            var minimumError = error with
+            {
+                Message = string.Empty,
+                Hint = null,
+                Location = error.Location is null ? null : error.Location with { Path = null },
+            };
+            var minimumOmittedItems = (messageOmitted || error.Message.Length > 0 ? 1 : 0) +
+                (hintOmitted || error.Hint is { Length: > 0 } ? 1 : 0) +
+                (pathOmitted || error.Location?.Path is not null ? 1 : 0) +
+                (commandOmitted ? 1 : 0) + (report is null ? 0 : 1);
+            var minimumTruncation = minimumOmittedItems > 0
+                ? new { omittedItems = minimumOmittedItems, maxCellChars = requestedCellChars, maxOutputBytes = requestedBytes }
+                : null;
+            var minimumEnvelope = new SqlHarnessAgentEnvelope(
+                AgentEnvelopeSchema.Version, boundedCommand, "error", (int)outcome.ExitCode, null, minimumError,
+                minimumTruncation,
+                outcome.OperationRef, outcome.ParentOperationRef);
+            var minimumBytes = JsonSerializer.SerializeToUtf8Bytes(minimumEnvelope, CompactJson);
+            if (minimumBytes.Length + lineEndingBytes <= requestedBytes)
+            {
+                output.Write(Encoding.UTF8.GetString(minimumBytes));
                 output.WriteLine();
                 return;
             }
@@ -178,7 +265,7 @@ public sealed class Renderer
             new SqlHarnessError("output_budget_too_small", "render", "The minimum agent response does not fit the configured byte budget."),
             new { omittedItems = 1, maxOutputBytes = requestedBytes });
         var minimalBytes = JsonSerializer.SerializeToUtf8Bytes(minimal, CompactJson);
-        if (minimalBytes.Length + 1 <= requestedBytes)
+        if (minimalBytes.Length + lineEndingBytes <= requestedBytes)
         {
             output.Write(Encoding.UTF8.GetString(minimalBytes));
             output.WriteLine();

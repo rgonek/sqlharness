@@ -95,7 +95,7 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -127,7 +127,7 @@ public sealed class McpToolHandlers(
         string? expectDatabase = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -188,7 +188,7 @@ public sealed class McpToolHandlers(
         int? timeout = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -238,7 +238,7 @@ public sealed class McpToolHandlers(
         bool compareNullability = false,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -268,7 +268,7 @@ public sealed class McpToolHandlers(
         [MinLength(1), MaxLength(32)] string[]? parameterSetFiles = null,
         bool compareNullability = false,
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         int? maxOperationSeconds = null,
         bool dryRun = false,
@@ -304,7 +304,7 @@ public sealed class McpToolHandlers(
         string? maxDuration = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -342,7 +342,7 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
@@ -364,7 +364,7 @@ public sealed class McpToolHandlers(
         string? file = null,
         [Description("includeText (default true) returns bounded statement text and predicates; false returns metadata only.")]
         bool includeText = true,
-        [Description("Cell clip 0..4096 characters; default 2048.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_plan", ctx, async token =>
@@ -395,7 +395,7 @@ public sealed class McpToolHandlers(
         int? repetition = null,
         [Description("Include plan text and predicates.")]
         bool includeText = false,
-        [Description("Cell text clip, max 4096.")]
+        [Description(McpToolCatalog.CellCharactersDescription)]
         int? maxCellChars = null,
         [Description("Result byte budget.")]
         [Range(McpLimits.MinCallToolResultBudgetBytes, McpLimits.MaxCallToolResultBudgetBytes)]
@@ -691,7 +691,8 @@ public static class McpToolCatalog
 {
     /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
     public const string CapabilitiesDescription =
-        "Runtime configuration: scopeMode, compareContext, connectionTimeoutSeconds, defaultExecutionTimeoutSeconds, engines, allowedProfiles, inputRoots, processLimits and configurationRef. Timeout values are seconds; Azure CLI token acquisition has a separate budget. Omitted SQL timeouts use defaultExecutionTimeoutSeconds. Reuse for this process; refresh after reconnect or restart.";
+        "Runtime config: scopeMode, compareContext, connectionTimeoutSeconds, SQL timeouts, engines, allowedProfiles, inputRoots, processLimits, configurationRef. After redaction, Message/Hint use max(requested cell limit, 2048), capped at 4096 chars and response bytes; Location.Path uses the requested limit. Tiny budgets keep error code/phase and count omissions. Timeouts are seconds; Azure CLI token acquisition has a separate budget. Omitted SQL timeouts use defaultExecutionTimeoutSeconds. Reuse per process; refresh after reconnect/restart.";
+    public const string CellCharactersDescription = "0..4096; default 2048.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     public const string OperationLabelDescription = "Optional plain-text label for this operation (up to 120 Unicode code points).";
@@ -710,13 +711,13 @@ public static class McpToolCatalog
     public const string MeasureDescription = "Measure repeats. Optimization: subject+textual scope, independent of compare.requireContext. Ordered sets: isolated sessions/setup; failure stops, completed sets retained. Stability: per-set, not cross-set equivalence. TVP/list: no valueHash; low-entropy excluded from unkeyed hashes. statementEvidence: per-case collected counters, not total cost. Optional saved diagnostics; no diagnostic read is required for every optimization: artifactId via sqlharness_artifact sections metrics/statements holds memory, compile, IO. Exact repetitions/row limits: section=statements.";
     public const string CompareDescription = "Compare baseline/candidate measures+rows. subject/scope follow frozen compare.requireContext (capabilities); request target selects DB. Session/setup per set; failure stops, completed cells retained. Verdict/reasons, not exitCode: pass=no policy elapsed regression, not improvement. Equivalence follows selected order/duplicates/nullability, not domain equivalence. Dry-run validates only; execution not run; reports setup/baseline/candidate classifications. statementEvidence: counters per variant/set/cell, not total cost. Optional saved diagnostics; no diagnostic read is required for every optimization: artifactId via sqlharness_artifact sections metrics/statements holds memory, compile, IO. Exact repetitions/row limits: section=statements.";
     public const string ArtifactSectionDescription = "metrics: grant/compile by planDocumentOrdinal/planQueryOrdinal; STATISTICS IO ScanCount. statements: planDiagnostics, object logicalReads/lobLogicalReads, separate Showplan ActualScans. Missing is unavailable/partial, not zero; continue statements for exact identities.";
-    public const string ArtifactCursorDescription = "Zero-based cursor for matrix-cells, operators, statements, and plan; use returned continuation.";
+    public const string ArtifactCursorDescription = "Zero-based cursor: matrix-cells/operators/statements/plan; use continuation.";
     public const string ArtifactVariantDescription = "Plan only: measure/set=query; compare=baseline|candidate.";
     public const string ArtifactStatementDescription = "plan only: zero-based statement ordinal.";
     public const string ArtifactParameterSetDescription = "plan only: exact measure parameter-set name.";
-    public const string ArtifactRepetitionDescription = "plan only: exact repetition; default last measured.";
+    public const string ArtifactRepetitionDescription = "Plan only: exact repetition; default last measured. Missing plan stays missing.";
     public const string ArtifactPageSizeDescription = "Page max 512; defaults matrix-cells/operators 32, statements/plan 128. Byte budget may return fewer; use continuation.";
-    public const string ArtifactDescription = "Saved artifact. Follow statements continuation for exact source identities.";
+    public const string ArtifactDescription = "Saved artifact; statements continuation gives exact source identities.";
     public const string WatchDescription = "Poll a bounded query until its stop condition or duration limit. Poll output has no continuation; inspect emitted polls, source omissions, and projection omissions in this response.";
     public const string QueryDescription = "A query duration is one execution's elapsed time, not benchmark evidence. Estimated plan rows are optimizer estimates; actualRows are observed rows and executions is the operator count. Dry-run reports validation: passed and execution: not-run.";
     public const string PlanDescription = "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only. Clipped nodes report omittedChildCount and omittedSubtreeCount.";
