@@ -411,7 +411,8 @@ public sealed class CapabilitiesCommandTests
 
         Assert.Contains("source-scoped grant/compile", guidance, StringComparison.Ordinal);
         Assert.Contains("STATISTICS IO ScanCount", guidance, StringComparison.Ordinal);
-        Assert.Contains("statements provides per-statement plan diagnostics and object IO with continuation", guidance, StringComparison.Ordinal);
+        Assert.Contains("statement-summary provides discovery-only statement CPU/elapsed values", guidance, StringComparison.Ordinal);
+        Assert.Contains("statements provides exact per-statement diagnostics and object IO with continuation", guidance, StringComparison.Ordinal);
         Assert.Contains("partial or unavailable, not zero", guidance, StringComparison.Ordinal);
     }
 

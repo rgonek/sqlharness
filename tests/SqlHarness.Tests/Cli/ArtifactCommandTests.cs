@@ -177,10 +177,10 @@ public sealed class ArtifactCommandTests
         Assert.DoesNotContain("sessionTempStatements", limits.EnumerateObject().Select(property => property.Name));
         var read = limits.GetProperty("artifactRead");
         Assert.Equal(
-            ["summary", "metrics", "operators", "statements", "matrix-cells", "plan"],
+            ["summary", "metrics", "operators", "statements", "statement-summary", "matrix-cells", "plan"],
             read.GetProperty("sections").EnumerateArray().Select(section => section.GetString()!).ToArray());
         Assert.Equal(2, read.GetProperty("manifestVersion").GetInt32());
-        Assert.Equal("matrix-cells,operators,plan,statements", read.GetProperty("pagedSections").GetString());
+        Assert.Equal("matrix-cells,operators,plan,statements,statement-summary", read.GetProperty("pagedSections").GetString());
         Assert.Equal("variant,statement,parameterSet,repetition,includeText", read.GetProperty("planSelectors").GetString());
         Assert.Equal(128, read.GetProperty("planSourceWindowNodes").GetInt32());
         Assert.Equal("each plan response is byte-budgeted; continuation advances by nodes returned",

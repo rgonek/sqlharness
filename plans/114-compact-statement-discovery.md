@@ -1,6 +1,6 @@
 # Plan 114: Add compact per-statement CPU and elapsed discovery
 
-> **Status:** accepted research follow-up from Plan 109; TODO. This file is an implementation handoff, not authorization to implement, merge, push, use a live database, or run paid-agent trials.
+> **Status:** Implemented on feature branch `plan-114`; Windows `just verify` and branch formatting pass. Awaiting independent task and whole-branch review; not integrated or pushed.
 
 ## Evidence and goal
 

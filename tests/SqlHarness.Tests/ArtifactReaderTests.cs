@@ -1366,6 +1366,62 @@ public class ArtifactReaderTests
         Assert.Null(projectedLast.Continuation);
     }
 
+    [Fact]
+    public void Statement_summary_reads_compact_cpu_elapsed_records_in_source_order()
+    {
+        using var temp = new TempDirectory();
+        const string id = "statement-summary-pages";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"statements\"]}");
+        var source = new[]
+        {
+            new ArtifactStatementMetric("baseline", "set-界", 7, 2, "hash-\"one", 12, 34, 4, [new StatementOperatorSummary(1, "Index Seek", "dbo.T", null, 1, 1, 1)]),
+            new ArtifactStatementMetric("candidate", null, null, 0, "hash-two", null, 56, null, []),
+            new ArtifactStatementMetric("candidate", "set-b", 3, 1, "hash-three", 78, null, null, []),
+        };
+        var stored = JsonNode.Parse(JsonSerializer.Serialize(
+            new ArtifactStatementsSection(id, "compare", source, 0), new JsonSerializerOptions(JsonSerializerDefaults.Web)))!;
+        var legacyStatement = stored["statements"]![1]!.AsObject();
+        legacyStatement.Remove("cpuTimeMilliseconds");
+        legacyStatement.Remove("elapsedTimeMilliseconds");
+        File.WriteAllText(Path.Combine(directory, "statements.json"), stored.ToJsonString());
+
+        var first = Assert.IsType<ArtifactStatementSummarySection>(ArtifactReader.ReadSection(
+            temp.Path, id, "statement-summary", cursor: 0, pageSize: 2));
+        Assert.Equal(id, first.ArtifactId);
+        Assert.Equal("compare", first.ArtifactKind);
+        Assert.Equal(0, first.Cursor);
+        Assert.Equal(2, first.Continuation);
+        Assert.Equal(0, first.OmittedStatements);
+        Assert.Equal(
+            [("baseline", "set-界", 7, 2, "hash-\"one", (long?)12, (long?)34),
+             ("candidate", null, null, 0, "hash-two", null, null)],
+            first.Statements.Select(statement => (statement.Variant, statement.ParameterSet, statement.MatrixCell,
+                statement.StatementOrdinal, statement.StatementHash, statement.CpuTimeMilliseconds,
+                statement.ElapsedTimeMilliseconds)).ToArray());
+
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(first, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var rows = json.RootElement.GetProperty("statements").EnumerateArray().ToArray();
+        Assert.Equal(["variant", "parameterSet", "matrixCell", "statementOrdinal", "statementHash", "cpuTimeMilliseconds", "elapsedTimeMilliseconds"],
+            rows[0].EnumerateObject().Select(property => property.Name).ToArray());
+        Assert.False(rows[0].TryGetProperty("topOperators", out _));
+        Assert.False(rows[0].TryGetProperty("repetition", out _));
+        Assert.False(rows[0].TryGetProperty("planDiagnostics", out _));
+        Assert.Equal(JsonValueKind.Null, rows[1].GetProperty("cpuTimeMilliseconds").ValueKind);
+        Assert.Equal(JsonValueKind.Null, rows[1].GetProperty("elapsedTimeMilliseconds").ValueKind);
+        Assert.False(json.RootElement.TryGetProperty("sql", out _));
+
+        var second = Assert.IsType<ArtifactStatementSummarySection>(ArtifactReader.ReadSection(
+            temp.Path, id, "statement-summary", cursor: first.Continuation, pageSize: 2));
+        var last = Assert.Single(second.Statements);
+        Assert.Equal(("candidate", "set-b", 3, 1, "hash-three", (long?)78, (long?)null),
+            (last.Variant, last.ParameterSet, last.MatrixCell, last.StatementOrdinal, last.StatementHash,
+                last.CpuTimeMilliseconds, last.ElapsedTimeMilliseconds));
+        Assert.Null(second.Continuation);
+    }
+
     [Theory]
     [InlineData(4096)]
     [InlineData(65536)]

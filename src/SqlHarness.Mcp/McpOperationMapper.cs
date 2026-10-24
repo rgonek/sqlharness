@@ -22,6 +22,7 @@ public sealed record McpArtifactPageLimits(
     int MatrixCellsDefault,
     int OperatorsDefault,
     int StatementsDefault,
+    int StatementSummariesDefault,
     int PlanDefault);
 
 /// <summary>
@@ -125,7 +126,7 @@ public static partial class McpOperationMapper
     private static readonly HashSet<string> SnapshotActions = new(StringComparer.OrdinalIgnoreCase)
         { "capture", "diff" };
     private static readonly HashSet<string> ArtifactSections = new(StringComparer.OrdinalIgnoreCase)
-        { "summary", "metrics", "operators", "statements", "matrix-cells", "plan" };
+        { "summary", "metrics", "operators", "statements", "statement-summary", "matrix-cells", "plan" };
 
     private static readonly TimeSpan DefaultWatchInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DefaultWatchMaxDuration = TimeSpan.FromMinutes(15);
@@ -202,6 +203,7 @@ public static partial class McpOperationMapper
         1, ArtifactReader.MaxPageSourceItems,
         ArtifactReader.DefaultMatrixCellsPageSourceItems,
         ArtifactReader.DefaultOperatorsPageSourceItems,
+        ArtifactReader.DefaultStatementsPageSourceItems,
         ArtifactReader.DefaultStatementsPageSourceItems,
         ArtifactReader.MaxPlanPageSourceNodes);
 
@@ -574,7 +576,7 @@ public static partial class McpOperationMapper
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (section is null || !ArtifactSections.Contains(section))
-            throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.");
+            throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators, statements, statement-summary, matrix-cells, plan.");
         if (section != ArtifactReader.PlanSection && (variant is not null || statement != 0 || parameterSet is not null || repetition is not null || includeText))
             throw new McpMappingException("Plan selectors are only valid for the plan section.");
         return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section, scope.Owner, cursor,
@@ -587,7 +589,7 @@ public static partial class McpOperationMapper
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (section is null || !ArtifactSections.Contains(section))
-            throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.");
+            throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators, statements, statement-summary, matrix-cells, plan.");
         // The shared manifest reader pins ids to single directory names under
         // the artifact root and serves only scope-owned safe sections: no raw
         // plans, queries.jsonl, SQL, or snapshot cells can leave through it.

@@ -381,7 +381,7 @@ public sealed class McpToolHandlers(
         [Description("Saved artifact ID.")]
         string id,
         [Description(McpToolCatalog.ArtifactSectionDescription)]
-        [AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells", "plan")]
+        [AllowedValues("summary", "metrics", "operators", "statements", "statement-summary", "matrix-cells", "plan")]
         string section,
         [Description(McpToolCatalog.ArtifactCursorDescription)]
         int? cursor = null,
@@ -710,14 +710,14 @@ public static class McpToolCatalog
     public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. Table-valued and list parameters are not supported. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
     public const string MeasureDescription = "Measure repeats. Optimization: subject+textual scope, independent of compare.requireContext. Ordered sets: isolated sessions/setup; failure stops, completed sets retained. Stability: per-set, not cross-set equivalence. TVP/list: no valueHash; low-entropy excluded from unkeyed hashes. statementEvidence: per-case collected counters, not total cost. Optional saved diagnostics; no diagnostic read is required for every optimization: artifactId via sqlharness_artifact sections metrics/statements holds memory, compile, IO. Exact repetitions/row limits: section=statements.";
     public const string CompareDescription = "Compare baseline/candidate measures+rows. subject/scope follow frozen compare.requireContext (capabilities); request target selects DB. Session/setup per set; failure stops, completed cells retained. Verdict/reasons, not exitCode: pass=no policy elapsed regression, not improvement. Equivalence follows selected order/duplicates/nullability, not domain equivalence. Dry-run validates only; execution not run; reports setup/baseline/candidate classifications. statementEvidence: counters per variant/set/cell, not total cost. Optional saved diagnostics; no diagnostic read is required for every optimization: artifactId via sqlharness_artifact sections metrics/statements holds memory, compile, IO. Exact repetitions/row limits: section=statements.";
-    public const string ArtifactSectionDescription = "metrics: grant/compile by planDocumentOrdinal/planQueryOrdinal; STATISTICS IO ScanCount. statements: planDiagnostics, object logicalReads/lobLogicalReads, separate Showplan ActualScans. Missing is unavailable/partial, not zero; continue statements for exact identities.";
-    public const string ArtifactCursorDescription = "Zero-based cursor: matrix-cells/operators/statements/plan; use continuation.";
-    public const string ArtifactVariantDescription = "Plan only: measure/set=query; compare=baseline|candidate.";
-    public const string ArtifactStatementDescription = "plan only: zero-based statement ordinal.";
-    public const string ArtifactParameterSetDescription = "plan only: exact measure parameter-set name.";
-    public const string ArtifactRepetitionDescription = "Plan only: exact repetition; default last measured. Missing plan stays missing.";
-    public const string ArtifactPageSizeDescription = "Page max 512; defaults matrix-cells/operators 32, statements/plan 128. Byte budget may return fewer; use continuation.";
-    public const string ArtifactDescription = "Saved artifact; statements continuation gives exact source identities.";
+    public const string ArtifactSectionDescription = "grant/compile by planQueryOrdinal; STATISTICS IO ScanCount. statements: planDiagnostics, logicalReads/lobLogicalReads, Showplan ActualScans. statement-summary: variant/set/cell/ordinal/hash CPU/elapsed; no operators/repetition; missing values unavailable/null.";
+    public const string ArtifactCursorDescription = "Zero-based cursor; continuation by section.";
+    public const string ArtifactVariantDescription = "Plan selector: measure/set=query; compare=baseline|candidate.";
+    public const string ArtifactStatementDescription = "plan: statement ordinal (zero-based).";
+    public const string ArtifactParameterSetDescription = "plan measure parameter-set name.";
+    public const string ArtifactRepetitionDescription = "plan repetition; default last measured; missing plan stays missing.";
+    public const string ArtifactPageSizeDescription = "Max 512; defaults matrix-cells/operators 32, statements/statement-summary/plan 128; byte budget may return fewer.";
+    public const string ArtifactDescription = "Saved artifact; exact source identities; continuation.";
     public const string WatchDescription = "Poll a bounded query until its stop condition or duration limit. Poll output has no continuation; inspect emitted polls, source omissions, and projection omissions in this response.";
     public const string QueryDescription = "A query duration is one execution's elapsed time, not benchmark evidence. Estimated plan rows are optimizer estimates; actualRows are observed rows and executions is the operator count. Dry-run reports validation: passed and execution: not-run.";
     public const string PlanDescription = "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only. Clipped nodes report omittedChildCount and omittedSubtreeCount.";
@@ -818,7 +818,7 @@ public static class McpToolCatalog
             factory.Tool(ToolNames[5], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until or untilUnchanged, within interval/maxDuration bounds. " + WatchDescription, true, false, null, true, true),
             factory.Tool(ToolNames[6], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true, true),
             factory.Tool(ToolNames[7], nameof(McpToolHandlers.PlanAsync), PlanDescription, true, false, true, false),
-            factory.Tool(ToolNames[8], nameof(McpToolHandlers.ArtifactAsync), ArtifactDescription + " Sections: summary, metrics, operators, statements, matrix-cells, and plan.", true, false, true, false),
+            factory.Tool(ToolNames[8], nameof(McpToolHandlers.ArtifactAsync), ArtifactDescription + " Sections: summary, metrics, operators, statements, statement-summary, matrix-cells, and plan.", true, false, true, false),
         };
         if (operationAnnotationsEnabled)
             tools.Add(factory.Tool(AnnotationToolName, nameof(McpToolHandlers.AnnotateAsync), AnnotationToolDescription, false, false, true, false));

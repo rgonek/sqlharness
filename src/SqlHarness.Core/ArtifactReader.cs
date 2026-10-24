@@ -196,6 +196,30 @@ public sealed record ArtifactStatementMetric(
     public int? OmittedObjects { get; init; }
 }
 
+/// <summary>Compact discovery identity and CPU/elapsed values for one saved statement record.</summary>
+public sealed record ArtifactStatementSummaryMetric(
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int? MatrixCell,
+    int StatementOrdinal,
+    string StatementHash,
+    long? CpuTimeMilliseconds,
+    long? ElapsedTimeMilliseconds);
+
+/// <summary>Bounded, paged discovery projection without repetition or operator evidence.</summary>
+public sealed record ArtifactStatementSummarySection(
+    string ArtifactId,
+    string ArtifactKind,
+    IReadOnlyList<ArtifactStatementSummaryMetric> Statements,
+    int OmittedStatements)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Continuation { get; init; }
+
+    [JsonIgnore]
+    public int Cursor { get; init; }
+}
+
 public sealed record ArtifactStatementObjectIo(
     string Object,
     string Kind,
@@ -324,6 +348,7 @@ public static class ArtifactReader
     public const string MetricsSection = "metrics";
     public const string OperatorsSection = "operators";
     public const string StatementsSection = "statements";
+    public const string StatementSummarySection = "statement-summary";
     public const string MatrixCellsSection = "matrix-cells";
     public const string PlanSection = "plan";
 
@@ -351,7 +376,7 @@ public static class ArtifactReader
     public const int DefaultOperatorsPageSourceItems = 32;
 
     public static readonly IReadOnlyList<string> SupportedSections =
-        [SummarySection, MetricsSection, OperatorsSection, StatementsSection, MatrixCellsSection, PlanSection];
+        [SummarySection, MetricsSection, OperatorsSection, StatementsSection, StatementSummarySection, MatrixCellsSection, PlanSection];
 
     private static readonly IReadOnlySet<string> SupportedKinds =
         new HashSet<string>(StringComparer.Ordinal) { CompareKind, MeasureKind, MeasureSetKind };
@@ -373,17 +398,17 @@ public static class ArtifactReader
         string root, string artifactId, string section, ArtifactOwner? owner = null, int? cursor = null,
         ArtifactPlanSelector? planSelector = null, bool includeText = false, int? pageSize = null)
     {
-        var pageable = section is MatrixCellsSection or OperatorsSection or StatementsSection or PlanSection;
+        var pageable = section is MatrixCellsSection or OperatorsSection or StatementsSection or StatementSummarySection or PlanSection;
         if (pageSize is < 1 or > MaxPageSourceItems || pageSize is not null && !pageable)
             throw new ArtifactReadException(
-                $"Artifact pageSize must be 1..{MaxPageSourceItems} and is only valid for pageable sections: matrix-cells, operators, statements, or plan.",
+                $"Artifact pageSize must be 1..{MaxPageSourceItems} and is only valid for pageable sections: matrix-cells, operators, statements, statement-summary, or plan.",
                 SqlHarnessExitCode.Safety);
         if (!SupportedSections.Contains(section, StringComparer.Ordinal))
             throw new ArtifactReadException(
-                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.",
+                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, statement-summary, matrix-cells, plan.",
                 SqlHarnessExitCode.Safety);
 
-        if (cursor is < 0 || cursor is not null && section is not (MatrixCellsSection or StatementsSection or OperatorsSection or PlanSection))
+        if (cursor is < 0 || cursor is not null && section is not (MatrixCellsSection or StatementsSection or StatementSummarySection or OperatorsSection or PlanSection))
             throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
         if (section != PlanSection && (planSelector is not null || includeText))
             throw new ArtifactReadException("Plan selectors are only valid for the plan section.", SqlHarnessExitCode.Safety);
@@ -395,6 +420,7 @@ public static class ArtifactReader
                 "The artifact is not available in the current scope.",
                 SqlHarnessExitCode.Safety);
         if (!manifest.Sections.Contains(section, StringComparer.Ordinal)
+            && !(section == StatementSummarySection && manifest.Sections.Contains(StatementsSection, StringComparer.Ordinal))
             && !(section == PlanSection && manifest.ArtifactKind is CompareKind or MeasureKind or MeasureSetKind))
             throw new ArtifactReadException(
                 $"Artifact section '{section}' is not available for this artifact.",
@@ -406,10 +432,11 @@ public static class ArtifactReader
             MetricsSection => ReadMetrics(directory, artifactId, manifest),
             OperatorsSection => ReadOperators(directory, artifactId, manifest, cursor ?? 0, pageSize ?? DefaultOperatorsPageSourceItems),
             StatementsSection => ReadStatements(directory, artifactId, manifest, cursor ?? 0, pageSize ?? DefaultStatementsPageSourceItems),
+            StatementSummarySection => ReadStatementSummary(directory, artifactId, manifest, cursor ?? 0, pageSize ?? DefaultStatementsPageSourceItems),
             MatrixCellsSection => ReadMatrixCells(directory, artifactId, cursor ?? 0, pageSize ?? DefaultMatrixCellsPageSourceItems),
             PlanSection => ReadPlan(directory, artifactId, manifest, planSelector, cursor ?? 0, includeText, pageSize ?? MaxPlanPageSourceNodes),
             _ => throw new ArtifactReadException(
-                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.",
+                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, statement-summary, matrix-cells, plan.",
                 SqlHarnessExitCode.Safety),
         };
         // Producer metadata is exposed only after the scope owner and section have been checked.
@@ -1181,6 +1208,20 @@ public static class ArtifactReader
         {
             throw new ArtifactReadException("Artifact storage is unavailable.", SqlHarnessExitCode.LocalStorage);
         }
+    }
+
+    private static ArtifactStatementSummarySection ReadStatementSummary(string directory, string artifactId,
+        ArtifactManifest manifest, int cursor, int pageSize)
+    {
+        var source = ReadStatements(directory, artifactId, manifest, cursor, pageSize);
+        var statements = source.Statements.Select(statement => new ArtifactStatementSummaryMetric(
+            statement.Variant, statement.ParameterSet, statement.MatrixCell, statement.StatementOrdinal,
+            statement.StatementHash, statement.CpuTimeMilliseconds, statement.ElapsedTimeMilliseconds)).ToArray();
+        return new ArtifactStatementSummarySection(artifactId, manifest.ArtifactKind, statements, source.OmittedStatements)
+        {
+            Continuation = source.Continuation,
+            Cursor = source.Cursor,
+        };
     }
 
     private static ArtifactStatementMetric NormalizeEvidence(ArtifactStatementMetric statement)

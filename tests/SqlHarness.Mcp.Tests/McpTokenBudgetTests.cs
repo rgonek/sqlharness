@@ -83,6 +83,35 @@ public sealed class McpTokenBudgetTests
         Assert.Equal("render", envelope.GetProperty("error").GetProperty("phase").GetString());
     }
 
+    [Fact]
+    public void Compact_statement_projection_skips_an_unfittable_identity_whole_and_counts_it()
+    {
+        var section = new ArtifactStatementSummarySection("artifact", "compare",
+        [
+            new ArtifactStatementSummaryMetric(new string('v', 5000), "large", null, 0, new string('h', 64), 1, 2),
+            new ArtifactStatementSummaryMetric("candidate", null, 3, 1, new string('c', 64), null, 4),
+        ], 0)
+        { Cursor = 0 };
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null),
+            "sqlharness_artifact", new McpResultBudget(4096, 0));
+
+        ResultTextBytes(result, 4096);
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var envelope = document.RootElement;
+        Assert.Equal("success", envelope.GetProperty("status").GetString());
+        var projection = envelope.GetProperty("result");
+        Assert.Equal(1, projection.GetProperty("omittedStatements").GetInt32());
+        Assert.Null(projection.TryGetProperty("continuation", out var continuation) ? continuation.GetInt32() : null);
+        var retained = Assert.Single(projection.GetProperty("statements").EnumerateArray());
+        Assert.Equal("candidate", retained.GetProperty("variant").GetString());
+        Assert.Equal(1, retained.GetProperty("statementOrdinal").GetInt32());
+        Assert.DoesNotContain(new string('v', 64), document.RootElement.GetRawText(), StringComparison.Ordinal);
+        Assert.True(envelope.TryGetProperty("truncation", out var truncation));
+        Assert.True(truncation.GetProperty("omittedItems").GetInt32() >= 1);
+    }
+
     private static McpProcessContext RequestProcess() => McpProcessContext.Create(new McpServerOptions
     {
         RequestScope = true,

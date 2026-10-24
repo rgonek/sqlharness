@@ -583,6 +583,48 @@ public static class AgentOutputProjection
                             PageError = null
                         };
                     }
+                case ArtifactStatementSummarySection summary:
+                    {
+                        var selected = new List<ArtifactStatementSummaryMetric>();
+                        var consumed = 0;
+                        var omittedStatements = summary.OmittedStatements + clippedItems;
+                        foreach (var statement in summary.Statements)
+                        {
+                            var candidate = summary with
+                            {
+                                Statements = selected.Append(statement).ToArray(),
+                                OmittedStatements = omittedStatements,
+                            };
+                            if (SerializedLength(candidate) + 384 <= maximumBytes)
+                            {
+                                selected.Add(statement);
+                                consumed++;
+                                continue;
+                            }
+
+                            // A complete identity that cannot fit alone must be skipped whole.
+                            // Advancing over that source record and counting it prevents a
+                            // continuation loop without manufacturing a partial identity.
+                            if (selected.Count == 0)
+                            {
+                                omittedStatements++;
+                                consumed++;
+                                continue;
+                            }
+                            break;
+                        }
+
+                        omittedStatements += Math.Max(0, summary.Statements.Count - consumed);
+                        omissions += Math.Max(0, summary.Statements.Count - selected.Count) + clippedItems;
+                        return summary with
+                        {
+                            Statements = selected,
+                            OmittedStatements = omittedStatements,
+                            Continuation = consumed < summary.Statements.Count
+                                ? summary.Cursor + consumed
+                                : summary.Continuation,
+                        };
+                    }
                 case ArtifactStatementsSection statements:
                     {
                         var selectedRunDiagnostics = statements.RunPlanDiagnostics.Take(detailLimit).ToArray();
