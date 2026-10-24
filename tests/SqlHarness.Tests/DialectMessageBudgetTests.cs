@@ -92,6 +92,71 @@ public sealed class DialectMessageBudgetTests
     }
 
     [Fact]
+    public async Task Typed_table_variable_identity_survives_omitted_text_when_detail_is_complete()
+    {
+        var session = new DrainingSession(command =>
+            command.Sql.StartsWith("SET", StringComparison.Ordinal) ? Empty() : SingleRow());
+        session.OnExecute = command =>
+        {
+            if (command.Sql.StartsWith("SET", StringComparison.Ordinal))
+                return;
+            for (var index = 0; index < 1500; index++)
+            {
+                var table = index % 2 == 0 ? $"#{index + 1:X8}" : "table variables";
+                session.Emit(3615,
+                    $"Table '{table}'. Scan count 1, logical reads 2, physical reads 0, lob logical reads 1.\n" + new string('x', 200));
+            }
+        };
+        using var raw = new CanonicalResultAccumulator();
+
+        var run = await new SqlServerDialect().ExecuteBenchmarkRunAsync(
+            session, "SELECT Value", [], 30, 1, "measure", raw,
+            captureComparison: true, comparisonMaximumRows: 1000, CancellationToken.None);
+
+        Assert.True(run.Artifact.MessageCount < 1500);
+        Assert.True(run.Artifact.TableIoComplete);
+        Assert.NotNull(run.Artifact.LogicalReadsByTableIdentity);
+        Assert.Equal(2250, run.Artifact.LogicalReadsByTableIdentity![StatisticsIoTableIdentity.AnonymousTableVariable]);
+        Assert.Equal(2250, run.Artifact.LogicalReadsByTableIdentity[StatisticsIoTableIdentity.Unknown("table variables")]);
+        Assert.Equal(4500, run.Artifact.LogicalReads);
+        Assert.Equal(751, run.Artifact.LogicalReadsByTable.Count);
+        Assert.Equal(3, run.Artifact.LogicalReadsByTable["#00000001"]);
+        Assert.Equal(2250, run.Artifact.LogicalReadsByTable["table variables"]);
+        Assert.Equal(1500, run.Artifact.TableIo.Sum(row => row.ScanCount));
+        Assert.Empty(session.Messages);
+    }
+
+    [Fact]
+    public async Task Mixed_unparseable_io_prevents_omitted_text_fallback_from_claiming_complete_identity()
+    {
+        var session = new DrainingSession(command =>
+            command.Sql.StartsWith("SET", StringComparison.Ordinal) ? Empty() : SingleRow());
+        session.OnExecute = command =>
+        {
+            if (command.Sql.StartsWith("SET", StringComparison.Ordinal))
+                return;
+            for (var index = 0; index < 1500; index++)
+                session.Emit(3615, $"""
+                    Table '#A1B2C3D4'. Scan count 1, logical reads 2, lob logical reads 1.
+                    Table 'Broken{index}'. Scan count 1, physical reads 0, lob logical reads 0.
+                    """);
+        };
+        using var raw = new CanonicalResultAccumulator();
+
+        var run = await new SqlServerDialect().ExecuteBenchmarkRunAsync(
+            session, "SELECT Value", [], 30, 1, "measure", raw,
+            captureComparison: true, comparisonMaximumRows: 1000, CancellationToken.None);
+
+        Assert.True(run.Artifact.MessageCount < 1500);
+        Assert.False(run.Artifact.TableIoComplete);
+        Assert.Null(run.Artifact.LogicalReadsByTableIdentity);
+        Assert.NotNull(run.Artifact.Metrics);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, run.Artifact.Metrics!.LogicalReadsAvailability);
+        Assert.Contains("omitted", Assert.Single(run.Artifact.Metrics.Warnings), StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(session.Messages);
+    }
+
+    [Fact]
     public async Task User_messages_imitating_statistics_are_ignored()
     {
         var session = new DrainingSession(command =>

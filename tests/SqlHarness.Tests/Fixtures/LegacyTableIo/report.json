@@ -1,0 +1,40 @@
+{
+  "target": {
+    "requestedServer": "legacy-server",
+    "requestedDatabase": "legacy-db",
+    "actualServer": "legacy-server",
+    "actualDatabase": "legacy-db",
+    "mode": "profile",
+    "engine": "sqlserver"
+  },
+  "repetitions": 3,
+  "measuredRunCount": 3,
+  "resultsEquivalent": true,
+  "baseline": {
+    "name": "baseline",
+    "cpuTimeMilliseconds": { "min": 1, "median": 2, "max": 3 },
+    "elapsedTimeMilliseconds": { "min": 4, "median": 5, "max": 6 },
+    "logicalReads": { "min": 17, "median": 19, "max": 23 },
+    "totalLogicalReadsByTable": { "#A1B2C3D4": 12, "table variables": 7 },
+    "operators": [],
+    "warnings": [],
+    "logicalReadsByTable": {
+      "#A1B2C3D4": { "min": 10, "median": 12, "max": 14 },
+      "table variables": { "min": 7, "median": 7, "max": 9 }
+    }
+  },
+  "candidate": {
+    "name": "candidate",
+    "cpuTimeMilliseconds": { "min": 2, "median": 3, "max": 4 },
+    "elapsedTimeMilliseconds": { "min": 5, "median": 6, "max": 7 },
+    "logicalReads": { "min": 20, "median": 21, "max": 25 },
+    "totalLogicalReadsByTable": { "#ABCDEF12": 15, "table variables": 6 },
+    "operators": [],
+    "warnings": [],
+    "logicalReadsByTable": {
+      "#ABCDEF12": { "min": 14, "median": 15, "max": 16 },
+      "table variables": { "min": 6, "median": 6, "max": 9 }
+    }
+  },
+  "artifactDirectory": "C:/artifacts/legacy"
+}

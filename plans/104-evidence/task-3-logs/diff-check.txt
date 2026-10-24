@@ -1,0 +1,2 @@
+warning: in the working copy of 'plans/104-evidence/sqlserver-internal-naming-research.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'plans/104-verification-evidence.md', LF will be replaced by CRLF the next time Git touches it

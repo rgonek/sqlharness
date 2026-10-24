@@ -11,7 +11,11 @@ public sealed class StatisticsIoDetailParserTests
 
         var table = Assert.Single(StatisticsIoDetailParser.Parse(text));
 
-        Assert.Equal(new TableIoCounters("Orders", 3, 120, 2, 0, 40, 7, 1, 5), table);
+        Assert.Equal(new TableIoCounters("Orders", 3, 120, 2, 0, 40, 7, 1, 5)
+        {
+            Identity = StatisticsIoTableIdentity.Unknown("Orders"),
+            RawTableName = "Orders",
+        }, table);
     }
 
     [Fact]
@@ -19,7 +23,11 @@ public sealed class StatisticsIoDetailParserTests
     {
         const string text = "Table 'Clients'. Scan count 1, logical reads 5, physical reads 0, lob logical reads 0.";
 
-        Assert.Equal(new TableIoCounters("Clients", 1, 5, 0, 0, 0, 0, 0, 0), Assert.Single(StatisticsIoDetailParser.Parse(text)));
+        Assert.Equal(new TableIoCounters("Clients", 1, 5, 0, 0, 0, 0, 0, 0)
+        {
+            Identity = StatisticsIoTableIdentity.Unknown("Clients"),
+            RawTableName = "Clients",
+        }, Assert.Single(StatisticsIoDetailParser.Parse(text)));
     }
 
     [Fact]
@@ -35,7 +43,11 @@ public sealed class StatisticsIoDetailParserTests
         var tables = StatisticsIoDetailParser.Parse(text);
 
         Assert.Equal(["Worktable", "O'Brien"], tables.Select(table => table.Table));
-        Assert.Equal(new TableIoCounters("O'Brien", 3, 10, 1, 0, 3, 0, 0, 0), tables[1]);
+        Assert.Equal(new TableIoCounters("O'Brien", 3, 10, 1, 0, 3, 0, 0, 0)
+        {
+            Identity = StatisticsIoTableIdentity.Unknown("O'Brien"),
+            RawTableName = "O'Brien",
+        }, tables[1]);
     }
 
     [Theory]
@@ -54,7 +66,11 @@ public sealed class StatisticsIoDetailParserTests
             Table 'Sales'. Segment reads 2, segment skipped 1.
             """;
 
-        Assert.Equal(new TableIoCounters("Sales", 1, 0, 0, 0, 0, 30, 0, 0), Assert.Single(StatisticsIoDetailParser.Parse(text)));
+        Assert.Equal(new TableIoCounters("Sales", 1, 0, 0, 0, 0, 30, 0, 0)
+        {
+            Identity = StatisticsIoTableIdentity.Unknown("Sales"),
+            RawTableName = "Sales",
+        }, Assert.Single(StatisticsIoDetailParser.Parse(text)));
     }
 
     [Fact]
@@ -89,5 +105,22 @@ public sealed class StatisticsIoDetailParserTests
 
         Assert.False(accumulator.Complete);
         Assert.Empty(accumulator.Snapshot());
+    }
+
+    [Fact]
+    public void Mixed_valid_and_unparseable_table_rows_mark_accumulation_incomplete()
+    {
+        var accumulator = new TableIoAccumulator();
+
+        accumulator.Add(3615, """
+            Table '#A1B2C3D4'. Scan count 1, logical reads 5, lob logical reads 1.
+            Table 'Broken'. Scan count 1, physical reads 0, lob logical reads 0.
+            """);
+
+        Assert.False(accumulator.Complete);
+        var row = Assert.Single(accumulator.Snapshot());
+        Assert.Equal(StatisticsIoTableIdentity.AnonymousTableVariable, row.Identity);
+        Assert.Equal(5, row.LogicalReads);
+        Assert.Equal(1, row.LobLogicalReads);
     }
 }

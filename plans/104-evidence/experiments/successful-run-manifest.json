@@ -1,0 +1,21 @@
+{
+  "format": "sqlharness-plan104-experiment-capture-v1",
+  "run": "initial successful matrix",
+  "sqlServerTarget": "localhost",
+  "database": "tempdb",
+  "authentication": "Windows integrated; credentials not recorded",
+  "sqlcmdPath": "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\180\\Tools\\Binn\\SQLCMD.EXE",
+  "sqlcmdArguments": ["-S", "localhost", "-E", "-C", "-d", "tempdb", "-l", "5", "-t", "30", "-b", "-y", "0", "-i", "matrix.sql"],
+  "captureStartedUtc": "2026-10-24T07:59:27.7079778Z",
+  "captureCompletedUtc": "2026-10-24T07:59:32.5590678Z",
+  "observedCommandWallTimeSeconds": 5.00025,
+  "exitCode": 0,
+  "inputSqlSha256": "65d46a34caf6adbad5846a92608cbfac31d5d9d1c19590fdcc811e89b3e596ce",
+  "stdoutFile": "matrix.stdout.txt",
+  "stdoutBytes": 445176,
+  "stdoutSha256": "fbc411f542336854ae53594f94948f6565957c169e827aa788e054ce0dc62fcc",
+  "stderrFile": "matrix.stderr.txt",
+  "stderrBytes": 0,
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "timePrecisionNote": "Timestamps are the output redirection file creation and final-write times; command runtime came from the execution controller."
+}

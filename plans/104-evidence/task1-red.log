@@ -1,0 +1,126 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.01] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.71]   Discovering: SqlHarness.Tests
+[xUnit.net 00:00:04.74]   Discovered:  SqlHarness.Tests
+[xUnit.net 00:00:04.87]   Starting:    SqlHarness.Tests
+[xUnit.net 00:00:05.09]     SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(repeat: 3) [FAIL]
+[xUnit.net 00:00:05.09]       System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+[xUnit.net 00:00:05.09]       Stack Trace:
+[xUnit.net 00:00:05.10]            at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+[xUnit.net 00:00:05.10]         D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkRunTests.cs(29,0): at SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(Int32 repeat)
+[xUnit.net 00:00:05.10]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+[xUnit.net 00:00:05.10]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+[xUnit.net 00:00:05.10]     SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(repeat: 2) [FAIL]
+[xUnit.net 00:00:05.10]       System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+[xUnit.net 00:00:05.10]       Stack Trace:
+[xUnit.net 00:00:05.10]            at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+[xUnit.net 00:00:05.10]         D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkRunTests.cs(29,0): at SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(Int32 repeat)
+[xUnit.net 00:00:05.10]            at InvokeStub_BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(Object, Span`1)
+[xUnit.net 00:00:05.10]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Measure_noteworthy_plan_refs_use_query_variant_and_parameter_set [71 ms]
+  Failed SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(repeat: 3) [71 ms]
+  Error Message:
+   System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+  Stack Trace:
+     at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+   at SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(Int32 repeat) in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkRunTests.cs:line 29
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(repeat: 2) [1 ms]
+  Error Message:
+   System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+  Stack Trace:
+     at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+   at SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(Int32 repeat) in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkRunTests.cs:line 29
+   at InvokeStub_BenchmarkRunTests.Generated_table_variable_reads_have_a_per_run_aggregate_median(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Passed SqlHarness.Tests.BenchmarkRunTests.Stable_and_long_escaped_keys_keep_their_own_distributions [20 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_noteworthy_omits_plan_refs_for_legacy_operators_without_origin [36 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Summary_repeats_metric_availability_for_compare_and_measure [190 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_noteworthy_picks_the_flagged_sibling_not_the_first_clean_key_match [7 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Measure_set_projection_keeps_medians_labels_and_caps_noteworthy_operators [93 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Matrix_projection_keeps_input_order_and_omits_full_run_and_operator_arrays [219 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_noteworthy_does_not_treat_a_one_side_warning_as_shared_proof [18 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_noteworthy_is_capped_and_discloses_the_cap [2 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_noteworthy_ors_attention_flags_within_same_physical_op_and_object_key [< 1 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_noteworthy_operators_are_capped_at_ten [1 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Thirty_two_mixed_cases_keep_unique_decision_fields_and_do_not_recompute_reasons [33 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Measure_projection_is_bounded_without_equivalence_fields [12 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Artifact_id_round_trips_dots_and_ignores_deep_parent_paths [1 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_projection_preserves_equivalence_diagnostics [1 ms]
+[xUnit.net 00:00:05.71]     SqlHarness.Tests.BenchmarkSummaryTests.Compare_projection_keeps_the_generated_table_variable_distribution [FAIL]
+[xUnit.net 00:00:05.71]       System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+[xUnit.net 00:00:05.71]       Stack Trace:
+[xUnit.net 00:00:05.71]            at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+[xUnit.net 00:00:05.71]         D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkSummaryTests.cs(24,0): at SqlHarness.Tests.BenchmarkSummaryTests.Compare_projection_keeps_the_generated_table_variable_distribution()
+[xUnit.net 00:00:05.71]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+[xUnit.net 00:00:05.71]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.True_zero_metrics_stay_zero_and_unavailable_metrics_are_null [10 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Matrix_case_copies_regression_verdict_and_elapsed_range_from_the_cell [3 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Matrix_case_copies_equivalence_diagnostics_and_does_not_guess_from_counters [1 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Measure_set_projection_rejects_null_report [3 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_noteworthy_operators_prefer_warnings_then_ordinal_physical_op_and_object [10 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_projection_is_bounded_and_retains_core_metrics [7 ms]
+  Failed SqlHarness.Tests.BenchmarkSummaryTests.Compare_projection_keeps_the_generated_table_variable_distribution [1 ms]
+  Error Message:
+   System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+  Stack Trace:
+     at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+   at SqlHarness.Tests.BenchmarkSummaryTests.Compare_projection_keeps_the_generated_table_variable_distribution() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkSummaryTests.cs:line 24
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_noteworthy_keeps_identity_and_attention_flags_for_one_sided_rows [1 ms]
+  Passed SqlHarness.Tests.BenchmarkSummaryTests.Compare_noteworthy_plan_refs_keep_colliding_node_ids_on_their_statements [3 ms]
+  Passed SqlHarness.Tests.BenchmarkRunTests.Null_parameter_set_does_not_change_serialized_run_json [919 ms]
+[xUnit.net 00:00:06.06]     SqlHarness.Tests.BenchmarkRunTests.Multiple_generated_table_variables_are_summed_within_each_run_before_distribution [FAIL]
+[xUnit.net 00:00:06.06]       System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+[xUnit.net 00:00:06.06]       Stack Trace:
+[xUnit.net 00:00:06.06]            at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+[xUnit.net 00:00:06.06]         D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkRunTests.cs(44,0): at SqlHarness.Tests.BenchmarkRunTests.Multiple_generated_table_variables_are_summed_within_each_run_before_distribution()
+[xUnit.net 00:00:06.06]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+[xUnit.net 00:00:06.06]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:06.10]     SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_aggregation_keeps_explicit_temp_name_distinct [FAIL]
+[xUnit.net 00:00:06.10]       System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+[xUnit.net 00:00:06.10]       Stack Trace:
+[xUnit.net 00:00:06.10]            at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+[xUnit.net 00:00:06.10]         D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkRunTests.cs(59,0): at SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_aggregation_keeps_explicit_temp_name_distinct()
+[xUnit.net 00:00:06.10]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+[xUnit.net 00:00:06.10]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:06.11]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.BenchmarkRunTests.ExecuteRawAsync_drains_rows_without_normalizing_when_raw_is_unavailable [10 ms]
+  Passed SqlHarness.Tests.BenchmarkRunTests.Primary_exception_propagates_from_the_dialect [9 ms]
+  Passed SqlHarness.Tests.BenchmarkRunTests.ExecuteAsync_returns_the_dialect_result_and_copies_parameter_set [23 ms]
+  Passed SqlHarness.Tests.BenchmarkRunTests.ExecuteRawAsync_preserves_the_primary_failure_when_cleanup_fails [9 ms]
+  Failed SqlHarness.Tests.BenchmarkRunTests.Multiple_generated_table_variables_are_summed_within_each_run_before_distribution [1 ms]
+  Error Message:
+   System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+  Stack Trace:
+     at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+   at SqlHarness.Tests.BenchmarkRunTests.Multiple_generated_table_variables_are_summed_within_each_run_before_distribution() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkRunTests.cs:line 44
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Passed SqlHarness.Tests.BenchmarkRunTests.ExecuteRawAsync_propagates_cleanup_failure_without_a_primary_failure [4 ms]
+  Passed SqlHarness.Tests.BenchmarkRunTests.Cancellation_propagates_from_the_dialect [3 ms]
+  Passed SqlHarness.Tests.BenchmarkRunTests.Plan_hashes_identify_the_operator_tree_not_runtime_values [33 ms]
+  Failed SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_aggregation_keeps_explicit_temp_name_distinct [1 ms]
+  Error Message:
+   System.Collections.Generic.KeyNotFoundException : The given key 'table variables' was not present in the dictionary.
+  Stack Trace:
+     at System.Collections.Generic.Dictionary`2.get_Item(TKey key)
+   at SqlHarness.Tests.BenchmarkRunTests.Generated_table_variable_aggregation_keeps_explicit_temp_name_distinct() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkRunTests.cs:line 59
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+
+Test Run Failed.
+Total tests: 36
+     Passed: 31
+     Failed: 5
+ Total time: 8,0412 Seconds

@@ -62,7 +62,9 @@ public sealed record McpCapabilitiesDocument(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? OperationAnnotations = null,
     McpArtifactPageLimits? ArtifactPages = null,
     McpParameterFileIngressLimits? ParameterFileIngress = null,
-    int MaterializedParameterBytes = 0);
+    int MaterializedParameterBytes = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    SqlHarnessEngineGuidance? EngineGuidance = null);
 
 public sealed record AllowedProfileMutationCapability(string Profile, string Mode, bool WriterConfigured);
 
@@ -155,7 +157,8 @@ public static partial class McpOperationMapper
             ProfileMutations: ProfileMutation(scope.TargetRequest.Profile, scope.Profiles, null),
             ArtifactPages: ArtifactPageLimits(),
             ParameterFileIngress: ParameterFileIngressLimits(),
-            MaterializedParameterBytes: SqlHarnessCapabilitiesProvider.ParameterFileLimits.MaxMaterializedBytes);
+            MaterializedParameterBytes: SqlHarnessCapabilitiesProvider.ParameterFileLimits.MaxMaterializedBytes,
+            EngineGuidance: SqlHarnessCapabilitiesProvider.GuidanceFor(scope.ResolvedTarget.Engine));
         return WithInputRootPage(document, scope.InputRoots, inputRootCursor, scope.MaxResultBytes);
     }
 
@@ -195,7 +198,8 @@ public static partial class McpOperationMapper
             OperationAnnotations: context.Config.Journal.OperationAnnotations ? true : null,
             ArtifactPages: ArtifactPageLimits(),
             ParameterFileIngress: ParameterFileIngressLimits(),
-            MaterializedParameterBytes: SqlHarnessCapabilitiesProvider.ParameterFileLimits.MaxMaterializedBytes);
+            MaterializedParameterBytes: SqlHarnessCapabilitiesProvider.ParameterFileLimits.MaxMaterializedBytes,
+            EngineGuidance: SqlHarnessCapabilitiesProvider.GuidanceFor(SqlEngine.SqlServer));
         return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);
     }
 

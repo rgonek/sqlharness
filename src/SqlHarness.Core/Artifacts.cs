@@ -373,6 +373,10 @@ internal sealed record CompareRunArtifact(
     [JsonIgnore]
     public IReadOnlyList<TableIoCounters> TableIo { get; init; } = [];
 
+    /// <summary>Producer-derived SQL Server IO identity; journal-only and never serialized.</summary>
+    [JsonIgnore]
+    public IReadOnlyDictionary<StatisticsIoTableIdentity, long>? LogicalReadsByTableIdentity { get; init; }
+
     /// <summary>Whether the SQL Server table IO detail was fully parsed; journal-only and never serialized.</summary>
     [JsonIgnore]
     public bool? TableIoComplete { get; init; }

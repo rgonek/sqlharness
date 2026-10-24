@@ -1,0 +1,4 @@
+[6 qformat: 16 changed C# file(s) (branch)
+D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\ArtifactReaderTests.cs(1896,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\SqlHarness.Tests.csproj]
+format: FAILED (dotnet format exit 2)
+DIRECT_EXIT_CODE=2

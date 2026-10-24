@@ -98,7 +98,8 @@ internal sealed record ConsumedSessionMessages(
     IReadOnlyList<SessionMessage> Messages,
     int OmittedMessageCount,
     IReadOnlyList<TableIoCounters> TableIo,
-    bool TableIoComplete)
+    bool TableIoComplete,
+    IReadOnlyDictionary<string, long>? RawTableLogicalReads = null)
 {
     internal ConsumedSessionMessages(IReadOnlyList<SessionMessage> messages, int omittedMessageCount)
         : this(messages, omittedMessageCount, [], true) { }
@@ -181,11 +182,12 @@ internal sealed class SessionMessageBuffer
             int omitted = _droppedSinceConsume;
             IReadOnlyList<TableIoCounters> tableIo = _tableIo.Snapshot();
             bool tableIoComplete = _tableIo.Complete;
+            IReadOnlyDictionary<string, long> rawTableLogicalReads = _tableIo.RawLogicalReadsByTable;
             _messages.Clear();
             _retainedChars = 0;
             _droppedSinceConsume = 0;
             _tableIo.Reset();
-            return new ConsumedSessionMessages(slice, omitted, tableIo, tableIoComplete);
+            return new ConsumedSessionMessages(slice, omitted, tableIo, tableIoComplete, rawTableLogicalReads);
         }
     }
 }

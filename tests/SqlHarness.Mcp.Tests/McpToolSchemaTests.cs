@@ -1455,33 +1455,31 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("executions", query, StringComparison.Ordinal);
             Assert.Contains("validation: passed", query, StringComparison.Ordinal);
             Assert.Contains("execution: not-run", query, StringComparison.Ordinal);
-            Assert.Contains("subject+textual scope", measure, StringComparison.Ordinal);
-            Assert.Contains("independent of compare.requireContext", measure, StringComparison.Ordinal);
-            Assert.Contains("Ordered sets: isolated sessions/setup", measure, StringComparison.Ordinal);
-            Assert.Contains("sessions/setup", measure, StringComparison.Ordinal);
-            Assert.Contains("failure stops, completed sets retained", measure, StringComparison.Ordinal);
-            Assert.Contains("Stability: per-set, not cross-set equivalence", measure, StringComparison.Ordinal);
-            Assert.Contains("TVP/list: no valueHash", measure, StringComparison.Ordinal);
+            Assert.Contains("Key is subject+textual scope, independent of compare.requireContext", measure, StringComparison.Ordinal);
+            Assert.Contains("Each set uses isolated session/setup", measure, StringComparison.Ordinal);
+            Assert.Contains("session/setup", measure, StringComparison.Ordinal);
+            Assert.Contains("stop on failure, keep completed results", measure, StringComparison.Ordinal);
+            Assert.Contains("Stability is per-set only", measure, StringComparison.Ordinal);
+            Assert.Contains("no cross-set equivalence", measure, StringComparison.Ordinal);
+            Assert.Contains("TVP/list has no valueHash", measure, StringComparison.Ordinal);
             Assert.Contains("low-entropy excluded from unkeyed hashes", measure, StringComparison.Ordinal);
-            Assert.Contains("statementEvidence: per-case collected counters, not total cost", measure, StringComparison.Ordinal);
-            Assert.Contains("Optional saved diagnostics", measure, StringComparison.Ordinal);
-            Assert.Contains("sqlharness_artifact", measure, StringComparison.Ordinal);
-            Assert.Contains("no diagnostic read is required for every optimization", measure, StringComparison.Ordinal);
-            Assert.Contains("Exact repetitions/row limits: section=statements", measure, StringComparison.Ordinal);
-            Assert.Contains("subject/scope follow frozen compare.requireContext (capabilities)", compare, StringComparison.Ordinal);
+            Assert.Contains("statementEvidence is collected per-case counters, not total cost", measure, StringComparison.Ordinal);
+            Assert.Contains("Exact runs/limits: artifactId, section=statements", measure, StringComparison.Ordinal);
+            Assert.Contains("Subject/scope follow compare.requireContext", compare, StringComparison.Ordinal);
+            Assert.Contains("Diagnostics optional", measure, StringComparison.Ordinal);
+            Assert.Contains("no artifact read required per optimization", measure, StringComparison.Ordinal);
             Assert.Contains("request target selects DB", compare, StringComparison.Ordinal);
-            Assert.Contains("Session/setup per set", compare, StringComparison.Ordinal);
-            Assert.Contains("failure stops, completed cells retained", compare, StringComparison.Ordinal);
+            Assert.Contains("Isolated session/setup per set", compare, StringComparison.Ordinal);
+            Assert.Contains("stop on failure, keep completed cells", compare, StringComparison.Ordinal);
             Assert.Contains("Verdict/reasons, not exitCode", compare, StringComparison.Ordinal);
-            Assert.Contains("pass=no policy elapsed regression, not improvement", compare, StringComparison.Ordinal);
-            Assert.Contains("selected order/duplicates/nullability, not domain equivalence", compare, StringComparison.Ordinal);
-            Assert.Contains("Dry-run validates only; execution not run", compare, StringComparison.Ordinal);
+            Assert.Contains("elapsed-regression policy not met, not improvement", compare, StringComparison.Ordinal);
+            Assert.Contains("Equivalence follows order/duplicates/nullability, not domain equivalence", compare, StringComparison.Ordinal);
+            Assert.Contains("Dry-run: no execution; reports setup/baseline/candidate classifications", compare, StringComparison.Ordinal);
             Assert.Contains("baseline/candidate classifications", compare, StringComparison.Ordinal);
-            Assert.Contains("statementEvidence: counters per variant/set/cell, not total cost", compare, StringComparison.Ordinal);
-            Assert.Contains("Optional saved diagnostics", compare, StringComparison.Ordinal);
-            Assert.Contains("sqlharness_artifact", compare, StringComparison.Ordinal);
-            Assert.Contains("no diagnostic read is required for every optimization", compare, StringComparison.Ordinal);
-            Assert.Contains("Exact repetitions/row limits: section=statements", compare, StringComparison.Ordinal);
+            Assert.Contains("statementEvidence is collected per variant/set/cell, not total cost", compare, StringComparison.Ordinal);
+            Assert.Contains("Exact runs/limits: artifactId, section=statements", compare, StringComparison.Ordinal);
+            Assert.Contains("Diagnostics optional", compare, StringComparison.Ordinal);
+            Assert.Contains("artifact read not required", compare, StringComparison.Ordinal);
             Assert.Contains("no continuation", watch, StringComparison.Ordinal);
             Assert.Contains("projection omissions", watch, StringComparison.Ordinal);
             Assert.Contains("omittedChildCount", plan, StringComparison.Ordinal);
@@ -1988,8 +1986,33 @@ public sealed class McpToolSchemaTests : IDisposable
 
     // Distinctive registry tokens: SQL Server setup orders #temp creation before the first
     // parameter reference; PostgreSQL setup warns about user functions and READ ONLY commands.
-    private static readonly string[] SqlServerTokens = ["#temp", "first parameter reference"];
+    private static readonly string[] SqlServerTokens = ["#temp", "first parameter reference", "engineGuidance.tableIo"];
     private static readonly string[] PostgresTokens = ["READ ONLY", "TEMP setup", "user function", "least-privilege"];
+
+    [Fact]
+    public async Task Table_io_rule_is_in_sqlserver_capabilities_and_omitted_for_postgres()
+    {
+        foreach (var (scope, hasRule) in new[] { (Scope(), true), (PostgresScope(), false) })
+        {
+            await using var served = await ServedCatalog.CreateAsync(scope);
+            var response = await served.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+            using var document = JsonDocument.Parse(Assert.Single(response.Content.OfType<TextContentBlock>()).Text);
+            var result = document.RootElement.GetProperty("result");
+            var guidance = result.GetProperty("engineGuidance");
+            if (hasRule)
+            {
+                var rule = guidance.GetProperty("tableIo").GetString()!;
+                Assert.Contains("exact raw bare # plus eight hexadecimal characters", rule, StringComparison.Ordinal);
+                Assert.Contains("Explicit local-temp suffixes retain local-temp identity", rule, StringComparison.Ordinal);
+                Assert.Contains("Other raw forms and legacy values without producer identity remain Unknown", rule, StringComparison.Ordinal);
+                Assert.Contains("not a Microsoft cross-version guarantee", rule, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.False(guidance.TryGetProperty("tableIo", out _));
+            }
+        }
+    }
 
     private McpScope PostgresScope()
     {
@@ -2036,7 +2059,9 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Equal(1, Regex.Count(setup, "do not (carry|cross)", RegexOptions.IgnoreCase));
         }
         var query = ToolDescription(tools, "sqlharness_query");
-        var guided = string.Join("\n", setups.Append(query));
+        var guided = string.Join("\n", setups.Append(query)
+            .Append(ToolDescription(tools, "sqlharness_measure"))
+            .Append(ToolDescription(tools, "sqlharness_compare")));
         foreach (var token in expected)
             Assert.Contains(token, guided, StringComparison.Ordinal);
         var all = JsonSerializer.Serialize(tools);

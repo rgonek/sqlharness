@@ -1,0 +1,28 @@
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:03.89]     SqlHarness.Tests.StatisticsIoDetailParserTests.Mixed_valid_and_unparseable_table_rows_mark_accumulation_incomplete [FAIL]
+[xUnit.net 00:00:04.06]     SqlHarness.Tests.DialectMessageBudgetTests.Mixed_unparseable_io_prevents_omitted_text_fallback_from_claiming_complete_identity [FAIL]
+  Failed SqlHarness.Tests.StatisticsIoDetailParserTests.Mixed_valid_and_unparseable_table_rows_mark_accumulation_incomplete [71 ms]
+  Error Message:
+   Assert.False() Failure
+Expected: False
+Actual:   True
+  Stack Trace:
+     at SqlHarness.Tests.StatisticsIoDetailParserTests.Mixed_valid_and_unparseable_table_rows_mark_accumulation_incomplete() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\StatisticsIoDetailParserTests.cs:line 120
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.DialectMessageBudgetTests.Mixed_unparseable_io_prevents_omitted_text_fallback_from_claiming_complete_identity [297 ms]
+  Error Message:
+   Assert.False() Failure
+Expected: False
+Actual:   True
+  Stack Trace:
+     at SqlHarness.Tests.DialectMessageBudgetTests.Mixed_unparseable_io_prevents_omitted_text_fallback_from_claiming_complete_identity() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\DialectMessageBudgetTests.cs:line 151
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 297 ms - SqlHarness.Tests.dll (net10.0)

@@ -8,12 +8,12 @@ export type TableIoDeltaRow = {
   logicalDelta: number | null
 }
 
-const tableVariable = /^(?:\[dbo\]\.)?\[?#(?:[0-9a-f]{8})\]?$/i
-
 function grouped(rows: TableIoRow[]): Map<string, TableIoRow> {
   const result = new Map<string, TableIoRow>()
   for (const row of rows) {
-    const table = tableVariable.test(row.table) ? "table variables" : row.table
+    // Core owns object classification and collision-safe aggregate labels.
+    // Preserve exact persisted names here, including legacy summaries without provenance.
+    const table = row.table
     const previous = result.get(table)
     if (!previous) {
       result.set(table, { ...row, table })

@@ -1,0 +1,144 @@
+diff --git a/tests/SqlHarness.Tests/BenchmarkRunTests.cs b/tests/SqlHarness.Tests/BenchmarkRunTests.cs
+index 10c8ef6b..9183a3e3 100644
+--- a/tests/SqlHarness.Tests/BenchmarkRunTests.cs
++++ b/tests/SqlHarness.Tests/BenchmarkRunTests.cs
+@@ -14,6 +14,70 @@ public sealed class BenchmarkRunTests
+     private const string EmptyPlanHash = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855";
+     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+ 
++    [Theory]
++    [InlineData(2)]
++    [InlineData(3)]
++    public void Generated_table_variable_reads_have_a_per_run_aggregate_median(int repeat)
++    {
++        var runs = Enumerable.Range(1, repeat)
++            .Select(repetition => CollectedRun(repetition,
++                [$"#{repetition:X8}"], [100]))
++            .ToArray();
++
++        var report = BenchmarkReports.CreateVariantReport("measure", runs);
++
++        Assert.Equal(new CompareDistribution(100, 100, 100), report.LogicalReadsByTable["table variables"]);
++    }
++
++    [Fact]
++    public void Multiple_generated_table_variables_are_summed_within_each_run_before_distribution()
++    {
++        var runs = new[]
++        {
++            CollectedRun(1, ["#A0000001", "#A0000002"], [40, 60]),
++            CollectedRun(2, ["#B0000001", "#B0000002"], [45, 55]),
++            CollectedRun(3, ["#C0000001", "#C0000002"], [35, 65]),
++        };
++
++        var report = BenchmarkReports.CreateVariantReport("measure", runs);
++
++        Assert.Equal(new CompareDistribution(100, 100, 100), report.LogicalReadsByTable["table variables"]);
++    }
++
++    [Fact]
++    public void Generated_table_variable_aggregation_keeps_explicit_temp_name_distinct()
++    {
++        var runs = new[]
++        {
++            CollectedRun(1, ["#A0000001"], [100]),
++            CollectedRun(2, ["#A0000002"], [100]),
++            CollectedRun(3, ["#A0000003", "#ABCDEF12"], [100, 500]),
++        };
++
++        var report = BenchmarkReports.CreateVariantReport("measure", runs);
++
++        Assert.Equal(new CompareDistribution(100, 100, 100), report.LogicalReadsByTable["table variables"]);
++        Assert.Equal(new CompareDistribution(0, 0, 500), report.LogicalReadsByTable["#ABCDEF12"]);
++    }
++
++    [Fact]
++    public void Stable_and_long_escaped_keys_keep_their_own_distributions()
++    {
++        var longEscapedPermanentName = "dbo.[A very long name with 'quotes' and \\slashes]";
++        var runs = new[]
++        {
++            CollectedRun(1, ["dbo.Clients", longEscapedPermanentName], [30, 7]),
++            CollectedRun(2, ["dbo.Clients"], [30]),
++            CollectedRun(3, ["dbo.Clients"], [30]),
++        };
++
++        var report = BenchmarkReports.CreateVariantReport("measure", runs);
++
++        Assert.Equal(new CompareDistribution(30, 30, 30), report.LogicalReadsByTable["dbo.Clients"]);
++        Assert.Equal(new CompareDistribution(0, 0, 7), report.LogicalReadsByTable[longEscapedPermanentName]);
++        Assert.DoesNotContain("dbo.Missing", report.LogicalReadsByTable.Keys);
++    }
++
+     [Fact]
+     public async Task ExecuteAsync_returns_the_dialect_result_and_copies_parameter_set()
+     {
+@@ -390,6 +454,17 @@ public sealed class BenchmarkRunTests
+     private static CompareRunArtifact Artifact(params string[] plans) =>
+         new("measure", 2, 10, 12, 5, new Dictionary<string, long> { ["Clients"] = 5 }, "RESULT-HASH", plans, 3);
+ 
++    private static CollectedBenchmarkRun CollectedRun(
++        int repetition,
++        IReadOnlyList<string> tableNames,
++        IReadOnlyList<long> reads)
++    {
++        var logicalReads = tableNames.Zip(reads).ToDictionary(pair => pair.First, pair => pair.Second, StringComparer.Ordinal);
++        var artifact = new CompareRunArtifact(
++            "measure", repetition, 1, 1, logicalReads.Values.Sum(), logicalReads, "RESULT-HASH", [], 0);
++        return new CollectedBenchmarkRun(artifact, [], []);
++    }
++
+     private static string Sha256(string text) =>
+         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+ 
+@@ -515,4 +590,4 @@ public sealed class BenchmarkRunTests
+ 
+         public void Dispose() => Directory.Delete(Path, true);
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/tests/SqlHarness.Tests/BenchmarkSummaryTests.cs b/tests/SqlHarness.Tests/BenchmarkSummaryTests.cs
+index 79ddfbc8..7fab2132 100644
+--- a/tests/SqlHarness.Tests/BenchmarkSummaryTests.cs
++++ b/tests/SqlHarness.Tests/BenchmarkSummaryTests.cs
+@@ -8,6 +8,32 @@ public sealed class BenchmarkSummaryTests
+ {
+     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+ 
++    [Fact]
++    public void Compare_projection_keeps_the_generated_table_variable_distribution()
++    {
++        var runs = new[]
++        {
++            SummaryRun(1, "#A0000001", 100, "#ABCDEF12", 500),
++            SummaryRun(2, "#A0000002", 100, null, 0),
++        };
++        var aggregate = BenchmarkReports.CreateVariantReport("baseline", runs);
++        var report = MinimalCompare([], []) with { Baseline = aggregate };
++
++        var summary = BenchmarkSummaryProjector.Project(report);
++
++        Assert.Equal(new CompareDistribution(100, 100, 100), summary.Baseline.LogicalReadsByTable["table variables"]);
++        Assert.Equal(new CompareDistribution(0, 250, 500), summary.Baseline.LogicalReadsByTable["#ABCDEF12"]);
++    }
++
++    private static CollectedBenchmarkRun SummaryRun(int repetition, string variableName, long variableReads, string? explicitTempName, long explicitReads)
++    {
++        var reads = new Dictionary<string, long>(StringComparer.Ordinal) { [variableName] = variableReads };
++        if (explicitTempName is not null)
++            reads[explicitTempName] = explicitReads;
++        var artifact = new CompareRunArtifact("baseline", repetition, 1, 1, reads.Values.Sum(), reads, "RESULT-HASH", [], 0);
++        return new CollectedBenchmarkRun(artifact, [], []);
++    }
++
+     [Fact]
+     public void Compare_projection_is_bounded_and_retains_core_metrics()
+     {
+@@ -1025,4 +1051,4 @@ public sealed class BenchmarkSummaryTests
+                 candidate,
+                 []),
+             artifactDirectory);
+-}
+\ No newline at end of file
++}
