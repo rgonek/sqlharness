@@ -74,9 +74,9 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 1: Reproduce misleading medians
 
-- [ ] In BenchmarkRunTests/BenchmarkSummaryTests add repeat=2 and repeat=3 fixtures: a new #hex variable name per run with 100 reads must yield aggregate median 100, not 50/0; two generated variables per run must sum within the run first. Include absent real objects, explicit #temp tables, stable permanent names and long escaped keys.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] In BenchmarkRunTests/BenchmarkSummaryTests add repeat=2 and repeat=3 fixtures: a new #hex variable name per run with 100 reads must yield aggregate median 100, not 50/0; two generated variables per run must sum within the run first. Include absent real objects, explicit #temp tables, stable permanent names and long escaped keys.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 2: Centralize explicit aggregation semantics
 
