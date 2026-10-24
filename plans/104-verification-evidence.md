@@ -28,3 +28,11 @@ The original repair needs a supported capture producer that associates each IO c
 ## Independent review disposition
 
 Luna xhigh accepted the [Task 1 diagnostic evidence](104-evidence/task-1-review.md), while explicitly retaining original Task 1 BLOCKED/NOT DONE. Sol low accepted the [whole-branch diagnostic delivery](104-evidence/whole-review.md) for `ab46345a..95b95ad2` with no blocking findings. Neither review approves original implementation or a future fallback. All new relative Markdown links resolve, the branch diff check exits 0, and the reproduction patch applies. The [execution ledger](104-evidence/execution-ledger.md) records resumption and rulings. The SDD workspace is retained for the incomplete plan.
+
+## Subsequent live experiments and primary-source research
+
+The user subsequently authorized experiments and asked for Microsoft documentation. This supersedes the earlier no-live-evidence boundary only for the bounded local investigation; all original historical test/review outcomes above remain as recorded.
+
+On localhost/tempdb SQL Server17.0.1145.4, the [matrix](104-evidence/experiments-report.md) captured distinct raw IO names for generated variables and explicit temp tables, including a literal #ABCDEF12 and repeated temporary procedure calls. Existing normalization discards the suffix distinguishing the observed explicit temp names. Two captures were made because an intended analysis invocation accidentally executed a second3-repeat matrix; the report preserves this deviation and the runner now requires an explicit mode. No product code or application database changed.
+
+[Microsoft-source research](104-evidence/sqlserver-internal-naming-research.md) documents the suffix/caching mechanisms and cached explicit-temp catalog counterexamples. [Transport research](104-evidence/statistics-io-transport-research.md) establishes that diagnostic3615/TDS INFO has no independent typed object field. The [updated Luna xhigh review](104-evidence/experiment-resolution-review.md) proposes a characterized-build classifier; this is not an implemented or Microsoft-guaranteed runtime policy. A hard-coded development-build allowlist has not been silently substituted for the original general repair. Positive recognition scope remains unresolved. Original Tasks1–3 and implementation gates remain incomplete.

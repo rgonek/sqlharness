@@ -11,7 +11,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 
 ## Pending
 
-Plan [104](104-stable-local-object-io-aggregation.md): **BLOCKED after renewed investigation (2026-10-24)** — current capture has no positive per-counter object-kind provenance. Luna high investigated alternatives and Luna xhigh confirmed the STOP; no product changes. See [resolution review](104-evidence/resolution-review.md).
+Plan [104](104-stable-local-object-io-aggregation.md): **INVESTIGATION IN PROGRESS (2026-10-24)** — local experiments found raw-name provenance discarded by normalization; Microsoft-source research explains suffix/cache behavior but leaves general IO classification policy unresolved. No product changes. See [experiments](104-evidence/experiments-report.md) and [source research](104-evidence/sqlserver-internal-naming-research.md).
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
