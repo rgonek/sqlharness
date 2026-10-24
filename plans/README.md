@@ -11,7 +11,7 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 
 ## Pending
 
-Plan [104](104-stable-local-object-io-aggregation.md): **INVESTIGATION IN PROGRESS (2026-10-24)** — local experiments found raw-name provenance discarded by normalization; Microsoft-source research explains suffix/cache behavior but leaves general IO classification policy unresolved. No product changes. See [experiments](104-evidence/experiments-report.md) and [source research](104-evidence/sqlserver-internal-naming-research.md).
+Plan [104](104-stable-local-object-io-aggregation.md): **IMPLEMENTATION IN PROGRESS (2026-10-24)** — the user accepted the experimentally characterized raw-name rule without a patch-version allowlist. Producer provenance and per-run aggregation are implemented; task reviews, consumer compatibility and final verification are in progress. See [experiments](104-evidence/experiments-report.md) and [source research](104-evidence/sqlserver-internal-naming-research.md).
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|

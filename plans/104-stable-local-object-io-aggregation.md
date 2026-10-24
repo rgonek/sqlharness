@@ -80,9 +80,9 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 2: Centralize explicit aggregation semantics
 
-- [ ] Extract/reuse the narrow name classification from journal normalization in a shared Core helper without introducing Core-to-Journal coupling. Apply normalization before BenchmarkRunner distributions and use equivalent semantics for new saved metrics. Account for a real name colliding with an aggregate label using a typed/group representation or explicit collision-safe encoding; never overwrite or merge a real identity silently.
-- [ ] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
-- [ ] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
+- [x] Extract/reuse the narrow name classification from journal normalization in a shared Core helper without introducing Core-to-Journal coupling. Apply normalization before BenchmarkRunner distributions and use equivalent semantics for new saved metrics. Account for a real name colliding with an aggregate label using a typed/group representation or explicit collision-safe encoding; never overwrite or merge a real identity silently.
+- [x] Add a behavior-level regression that fails before the change, run the focused suite, implement the narrow change, then confirm GREEN.
+- [x] Save the task's evidence and inspect the diff. Obtain task review before moving to the next independently reviewable change.
 
 ### Task 3: Verify consumers and compatibility
 
