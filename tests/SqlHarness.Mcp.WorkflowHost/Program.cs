@@ -1,5 +1,6 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
+
+using Microsoft.Extensions.Logging.Abstractions;
 
 using ModelContextProtocol.Server;
 
