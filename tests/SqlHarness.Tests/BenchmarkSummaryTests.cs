@@ -52,6 +52,30 @@ public sealed class BenchmarkSummaryTests
     }
 
     [Fact]
+    public void Compare_omits_typed_io_distribution_when_a_run_has_incomplete_provenance()
+    {
+        var parsed = StatisticsIoParser.Parse("Table '#A1B2C3D4'. Scan count 1, logical reads 100, lob logical reads 0.");
+        var complete = new CompareRunArtifact("measure", 1, 0, 0, parsed.LogicalReads, parsed.Tables, "hash-1", [], 0)
+        {
+            LogicalReadsByTableIdentity = parsed.TypedTables,
+        };
+        // A prior/incomplete run has only its legacy string map. Its name cannot
+        // establish anonymous-variable provenance, and missing evidence is not zero.
+        var incomplete = new CompareRunArtifact(
+            "measure", 2, 0, 0, 0,
+            new Dictionary<string, long>(StringComparer.Ordinal) { ["#D4C3B2A1"] = 100 },
+            "hash-2", [], 0);
+
+        var variant = BenchmarkReports.CreateVariantReport("measure", [
+            new CollectedBenchmarkRun(complete, [], []),
+            new CollectedBenchmarkRun(incomplete, [], []),
+        ]);
+
+        Assert.DoesNotContain("table variables", variant.LogicalReadsByTable.Keys);
+        Assert.Contains("TableIoDistributionUnavailable", variant.Warnings);
+    }
+
+    [Fact]
     public void Compare_projection_is_bounded_and_retains_core_metrics()
     {
         var baselineOps = Enumerable.Range(1, 20)

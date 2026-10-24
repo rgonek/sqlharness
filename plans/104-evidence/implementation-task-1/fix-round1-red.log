@@ -1,0 +1,38 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.01] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.53]   Discovering: SqlHarness.Tests
+[xUnit.net 00:00:02.31]   Discovered:  SqlHarness.Tests
+[xUnit.net 00:00:02.38]   Starting:    SqlHarness.Tests
+[xUnit.net 00:00:02.63]     SqlHarness.Tests.BenchmarkSummaryTests.Compare_omits_typed_io_distribution_when_a_run_has_incomplete_provenance [FAIL]
+[xUnit.net 00:00:02.64]       Assert.DoesNotContain() Failure: Item found in collection
+[xUnit.net 00:00:02.64]                    ↓ (pos 0)
+[xUnit.net 00:00:02.64]       Collection: ["table variables", "#D4C3B2A1"]
+[xUnit.net 00:00:02.64]       Found:      "table variables"
+[xUnit.net 00:00:02.64]       Stack Trace:
+[xUnit.net 00:00:02.64]         D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkSummaryTests.cs(74,0): at SqlHarness.Tests.BenchmarkSummaryTests.Compare_omits_typed_io_distribution_when_a_run_has_incomplete_provenance()
+[xUnit.net 00:00:02.64]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+[xUnit.net 00:00:02.64]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:02.70]   Finished:    SqlHarness.Tests
+  Failed SqlHarness.Tests.BenchmarkSummaryTests.Compare_omits_typed_io_distribution_when_a_run_has_incomplete_provenance [144 ms]
+  Error Message:
+   Assert.DoesNotContain() Failure: Item found in collection
+             ↓ (pos 0)
+Collection: ["table variables", "#D4C3B2A1"]
+Found:      "table variables"
+  Stack Trace:
+     at SqlHarness.Tests.BenchmarkSummaryTests.Compare_omits_typed_io_distribution_when_a_run_has_incomplete_provenance() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkSummaryTests.cs:line 74
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Test Run Failed.
+Total tests: 1
+     Failed: 1
+ Total time: 4,2717 Seconds

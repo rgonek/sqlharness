@@ -223,6 +223,13 @@ internal static class BenchmarkReports
             .ThenBy(identity => identity.DisplayName, StringComparer.Ordinal)
             .ThenBy(identity => identity.Kind))
         {
+            if (identity.Kind != StatisticsIoTableKind.Unknown &&
+                runs.Any(run => run.Artifact.LogicalReadsByTableIdentity is null))
+            {
+                warnings.Add("TableIoDistributionUnavailable");
+                continue;
+            }
+
             var samples = runs.Select(run =>
             {
                 if (run.Artifact.LogicalReadsByTableIdentity is { } typed)

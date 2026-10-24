@@ -197,7 +197,7 @@ internal sealed class SqlServerDialect : ISqlDialect
             {
                 TableIo = consumed.TableIo,
                 TableIoComplete = consumed.TableIoComplete,
-                LogicalReadsByTableIdentity = consumed.OmittedMessageCount == 0 ? io.TypedTables : null,
+                LogicalReadsByTableIdentity = consumed.OmittedMessageCount == 0 && consumed.TableIoComplete ? io.TypedTables : null,
             };
             return new CollectedCompareRun(artifact, plans, result.Comparison);
         }
