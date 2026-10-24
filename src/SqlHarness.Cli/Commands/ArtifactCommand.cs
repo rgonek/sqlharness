@@ -30,7 +30,7 @@ public sealed class ArtifactCommand(ISqlHarnessModule module, OutputContext outp
         public int? Cursor { get; set; }
 
         [CommandOption("--variant <VARIANT>")]
-        [Description("Plan variant: baseline, candidate, or query.")]
+        [Description("Plan variant: query for measure and measure-set (default when omitted); baseline or candidate for compare (required).")]
         public string? Variant { get; set; }
 
         [CommandOption("--statement <INDEX>")]

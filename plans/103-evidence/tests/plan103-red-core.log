@@ -1,0 +1,31 @@
+  SqlHarness.Core -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:02.73]     SqlHarness.Tests.ArtifactReaderTests.Statement_projection_budgets_hidden_work_and_counts_response_omissions(budget: 4096) [FAIL]
+[xUnit.net 00:00:03.02]     SqlHarness.Tests.StatementMetricsTests.Compact_statement_evidence_scopes_omissions_to_the_affected_case [FAIL]
+  Failed SqlHarness.Tests.ArtifactReaderTests.Statement_projection_budgets_hidden_work_and_counts_response_omissions(budget: 4096) [133 ms]
+  Error Message:
+   SqlHarness.Core.SqlHarnessSafetyException : The output budget cannot fit an artifact statement.
+  Stack Trace:
+     at SqlHarness.Core.AgentOutputProjection.ProjectCore(Object report, Int32 maximumCellCharacters, Int32 detailLimit, Int32& omittedItems, Int32 maximumBytes, AgentProjectionProfile profile, Action`1 tableSelectionAccounting) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\src\SqlHarness.Core\AgentOutputProjection.cs:line 600
+   at SqlHarness.Core.AgentOutputProjection.Project(Object report, Int32 maximumCellCharacters, Int32 detailLimit, Int32& omittedItems, Int32 maximumBytes, AgentProjectionProfile profile, AgentStatementEvidence statementEvidence) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\src\SqlHarness.Core\AgentOutputProjection.cs:line 162
+   at SqlHarness.Tests.ArtifactReaderTests.Statement_projection_budgets_hidden_work_and_counts_response_omissions(Int32 budget) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\tests\SqlHarness.Tests\ArtifactReaderTests.cs:line 824
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.StatementMetricsTests.Compact_statement_evidence_scopes_omissions_to_the_affected_case [452 ms]
+  Error Message:
+   Assert.Equal() Failure: Strings differ
+           ↓ (pos 0)
+Expected: "complete"
+Actual:   "partial"
+           ↑ (pos 0)
+  Stack Trace:
+     at SqlHarness.Tests.StatementMetricsTests.Compact_statement_evidence_scopes_omissions_to_the_affected_case() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\3aed\sqlharness\tests\SqlHarness.Tests\StatementMetricsTests.cs:line 295
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+
+Failed!  - Failed:     2, Passed:     1, Skipped:     0, Total:     3, Duration: 452 ms - SqlHarness.Tests.dll (net10.0)

@@ -1,0 +1,9 @@
+pwsh ./scripts/verify.ps1 -LogDirectory D:/temp/sqlharness-plan106-integration-verify
+[6 q==> ui-install skipped (lockfile unchanged)
+==> build ok 50,0s
+==> ui-check ok 7m39s
+==> test ok 4m16s
+format: 18 changed C# file(s) (working-tree)
+==> format ok 1m45s
+verify: OK  stages=5  13m41s
+DIRECT_EXIT_CODE=0

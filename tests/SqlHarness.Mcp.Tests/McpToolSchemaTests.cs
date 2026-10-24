@@ -617,8 +617,10 @@ public sealed class McpToolSchemaTests : IDisposable
         var defaultBytes = Encoding.UTF8.GetByteCount(defaultText);
         Assert.InRange(defaultBytes, 1, 65536);
         var defaultProjection = ServedEnvelope(defaultResult, "sqlharness_artifact").GetProperty("result");
-        Assert.Equal(128, defaultProjection.GetProperty("statements").GetArrayLength());
-        Assert.Equal(128, defaultProjection.GetProperty("continuation").GetInt32());
+        var defaultCount = defaultProjection.GetProperty("statements").GetArrayLength();
+        Assert.InRange(defaultCount, 1, firstSourcePage.Statements.Count);
+        Assert.Equal(defaultCount, defaultProjection.GetProperty("continuation").GetInt32());
+        _output.WriteLine($"default statements page: {defaultCount} of {firstSourcePage.Statements.Count} source-window items, {defaultBytes} UTF-8 bytes of 65536; continuation={defaultCount}");
 
         var raisedText = Assert.Single(raisedResult.Content.OfType<TextContentBlock>()).Text;
         Assert.Equal("success", ServedEnvelope(raisedResult, "sqlharness_artifact").GetProperty("status").GetString());
@@ -1309,16 +1311,27 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Contains("executions", query, StringComparison.Ordinal);
             Assert.Contains("validation: passed", query, StringComparison.Ordinal);
             Assert.Contains("execution: not-run", query, StringComparison.Ordinal);
-            Assert.StartsWith(
-                "Measure one query across repeats. For an optimization measurement, provide both optional subject and textual scope; this is independent of compare.requireContext.",
-                measure, StringComparison.Ordinal);
-            Assert.Contains("Each parameter set runs on its own session", measure, StringComparison.Ordinal);
-            Assert.Contains("Results report per-set stability, not cross-set equivalence.", measure, StringComparison.Ordinal);
-            Assert.Contains("pass means no elapsed regression", compare, StringComparison.Ordinal);
-            Assert.Contains("not improvement", compare, StringComparison.Ordinal);
-            Assert.Contains("not domain equivalence", compare, StringComparison.Ordinal);
-            Assert.Contains("execution: not-run", compare, StringComparison.Ordinal);
+            Assert.Contains("subject+textual scope", measure, StringComparison.Ordinal);
+            Assert.Contains("independent of compare.requireContext", measure, StringComparison.Ordinal);
+            Assert.Contains("Ordered sets: isolated sessions/setup", measure, StringComparison.Ordinal);
+            Assert.Contains("sessions/setup", measure, StringComparison.Ordinal);
+            Assert.Contains("failure stops, completed sets retained", measure, StringComparison.Ordinal);
+            Assert.Contains("Stability: per-set, not cross-set equivalence", measure, StringComparison.Ordinal);
+            Assert.Contains("TVP/list: no valueHash", measure, StringComparison.Ordinal);
+            Assert.Contains("low-entropy excluded from unkeyed hashes", measure, StringComparison.Ordinal);
+            Assert.Contains("statementEvidence: per-case collected counters, not total cost", measure, StringComparison.Ordinal);
+            Assert.Contains("Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements", measure, StringComparison.Ordinal);
+            Assert.Contains("subject/scope follow frozen compare.requireContext (capabilities)", compare, StringComparison.Ordinal);
+            Assert.Contains("request target selects DB", compare, StringComparison.Ordinal);
+            Assert.Contains("Session/setup per set", compare, StringComparison.Ordinal);
+            Assert.Contains("failure stops, completed cells retained", compare, StringComparison.Ordinal);
+            Assert.Contains("Verdict/reasons, not exitCode", compare, StringComparison.Ordinal);
+            Assert.Contains("pass=no policy elapsed regression, not improvement", compare, StringComparison.Ordinal);
+            Assert.Contains("selected order/duplicates/nullability, not domain equivalence", compare, StringComparison.Ordinal);
+            Assert.Contains("Dry-run validates only; execution not run", compare, StringComparison.Ordinal);
             Assert.Contains("baseline/candidate classifications", compare, StringComparison.Ordinal);
+            Assert.Contains("statementEvidence: counters per variant/set/cell, not total cost", compare, StringComparison.Ordinal);
+            Assert.Contains("Exact repetitions/row limits: artifactId; sqlharness_artifact section=statements", compare, StringComparison.Ordinal);
             Assert.Contains("no continuation", watch, StringComparison.Ordinal);
             Assert.Contains("projection omissions", watch, StringComparison.Ordinal);
             Assert.Contains("omittedChildCount", plan, StringComparison.Ordinal);

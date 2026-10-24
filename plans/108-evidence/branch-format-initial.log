@@ -1,0 +1,8 @@
+[6 qformat: 5 changed C# file(s) (branch)
+D:\Dev\sqlharness\.worktrees\plan-108\src\SqlHarness.Core\ArtifactReader.cs(895,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-108\src\SqlHarness.Core\SqlHarness.Core.csproj]
+D:\Dev\sqlharness\.worktrees\plan-108\tests\SqlHarness.Tests\ArtifactReaderTests.cs(1631,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-108\tests\SqlHarness.Tests\SqlHarness.Tests.csproj]
+D:\Dev\sqlharness\.worktrees\plan-108\src\SqlHarness.Mcp\Tools\McpRequestToolHandlers.cs(361,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-108\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj]
+D:\Dev\sqlharness\.worktrees\plan-108\src\SqlHarness.Mcp\Tools\McpToolCatalog.cs(892,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-108\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj]
+D:\Dev\sqlharness\.worktrees\plan-108\tests\SqlHarness.Mcp.Tests\McpTokenBudgetTests.cs(1205,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [D:\Dev\sqlharness\.worktrees\plan-108\tests\SqlHarness.Mcp.Tests\SqlHarness.Mcp.Tests.csproj]
+format: FAILED (dotnet format exit 2)
+EXIT_CODE=2

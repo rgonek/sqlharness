@@ -154,11 +154,12 @@ public static class McpResultAdapter
         var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead
             ? artifactRead.Section
             : outcome.Report;
+        var statementEvidence = AgentOutputProjection.StatementEvidenceFor(outcome);
         foreach (var detailLimit in AgentOutputProjection.CandidateDetailLimits)
         {
             var projected = PlaceCoverage(
                 AgentOutputProjection.Project(
-                    report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes, AgentProjectionProfile.Mcp),
+                    report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes, AgentProjectionProfile.Mcp, statementEvidence),
                 outcome,
                 ref error);
             var totalOmitted = omitted + errorOmitted;

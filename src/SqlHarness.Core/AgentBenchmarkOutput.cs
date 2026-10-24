@@ -42,6 +42,26 @@ public sealed record AgentRegressionReport(
     AgentRegressionDiagnostic LogicalReads,
     AgentRegressionDiagnostic Cpu);
 
+/// <summary>Compact statement-counter coverage grouped by exact execution case and variant.</summary>
+public sealed record AgentStatementEvidenceCase(
+    string Variant,
+    string? ParameterSet,
+    int? MatrixCell,
+    string CounterAttribution,
+    int StatementCount,
+    int PartialStatementCount,
+    int UnavailableStatementCount,
+    IReadOnlyList<string> Limitations);
+
+/// <summary>Saved statement-counter coverage. It describes collected counters, not total query cost.</summary>
+public sealed record AgentStatementEvidence(
+    string EvidenceAvailability,
+    string? CoverageBasis,
+    string? CoverageDescription,
+    IReadOnlyList<AgentStatementEvidenceCase> Cases,
+    int OmittedStatements,
+    int OmittedCases = 0);
+
 public sealed record AgentCompareOutput(
     AgentResolvedTarget Target,
     int Repetitions,
@@ -52,7 +72,8 @@ public sealed record AgentCompareOutput(
     AgentBenchmarkVariant Candidate,
     IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ArtifactId = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AgentRegressionReport? Regression = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AgentRegressionReport? Regression = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AgentStatementEvidence? StatementEvidence = null);
 
 public sealed record AgentMeasureOutput(
     AgentResolvedTarget Target,
@@ -62,7 +83,8 @@ public sealed record AgentMeasureOutput(
     IReadOnlyList<BenchmarkParameterReport> Parameters,
     AgentBenchmarkVariant Query,
     IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ArtifactId = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ArtifactId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AgentStatementEvidence? StatementEvidence = null);
 
 public sealed record AgentMeasureSetItem(
     string Name,
@@ -108,7 +130,8 @@ public sealed record AgentMeasureSetOutput(
     string PlanCacheWarning,
     IReadOnlyList<AgentMeasureSetItem> Sets,
     AgentMeasureCrossSetSummary CrossSetSummary,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ArtifactId = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ArtifactId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AgentStatementEvidence? StatementEvidence = null);
 
 public sealed record AgentMatrixCellDetail(
     int Index,
@@ -136,7 +159,8 @@ public sealed record AgentMatrixOutput(
     int OmittedDetailCount,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MatrixArtifactId,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Continuation,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MatrixExecutionCoverage? Coverage = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MatrixExecutionCoverage? Coverage = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AgentStatementEvidence? StatementEvidence = null);
 
 /// <summary>Maps CLI/storage summaries onto MCP benchmark DTOs without changing stored measurements.</summary>
 public static class AgentBenchmarkProjection
@@ -185,6 +209,16 @@ public static class AgentBenchmarkProjection
             summary.Sets.Select(Set).ToArray(),
             CrossSet(summary.CrossSetSummary),
             ArtifactIds.FromDirectory(summary.ArtifactDirectory));
+
+    internal static object? WithStatementEvidence(object? output, AgentStatementEvidence? evidence) =>
+        (output, evidence) switch
+        {
+            (AgentCompareOutput value, not null) => value with { StatementEvidence = evidence },
+            (AgentMeasureOutput value, not null) => value with { StatementEvidence = evidence },
+            (AgentMeasureSetOutput value, not null) => value with { StatementEvidence = evidence },
+            (AgentMatrixOutput value, not null) => value with { StatementEvidence = evidence },
+            _ => output,
+        };
 
     public static AgentMatrixOutput Matrix(CompareMatrixBenchmarkSummary summary) =>
         new(
@@ -321,4 +355,68 @@ public static class AgentBenchmarkProjection
 
     private static string? RequestedIfDifferent(string requested, string actual) =>
         string.Equals(requested, actual, StringComparison.Ordinal) ? null : requested;
+}
+
+internal static class AgentStatementEvidenceProjection
+{
+    private const int MaximumCompactCases = 8;
+
+    internal static AgentStatementEvidence Create(string artifactKind, IReadOnlyList<CompareRunArtifact>? runs)
+    {
+        if (runs is null || runs.Count == 0)
+            return new("unavailable", null, null, [], 0);
+
+        var section = ArtifactStatementProjector.Project(artifactKind, runs);
+        var statementsByCase = section.Statements
+            .GroupBy(statement => (statement.Variant, statement.ParameterSet, statement.MatrixCell))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var runsByCase = runs
+            .GroupBy(run => (run.Variant, run.ParameterSet, run.MatrixCell))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var omittedByCase = section.OmittedByCase
+            .ToDictionary(item => (item.Variant, item.ParameterSet, item.MatrixCell), item => item.Count);
+        var caseKeys = statementsByCase.Keys.Concat(runsByCase.Keys).ToHashSet();
+
+        var groups = caseKeys
+            .Select(key =>
+            {
+                var rows = statementsByCase.GetValueOrDefault(key, []);
+                var caseRuns = runsByCase.GetValueOrDefault(key, []);
+                var missingRunCount = caseRuns
+                    .GroupBy(run => run.Repetition)
+                    .Sum(group => Math.Max(0, group.Count() - rows.Count(row => row.Repetition == group.Key)));
+                var partial = rows.Count(row => row.CounterAttribution == "partial");
+                var unavailable = rows.Count(row => row.CounterAttribution == "unavailable");
+                var attribution = partial > 0 || (rows.Length > 0 && omittedByCase.GetValueOrDefault(key) > 0) || (missingRunCount > 0 && rows.Length > 0)
+                    ? "partial"
+                    : rows.Length > 0 && unavailable == 0 && rows.All(row => row.CounterAttribution == "complete")
+                        ? "complete"
+                        : "unavailable";
+                var limitations = rows.SelectMany(row => row.Limitations).ToList();
+                if (missingRunCount > 0)
+                    limitations.Add($"Statement evidence is missing for {missingRunCount} of {caseRuns.Length} runs.");
+                return new AgentStatementEvidenceCase(
+                    key.Variant,
+                    key.ParameterSet,
+                    key.MatrixCell,
+                    attribution,
+                    rows.Length,
+                    partial,
+                    unavailable,
+                    limitations.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+            })
+            .OrderByDescending(item => item.CounterAttribution == "partial")
+            .ThenBy(item => item.Variant, StringComparer.Ordinal)
+            .ThenBy(item => item.ParameterSet, StringComparer.Ordinal)
+            .ThenBy(item => item.MatrixCell)
+            .ToArray();
+
+        return new AgentStatementEvidence(
+            section.EvidenceAvailability,
+            section.CoverageBasis,
+            section.CoverageDescription,
+            groups.Take(MaximumCompactCases).ToArray(),
+            section.OmittedStatements,
+            Math.Max(0, groups.Length - MaximumCompactCases));
+    }
 }

@@ -84,6 +84,86 @@ public sealed class McpParameterBatchTests
     }
 
     [Fact]
+    public async Task Served_compare_characterizes_current_offline_list_failures_for_both_IN_forms()
+    {
+        var attempts = 0;
+        await using var served = await ServedCatalog.CreateAsync(requestScope: false, () => Interlocked.Increment(ref attempts));
+        var forms = new[] { "SELECT 1 WHERE 1 IN @Ids", "SELECT 1 WHERE 1 IN (@Ids)" };
+        var scenarios = new[]
+        {
+            ("singleton", new string?[] { "7" }, false, false, false),
+            ("multi-value", new string?[] { "7", "8" }, false, false, false),
+            ("empty-list", Array.Empty<string?>(), false, false, false),
+            ("multiple-sets", new string?[] { "7" }, true, false, false),
+            ("setup-reuse", new string?[] { "7", "8" }, false, true, false),
+            ("caller-Ids1-collision", new string?[] { "7" }, false, false, true),
+        };
+        var observed = 0;
+        var mismatches = new List<string>();
+        foreach (var sql in forms)
+            foreach (var (name, values, multipleSets, setupReuse, collision) in scenarios)
+            {
+                var parameters = new List<object?>
+            {
+                new { name = "Ids", type = "int", kind = "list", values },
+            };
+                if (collision)
+                    parameters.Add(new { name = "Ids1", type = "int", value = "99" });
+                var sets = new List<object?> { new { name = "only", parameters } };
+                if (multipleSets)
+                    sets.Add(new { name = "second", parameters = new[] { new { name = "Ids", type = "int", kind = "list", values = new string?[] { "9", "10" } } } });
+
+                var querySql = setupReuse
+                    ? sql.Contains("(@Ids)", StringComparison.Ordinal) ? "SELECT Id FROM #ids WHERE Id IN (@Ids)" : "SELECT Id FROM #ids WHERE Id IN @Ids"
+                    : sql;
+                var setupSql = sql.Contains("(@Ids)", StringComparison.Ordinal)
+                    ? "SELECT Id INTO #ids FROM dbo.Items WHERE Id IN (@Ids)"
+                    : "SELECT Id INTO #ids FROM dbo.Items WHERE Id IN @Ids";
+                var arguments = new Dictionary<string, object?>
+                {
+                    ["baseline"] = new { sql = querySql },
+                    ["candidate"] = new { sql = querySql },
+                    ["subject"] = "plan107-diagnostic",
+                    ["scope"] = "whole",
+                    ["parameterSets"] = sets,
+                    ["repeat"] = 1,
+                    ["dryRun"] = true,
+                };
+                if (setupReuse)
+                    arguments["setup"] = new { sql = setupSql };
+
+                var result = await served.Client.CallToolAsync("sqlharness_compare", arguments, cancellationToken: CancellationToken.None);
+                var text = Text(result);
+                var envelope = Envelope(result);
+                var status = envelope.GetProperty("error").GetProperty("code").GetString();
+                var expectedCurrentError = sql.Contains("(@Ids)", StringComparison.Ordinal)
+                    ? values.Length == 0 ? "List expansion parameter '@Ids' collides" : "List expansion parameter '@Ids1' collides"
+                    : "ParseError";
+                _output.WriteLine($"CASE {name} form={sql} expected-current=safety_rejected/{expectedCurrentError} expected-contract={(collision ? "safety_rejected" : "success")} request={JsonSerializer.Serialize(arguments)} observed={text}");
+                var errorMessage = envelope.GetProperty("error").GetProperty("message").GetString() ?? string.Empty;
+                if (!string.Equals("safety_rejected", status, StringComparison.OrdinalIgnoreCase)
+                    || !errorMessage.Contains(expectedCurrentError, StringComparison.OrdinalIgnoreCase))
+                    mismatches.Add($"{name} expected current safety rejection containing '{expectedCurrentError}', observed {text}");
+                observed++;
+            }
+
+        Assert.Equal(0, Volatile.Read(ref attempts));
+        _output.WriteLine($"Plan107 known-source offline diagnostic: {observed} cases; connection attempts=0.");
+        _output.WriteLine($"Test assembly identity: {AssemblyIdentity(typeof(McpParameterBatchTests).Assembly)}");
+        _output.WriteLine($"Loaded MCP runtime assembly: {AssemblyIdentity(typeof(McpToolCatalog).Assembly)}");
+        _output.WriteLine($"Loaded Core runtime assembly: {AssemblyIdentity(typeof(SqlHarnessModule).Assembly)}");
+        Assert.Empty(mismatches);
+    }
+
+    private static string AssemblyIdentity(System.Reflection.Assembly assembly)
+    {
+        var informationalVersion = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .Cast<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .SingleOrDefault()?.InformationalVersion ?? "(missing)";
+        return $"{assembly.GetName().Name} informationalVersion={informationalVersion} location={assembly.Location} mvid={assembly.ManifestModule.ModuleVersionId}";
+    }
+
+    [Fact]
     public async Task Explicit_empty_collection_is_rejected_and_33_cases_get_split_guidance()
     {
         var scope = FixedScope();
@@ -99,6 +179,74 @@ public sealed class McpParameterBatchTests
             CancellationToken.None, dryRun: true, subject: "query", optimizationScope: "whole"));
         Assert.Contains("split into calls of at most 32 cases", tooMany.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("singleton remainder", tooMany.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Served_artifact_statement_keeps_identity_and_hidden_work_omissions_at_minimum_and_default_budgets()
+    {
+        using var temp = new McpBatchTempDirectory();
+        await using var served = await ServedCatalog.CreateAsync(requestScope: false, () => { });
+        const string id = "hidden-work-budget";
+        var directory = Path.Combine(SqlHarnessPaths.CompareDir, id);
+        Directory.CreateDirectory(directory);
+        var manifest = new ArtifactManifest(ArtifactReader.CurrentManifestVersion, ArtifactReader.CompareKind,
+            ArtifactReader.ReportFileName, ["statements"])
+        { Owner = served.Owner };
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        File.WriteAllText(Path.Combine(directory, ArtifactReader.ReportFileName), "{}");
+        var hidden = Enumerable.Range(0, 16).Select(index => new ArtifactHiddenWork(
+            "multi-statement-tvf", $"[dbo].[函\"\\\n{index}-{new string('界', 160)}]", false, index + 1, null)).ToArray();
+        var statement = new ArtifactStatementMetric("candidate", "set-a", 7, 3, new string('a', 64),
+            1, 2, 1, [])
+        {
+            Repetition = 2,
+            CounterAttribution = "complete",
+            StatementIdentityComplete = true,
+            PlanDocumentOrdinal = 4,
+            PlanStatementIndex = 1,
+            PlanHash = new string('b', 64),
+            HiddenWork = hidden,
+            HiddenWorkOmitted = 0,
+            Limitations = ["Multi-statement TVF work may not be fully represented by collected statement counters."],
+        };
+        File.WriteAllText(Path.Combine(directory, "statements.json"), JsonSerializer.Serialize(
+            new ArtifactStatementsSection(id, ArtifactReader.CompareKind, [statement], 0)
+            {
+                EvidenceVersion = 1,
+                EvidenceAvailability = "available",
+                CoverageBasis = "collected-statement-counters",
+            }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        foreach (var budget in new[] { 4096, (int?)null })
+        {
+            var arguments = new Dictionary<string, object?> { ["id"] = id, ["section"] = "statements" };
+            if (budget is int bytes) arguments["maxResultBytes"] = bytes;
+            var response = await served.Client.CallToolAsync("sqlharness_artifact", arguments, cancellationToken: CancellationToken.None);
+            var text = Text(response);
+            Assert.False(response.IsError == true, text);
+            using var document = JsonDocument.Parse(text);
+            var result = document.RootElement.GetProperty("result");
+            var row = Assert.Single(result.GetProperty("statements").EnumerateArray());
+            Assert.Equal(("candidate", "set-a", 7, 3, 2, "complete", true),
+                (row.GetProperty("variant").GetString(), row.GetProperty("parameterSet").GetString(),
+                    row.GetProperty("matrixCell").GetInt32(), row.GetProperty("statementOrdinal").GetInt32(),
+                    row.GetProperty("repetition").GetInt32(), row.GetProperty("counterAttribution").GetString(),
+                    row.GetProperty("statementIdentityComplete").GetBoolean()));
+            var returnedHidden = row.GetProperty("hiddenWork").EnumerateArray().ToArray();
+            Assert.Equal(hidden.Length - returnedHidden.Length, row.GetProperty("hiddenWorkOmitted").GetInt32());
+            Assert.All(returnedHidden, item =>
+            {
+                var execution = checked((int)item.GetProperty("executions").GetInt64());
+                var name = item.GetProperty("name").GetString()!;
+                var source = hidden[execution - 1].Name;
+                Assert.Equal(item.GetProperty("nameTruncated").GetBoolean(), !string.Equals(name, source, StringComparison.Ordinal));
+                Assert.StartsWith(name, source, StringComparison.Ordinal);
+            });
+            Assert.Contains(row.GetProperty("limitations").EnumerateArray().Select(item => item.GetString()),
+                item => item!.Contains("Multi-statement TVF", StringComparison.Ordinal));
+            Assert.Equal(Enumerable.Range(1, returnedHidden.Length).Select(index => (long)index),
+                returnedHidden.Select(item => item.GetProperty("executions").GetInt64()));
+        }
     }
 
     [Fact]
@@ -201,6 +349,7 @@ public sealed class McpParameterBatchTests
         private Task _serverTask = Task.CompletedTask;
 
         public McpClient Client { get; private set; } = null!;
+        public ArtifactOwner Owner { get; private set; } = null!;
         public (long Input, long Output) TransportByteCounts => (_clientWriter.BytesWritten, _serverWriter.BytesWritten);
 
         public static async Task<ServedCatalog> CreateAsync(bool requestScope, Action onConnect)
@@ -226,6 +375,7 @@ public sealed class McpParameterBatchTests
             else
             {
                 var scope = FixedScope();
+                catalog.Owner = scope.Owner;
                 var module = moduleFactory(scope);
                 McpToolCatalog.Wire(options, scope, module);
             }
