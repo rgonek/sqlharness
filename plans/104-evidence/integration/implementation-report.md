@@ -26,4 +26,4 @@ Changed C# files were formatted with `dotnet format whitespace SqlHarness.sln --
 
 ## Remaining integration gates
 
-The combined `just verify`, whole-branch formatting review, independent integration reviews, and fast-forward of the main checkout remain controller-owned and pending. The full combined gate has not run on this prepared tree. No database, installation, push, or main-checkout edits were performed. Linux and live UAT remain unverified as documented in the feature evidence.
+The post-commit branch-format check passed on `d2f2b060` for 21 changed C# files (exit 0); its raw log and direct exit are [branch-format.log](branch-format.log) and [branch-format.exit](branch-format.exit). The combined `just verify`, independent integration reviews, and fast-forward of the main checkout remain controller-owned and pending. The full combined gate has not run on this prepared tree. No database, installation, push, or main-checkout edits were performed. Linux and live UAT remain unverified as documented in the feature evidence.
