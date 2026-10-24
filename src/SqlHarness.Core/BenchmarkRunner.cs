@@ -186,7 +186,30 @@ internal static class BenchmarkRunner
 /// </summary>
 internal static class BenchmarkReports
 {
-    internal static CompareVariantReport CreateVariantReport(string name, IReadOnlyList<CollectedBenchmarkRun> runs)
+    internal static IReadOnlyDictionary<StatisticsIoTableIdentity, string> AllocateTableLabels(
+        IEnumerable<CollectedBenchmarkRun> runs)
+        => AllocateTableLabels(runs.Select(run => run.Artifact));
+
+    internal static IReadOnlyDictionary<StatisticsIoTableIdentity, string> AllocateTableLabels(
+        IEnumerable<CompareRunArtifact> artifacts)
+    {
+        var identities = new HashSet<StatisticsIoTableIdentity>();
+        foreach (var artifact in artifacts)
+        {
+            if (artifact.LogicalReadsByTableIdentity is { } typed)
+                identities.UnionWith(typed.Keys);
+            else
+                identities.UnionWith(artifact.LogicalReadsByTable.Keys.Select(StatisticsIoTableIdentity.Unknown));
+            identities.UnionWith(artifact.TableIo.Select(counter =>
+                counter.Identity ?? StatisticsIoTableIdentity.Unknown(counter.Table)));
+        }
+        return StatisticsIoTableIdentity.AllocateDisplayNames(identities);
+    }
+
+    internal static CompareVariantReport CreateVariantReport(
+        string name,
+        IReadOnlyList<CollectedBenchmarkRun> runs,
+        IReadOnlyDictionary<StatisticsIoTableIdentity, string>? sharedTableLabels = null)
     {
         var operators = new List<CompareOperatorReport>();
         foreach (var run in runs)
@@ -206,9 +229,6 @@ internal static class BenchmarkReports
         if (uniqueOperators.Any(op => op.HasWarnings)) warnings.Add("PlanWarning");
         if (uniqueOperators.Any(op => op.HasSpill)) warnings.Add("SpillToTempDb");
         if (uniqueOperators.Any(op => op.HasImplicitConversion)) warnings.Add("ImplicitConversion");
-        var tables = runs.SelectMany(run => run.Artifact.LogicalReadsByTable)
-            .GroupBy(pair => pair.Key, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Sum(pair => pair.Value), StringComparer.Ordinal);
         var identityTables = new HashSet<StatisticsIoTableIdentity>();
         foreach (var run in runs)
         {
@@ -217,6 +237,11 @@ internal static class BenchmarkReports
             else
                 identityTables.UnionWith(run.Artifact.LogicalReadsByTable.Keys.Select(StatisticsIoTableIdentity.Unknown));
         }
+        var tableLabels = sharedTableLabels ?? StatisticsIoTableIdentity.AllocateDisplayNames(identityTables);
+        var tables = identityTables.ToDictionary(
+            identity => tableLabels[identity],
+            identity => runs.Sum(run => ReadsForIdentity(run.Artifact, identity)),
+            StringComparer.Ordinal);
         var logicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal);
         foreach (var identity in identityTables
             .OrderBy(identity => identity.Kind == StatisticsIoTableKind.AnonymousTableVariable ? 0 : 1)
@@ -238,10 +263,7 @@ internal static class BenchmarkReports
                     ? run.Artifact.LogicalReadsByTable.GetValueOrDefault(identity.Name)
                     : 0L;
             });
-            var displayName = identity.DisplayName;
-            if (logicalReadsByTable.ContainsKey(displayName))
-                displayName = $"{displayName} (object)";
-            logicalReadsByTable[displayName] = ToPublic(Distribution.From(samples));
+            logicalReadsByTable[tableLabels[identity]] = ToPublic(Distribution.From(samples));
         }
         return new CompareVariantReport(
             name,
@@ -255,6 +277,15 @@ internal static class BenchmarkReports
             LogicalReadsByTable = logicalReadsByTable,
             MetricReport = BenchmarkMetricReport.FromArtifacts(runs.Select(run => run.Artifact).ToArray()),
         };
+    }
+
+    private static long ReadsForIdentity(CompareRunArtifact artifact, StatisticsIoTableIdentity identity)
+    {
+        if (artifact.LogicalReadsByTableIdentity is { } typed)
+            return typed.GetValueOrDefault(identity);
+        return identity.Kind == StatisticsIoTableKind.Unknown
+            ? artifact.LogicalReadsByTable.GetValueOrDefault(identity.Name)
+            : 0L;
     }
 
     private static CompareOperatorReport ToOperatorReport(PlanOperator op, CollectedBenchmarkRun run, int ordinalOffset)

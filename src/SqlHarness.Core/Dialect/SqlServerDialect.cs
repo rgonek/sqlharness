@@ -176,11 +176,16 @@ internal sealed class SqlServerDialect : ISqlDialect
             var time = StatisticsTimeParser.Parse(string.Join(Environment.NewLine, timeMessages));
             if (consumed.OmittedMessageCount > 0 && consumed.TableIoComplete)
             {
-                var tables = consumed.TableIo.ToDictionary(
-                    table => table.Table,
-                    table => table.LogicalReads + table.LobLogicalReads,
-                    StringComparer.Ordinal);
-                io = new StatisticsIo(tables.Values.Sum(), tables);
+                var typedTables = new Dictionary<StatisticsIoTableIdentity, long>();
+                foreach (var table in consumed.TableIo)
+                {
+                    var identity = table.Identity ?? StatisticsIoTableIdentity.Unknown(table.Table);
+                    typedTables[identity] = typedTables.GetValueOrDefault(identity) + table.LogicalReads + table.LobLogicalReads;
+                }
+                var tables = consumed.RawTableLogicalReads is { } rawTables
+                    ? rawTables.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
+                    : typedTables.ToDictionary(pair => pair.Key.DisplayName, pair => pair.Value, StringComparer.Ordinal);
+                io = new StatisticsIo(tables.Values.Sum(), tables) { TypedTables = typedTables };
             }
             var plans = result.PlanXmls.Select(ExecutionPlanParser.Parse).ToArray();
             var artifact = new CompareRunArtifact(
@@ -197,7 +202,7 @@ internal sealed class SqlServerDialect : ISqlDialect
             {
                 TableIo = consumed.TableIo,
                 TableIoComplete = consumed.TableIoComplete,
-                LogicalReadsByTableIdentity = consumed.OmittedMessageCount == 0 && consumed.TableIoComplete ? io.TypedTables : null,
+                LogicalReadsByTableIdentity = consumed.TableIoComplete ? io.TypedTables : null,
             };
             return new CollectedCompareRun(artifact, plans, result.Comparison);
         }

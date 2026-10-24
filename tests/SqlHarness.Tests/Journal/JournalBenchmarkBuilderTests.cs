@@ -188,16 +188,61 @@ public sealed class JournalBenchmarkBuilderTests
     [Fact]
     public void Table_variables_group_before_medians()
     {
+        var run1 = StatisticsIoDetailParser.Parse("Table '#A1B2C3D4'. Scan count 1, logical reads 10, lob logical reads 0.");
+        var run2 = StatisticsIoDetailParser.Parse("Table '#B2C3D4E5'. Scan count 1, logical reads 10, lob logical reads 0.");
+        var run3 = StatisticsIoDetailParser.Parse("Table '#C3D4E5F6'. Scan count 1, logical reads 10, lob logical reads 0.");
         var record = JournalBenchmarkBuilder.Build(
         [
-            Run("measure", 1, 1, 1, 10, io: [new TableIoCounters("#A1B2C3D4", 1, 10, 0, 0, 0, 0, 0, 0)]),
-            Run("measure", 2, 1, 1, 10, io: [new TableIoCounters("[dbo].[#B2C3D4E5]", 1, 10, 0, 0, 0, 0, 0, 0)]),
-            Run("measure", 3, 1, 1, 10, io: [new TableIoCounters("[#C3D4E5F6]", 1, 10, 0, 0, 0, 0, 0, 0)]),
+            Run("measure", 1, 1, 1, 10, io: run1),
+            Run("measure", 2, 1, 1, 10, io: run2),
+            Run("measure", 3, 1, 1, 10, io: run3),
         ]);
 
         var table = Assert.Single(Assert.Single(record.Variants).TableIo);
         Assert.Equal("table variables", table.Table);
         Assert.Equal(10, table.LogicalReads);
+    }
+
+    [Fact]
+    public void Journal_keeps_real_aggregate_name_separate_from_typed_variable_rows()
+    {
+        var io = StatisticsIoDetailParser.Parse("""
+            Table '#A1B2C3D4'. Scan count 1, logical reads 30, lob logical reads 0.
+            Table 'table variables'. Scan count 1, logical reads 7, lob logical reads 0.
+            """);
+        var record = JournalBenchmarkBuilder.Build([Run("measure", 1, 1, 1, 37, io: io)]);
+
+        Assert.Equal(2, record.Variants[0].TableIo.Count);
+        Assert.Equal(7, record.Variants[0].TableIo.Single(row => row.Table == "table variables").LogicalReads);
+        Assert.Equal(30, record.Variants[0].TableIo.Single(row => row.Table == "table variables (aggregate)").LogicalReads);
+    }
+
+    [Fact]
+    public void Journal_variants_share_collision_safe_aggregate_labels()
+    {
+        var baselineIo = StatisticsIoDetailParser.Parse("Table '#A1B2C3D4'. Scan count 1, logical reads 30, lob logical reads 0.");
+        var candidateIo = StatisticsIoDetailParser.Parse("""
+            Table '#B2C3D4E5'. Scan count 1, logical reads 30, lob logical reads 0.
+            Table 'table variables'. Scan count 1, logical reads 7, lob logical reads 0.
+            """);
+        var record = JournalBenchmarkBuilder.Build(
+        [
+            Run("baseline", 1, 1, 1, 30, io: baselineIo),
+            Run("candidate", 1, 1, 1, 37, io: candidateIo),
+        ]);
+
+        Assert.Equal("table variables (aggregate)", Assert.Single(record.Variants.Single(row => row.Variant == "baseline").TableIo).Table);
+        Assert.Contains(record.Variants.Single(row => row.Variant == "candidate").TableIo, row => row.Table == "table variables (aggregate)");
+        Assert.Contains(record.Variants.Single(row => row.Variant == "candidate").TableIo, row => row.Table == "table variables");
+    }
+
+    [Fact]
+    public void Journal_preserves_hash_named_legacy_rows_without_provenance()
+    {
+        var record = JournalBenchmarkBuilder.Build([Run("measure", 1, 1, 1, 10,
+            io: [new TableIoCounters("#A1B2C3D4", 1, 10, 0, 0, 0, 0, 0, 0)])]);
+
+        Assert.Equal("#A1B2C3D4", Assert.Single(record.Variants[0].TableIo).Table);
     }
 
     [Fact]

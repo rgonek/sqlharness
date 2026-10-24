@@ -1,0 +1,33 @@
+# Plan 104 Task 2 implementation report
+
+## Result
+
+Centralized SQL Server STATISTICS IO name classification and carried the typed identity through detailed parsing, incremental accumulation, omitted-text fallback, benchmark reports, journal summaries, and statement reconciliation.
+
+`StatisticsIoTableIdentity.FromRawName` classifies the decoded raw producer name before temp-name normalization. It recognizes only the exact bare `#` plus eight hexadecimal characters as an anonymous table-variable identity. Names whose explicit-local suffix is recognized by `TempTableKey` keep local-temp provenance and the normalized base name. Other forms remain Unknown. Historical rows and manually constructed counters without producer metadata remain Unknown and are never reclassified from their text.
+
+Light and detailed paths now share that classification. Detailed counters and the accumulator group anonymous table variables by identity within each run. The bounded message buffer also retains the prior raw per-run logical-read map, so omitted text can use the complete accumulator for typed summaries without replacing the existing per-run map with a synthetic name. LOB logical reads remain included in logical-read totals.
+
+The SQL Server omitted-text fallback produces typed table summaries when detailed IO evidence is complete, even when the message window omitted text. Incomplete detailed evidence still leaves typed distributions unavailable. Statement reconciliation uses producer identity for new observed rows; legacy observed hashes remain exact Unknown names.
+
+Benchmark total-read maps, distributions, journal rows, and median-run selection group by typed identity. `AllocateDisplayNames` reserves every real object name first. It leaves each real exact key intact and labels the anonymous group `table variables` when that key is free, otherwise `table variables (aggregate)`, then numbered variants until the label is free. Names that already resemble a disambiguated label remain intact.
+
+Compare baseline and candidate reports share one label map built from both sides. Journal rows share one label map built from the full operation, while their metric sums remain grouped by variant, parameter set, and matrix cell. This keeps the anonymous group aligned in asymmetric cases where only one side has a real object named `table variables` or an aggregate-like label. No persisted typed-provenance schema was added; new journal rows contain the finalized collision-safe labels, and old saved rows are not reinterpreted.
+
+## Evidence
+
+The new collision regression first failed as expected: the aggregate distribution overwrote the real `table variables` entry (`Expected: 7`, `Actual: 30`). Its raw RED output is in `plans/104-evidence/implementation-task-2/red-label-collision.log`.
+
+The final focused test command was:
+
+```text
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:IsTestProject=true --filter "FullyQualifiedName~StatisticsParserTests|FullyQualifiedName~StatisticsIoDetailParserTests|FullyQualifiedName~BenchmarkSummaryTests|FullyQualifiedName~StatementReconcilerTests|FullyQualifiedName~JournalBenchmarkBuilderTests|FullyQualifiedName~DialectMessageBudgetTests" --no-restore
+```
+
+Result: 91 passed, 0 failed, 0 skipped. The raw output is in `plans/104-evidence/implementation-task-2/focused-green-final.log`. Coverage includes the complete detail-accumulator fallback after message omission, preservation of the raw per-run name map, exact aggregate-label collisions including existing suffix-like names, paired compare and journal label stability, and Unknown behavior for legacy hashes.
+
+`git diff --check` passed. No full `just verify`, live database test, reviewer invocation, merge, or push was performed; the controller owns later task sequencing and integration.
+
+## Review boundary
+
+This task changes Core aggregation and journal input only. The dashboard fold-removal and MCP/artifact consumer checks remain in Task 3. The recognition rule is the accepted empirical operational rule for the observed build; it does not establish a cross-version Microsoft guarantee.

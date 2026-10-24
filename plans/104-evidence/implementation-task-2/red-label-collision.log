@@ -1,0 +1,19 @@
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\plan-104\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:03.88]     SqlHarness.Tests.BenchmarkSummaryTests.Compare_preserves_real_names_that_resemble_aggregate_labels [FAIL]
+  Failed SqlHarness.Tests.BenchmarkSummaryTests.Compare_preserves_real_names_that_resemble_aggregate_labels [92 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 7
+Actual:   30
+  Stack Trace:
+     at SqlHarness.Tests.BenchmarkSummaryTests.Compare_preserves_real_names_that_resemble_aggregate_labels() in D:\Dev\sqlharness\.worktrees\plan-104\tests\SqlHarness.Tests\BenchmarkSummaryTests.cs:line 97
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 92 ms - SqlHarness.Tests.dll (net10.0)

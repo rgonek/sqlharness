@@ -58,7 +58,10 @@ internal static class StatementReconciler
         var observedObjects = new Dictionary<string, CounterTotals>(StringComparer.OrdinalIgnoreCase);
         foreach (var counters in observed)
         {
-            var key = Normalize(counters.Table, null);
+            var identity = counters.Identity ?? StatisticsIoTableIdentity.Unknown(counters.Table);
+            var key = identity.Kind == StatisticsIoTableKind.AnonymousTableVariable
+                ? "table variables"
+                : NormalizeObservedName(counters.Table);
             if (!observedObjects.TryGetValue(key, out var total))
                 observedObjects[key] = total = new CounterTotals();
             total.Add(counters.LogicalReads, counters.LobLogicalReads, counters.ScanCount);
@@ -83,6 +86,14 @@ internal static class StatementReconciler
                 return StatementStatus.Partial;
             return StatementStatus.Confirmed;
         }).ToArray();
+    }
+
+    private static string NormalizeObservedName(string name)
+    {
+        var unwrapped = name.Trim().Replace("[", string.Empty, StringComparison.Ordinal)
+            .Replace("]", string.Empty, StringComparison.Ordinal);
+        var dot = unwrapped.LastIndexOf('.');
+        return dot >= 0 ? unwrapped[(dot + 1)..] : unwrapped;
     }
 
     private static string Normalize(string name, string? kind)

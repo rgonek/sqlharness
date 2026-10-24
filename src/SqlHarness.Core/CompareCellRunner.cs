@@ -280,6 +280,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 rawFootprint = null;
             var baselineRuns = runs.Where(run => run.Variant == "baseline").ToArray();
             var candidateRuns = runs.Where(run => run.Variant == "candidate").ToArray();
+            var sharedTableLabels = BenchmarkReports.AllocateTableLabels(baselineRuns.Concat(candidateRuns));
             var equivalence = ResultComparer.Compare(
                 request.CompareResults,
                 baselineRuns.Select(run => run.Comparison).ToArray(),
@@ -291,8 +292,8 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 request.Repeat,
                 runs.Count,
                 equivalence.Equivalent,
-                BenchmarkReports.CreateVariantReport("baseline", baselineRuns),
-                BenchmarkReports.CreateVariantReport("candidate", candidateRuns),
+                BenchmarkReports.CreateVariantReport("baseline", baselineRuns, sharedTableLabels),
+                BenchmarkReports.CreateVariantReport("candidate", candidateRuns, sharedTableLabels),
                 null)
             {
                 Equivalence = equivalence,

@@ -56,7 +56,19 @@ public sealed class StatementReconcilerTests
         };
 
         Assert.Equal([StatementStatus.Confirmed, StatementStatus.Confirmed],
-            StatementReconciler.Reconcile(statements, [Io("#A531CF90", 7, 3, 1)]));
+            StatementReconciler.Reconcile(statements, [Io("#A531CF90", 7, 3, 1) with { Identity = StatisticsIoTableIdentity.AnonymousTableVariable }]));
+    }
+
+    [Fact]
+    public void Unknown_legacy_hash_name_is_not_reclassified_as_a_table_variable()
+    {
+        var statement = Statement(0, new StatementObjectCounters("[@first]", "table-variable", 7, 1, 3));
+        var unknownHash = Io("#A531CF90", 7, 3, 1) with
+        {
+            Identity = StatisticsIoTableIdentity.Unknown("#A531CF90"),
+        };
+
+        Assert.Equal([StatementStatus.Partial], StatementReconciler.Reconcile([statement], [unknownHash]));
     }
 
     [Fact]

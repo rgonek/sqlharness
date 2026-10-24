@@ -76,6 +76,67 @@ public sealed class BenchmarkSummaryTests
     }
 
     [Fact]
+    public void Compare_preserves_real_names_that_resemble_aggregate_labels()
+    {
+        var identities = new Dictionary<StatisticsIoTableIdentity, long>
+        {
+            [StatisticsIoTableIdentity.AnonymousTableVariable] = 30,
+            [StatisticsIoTableIdentity.Unknown("table variables")] = 7,
+            [StatisticsIoTableIdentity.Unknown("table variables (object)")] = 13,
+            [StatisticsIoTableIdentity.Unknown("table variables (aggregate)")] = 17,
+        };
+        var artifact = new CompareRunArtifact("measure", 1, 0, 0, 50,
+            new Dictionary<string, long> { ["#A1B2C3D4"] = 30, ["table variables"] = 7, ["table variables (object)"] = 13 },
+            "hash", [], 0)
+        {
+            LogicalReadsByTableIdentity = identities,
+        };
+
+        var variant = BenchmarkReports.CreateVariantReport("measure", [new CollectedBenchmarkRun(artifact, [], [])]);
+
+        Assert.Equal(4, variant.LogicalReadsByTable.Count);
+        Assert.Equal(7, variant.LogicalReadsByTable["table variables"].Median);
+        Assert.Equal(13, variant.LogicalReadsByTable["table variables (object)"].Median);
+        Assert.Equal(17, variant.LogicalReadsByTable["table variables (aggregate)"].Median);
+        Assert.Equal(30, variant.LogicalReadsByTable["table variables (aggregate 2)"].Median);
+        Assert.Equal(7, variant.TotalLogicalReadsByTable["table variables"]);
+        Assert.Equal(13, variant.TotalLogicalReadsByTable["table variables (object)"]);
+        Assert.Equal(17, variant.TotalLogicalReadsByTable["table variables (aggregate)"]);
+        Assert.Equal(30, variant.TotalLogicalReadsByTable["table variables (aggregate 2)"]);
+    }
+
+    [Fact]
+    public void Compare_variants_share_collision_safe_aggregate_labels()
+    {
+        static CollectedBenchmarkRun Run(string variant, params (StatisticsIoTableIdentity Identity, long Reads)[] rows)
+        {
+            var typed = rows.ToDictionary(row => row.Identity, row => row.Reads);
+            var raw = rows.ToDictionary(
+                row => row.Identity.Kind == StatisticsIoTableKind.AnonymousTableVariable ? "#A1B2C3D4" : row.Identity.Name,
+                row => row.Reads,
+                StringComparer.Ordinal);
+            var artifact = new CompareRunArtifact(variant, 1, 0, 0, typed.Values.Sum(), raw, "hash", [], 0)
+            {
+                LogicalReadsByTableIdentity = typed,
+            };
+            return new CollectedBenchmarkRun(artifact, [], []);
+        }
+
+        var baseline = Run("baseline", (StatisticsIoTableIdentity.AnonymousTableVariable, 30));
+        var candidate = Run("candidate",
+            (StatisticsIoTableIdentity.AnonymousTableVariable, 30),
+            (StatisticsIoTableIdentity.Unknown("table variables"), 7));
+        var labels = BenchmarkReports.AllocateTableLabels([baseline, candidate]);
+
+        var baselineReport = BenchmarkReports.CreateVariantReport("baseline", [baseline], labels);
+        var candidateReport = BenchmarkReports.CreateVariantReport("candidate", [candidate], labels);
+
+        Assert.Equal(30, baselineReport.LogicalReadsByTable["table variables (aggregate)"].Median);
+        Assert.Equal(30, candidateReport.LogicalReadsByTable["table variables (aggregate)"].Median);
+        Assert.Equal(7, candidateReport.LogicalReadsByTable["table variables"].Median);
+    }
+
+    [Fact]
     public void Compare_projection_is_bounded_and_retains_core_metrics()
     {
         var baselineOps = Enumerable.Range(1, 20)
