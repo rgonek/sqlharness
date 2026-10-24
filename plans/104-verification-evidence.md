@@ -5,9 +5,13 @@ Worktree: `D:/Dev/sqlharness/.worktrees/plan-104`, branch `plan-104`.
 
 ## Outcome
 
-**BLOCKED, implementation incomplete.** Original Tasks 1–3 are not complete. No product behavior changed. The original contract needs positively identified table-variable IO, while the current producer emits only names and counters. The same `#ABCDEF12` spelling can represent an explicit temporary name or an anonymous variable observation; current inputs contain no object-kind discriminator.
+**Current outcome: implementation incomplete; general recognition policy unresolved.** Original Tasks 1–3 are not complete, and no product behavior changed. The subsequent experiment captured a raw-name distinction before normalization on SQL Server `17.0.1145.4`; that is candidate provenance for the tested build, not a generally supported object-kind contract. The earlier STOP and “no discriminator” statements below record the pre-experiment investigation and must be read as historical conclusions about the evidence available then.
 
 Luna high investigated suffix provenance, additive typed fields and conservative ambiguity handling. Luna xhigh independently reviewed those proposals and confirmed the STOP. An unpopulated typed field would not repair real capture. An availability-only fallback needs a separate report/journal/dashboard/export contract and does not satisfy the original aggregate-median assertions. See the [proposal](104-evidence/resolution-proposal.md) and binding [resolution review](104-evidence/resolution-review.md).
+
+## Historical pre-experiment investigation
+
+This section records the investigation before the user-authorized raw-name experiment. Its STOP conclusion was accurate for that earlier evidence set; the later experiment revised the producer-evidence description, while leaving implementation and general recognition policy unresolved.
 
 ## Revision and executable evidence
 
@@ -23,7 +27,7 @@ The current delivery changes documentation/evidence only. Documentation-scoped d
 
 ## Required next input
 
-The original repair needs a supported capture producer that associates each IO counter with an object kind, validated against explicit hex-shaped temp names and SQL Server versions. A suffix pattern, SQL text guess, group-sum reconciliation or manually typed fixture is not that producer. A separately scoped ambiguity-reporting change is feasible, but must keep total reads and per-run evidence while making omitted object distributions explicit in every consumer.
+The experiment shows that the raw IO name retains candidate provenance before normalization for the tested `17.0.1145.4` cases, including an explicit hex-shaped temp name. What remains unresolved is a general, supported recognition policy across engine versions and uncharacterized name shapes; the empirical spelling rule is not a Microsoft guarantee. A suffix pattern beyond the characterized build, SQL-text guess, group-sum reconciliation or manually typed fixture cannot establish that broader policy. A separately scoped ambiguity-reporting change remains feasible, but must keep total reads and per-run evidence while making omitted object distributions explicit in every consumer.
 
 ## Independent review disposition
 
