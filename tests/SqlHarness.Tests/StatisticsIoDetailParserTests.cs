@@ -106,4 +106,21 @@ public sealed class StatisticsIoDetailParserTests
         Assert.False(accumulator.Complete);
         Assert.Empty(accumulator.Snapshot());
     }
+
+    [Fact]
+    public void Mixed_valid_and_unparseable_table_rows_mark_accumulation_incomplete()
+    {
+        var accumulator = new TableIoAccumulator();
+
+        accumulator.Add(3615, """
+            Table '#A1B2C3D4'. Scan count 1, logical reads 5, lob logical reads 1.
+            Table 'Broken'. Scan count 1, physical reads 0, lob logical reads 0.
+            """);
+
+        Assert.False(accumulator.Complete);
+        var row = Assert.Single(accumulator.Snapshot());
+        Assert.Equal(StatisticsIoTableIdentity.AnonymousTableVariable, row.Identity);
+        Assert.Equal(5, row.LogicalReads);
+        Assert.Equal(1, row.LobLogicalReads);
+    }
 }

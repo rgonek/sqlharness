@@ -26,7 +26,21 @@ dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:IsTestProject=true
 
 Result: 91 passed, 0 failed, 0 skipped. The raw output is in `plans/104-evidence/implementation-task-2/focused-green-final.log`. Coverage includes the complete detail-accumulator fallback after message omission, preservation of the raw per-run name map, exact aggregate-label collisions including existing suffix-like names, paired compare and journal label stability, and Unknown behavior for legacy hashes.
 
-`git diff --check` passed. No full `just verify`, live database test, reviewer invocation, merge, or push was performed; the controller owns later task sequencing and integration.
+`git diff --check` passed. No full `just verify`, live database test, merge, or push was performed; the review follow-up and controller-owned Task 3 sequencing are recorded below.
+
+## Fix round 1: mixed-message completeness (review P2)
+
+The review found that a 3615 message with one parseable row and another table row missing a parseable logical-read counter was treated as complete. `ParseRows` now reports message-level completeness. Any unrecognized table row makes the accumulator incomplete, while successfully parsed rows are still retained. Recognized columnstore `Segment reads` and `Segment skipped` lines remain ignorable. The omitted-text fallback therefore cannot publish typed summaries when a mixed message made the detail evidence incomplete.
+
+The RED command targeted `Mixed_valid_and_unparseable_table_rows_mark_accumulation_incomplete` and `Mixed_unparseable_io_prevents_omitted_text_fallback_from_claiming_complete_identity`. Both failed before the fix as expected: the accumulator remained complete and the omitted-text path exposed typed identity. Raw output: `plans/104-evidence/implementation-task-2/fix-round1-red.log`.
+
+The two new regressions passed after the fix (2 passed, 0 failed), recorded in `plans/104-evidence/implementation-task-2/fix-round1-focused-green.log`. The complete affected classes then passed with this command:
+
+```text
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:IsTestProject=true --filter "FullyQualifiedName~StatisticsIoDetailParserTests|FullyQualifiedName~DialectMessageBudgetTests" --no-restore
+```
+
+Result: 22 passed, 0 failed, 0 skipped. Raw output: `plans/104-evidence/implementation-task-2/fix-round1-green.log`. Provider framing for this mixed case remains unverified; the synthetic regression directly exercises the bounded parser and fallback contract.
 
 ## Review boundary
 

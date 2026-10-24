@@ -178,15 +178,25 @@ internal static class StatisticsIoDetailParser
     }
 
     internal static IReadOnlyList<TableIoCounters> ParseRows(string text)
+        => ParseRows(text, out _);
+
+    internal static IReadOnlyList<TableIoCounters> ParseRows(string text, out bool complete)
     {
         var counters = new List<TableIoCounters>();
+        complete = true;
         foreach (Match line in TableLine.Matches(text))
         {
             if (TryParse(line, out var row))
                 counters.Add(row);
+            else if (!IsKnownNonIoTableLine(line.Groups["counters"].Value))
+                complete = false;
         }
         return counters;
     }
+
+    private static bool IsKnownNonIoTableLine(string counters) =>
+        counters.TrimStart().StartsWith("Segment reads", StringComparison.OrdinalIgnoreCase)
+        || counters.TrimStart().StartsWith("Segment skipped", StringComparison.OrdinalIgnoreCase);
 
     internal static void Add(
         Dictionary<StatisticsIoTableIdentity, TableIoCounters> tables,
@@ -229,8 +239,7 @@ internal static class StatisticsIoDetailParser
                 values[match.Groups["name"].Value.Trim()] = value;
         }
 
-        // Like StatisticsIoParser, a line without logical reads (localized output,
-        // columnstore segment lines) is not a counter line; recording it would turn unknown into zero.
+        // A line without logical reads is unavailable evidence; never turn it into zero.
         if (!values.ContainsKey("logical reads"))
         {
             counters = null!;
@@ -277,12 +286,14 @@ internal sealed class TableIoAccumulator
             return;
         }
 
-        var counters = StatisticsIoDetailParser.ParseRows(message);
+        var counters = StatisticsIoDetailParser.ParseRows(message, out var messageComplete);
         if (counters.Count == 0)
         {
             Complete = false;
             return;
         }
+        if (!messageComplete)
+            Complete = false;
 
         foreach (var counter in counters)
         {
