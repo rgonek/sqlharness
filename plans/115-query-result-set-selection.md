@@ -1,6 +1,6 @@
 # Plan 115: Select relevant query result sets
 
-> **Status:** accepted research follow-up from Plan 109; TODO. This file is an implementation handoff, not authorization to implement, merge, push, use a live database, or run paid-agent trials.
+> **Status:** IMPLEMENTATION COMPLETE on `plan-115`; Windows `just verify` passed on `3ffc574b`; Luna xhigh task review and Sol low whole-branch/scoped reviews approved. Not merged or pushed. See [verification evidence](115-verification-evidence.md). No live database or paid-agent acceptance was run.
 
 ## Evidence and goal
 

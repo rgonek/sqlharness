@@ -21,7 +21,6 @@ Read the selected plan and its spec before executing. A queue entry is not appro
 | [083](083-table-and-list-parameters.md) | Stage D table-valued parameters (inline rows or rows from a read-only query, catalog-resolved types, Structured binding) and Dapper list expansion across read-only tools; conditions, labels and SSMS scripts; mutation rejects them | 077, 079 merged | IMPLEMENTATION VERIFIED; locally integrated into `main` at `55d23ba`; final scoped Sol review approved; live UAT pending; Linux waived ([evidence](083-verification-evidence.md)) |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and in-flight batch identities while preserving applicable staging and retry/cursor state | 084 merged | DONE; locally integrated into `main` at `7f03ecb`; both task reviews, Sol low whole-branch review and final scoped re-review approved; evidence archive includes 10 tracked raw logs ([evidence](090-verification-evidence.md)) |
 | [114](114-compact-statement-discovery.md) | Opt-in per-statement CPU/elapsed discovery without operator summaries | 109 research accepted | TODO — implementation authorization is separate |
-| [115](115-query-result-set-selection.md) | Optional query response selection by original result-set ordinal | 109 research accepted | TODO — implementation authorization is separate |
 
 ## Limit-economics execution notes (2026-10-20)
 
@@ -42,6 +41,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
+| [115](115-query-result-set-selection.md) | Optional query response selection by original result-set ordinal | IMPLEMENTATION COMPLETE on `plan-115`; Luna task and Sol low whole-branch/scoped reviews approved; Windows gate and branch format passed on `3ffc574b`; not merged or pushed ([evidence](115-verification-evidence.md)) |
 | [106](106-bounded-error-diagnostics.md) | Bounded actionable error diagnostics independent of result-cell caps | DONE; previously integrated into `main` at `59fc0359`; this merge combines it with Plan 105; not pushed ([evidence](106-verification-evidence.md)) |
 | [105](105-artifact-diagnostic-evidence.md) | Bounded statement IO, scans and source-scoped grant/compile diagnostics | DONE; locally integrated into `main` at `42e7e284`; combined `fcd2a3a5` passed Windows gate and branch format; all reviews approved; not pushed ([integration evidence](105-evidence/integration/verification.md)) |
 | [103](103-agent-evidence-completeness.md) | Versioned statement evidence, attribution completeness and bounded hidden-work limitations for agents | DONE; locally integrated into `main` at `1301aa7b`; Luna task reviews and Sol low whole-branch/scoped reviews approved; Windows-verified product/test tree `874b4fc9` unchanged; not pushed ([evidence](103-verification-evidence.md)) |

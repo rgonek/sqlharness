@@ -1,0 +1,22 @@
+format: 8 changed C# file(s) (branch)
+format: OK
+exit code: 0
+
+Review-fix branch format command: pwsh -NoProfile -File ./scripts/format-changed.ps1 -Mode branch -BaseRef 9718b052
+format: 8 changed C# file(s) (branch)
+C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\src\SqlHarness.Core\AgentOutputProjection.cs(1303,95): error FINALNEWLINE: Fix final newline. Delete 2 characters. [C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\src\SqlHarness.Core\SqlHarness.Core.csproj]
+C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\src\SqlHarness.Mcp\Tools\McpRequestToolHandlers.cs(362,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj]
+C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\src\SqlHarness.Mcp\Tools\McpToolCatalog.cs(946,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj]
+C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs(2200,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Mcp.Tests\SqlHarness.Mcp.Tests.csproj]
+format: FAILED (dotnet format exit 2)
+format exit code: 2
+
+Review-fix formatting fix command: pwsh -NoProfile -File ./scripts/format-changed.ps1 -Mode branch -BaseRef 9718b052 -Fix
+format: 8 changed C# file(s) (branch)
+format: OK
+format fix exit code: 0
+
+Review-fix final branch format command: pwsh -NoProfile -File ./scripts/format-changed.ps1 -Mode branch -BaseRef 9718b052
+format: 8 changed C# file(s) (branch)
+format: OK
+format exit code: 0

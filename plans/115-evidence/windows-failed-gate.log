@@ -1,0 +1,49 @@
+pwsh ./scripts/verify.ps1 -LogDirectory .superpowers/sdd/115-query-result-set-selection/windows-final-dryrun-fix
+[6 q==> ui-install skipped (lockfile unchanged)
+==> build ok 37,1s
+==> ui-check ok 4m52s
+==> test FAILED (exit 1)
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+Test run for C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:02.31]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [SKIP]
+[xUnit.net 00:00:02.31]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [SKIP]
+[xUnit.net 00:00:02.31]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [SKIP]
+[xUnit.net 00:00:02.51]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [SKIP]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [1 ms]
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Cell_limit_argument_describes_error_diagnostic_floor_in_both_modes [43 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Runtime: scopeMode, compareContext, conne"···
+Not found: "After redaction, Message/Hint use max(req"···
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Cell_limit_argument_describes_error_diagnostic_floor_in_both_modes() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 1272
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Cell_limit_argument_describes_error_diagnostic_floor_in_both_modes() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 1265
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Cell_limit_argument_describes_error_diagnostic_floor_in_both_modes() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 1265
+--- End of stack trace from previous location ---
+  Standard Output Messages:
+ fixed tools/list: 28630 UTF-8 bytes of 32768.
+
+
+  Failed SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes [59 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "Run a bounded query passing the static vi"···
+Not found: "not benchmark evidence"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 1315
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 1298
+   at SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Mcp.Tests\McpToolSchemaTests.cs:line 1298
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     2, Passed:   527, Skipped:     4, Total:   533, Duration: 2 m 55 s - SqlHarness.Mcp.Tests.dll (net10.0)
+[xUnit.net 00:02:21.46]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Cell_limit_argument_describes_error_diagnostic_floor_in_both_modes [FAIL]
+[xUnit.net 00:02:22.71]     SqlHarness.Mcp.Tests.McpToolSchemaTests.Tools_list_explains_optimization_evidence_semantics_in_both_modes [FAIL]
+==> test project: tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj exit 1
+full log: .superpowers\sdd\115-query-result-set-selection\windows-final-dryrun-fix\test-SqlHarness.Mcp.Tests.log
+verify: FAILED  stage=test  exit=1  8m49s
+error: recipe `verify` failed on line 12 with exit code 1
+Direct exit code: 1
