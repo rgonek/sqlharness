@@ -1,6 +1,14 @@
 # Plan 106 verification evidence
 
-Status: DONE on isolated branch `plan-106`; no merge, push or installation.
+Status: DONE; locally integrated into `main` at `59fc0359`. No push or installation.
+
+## Local integration — 2026-10-24
+
+User chose local merge. Main had advanced to `33651662`; the combined tree retains Plans 103/107/108/110 and Plan 106. Luna high resolved the two conflicts, Luna xhigh approved the integration, and Sol low approved the whole integrated delta without findings. The resolved tree passed Windows `just verify` before the merge commit: Core **4688 passed/11 skipped**, MCP **521 passed/4 skipped**, UI **372 passed**, build 0 warnings/errors, five stages, exit **0** in 13m41s. The tested index tree `6ef06d21d303c387e92f228fa5bc9e986086b474` matches merge commit `59fc0359` for source/tests/scripts. Direct branch formatting on the merge commit checked **25 C# files** and exited 0. Main fast-forwarded to that exact merge result; no redundant gate was run on unchanged code. Later closeout commits contain documentation/evidence only.
+
+[Integration verification and logs](106-evidence/integration/verification.md), [Luna review](106-evidence/integration/integration-review.md), [Sol review](106-evidence/integration/whole-review.md), [direct branch format](106-evidence/integration/branch-format-output.txt).
+
+Unrelated local README/index additions are preserved; the original untracked Plan 106 is backed up at `D:/temp/sqlharness-plan106-main-local-backup-20261023-215409`. The obsolete local 106 TODO row is removed while the completed history entry remains. Other untracked plans stay untouched. Linux/live DB/deployment/loaded-binary behavior remains unverified.
 
 ## Tested identity
 

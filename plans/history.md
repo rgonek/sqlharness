@@ -1,5 +1,9 @@
 # Plan history
 
+## Plan 106 locally integrated — 2026-10-24
+
+Plan [106](106-bounded-error-diagnostics.md) is locally integrated into `main` at `59fc0359`, combining main `33651662` with Plan 106. Luna high resolved the index/schema conflicts; Luna xhigh and Sol low integration reviews approved. The exact combined product/test tree passed Windows `just verify` (Core 4688/11 skipped, MCP 521/4 skipped, UI 372, exit 0); direct branch formatting checked 25 C# files and passed. Main received the identical verified tree by fast-forward; closeout commits are documentation only. Unrelated local README/index additions and other untracked plans are preserved, and the original untracked Plan 106 is backed up. No push, installation, Linux or live-DB acceptance. See [integration evidence](106-evidence/integration/verification.md).
+
 ## Plan 106 DONE on feature branch — 2026-10-23
 
 Plan [106](106-bounded-error-diagnostics.md) keeps redacted error Message/Hint readable independently of small result-cell caps, with one Core policy used by CLI and MCP. Minimum-budget envelopes preserve original code/phase and exact truncation even with oversized optional paths. Luna high implemented, Luna xhigh approved task reviews, and Sol low approved whole-branch fixes and the final test-only gate remediation. Direct branch formatting passed. Windows `just verify` exited 0 on `a5ec831fae055594035d2ef218f59c4020f9fdb2`: build 0 warnings/errors, UI 372 passed, Core 4661 passed/11 skipped, MCP 516 passed/4 skipped. Initial failed gate evidence is retained. Linux/live DB/loaded-binary/deployment acceptance remains unverified. No merge, push or installation. See [verification evidence](106-verification-evidence.md).

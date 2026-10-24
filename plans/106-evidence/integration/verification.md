@@ -21,3 +21,7 @@ The gate tested the resolved working tree whose index tree is `6ef06d21d303c387e
 - [UI log](windows-gate/ui-check-output.txt)
 
 Main's unrelated dirty README and plan-index additions and other untracked plans were not part of this merge. A byte-preserving backup was prepared at `D:/temp/sqlharness-plan106-main-local-backup-20261023-215409` before any source checkout changes. No push, installation, Linux verification or live DB activity is authorized or claimed.
+
+## Local main closeout
+
+Local main fast-forwarded to merge commit 59fc0359. Source/tests/scripts exactly match the integrated gate tree above. Direct branch formatting on that commit checked 25 C# files and exited 0; see [formatter output](branch-format-output.txt). Subsequent closeout changes only documentation/evidence. No redundant full gate was run on unchanged code. Original user files are backed up; local observation-index additions are restored with only the obsolete 106 TODO row omitted.

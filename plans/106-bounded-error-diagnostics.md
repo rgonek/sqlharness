@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: DONE on `plan-106` — Windows gate passed on `a5ec831f`; Luna high implementation, Luna xhigh task reviews and Sol low whole-branch/scoped reviews approved. Branch formatting passed; no merge, push, installation or live acceptance ([verification evidence](106-verification-evidence.md)); 2026-10-23.
+- Status: DONE — locally integrated into `main` at `59fc0359`; integrated Windows gate and branch formatting passed, Luna xhigh and Sol low integration reviews approved. No push, installation or live acceptance ([integration evidence](106-evidence/integration/verification.md)); 2026-10-24.
 - Priority: **P2** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
