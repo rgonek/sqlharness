@@ -21,3 +21,7 @@ Ruling: Revise plan-mandated MCP publisher/journal test-discovery criterion to N
 Task 2: fix round 1/5 (2 addressed, 0 open — MCP criterion N/A explicit; observed audit wording; commits b244823a..10b27690)
 Task 2: complete (commits 49f4ea96..10b27690, review clean)
 Task 3 BASE: 10b27690
+Task 3 cannot-verify items resolved by controller: branch diff --check exit0 and all relative Markdown file links resolved on 8ed91395.
+Task 3: complete (commits 10b27690..8ed91395, review clean)
+Whole-branch review: Sol low approved 8ed91395; no Critical/Important/Minor findings.
+Ruling: Accept all five declined-to-judge boundaries (historical cause, historical binary identity, MCP publisher/journal integration, Linux/live behavior, npm/Vite attribution) as explicitly unverified rather than reopening this diagnosis — source/offline evidence cannot settle them and no product change was selected — cost if wrong is unresolved external causality, integration/platform/live behavior or dependency risk; no acceptance is claimed.

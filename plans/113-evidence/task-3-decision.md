@@ -47,4 +47,4 @@ The follow-up inspection was limited to the observation, the Plan 076 record, an
 
 ## Review state
 
-Tasks 1 and 2 and the Task 2 correction have approved review records archived at [reviews](reviews/). Task 3 evidence is ready for its final review; plan status remains final-review-pending and does not imply final approval.
+Tasks 1, 2, the Task 2 correction and Task 3 have approved review records archived at [reviews](reviews/). The Sol low whole-branch review approved commit `8ed91395` with no findings. The plan is DIAGNOSIS COMPLETE; the unknown cause, unavailable historical binary identity and acceptance limits remain unchanged.

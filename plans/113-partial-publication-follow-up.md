@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: diagnostic tasks complete; final review pending (2026-10-24).
+- Status: DIAGNOSIS COMPLETE (2026-10-24); Task 1/2/3 reviews and the Sol low whole-branch review approved on `8ed91395`.
 - Priority: **P4** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: S; change risk: LOW.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -74,7 +74,7 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 - [x] Run the focused Windows suites. Existing Core fixtures cover the relevant retry and journal boundaries, so no tests were added. Record tests skipped on non-Windows separately. [Task 2 evidence](113-evidence/task-2-focused-offline-confirmation.md)
 - [x] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved. See [Task 2 evidence](113-evidence/task-2-focused-offline-confirmation.md).
-- [x] Save the task's evidence and inspect the diff. No production behavior changed; the ignored full report is at `.superpowers/sdd/113-partial-publication-follow-up/task-2-report.md`.
+- [x] Save the task's evidence and inspect the diff. No production behavior changed. Durable evidence and the approved Task 2 reviews are archived under [Task 2 evidence](113-evidence/task-2-focused-offline-confirmation.md) and [review records](113-evidence/reviews/).
 
 ### Task 3: Decide whether residual diagnosis is justified
 
@@ -91,7 +91,7 @@ Run `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "Artifa
 - [x] Notes-only work: diff/link checks are the scoped check; no product gate is claimed.
 - [x] Linux remains unverified; no completed executable check was rerun because behavior was unchanged.
 - [x] Diagnosis evidence records the disposition and keeps the cause unknown; no product change was invented.
-- [x] Updated this plan and the index with the tested revision, scope, review state and limitations. Deferred live acceptance remains unverified; final review is pending.
+- [x] Updated this plan and the index with tested revision, scope, approved review state and limitations. Deferred live acceptance remains unverified.
 
 ## STOP conditions
 
