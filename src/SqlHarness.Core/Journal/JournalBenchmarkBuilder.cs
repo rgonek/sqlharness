@@ -286,7 +286,8 @@ internal static class JournalBenchmarkBuilder
                 Sum(group, item => item.ReadAheadReads),
                 Sum(group, item => item.LobLogicalReads),
                 Sum(group, item => item.LobPhysicalReads),
-                Sum(group, item => item.LobReadAheadReads)) { Identity = group.Key });
+                Sum(group, item => item.LobReadAheadReads))
+            { Identity = group.Key });
 
         static long Sum(IEnumerable<TableIoCounters> counters, Func<TableIoCounters, long> select) =>
             counters.Aggregate(0L, (total, item) => SaturatingAdd(total, select(item)));
