@@ -28,6 +28,18 @@ public sealed record PlanMetrics(
     public static PlanMetrics Empty { get; } = new(null, null, null, null, null, null, 0, false, false, 0, [], null);
 }
 
+internal sealed record PlanDiagnosticSource(
+    string Scope,
+    int PlanDocumentOrdinal,
+    int PlanQueryOrdinal,
+    int? PlanStatementIndex,
+    int? DegreeOfParallelism,
+    long? GrantRequestedKb,
+    long? GrantGrantedKb,
+    long? GrantMaxUsedKb,
+    long? CompileTimeMs,
+    long? CompileCpuMs);
+
 /// <summary>
 /// Journal-only plan diagnostics from actual Showplan XML (SQL Server) or
 /// EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) (Postgres). Never throws: an
@@ -36,6 +48,63 @@ public sealed record PlanMetrics(
 internal static class PlanMetricsExtractor
 {
     internal const int MaximumCharacters = 16 * 1024 * 1024;
+    private static readonly XNamespace ShowplanNamespace = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
+
+    internal static IReadOnlyList<PlanDiagnosticSource> ExtractDiagnosticSources(IEnumerable<string> documents)
+    {
+        var result = new List<PlanDiagnosticSource>();
+        var ordinal = 0;
+        foreach (var document in documents)
+        {
+            try
+            {
+                result.AddRange(ExtractDiagnosticSources(document, ordinal));
+            }
+            catch (Exception exception) when (IsExtractionFailure(exception))
+            {
+                // One unreadable plan document does not hide valid sibling sources.
+            }
+            ordinal++;
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<PlanDiagnosticSource> ExtractDiagnosticSources(string document, int documentOrdinal)
+    {
+        if (string.IsNullOrWhiteSpace(document) || document.Length > MaximumCharacters
+            || document.AsSpan().TrimStart()[0] is '{' or '[')
+            return [];
+
+        using var reader = XmlReader.Create(new StringReader(document), new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = MaximumCharacters,
+        });
+        var root = XDocument.Load(reader);
+        if (root.Root?.Name != ShowplanNamespace + "ShowPlanXML")
+            return [];
+        var statements = root.Descendants(ShowplanNamespace + "StmtSimple").ToArray();
+        return root.Descendants(ShowplanNamespace + "QueryPlan")
+            .Select((queryPlan, queryPlanOrdinal) =>
+            {
+                var statement = queryPlan.Ancestors(ShowplanNamespace + "StmtSimple").FirstOrDefault();
+                var statementIndex = statement is null ? (int?)null : Array.IndexOf(statements, statement);
+                var grant = queryPlan.Descendants(ShowplanNamespace + "MemoryGrantInfo").FirstOrDefault();
+                return new PlanDiagnosticSource(
+                    statement is null ? "batch" : "statement",
+                    documentOrdinal,
+                    queryPlanOrdinal,
+                    statementIndex,
+                    Int(queryPlan, "DegreeOfParallelism"),
+                    Long(grant ?? queryPlan, "RequestedMemory"),
+                    Long(grant ?? queryPlan, "GrantedMemory"),
+                    Long(grant ?? queryPlan, "MaxUsedMemory"),
+                    Long(queryPlan, "CompileTime"),
+                    Long(queryPlan, "CompileCPU"));
+            })
+            .ToArray();
+    }
 
     internal static PlanMetrics Extract(IEnumerable<string> documents)
     {
@@ -109,12 +178,14 @@ internal static class PlanMetricsExtractor
         });
         var root = XDocument.Load(reader);
         var elements = root.Descendants().ToArray();
-        XElement[] Named(string localName) => elements.Where(element => element.Name.LocalName == localName).ToArray();
+        if (root.Root?.Name != ShowplanNamespace + "ShowPlanXML")
+            return PlanMetrics.Empty;
+        XElement[] Named(string localName) => elements.Where(element => element.Name == ShowplanNamespace + localName).ToArray();
 
         var queryPlans = Named("QueryPlan");
         var grants = Named("MemoryGrantInfo");
         var waits = Named("Wait")
-            .Where(wait => wait.Parent?.Name.LocalName == "WaitStats")
+            .Where(wait => wait.Parent?.Name == ShowplanNamespace + "WaitStats")
             .GroupBy(wait => Attribute(wait, "WaitType") ?? "UNKNOWN", StringComparer.Ordinal)
             .Select(group => new PlanWait(
                 group.Key,
@@ -207,8 +278,9 @@ internal static class PlanMetricsExtractor
     /// elements owned by an operator, never in statement text or parameter values.
     /// </summary>
     private static bool IsOperatorImplicitConversion(XElement element) =>
-        element.Name.LocalName != "RelOp"
-        && element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "RelOp")
+        element.Name.Namespace == ShowplanNamespace
+        && element.Name != ShowplanNamespace + "RelOp"
+        && element.Ancestors(ShowplanNamespace + "RelOp").Any()
         && element.Attributes().Any(attribute =>
             attribute.Value.Contains("CONVERT_IMPLICIT", StringComparison.OrdinalIgnoreCase));
 

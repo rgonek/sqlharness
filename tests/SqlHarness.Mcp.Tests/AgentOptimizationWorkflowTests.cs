@@ -149,6 +149,135 @@ public sealed class AgentOptimizationWorkflowTests
         session.AssertNoDatabaseConnections();
     }
 
+    [Fact]
+    public async Task Artifact_diagnostics_support_offline_memory_tradeoffs_and_multi_statement_io_at_both_budgets()
+    {
+        await using var session = await Session.StartAsync(WorkflowScenarios.ArtifactDiagnosticEvidenceId, Budget);
+        var compare = await session.Call("sqlharness_compare", CompareArguments(
+            WorkflowScenarios.ArtifactReviewBaselineSql,
+            WorkflowScenarios.ArtifactReviewCandidateV1Sql,
+            budget: 65536));
+        Assert.False(compare.IsError == true, Text(compare));
+        var artifactId = ArtifactId(Envelope(compare));
+
+        async Task<JsonElement> ReadMetricsAsync(int budget)
+        {
+            var result = await session.Call("sqlharness_artifact", new Dictionary<string, object?>
+            {
+                ["id"] = artifactId,
+                ["section"] = "metrics",
+                ["maxResultBytes"] = budget,
+            });
+            Assert.False(result.IsError == true, Text(result));
+            Assert.InRange(Encoding.UTF8.GetByteCount(Text(result)), 1, budget);
+            _output.WriteLine($"metrics budget={budget} responseUtf8Bytes={Encoding.UTF8.GetByteCount(Text(result))}");
+            return Envelope(result).GetProperty("result").Clone();
+        }
+
+        async Task<(List<JsonElement> Rows, List<int> ResponseBytes)> ReadStatementsAsync(int budget, int firstCursor)
+        {
+            const int maximumPages = 4;
+            var rows = new List<JsonElement>();
+            var responseBytes = new List<int>();
+            int? cursor = firstCursor;
+            while (rows.Count < 4 && responseBytes.Count < maximumPages)
+            {
+                var arguments = new Dictionary<string, object?>
+                {
+                    ["id"] = artifactId,
+                    ["section"] = "statements",
+                    ["pageSize"] = 1,
+                    ["maxResultBytes"] = budget,
+                };
+                if (cursor is int current)
+                    arguments["cursor"] = current;
+                var result = await session.Call("sqlharness_artifact", arguments);
+                Assert.False(result.IsError == true, Text(result));
+                var text = Text(result);
+                responseBytes.Add(Encoding.UTF8.GetByteCount(text));
+                Assert.InRange(responseBytes[^1], 1, budget);
+                var envelope = Envelope(result);
+                rows.AddRange(envelope.GetProperty("result").GetProperty("statements").EnumerateArray().Select(row => row.Clone()));
+                var next = Continuation(envelope);
+                Assert.True(rows.Count >= 4 || next is int,
+                    $"Statement pagination exhausted after {rows.Count} of 4 expected rows.");
+                if (next is int continuation)
+                    Assert.True(continuation > (cursor ?? 0), $"Statement continuation did not advance from {cursor} to {continuation}.");
+                else
+                    Assert.Equal(4, rows.Count);
+                cursor = next;
+            }
+
+            Assert.Equal(4, rows.Count);
+
+            return (rows, responseBytes);
+        }
+
+        var defaultMetrics = await ReadMetricsAsync(65536);
+        var minimumMetrics = await ReadMetricsAsync(4096);
+        foreach (var metrics in new[] { defaultMetrics, minimumMetrics })
+        {
+            var planDiagnostics = metrics.GetProperty("planDiagnosticDistributions").EnumerateArray()
+                .ToArray();
+            Assert.NotEmpty(planDiagnostics);
+            Assert.All(planDiagnostics, item =>
+            {
+                Assert.Equal("sql-server-showplan-query-plan", item.GetProperty("source").GetString());
+                Assert.True(item.TryGetProperty("planDocumentOrdinal", out _));
+                Assert.True(item.TryGetProperty("planQueryOrdinal", out _));
+            });
+            if (metrics.GetProperty("planDiagnosticDistributionsAvailability").GetString() == "partial")
+                Assert.True(metrics.GetProperty("omittedPlanDiagnosticDistributions").GetInt32() > 0);
+            var statementRead = Assert.Single(metrics.GetProperty("statisticsIoScanCountDistributions").EnumerateArray(),
+                item => item.GetProperty("variant").GetString() == "candidate" && item.GetProperty("table").GetString() == "Orders");
+            Assert.Equal("sql-server-statistics-io", statementRead.GetProperty("source").GetString());
+            Assert.Equal(5, statementRead.GetProperty("scanCount").GetProperty("median").GetInt64());
+        }
+
+        var defaultBaselineStatements = await ReadStatementsAsync(65536, 0);
+        var defaultCandidateStatements = await ReadStatementsAsync(65536, 20);
+        var minimumBaselineStatements = await ReadStatementsAsync(4096, 0);
+        var minimumCandidateStatements = await ReadStatementsAsync(4096, 20);
+        foreach (var (variant, statements) in new[]
+        {
+            ("baseline", defaultBaselineStatements),
+            ("candidate", defaultCandidateStatements),
+            ("baseline", minimumBaselineStatements),
+            ("candidate", minimumCandidateStatements),
+        })
+        {
+            var selected = statements.Rows.Where(row => row.GetProperty("variant").GetString() == variant
+                && row.GetProperty("repetition").GetInt32() == 1).OrderBy(row => row.GetProperty("statementOrdinal").GetInt32()).ToArray();
+            Assert.Equal(4, selected.Length);
+            Assert.Equal(Enumerable.Range(0, 4), selected.Select(row => row.GetProperty("statementOrdinal").GetInt32()));
+            for (var ordinal = 0; ordinal < selected.Length; ordinal++)
+            {
+                var row = selected[ordinal];
+                Assert.Equal("available", row.GetProperty("objectIoAvailability").GetString());
+                var objects = row.GetProperty("objects");
+                var io = Assert.Single(objects.EnumerateArray());
+                Assert.Equal(new[] { "[dbo].[Orders]", "[dbo].[Orders]", "[dbo].[Customers]", "[dbo].[Payments]" }[ordinal], io.GetProperty("object").GetString());
+                Assert.Equal(100 + ordinal * 10, io.GetProperty("logicalReads").GetInt64());
+                Assert.Equal(ordinal * 2, io.GetProperty("lobLogicalReads").GetInt64());
+                Assert.Equal(3 + ordinal, io.GetProperty("showplanActualScans").GetInt64());
+                var diagnostic = Assert.Single(row.GetProperty("planDiagnostics").EnumerateArray());
+                Assert.Equal("sql-server-showplan-query-plan", diagnostic.GetProperty("source").GetString());
+                Assert.Equal(1 + ordinal, diagnostic.GetProperty("degreeOfParallelism").GetInt32());
+                var isCandidate = variant == "candidate";
+                Assert.Equal((isCandidate ? 120 : 240) + ordinal * 50, diagnostic.GetProperty("grantRequestedKb").GetInt64());
+                Assert.Equal((isCandidate ? 90 : 200) + ordinal * 40, diagnostic.GetProperty("grantGrantedKb").GetInt64());
+                Assert.Equal((isCandidate ? 60 : 160) + ordinal * 30, diagnostic.GetProperty("grantMaxUsedKb").GetInt64());
+                Assert.Equal((isCandidate ? 20 : 5) + ordinal, diagnostic.GetProperty("compileTimeMs").GetInt64());
+                Assert.Equal((isCandidate ? 10 : 2) + ordinal, diagnostic.GetProperty("compileCpuMs").GetInt64());
+            }
+            Assert.True(statements.ResponseBytes.Count > 1, "The statement inventory should require continuation at both budgets.");
+        }
+
+        _output.WriteLine($"Offline diagnostic retrieval: metrics UTF-8 bytes min/default={Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(minimumMetrics))}/{Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(defaultMetrics))}; statements min/default calls={minimumBaselineStatements.ResponseBytes.Count + minimumCandidateStatements.ResponseBytes.Count}/{defaultBaselineStatements.ResponseBytes.Count + defaultCandidateStatements.ResponseBytes.Count}, response bytes={minimumBaselineStatements.ResponseBytes.Sum() + minimumCandidateStatements.ResponseBytes.Sum()}/{defaultBaselineStatements.ResponseBytes.Sum() + defaultCandidateStatements.ResponseBytes.Sum()}; all four statement identities for both variants and grant/compile source values matched.");
+        await session.ShutdownAsync();
+        session.AssertNoDatabaseConnections();
+    }
+
     [Theory]
     [InlineData(4096)]
     [InlineData(65536)]

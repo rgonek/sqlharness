@@ -282,8 +282,9 @@ public sealed class WorkflowModule : ISqlHarnessModule
     private IReadOnlyList<CompareRunArtifact> BuildRuns(SqlHarnessCompareReport report, PairShape shape)
     {
         var planPagingFixture = _scenario.Id == WorkflowScenarios.PlanPagingId;
-        var baselinePlan = PlanXml(_scenario.BaselineSql, warningOnSecond: false, planPagingFixture);
-        var candidatePlan = PlanXml(_scenario.CandidateSql, warningOnSecond: shape.WarningOnCandidate, planPagingFixture);
+        var diagnosticFixture = _scenario.Id == WorkflowScenarios.ArtifactDiagnosticEvidenceId;
+        var baselinePlan = PlanXml(_scenario.BaselineSql, warningOnSecond: false, planPagingFixture, diagnosticFixture, candidateDiagnosticProfile: false);
+        var candidatePlan = PlanXml(_scenario.CandidateSql, warningOnSecond: shape.WarningOnCandidate, planPagingFixture, diagnosticFixture, candidateDiagnosticProfile: true);
         var baselineElapsed = ElapsedSamples(shape.BaselineElapsed, shape.UnstableBaseline);
         var candidateElapsed = ElapsedSamples(shape.CandidateElapsed, false);
         var table = _scenario.Id == WorkflowScenarios.CollidingOperatorsId ? "Accounts" : "Orders";
@@ -297,9 +298,16 @@ public sealed class WorkflowModule : ISqlHarnessModule
                 with
             {
                 ExecutedSql = _scenario.CandidateSql,
-                TableIo = _scenario.Id == WorkflowScenarios.ArtifactReviewStudyId && index == 0
-                    ? [new TableIoCounters("Orders", 1, 999, 0, 0, 0, 0, 0, 0)]
+                TableIo = _scenario.Id == WorkflowScenarios.ArtifactDiagnosticEvidenceId
+                    ? [
+                        new TableIoCounters("Orders", 5, 500, 0, 0, 0, 0, 0, 0),
+                        new TableIoCounters("Customers", 7, 700, 0, 0, 0, 0, 0, 0),
+                        new TableIoCounters("Payments", 8, 800, 0, 0, 0, 0, 0, 0),
+                    ]
+                    : _scenario.Id == WorkflowScenarios.ArtifactReviewStudyId && index == 0
+                        ? [new TableIoCounters("Orders", 1, 999, 0, 0, 0, 0, 0, 0)]
                     : [],
+                TableIoComplete = _scenario.Id == WorkflowScenarios.ArtifactDiagnosticEvidenceId,
             });
         }
 
@@ -402,7 +410,12 @@ public sealed class WorkflowModule : ISqlHarnessModule
             Engine: _scenario.Engine);
     }
 
-    private static string PlanXml(string sql, bool warningOnSecond, bool planPagingFixture)
+    private static string PlanXml(
+        string sql,
+        bool warningOnSecond,
+        bool planPagingFixture,
+        bool diagnosticFixture = false,
+        bool candidateDiagnosticProfile = false)
     {
         if (planPagingFixture)
         {
@@ -414,7 +427,8 @@ public sealed class WorkflowModule : ISqlHarnessModule
         var statements = sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (statements.Length == 0)
             statements = [sql];
-        var body = string.Join("", statements.Select((text, index) => RelOp(text, warningOnSecond && index == 1)));
+        var body = string.Join("", statements.Select((text, index) => RelOp(
+            text, warningOnSecond && index == 1, index, diagnosticFixture, candidateDiagnosticProfile)));
         return """
             <?xml version="1.0" encoding="utf-8"?>
             <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
@@ -429,7 +443,12 @@ public sealed class WorkflowModule : ISqlHarnessModule
             """;
     }
 
-    private static string RelOp(string statementText, bool warning)
+    private static string RelOp(
+        string statementText,
+        bool warning,
+        int statementOrdinal,
+        bool diagnosticFixture,
+        bool candidateDiagnosticProfile)
     {
         var escaped = System.Security.SecurityElement.Escape(statementText) ?? statementText;
         var warnings = warning
@@ -437,15 +456,30 @@ public sealed class WorkflowModule : ISqlHarnessModule
             : "";
         var clustered = statementText.Contains("COUNT_BIG", StringComparison.OrdinalIgnoreCase);
         var accounts = statementText.Contains("dbo.Accounts", StringComparison.OrdinalIgnoreCase);
+        var table = statementText.Contains("dbo.Customers", StringComparison.OrdinalIgnoreCase) ? "[dbo].[Customers]"
+            : statementText.Contains("dbo.Payments", StringComparison.OrdinalIgnoreCase) ? "[dbo].[Payments]"
+            : accounts ? "[dbo].[Accounts]" : "[dbo].[Orders]";
         var physical = clustered ? "Clustered Index Scan" : "Index Seek";
-        var table = accounts ? "[dbo].[Accounts]" : "[dbo].[Orders]";
-        var index = clustered ? "[PK_Accounts]" : accounts ? "[IX_Accounts]" : "[IX_Orders]";
+        var index = clustered ? "[PK_Accounts]" : accounts ? "[IX_Accounts]"
+            : table.Contains("Customers", StringComparison.Ordinal) ? "[IX_Customers]"
+            : table.Contains("Payments", StringComparison.Ordinal) ? "[IX_Payments]" : "[IX_Orders]";
+        var queryPlanAttributes = diagnosticFixture
+            ? $" DegreeOfParallelism=\"{1 + statementOrdinal}\" CompileTime=\"{(candidateDiagnosticProfile ? 20 : 5) + statementOrdinal}\" CompileCPU=\"{(candidateDiagnosticProfile ? 10 : 2) + statementOrdinal}\""
+            : string.Empty;
+        var memoryGrant = diagnosticFixture
+            ? $"<MemoryGrantInfo RequestedMemory=\"{(candidateDiagnosticProfile ? 120 : 240) + statementOrdinal * 50}\" GrantedMemory=\"{(candidateDiagnosticProfile ? 90 : 200) + statementOrdinal * 40}\" MaxUsedMemory=\"{(candidateDiagnosticProfile ? 60 : 160) + statementOrdinal * 30}\" />"
+            : string.Empty;
+        var counters = diagnosticFixture
+            ? $"<RunTimeInformation><RunTimeCountersPerThread Thread=\"0\" ActualRows=\"1\" ActualExecutions=\"1\" ActualLogicalReads=\"{100 + statementOrdinal * 10}\" ActualLobLogicalReads=\"{statementOrdinal * 2}\" ActualScans=\"{3 + statementOrdinal}\" /></RunTimeInformation>"
+            : string.Empty;
         return $"""
                     <StmtSimple StatementText="{escaped}">
-                      <QueryPlan>
+                      <QueryPlan{queryPlanAttributes}>
+                        {memoryGrant}
                         <QueryTimeStats CpuTime="10" ElapsedTime="14" />
                         <RelOp NodeId="1" PhysicalOp="{physical}" LogicalOp="{physical}" EstimateRows="7" EstimatedTotalSubtreeCost="0.6">
                           {warnings}
+                          {counters}
                           <IndexScan>
                             <Object Table="{table}" Index="{index}" />
                           </IndexScan>

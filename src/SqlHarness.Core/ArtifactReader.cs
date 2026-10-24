@@ -57,7 +57,45 @@ public sealed record ArtifactMetricsSection(
     string ArtifactId,
     string ArtifactKind,
     IReadOnlyList<ArtifactNamedMetrics> Variants,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ResultEquivalenceReport? Equivalence = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ResultEquivalenceReport? Equivalence = null)
+{
+    public string PlanDiagnosticDistributionsAvailability { get; init; } = "unavailable";
+    public IReadOnlyList<ArtifactPlanDiagnosticDistribution> PlanDiagnosticDistributions { get; init; } = [];
+    public int OmittedPlanDiagnosticDistributions { get; init; }
+    public string StatisticsIoScanCountAvailability { get; init; } = "unavailable";
+    public IReadOnlyList<ArtifactTableScanDistribution> StatisticsIoScanCountDistributions { get; init; } = [];
+    public int OmittedStatisticsIoScanCountDistributions { get; init; }
+}
+
+/// <summary>Across-run distribution for one saved query-plan source identity; values are never summed.</summary>
+public sealed record ArtifactPlanDiagnosticDistribution(
+    string Source,
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int? MatrixCell,
+    string Scope,
+    int PlanDocumentOrdinal,
+    int? PlanQueryOrdinal,
+    int? PlanStatementIndex,
+    int SampleCount,
+    ArtifactNumericDistribution GrantRequestedKb,
+    ArtifactNumericDistribution GrantGrantedKb,
+    ArtifactNumericDistribution GrantMaxUsedKb,
+    ArtifactNumericDistribution CompileTimeMs,
+    ArtifactNumericDistribution CompileCpuMs);
+
+public sealed record ArtifactNumericDistribution(string Availability, int SampleCount, CompareDistribution? Distribution);
+
+/// <summary>Run distribution from SQL Server STATISTICS IO; independent of Showplan ActualScans.</summary>
+public sealed record ArtifactTableScanDistribution(
+    string Source,
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int? MatrixCell,
+    string Table,
+    int SampleCount,
+    string Availability,
+    CompareDistribution ScanCount);
 
 /// <summary>Noteworthy operators of a saved benchmark artifact (capped at ten by the summary projector).</summary>
 public sealed record ArtifactOperatorsSection(
@@ -141,7 +179,66 @@ public sealed record ArtifactStatementMetric(
     public int? HiddenWorkOmitted { get; init; }
 
     public IReadOnlyList<string> Limitations { get; init; } = [];
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ArtifactPlanDiagnostic>? PlanDiagnostics { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? OmittedPlanDiagnostics { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ObjectIoAvailability { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ArtifactStatementObjectIo>? Objects { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? OmittedObjects { get; init; }
 }
+
+public sealed record ArtifactStatementObjectIo(
+    string Object,
+    string Kind,
+    long? LogicalReads,
+    long? LobLogicalReads,
+    long? ShowplanActualScans);
+
+public sealed record ArtifactStatisticsIoRun(
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int? MatrixCell,
+    int Repetition,
+    string Availability,
+    IReadOnlyDictionary<string, long> ScanCountByTable,
+    int OmittedTables = 0);
+
+public sealed record ArtifactPlanDiagnostic(
+    string Source,
+    string Scope,
+    int PlanDocumentOrdinal,
+    int? PlanQueryOrdinal,
+    int? PlanStatementIndex,
+    int? DegreeOfParallelism,
+    long? GrantRequestedKb,
+    long? GrantGrantedKb,
+    long? GrantMaxUsedKb,
+    long? CompileTimeMs,
+    long? CompileCpuMs);
+
+public sealed record ArtifactRunPlanDiagnostic(
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int? MatrixCell,
+    int Repetition,
+    ArtifactPlanDiagnostic Diagnostic);
+
+public sealed record ArtifactPlanDiagnosticAvailability(
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int? MatrixCell,
+    int Repetition,
+    string Availability,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Source);
 
 public sealed record ArtifactHiddenWork(string Kind, string Name, bool NameTruncated, long? Executions, double? SharePercent);
 
@@ -151,6 +248,23 @@ public sealed record ArtifactStatementsSection(
     IReadOnlyList<ArtifactStatementMetric> Statements,
     int OmittedStatements)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PlanDiagnosticsAvailability { get; init; }
+
+    public IReadOnlyList<ArtifactRunPlanDiagnostic> RunPlanDiagnostics { get; init; } = [];
+
+    public IReadOnlyList<ArtifactPlanDiagnosticAvailability> PlanDiagnosticCases { get; init; } = [];
+
+    public string StatisticsIoScanCountAvailability { get; init; } = "unavailable";
+
+    public IReadOnlyList<ArtifactStatisticsIoRun> StatisticsIoScanCountRuns { get; init; } = [];
+
+    public int OmittedStatisticsIoScanCountRuns { get; init; }
+
+    public int OmittedRunPlanDiagnostics { get; init; }
+
+    public int OmittedPlanDiagnosticCases { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? EvidenceVersion { get; init; }
 
@@ -457,12 +571,26 @@ public static class ArtifactReader
 
     private static ArtifactMetricsSection ReadMetrics(string directory, string artifactId, ArtifactManifest manifest)
     {
-        return manifest.ArtifactKind switch
+        var section = manifest.ArtifactKind switch
         {
             CompareKind => FromCompare(ReadReport<SqlHarnessCompareReport>(directory)),
             MeasureKind => FromMeasure(ReadReport<SqlHarnessMeasureReport>(directory)),
             MeasureSetKind => FromMeasureSet(ReadReport<SqlHarnessMeasureSetReport>(directory)),
             _ => throw new ArtifactReadException("Artifact manifest is invalid.", SqlHarnessExitCode.Safety),
+        };
+        var statementsAdvertised = manifest.Sections.Contains(StatementsSection, StringComparer.Ordinal);
+        var diagnosticDistributions = ReadPlanDiagnosticDistributions(directory, statementsAdvertised,
+            out var diagnosticAvailability, out var omittedDiagnosticDistributions);
+        var scanDistributions = ReadStatisticsIoScanCountDistributions(directory, statementsAdvertised,
+            out var scanAvailability, out var omittedScanDistributions);
+        return section with
+        {
+            PlanDiagnosticDistributionsAvailability = diagnosticAvailability,
+            PlanDiagnosticDistributions = diagnosticDistributions,
+            OmittedPlanDiagnosticDistributions = omittedDiagnosticDistributions,
+            StatisticsIoScanCountAvailability = scanAvailability,
+            StatisticsIoScanCountDistributions = scanDistributions,
+            OmittedStatisticsIoScanCountDistributions = omittedScanDistributions,
         };
 
         ArtifactMetricsSection FromCompare(SqlHarnessCompareReport report) => new(
@@ -476,6 +604,169 @@ public static class ArtifactReader
         ArtifactMetricsSection FromMeasureSet(SqlHarnessMeasureSetReport report) => new(
             artifactId, manifest.ArtifactKind,
             report.Sets.Select(set => Of(set.Name, set.Metrics)).ToArray());
+    }
+
+    private static IReadOnlyList<ArtifactPlanDiagnosticDistribution> ReadPlanDiagnosticDistributions(
+        string directory, bool statementsAdvertised, out string availability, out int omitted)
+    {
+        availability = "unavailable";
+        omitted = 0;
+        if (!statementsAdvertised)
+            return [];
+        var path = Path.Combine(directory, StatementsFileName);
+        if (!IsPlainFile(path))
+            throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
+        try
+        {
+            var stored = JsonSerializer.Deserialize<ArtifactStatementsSection>(
+                ReadBoundedText(path, MaxReportBytes), ArtifactDirectoryPublisher.JsonOptions);
+            if (stored?.EvidenceVersion is null || stored.Statements is null || stored.RunPlanDiagnostics is null)
+                return [];
+            if (stored.Statements.Any(statement => statement?.PlanDiagnostics?.Any(diagnostic =>
+                    diagnostic is null || diagnostic.PlanQueryOrdinal is < 0) == true)
+                || stored.RunPlanDiagnostics.Any(item => item?.Diagnostic is null
+                    || item.Diagnostic.PlanQueryOrdinal is < 0))
+                throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
+            var samples = new List<(string Variant, string? ParameterSet, int? MatrixCell, int? Repetition, ArtifactPlanDiagnostic Diagnostic)>();
+            foreach (var statement in stored.Statements)
+            {
+                if (statement?.PlanDiagnostics is null)
+                    continue;
+                samples.AddRange(statement.PlanDiagnostics.Select(diagnostic =>
+                    (statement.Variant, statement.ParameterSet, statement.MatrixCell, statement.Repetition, diagnostic)));
+            }
+            samples.AddRange(stored.RunPlanDiagnostics.Select(item =>
+                (item.Variant, item.ParameterSet, item.MatrixCell, (int?)item.Repetition, item.Diagnostic)));
+            var ambiguousLegacySources = samples
+                .Where(item => item.Diagnostic.PlanQueryOrdinal is null)
+                .GroupBy(item => (item.Variant, item.ParameterSet, item.MatrixCell, item.Diagnostic.Scope,
+                    item.Diagnostic.PlanDocumentOrdinal, item.Diagnostic.PlanStatementIndex))
+                .Where(group => group.GroupBy(item => item.Repetition).Any(repetition => repetition.Count() > 1))
+                .Select(group => group.Key)
+                .ToHashSet();
+            var attributableSamples = samples.Where(item => item.Diagnostic.PlanQueryOrdinal is not null
+                || !ambiguousLegacySources.Contains((item.Variant, item.ParameterSet, item.MatrixCell,
+                    item.Diagnostic.Scope, item.Diagnostic.PlanDocumentOrdinal, item.Diagnostic.PlanStatementIndex)));
+            var groups = attributableSamples
+                .GroupBy(item => (item.Variant, item.ParameterSet, item.MatrixCell, item.Diagnostic.Scope,
+                    item.Diagnostic.PlanDocumentOrdinal, item.Diagnostic.PlanQueryOrdinal, item.Diagnostic.PlanStatementIndex))
+                .OrderBy(group => group.Key.Variant, StringComparer.Ordinal)
+                .ThenBy(group => group.Key.ParameterSet, StringComparer.Ordinal)
+                .ThenBy(group => group.Key.MatrixCell)
+                .ThenBy(group => group.Key.Scope, StringComparer.Ordinal)
+                .ThenBy(group => group.Key.PlanDocumentOrdinal)
+                .ThenBy(group => group.Key.PlanQueryOrdinal)
+                .ThenBy(group => group.Key.PlanStatementIndex)
+                .ToArray();
+            var capturedCases = stored.PlanDiagnosticCases ?? [];
+            var availableCases = capturedCases.Count(item => item.Availability == "available");
+            availability = capturedCases.Count == 0
+                ? samples.Count == 0 ? "unavailable" : "available"
+                : availableCases == 0 ? "unavailable"
+                : availableCases == capturedCases.Count && stored.OmittedPlanDiagnosticCases == 0
+                    ? "available" : "partial";
+            omitted = Math.Max(0, groups.Length - 512)
+                + ambiguousLegacySources.Count
+                + stored.OmittedRunPlanDiagnostics
+                + stored.Statements.Sum(statement => statement?.OmittedPlanDiagnostics ?? 0);
+            if (omitted > 0 && availability != "unavailable")
+                availability = "partial";
+            if (stored.OmittedPlanDiagnosticCases > 0)
+                availability = availability == "unavailable" ? "unavailable" : "partial";
+            return groups.Take(512)
+                .Select(group => new ArtifactPlanDiagnosticDistribution(
+                    "sql-server-showplan-query-plan", group.Key.Variant, group.Key.ParameterSet, group.Key.MatrixCell, group.Key.Scope,
+                    group.Key.PlanDocumentOrdinal, group.Key.PlanQueryOrdinal, group.Key.PlanStatementIndex, group.Count(),
+                    Numeric(group.Select(item => item.Diagnostic.GrantRequestedKb)),
+                    Numeric(group.Select(item => item.Diagnostic.GrantGrantedKb)),
+                    Numeric(group.Select(item => item.Diagnostic.GrantMaxUsedKb)),
+                    Numeric(group.Select(item => item.Diagnostic.CompileTimeMs)),
+                    Numeric(group.Select(item => item.Diagnostic.CompileCpuMs)))
+                ).ToArray();
+        }
+        catch (Exception exception) when (exception is JsonException or ArtifactReadException or IOException or UnauthorizedAccessException)
+        {
+            throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
+        }
+
+        static ArtifactNumericDistribution Numeric(IEnumerable<long?> values)
+        {
+            var samples = values.ToArray();
+            var present = samples.Where(value => value.HasValue).Select(value => value!.Value).ToArray();
+            var availability = present.Length == 0 ? "unavailable" : present.Length == samples.Length ? "available" : "partial";
+            return new ArtifactNumericDistribution(availability, present.Length,
+                present.Length == 0 ? null : ToDistribution(present));
+        }
+
+        static CompareDistribution ToDistribution(long[] values)
+        {
+            var ordered = values.Order().ToArray();
+            var middle = ordered.Length / 2;
+            var median = ordered.Length % 2 == 0
+                ? (long)(((decimal)ordered[middle - 1] + ordered[middle]) / 2)
+                : ordered[middle];
+            return new CompareDistribution(ordered[0], median, ordered[^1]);
+        }
+    }
+
+    private static IReadOnlyList<ArtifactTableScanDistribution> ReadStatisticsIoScanCountDistributions(
+        string directory, bool statementsAdvertised, out string availability, out int omitted)
+    {
+        availability = "unavailable";
+        omitted = 0;
+        if (!statementsAdvertised)
+            return [];
+        var path = Path.Combine(directory, StatementsFileName);
+        if (!IsPlainFile(path))
+            throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
+        try
+        {
+            var text = ReadBoundedText(path, MaxReportBytes);
+            var stored = JsonSerializer.Deserialize<ArtifactStatementsSection>(text, ArtifactDirectoryPublisher.JsonOptions);
+            if (stored?.EvidenceVersion is null || stored.StatisticsIoScanCountRuns is null)
+                return [];
+            availability = stored.StatisticsIoScanCountAvailability is "available" or "partial"
+                ? stored.StatisticsIoScanCountAvailability : "unavailable";
+            if (stored.OmittedStatisticsIoScanCountRuns > 0)
+                availability = availability == "unavailable" ? "unavailable" : "partial";
+            var availableRuns = stored.StatisticsIoScanCountRuns.Where(item => item.Availability == "available").ToArray();
+            var runCounts = availableRuns.GroupBy(run => (run.Variant, run.ParameterSet, run.MatrixCell))
+                .ToDictionary(group => group.Key, group => group.Count());
+            var groups = availableRuns.SelectMany(run => run.ScanCountByTable.Select(table =>
+                    (run.Variant, run.ParameterSet, run.MatrixCell, Table: table.Key, Count: table.Value,
+                        run.OmittedTables)))
+                .GroupBy(item => (item.Variant, item.ParameterSet, item.MatrixCell, item.Table))
+                .OrderBy(group => group.Key.Variant, StringComparer.Ordinal)
+                .ThenBy(group => group.Key.ParameterSet, StringComparer.Ordinal)
+                .ThenBy(group => group.Key.MatrixCell)
+                .ThenBy(group => group.Key.Table, StringComparer.Ordinal)
+                .ToArray();
+            omitted = Math.Max(0, groups.Length - 512);
+            if (omitted > 0 && availability != "unavailable")
+                availability = "partial";
+            return groups.Take(512)
+                .Select(group => new ArtifactTableScanDistribution(
+                    "sql-server-statistics-io", group.Key.Variant, group.Key.ParameterSet, group.Key.MatrixCell, group.Key.Table,
+                    group.Count(), group.Any(item => item.OmittedTables > 0)
+                        || group.Count() < runCounts[(group.Key.Variant, group.Key.ParameterSet, group.Key.MatrixCell)]
+                        || stored.OmittedStatisticsIoScanCountRuns > 0 ? "partial" : "available",
+                    ToDistribution(group.Select(item => item.Count).ToArray())))
+                .ToArray();
+        }
+        catch (Exception exception) when (exception is JsonException or ArtifactReadException or IOException or UnauthorizedAccessException)
+        {
+            throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
+        }
+
+        static CompareDistribution ToDistribution(IEnumerable<long> source)
+        {
+            var ordered = source.Order().ToArray();
+            var middle = ordered.Length / 2;
+            var median = ordered.Length % 2 == 0
+                ? (long)(((decimal)ordered[middle - 1] + ordered[middle]) / 2)
+                : ordered[middle];
+            return new CompareDistribution(ordered[0], median, ordered[^1]);
+        }
     }
 
     private static ArtifactOperatorsSection ReadOperators(string directory, string artifactId, ArtifactManifest manifest, int cursor, int pageSize)
@@ -795,14 +1086,44 @@ public static class ArtifactReader
             var section = JsonSerializer.Deserialize<ArtifactStatementsSection>(
                 ReadBoundedText(path, MaxReportBytes), ArtifactDirectoryPublisher.JsonOptions);
             if (section is null || section.Statements is null || section.OmittedStatements < 0
+                || section.RunPlanDiagnostics is null || section.PlanDiagnosticCases is null
+                || section.OmittedRunPlanDiagnostics < 0 || section.OmittedPlanDiagnosticCases < 0
+                || section.StatisticsIoScanCountAvailability is not ("available" or "partial" or "unavailable")
+                || section.StatisticsIoScanCountRuns is null || section.StatisticsIoScanCountRuns.Count > 512
+                || section.OmittedStatisticsIoScanCountRuns < 0
+                || section.StatisticsIoScanCountRuns.Any(item => item is null || item.Variant is null
+                    || item.Repetition < 1 || item.Availability is not ("available" or "unavailable")
+                    || item.ScanCountByTable is null || item.ScanCountByTable.Count > 64 || item.OmittedTables < 0
+                    || item.ScanCountByTable.Any(table => table.Key.Length > 512 || table.Value < 0))
                 || section.Statements.Any(statement => statement is null || statement.StatementHash is null
                     || statement.Variant is null || statement.TopOperators is null
-                    || statement.HiddenWork is null || statement.Limitations is null))
+                    || statement.HiddenWork is null || statement.Limitations is null
+                    || statement.Objects?.Any(item => item is null || item.Object is null || item.Kind is null
+                        || item.LogicalReads is < 0 || item.LobLogicalReads is < 0 || item.ShowplanActualScans is < 0) == true
+                    || statement.PlanDiagnostics?.Any(diagnostic => diagnostic is null
+                        || diagnostic.Source != "sql-server-showplan-query-plan"
+                        || diagnostic.Scope != "statement"
+                        || diagnostic.PlanDocumentOrdinal < 0
+                        || diagnostic.PlanQueryOrdinal is < 0
+                        || diagnostic.PlanStatementIndex is < 0) == true
+                    || statement.OmittedPlanDiagnostics is < 0))
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
             if (section.EvidenceVersion is < 1 or > 1
                 || section.EvidenceAvailability is not ("available" or "unavailable")
+                || section.PlanDiagnosticsAvailability is not (null or "available" or "unavailable")
+                || section.RunPlanDiagnostics.Any(item => item is null || item.Variant is null
+                    || item.Repetition < 1 || item.Diagnostic is null || item.Diagnostic.Scope != "batch"
+                    || item.Diagnostic.Source != "sql-server-showplan-query-plan"
+                    || item.Diagnostic.PlanDocumentOrdinal < 0 || item.Diagnostic.PlanQueryOrdinal is < 0
+                    || item.Diagnostic.PlanStatementIndex is not null)
+                || section.PlanDiagnosticCases.Any(item => item is null || item.Variant is null
+                    || item.Repetition < 1 || item.Availability is not ("available" or "unavailable")
+                    || item.Availability == "available" && item.Source != "sql-server-showplan-query-plan"
+                    || item.Availability == "unavailable" && item.Source is not null)
                 || section.Statements.Any(statement => statement.CounterAttribution is not ("complete" or "partial" or "unavailable")
-                    || statement.HiddenWorkOmitted is < 0))
+                    || statement.HiddenWorkOmitted is < 0
+                    || statement.ObjectIoAvailability is not (null or "available" or "partial" or "unavailable")
+                    || statement.OmittedObjects is < 0))
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
             if (cursor > section.Statements.Count)
                 throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
@@ -819,9 +1140,17 @@ public static class ArtifactReader
                         Executions = null,
                         UdfElapsedMilliseconds = null,
                         HiddenWork = [],
-                        Limitations = []
+                        Limitations = [],
+                        PlanDiagnostics = null,
+                        ObjectIoAvailability = "unavailable",
+                        Objects = [],
+                        OmittedObjects = null,
                     }
-                    : NormalizeEvidence(statement)).ToArray();
+                    : NormalizeEvidence(statement with
+                    {
+                        ObjectIoAvailability = statement.ObjectIoAvailability ?? "unavailable",
+                        Objects = statement.Objects ?? [],
+                    })).ToArray();
             return section with
             {
                 ArtifactId = artifactId,
@@ -831,6 +1160,9 @@ public static class ArtifactReader
                     ? "unavailable" : section.EvidenceAvailability,
                 CoverageBasis = section.EvidenceVersion is null ? null : section.CoverageBasis,
                 CoverageDescription = section.EvidenceVersion is null ? null : section.CoverageDescription,
+                PlanDiagnosticsAvailability = section.PlanDiagnosticsAvailability ?? "unavailable",
+                RunPlanDiagnostics = section.EvidenceVersion is null ? [] : section.RunPlanDiagnostics,
+                PlanDiagnosticCases = section.EvidenceVersion is null ? [] : section.PlanDiagnosticCases,
                 Continuation = cursor + Math.Min(pageSize, section.Statements.Count - cursor) < section.Statements.Count
                     ? cursor + Math.Min(pageSize, section.Statements.Count - cursor)
                     : null,

@@ -408,6 +408,19 @@ public sealed class CapabilitiesCommandTests
     }
 
     [Fact]
+    public void Capabilities_describe_bounded_artifact_diagnostic_evidence()
+    {
+        using var document = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get()));
+        var artifactRead = document.RootElement.GetProperty("limits").GetProperty("artifactRead");
+        var guidance = artifactRead.GetProperty("diagnosticEvidence").GetString();
+
+        Assert.Contains("source-scoped grant/compile", guidance, StringComparison.Ordinal);
+        Assert.Contains("STATISTICS IO ScanCount", guidance, StringComparison.Ordinal);
+        Assert.Contains("statements provides per-statement plan diagnostics and object IO with continuation", guidance, StringComparison.Ordinal);
+        Assert.Contains("partial or unavailable, not zero", guidance, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Mutation_is_advertised_with_agent_facing_status_contract()
     {
         var capabilities = SqlHarnessCapabilitiesProvider.Get();

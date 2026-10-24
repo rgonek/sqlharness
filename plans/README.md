@@ -2,7 +2,7 @@
 
 Read the selected plan and its spec before executing. A queue entry is not approval for implementation, publication or a live DB. We execute each assigned plan in full; general work and SQL Server take priority over PostgreSQL-only work.
 
-Plan [104](104-stable-local-object-io-aggregation.md): **DONE on feature branch `plan-104` (2026-10-24)** — task and whole-branch reviews approved; Windows gate passed on `f22137e8` (Core 4705, MCP 522, UI 372 passed), branch format 21 files passed. Empirical recognition accepted; Linux/live UAT unverified. No merge/push/install. See [evidence](104-verification-evidence.md).
+Plan [104](104-stable-local-object-io-aggregation.md): **DONE on feature branch `plan-104`; merge prepared against main `9718b052` (2026-10-24)** — feature reviews and Windows gate passed at `f22137e8`; bounded overlap checks are recorded in the [integration report](104-evidence/integration/implementation-report.md). Combined Windows gate and integration reviews remain controller-owned and pending; the main checkout is unchanged. No push/install. Linux/live UAT unverified. See [feature evidence](104-verification-evidence.md).
 
 ## In progress
 
@@ -10,6 +10,7 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE on feature branch 
 |---|---|---|
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
+
 
 ## Pending
 
@@ -41,7 +42,8 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
-| [106](106-bounded-error-diagnostics.md) | Bounded actionable error diagnostics independent of result-cell caps | DONE; locally integrated into `main` at `59fc0359`; combined Windows gate, 25-file branch formatting and all integration reviews approved; not pushed ([evidence](106-verification-evidence.md)) |
+| [106](106-bounded-error-diagnostics.md) | Bounded actionable error diagnostics independent of result-cell caps | DONE; previously integrated into `main` at `59fc0359`; this merge combines it with Plan 105; not pushed ([evidence](106-verification-evidence.md)) |
+| [105](105-artifact-diagnostic-evidence.md) | Bounded statement IO, scans and source-scoped grant/compile diagnostics | DONE; locally integrated into `main` at `42e7e284`; combined `fcd2a3a5` passed Windows gate and branch format; all reviews approved; not pushed ([integration evidence](105-evidence/integration/verification.md)) |
 | [103](103-agent-evidence-completeness.md) | Versioned statement evidence, attribution completeness and bounded hidden-work limitations for agents | DONE; locally integrated into `main` at `1301aa7b`; Luna task reviews and Sol low whole-branch/scoped reviews approved; Windows-verified product/test tree `874b4fc9` unchanged; not pushed ([evidence](103-verification-evidence.md)) |
 | [107](107-list-runtime-build-diagnosis.md) | Offline list-parameter runtime/source diagnosis | DIAGNOSIS COMPLETE; locally integrated into `main` at `ca0f601a`; combined Windows gate passed ([integration evidence](107-evidence/integration-main.md)); task reviews and whole-branch review approved, two wording Minors corrected approved by the final scoped Sol low re-review; Windows `just verify` passed on `19035a07` (Core 4657/11 skipped, MCP 508/4 skipped, UI 372/372); known-source Core 65/65 and MCP 5/5 characterize 12 rejecting requests with zero connections; source correction assigned to a separate follow-up and historical loaded-build attribution remains unverified ([diagnosis](107-evidence/task-3-diagnosis.md), [review archive](107-evidence/reviews/README.md)) |
 | [108](108-artifact-plan-variant-default.md) | Unique measure-plan variant default and artifact-specific invalid-selection guidance | DONE; locally integrated into `main` at `29bdcde0`; combined product/test `fb204898` passed Windows gate and branch format; all task, whole-branch and integration reviews approved; not pushed ([evidence](108-verification-evidence.md)) |

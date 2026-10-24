@@ -455,6 +455,12 @@ public static class AgentOutputProjection
                 case ArtifactMetricsSection metrics:
                     {
                         var sourceVariants = Take(metrics.Variants);
+                        var planDiagnosticDistributions = Take(metrics.PlanDiagnosticDistributions);
+                        var statisticsIoDistributions = Take(metrics.StatisticsIoScanCountDistributions);
+                        var omittedPlanDiagnosticDistributions = metrics.OmittedPlanDiagnosticDistributions
+                            + Math.Max(0, metrics.PlanDiagnosticDistributions.Count - planDiagnosticDistributions.Count);
+                        var omittedStatisticsIoDistributions = metrics.OmittedStatisticsIoScanCountDistributions
+                            + Math.Max(0, metrics.StatisticsIoScanCountDistributions.Count - statisticsIoDistributions.Count);
                         var variantsShell = sourceVariants.Select(variant => variant with
                         {
                             Name = Clip(variant.Name)!,
@@ -467,6 +473,14 @@ public static class AgentOutputProjection
                             {
                                 LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal),
                             }).ToArray(),
+                            PlanDiagnosticDistributions = planDiagnosticDistributions,
+                            OmittedPlanDiagnosticDistributions = omittedPlanDiagnosticDistributions,
+                            PlanDiagnosticDistributionsAvailability = metrics.PlanDiagnosticDistributionsAvailability != "unavailable"
+                                && omittedPlanDiagnosticDistributions > 0 ? "partial" : metrics.PlanDiagnosticDistributionsAvailability,
+                            StatisticsIoScanCountDistributions = statisticsIoDistributions,
+                            OmittedStatisticsIoScanCountDistributions = omittedStatisticsIoDistributions,
+                            StatisticsIoScanCountAvailability = metrics.StatisticsIoScanCountAvailability != "unavailable"
+                                && omittedStatisticsIoDistributions > 0 ? "partial" : metrics.StatisticsIoScanCountAvailability,
                         };
                         var metricsFixedBytes = SerializedLength(emptyMetrics);
                         tableSelectionAccounting?.Invoke(metricsFixedBytes);
@@ -478,7 +492,7 @@ public static class AgentOutputProjection
                             LogicalReadsByTable = variantMaps[index],
                         }).ToArray();
                         omissions += clippedItems;
-                        return metrics with { Variants = variants };
+                        return emptyMetrics with { Variants = variants };
                     }
                 case ArtifactOperatorsSection operators:
                     {
@@ -571,49 +585,93 @@ public static class AgentOutputProjection
                     }
                 case ArtifactStatementsSection statements:
                     {
+                        var selectedRunDiagnostics = statements.RunPlanDiagnostics.Take(detailLimit).ToArray();
+                        var selectedDiagnosticCases = statements.PlanDiagnosticCases.Take(detailLimit).ToArray();
+                        var selectedScanRuns = statements.StatisticsIoScanCountRuns.Take(detailLimit).Select(run =>
+                        {
+                            var tables = run.ScanCountByTable.Take(detailLimit).ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
+                            return run with
+                            {
+                                ScanCountByTable = tables,
+                                OmittedTables = run.OmittedTables + Math.Max(0, run.ScanCountByTable.Count - tables.Count),
+                            };
+                        }).ToArray();
+                        var evidenceSection = statements with
+                        {
+                            RunPlanDiagnostics = selectedRunDiagnostics,
+                            OmittedRunPlanDiagnostics = statements.OmittedRunPlanDiagnostics
+                                + Math.Max(0, statements.RunPlanDiagnostics.Count - selectedRunDiagnostics.Length),
+                            PlanDiagnosticCases = selectedDiagnosticCases,
+                            OmittedPlanDiagnosticCases = statements.OmittedPlanDiagnosticCases
+                                + Math.Max(0, statements.PlanDiagnosticCases.Count - selectedDiagnosticCases.Length),
+                            StatisticsIoScanCountRuns = selectedScanRuns,
+                            OmittedStatisticsIoScanCountRuns = statements.OmittedStatisticsIoScanCountRuns
+                                + Math.Max(0, statements.StatisticsIoScanCountRuns.Count - selectedScanRuns.Length),
+                            OmittedByCase = statements.OmittedByCase.Take(detailLimit).ToArray(),
+                        };
+                        omissions += statements.RunPlanDiagnostics.Count - selectedRunDiagnostics.Length;
+                        omissions += statements.PlanDiagnosticCases.Count - selectedDiagnosticCases.Length;
+                        omissions += statements.StatisticsIoScanCountRuns.Count - selectedScanRuns.Length;
+                        omissions += statements.OmittedByCase.Count - evidenceSection.OmittedByCase.Count;
+                        omissions += selectedScanRuns.Select((run, index) =>
+                            statements.StatisticsIoScanCountRuns[index].ScanCountByTable.Count - run.ScanCountByTable.Count).Sum();
                         var selected = new List<ArtifactStatementMetric>();
                         foreach (var sourceStatement in statements.Statements.Take(detailLimit))
                         {
                             ArtifactStatementMetric? fittingStatement = null;
+                            var preparedObjects = (sourceStatement.Objects ?? []).Take(detailLimit).Select(item => item with
+                            {
+                                Object = Clip(item.Object)!,
+                                Kind = Clip(item.Kind)!,
+                            }).ToArray();
+                            var preparedTopOperators = Take(sourceStatement.TopOperators).Select(op => op with
+                            {
+                                PhysicalOp = Clip(op.PhysicalOp)!,
+                                Object = Clip(op.Object),
+                                Index = Clip(op.Index),
+                            }).ToArray();
                             foreach (var nameLimit in new[] { int.MaxValue, 256, 128, 64, 32, 16, 8, 4, 1, 0 })
                             {
-                                for (var hiddenCount = sourceStatement.HiddenWork.Count; hiddenCount >= 0 && fittingStatement is null; hiddenCount--)
+                                for (var objectCount = preparedObjects.Length; objectCount >= 0 && fittingStatement is null; objectCount--)
                                 {
-                                    var hidden = sourceStatement.HiddenWork.Take(hiddenCount).Select(item =>
+                                    for (var hiddenCount = sourceStatement.HiddenWork.Count; hiddenCount >= 0 && fittingStatement is null; hiddenCount--)
                                     {
-                                        var name = nameLimit == int.MaxValue
-                                            ? item.Name
-                                            : string.Concat(item.Name.EnumerateRunes().Take(nameLimit).Select(rune => rune.ToString()));
-                                        return item with { Name = name, NameTruncated = item.NameTruncated || !string.Equals(name, item.Name, StringComparison.Ordinal) };
-                                    }).ToArray();
-                                    var responseOmitted = sourceStatement.HiddenWork.Count - hidden.Length;
-                                    var statement = sourceStatement with
-                                    {
-                                        // Selectors are evidence identity. Cell clipping must never make a row unaddressable.
-                                        TopOperators = Take(sourceStatement.TopOperators).Select(op => op with
+                                        var hidden = sourceStatement.HiddenWork.Take(hiddenCount).Select(item =>
                                         {
-                                            PhysicalOp = Clip(op.PhysicalOp)!,
-                                            Object = Clip(op.Object),
-                                            Index = Clip(op.Index),
-                                        }).ToArray(),
-                                        HiddenWork = hidden,
-                                        HiddenWorkOmitted = sourceStatement.HiddenWorkOmitted is { } persistedOmitted
-                                            ? persistedOmitted + responseOmitted
-                                            : null,
-                                    };
-                                    var candidateStatements = selected.Append(statement).ToArray();
-                                    var candidate = statements with
-                                    {
-                                        Statements = candidateStatements,
-                                        OmittedStatements = statements.OmittedStatements + statements.Statements.Count - candidateStatements.Length,
-                                        Continuation = candidateStatements.Length < statements.Statements.Count
-                                            ? statements.Cursor + candidateStatements.Length
-                                            : statements.Continuation,
-                                    };
-                                    if (SerializedLength(candidate) + 384 <= maximumBytes)
-                                    {
-                                        fittingStatement = statement;
-                                        break;
+                                            var name = nameLimit == int.MaxValue
+                                                ? item.Name
+                                                : string.Concat(item.Name.EnumerateRunes().Take(nameLimit).Select(rune => rune.ToString()));
+                                            return item with { Name = name, NameTruncated = item.NameTruncated || !string.Equals(name, item.Name, StringComparison.Ordinal) };
+                                        }).ToArray();
+                                        var responseOmitted = sourceStatement.HiddenWork.Count - hidden.Length;
+                                        var omittedObjects = (sourceStatement.OmittedObjects ?? 0)
+                                            + Math.Max(0, (sourceStatement.Objects?.Count ?? 0) - objectCount);
+                                        var statement = sourceStatement with
+                                        {
+                                            // Selectors are evidence identity. Cell clipping must never make a row unaddressable.
+                                            TopOperators = preparedTopOperators,
+                                            HiddenWork = hidden,
+                                            HiddenWorkOmitted = sourceStatement.HiddenWorkOmitted is { } persistedOmitted
+                                                ? persistedOmitted + responseOmitted
+                                                : null,
+                                            Objects = objectCount == 0 ? null : preparedObjects.Take(objectCount).ToArray(),
+                                            OmittedObjects = omittedObjects > 0 ? omittedObjects : null,
+                                        };
+                                        var candidateStatements = selected.Append(statement).ToArray();
+                                        var candidate = evidenceSection with
+                                        {
+                                            Statements = candidateStatements,
+                                            OmittedStatements = evidenceSection.OmittedStatements + evidenceSection.Statements.Count - candidateStatements.Length,
+                                            Continuation = candidateStatements.Length < evidenceSection.Statements.Count
+                                                ? evidenceSection.Cursor + candidateStatements.Length
+                                                : evidenceSection.Continuation,
+                                        };
+                                        var candidateBytes = SerializedLength(candidate);
+                                        if (candidateBytes + 384 <= maximumBytes)
+                                        {
+                                            fittingStatement = statement;
+                                            break;
+                                        }
                                     }
                                 }
                                 if (fittingStatement is not null)
@@ -624,15 +682,15 @@ public static class AgentOutputProjection
                             selected.Add(fittingStatement);
                         }
                         if (selected.Count == 0 && statements.Statements.Count > 0)
-                            throw new SqlHarnessSafetyException("The output budget cannot fit an artifact statement.");
+                            throw new ArtifactStatementProjectionException("The output budget cannot fit an artifact statement.");
                         omissions += Math.Max(0, statements.Statements.Count - selected.Count) + clippedItems;
-                        return statements with
+                        return evidenceSection with
                         {
                             Statements = selected,
-                            OmittedStatements = statements.OmittedStatements + Math.Max(0, statements.Statements.Count - selected.Count),
-                            Continuation = selected.Count < statements.Statements.Count
-                                ? statements.Cursor + selected.Count
-                                : statements.Continuation,
+                            OmittedStatements = evidenceSection.OmittedStatements + Math.Max(0, evidenceSection.Statements.Count - selected.Count),
+                            Continuation = selected.Count < evidenceSection.Statements.Count
+                                ? evidenceSection.Cursor + selected.Count
+                                : evidenceSection.Continuation,
                         };
                     }
                 case ArtifactMatrixCellsSection matrixCells:
@@ -1215,3 +1273,6 @@ public static class AgentOutputProjection
     }
 
 }
+
+/// <summary>A saved artifact statement cannot fit a projection candidate's byte budget.</summary>
+public sealed class ArtifactStatementProjectionException(string message) : Exception(message);

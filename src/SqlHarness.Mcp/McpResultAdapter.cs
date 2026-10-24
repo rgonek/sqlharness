@@ -157,11 +157,20 @@ public static class McpResultAdapter
         var statementEvidence = AgentOutputProjection.StatementEvidenceFor(outcome);
         foreach (var detailLimit in AgentOutputProjection.CandidateDetailLimits)
         {
-            var projected = PlaceCoverage(
-                AgentOutputProjection.Project(
-                    report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes, AgentProjectionProfile.Mcp, statementEvidence),
-                outcome,
-                ref error);
+            object? projectedReport;
+            int omitted;
+            try
+            {
+                projectedReport = AgentOutputProjection.Project(
+                    report, maximumCellCharacters, detailLimit, out omitted, maximumBytes, AgentProjectionProfile.Mcp, statementEvidence);
+            }
+            catch (ArtifactStatementProjectionException)
+            {
+                // A statement may fail to fit with a high detail limit while a
+                // later candidate can fit after nested evidence is reduced.
+                continue;
+            }
+            var projected = PlaceCoverage(projectedReport, outcome, ref error);
             var totalOmitted = omitted + errorOmitted;
 
             // Reports the shared projection does not know (capabilities,

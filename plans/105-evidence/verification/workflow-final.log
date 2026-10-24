@@ -1,0 +1,20 @@
+Test run for D:\Dev\sqlharness\.worktrees\plan-105\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+D:\Dev\sqlharness\.worktrees\plan-105\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+[xUnit.net 00:00:00.01] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.28]   Discovering: SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.56]   Discovered:  SqlHarness.Mcp.Tests
+[xUnit.net 00:00:00.63]   Starting:    SqlHarness.Mcp.Tests
+[xUnit.net 00:00:04.16]   Finished:    SqlHarness.Mcp.Tests
+  Passed SqlHarness.Mcp.Tests.AgentOptimizationWorkflowTests.Artifact_diagnostics_support_offline_memory_tradeoffs_and_multi_statement_io_at_both_budgets [3 s]
+  Standard Output Messages:
+ metrics budget=65536 responseUtf8Bytes=7659
+ metrics budget=4096 responseUtf8Bytes=3105
+ Offline diagnostic retrieval: metrics UTF-8 bytes min/default=3005/7611; statements min/default calls=8/8, response bytes=23003/35467; all four statement identities for both variants and grant/compile source values matched.
+
+
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 5,5269 Seconds

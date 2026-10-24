@@ -243,6 +243,7 @@ public static class SqlHarnessCapabilitiesProvider
                 planSelectors = "variant,statement,parameterSet,repetition,includeText",
                 planSourceWindowNodes = ArtifactReader.MaxPlanPageSourceNodes,
                 planPaging = "each plan response is byte-budgeted; continuation advances by nodes returned",
+                diagnosticEvidence = "metrics provides bounded source-scoped grant/compile and STATISTICS IO ScanCount distributions; statements provides per-statement plan diagnostics and object IO with continuation; missing values are partial or unavailable, not zero",
             },
             ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing; one terminal record", history = "none; every change emitted" },
         };
