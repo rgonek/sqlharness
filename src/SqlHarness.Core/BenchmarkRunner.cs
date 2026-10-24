@@ -209,16 +209,33 @@ internal static class BenchmarkReports
         var tables = runs.SelectMany(run => run.Artifact.LogicalReadsByTable)
             .GroupBy(pair => pair.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Sum(pair => pair.Value), StringComparer.Ordinal);
-        var tableNames = runs
-            .SelectMany(run => run.Artifact.LogicalReadsByTable.Keys)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        var logicalReadsByTable = tableNames.ToDictionary(
-            table => table,
-            table => ToPublic(Distribution.From(runs.Select(run =>
-                run.Artifact.LogicalReadsByTable.TryGetValue(table, out var reads) ? reads : 0L))),
-            StringComparer.Ordinal);
+        var identityTables = new HashSet<StatisticsIoTableIdentity>();
+        foreach (var run in runs)
+        {
+            if (run.Artifact.LogicalReadsByTableIdentity is { } typed)
+                identityTables.UnionWith(typed.Keys);
+            else
+                identityTables.UnionWith(run.Artifact.LogicalReadsByTable.Keys.Select(StatisticsIoTableIdentity.Unknown));
+        }
+        var logicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal);
+        foreach (var identity in identityTables
+            .OrderBy(identity => identity.Kind == StatisticsIoTableKind.AnonymousTableVariable ? 0 : 1)
+            .ThenBy(identity => identity.DisplayName, StringComparer.Ordinal)
+            .ThenBy(identity => identity.Kind))
+        {
+            var samples = runs.Select(run =>
+            {
+                if (run.Artifact.LogicalReadsByTableIdentity is { } typed)
+                    return typed.GetValueOrDefault(identity);
+                return identity.Kind == StatisticsIoTableKind.Unknown
+                    ? run.Artifact.LogicalReadsByTable.GetValueOrDefault(identity.Name)
+                    : 0L;
+            });
+            var displayName = identity.DisplayName;
+            if (logicalReadsByTable.ContainsKey(displayName))
+                displayName = $"{displayName} (object)";
+            logicalReadsByTable[displayName] = ToPublic(Distribution.From(samples));
+        }
         return new CompareVariantReport(
             name,
             ToPublic(Distribution.From(runs.Select(run => run.Artifact.CpuTimeMilliseconds))),

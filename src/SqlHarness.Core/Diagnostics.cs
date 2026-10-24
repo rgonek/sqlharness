@@ -5,7 +5,20 @@ using System.Xml.Linq;
 
 namespace SqlHarness.Core;
 
-internal sealed record StatisticsIo(long LogicalReads, IReadOnlyDictionary<string, long> Tables);
+internal enum StatisticsIoTableKind { Unknown, LocalTemp, AnonymousTableVariable }
+
+internal readonly record struct StatisticsIoTableIdentity(StatisticsIoTableKind Kind, string Name)
+{
+    internal static StatisticsIoTableIdentity Unknown(string name) => new(StatisticsIoTableKind.Unknown, name);
+    internal static StatisticsIoTableIdentity LocalTemp(string name) => new(StatisticsIoTableKind.LocalTemp, name);
+    internal static StatisticsIoTableIdentity AnonymousTableVariable => new(StatisticsIoTableKind.AnonymousTableVariable, "");
+    internal string DisplayName => Kind == StatisticsIoTableKind.AnonymousTableVariable ? "table variables" : Name;
+}
+
+internal sealed record StatisticsIo(long LogicalReads, IReadOnlyDictionary<string, long> Tables)
+{
+    internal IReadOnlyDictionary<StatisticsIoTableIdentity, long>? TypedTables { get; init; }
+}
 
 internal static partial class TempTableKey
 {
@@ -35,13 +48,25 @@ internal static class StatisticsIoParser
         @"\blob logical reads\s+(?<logical>\d+)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    private static readonly Regex AnonymousTableVariable = new(
+        @"^#[0-9A-Fa-f]{8}$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     internal static StatisticsIo Parse(string text)
     {
         var tables = new Dictionary<string, long>(StringComparer.Ordinal);
+        var typedTables = new Dictionary<StatisticsIoTableIdentity, long>();
 
         foreach (Match match in IoLine.Matches(text))
         {
-            var table = TempTableKey.Normalize(match.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal));
+            var rawTable = match.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal);
+            var normalizedTable = TempTableKey.Normalize(rawTable);
+            var identity = AnonymousTableVariable.IsMatch(rawTable)
+                ? StatisticsIoTableIdentity.AnonymousTableVariable
+                : normalizedTable != rawTable && rawTable.Contains('#')
+                    ? StatisticsIoTableIdentity.LocalTemp(normalizedTable)
+                    : StatisticsIoTableIdentity.Unknown(rawTable);
+            var table = normalizedTable;
             var reads = ParseLong(match.Groups["logical"].Value);
             var lobMatch = LobLogicalReads.Match(match.Groups["tail"].Value);
             if (lobMatch.Success)
@@ -50,9 +75,10 @@ internal static class StatisticsIoParser
             }
 
             tables[table] = tables.GetValueOrDefault(table) + reads;
+            typedTables[identity] = typedTables.GetValueOrDefault(identity) + reads;
         }
 
-        return new StatisticsIo(tables.Values.Sum(), tables);
+        return new StatisticsIo(tables.Values.Sum(), tables) { TypedTables = typedTables };
     }
 
     private static long ParseLong(string value) => long.Parse(value, NumberStyles.None, CultureInfo.InvariantCulture);
