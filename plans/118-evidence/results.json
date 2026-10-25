@@ -1,6 +1,6 @@
 {
   "schema": "plan118-condition-explanation-results-v1",
-  "revision": "f15da015f290647ef6ddafd8e09694992d0dd7cd",
+  "revision": "e2b76bc0999270da1cff9a87a7cd0262552d69f2",
   "evaluationState": "working tree evidence based on revision above",
   "serializer": "PowerShell ConvertTo-Json -Depth 80 -Compress; UTF-8 byte count via System.Text.Encoding",
   "limits": {
