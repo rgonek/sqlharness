@@ -1,0 +1,8 @@
+Plan117 controller final verification, base05a414a4, uncommitted branch plan-117.
+evaluate.ps1 exit0: 31 synthetic scenarios, budgets4096/65536.
+verify.ps1 exit0: independent expectations, provenance, omissions, projected envelopes and caps pass.
+check-study.ps1 exit0: unchanged product, whitespace clean, 95 relative links resolved (anchors not validated).
+Task1/2/3 Luna xhigh reviews and fixes approved. Sol low whole-study and scoped closeout reviews approved.
+Disclosed limitation: fixed large-fixture generators hardcode dimensions; generatedInput documentation-only.
+Production heap and serializer measurements, product gate, Linux, live DB and deployment were not performed.
+No commits, staging, merge or push. Retain worktree and ignored scratch/evidence logs; logs ignored by .gitignore36.

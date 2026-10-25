@@ -1,0 +1,15 @@
+# Plan 117 Task 3 scoped verification
+
+Study start revision: `05a414a4133d440a2cc71c41cf2b1a86a2a717aa`.
+
+Commands and observed results:
+
+- `pwsh -NoProfile -File plans/117-evidence/evaluate.ps1` — exit 0; `evaluated 31 synthetic scenarios`; `evaluate.ps1: PASS; cases=31; budgets=4096,65536`.
+- `pwsh -NoProfile -File plans/117-evidence/verify.ps1` — exit 0; `verify.ps1: PASS; scenarios=31; independent expected verdicts and locations checked; pair provenance, omission counts, no-value/hash shape, descriptor/output caps, off/legacy gaps and 4096/65536 views checked.`
+- `pwsh -NoProfile -File .superpowers/sdd/117-equivalence-localization-study/check-study.ps1` — exit 0; `PASS: product unchanged; tracked diff whitespace; study files whitespace; 95 relative file links (anchors not validated).`
+- `git diff --name-only 05a414a4133d440a2cc71c41cf2b1a86a2a717aa -- src tests scripts` — exit 0; empty output (no product/source/test/script paths changed).
+- `git status --short` — `M plans/117-equivalence-localization-study.md`, `M plans/README.md`, `?? plans/117-evidence/`; all changes are in the authorized plan/index/evidence scope.
+
+The initial helper invocation returned exit 1 because the plan status row had just been updated to link this not-yet-created log (`Broken link: plans/117-equivalence-localization-study.md -> 117-evidence/logs/task-3-verification.log`). The log is now present; the helper is rerun before delivery and its final output is appended below.
+
+No product tests, Windows `just verify`, MCP live calls, database operations, merge, or push were run. The byte figures above are synthetic compact-JSON estimates, not production serializer or heap measurements.

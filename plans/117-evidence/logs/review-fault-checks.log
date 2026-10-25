@@ -1,0 +1,5 @@
+missing-cross-pair -> exit 1; | VERIFY FAILED: eq-unstable-and-cross-side-difference-030: item count differs
+missing-set-omission -> exit 1; | VERIFY FAILED: eq-per-run-metadata-cap-021: resultSetDescriptors omission count differs
+missing-response-gap -> exit 1; | VERIFY FAILED: eq-item-cap-overflow-known-omissions-029: response-budget gap is missing or spurious
+tampered-whole-object-marker -> exit 1; | VERIFY FAILED: eq-whole-budget-031: whole-object fallback marker is missing or malformed
+missing-results -> exit 1; | VERIFY FAILED: missing required evidence file
