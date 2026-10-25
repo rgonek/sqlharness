@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TODO — research; recorded 2026-10-23.
+- Status: TASK 3 RESEARCH PREPARED at `d3a6826d`; Task 3 review and final Sol whole-branch review pending. Tasks 1 and 2 reviews approved. No implementation, integration, or live UAT is claimed.
 - Priority: **P4** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: L; change risk: HIGH.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -67,32 +67,32 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 1: Assess evidence demand and existing coverage
 
-- [ ] Count only non-report observation cases whose selected bottleneck was DML, recording sample size and recurrence limits. Reconcile 063 inventory overlap and 083 TVP support. Describe expanded-list grouping as a candidate heuristic with source/query-shape confirmation, not a canonical text normalization guarantee.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Count qualifying DML bottleneck cases, record recurrence limits, reconcile 063/083, and keep expanded-list grouping candidate-only with source/query-shape confirmation. Evidence: [Task 1 coverage](112-evidence/task-1-coverage.md); Task 1 review approved.
+- [x] Record inspected sources, commands/fixtures, expected and observed outcomes, and unresolved causes in the Task 1 evidence ledger.
+- [x] Save the Task 1 evidence and inspect the diff; no production behavior changed.
 
 ### Task 2: Evaluate the three capability options
 
-- [ ] For estimated-only evidence examine compile-time permissions and side effects, source availability, plan capture constraints and exact no-execution guarantee. For actual benchmarking require an isolated target strategy, explicit operator policy and known cleanup limits. For index inventory compare uniqueness, INCLUDE/filter/order/partition/compression and read usage before any redundancy label; no inferred drop recommendation from key prefix alone.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Evaluate the three options, including compile effects, permissions, capture limits, isolated-target policy and cleanup limits, and full index semantics. Evidence: [Task 2 options](112-evidence/task-2-options.md); Task 2 review approved.
+- [x] Record inspected sources, commands/fixtures, expected and observed outcomes, and unresolved causes in the Task 2 evidence ledger.
+- [x] Save the Task 2 evidence and inspect the diff; no production behavior changed.
 
 ### Task 3: Deliver independent go/no-go decisions
 
-- [ ] Save a risk/evidence matrix under plans/112-evidence/ and write separate numbered implementation/design plans only for justified accepted directions. Define a reproducible synthetic workload and authorized environment requirements for future UAT without running it. Completion is a reviewed decision record, including low-value/rejected options and why.
-- [ ] Record the inspected source, command or fixture, expected outcome and observed outcome; keep uncertain causes explicitly unresolved.
-- [ ] Save the task's evidence and inspect the diff. Do not change production behavior as an incidental fix.
+- [x] Prepare the independent risk/evidence matrix, ranked decisions, rejected alternatives, reproducible synthetic workload, and future authorized UAT requirements. No direction is accepted, so no numbered follow-up plan was justified. Task 3 review is pending.
+- [x] Record inspected sources, commands/fixtures, expected and observed outcomes, and unresolved causes in the Task 3 evidence ledger.
+- [x] Save the Task 3 evidence and inspect the diff; no production behavior changed.
 
 ## Verification and done criteria
 
 Documentation/research checks only unless executable fixtures change.
 
-- [ ] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [ ] All task outcomes and relevant source paths are recorded; the final status distinguishes implementation, diagnosis, research and deferred live acceptance.
-- [ ] If executable code/tests change, use focused suites and the required Windows implementation gate before claiming those changes verified. For notes-only work, diff/link/example checks are the complete scoped check; no product gate is claimed.
-- [ ] Linux remains unverified unless explicitly requested. Re-run completed checks only for changed behavior or a concrete unresolved risk.
-- [ ] Research/diagnosis evidence includes accept/defer/reject or cause/unknown outcomes; it need not invent a product change to be complete.
-- [ ] Update this plan and the index with tested revision, scope, review outcomes and remaining limitations. Do not mark deferred live UAT complete.
+- [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
+- [x] Task outcomes, source paths, current revision, completed Task 1/2 reviews, pending Task 3/Sol reviews, and deferred UAT are recorded.
+- [x] Notes-only scope: diff/link/example checks are the scoped checks; no product gate is claimed.
+- [x] Linux and live acceptance remain unverified. No product behavior changed.
+- [x] Research decisions include go/defer/reject outcomes; no product change was invented.
+- [x] Update this plan and index with tested base revision `d3a6826d`, docs-only scope, completed Task 1/2 reviews, pending Task 3 and Sol reviews, and deferred UAT.
 
 ## STOP conditions
 
