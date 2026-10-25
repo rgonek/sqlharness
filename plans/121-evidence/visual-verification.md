@@ -10,7 +10,7 @@ Exact product tree IDs: [receipt](visual-product-trees.json).
 
 ## Gate attempts
 
-1. [First attempt](visual-logs/gate-attempt-1/ui-install.log): `npm ci` could not replace the Windows Rolldown binding while this task's Vite processes held it. Only the task-owned servers were stopped; built static servers replaced them.
+1. First attempt (terminal output; no stage log was written): `npm ci` could not replace the Windows Rolldown binding while this task's Vite processes held it. Only the task-owned servers were stopped; built static servers replaced them.
 2. [Second attempt](visual-logs/gate-attempt-2/): UI 383 passed, Core 4716 passed / 2 failed / 11 skipped; MCP 535 passed / 4 skipped. The two unchanged process/lifecycle timing tests failed under default parallel collections. Both passed isolated without source/timeout changes ([log](visual-logs/sqlharness-visual-isolated-dotnet.log)). This intermediate tree also preceded the last layout/context corrections.
 3. [Third attempt](visual-logs/gate-attempt-3/): UI 384 passed, but TypeScript correctly rejected the sound Select's upload sentinel inferred outside its persisted-selection type. An explicit union generic and removal of the unnecessary assertion corrected this. Standalone typecheck passed. This is erased typing and changes no rendered output.
 4. Final `just verify -LogDirectory D:\temp\sqlharness-visual-final-gate-4`: **exit 0**, 5 stages, 13m36s. Build: zero warnings/errors; UI lint/typecheck and **384 tests passed**; Core/Dashboard/CLI **4718 passed, 11 skipped**; MCP **535 passed, 4 skipped**; formatting appropriately skipped (no changed C#). [Final logs](visual-logs/final-gate/).
