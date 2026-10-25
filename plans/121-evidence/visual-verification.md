@@ -22,3 +22,5 @@ The caret interaction regression was observed RED, then GREEN ([RED](visual-logs
 ## Delivery
 
 Pending final gate, local integration and publication. No push, Linux gate or live database acceptance is claimed.
+
+Text logs have trailing whitespace normalized for repository checks; [raw bytes](visual-logs/raw-logs.zip) are retained separately.

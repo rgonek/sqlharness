@@ -3,10 +3,10 @@
   SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\dashboard-visual-fidelity\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
   SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\dashboard-visual-fidelity\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
   SqlHarness.Mcp.WorkflowHost -> D:\Dev\sqlharness\.worktrees\dashboard-visual-fidelity\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
-  
+
   > ui@0.0.0 build
   > vite build
-  
+
   [36mvite v8.3.3 [32mbuilding client environment for production...[36m[39m
   transforming...
   Γ£ô 4021 modules transformed.
@@ -31,8 +31,8 @@
   dist/assets/PlanGraphView-BfY4JD6K.js                             174.90 kB Γöé gzip:  55.54 kB
   dist/assets/index-CtJa0UMV.js                                   1,519.54 kB Γöé gzip: 455.12 kB
   dist/assets/monaco-DFtmSN8v.js                                  2,724.54 kB Γöé gzip: 700.52 kB
-  
-  [33m[plugin builtin:vite-reporter] 
+
+  [33m[plugin builtin:vite-reporter]
   (!) Some chunks are larger than 500 kB after minification. Consider:
   - Using dynamic import() to code-split the application
   - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
