@@ -6,7 +6,7 @@ Date: 2026-10-25 · Branch: `plan-112` · Worktree: `D:/Dev/sqlharness/.worktree
 
 Task 3 produced a ranked decision matrix, rejected alternatives, a reproducible synthetic workload specification, future authorized UAT requirements, and an applicability assessment for all five Plan 112 review-focus items. It created no numbered follow-up plan because no direction is accepted on the current one-case evidence. No source, test, fixture, executable SQL, or product behavior changed. No database, DML/DDL, mutation, install, paid trial, merge, push, or live UAT occurred. Task 1 and Task 2 reviews are approved. Task 3 review and final Sol whole-branch review remain pending.
 
-The previously committed Task 3 matrix is at `b33c4801`. This check set covers that committed matrix plus the current 2100-parameter correction in the worktree. The post-commit range and tested final revision are recorded in the Task 3 report; `d3a6826d` is not presented as the final tested revision.
+The earlier workload proposal was committed at `b33c4801`; the scalar-list limit correction is committed at `acd726d9` and is the tested workload revision. The current checks cover that exact correction. `d3a6826d` and `b33c4801` are historical bases, not the final tested workload revision.
 
 ## Scoped checks
 
@@ -15,9 +15,9 @@ The previously committed Task 3 matrix is at `b33c4801`. This check set covers t
 | `git diff --check` | No whitespace errors in the current correction delta. | PASS; exit 0. |
 | Relative Markdown link check in four updated Plan 112 docs (exact command in Task 3 report). | Every local target resolves. | PASS; every target resolved. |
 | Arithmetic/cardinality check: for each n in `10,100,1000,2100`, generate `1 + ((112*7919 + i*4729) mod 100000)` for `i=0..n-1`; assert generated count = unique count = n and n ≤ 2100. | Deterministic key sets have the stated size and do not exceed the SQL Server/Plan 083 parameter ceiling. | PASS for 10, 100, 1000, and 2100; all generated keys were unique and scalar parameter counts were within 2100. |
-| `git diff --check b33c4801..HEAD` | Committed correction has no whitespace errors. | To be recorded after commit. |
-| `git diff --name-only b33c4801..HEAD` | Scope of this correction commit is limited to the decision matrix and verification evidence. | To be recorded after commit. |
-| `git status --short --branch` | Confirm final branch and clean committed documentation scope. | To be recorded after commit. |
+| `git diff --check b33c4801..HEAD` | The committed scalar-cap correction has no whitespace errors. | PASS; exit 0 at `acd726d9`. |
+| `git diff --name-only b33c4801..HEAD` | Scope is limited to the decision matrix and verification evidence. | PASS; exactly those two files at `acd726d9`. |
+| `git status --short --branch` | Confirm final branch and clean committed documentation scope. | PASS; clean `plan-112` at `acd726d9`. |
 
 No Windows `just verify`, Linux gate, unit tests, SQL command, fixture execution, or UAT was run. Under `docs/agents/verification.md`, changed behavior did not require a product gate; the documentation diff, links, and evidence-boundary checks are the scoped verification. Linux and live acceptance remain unverified.
 
