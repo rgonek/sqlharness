@@ -1,0 +1,9 @@
+Command: pwsh -NoProfile -File plans/118-evidence/verify.ps1
+Worktree: D:\Dev\sqlharness\.worktrees\plan-118
+HEAD before verification: e1e6cd0884978ffe80a5e9a0027349550082ca51
+Exit: 0
+Output:
+cases=27 output=D:\Dev\sqlharness\.worktrees\plan-118\plans\118-evidence\results.json
+VERIFIED: 27 named scenarios; exact oracle values, basis preservation, absent-property states, fingerprint semantics, pairing non-disclosure, omissions, and UTF-8 limits passed.
+
+The verifier invokes evaluate.ps1 and temporarily rewrites results.json with the current HEAD revision. The tracked results.json was restored from HEAD after the successful run to retain the already recorded executable revision and avoid a revision-only results diff.

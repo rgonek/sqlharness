@@ -1,0 +1,5 @@
+Controller final verification at4a270abe (metadata closeout edits only):
+pwsh -NoProfile -File plans/118-evidence/verify.ps1
+Exit0
+cases=34 output=D:\Dev\sqlharness\.worktrees\plan-118\plans\118-evidence\results.json
+VERIFIED: 34 named scenarios; exact oracle values, basis preservation, absent-property states, fingerprint semantics, pairing non-disclosure, omissions, and UTF-8 limits passed.

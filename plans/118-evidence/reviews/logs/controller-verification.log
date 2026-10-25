@@ -1,0 +1,7 @@
+Controller verification on b50c44f9:
+pwsh -NoProfile -File plans/118-evidence/verify.ps1
+Exit 0: VERIFIED 27 named scenarios; exact oracle values, basis preservation, absent-property states, fingerprint semantics, pairing non-disclosure, omissions and UTF-8 limits passed.
+Tracked results.json bytes restored after verification to preserve executable revision evidence.
+git diff --check 7c1b2fbf HEAD: exit0.
+git diff --name-only 7c1b2fbf HEAD -- src tests scripts: empty.
+git status --short after checks: clean.

@@ -7,7 +7,7 @@
 
 ## Status
 
-- **Status:** TODO; design study only; no implementation, live DB, merge or push.
+- **Status:** RESEARCH COMPLETE; bounded explanation subset accepted for separately selected implementation; cross-group UI explanation deferred until an exact operation pair is available. No product implementation, live DB, merge or push. See [decision](118-evidence/decision.md) and [study evidence](118-evidence/design.md).
 - **Priority:** P2; selected direction proposal 3.
 - **Effort / risk / confidence:** M / MED / HIGH grounding.
 - **Depends on:** none of 116-120; implemented 079/080/087 supply conditions/grouping semantics.
@@ -19,7 +19,7 @@
 
 ## Execution setup
 
-Use an isolated `plan-118` checkout after inspecting `git status --short` and `git worktree list --porcelain`. Before changes run `$studyStart = (git rev-parse HEAD).Trim()` and retain the revision/initial status. Preserve unrelated edits; no automatic commit/merge/push. Apply `docs/agents/verification.md` scoped documentation/study checks. All experiment/verifier scripts must exit nonzero for missing evidence or failed assertions.
+Use an isolated `plan-118` checkout after inspecting `git status --short` and `git worktree list --porcelain`. Before changes run `$studyStart = (git rev-parse HEAD).Trim()` and retain the revision/initial status. Preserve unrelated edits. Normal commits are authorized by the operator for this execution; no merge/push. Apply `docs/agents/verification.md` scoped documentation/study checks. All experiment/verifier scripts must exit nonzero for missing evidence or failed assertions.
 
 ## Why this matters
 
@@ -79,30 +79,30 @@ Show repeat, timeout and comparison-only differences as informational unless cur
 
 ### Task 1: Reconstruct the authoritative field semantics
 
-- [ ] Write `inventory.md`: table of retained fields, fingerprint participation, sensitivity/omission rules, matching identities and current generic-message branches. Copy short excerpts from the exact current payload builders.
-- [ ] Verify: `Select-String -Path plans/118-evidence/inventory.md -Pattern 'MeasurementFingerprint|Repeat|Timeout|CompareNullability|identity|omitted'` -> all six topics have an evidence-backed disposition. Reopen each cited source location.
+- [x] Write `inventory.md`: table of retained fields, fingerprint participation, sensitivity/omission rules, matching identities and current generic-message branches. Copy short excerpts from the exact current payload builders.
+- [x] Verify: `Select-String -Path plans/118-evidence/inventory.md -Pattern 'MeasurementFingerprint|Repeat|Timeout|CompareNullability|identity|omitted'` -> all six topics have an evidence-backed disposition. Reopen each cited source location.
 
 ### Task 2: Freeze examples and evaluate the explanation contract
 
-- [ ] Write `design.md` with exact field/gap contracts, deterministic ordering, grouping-versus-explanation separation, max-size policy, UI wording and future route/component/file map. Give both a group-selector explanation path and an operation-pair path; if current routes cannot expose the former safely, explicitly defer that surface instead of expanding API scope.
-- [ ] Create `cases.json` for: equal conditions; changed setup hash; changed effective type; added/removed case; informational repeat/timeout; changed comparison mode only; hidden values with mismatching combined fingerprints; unavailable old model; omitted long fields; ambiguous case rename/order; cross-journal fingerprints without a verified common key domain; unresolved subject/scope; identical SQL with different cases; typed NULL versus absent value; enough multibyte differences to exceed caps.
-- [ ] Implement the standalone evaluator over synthetic retained-condition records. Its inputs include existing authoritative basis/grouping outcome as an immutable fixture field. Return explanatory output only; never recompute or override the verdict.
-- [ ] Implement `verify.ps1` with independent expected categories/availability. Assert the input basis/verdict is unchanged, informational fields do not become incompatibilities, hidden values are absent, ambiguous pairing produces a gap and budget overflow preserves item identities/omissions.
-- [ ] Verify: `pwsh -NoProfile -File plans/118-evidence/evaluate.ps1` and `pwsh -NoProfile -File plans/118-evidence/verify.ps1` -> exit 0; every named case checked. Write `results.json` with serializer, revision, byte counts and known limits.
+- [x] Write `design.md` with exact field/gap contracts, deterministic ordering, grouping-versus-explanation separation, max-size policy, UI wording and future route/component/file map. Give both a group-selector explanation path and an operation-pair path; if current routes cannot expose the former safely, explicitly defer that surface instead of expanding API scope.
+- [x] Create `cases.json` for: equal conditions; changed setup hash; changed effective type; added/removed case; informational repeat/timeout; changed comparison mode only; hidden values with mismatching combined fingerprints; unavailable old model; omitted long fields; ambiguous case rename/order; cross-journal fingerprints without a verified common key domain; unresolved subject/scope; identical SQL with different cases; typed NULL versus absent value; enough multibyte differences to exceed caps.
+- [x] Implement the standalone evaluator over synthetic retained-condition records. Its inputs include existing authoritative basis/grouping outcome as an immutable fixture field. Return explanatory output only; never recompute or override the verdict.
+- [x] Implement `verify.ps1` with independent expected categories/availability. Assert the input basis/verdict is unchanged, informational fields do not become incompatibilities, hidden values are absent, ambiguous pairing produces a gap and budget overflow preserves item identities/omissions.
+- [x] Verify: `pwsh -NoProfile -File plans/118-evidence/evaluate.ps1` and `pwsh -NoProfile -File plans/118-evidence/verify.ps1` -> exit 0; every named case checked. Write `results.json` with serializer, revision, byte counts and known limits.
 
 ### Task 3: Decide and map future verification
 
-- [ ] Write `decision.md`: accept the bounded explanation subset, defer or reject, with demand assumptions, costs and unanswered questions. A design that changes comparability or requires recovering unstored values is a no-go.
-- [ ] Future implementation tests must pin comparer output invariance, legacy gaps, stable case identity, sensitive-off payloads, UI/Markdown parity and overflow. Commands: `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~OptimizationComparerTests|FullyQualifiedName~OptimizationSummaryBuilderTests'`; `npm --prefix src/SqlHarness.Dashboard/ui run test -- src/components/optimization/ComparisonPanel.test.tsx`; then `just verify` and explicit branch C# formatting on separately selected product work.
-- [ ] Run study verification, Markdown link/whitespace checks and source immutability check; update the index to RESEARCH COMPLETE with the decision.
+- [x] Write `decision.md`: accept the bounded explanation subset, defer or reject, with demand assumptions, costs and unanswered questions. A design that changes comparability or requires recovering unstored values is a no-go.
+- [x] Future implementation tests must pin comparer output invariance, legacy gaps, stable case identity, sensitive-off payloads, UI/Markdown parity and overflow. Commands: `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~OptimizationComparerTests|FullyQualifiedName~OptimizationSummaryBuilderTests'`; `npm --prefix src/SqlHarness.Dashboard/ui run test -- src/components/optimization/ComparisonPanel.test.tsx`; then `just verify` and explicit branch C# formatting on separately selected product work.
+- [x] Run study verification, Markdown link/whitespace checks and source immutability check; update the index to RESEARCH COMPLETE with the decision. All Luna xhigh task reviews and Sol low whole-study/final scoped review are approved; see [final review](118-evidence/reviews/final-scoped-review.md).
 
 ## Done criteria
 
-- [ ] `pwsh -NoProfile -File plans/118-evidence/verify.ps1` exits 0 with one independently asserted result per named scenario.
-- [ ] Design and decision explicitly separate a known change, informative difference, identity failure and unavailable evidence.
-- [ ] Output has a bounded item/byte policy and tests for escaped/multibyte names, with no unstored-value recovery.
-- [ ] `git diff --name-only $studyStart -- src tests scripts` is empty; `git status --short` shows no unexpected new files; links and `git diff --check` pass.
-- [ ] Study outputs do not claim production UI, live comparability or product verification. Notes-only work uses scoped documentation checks.
+- [x] `pwsh -NoProfile -File plans/118-evidence/verify.ps1` exits 0 with one independently asserted result per named scenario.
+- [x] Design and decision explicitly separate a known change, informative difference, identity failure and unavailable evidence.
+- [x] Output has a bounded item/byte policy and tests for escaped/multibyte names, with no unstored-value recovery.
+- [x] `git diff --name-only $studyStart -- src tests scripts` is empty; `git status --short` shows no unexpected new files; links and `git diff --check` pass.
+- [x] Study outputs do not claim production UI, live comparability or product verification. Notes-only work uses scoped documentation checks.
 
 ## STOP conditions and maintenance
 
