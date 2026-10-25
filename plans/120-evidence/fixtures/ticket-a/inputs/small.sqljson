@@ -1,0 +1,10 @@
+{
+  "name": "small",
+  "parameters": [
+    {
+      "name": "customerId",
+      "type": "nvarchar",
+      "value": "7"
+    }
+  ]
+}

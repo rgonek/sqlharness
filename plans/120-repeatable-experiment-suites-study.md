@@ -7,7 +7,7 @@
 
 ## Status
 
-- **Status:** TODO; research/design only; no production runner, real execution, merge or push.
+- **Status:** RESEARCH COMPLETE — choose C (no new supported feature now); defer B pending the explicit demand and design gates in [decision](120-evidence/decision.md). Current evaluator/verifier evidence: 29 synthetic cases and 17 mock dispatches, including strict integer-version validation; fixed typed scalar and MCP named-set-file shapes only, with no full reader grammar parity or executed symlink proof. The initial whole-branch review is approved after its single Minor correction; final scoped rereview is approved. Local `plan-120` only; not integrated or pushed.
 - **Priority:** P3; selected direction proposal 5; recurring multi-subject demand remains unconfirmed.
 - **Effort / risk / confidence:** M study, L potential implementation / MED-HIGH / MED grounding.
 - **Depends on:** none of 116-119. Existing compare/parameter-set contracts are implemented; Plan 036 is a different testing-infrastructure feature.
@@ -83,34 +83,34 @@ The simulator is a pure function of synthetic manifest, fixture files and inject
 
 ### Task 1: Establish demand assumptions and compare existing alternatives
 
-- [ ] Write `inventory.md` mapping every proposed input to the current CLI/Core/MCP contract and authority for bounds. Flag unsupported combinations explicitly.
-- [ ] Generate two portable synthetic ticket workspaces: A has two SQL subjects with small/large/empty scalar cases; B has three revision pairs with setup, boundary date, duplicate-sensitive results and a deliberately changed file. Include exact generated hashes; no placeholder digests in executable fixtures.
-- [ ] Count command/input reconstruction steps for a plain external command list versus a manifest. Label them synthetic ergonomics estimates, not observed user time or model tokens. Lack of real demand is a recorded limitation, not invented interview evidence.
-- [ ] Verify: `Select-String -Path plans/120-evidence/inventory.md -Pattern 'CLI|MCP|Core|named|matrix|bounds'` -> every topic covered; reopen cited contracts and option definitions.
+- [x] Write `inventory.md` mapping every proposed input to the current CLI/Core/MCP contract and authority for bounds. Flag unsupported combinations explicitly.
+- [x] Generate two portable synthetic ticket workspaces: A has two SQL subjects with small/large/empty scalar cases; B has three revision pairs with setup, boundary date, duplicate-sensitive results and a deliberately changed file. Include exact generated hashes; no placeholder digests in executable fixtures.
+- [x] Count command/input reconstruction steps for a plain external command list versus a manifest. Label them synthetic ergonomics estimates, not observed user time or model tokens. Lack of real demand is a recorded limitation, not invented interview evidence.
+- [x] Verify: `Select-String -Path plans/120-evidence/inventory.md -Pattern 'CLI|MCP|Core|named|matrix|bounds'` -> every topic covered; reopen cited contracts and option definitions.
 
 ### Task 2: Specify and exercise the safe dispatch model
 
-- [ ] Write `design.md`: exact candidate schema, input-root/hash semantics, mutually exclusive input rules, operation identity, deterministic dispatch order, partial outcomes and A/B/C decision matrix. State whether a target change is permitted and require it to be explicit per entry within existing operator scope.
-- [ ] Build `evaluate.ps1` with an injected in-memory dispatcher returning mock outcomes and recording calls. Never use `Invoke-Expression`, arbitrary commands, real target profiles or executable names from input. Output only synthetic invocation records and outcome metadata to `results.json`.
-- [ ] `cases.json` must independently cover: all-success; valid non-equivalence; regression; inconclusive; error on entry 2; timeout/cancellation/unknown completion on entry 2; unexecuted tail; changed SQL/parameter/setup hashes; missing file; duplicate entry ID; invalid manifest count/size; parameter budget overflow; path escape; symlink/reparse escape; mixed/unsupported set inputs; reused prior artifact; attempted resume; mutation entry.
-- [ ] Simulate first-error/cancellation stop and preserve completed negatives. File/hash/preflight errors must prevent execution according to the frozen preflight design; explicitly specify all-suite preflight versus per-entry validation and avoid claiming atomicity. Candidate default: validate every input before the first dispatch, recheck hashes immediately before each dispatch, stop at a changed input and retain prior completed entries.
-- [ ] Implement independent `verify.ps1` assertions for every case: exact dispatch count/order, unchanged parameter/case semantics, preserved outcome IDs, no invocation for unexecuted tails, no retries/resume/reuse, and no real connection capability.
-- [ ] Verify: `pwsh -NoProfile -File plans/120-evidence/evaluate.ps1` and `pwsh -NoProfile -File plans/120-evidence/verify.ps1` -> exit 0; every case accounted for, no external process or DB call. Platforms unable to create a test symlink must record unavailable OS proof plus the simulated rejection; they cannot claim an executed filesystem proof.
+- [x] Write `design.md`: exact candidate schema, input-root/hash semantics, mutually exclusive input rules, operation identity, deterministic dispatch order, partial outcomes and A/B/C decision matrix. State whether a target change is permitted and require it to be explicit per entry within existing operator scope.
+- [x] Build `evaluate.ps1` with an injected in-memory dispatcher returning mock outcomes and recording calls. Never use `Invoke-Expression`, arbitrary commands, real target profiles or executable names from input. Output only synthetic invocation records and outcome metadata to `results.json`.
+- [x] `cases.json` covers success and negative outcomes, stop/tail behavior, changed and missing inputs, invalid manifests, path escapes, unsupported inputs, reuse/resume and mutation rejection.
+- [x] Simulate first-error/cancellation stop and preserve completed negatives. Preflight and immediate per-entry hash checks are explicit; prior completed entries survive an after-preflight change without claiming atomicity.
+- [x] Implement independent `verify.ps1` assertions for every case: exact dispatch count/order, unchanged parameter/case semantics, preserved outcome IDs, no invocation for unexecuted tails, no retries/resume/reuse, and no real connection capability.
+- [x] Verify evaluator and verifier exit 0; every case accounted for, with no external process or DB call. The OS denied test-symlink creation; results label the simulated rejection and do not claim executed filesystem proof. The final scoped version-gate correction adds three independently asserted malformed-version cases; current count is 29 cases and 17 mock dispatches.
 
 ### Task 3: Decide whether a supported feature is justified
 
-- [ ] Write `decision.md`: accept A/B, defer or reject; explain which repeated-work need is supported, what cases remain unsupported, implementation/maintenance costs and explicit demand needed before expanding scope. Do not call this a CI lane, scheduler, replay engine or deployment framework.
-- [ ] If a feature is accepted, `design.md` must specify the exact future surface, file map and meaningful tests: two-entry success; first-failure retention; input-root/hash races; resource/parameter parity; structured output and outcome preservation. Reuse existing Core/CLI test conventions; no source edits in this study.
-- [ ] Future implementation verification: focused CLI/compare/parameter resolver tests with zero DB connections, then Windows `just verify` plus explicit branch formatting. Real runs need separate target authorization; Plan 036's optional live CI is not a hard predecessor and is not a substitute for user-workload acceptance.
-- [ ] Verify scripts, relative links, `git diff --check`, unchanged product paths; mark RESEARCH COMPLETE with selected alternative and limits.
+- [x] Write `120-evidence/decision.md`: choose C for now and defer B; explain the hypothesized need, evidence limits, unsupported cases, coarse costs, and demand/design gates.
+- [x] No feature is accepted; therefore no future product file map or test plan is presented as approved. A new scoped plan is required if later demand gates justify B.
+- [x] Record future implementation verification requirements: focused CLI/compare/parameter resolver tests with zero DB connections, then Windows `just verify` and explicit branch formatting. Real target runs need separate authorization; Plan 036 is not a hard predecessor or substitute for user-workload acceptance.
+- [x] Verify study scripts, relative links, whitespace and unchanged product paths; mark RESEARCH COMPLETE with selected alternative and limits. Whole-branch review remains pending.
 
 ## Done criteria
 
-- [ ] Two generated workspaces reproduce from repository-local synthetic inputs, with real computed input hashes and an explicit supported-input matrix.
-- [ ] Study verifier exits 0 and independently verifies every named scenario, stop/retention behavior and preflight policy.
-- [ ] A/B/C alternatives, coarse cost, demand assumptions and a go/no-go decision are documented; no unsupported CLI flag or hidden semantic conversion remains.
-- [ ] `git diff --name-only $studyStart -- src tests scripts skills .github` is empty; inspect untracked paths using `git status --short`; links/whitespace pass.
-- [ ] No execution of a real suite, real target, mutation, runtime install, paid agent, CI dispatch or token-savings claim occurred.
+- [x] Two generated workspaces reproduce from repository-local synthetic inputs, with real computed input hashes and an explicit supported-input matrix.
+- [x] Study verifier independently verifies all named scenarios, including string, boolean, and floating-point version rejection, stop/retention behavior and preflight policy.
+- [x] A/B/C alternatives, coarse cost, demand assumptions and a go/no-go decision are documented; no unsupported CLI flag or hidden semantic conversion is claimed.
+- [x] Product paths are unchanged; changed/untracked paths are scoped; links and whitespace pass.
+- [x] No real suite, real target, mutation, runtime install, paid agent, CI dispatch or token-savings claim occurred.
 
 ## STOP conditions and maintenance
 
