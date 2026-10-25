@@ -28,4 +28,3 @@
 **Task quality:** Approved
 
 **Reasoning:** The decision satisfies Task 3's required scope and verification map while keeping demand and production behavior as open questions. The recorded checks support the completion claim, and the remaining verifier-internals limit belongs to the already reviewed study implementation rather than this decision/closeout change.
-
