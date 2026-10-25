@@ -61,8 +61,8 @@ Write-Json "$a/inputs/empty.sqljson" @{ name = 'empty'; parameters = @(@{ name =
 $aCaseFiles = @((File-Reference "$a/inputs/small.sqljson"), (File-Reference "$a/inputs/large.sqljson"), (File-Reference "$a/inputs/empty.sqljson"))
 
 $aComparisons = @(
-    @{ id = 'orders-by-customer'; profile = 'synthetic-ticket-a'; vars = @{ dataset = 'orders' }; subject = 'orders'; scope = 'customer lookup'; baseline = (File-Reference "$a/sql/orders-baseline.sql"); candidate = (File-Reference "$a/sql/orders-candidate.sql"); setup = $null; repeat = 5; timeoutSeconds = 30; compareResults = 'ordered'; compareNullability = $false; input = @{ kind = 'parameterSetFiles'; files = $aCaseFiles } },
-    @{ id = 'returns-by-customer'; profile = 'synthetic-ticket-a'; vars = @{ dataset = 'returns' }; subject = 'returns'; scope = 'customer lookup'; baseline = (File-Reference "$a/sql/returns-baseline.sql"); candidate = (File-Reference "$a/sql/returns-candidate.sql"); setup = $null; repeat = 5; timeoutSeconds = 30; compareResults = 'ordered'; compareNullability = $false; input = @{ kind = 'parameterSetFiles'; files = $aCaseFiles } }
+    @{ id = 'orders-by-customer'; surface = 'mcp'; profile = 'synthetic-ticket-a'; vars = @{ dataset = 'orders' }; subject = 'orders'; scope = 'customer lookup'; baseline = (File-Reference "$a/sql/orders-baseline.sql"); candidate = (File-Reference "$a/sql/orders-candidate.sql"); setup = $null; repeat = 5; timeoutSeconds = 30; compareResults = 'ordered'; compareNullability = $false; input = @{ kind = 'parameterSetFiles'; files = $aCaseFiles } },
+    @{ id = 'returns-by-customer'; surface = 'mcp'; profile = 'synthetic-ticket-a'; vars = @{ dataset = 'returns' }; subject = 'returns'; scope = 'customer lookup'; baseline = (File-Reference "$a/sql/returns-baseline.sql"); candidate = (File-Reference "$a/sql/returns-candidate.sql"); setup = $null; repeat = 5; timeoutSeconds = 30; compareResults = 'ordered'; compareNullability = $false; input = @{ kind = 'parameterSetFiles'; files = $aCaseFiles } }
 )
 Write-Json "$a/experiment-suite.json" @{ version = 1; comparisons = $aComparisons }
 Write-Json "$a/mock-outcomes.json" @{ entries = @(
@@ -93,12 +93,12 @@ $duplicateBaselineRows.Add([object[]]@(4, 3))
 $duplicateCandidateRows = [System.Collections.Generic.List[object]]::new()
 $duplicateCandidateRows.Add([object[]]@(4, 3))
 $bPairs = @(
-    @{ id = 'date-boundary'; baseline = (File-Reference "$b/revisions/pair-01/baseline.sql"); candidate = (File-Reference "$b/revisions/pair-01/candidate.sql"); input = @{ kind = 'parameterSetFile'; file = $boundaryInputs } },
+    @{ id = 'date-boundary'; baseline = (File-Reference "$b/revisions/pair-01/baseline.sql"); candidate = (File-Reference "$b/revisions/pair-01/candidate.sql"); input = @{ kind = 'fixed'; parameters = @(@{ name = 'boundaryDate'; type = 'date'; value = '2024-02-29' }) } },
     @{ id = 'duplicate-counts'; baseline = (File-Reference "$b/revisions/pair-02/baseline.sql"); candidate = (File-Reference "$b/revisions/pair-02/candidate.sql"); input = @{ kind = 'fixed'; parameters = @(@{ name = 'includeHidden'; type = 'bit'; value = '1' }) } },
-    @{ id = 'changed-revision'; baseline = (File-Reference "$b/revisions/pair-03/baseline.sql"); candidate = (File-Reference $pair3Path $pair3PinnedHash); input = @{ kind = 'parameterSetFile'; file = $boundaryInputs } }
+    @{ id = 'changed-revision'; baseline = (File-Reference "$b/revisions/pair-03/baseline.sql"); candidate = (File-Reference $pair3Path $pair3PinnedHash); input = @{ kind = 'fixed'; parameters = @(@{ name = 'boundaryDate'; type = 'date'; value = '2024-02-29' }) } }
 )
 $bComparisons = foreach ($pair in $bPairs) {
-    @{ id = $pair.id; profile = 'synthetic-ticket-b'; vars = @{ dataset = 'revision-fixture' }; subject = $pair.id; scope = 'revision pair'; baseline = $pair.baseline; candidate = $pair.candidate; setup = $sharedSetup; repeat = 7; timeoutSeconds = 45; compareResults = 'multiset'; compareNullability = $true; input = $pair.input }
+    @{ id = $pair.id; surface = 'cli'; profile = 'synthetic-ticket-b'; vars = @{ dataset = 'revision-fixture' }; subject = $pair.id; scope = 'revision pair'; baseline = $pair.baseline; candidate = $pair.candidate; setup = $sharedSetup; repeat = 7; timeoutSeconds = 45; compareResults = 'multiset'; compareNullability = $true; input = $pair.input }
 }
 Write-Json "$b/experiment-suite.json" @{ version = 1; comparisons = @($bComparisons) }
 Write-Json "$b/mock-outcomes.json" @{ entries = @(

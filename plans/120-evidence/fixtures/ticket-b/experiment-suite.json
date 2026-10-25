@@ -13,11 +13,14 @@
       "compareResults": "multiset",
       "id": "date-boundary",
       "input": {
-        "file": {
-          "path": "inputs/boundary-date.sqljson",
-          "sha256": "cd0344619d8e8c52c10993d718383a4e4a0644a4b947b05a5b4fc5fb2c5aaef5"
-        },
-        "kind": "parameterSetFile"
+        "kind": "fixed",
+        "parameters": [
+          {
+            "name": "boundaryDate",
+            "type": "date",
+            "value": "2024-02-29"
+          }
+        ]
       },
       "profile": "synthetic-ticket-b",
       "repeat": 7,
@@ -27,6 +30,7 @@
         "sha256": "0ee416bcc8cdc6add7ee0dca0210a0bb2e22b3eeb4b4019290db89c4dd67204c"
       },
       "subject": "date-boundary",
+      "surface": "cli",
       "timeoutSeconds": 45,
       "vars": {
         "dataset": "revision-fixture"
@@ -62,6 +66,7 @@
         "sha256": "0ee416bcc8cdc6add7ee0dca0210a0bb2e22b3eeb4b4019290db89c4dd67204c"
       },
       "subject": "duplicate-counts",
+      "surface": "cli",
       "timeoutSeconds": 45,
       "vars": {
         "dataset": "revision-fixture"
@@ -80,11 +85,14 @@
       "compareResults": "multiset",
       "id": "changed-revision",
       "input": {
-        "file": {
-          "path": "inputs/boundary-date.sqljson",
-          "sha256": "cd0344619d8e8c52c10993d718383a4e4a0644a4b947b05a5b4fc5fb2c5aaef5"
-        },
-        "kind": "parameterSetFile"
+        "kind": "fixed",
+        "parameters": [
+          {
+            "name": "boundaryDate",
+            "type": "date",
+            "value": "2024-02-29"
+          }
+        ]
       },
       "profile": "synthetic-ticket-b",
       "repeat": 7,
@@ -94,6 +102,7 @@
         "sha256": "0ee416bcc8cdc6add7ee0dca0210a0bb2e22b3eeb4b4019290db89c4dd67204c"
       },
       "subject": "changed-revision",
+      "surface": "cli",
       "timeoutSeconds": 45,
       "vars": {
         "dataset": "revision-fixture"

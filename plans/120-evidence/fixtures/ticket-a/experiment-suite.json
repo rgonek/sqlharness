@@ -34,6 +34,7 @@
       "scope": "customer lookup",
       "setup": null,
       "subject": "orders",
+      "surface": "mcp",
       "timeoutSeconds": 30,
       "vars": {
         "dataset": "orders"
@@ -73,6 +74,7 @@
       "scope": "customer lookup",
       "setup": null,
       "subject": "returns",
+      "surface": "mcp",
       "timeoutSeconds": 30,
       "vars": {
         "dataset": "returns"
