@@ -8,7 +8,7 @@ The candidate payload is `conditionExplanation: { availability, differences, gap
 
 ## Evidence and comparison rules
 
-- Compare only fields represented in both retained records. A present JSON null, typed SQL NULL, absent property, explicit `unknown`, explicit `omitted`, and empty collection are distinct states. Missing retained-value properties or parameter/case collections produce a gap; they are never treated as empty or equal.
+- Compare only fields represented in both retained records. A present JSON null, typed SQL NULL, absent property, explicit `unknown`, explicit `omitted`, null collection, and empty collection are distinct states. Missing retained-value properties and missing/null parameter or case collections produce a gap; they are never treated as empty or equal. A null collection prevents added/removed claims for its contents.
 - Explain setup SQL only when both sides retain its text; a setup-hash change alone is opaque. For parameters, compare retained effective type, list/TVP kind and shape metadata, and value only if both values are retained.
 - Emit display values only when the source record marks the value `retained` and the value is present. The display layer does not interpret labels, SQL hashes, journal-keyed hashes, or whole-operation fingerprints as parameter/setup values.
 - Compare parameter records only by exact parameter identity inside a uniquely paired case. Pair cases only when the fixture supplies one verified, unambiguous common measurement key. Do not pair by array position, label, ordinal, or renamed set name. Duplicate or absent keys create `case-pairing-ambiguous` or `identity-unresolved` gaps.

@@ -8,6 +8,12 @@ function Json($value) { ConvertTo-Json -InputObject $value -Depth 80 -Compress }
 function Utf8Size([string]$value) { [System.Text.Encoding]::UTF8.GetByteCount($value) }
 function Has-Property($object, [string]$name) { return ($null -ne $object -and $object.PSObject.Properties.Name -contains $name) }
 function Add-Gap($list, [string]$code) { if (-not $list.Contains($code)) { $list.Add($code) } }
+function Has-UsableCollection($object, [string]$name, $gaps) {
+    if (-not (Has-Property $object $name)) { Add-Gap $gaps 'field-omitted'; return $false }
+    $value = $object.$name
+    if ($null -eq $value -or $value -isnot [array]) { Add-Gap $gaps 'field-omitted'; return $false }
+    return $true
+}
 function Add-Difference($list, [string]$field, [string]$kind, [string]$relation, $caseIdentity, $parameterIdentity, $before, $after, [bool]$hasBefore = $false, [bool]$hasAfter = $false) {
     $item = [ordered]@{ field = $field }
     if ($null -ne $caseIdentity) { $item.caseIdentity = $caseIdentity }
@@ -106,12 +112,12 @@ foreach ($scenario in $fixture.cases) {
             $leftText = $leftSetup.text; $rightText = $rightSetup.text
             Compare-Scalar $differences $gaps 'setup.text.value' $leftText $rightText $leftSetupTextPresent $rightSetupTextPresent 'measurement-condition' $null $null
         } else { Add-Gap $gaps 'field-omitted' }
-        $leftParametersPresent = Has-Property $before.conditions 'parameters'; $rightParametersPresent = Has-Property $after.conditions 'parameters'
-        if (-not $leftParametersPresent -or -not $rightParametersPresent) { Add-Gap $gaps 'field-omitted' }
-        else { Compare-Parameters $differences $gaps $before.conditions.parameters $after.conditions.parameters '' $null }
-        $leftCasesPresent = Has-Property $before.conditions 'cases'; $rightCasesPresent = Has-Property $after.conditions 'cases'
-        if (-not $leftCasesPresent -or -not $rightCasesPresent) { Add-Gap $gaps 'field-omitted' }
-        elseif ($before.fingerprintDomainVerified -and $after.fingerprintDomainVerified) {
+        $leftParametersUsable = Has-UsableCollection $before.conditions 'parameters' $gaps
+        $rightParametersUsable = Has-UsableCollection $after.conditions 'parameters' $gaps
+        if ($leftParametersUsable -and $rightParametersUsable) { Compare-Parameters $differences $gaps $before.conditions.parameters $after.conditions.parameters '' $null }
+        $leftCasesUsable = Has-UsableCollection $before.conditions 'cases' $gaps
+        $rightCasesUsable = Has-UsableCollection $after.conditions 'cases' $gaps
+        if ($leftCasesUsable -and $rightCasesUsable -and $before.fingerprintDomainVerified -and $after.fingerprintDomainVerified) {
             $leftCases = @($before.conditions.cases | Where-Object { $null -ne $_ }); $rightCases = @($after.conditions.cases | Where-Object { $null -ne $_ })
             $leftKeys = @{}; $rightKeys = @{}
             foreach ($case in $leftCases) { if (-not $case.pairKey -or $leftKeys.ContainsKey([string]$case.pairKey)) { Add-Gap $gaps 'case-pairing-ambiguous' } else { $leftKeys[[string]$case.pairKey] = $case } }
@@ -125,9 +131,10 @@ foreach ($scenario in $fixture.cases) {
                     if ($l.identity) { Add-Difference $differences 'cases' 'removed' 'measurement-condition' $l.identity $null $null $null }
                     else { Add-Gap $gaps 'identity-unresolved' }
                 } elseif (-not $l.identity -or -not $r.identity) { Add-Gap $gaps 'identity-unresolved' }
+                elseif (-not (Has-UsableCollection $l 'parameters' $gaps) -or -not (Has-UsableCollection $r 'parameters' $gaps)) { continue }
                 else { Compare-Parameters $differences $gaps $l.parameters $r.parameters 'cases' ([pscustomobject]@{ before=$l.identity; after=$r.identity }) }
             }
-        } else { Add-Gap $gaps 'fingerprint-domain-unverified' }
+        } elseif ($leftCasesUsable -and $rightCasesUsable) { Add-Gap $gaps 'fingerprint-domain-unverified' }
         $leftMeasurementPresent = Has-Property $before 'measurementFingerprint'; $rightMeasurementPresent = Has-Property $after 'measurementFingerprint'
         if (-not $leftMeasurementPresent -or -not $rightMeasurementPresent) { Add-Gap $gaps 'legacy-model-unsupported' }
         elseif ($before.measurementFingerprint -cne $after.measurementFingerprint) {

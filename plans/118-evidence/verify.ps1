@@ -37,6 +37,11 @@ $expected = @{
     'absent conditions property versus empty object'=@{ availability='unavailable'; differences=@(); gaps=@('conditions-unavailable'); omitted=0 }
     'paired case parameter difference with opaque pair key'=@{ availability='complete'; differences=@('cases.parameters.@color.value|changed|measurement-condition|"@color"|{"before":"baseline-case","after":"candidate-case"}|"red"|"blue"'); gaps=@(); omitted=0 }
     'typed NULL retained before and after'=@{ availability='complete'; differences=@('parameters.@value.value|changed|measurement-condition|"@value"|<absent>|null|7'); gaps=@(); omitted=0 }
+    'null parameters collection versus empty'=@{ availability='unavailable'; differences=@(); gaps=@('field-omitted'); omitted=0 }
+    'null parameters collection versus nonempty'=@{ availability='unavailable'; differences=@(); gaps=@('field-omitted'); omitted=0 }
+    'null cases collection versus nonempty'=@{ availability='unavailable'; differences=@(); gaps=@('field-omitted'); omitted=0 }
+    'null paired-case parameter collection versus empty'=@{ availability='unavailable'; differences=@(); gaps=@('field-omitted'); omitted=0 }
+    'null paired-case parameter collection versus nonempty'=@{ availability='unavailable'; differences=@(); gaps=@('field-omitted'); omitted=0 }
 }
 Assert ($fixture.cases.Count -eq $expected.Count) "Named fixture coverage mismatch: fixture=$($fixture.cases.Count), oracle=$($expected.Count)."
 Assert ($actual.caseCount -eq $expected.Count) "Evaluator case count mismatch: $($actual.caseCount)."
@@ -79,6 +84,13 @@ Assert (-not (Has-Property $omittedInput.before.conditions.setup 'text')) 'Omitt
 Assert (-not (Has-Property $omittedInput.before.conditions.parameters[0] 'value')) 'Omitted parameter case must omit the JSON property.'
 $absentCollectionInput = $fixture.cases | Where-Object name -CEQ 'absent parameters collection versus empty'
 Assert (-not (Has-Property $absentCollectionInput.after.conditions 'parameters') -and @($absentCollectionInput.before.conditions.parameters).Count -eq 0) 'Missing and empty parameter collections are not distinct fixture states.'
+$nullCollectionCases = @($fixture.cases | Where-Object { $_.name -like 'null * collection *' })
+Assert ($nullCollectionCases.Count -eq 5 -and @($nullCollectionCases | Where-Object { $_.name -like '*nonempty' }).Count -eq 3) 'Null collection coverage must include empty and nonempty counterparts.'
+foreach ($nullCase in $nullCollectionCases) {
+    $result = $actual.results | Where-Object name -CEQ $nullCase.name
+    Assert ($result.conditionExplanation.gaps -contains 'field-omitted') "Null collection lacked a gap: $($nullCase.name)."
+    Assert ($result.conditionExplanation.differences.Count -eq 0) "Null collection generated unsupported added/removed claims: $($nullCase.name)."
+}
 $hiddenResult = $actual.results | Where-Object name -CEQ 'hidden values with mismatching combined fingerprints'
 $hiddenJson = Json $hiddenResult.conditionExplanation
 Assert ($hiddenJson -notmatch 'opaque-a|opaque-b|secret') 'Hidden parameter value, label, or fingerprint leaked into explanation.'

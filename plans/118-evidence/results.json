@@ -1,6 +1,6 @@
 {
   "schema": "plan118-condition-explanation-results-v1",
-  "revision": "74bcb397c93f8f50ac4ce6458c9b7ac93d2c9034",
+  "revision": "2d99dd75e999c7ffb3cc016b4210ce736f297d0d",
   "evaluationState": "working tree evidence based on revision above",
   "serializer": "PowerShell ConvertTo-Json -Depth 80 -Compress; UTF-8 byte count via System.Text.Encoding",
   "limits": {
@@ -8,8 +8,8 @@
     "gaps": 16,
     "explanationUtf8Bytes": 8192
   },
-  "caseCount": 22,
-  "totalExplanationUtf8Bytes": 7256,
+  "caseCount": 27,
+  "totalExplanationUtf8Bytes": 7731,
   "maxObservedExplanationUtf8Bytes": 3709,
   "results": [
     {
@@ -644,6 +644,86 @@
         "omittedDifferences": 0
       },
       "explanationUtf8Bytes": 217
+    },
+    {
+      "name": "null parameters collection versus empty",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g23"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "field-omitted"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 95
+    },
+    {
+      "name": "null parameters collection versus nonempty",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g24"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "field-omitted"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 95
+    },
+    {
+      "name": "null cases collection versus nonempty",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g25"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "field-omitted"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 95
+    },
+    {
+      "name": "null paired-case parameter collection versus empty",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g26"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "field-omitted"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 95
+    },
+    {
+      "name": "null paired-case parameter collection versus nonempty",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g27"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "field-omitted"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 95
     }
   ],
   "knownLimits": [
