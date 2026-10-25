@@ -42,10 +42,10 @@ try {
     $script:results = Get-Content -LiteralPath $resultsPath -Raw | ConvertFrom-Json
     $caseDoc = Get-Content -LiteralPath (Join-Path $root 'cases.json') -Raw | ConvertFrom-Json
     $expectedIds = @(
-        'all-success','valid-non-equivalence','regression','inconclusive','error-entry-2','timeout-entry-2',
+        'all-success','valid-non-equivalence','ticket-b-boundary-date','regression','inconclusive','error-entry-2','timeout-entry-2',
         'cancellation-entry-2','unknown-completion-entry-2','changed-sql-hash','changed-parameter-hash',
         'changed-setup-hash','missing-file','duplicate-entry-id','invalid-entry-count','invalid-manifest-size',
-        'parameter-budget-overflow','path-escape','symlink-reparse-escape','mixed-inputs',
+        'malformed-nullability-type','parameter-budget-overflow','path-escape','symlink-reparse-escape','mixed-inputs',
         'unsupported-cli-named-sets','reused-prior-artifact','attempted-resume','mutation-entry','changed-after-preflight'
     )
     $actualIds = @($script:results.cases | ForEach-Object { [string]$_.id })
@@ -79,6 +79,28 @@ try {
         Assert ($negative.outcomes[0].coverage.completedCases -eq 1 -and $negative.outcomes[0].coverage.requestedCases -eq 1) 'negative result retains complete coverage identity'
     }
 
+    Assert-Order (Get-Case 'ticket-b-boundary-date') @('date-boundary') 'ticket-b-boundary-date'
+    $boundaryCase = Get-Case 'ticket-b-boundary-date'
+    if ($null -ne $boundaryCase -and $boundaryCase.invocations.Count -eq 1) {
+        $boundaryInvocation = $boundaryCase.invocations[0]
+        Assert ($boundaryInvocation.surface -ceq 'cli' -and $boundaryInvocation.inputKind -ceq 'fixed') 'Ticket B boundary date is dispatched through its declared CLI fixed-scalar shape'
+        Assert ($boundaryInvocation.caseInputs[0].parameters[0].name -ceq 'boundaryDate') 'Ticket B parameter name is preserved'
+        Assert ($boundaryInvocation.caseInputs[0].parameters[0].type -ceq 'date') 'Ticket B parameter type is preserved'
+        Assert ($boundaryInvocation.caseInputs[0].parameters[0].value -ceq '2024-02-29') 'Ticket B boundary date value is preserved'
+    }
+    $ticketB = Get-Content -LiteralPath (Join-Path $root 'fixtures/ticket-b/experiment-suite.json') -Raw | ConvertFrom-Json
+    foreach ($ticketEntryId in @('date-boundary','changed-revision')) {
+        $ticketEntries = @($ticketB.comparisons | Where-Object { $_.id -ceq $ticketEntryId })
+        Assert ($ticketEntries.Count -eq 1) "Ticket B '$ticketEntryId' fixture entry exists once"
+        if ($ticketEntries.Count -eq 1) {
+            $ticketParameters = @($ticketEntries[0].input.parameters)
+            Assert ($ticketEntries[0].input.kind -ceq 'fixed' -and $ticketParameters.Count -eq 1) "Ticket B '$ticketEntryId' uses exactly one fixed parameter"
+            if ($ticketParameters.Count -eq 1) {
+                Assert ($ticketParameters[0].name -ceq 'boundaryDate' -and $ticketParameters[0].type -ceq 'date' -and $ticketParameters[0].value -ceq '2024-02-29') "Ticket B '$ticketEntryId' pins boundaryDate/date/2024-02-29"
+            }
+        }
+    }
+
     Assert-Order (Get-Case 'regression') @('orders-by-customer','returns-by-customer') 'regression'
     $regression = Get-Case 'regression'
     if ($null -ne $regression -and $regression.outcomes.Count -gt 0) { Assert ($regression.outcomes[0].execution -ceq 'completed' -and $regression.outcomes[0].equivalence -ceq 'regression') 'regression is preserved as a completed outcome' }
@@ -99,7 +121,13 @@ try {
         if ($null -ne $stopped -and $stopped.outcomes.Count -eq 2) {
             Assert ($stopped.preflight.passed) "$($expectation.id) passes suite preflight before injected outcome"
             Assert ($stopped.outcomes[0].execution -ceq 'completed') "$($expectation.id) retains completed entry 1"
+            Assert ($stopped.outcomes[0].comparisonStatus -ceq 'completed' -and $stopped.outcomes[0].equivalence -ceq 'equivalent') "$($expectation.id) retains entry 1 completed comparison semantics"
+            Assert ($stopped.outcomes[0].coverage.completedCases -eq 3 -and $stopped.outcomes[0].coverage.requestedCases -eq 3) "$($expectation.id) retains entry 1 complete coverage"
             Assert ($stopped.outcomes[1].execution -ceq $expectation.status) "$($expectation.id) preserves entry 2 status"
+            Assert ($stopped.outcomes[1].comparisonStatus -ceq 'not-run') "$($expectation.id) marks failed entry comparison not run"
+            Assert ($stopped.outcomes[1].equivalence -ceq 'not-evaluated') "$($expectation.id) does not invent entry 2 equivalence"
+            Assert ($stopped.outcomes[1].performance -ceq 'not-measured') "$($expectation.id) does not invent entry 2 performance"
+            Assert ($stopped.outcomes[1].coverage.completedCases -eq 0 -and $stopped.outcomes[1].coverage.requestedCases -eq 3) "$($expectation.id) records zero of three entry 2 cases completed"
             Assert ($stopped.stopReason -ceq $expectation.status) "$($expectation.id) stops at entry 2"
             Assert (-not ($stopped.dispatchOrder -contains 'unexecuted-tail')) "$($expectation.id) never dispatches the explicit tail entry"
             Assert (-not ($stopped.outcomes.id -contains 'unexecuted-tail')) "$($expectation.id) does not create an outcome for the tail"
@@ -114,6 +142,7 @@ try {
         @{ id = 'duplicate-entry-id'; error = 'duplicate-entry-id' },
         @{ id = 'invalid-entry-count'; error = 'invalid-manifest-count' },
         @{ id = 'invalid-manifest-size'; error = 'manifest-size-limit' },
+        @{ id = 'malformed-nullability-type'; error = 'invalid-nullability-policy-type' },
         @{ id = 'parameter-budget-overflow'; error = 'parameter-ingress-budget-exceeded' },
         @{ id = 'path-escape'; error = 'path-traversal' },
         @{ id = 'mixed-inputs'; error = 'mixed-inputs' },
@@ -131,6 +160,8 @@ try {
             Assert ($case.invocations.Count -eq 0 -and $case.outcomes.Count -eq 0) "$($expectation.id) dispatches nothing and invents no outcome"
         }
     }
+    $oversizedManifest = Get-Case 'invalid-manifest-size'
+    if ($null -ne $oversizedManifest) { Assert ($oversizedManifest.manifestBytes -gt 1MB) 'manifest size case exceeds the source-file byte cap before parsing' }
     $stale = Get-Content -LiteralPath (Join-Path $root 'fixtures/ticket-b/pinned-revision.json') -Raw | ConvertFrom-Json
     Assert ($stale.pinnedSha256 -cne $stale.currentSha256) 'Ticket B fixture really pins different SQL bytes'
     $staleCase = Get-Case 'changed-sql-hash'

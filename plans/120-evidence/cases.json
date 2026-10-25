@@ -3,6 +3,7 @@
   "cases": [
     { "id": "all-success", "fixture": "ticket-a", "action": "none" },
     { "id": "valid-non-equivalence", "fixture": "ticket-b", "action": "dispatch-duplicate-negative" },
+    { "id": "ticket-b-boundary-date", "fixture": "ticket-b", "action": "dispatch-date-boundary" },
     { "id": "regression", "fixture": "ticket-a", "action": "outcome-regression" },
     { "id": "inconclusive", "fixture": "ticket-a", "action": "outcome-inconclusive" },
     { "id": "error-entry-2", "fixture": "ticket-a", "action": "stop-error-entry-2" },
@@ -16,6 +17,7 @@
     { "id": "duplicate-entry-id", "fixture": "ticket-a", "action": "duplicate-id" },
     { "id": "invalid-entry-count", "fixture": "ticket-a", "action": "too-many-entries" },
     { "id": "invalid-manifest-size", "fixture": "ticket-a", "action": "oversize-manifest" },
+    { "id": "malformed-nullability-type", "fixture": "ticket-a", "action": "malformed-nullability" },
     { "id": "parameter-budget-overflow", "fixture": "ticket-a", "action": "parameter-budget-overflow" },
     { "id": "path-escape", "fixture": "ticket-a", "action": "path-escape" },
     { "id": "symlink-reparse-escape", "fixture": "ticket-a", "action": "symlink-escape" },

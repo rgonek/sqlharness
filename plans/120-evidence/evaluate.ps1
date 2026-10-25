@@ -124,6 +124,7 @@ function Test-EntryShape([object] $Entry) {
     if (($Entry.repeat -isnot [int] -and $Entry.repeat -isnot [long]) -or $Entry.repeat -lt 1 -or $Entry.repeat -gt 100) { throw 'invalid-repeat' }
     if (($Entry.timeoutSeconds -isnot [int] -and $Entry.timeoutSeconds -isnot [long]) -or $Entry.timeoutSeconds -lt 1 -or $Entry.timeoutSeconds -gt 300) { throw 'invalid-timeout' }
     if ($Entry.compareResults -notin @('ordered','multiset','set','off')) { throw 'invalid-comparison-policy' }
+    if ($Entry.compareNullability -isnot [bool]) { throw 'invalid-nullability-policy-type' }
     if ($Entry.compareResults -eq 'off' -and $Entry.compareNullability) { throw 'invalid-nullability-policy' }
     if ($Entry.input -isnot [System.Collections.IDictionary]) { throw 'invalid-input' }
     switch ([string]$Entry.input.kind) {
@@ -214,6 +215,7 @@ function Invoke-MockDispatcher([System.Collections.IDictionary] $Entry, [object]
         id = [string]$Entry.id
         operationId = [string]$record.operationId
         execution = [string]$Outcome.execution
+        comparisonStatus = if ($Outcome.Contains('comparisonStatus')) { [string]$Outcome.comparisonStatus } elseif ($Outcome.execution -eq 'completed') { 'completed' } else { 'not-run' }
         equivalence = [string]$Outcome.equivalence
         performance = [string]$Outcome.performance
         coverage = $Outcome.coverage
@@ -226,6 +228,15 @@ function Set-ReferencePath([System.Collections.IDictionary] $Reference, [string]
     $Reference.path = $Path
 }
 
+function Set-InjectedStopOutcome([System.Collections.IDictionary] $Outcome, [string] $Status, [string] $Reason) {
+    $Outcome.execution = $Status
+    $Outcome.comparisonStatus = 'not-run'
+    $Outcome.equivalence = 'not-evaluated'
+    $Outcome.performance = 'not-measured'
+    $Outcome.coverage = @{ requestedCases = 3; completedCases = 0 }
+    $Outcome.stopReason = $Reason
+}
+
 function Set-CaseMutation([string] $Action, [System.Collections.IDictionary] $Suite, [System.Collections.IDictionary] $Outcomes, [string] $InputRoot, [string] $CaseRoot, [ref] $VirtualLink, [ref] $LinkProof) {
     switch ($Action) {
         'none' { }
@@ -233,12 +244,13 @@ function Set-CaseMutation([string] $Action, [System.Collections.IDictionary] $Su
         'dispatch-duplicate-negative' {
             $Suite.comparisons = @($Suite.comparisons | Where-Object { $_.id -eq 'duplicate-counts' })
         }
+        'dispatch-date-boundary' { $Suite.comparisons = @($Suite.comparisons | Where-Object { $_.id -eq 'date-boundary' }) }
         'outcome-regression' { $Outcomes.entries[0].equivalence = 'regression' }
         'outcome-inconclusive' { $Outcomes.entries[0].equivalence = 'inconclusive'; $Outcomes.entries[0].performance = 'inconclusive' }
-        'stop-error-entry-2' { $Outcomes.entries[1].execution = 'error'; $Outcomes.entries[1].stopReason = 'injected-error' }
-        'stop-timeout-entry-2' { $Outcomes.entries[1].execution = 'timeout'; $Outcomes.entries[1].stopReason = 'injected-timeout' }
-        'stop-cancelled-entry-2' { $Outcomes.entries[1].execution = 'cancelled'; $Outcomes.entries[1].stopReason = 'injected-cancellation' }
-        'stop-unknown-entry-2' { $Outcomes.entries[1].execution = 'unknown'; $Outcomes.entries[1].stopReason = 'injected-unknown-completion' }
+        'stop-error-entry-2' { Set-InjectedStopOutcome $Outcomes.entries[1] 'error' 'injected-error' }
+        'stop-timeout-entry-2' { Set-InjectedStopOutcome $Outcomes.entries[1] 'timeout' 'injected-timeout' }
+        'stop-cancelled-entry-2' { Set-InjectedStopOutcome $Outcomes.entries[1] 'cancelled' 'injected-cancellation' }
+        'stop-unknown-entry-2' { Set-InjectedStopOutcome $Outcomes.entries[1] 'unknown' 'injected-unknown-completion' }
         'corrupt-parameter-hash' { $Suite.comparisons[1].input.files[0].sha256 = ('0' * 64) }
         'corrupt-setup-hash' { $Suite.comparisons = @($Suite.comparisons[1]); $Suite.comparisons[0].setup.sha256 = ('0' * 64) }
         'missing-input' { Set-ReferencePath $Suite.comparisons[0].input.files[0] 'inputs/not-present.sqljson' }
@@ -249,7 +261,8 @@ function Set-CaseMutation([string] $Action, [System.Collections.IDictionary] $Su
             while ($entries.Count -lt 17) { $copy = $Suite.comparisons[0] | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable; $copy.id = "extra-$($entries.Count)"; $entries.Add($copy) }
             $Suite.comparisons = $entries.ToArray()
         }
-        'oversize-manifest' { $Suite.padding = 'x' * ($script:MaxManifestBytes + 1) }
+        'oversize-manifest' { }
+        'malformed-nullability' { $Suite.comparisons[0].compareNullability = 'false' }
         'parameter-budget-overflow' {
             $entry = $Suite.comparisons[0]
             $files = [System.Collections.Generic.List[object]]::new()
@@ -300,21 +313,23 @@ function Invoke-Case([System.Collections.IDictionary] $Case) {
     Copy-Tree (Join-Path $script:FixtureRoot ([string]$Case.fixture)) $inputRoot
     $suitePath = Join-Path $inputRoot 'experiment-suite.json'
     $outcomePath = Join-Path $inputRoot 'mock-outcomes.json'
-    $suite = Read-JsonFile $suitePath
-    $outcomes = Read-JsonFile $outcomePath
     $virtualLink = $false
     $linkProof = 'not-applicable'
-    Set-CaseMutation ([string]$Case.action) $suite $outcomes $inputRoot $caseRoot ([ref]$virtualLink) ([ref]$linkProof)
-    $manifestJson = ConvertTo-Json -InputObject $suite -Depth 100
-    $manifestBytes = Get-Bytes $manifestJson
     $calls = [System.Collections.Generic.List[object]]::new()
     $entryOutcomes = [System.Collections.Generic.List[object]]::new()
     $preflightError = $null
     $dispatchStopReason = $null
-    if ($manifestBytes.Length -gt $script:MaxManifestBytes) {
+    if ($Case.action -eq 'oversize-manifest') {
+        [System.IO.File]::AppendAllText($suitePath, (' ' * ($script:MaxManifestBytes + 1)), [System.Text.UTF8Encoding]::new($false))
+    }
+    $sourceManifestBytes = (Get-Item -LiteralPath $suitePath).Length
+    if ($sourceManifestBytes -gt $script:MaxManifestBytes) {
         $preflightError = 'manifest-size-limit'
     }
     else {
+        $suite = Read-JsonFile $suitePath
+        $outcomes = Read-JsonFile $outcomePath
+        Set-CaseMutation ([string]$Case.action) $suite $outcomes $inputRoot $caseRoot ([ref]$virtualLink) ([ref]$linkProof)
         try { $validated = Test-SuitePreflight $suite $inputRoot $virtualLink }
         catch { $preflightError = $_.Exception.Message }
     }
@@ -349,6 +364,7 @@ function Invoke-Case([System.Collections.IDictionary] $Case) {
     $stopReason = if ($null -ne $preflightError) { $preflightError } elseif ($null -ne $dispatchStopReason) { $dispatchStopReason } elseif ($entryOutcomes.Count -gt 0 -and $entryOutcomes[$entryOutcomes.Count - 1].execution -ne 'completed') { [string]$entryOutcomes[$entryOutcomes.Count - 1].execution } elseif ($calls.Count -lt $suite.comparisons.Count) { 'unexecuted-tail' } else { $null }
     return [pscustomobject]@{
         id = [string]$Case.id
+        manifestBytes = [long]$sourceManifestBytes
         preflight = [pscustomobject]@{ passed = $preflightPassed; error = $preflightError }
         dispatchCount = $calls.Count
         dispatchOrder = @($calls | ForEach-Object { $_.entryId })

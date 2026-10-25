@@ -2,7 +2,7 @@
 
 ## Candidate v1 grammar
 
-The simulator accepts an UTF-8 JSON object with exactly the study-level fields `version` and `comparisons`. `version` is integer `1`; `comparisons` is an ordered array with 1–16 entries. The serialized manifest must be at most 1 MiB. Each comparison has exactly these fields:
+The simulator accepts an UTF-8 JSON object with exactly the study-level fields `version` and `comparisons`. `version` is integer `1`; `comparisons` is an ordered array with 1–16 entries. The source manifest file must be at most 1 MiB in raw UTF-8 bytes, measured before parsing. Each comparison has exactly these fields:
 
 ```json
 {
@@ -19,11 +19,11 @@ The simulator accepts an UTF-8 JSON object with exactly the study-level fields `
   "timeoutSeconds": 30,
   "compareResults": "ordered",
   "compareNullability": false,
-  "input": { "kind": "parameterSetFiles", "files": [ { "path": "cases/a.sqljson", "sha256": "64 lowercase hex digits" } ]
+  "input": { "kind": "parameterSetFiles", "files": [ { "path": "cases/a.sqljson", "sha256": "64 lowercase hex digits" } ] }
 }
 ```
 
-Required entry properties are shown above. `setup` may instead be a file reference. `vars` is an explicit object and may be empty. IDs are unique ordinal strings. Profile, variables, subject, and scope are data only: they are never resolved to a profile, credential, endpoint, command, or live target. `repeat` and `timeoutSeconds` are integers 1–100 and 1–300. Result policy is one of `ordered`, `multiset`, `set`, or `off`; nullability comparison cannot be enabled with `off`.
+Required entry properties are shown above. `setup` may instead be a file reference. `vars` is an explicit object and may be empty. IDs are unique ordinal strings. Profile, variables, subject, and scope are data only: they are never resolved to a profile, credential, endpoint, command, or live target. `repeat` and `timeoutSeconds` are integers 1–100 and 1–300. Result policy is one of `ordered`, `multiset`, `set`, or `off`; `compareNullability` must be a JSON boolean and cannot be true with `off`.
 
 The only accepted input forms in this study are:
 
@@ -39,7 +39,7 @@ Paths are non-empty relative paths with no rooted, drive-qualified, URI, or pare
 
 The evaluator first validates the complete manifest and every referenced input for every entry. Any preflight defect blocks all dispatch. After a successful all-suite preflight, it rechecks each entry's referenced hashes immediately before that entry's dispatch. If an input changes at that point, dispatch stops; already completed outcomes remain recorded. This is not an atomic snapshot: a same-user writer can still race a read, and a hash pins bytes, not a database snapshot or old artifact validity. No general suite resume, retry, or artifact reuse exists. Each run starts from the manifest; a partial prior `results.json` is neither read as an input nor a resume token.
 
-Each dispatch is a call to the evaluator's injected in-memory mock dispatcher. It records a deterministic synthetic operation identity, ordered inputs/case labels, exact fixed values, profile/vars/subject/scope and policy fields. The injected outcome supplies execution, equivalence, performance, and coverage metadata. A completed `different`/`regression` result is preserved as completed negative evidence. `error`, `timeout`, `cancelled`, and `unknown` stop subsequent dispatch; there is no retry. An unexecuted tail is marked `not-dispatched`, not failed, equivalent, or measured. No suite-level equivalence, winner, or aggregate success verdict is computed.
+Each dispatch is a call to the evaluator's injected in-memory mock dispatcher. It records a deterministic synthetic operation identity, ordered inputs/case labels, exact fixed values, profile/vars/subject/scope and policy fields. The injected outcome supplies execution, comparison, equivalence, performance, and coverage metadata. A completed `different`/`regression` result is preserved as completed negative evidence. An injected `error`, `timeout`, `cancelled`, or `unknown` completion is explicitly `comparisonStatus=not-run`, `equivalence=not-evaluated`, `performance=not-measured`, with zero completed cases; it stops subsequent dispatch and is not reported as a completed comparison. There is no retry. An unexecuted tail is marked `not-dispatched`, not failed, equivalent, or measured. No suite-level equivalence, winner, or aggregate success verdict is computed.
 
 Changing target from a prior entry is permitted only when that entry explicitly names its profile and vars and the requested target is already within the operator's existing scope and policy. There is no inherited target or substitution. The simulator cannot prove operator scope or authorization. Mutation entries and any mutation-like operation are rejected before dispatch.
 
