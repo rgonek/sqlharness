@@ -1,0 +1,42 @@
+Test run for C:\Users\rgone\.codex\worktrees\16f4\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.32]   Discovering: SqlHarness.Tests (app domain = off, method display = ClassAndMethod, method display options = None)
+[xUnit.net 00:00:00.43] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.RegressionPolicyTests.Result_equivalence_gate_is_inconclusive_never_a_performance_fail'; falling back to single test case.
+[xUnit.net 00:00:00.67] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.Cli.CommandTests.Compare_text_renders_nullability_diagnostic'; falling back to single test case.
+[xUnit.net 00:00:01.85]   Discovered:  SqlHarness.Tests (4746 test cases to be run)
+[xUnit.net 00:00:01.92]   Starting:    SqlHarness.Tests (parallel test collections = off, stop on fail = off, explicit = off)
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.RunAsync_ClosesChildStandardInput [75 ms]
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree [529 ms]
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.PidPublicationError_RetriesErrorMarkerAfterTransientSharingViolation [746 ms]
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.ProcessAbstractions_AreInternal [1 ms]
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.WaitForPidsAsync_ToleratesSlowPublisher [1 s]
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.CleanupTreeAsync_RetriesDeletionAfterLockedFileIsReleased [110 ms]
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.PidPublicationError_PreservesOriginalWhenMarkerWriteFails [535 ms]
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.CleanupTreeAsync_ReportsDeletionFailureAfterRetryBudget [954 ms]
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.PidPublicationError_ReportsDiagnosticsAndCleansUp [381 ms]
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.WaitForPidsAsync_WaitsWhilePublisherOwnsFileExclusively [35 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Lost_shutdown_response_returns_Stopped_after_lock_and_process_exit_are_confirmed [102 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Old_or_unsupported_endpoint_returns_Failed_with_pid_guidance(status: NotFound) [64 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Old_or_unsupported_endpoint_returns_Failed_with_pid_guidance(status: MethodNotAllowed) [15 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Production_http_handler_disables_proxy_and_redirects [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Request_timeout_returns_Failed_within_the_shared_deadline [270 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Stale_pid_with_held_lock_fails_without_contacting_its_endpoint [256 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Connection_failure_returns_Failed_without_leaking_token [1 s]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.No_holder_returns_AlreadyStopped [1 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Stale_start_time_with_held_lock_fails_without_contacting_its_endpoint [256 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Self_only_reader_cannot_claim_captured_process_stopped [270 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Shutdown_uses_guarded_loopback_post_without_token_in_url_and_does_not_follow_redirects [13 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Published_host_returns_Stopped_and_releases_the_lock [566 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Corrupt_metadata_with_held_lock_returns_Failed_by_timeout [264 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Unauthorized_shutdown_returns_Failed_without_leaking_token [1 s]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Replacement_endpoint_returns_Failed_and_is_not_contacted [28 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Caller_cancellation_propagates_during_the_shutdown_request [161 ms]
+[xUnit.net 00:00:11.69]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Reused_port_replacement_rejects_captured_identity_and_remains_live [564 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Held_unpublished_lock_returns_Failed_by_timeout [267 ms]
+
+Test Run Successful.
+Total tests: 28
+     Passed: 28
+ Total time: 12,5223 Seconds
