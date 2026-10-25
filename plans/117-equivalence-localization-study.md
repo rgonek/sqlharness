@@ -7,7 +7,7 @@
 
 ## Status
 
-- **Status:** RESEARCH COMPLETE; bounded optional diagnostics accepted for a separately selected implementation, with unordered row alignment and raw-value localization excluded. Synthetic oracle only; production capture/heap/serializer limits remain unmeasured. All task reviews and the Sol whole-study review are approved; the generated-fixture recipe limitation is accepted for the fixed oracle; final scoped Sol closeout re-review is approved. No implementation/live DB/merge/push. See [decision](117-evidence/decision.md) and archived [study verification](117-evidence/logs/task-3-verification.log).
+- **Status:** RESEARCH COMPLETE; bounded optional diagnostics accepted for a separately selected implementation, with unordered row alignment and raw-value localization excluded. Synthetic oracle only; production capture/heap/serializer limits remain unmeasured. All task reviews and the Sol whole-study review are approved; the generated-fixture recipe limitation is accepted for the fixed oracle; final scoped Sol closeout re-review is approved. Locally integrated into `main` at `2c989f0b`; no product implementation, live DB or push. See [decision](117-evidence/decision.md) and archived [study verification](117-evidence/logs/task-3-verification.log).
 - **Priority:** P2; selected direction proposal 2.
 - **Effort / risk / confidence:** M / MED / HIGH grounding.
 - **Depends on:** none of 116-120; existing compare and artifact foundations are implemented.
