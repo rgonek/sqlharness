@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Implemented in commit `a8aded980e3f46c0663e238f7afb82db74b82069` on `plan-107-followup`, based on `81d0fa59`. Final Windows gate and branch formatting passed; the scoped Luna xhigh task review approved with no findings. The Sol low whole-branch review remains pending. No live database, credentials, installation, or historical workload was used.
+DONE on branch `plan-107-followup`: tested product commit `a8aded980e3f46c0663e238f7afb82db74b82069`, based on `81d0fa59`. Final Windows gate and branch formatting passed; Luna xhigh task review and Sol low whole-branch review approved with no findings. This branch has not been integrated or pushed. No live database, credentials, installation, or historical workload was used.
 
 ## Diagnosis
 
@@ -80,4 +80,4 @@ format: OK; exit 0
 
 Changed product/test files: `src/SqlHarness.Core/CompareCellRunner.cs`, `src/SqlHarness.Core/SqlHarnessModule.cs`, `tests/SqlHarness.Tests/CompareTests.cs`, and `tests/SqlHarness.Mcp.Tests/McpParameterBatchTests.cs`.
 
-No known product concerns. A previous full-gate run observed the process-marker timeout described above; its unchanged focused rerun and the final full gate passed. The whole-branch review remains pending.
+No known product concerns. A previous full-gate run observed the process-marker timeout described above; its unchanged focused rerun and the final full gate passed. The timeout remains an observed event with no proven root cause. The final whole-branch review and execution ledger are archived in [follow-up-whole-branch-review.md](follow-up-whole-branch-review.md) and [follow-up-execution-ledger.md](follow-up-execution-ledger.md). No product changes were made after the tested commit `a8aded98`; later commits contain evidence and status documentation only.
