@@ -1,6 +1,6 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router"
-import { useId } from "react"
-import type { OptimizationSubject, ScopeVersions } from "@/api/types"
+import { useId, useState } from "react"
+import type { OperationSummary, OptimizationSubject, ScopeVersions } from "@/api/types"
 import type { AgentSessionKey } from "@/api/types"
 import { useAgentSessionOptimization, useAgentSessionOptimizationComparison, useSessionOptimization, useSessionOptimizationComparison } from "@/api/queries"
 import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
@@ -20,7 +20,7 @@ function scopeOrder(scope: ScopeVersions): number {
   return scope.scope === "whole query" ? 0 : 1
 }
 
-export function OptimizationSection({ sessionId, agentSessionKey }: { sessionId: number; agentSessionKey?: AgentSessionKey }) {
+export function OptimizationSection({ sessionId, agentSessionKey, operations = [] }: { sessionId: number; agentSessionKey?: AgentSessionKey; operations?: OperationSummary[] }) {
   const search = useSearch({ strict: false }) as SessionSearch
   const query = useSessionOptimization(sessionId, !agentSessionKey)
   const agentQuery = useAgentSessionOptimization(agentSessionKey ?? { agentKind: "", conversationId: "" }, !!agentSessionKey)
@@ -32,7 +32,7 @@ export function OptimizationSection({ sessionId, agentSessionKey }: { sessionId:
   if (!section) return null
   return <section aria-labelledby="optimization-heading" className="space-y-4">
     <div><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><p className="text-sm text-muted-foreground">Compare retained SQL versions and review measurements within their conditions and scope.</p></div>
-    {section.subjects.map(subject => <SubjectCard key={subjectKey(subject)} sessionId={sessionId} agentSessionKey={agentSessionKey} search={search} subject={subject} />)}
+    {section.subjects.map(subject => <SubjectCard key={subjectKey(subject)} sessionId={sessionId} agentSessionKey={agentSessionKey} search={search} subject={subject} operations={operations} />)}
     {!!section.unassigned.length && <Collapsible className="rounded-lg border p-3">
       <CollapsibleTrigger className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</CollapsibleTrigger>
       <CollapsibleContent keepMounted><p className="mt-2 text-sm text-muted-foreground">These compares do not have a complete subject and scope, so they are not included in version comparisons.</p>
@@ -41,9 +41,10 @@ export function OptimizationSection({ sessionId, agentSessionKey }: { sessionId:
   </section>
 }
 
-function SubjectCard({ sessionId, agentSessionKey, search, subject }: { sessionId: number; agentSessionKey?: AgentSessionKey; search: SessionSearch; subject: OptimizationSubject }) {
+function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }: { sessionId: number; agentSessionKey?: AgentSessionKey; search: SessionSearch; subject: OptimizationSubject; operations: OperationSummary[] }) {
   const navigate = useNavigate({ from: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id" } as never)
   const controlId = useId()
+  const [comparisonTab, setComparisonTab] = useState("diff")
   const matchesSubject = search.subject === subject.subject && (search.db ?? "") === subject.database
   const groups = subject.groups
   const group = (matchesSubject && groups.find(item => item.fingerprint === search.group)) || groups[0]
@@ -56,7 +57,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject }: { sessionI
   const selectedB = hasVersion(matchesCard ? search.b : undefined) ? search.b! : scope?.defaultB ?? ""
   const caseId = matchesCard ? search.case ?? "all" : "all"
   const aggregate = matchesCard ? search.agg ?? "sum" : "sum"
-  const view = matchesCard ? search.view ?? "changed" : "changed"
+  const view = matchesCard ? search.view ?? "statements" : "statements"
   const selectedSearch: SessionSearch = { subject: subject.subject, db: subject.database, group: group?.fingerprint, scope: scope?.scope, a: selectedA || undefined, b: selectedB || undefined, case: caseId, agg: aggregate, view }
   const compareParams = group && scope && selectedA && selectedB ? {
     subject: subject.subject, database: subject.database, group: group.fingerprint, scope: scope.scope,
@@ -102,12 +103,12 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject }: { sessionI
     {group && scope ? <>
       <p className="text-sm font-medium">{scope.scope}</p>
       {versions.length > 0 ? <VersionTable subject={`${subject.subject}-${subject.database}`} sessionId={sessionId} agentSessionKey={agentSessionKey} sessionSearch={selectedSearch}
-        versions={versions} selectedA={selectedA} selectedB={selectedB || null}
+        versions={versions} operations={operations} selectedA={selectedA} selectedB={selectedB || null}
         onSelect={(side, version) => update({ a: selectedA, b: selectedB || undefined, [side]: version })} /> : <p className="text-sm text-muted-foreground">No retained versions for this scope.</p>}
       {!selectedB && <p className="text-sm text-muted-foreground">Select a version for B to compare it with {selectedA}.</p>}
       {activeCompareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
       {activeCompareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {activeCompareQuery.error.message}</p>}
-      {activeCompareQuery.data && <div className="mt-4"><ComparisonPanel comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
+      {activeCompareQuery.data && <div className="mt-4"><ComparisonPanel activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
         sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={patch => update(patch)} /></div>}
     </> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
   </article>

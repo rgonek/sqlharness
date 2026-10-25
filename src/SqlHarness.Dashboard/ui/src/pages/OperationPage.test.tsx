@@ -82,6 +82,7 @@ test("compare opens on the Optimization panel and carries selected case and aggr
   expect(screen.getByText("v0 → v3")).toBeInTheDocument()
   expect(screen.getByText("shop")).toBeInTheDocument()
   expect(await screen.findByRole("region", { name: "Version comparison" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("tab", { name: "Details" }))
   expect(screen.getByRole("button", { name: "SQL diff & conditions" })).toHaveAttribute("aria-expanded", "false")
   expect(screen.getByRole("button", { name: "Plans" })).toHaveAttribute("aria-expanded", "false")
   expect(screen.getByRole("button", { name: "Per-case & per-run details" })).toHaveAttribute("aria-expanded", "false")
@@ -106,12 +107,15 @@ test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", a
   renderApp("/operations/10")
 
   expect(await screen.findByRole("heading", { level: 1, name: "Operation #10" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Details" }))
   expect(screen.getByText("acme")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("tab", { name: "Details" }))
   expect(screen.getByText("Output bytes (raw / emitted)")).toBeInTheDocument()
   expect(screen.getByText("Estimated output tokens (raw / emitted)")).toBeInTheDocument()
   expect(screen.getByText("Token estimation method")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Run diagnostics" })).toHaveAttribute("aria-expanded", "false")
   expect(screen.queryByRole("region", { name: "Time breakdown" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("tab", { name: "IO" }))
   const kpis = screen.getByRole("region", { name: "Key metrics" })
   // Elapsed median (with its 10–14 range) and compile time are both 12 ms in the fixture.
   expect(within(kpis).getAllByText("12 ms")).toHaveLength(2)
@@ -119,6 +123,7 @@ test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", a
   expect(within(kpis).getByText("512 KB / 8.0 MB")).toBeInTheDocument()
   expect(screen.getByRole("cell", { name: "Orders" })).toBeInTheDocument()
   expect(screen.getByRole("cell", { name: "PAGEIOLATCH_SH" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("tab", { name: "SQL & plan" }))
   expect(screen.getByText("SQL text is not stored (journal.storeSensitive is off).")).toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "Download plan" })).not.toBeInTheDocument()
 })
@@ -129,7 +134,7 @@ test("operation detail renders labels as text and exposes owner annotations and 
   }) })
   renderApp("/operations/10")
 
-  expect(await screen.findByText("<img src=x onerror=alert(1)>")).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { name: "<img src=x onerror=alert(1)>" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "★ Owner starred" })).toHaveAttribute("aria-pressed", "true")
   expect(screen.getByText("Agent keep")).toBeInTheDocument()
   expect(screen.getAllByText("SQL not stored").length).toBeGreaterThan(0)
@@ -198,8 +203,8 @@ test("operation details show phase timing shares and expandable connection diagn
   }) })
   renderApp("/operations/10")
 
-  const trigger = await screen.findByRole("button", { name: "Run diagnostics" })
-  expect(trigger).toHaveAttribute("aria-expanded", "false")
+  const trigger = await screen.findByRole("tab", { name: "Timing" })
+  expect(trigger).toHaveAttribute("aria-selected", "false")
   expect(screen.queryByRole("region", { name: "Time breakdown" })).not.toBeInTheDocument()
   await userEvent.click(trigger)
   const timing = screen.getByRole("region", { name: "Time breakdown" })
@@ -226,7 +231,7 @@ test("legacy operation details show an empty time breakdown without zero-valued 
   }) })
   renderApp("/operations/10")
 
-  await userEvent.click(await screen.findByRole("button", { name: "Run diagnostics" }))
+  await userEvent.click(await screen.findByRole("tab", { name: "Timing" }))
   const timing = screen.getByRole("region", { name: "Time breakdown" })
   expect(within(timing).getByRole("columnheader", { name: "Phase" })).toBeInTheDocument()
   expect(within(timing).getByText("No phase timing data was recorded for this operation.")).toBeInTheDocument()
@@ -252,6 +257,7 @@ test("compare shows baseline versus candidate and stored plans with operators", 
   })
   renderApp("/operations/10")
 
+  await userEvent.click(await screen.findByRole("tab", { name: "Details" }))
   await screen.findByRole("region", { name: "Compare detail" })
   expect(screen.getByText("v0 → v1")).toBeInTheDocument()
   await userEvent.click(screen.getByText("SQL diff & conditions"))
@@ -286,7 +292,9 @@ test("failed operation with a variant that has no metrics renders", async () => 
   })
   renderApp("/operations/10")
   expect(await screen.findByRole("heading", { level: 1, name: "Operation #10" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Details" }))
   expect(screen.getByText("5 (SqlExecution)")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("tab", { name: "IO" }))
   expect(within(screen.getByRole("region", { name: "Key metrics" })).getByText("— / —")).toBeInTheDocument()
 })
 
@@ -332,7 +340,8 @@ test("agent call card shows the client-supplied labels and is absent without the
   })
   renderApp("/operations/10")
 
-  await userEvent.click(await screen.findByRole("button", { name: "Run diagnostics" }))
+  await userEvent.click(await screen.findByRole("tab", { name: "Details" }))
+  await userEvent.click(screen.getByRole("button", { name: "Run diagnostics" }))
   expect(await screen.findByRole("heading", { name: "Agent call" })).toBeInTheDocument()
   expect(screen.getByText("gpt-6-sol")).toBeInTheDocument()
   expect(screen.getByText("low")).toBeInTheDocument()
@@ -345,7 +354,8 @@ test("shows transcript model and effort when the call has no client labels", asy
     agent: agentCall({ transcriptModel: "claude-opus-5-5", transcriptReasoningEffort: "high", conversationTitle: "Optimize orders" }),
   }) })
   renderApp("/operations/10")
-  await userEvent.click(await screen.findByRole("button", { name: "Run diagnostics" }))
+  await userEvent.click(await screen.findByRole("tab", { name: "Details" }))
+  await userEvent.click(screen.getByRole("button", { name: "Run diagnostics" }))
   expect(await screen.findByText("claude-opus-5-5")).toBeInTheDocument()
   expect(screen.getAllByText("from transcript")).toHaveLength(2)
   expect(screen.getByText("high")).toBeInTheDocument()
@@ -388,6 +398,7 @@ test("measure attribution shows single-run after values, hidden work, plan acces
   }) })
   renderApp("/operations/10")
 
+  await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
   const rows = await screen.findByRole("region", { name: "Statement IO" })
   expect(within(rows).getAllByText("42")).toHaveLength(2)
   expect(within(rows).queryByText("before", { exact: true })).not.toBeInTheDocument()

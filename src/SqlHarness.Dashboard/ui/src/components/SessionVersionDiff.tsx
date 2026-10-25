@@ -29,11 +29,12 @@ function sideState(version: string, query: ReturnType<typeof useSessionSqlText>)
   return null
 }
 
-export function SessionVersionDiff({ sessionId, engine, options, initialFrom, initialTo, agentSessionKey }: {
+export function SessionVersionDiff({ sessionId, engine, options, initialFrom, initialTo, agentSessionKey, selectionControls = true }: {
   sessionId: number
   agentSessionKey?: AgentSessionKey
   engine: string | null
   options: SqlVersionOption[]
+  selectionControls?: boolean
   initialFrom?: string
   initialTo?: string
 }) {
@@ -87,7 +88,7 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
   }
 
   return <div className="space-y-3">
-    <div className="grid gap-3 sm:grid-cols-2">
+    {selectionControls ? <div className="grid gap-3 sm:grid-cols-2">
       <label className="grid min-w-0 gap-1 text-sm">From version
         <Select items={selectItems} value={keyOf(fromOption)} onValueChange={value => setFromSelection(value)}>
           <SelectTrigger aria-label="From version" className="w-full min-w-0"><SelectValue placeholder="No versions available" /></SelectTrigger>
@@ -100,7 +101,7 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
           <SelectContent>{options.map(option => <SelectItem key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</SelectItem>)}</SelectContent>
         </Select>
       </label>
-    </div>
+    </div> : <p className="text-xs text-muted-foreground">{fromOption?.version ?? "—"} → {toOption?.version ?? "—"}</p>}
     <div className="space-y-3">
       {fromState}
       {toState}

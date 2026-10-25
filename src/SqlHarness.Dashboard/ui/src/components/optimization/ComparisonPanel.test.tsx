@@ -41,9 +41,10 @@ function renderPanel(payload = comparison, versions = [{ version: "v0", hash: "h
 test("shows basis, case chips, mixed warning, collapsed rows and URL-backed selectors", async () => {
   const { router } = renderPanel()
   expect(await screen.findByText("measured together in #214")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("tab", { name: "IO" }))
   expect(screen.getByRole("button", { name: "@CustomerId = 9001" })).toBeInTheDocument()
   expect(screen.getByText("Mixed: 2 better, 1 worse — @CustomerId = 9001: logical reads +35%")).toBeInTheDocument()
-  expect(screen.getByText("2 smaller tables")).toBeInTheDocument()
+  expect(await screen.findByText("2 smaller tables")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "@CustomerId = 9001" }))
   expect(router.state.location.search).toMatchObject({ case: "customer-9001" })
   await userEvent.click(screen.getByRole("button", { name: "Mean" }))
@@ -64,6 +65,8 @@ test("shows the engine IO message and action links and copies the panel Markdown
   const writeText = vi.fn().mockResolvedValue(undefined)
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
   const calls = stubFetch({
+    "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false },
+    "/api/operations/214": operationDetail({ operation: operation({ id: 214, operation: "compare" }), variants: [] }),
     "/api/sessions/7": sessionDetail({ session: session({ id: 7, hasCompare: true }), operations: [operation({ id: 70, operation: "compare" })] }),
     "/api/sessions/7/operations": { items: [operation({ id: 70, operation: "compare" })], nextCursor: null },
     "/api/sessions/7/optimization": { subjects: [{ subject: "Orders", database: "shop", engine: "PostgreSql", groups: [{ fingerprint: "fp-1", label: "1 cases", subject: "Orders", database: "shop", defaultA: "v0", defaultB: "v3", scopes: [{ scope: "whole query", defaultA: "v0", defaultB: "v3", versions: [{ version: "v0", hash: "h0", logicalReadsSum: 100, logicalReadsMean: 100, scansSum: 4, elapsedMedianMs: 10, caseOutcome: "1/1 ok", measuredIn: [214], latestOperationId: 214 }, { version: "v3", hash: "h3", logicalReadsSum: 135, logicalReadsMean: 135, scansSum: 2, elapsedMedianMs: 11, caseOutcome: "worse", measuredIn: [214], latestOperationId: 214 }] }] }] }], unassigned: [] },
@@ -71,8 +74,9 @@ test("shows the engine IO message and action links and copies the panel Markdown
     "/api/operations/214/repro": { text: "SELECT 1", completeness: "Complete", label: "Ready" },
   })
   renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v0&b=v3&case=all&agg=sum")
+  await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
   expect(await screen.findByText("per-table IO not available for this engine")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "SQL diff" })).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: "SQL diff" })).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Plans for v0" })).toHaveAttribute("href", expect.stringContaining("/operations/214"))
   expect(screen.getAllByRole("link", { name: "Operation #214" }).every(link => link.getAttribute("href")?.includes("/operations/214"))).toBe(true)
   expect(await screen.findAllByRole("button", { name: "Copy script (as executed)" })).toHaveLength(2)
@@ -96,9 +100,10 @@ test("shows the engine IO message and action links and copies the panel Markdown
 test("SQL diff starts at the selected non-default A/B pair", async () => {
   const versions = ["v0", "v1", "v2", "v3"].map((version, index) => ({ version, hash: `h${index}`, logicalReadsSum: 10, logicalReadsMean: 10, scansSum: 1, elapsedMedianMs: 1, caseOutcome: "ok", measuredIn: [214], latestOperationId: 214 }))
   renderPanel({ ...comparison, a: "v1", b: "v2" }, versions, "/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v1&b=v2&case=all&agg=sum")
-  await userEvent.click(await screen.findByRole("button", { name: "SQL diff" }))
-  expect(await screen.findByRole("combobox", { name: "From version" })).toHaveTextContent("v1")
-  expect(screen.getByRole("combobox", { name: "To version" })).toHaveTextContent("v2")
+  await userEvent.click(await screen.findByRole("tab", { name: "SQL diff" }))
+  expect(await screen.findByText("v1 → v2")).toBeInTheDocument()
+  expect(screen.queryByRole("combobox", { name: "From version" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("combobox", { name: "To version" })).not.toBeInTheDocument()
 })
 
 test("reproduction actions resolve a selected fingerprint to each side's raw case ID", async () => {
@@ -146,7 +151,8 @@ test("conditions-differ wording and collapsed row match their copied Markdown", 
   await expect.poll(() => writeText.mock.calls[0]?.[0]).toContain("conditions differ; SQL diff is the available comparison.")
   unmount()
   renderPanel({ ...comparison, mixed: null, tables: [{ table: "dbo.Orders", scansBefore: 4, scansAfter: 2, readsBefore: 100, readsAfter: 135, change: "+35%" }], collapsed: { count: 2, label: "2 smaller tables" } })
-  expect(await screen.findByRole("row", { name: "2 smaller tables" })).toBeInTheDocument()
+  await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
+  expect(await screen.findByText("2 smaller tables")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Copy summary" }))
   await expect.poll(() => writeText.mock.calls[1]?.[0]).toContain("| 2 smaller tables |")
   expect(writeText.mock.calls[1]?.[0]).not.toContain("collapsed")
@@ -177,7 +183,8 @@ test("view selection is URL-backed and the query receives the selected view", as
   const { calls, router } = renderPanel(payload, undefined,
     "/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v0&b=v3&case=all&agg=sum")
 
-  expect(await screen.findByRole("button", { name: "Changed statements" })).toHaveAttribute("aria-pressed", "true")
+  await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
+  expect(screen.getByRole("button", { name: "By statement" })).toHaveAttribute("aria-pressed", "true")
   expect(screen.getByText("whole batch: 500 → 650 reads (shared statements: 100)")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Whole batch" }))
   expect(router.state.location.search).toMatchObject({ view: "whole" })
@@ -192,6 +199,7 @@ test("incomplete attribution visibly falls back to Whole batch", async () => {
       sharedBefore: null, sharedAfter: null, changedBefore: null, changedAfter: null }, statements: [] })
 
   expect(await screen.findByText("per-statement attribution incomplete")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("tab", { name: "IO" }))
   expect(screen.getByRole("button", { name: "Whole batch" })).toHaveAttribute("aria-pressed", "true")
   expect(screen.getByText("basis: whole batch")).toBeInTheDocument()
 })

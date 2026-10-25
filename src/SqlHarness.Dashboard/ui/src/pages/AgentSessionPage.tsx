@@ -75,7 +75,7 @@ export function AgentSessionPage() {
         </li>)}</ul></div>}
       </CardContent>
     </Card>
-    {<OptimizationSection sessionId={optimizationSessionId ?? 0} agentSessionKey={key} />}
+    {<OptimizationSection sessionId={optimizationSessionId ?? 0} agentSessionKey={key} operations={operations.map(item => item.operation)} />}
     {optimization.data?.versionLabelsProvisional && optimization.data.versionLabelNote && <p role="note" className="text-sm text-muted-foreground">{optimization.data.versionLabelNote}</p>}
     {agentSession.children.some(child => child.session.hasCompare) && <Card><CardHeader><CardTitle>Child Optimization histories</CardTitle><CardDescription>Each child session keeps its own history, including inferred and CLI compares.</CardDescription></CardHeader>
       <CardContent><ul className="list-disc pl-5">{agentSession.children.filter(child => child.session.hasCompare).map(child => <li key={child.session.id}><Link className="underline" to="/sessions/$id" params={{ id: String(child.session.id) }}>{child.session.title ?? child.session.sessionKey}</Link> · Optimization history</li>)}</ul></CardContent></Card>}

@@ -3,13 +3,11 @@ import { getJson } from "@/api/client"
 import { queryKeys } from "@/api/queries"
 import type { OperationSummary, Page, SessionSummary } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
-import { OperationTable } from "@/components/OperationTable"
 import { InternalOperationsToggle } from "@/components/InternalOperationsToggle"
-import { SessionTable } from "@/components/SessionTable"
+import { ActivityFeed } from "@/components/ActivityFeed"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { isActiveSession, mergeOperations, mergeSessions, reconcileRunning, runningOnly } from "@/live/liveStore"
+import { mergeOperations, mergeSessions, reconcileRunning, runningOnly } from "@/live/liveStore"
 import { useLiveFeedState } from "@/live/useLiveFeed"
 import { useNow } from "@/lib/useNow"
 import { isInternalOperation, useShowInternalOperations } from "@/lib/internalOperations"
@@ -62,51 +60,18 @@ export function LivePage() {
 
   const running = runningOnly(runningOperations.data ?? [])
   const visibleRunning = showInternal ? running : running.filter(operation => !isInternalOperation(operation))
-  const recent = (operations.data ?? []).slice(0, 50)
-  const active = (sessions.data ?? []).filter(session => isActiveSession(session, now))
-  const noRunning = !runningOperations.isPending && visibleRunning.length === 0
-  const noActive = !sessions.isPending && active.length === 0
-
+  const runningIds = new Set(visibleRunning.map(operation => operation.id))
+  const feedOperations = [...(operations.data ?? []).filter(operation => operation.status !== "running" || runningIds.has(operation.id)), ...visibleRunning]
+  const uniqueOperations = [...new Map(feedOperations.map(operation => [operation.id, operation])).values()]
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <h1>Live</h1>
+        <h1>Activity</h1>
         <Badge variant={state === "connected" ? "secondary" : "outline"}>{state}</Badge>
       </div>
-      <Card role="region" aria-label="Running">
-        <CardHeader>
-          <CardTitle>Running</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {runningOperations.isPending ? <Skeleton className="h-16 w-full" /> : running.length === 0
-            ? noActive ? <p className="sr-only">Nothing running</p> : <p className="text-sm text-muted-foreground">Nothing is running.</p>
-            : <><InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />{visibleRunning.length > 0
-              ? <OperationTable operations={running} now={now} showInternal={showInternal} />
-              : !noActive && <p className="text-sm text-muted-foreground">No visible operations.</p>}</>}
-        </CardContent>
-      </Card>
-      <Card role="region" aria-label="Active sessions">
-        <CardHeader>
-          <CardTitle>Active sessions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {sessions.isPending ? <Skeleton className="h-16 w-full" /> : active.length === 0
-            ? noRunning ? <p className="sr-only">No active sessions</p> : <p className="text-sm text-muted-foreground">No session was active in the last 15 minutes.</p>
-            : <SessionTable pinned={[]} sessions={active} now={now} />}
-          {noRunning && noActive && <p className="text-sm text-muted-foreground">Nothing running · no active sessions</p>}
-        </CardContent>
-      </Card>
-      <Card role="region" aria-label="Recent operations">
-        <CardHeader>
-          <CardTitle>Recent operations</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />
-            {operations.isPending ? <Skeleton className="h-32 w-full" /> : <OperationTable operations={recent} showInternal={showInternal} />}
-          </div>
-        </CardContent>
-      </Card>
+      <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />
+      {operations.isPending || sessions.isPending || runningOperations.isPending ? <Skeleton className="h-48 w-full" /> : <ActivityFeed sessions={sessions.data ?? []} operations={uniqueOperations.filter(operation => showInternal || !isInternalOperation(operation))} now={now} />}
+
     </div>
   )
 }

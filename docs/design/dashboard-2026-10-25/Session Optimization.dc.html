@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#f0eee9;font-family:'Geist',system-ui,sans-serif;color:#0a0a0a}a{color:#0a0a0a}a:hover{color:#525252}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1120px}.dv-card{max-width:100%;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}.dv-next{margin:22px 0 0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.5)}table{border-collapse:collapse}.plan-hl{background:rgba(16,172,97,.28);border-radius:2px}.plan-stmt{background:#fafafa}</style></helmet>
+<section class="dv-turn" id="t4">
+<div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname"><a class="dv-oid" href="#3a">3a</a> + keep/label agenta + zakładka Plan</span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="4a"><div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a>Keep agenta jako fioletowa iskra przy wersji (tooltip), label agenta pod numerem. Zakładka Plan: wybór wersji i statementu, SQL u góry, graf na dole. Klik w operator podświetla SQL, klik w SQL zaznacza operator.</div>
+<div class="dv-card" style="width:1120px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 10px;display:flex;align-items:center">Live</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;background:#f5f5f5">Sessions</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Named operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Usage</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Profiles</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Mutations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Settings</span></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="padding:16px;display:flex;flex-direction:column;gap:16px;font-size:14px">
+
+<div style="display:flex;flex-direction:column;gap:6px;padding:4px 0">
+<div style="display:flex;align-items:center;gap:8px;min-height:36px">
+<sc-if value="{{ d.starLeft }}" hint-placeholder-val="{{ false }}"><span onClick="{{ d.toggleStar }}" onMouseEnter="{{ d.tipStarOn }}" onMouseLeave="{{ d.tipOff }}" style="position:relative;flex:none;width:32px;height:32px;margin-left:-6px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;color:{{ d.starColor }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{ d.starFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><sc-if value="{{ d.tipStar }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:36px;left:0;white-space:nowrap;background:#171717;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;z-index:6;pointer-events:none">{{ d.starLabel }}</span></sc-if></span></sc-if>
+<div style="flex:1;min-width:0;display:flex;align-items:center">
+<sc-if value="{{ d.editing }}" hint-placeholder-val="{{ false }}"><input autofocus="autofocus" value="{{ d.draft }}" onChange="{{ d.onDraft }}" onKeyDown="{{ d.onKey }}" onBlur="{{ d.cancel }}" style="font:600 20px 'Geist',sans-serif;height:36px;padding:0 10px;margin-left:-11px;border:1px solid #d4d4d4;border-radius:8px;outline:none;box-shadow:0 0 0 3px rgba(161,161,161,.35);width:100%;max-width:560px"></sc-if>
+<sc-if value="{{ d.notEditing }}" hint-placeholder-val="{{ true }}"><div onMouseEnter="{{ d.hoverOn }}" onMouseLeave="{{ d.hoverOff }}" onClick="{{ d.startEdit }}" title="Click to rename" style="display:flex;align-items:center;gap:6px;cursor:text;min-width:0"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.title }}</h1><span style="flex:none;width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:#737373;opacity:{{ d.pencilOpacity }};transition:opacity .12s"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg></span></div></sc-if>
+<sc-if value="{{ d.archived }}" hint-placeholder-val="{{ false }}"><span style="flex:none;margin-left:8px;font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #e5e5e5">Archived</span></sc-if>
+</div>
+<div style="flex:none;display:flex;align-items:center;gap:2px">
+<sc-if value="{{ d.starRight }}" hint-placeholder-val="{{ true }}"><span onClick="{{ d.toggleStar }}" onMouseEnter="{{ d.tipStarOn }}" onMouseLeave="{{ d.tipOff }}" style="position:relative;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;color:{{ d.starColor }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{ d.starFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><sc-if value="{{ d.tipStar }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:36px;right:0;white-space:nowrap;background:#171717;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;z-index:6;pointer-events:none">{{ d.starLabel }}</span></sc-if></span></sc-if>
+<span onClick="{{ d.toggleArchive }}" onMouseEnter="{{ d.tipArchOn }}" onMouseLeave="{{ d.tipOff }}" style="position:relative;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;background:{{ d.archBg }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg><sc-if value="{{ d.tipArch }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:36px;right:0;white-space:nowrap;background:#171717;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;z-index:6;pointer-events:none">{{ d.archiveLabel }}</span></sc-if></span>
+</div></div>
+<div style="color:#737373;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px"><span>Claude Code via stdio</span><span>·</span><span style="font-family:'Geist Mono',monospace;font-size:13px">mcp:7f3c2a91-orders</span><span>·</span><span>3 operations</span><span>·</span><span onClick="{{ d.toggleMeta }}" style="display:flex;align-items:center;gap:2px;color:#0a0a0a;cursor:pointer">Details<span style="display:flex;transform:rotate({{ d.metaRot }})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span></span></div>
+<sc-if value="{{ d.metaOpen }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 16px;padding-top:8px">
+<div><div style="font-size:13px;color:#737373">Client</div><div>claude-code 2.4.1</div></div><div><div style="font-size:13px;color:#737373">MCP protocol</div><div>2025-06-18</div></div><div><div style="font-size:13px;color:#737373">Working directory</div><div>C:\work\tickets\ORD-412</div></div><div><div style="font-size:13px;color:#737373">Failed / rejected</div><div>0 / 0</div></div>
+</div></sc-if>
+</div>
+
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px 0 0;display:flex;flex-direction:column;gap:16px">
+<div style="padding:0 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div style="display:grid;gap:4px"><div style="font-size:16px;font-weight:500">Optimization</div><div style="color:#737373">orders-report · shop · SqlServer · whole query</div></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 8px 0 10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e5e5;border-radius:8px">All cases · Sum<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span><span title="Copy summary" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></span></div></div>
+<div style="padding:0 16px">
+<table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:40px;padding:0 8px;text-align:left;font-weight:500">Version</th><th style="padding:0 8px;text-align:right;font-weight:500">Logical reads</th><th style="padding:0 8px;text-align:right;font-weight:500">vs A</th><th style="padding:0 8px;text-align:right;font-weight:500">Elapsed median</th><th style="padding:0 8px;text-align:right;font-weight:500">vs A</th><th style="padding:0 8px;text-align:left;font-weight:500">Outcome</th><th style="padding:0 4px;text-align:center;font-weight:500;width:36px">A</th><th style="padding:0 4px;text-align:center;font-weight:500;width:36px">B</th><th style="width:40px"></th></tr></thead>
+<tbody><sc-for list="{{ d.rows }}" as="r" hint-placeholder-count="3"><tr style="border-bottom:1px solid #e5e5e5;background:{{ r.bg }}">
+<td style="padding:8px"><div style="display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:6px"><span style="font-weight:500">{{ r.version }}</span><sc-if value="{{ r.keep }}" hint-placeholder-val="{{ false }}"><span onMouseEnter="{{ r.keepOn }}" onMouseLeave="{{ r.keepOff }}" style="position:relative;display:flex;padding:2px;color:#7c3aed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg><sc-if value="{{ r.keepTip }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:22px;left:-6px;white-space:nowrap;background:#171717;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;z-index:6;pointer-events:none">Kept by agent</span></sc-if></span></sc-if><sc-if value="{{ r.best }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #15803d;color:#15803d">Best</span></sc-if></div><sc-if value="{{ r.hasLabel }}" hint-placeholder-val="{{ true }}"><span style="font-size:12.5px;color:#737373;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.label }}</span></sc-if></div></td>
+<td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">{{ r.reads }}</td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums;color:{{ r.dReadsColor }}">{{ r.dReads }}</td>
+<td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">{{ r.elapsed }}</td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums;color:{{ r.dElColor }}">{{ r.dEl }}</td>
+<td style="padding:8px">{{ r.outcome }}</td>
+<td style="padding:4px;text-align:center"><span onClick="{{ r.pickA }}" style="margin:auto;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:{{ r.aBg }};color:{{ r.aFg }};box-shadow:inset 0 0 0 1px {{ r.aRing }}">A</span></td>
+<td style="padding:4px;text-align:center"><span onClick="{{ r.pickB }}" style="margin:auto;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:{{ r.bBg }};color:{{ r.bFg }};box-shadow:inset 0 0 0 1px {{ r.bRing }}">B</span></td>
+<td style="padding:4px 8px;position:relative"><span onClick="{{ r.toggleMenu }}" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer" style-hover="background:#e5e5e5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span>
+<sc-if value="{{ r.menuOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:8px;top:36px;width:240px;background:#fff;border-radius:10px;box-shadow:0 0 0 1px rgba(10,10,10,.1),0 8px 24px rgba(0,0,0,.08);padding:4px;z-index:5;text-align:left"><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Open operation {{ r.op }}</div><div onClick="{{ r.openPlan }}" style="padding:6px 8px;border-radius:6px;cursor:pointer" style-hover="background:#f5f5f5">Plan for {{ r.version }}</div><div style="height:1px;background:#e5e5e5;margin:4px -4px"></div><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Copy script (as executed)</div><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Copy script (local variables)</div></div></sc-if></td>
+</tr></sc-for></tbody></table>
+</div>
+<div style="display:flex;flex-direction:column;border-top:1px solid #e5e5e5">
+<div style="padding:0 16px;display:flex;align-items:center;gap:20px;border-bottom:1px solid #e5e5e5;font-weight:500">
+<span onClick="{{ d.tabDiff }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ d.tDiffLine }};color:{{ d.tDiffColor }}">SQL diff</span>
+<span onClick="{{ d.tabTables }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ d.tTabLine }};color:{{ d.tTabColor }}">IO</span>
+<span onClick="{{ d.tabPlan }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ d.tPlanLine }};color:{{ d.tPlanColor }}">Plan</span>
+<span style="margin-left:auto;font-weight:400;color:#525252;font-size:13px;font-variant-numeric:tabular-nums">{{ d.pair.label }} · {{ d.pair.basis }} · {{ d.pair.equiv }}</span></div>
+<div style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:{{ d.diffDisplay }};flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:16px;font-size:13px">
+<div style="display:flex;padding:2px;background:#f5f5f5;border-radius:9px;font-size:12.8px;font-weight:500"><span onClick="{{ d.setSide }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ d.sideBg }};box-shadow:{{ d.sideShadow }}">Side by side</span><span onClick="{{ d.setUnified }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ d.uniBg }};box-shadow:{{ d.uniShadow }}">Unified</span></div>
+<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" checked="{{ d.ignoreFmt }}" onChange="{{ d.toggleFmt }}">Ignore formatting</label>
+<span style="margin-left:auto;display:flex;align-items:center;gap:4px;color:#525252"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>Copy diff</span></div>
+<div style="height:380px;border:1px solid #e5e5e5;border-radius:6px;overflow:auto;background:#fff;font-family:'Geist Mono',ui-monospace,monospace;font-size:12px;line-height:19px;padding:8px 0">
+<sc-if value="{{ d.side }}" hint-placeholder-val="{{ true }}"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><div style="position:relative;display:flex;min-width:0;">
+<sc-for list="{{ d.paneL.bands }}" as="bnd" hint-placeholder-count="0"><div style="position:absolute;left:0;right:0;top:{{ bnd.top }}px;height:19px;background:{{ bnd.bg }}"></div></sc-for>
+<div style="position:relative;flex:none;width:34px;text-align:right;padding-right:8px;color:#737373;white-space:pre">{{ d.paneL.lnText }}</div>
+
+<div style="position:relative;flex:none;width:14px;white-space:pre"><sc-for list="{{ d.paneL.signs }}" as="sgn" hint-placeholder-count="0"><span style="color:{{ sgn.c }}">{{ sgn.t }}</span></sc-for></div>
+<div style="position:relative;white-space:pre;min-width:0;cursor:text"><sc-for list="{{ d.paneL.segs }}" as="tok" hint-placeholder-count="0"><span onClick="{{ tok.click }}" style="color:{{ tok.c }};font-weight:{{ tok.w }};font-style:{{ tok.i }};background:{{ tok.bg }};border-radius:2px">{{ tok.t }}</span></sc-for></div>
+</div><div style="position:relative;display:flex;min-width:0;border-left:1px solid #e5e5e5;">
+<sc-for list="{{ d.paneR.bands }}" as="bnd" hint-placeholder-count="0"><div style="position:absolute;left:0;right:0;top:{{ bnd.top }}px;height:19px;background:{{ bnd.bg }}"></div></sc-for>
+<div style="position:relative;flex:none;width:34px;text-align:right;padding-right:8px;color:#737373;white-space:pre">{{ d.paneR.lnText }}</div>
+
+<div style="position:relative;flex:none;width:14px;white-space:pre"><sc-for list="{{ d.paneR.signs }}" as="sgn" hint-placeholder-count="0"><span style="color:{{ sgn.c }}">{{ sgn.t }}</span></sc-for></div>
+<div style="position:relative;white-space:pre;min-width:0;cursor:text"><sc-for list="{{ d.paneR.segs }}" as="tok" hint-placeholder-count="0"><span onClick="{{ tok.click }}" style="color:{{ tok.c }};font-weight:{{ tok.w }};font-style:{{ tok.i }};background:{{ tok.bg }};border-radius:2px">{{ tok.t }}</span></sc-for></div>
+</div></div></sc-if>
+<sc-if value="{{ d.unified }}" hint-placeholder-val="{{ false }}"><div style="display:flex"><div style="position:relative;display:flex;min-width:0;flex:1;">
+<sc-for list="{{ d.paneU.bands }}" as="bnd" hint-placeholder-count="0"><div style="position:absolute;left:0;right:0;top:{{ bnd.top }}px;height:19px;background:{{ bnd.bg }}"></div></sc-for>
+<div style="position:relative;flex:none;width:34px;text-align:right;padding-right:6px;color:#737373;white-space:pre">{{ d.paneU.lnText }}</div>
+<div style="position:relative;flex:none;width:34px;text-align:right;padding-right:8px;color:#737373;white-space:pre">{{ d.paneU.ln2Text }}</div>
+<div style="position:relative;flex:none;width:14px;white-space:pre"><sc-for list="{{ d.paneU.signs }}" as="sgn" hint-placeholder-count="0"><span style="color:{{ sgn.c }}">{{ sgn.t }}</span></sc-for></div>
+<div style="position:relative;white-space:pre;min-width:0;cursor:text"><sc-for list="{{ d.paneU.segs }}" as="tok" hint-placeholder-count="0"><span onClick="{{ tok.click }}" style="color:{{ tok.c }};font-weight:{{ tok.w }};font-style:{{ tok.i }};background:{{ tok.bg }};border-radius:2px">{{ tok.t }}</span></sc-for></div>
+</div></div></sc-if>
+</div>
+</div>
+<sc-if value="{{ d.showStmts }}" hint-placeholder-val="{{ false }}"><table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:36px;padding:0 8px;text-align:left;font-weight:500">Statement</th><th style="padding:0 8px;text-align:left;font-weight:500">Status</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads before</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads after</th><th style="padding:0 8px;text-align:right;font-weight:500">Change</th></tr></thead>
+<tbody><sc-for list="{{ d.stmts }}" as="s" hint-placeholder-count="2"><tr style="border-bottom:1px solid #f0f0f0"><td style="padding:8px;font-family:'Geist Mono',monospace;font-size:12.5px">{{ s.text }}<div style="margin-top:4px;font-family:'Geist',sans-serif;font-size:12px;display:flex;gap:8px"><span onClick="{{ s.openA }}" style="text-decoration:underline;cursor:pointer">{{ s.planALabel }}</span><span onClick="{{ s.openB }}" style="text-decoration:underline;cursor:pointer">{{ s.planBLabel }}</span></div></td><td style="padding:8px;color:#737373">{{ s.status }}</td><td style="padding:8px;text-align:right">{{ s.before }}</td><td style="padding:8px;text-align:right">{{ s.after }}</td><td style="padding:8px;text-align:right;color:{{ s.color }}">{{ s.change }}</td></tr></sc-for></tbody></table></sc-if>
+<sc-if value="{{ d.showTables }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:10px;font-size:14px">
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+<div style="display:flex;padding:2px;background:#f5f5f5;border-radius:9px;font-size:12.8px;font-weight:500"><sc-for list="{{ d.io.modes }}" as="m" hint-placeholder-count="2"><span onClick="{{ m.pick }}" style="height:26px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ m.bg }};box-shadow:{{ m.sh }};color:{{ m.fg }}">{{ m.label }}</span></sc-for></div>
+<span style="font-size:12.5px;color:#737373;margin-left:8px">Columns</span>
+<sc-for list="{{ d.io.colChips }}" as="c" hint-placeholder-count="3"><span onClick="{{ c.toggle }}" style="height:26px;padding:0 10px;display:flex;align-items:center;gap:6px;border-radius:999px;font-size:12.8px;font-weight:500;cursor:pointer;background:{{ c.bg }};color:{{ c.fg }};box-shadow:inset 0 0 0 1px {{ c.ring }}">{{ c.label }}<span style="font-weight:400;opacity:.7">{{ c.hint }}</span></span></sc-for>
+<span style="margin-left:auto;font-size:12.5px;color:#737373">{{ d.io.pairLabel }}</span></div>
+<div style="display:grid;grid-template-columns:{{ d.io.cols }};gap:8px;padding:8px;font-weight:500;border-bottom:1px solid #e5e5e5"><sc-for list="{{ d.io.head }}" as="h" hint-placeholder-count="4"><span style="text-align:{{ h.align }}">{{ h.label }}</span></sc-for></div>
+<sc-if value="{{ d.io.byStmt }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ d.io.groups }}" as="g" hint-placeholder-count="2"><div style="display:flex;flex-direction:column;border-bottom:1px solid #e5e5e5">
+<div onClick="{{ g.toggle }}" style="display:flex;flex-direction:column;gap:4px;padding:9px 8px;cursor:pointer;background:#fafafa" style-hover="background:#f5f5f5">
+<div style="display:grid;grid-template-columns:{{ d.io.cols }};gap:8px;align-items:start"><span style="display:flex;align-items:center;gap:6px;min-width:0"><span style="display:flex;transform:rotate({{ g.rot }});transition:transform .15s;color:#737373"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg></span><span style="font-family:'Geist Mono',monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.sql }}</span></span><sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="2"><div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500"><div>{{ c.v }}</div><div style="font-size:12px;color:{{ c.color }};font-weight:400">{{ c.d }}</div></div></sc-for></div>
+<div style="display:flex;gap:6px 16px;flex-wrap:wrap;padding-left:20px;font-size:12.5px;color:#525252;font-variant-numeric:tabular-nums"><sc-if value="{{ g.hasStatus }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;padding:1px 8px;border-radius:999px;background:{{ g.statusBg }};color:{{ g.statusFg }}">{{ g.status }}</span></sc-if><sc-for list="{{ g.mem }}" as="mm" hint-placeholder-count="2"><span style="display:flex;gap:4px;align-items:center"><span style="color:#737373">{{ mm.k }}</span><span>{{ mm.v }}</span><sc-if value="{{ mm.warn }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;padding:0 6px;border-radius:999px;border:1px solid rgba(217,119,6,.5);color:#92400e">{{ mm.warnText }}</span></sc-if></span></sc-for><sc-for list="{{ g.plans }}" as="pl" hint-placeholder-count="2"><span onClick="{{ pl.open }}" style="text-decoration:underline;text-decoration-color:#a3a3a3;cursor:pointer;color:#0a0a0a">{{ pl.label }}</span></sc-for></div>
+</div>
+<sc-if value="{{ g.open }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:{{ d.io.cols }};gap:8px;padding:7px 8px 7px 28px;border-top:1px solid #f5f5f5;align-items:start"><span style="font-family:'Geist Mono',monospace;font-size:13px;color:{{ r.nameColor }}">{{ r.name }}</span><sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="2"><div style="text-align:right;font-variant-numeric:tabular-nums"><div>{{ c.v }}</div><div style="font-size:12px;color:{{ c.color }}">{{ c.d }}</div></div></sc-for></div></sc-for></sc-if>
+</div></sc-for></sc-if>
+<sc-if value="{{ d.io.whole }}" hint-placeholder-val="{{ false }}">
+<sc-for list="{{ d.io.wholeRows }}" as="r" hint-placeholder-count="4"><div style="display:grid;grid-template-columns:{{ d.io.cols }};gap:8px;padding:8px;border-bottom:1px solid #f0f0f0;align-items:start"><span style="font-family:'Geist Mono',monospace;font-size:13px;color:{{ r.nameColor }}">{{ r.name }}</span><sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="2"><div style="text-align:right;font-variant-numeric:tabular-nums"><div>{{ c.v }}</div><div style="font-size:12px;color:{{ c.color }}">{{ c.d }}</div></div></sc-for></div></sc-for>
+<div style="display:grid;grid-template-columns:{{ d.io.cols }};gap:8px;padding:8px;background:#fafafa;font-weight:600;align-items:start"><span>Total</span><sc-for list="{{ d.io.totalCells }}" as="c" hint-placeholder-count="2"><div style="text-align:right;font-variant-numeric:tabular-nums"><div>{{ c.v }}</div><div style="font-size:12px;color:{{ c.color }};font-weight:500">{{ c.d }}</div></div></sc-for></div>
+<div style="display:flex;gap:6px 16px;flex-wrap:wrap;padding:4px 8px 0;font-size:12.5px;color:#525252"><span style="color:#737373">Memory (all statements)</span><sc-for list="{{ d.io.memTotal }}" as="mt" hint-placeholder-count="3"><span>{{ mt }}</span></sc-for></div>
+</sc-if>
+<div style="font-size:12px;color:#737373;line-height:1.5">IO z SET STATISTICS IO (PostgreSQL: BUFFERS). Pamięć i spille z rzeczywistego planu.</div>
+</div></sc-if>
+<div style="display:{{ d.planDisplay }};flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13px">
+<div style="display:flex;padding:2px;background:#f5f5f5;border-radius:9px;font-size:12.8px;font-weight:500"><sc-for list="{{ d.planVersions }}" as="pv" hint-placeholder-count="3"><span onClick="{{ pv.pick }}" style="height:24px;padding:0 10px;display:flex;align-items:center;gap:6px;border-radius:7px;cursor:pointer;background:{{ pv.bg }};box-shadow:{{ pv.shadow }};color:{{ pv.color }}">{{ pv.version }}<sc-if value="{{ pv.isA }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:600;padding:0 5px;border-radius:4px;background:#e5e5e5;color:#0a0a0a">A</span></sc-if><sc-if value="{{ pv.isB }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:600;padding:0 5px;border-radius:4px;background:#171717;color:#fff">B</span></sc-if></span></sc-for></div>
+<select value="{{ d.planStmtVal }}" onChange="{{ d.onPlanStmt }}" style="height:28px;padding:0 6px;border:1px solid #e5e5e5;border-radius:8px;font:500 12.8px 'Geist',sans-serif;background:#fff"><sc-for list="{{ d.planStmtOptions }}" as="o" hint-placeholder-count="2"><option value="{{ o.v }}">{{ o.label }}</option></sc-for></select>
+<span style="margin-left:auto;display:flex;align-items:center;gap:4px;color:#525252;text-decoration:underline;cursor:pointer">Open in operation {{ d.planOp }}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></span></div>
+<div ref="{{ planScrollRef }}" style="height:232px;border:1px solid #e5e5e5;border-radius:6px;overflow:auto;background:#fff;font-family:'Geist Mono',ui-monospace,monospace;font-size:12px;line-height:19px;padding:8px 0">
+<div style="display:flex"><div style="position:relative;display:flex;min-width:0;flex:1;">
+<sc-for list="{{ d.paneP.bands }}" as="bnd" hint-placeholder-count="0"><div style="position:absolute;left:0;right:0;top:{{ bnd.top }}px;height:19px;background:{{ bnd.bg }}"></div></sc-for>
+<div style="position:relative;flex:none;width:34px;text-align:right;padding-right:8px;color:#737373;white-space:pre">{{ d.paneP.lnText }}</div>
+
+<div style="position:relative;flex:none;width:14px;white-space:pre"><sc-for list="{{ d.paneP.signs }}" as="sgn" hint-placeholder-count="0"><span style="color:{{ sgn.c }}">{{ sgn.t }}</span></sc-for></div>
+<div style="position:relative;white-space:pre;min-width:0;cursor:text"><sc-for list="{{ d.paneP.segs }}" as="tok" hint-placeholder-count="0"><span onClick="{{ tok.click }}" style="color:{{ tok.c }};font-weight:{{ tok.w }};font-style:{{ tok.i }};background:{{ tok.bg }};border-radius:2px">{{ tok.t }}</span></sc-for></div>
+</div></div>
+</div>
+<div style="border:1px solid #e5e5e5;border-radius:6px;overflow:auto;background-color:#fff;background-image:radial-gradient(#e5e5e5 1px, transparent 1px);background-size:24px 24px"><div style="position:relative;width:{{ d.graph.w }}px;height:{{ d.graph.h }}px;margin:0 auto">
+<sc-for list="{{ d.graph.edges }}" as="eg" hint-placeholder-count="0"><div style="position:absolute;left:{{ eg.h1x }}px;top:{{ eg.h1y }}px;width:{{ eg.h1w }}px;height:{{ eg.w }}px;background:#a3a3a3;pointer-events:none"></div><div style="position:absolute;left:{{ eg.vx }}px;top:{{ eg.vy }}px;width:{{ eg.w }}px;height:{{ eg.vh }}px;background:#a3a3a3;pointer-events:none"></div><div style="position:absolute;left:{{ eg.h2x }}px;top:{{ eg.h2y }}px;width:{{ eg.h2w }}px;height:{{ eg.w }}px;background:#a3a3a3;pointer-events:none"></div><span style="position:absolute;left:{{ eg.lx }}px;top:{{ eg.ly }}px;font-size:10.5px;color:#737373;background:rgba(255,255,255,.85);padding:0 3px;border-radius:3px;font-variant-numeric:tabular-nums;pointer-events:none">{{ eg.rows }}</span></sc-for>
+<sc-for list="{{ d.graph.nodes }}" as="n" hint-placeholder-count="0"><div onClick="{{ n.select }}" title="{{ n.tip }}" style="position:absolute;left:{{ n.left }}px;top:{{ n.top }}px;width:172px;height:96px;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:{{ n.border }};background:{{ n.bg }};box-shadow:{{ n.ring }};cursor:pointer;display:flex;flex-direction:column;gap:2px;font-size:12px;overflow:hidden">
+<div style="display:flex;justify-content:space-between;gap:6px;align-items:flex-start"><span style="font-size:13px;font-weight:500;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.op }}</span><sc-if value="{{ n.hasWarn }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font-size:10.5px;padding:0 6px;border-radius:999px;border:1px solid rgba(217,119,6,.5);color:#92400e">1 warning</span></sc-if></div>
+<span style="font-family:'Geist Mono',monospace;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#404040">{{ n.obj }}</span>
+<span style="color:#737373;margin-top:auto;font-variant-numeric:tabular-nums">Est. {{ n.est }} · Act. {{ n.act }}</span>
+<span style="display:flex;justify-content:space-between"><span style="color:{{ n.costColor }};font-weight:{{ n.costWeight }}">Cost {{ n.cost }}</span><span style="color:#737373;text-transform:capitalize">{{ n.conf }}</span></span>
+</div></sc-for>
+</div></div>
+<div style="min-height:20px;font-size:13px;color:#525252;display:flex;align-items:baseline;gap:6px 14px;flex-wrap:wrap">
+<sc-if value="{{ d.hasSel }}" hint-placeholder-val="{{ false }}"><span style="font-weight:500;color:#0a0a0a">{{ d.sel.title }}</span><span>Est. {{ d.sel.est }} · Actual {{ d.sel.act }}</span><span>Cost {{ d.sel.cost }}</span><span>Source: {{ d.sel.conf }} · {{ d.sel.rule }}</span><sc-if value="{{ d.sel.hasWarn }}" hint-placeholder-val="{{ false }}"><span style="color:#92400e">{{ d.sel.warn }}</span></sc-if></sc-if>
+<sc-if value="{{ d.noSel }}" hint-placeholder-val="{{ true }}"><span style="color:#737373">Click an operator to highlight its SQL, or click in the SQL to find its operator.</span></sc-if>
+<span style="margin-left:auto;color:#737373;font-size:12px">Solid border = exact source match · dashed = inferred</span>
+</div>
+</div>
+</div></div></div>
+<div style="padding:12px 16px;border:1px dashed #d4d4d4;border-radius:10px;color:#737373;font-size:13px">Add note · Conversations · All operations — bez zmian</div>
+</main></div></div>
+</div>
+</section>
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">Nagłówek z <a class="dv-oid" href="#2b">2b</a> (akcje jako ikony), tabela z <a class="dv-oid" href="#2a">2a</a>, zakładki z <a class="dv-oid" href="#2b">2b</a></span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="3a"><div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>Gwiazdka i Archive jako ikony, przypięte do prawej, więc nie zależą od długości tytułu. Pozycję gwiazdki (po prawej / przed tytułem) przełączysz w Tweaks. Najedź na tytuł, żeby edytować.</div>
+<div class="dv-card" style="width:1120px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 10px;display:flex;align-items:center">Live</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;background:#f5f5f5">Sessions</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Named operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Usage</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Profiles</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Mutations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Settings</span></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="padding:16px;display:flex;flex-direction:column;gap:16px;font-size:14px">
+
+<div style="display:flex;flex-direction:column;gap:6px;padding:4px 0">
+<div style="display:flex;align-items:center;gap:8px;min-height:36px">
+<sc-if value="{{ c.starLeft }}" hint-placeholder-val="{{ false }}"><span onClick="{{ c.toggleStar }}" onMouseEnter="{{ c.tipStarOn }}" onMouseLeave="{{ c.tipOff }}" style="position:relative;flex:none;width:32px;height:32px;margin-left:-6px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;color:{{ c.starColor }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{ c.starFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><sc-if value="{{ c.tipStar }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:36px;left:0;white-space:nowrap;background:#171717;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;z-index:6;pointer-events:none">{{ c.starLabel }}</span></sc-if></span></sc-if>
+<div style="flex:1;min-width:0;display:flex;align-items:center">
+<sc-if value="{{ c.editing }}" hint-placeholder-val="{{ false }}"><input autofocus="autofocus" value="{{ c.draft }}" onChange="{{ c.onDraft }}" onKeyDown="{{ c.onKey }}" onBlur="{{ c.cancel }}" style="font:600 20px 'Geist',sans-serif;height:36px;padding:0 10px;margin-left:-11px;border:1px solid #d4d4d4;border-radius:8px;outline:none;box-shadow:0 0 0 3px rgba(161,161,161,.35);width:100%;max-width:560px"></sc-if>
+<sc-if value="{{ c.notEditing }}" hint-placeholder-val="{{ true }}"><div onMouseEnter="{{ c.hoverOn }}" onMouseLeave="{{ c.hoverOff }}" onClick="{{ c.startEdit }}" title="Click to rename" style="display:flex;align-items:center;gap:6px;cursor:text;min-width:0"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.title }}</h1><span style="flex:none;width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:#737373;opacity:{{ c.pencilOpacity }};transition:opacity .12s"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg></span></div></sc-if>
+<sc-if value="{{ c.archived }}" hint-placeholder-val="{{ false }}"><span style="flex:none;margin-left:8px;font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #e5e5e5">Archived</span></sc-if>
+</div>
+<div style="flex:none;display:flex;align-items:center;gap:2px">
+<sc-if value="{{ c.starRight }}" hint-placeholder-val="{{ true }}"><span onClick="{{ c.toggleStar }}" onMouseEnter="{{ c.tipStarOn }}" onMouseLeave="{{ c.tipOff }}" style="position:relative;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;color:{{ c.starColor }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{ c.starFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><sc-if value="{{ c.tipStar }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:36px;right:0;white-space:nowrap;background:#171717;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;z-index:6;pointer-events:none">{{ c.starLabel }}</span></sc-if></span></sc-if>
+<span onClick="{{ c.toggleArchive }}" onMouseEnter="{{ c.tipArchOn }}" onMouseLeave="{{ c.tipOff }}" style="position:relative;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;background:{{ c.archBg }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg><sc-if value="{{ c.tipArch }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:36px;right:0;white-space:nowrap;background:#171717;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;z-index:6;pointer-events:none">{{ c.archiveLabel }}</span></sc-if></span>
+</div></div>
+<div style="color:#737373;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px"><span>Claude Code via stdio</span><span>·</span><span style="font-family:'Geist Mono',monospace;font-size:13px">mcp:7f3c2a91-orders</span><span>·</span><span>3 operations</span><span>·</span><span onClick="{{ c.toggleMeta }}" style="display:flex;align-items:center;gap:2px;color:#0a0a0a;cursor:pointer">Details<span style="display:flex;transform:rotate({{ c.metaRot }})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span></span></div>
+<sc-if value="{{ c.metaOpen }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 16px;padding-top:8px">
+<div><div style="font-size:13px;color:#737373">Client</div><div>claude-code 2.4.1</div></div><div><div style="font-size:13px;color:#737373">MCP protocol</div><div>2025-06-18</div></div><div><div style="font-size:13px;color:#737373">Working directory</div><div>C:\work\tickets\ORD-412</div></div><div><div style="font-size:13px;color:#737373">Failed / rejected</div><div>0 / 0</div></div>
+</div></sc-if>
+</div>
+
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px 0 0;display:flex;flex-direction:column;gap:16px">
+<div style="padding:0 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div style="display:grid;gap:4px"><div style="font-size:16px;font-weight:500">Optimization</div><div style="color:#737373">orders-report · shop · SqlServer · whole query</div></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 8px 0 10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e5e5;border-radius:8px">All cases · Sum<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span><span title="Copy summary" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></span></div></div>
+<div style="padding:0 16px">
+<table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:40px;padding:0 8px;text-align:left;font-weight:500">Version</th><th style="padding:0 8px;text-align:right;font-weight:500">Logical reads</th><th style="padding:0 8px;text-align:right;font-weight:500">vs A</th><th style="padding:0 8px;text-align:right;font-weight:500">Elapsed median</th><th style="padding:0 8px;text-align:right;font-weight:500">vs A</th><th style="padding:0 8px;text-align:left;font-weight:500">Outcome</th><th style="padding:0 4px;text-align:center;font-weight:500;width:36px">A</th><th style="padding:0 4px;text-align:center;font-weight:500;width:36px">B</th><th style="width:40px"></th></tr></thead>
+<tbody><sc-for list="{{ c.rows }}" as="r" hint-placeholder-count="3"><tr style="border-bottom:1px solid #e5e5e5;background:{{ r.bg }}">
+<td style="padding:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:500">{{ r.version }}</span><sc-if value="{{ r.best }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #15803d;color:#15803d">Best</span></sc-if></div></td>
+<td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">{{ r.reads }}</td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums;color:{{ r.dReadsColor }}">{{ r.dReads }}</td>
+<td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">{{ r.elapsed }}</td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums;color:{{ r.dElColor }}">{{ r.dEl }}</td>
+<td style="padding:8px">{{ r.outcome }}</td>
+<td style="padding:4px;text-align:center"><span onClick="{{ r.pickA }}" style="margin:auto;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:{{ r.aBg }};color:{{ r.aFg }};box-shadow:inset 0 0 0 1px {{ r.aRing }}">A</span></td>
+<td style="padding:4px;text-align:center"><span onClick="{{ r.pickB }}" style="margin:auto;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:{{ r.bBg }};color:{{ r.bFg }};box-shadow:inset 0 0 0 1px {{ r.bRing }}">B</span></td>
+<td style="padding:4px 8px;position:relative"><span onClick="{{ r.toggleMenu }}" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer" style-hover="background:#e5e5e5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span>
+<sc-if value="{{ r.menuOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:8px;top:36px;width:240px;background:#fff;border-radius:10px;box-shadow:0 0 0 1px rgba(10,10,10,.1),0 8px 24px rgba(0,0,0,.08);padding:4px;z-index:5;text-align:left"><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Open operation {{ r.op }}</div><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Plans for {{ r.version }}</div><div style="height:1px;background:#e5e5e5;margin:4px -4px"></div><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Copy script (as executed)</div><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Copy script (local variables)</div></div></sc-if></td>
+</tr></sc-for></tbody></table>
+</div>
+<div style="display:flex;flex-direction:column;border-top:1px solid #e5e5e5">
+<div style="padding:0 16px;display:flex;align-items:center;gap:20px;border-bottom:1px solid #e5e5e5;font-weight:500">
+<span onClick="{{ c.tabDiff }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ c.tDiffLine }};color:{{ c.tDiffColor }}">SQL diff</span>
+<span onClick="{{ c.tabStmts }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ c.tStmtLine }};color:{{ c.tStmtColor }}">Statements <span style="font-weight:400;color:#737373">{{ c.pair.stmtCount }}</span></span>
+<span onClick="{{ c.tabTables }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ c.tTabLine }};color:{{ c.tTabColor }}">Tables <span style="font-weight:400;color:#737373">3</span></span>
+<span style="margin-left:auto;font-weight:400;color:#525252;font-size:13px;font-variant-numeric:tabular-nums">{{ c.pair.label }} · {{ c.pair.basis }} · {{ c.pair.equiv }}</span></div>
+<div style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:{{ c.diffDisplay }};flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:16px;font-size:13px">
+<div style="display:flex;padding:2px;background:#f5f5f5;border-radius:9px;font-size:12.8px;font-weight:500"><span onClick="{{ c.setSide }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ c.sideBg }};box-shadow:{{ c.sideShadow }}">Side by side</span><span onClick="{{ c.setUnified }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ c.uniBg }};box-shadow:{{ c.uniShadow }}">Unified</span></div>
+<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" checked="{{ c.ignoreFmt }}" onChange="{{ c.toggleFmt }}">Ignore formatting</label>
+<span style="margin-left:auto;display:flex;align-items:center;gap:4px;color:#525252"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>Copy diff</span></div>
+<div style="height:380px;border:1px solid #e5e5e5;border-radius:6px;overflow:hidden;position:relative"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#737373;font-size:13px;pointer-events:none;opacity:1">Full SQL diff is shown in <a href="#4a" style="margin-left:4px;pointer-events:auto">4a</a></div></div>
+</div>
+<sc-if value="{{ c.showStmts }}" hint-placeholder-val="{{ false }}"><table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:36px;padding:0 8px;text-align:left;font-weight:500">Statement</th><th style="padding:0 8px;text-align:left;font-weight:500">Status</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads before</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads after</th><th style="padding:0 8px;text-align:right;font-weight:500">Change</th></tr></thead>
+<tbody><sc-for list="{{ c.pair.stmts }}" as="s" hint-placeholder-count="2"><tr style="border-bottom:1px solid #f0f0f0"><td style="padding:8px;font-family:'Geist Mono',monospace;font-size:12.5px">{{ s.text }}<div style="margin-top:4px;font-family:'Geist',sans-serif;font-size:12px;display:flex;gap:8px"><a href="#">Plan before</a><a href="#">Plan after</a></div></td><td style="padding:8px;color:#737373">{{ s.status }}</td><td style="padding:8px;text-align:right">{{ s.before }}</td><td style="padding:8px;text-align:right">{{ s.after }}</td><td style="padding:8px;text-align:right;color:{{ s.color }}">{{ s.change }}</td></tr></sc-for></tbody></table></sc-if>
+<sc-if value="{{ c.showTables }}" hint-placeholder-val="{{ false }}"><table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:36px;padding:0 8px;text-align:left;font-weight:500">Table</th><th style="padding:0 8px;text-align:right;font-weight:500">Scans before</th><th style="padding:0 8px;text-align:right;font-weight:500">Scans after</th><th style="padding:0 8px;text-align:right;font-weight:500">Logical reads before</th><th style="padding:0 8px;text-align:right;font-weight:500">Logical reads after</th></tr></thead>
+<tbody><sc-for list="{{ c.pair.tables }}" as="t" hint-placeholder-count="3"><tr style="border-bottom:1px solid #f0f0f0"><td style="padding:8px">{{ t.name }}</td><td style="padding:8px;text-align:right">{{ t.sb }}</td><td style="padding:8px;text-align:right">{{ t.sa }}</td><td style="padding:8px;text-align:right">{{ t.rb }}</td><td style="padding:8px;text-align:right">{{ t.ra }}</td></tr></sc-for></tbody></table></sc-if>
+</div></div></div>
+<div style="padding:12px 16px;border:1px dashed #d4d4d4;border-radius:10px;color:#737373;font-size:13px">Add note · Conversations · All operations — bez zmian</div>
+</main></div></div>
+</div>
+</section>
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Nagłówek z <a class="dv-oid" href="#1b">1b</a>/<a class="dv-oid" href="#1c">1c</a> + akcje sesji, tabela z <a class="dv-oid" href="#1b">1b</a> + wybór A/B + pełny diff w Monaco</span></div>
+<div class="dv-opts">
+
+<!-- ============ 2a ============ -->
+<div class="dv-opt" id="2a"><div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Nagłówek w karcie: najedź na tytuł → ołówek, gwiazdka obok, Archive i metadane w ⋯. Tabela z kolumnami A/B (klikalne), Δ liczone względem A. Pełny diff A→B w Monaco, statementy zwinięte pod spodem.</div>
+<div class="dv-card" style="width:1120px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 10px;display:flex;align-items:center">Live</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;background:#f5f5f5">Sessions</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Named operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Usage</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Profiles</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Mutations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Settings</span></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="padding:16px;display:flex;flex-direction:column;gap:16px;font-size:14px">
+
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+<div style="display:grid;gap:4px;min-width:0">
+<div style="display:flex;align-items:center;gap:4px;min-height:32px">
+<sc-if value="{{ a.editing }}" hint-placeholder-val="{{ false }}"><input autofocus="autofocus" value="{{ a.draft }}" onChange="{{ a.onDraft }}" onKeyDown="{{ a.onKey }}" onBlur="{{ a.cancel }}" style="font:500 16px 'Geist',sans-serif;height:32px;padding:0 10px;border:1px solid #d4d4d4;border-radius:8px;outline:none;box-shadow:0 0 0 3px rgba(161,161,161,.35);width:420px"></sc-if>
+<sc-if value="{{ a.notEditing }}" hint-placeholder-val="{{ true }}"><div onMouseEnter="{{ a.hoverOn }}" onMouseLeave="{{ a.hoverOff }}" onClick="{{ a.startEdit }}" style="display:flex;align-items:center;gap:6px;cursor:text;padding:2px 6px 2px 0;border-radius:6px"><h1 style="margin:0;font-size:16px;font-weight:500">{{ a.title }}</h1><span style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:#737373;opacity:{{ a.pencilOpacity }};transition:opacity .12s"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg></span></div></sc-if>
+<span onClick="{{ a.toggleStar }}" title="Star session" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{ a.starFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span>
+<sc-if value="{{ a.archived }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #e5e5e5">Archived</span></sc-if>
+</div>
+<div style="color:#737373;display:flex;flex-wrap:wrap;gap:4px 8px"><span>Claude Code via stdio (mcp)</span><span>·</span><span style="font-family:'Geist Mono',monospace;font-size:13px">mcp:7f3c2a91-orders</span><span>·</span><span>3 operations</span><span>·</span><span>last seen 12:41</span></div>
+</div>
+<div style="position:relative">
+<span onClick="{{ a.toggleMenu }}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;background:{{ a.menuBtnBg }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span>
+<sc-if value="{{ a.menuOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:0;top:36px;width:200px;background:#fff;border-radius:10px;box-shadow:0 0 0 1px rgba(10,10,10,.1),0 8px 24px rgba(0,0,0,.08);padding:4px;z-index:5">
+<div onClick="{{ a.menuEdit }}" style="padding:6px 8px;border-radius:6px;cursor:pointer" style-hover="background:#f5f5f5">Edit title</div>
+<div onClick="{{ a.menuMeta }}" style="padding:6px 8px;border-radius:6px;cursor:pointer" style-hover="background:#f5f5f5">{{ a.metaLabel }}</div>
+<div style="height:1px;background:#e5e5e5;margin:4px -4px"></div>
+<div onClick="{{ a.menuArchive }}" style="padding:6px 8px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px" style-hover="background:#f5f5f5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>{{ a.archiveLabel }}</div>
+</div></sc-if>
+</div></div>
+<sc-if value="{{ a.metaOpen }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 16px;padding-top:12px;border-top:1px solid #e5e5e5">
+<div><div style="font-size:13px;color:#737373">Client</div><div>claude-code 2.4.1</div></div><div><div style="font-size:13px;color:#737373">MCP protocol</div><div>2025-06-18</div></div><div><div style="font-size:13px;color:#737373">Working directory</div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\work\tickets\ORD-412</div></div><div><div style="font-size:13px;color:#737373">Failed / rejected</div><div>0 / 0</div></div>
+</div></sc-if>
+</div>
+
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px 0;display:flex;flex-direction:column;gap:16px">
+<div style="padding:0 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div style="display:grid;gap:4px"><div style="font-size:16px;font-weight:500">Optimization</div><div style="color:#737373">orders-report · shop · SqlServer · whole query</div></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 8px 0 10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e5e5;border-radius:8px">All cases<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span><span style="height:28px;padding:0 8px 0 10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e5e5;border-radius:8px">Sum<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span><span title="Copy summary" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></span></div></div>
+<div style="padding:0 16px">
+<table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:40px;padding:0 8px;text-align:left;font-weight:500">Version</th><th style="padding:0 8px;text-align:right;font-weight:500">Logical reads</th><th style="padding:0 8px;text-align:right;font-weight:500">vs A</th><th style="padding:0 8px;text-align:right;font-weight:500">Elapsed median</th><th style="padding:0 8px;text-align:right;font-weight:500">vs A</th><th style="padding:0 8px;text-align:left;font-weight:500">Outcome</th><th style="padding:0 4px;text-align:center;font-weight:500;width:36px">A</th><th style="padding:0 4px;text-align:center;font-weight:500;width:36px">B</th><th style="width:40px"></th></tr></thead>
+<tbody><sc-for list="{{ a.rows }}" as="r" hint-placeholder-count="3"><tr style="border-bottom:1px solid #e5e5e5;background:{{ r.bg }}">
+<td style="padding:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:500">{{ r.version }}</span><sc-if value="{{ r.best }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #15803d;color:#15803d">Best</span></sc-if></div></td>
+<td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">{{ r.reads }}</td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums;color:{{ r.dReadsColor }}">{{ r.dReads }}</td>
+<td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">{{ r.elapsed }}</td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums;color:{{ r.dElColor }}">{{ r.dEl }}</td>
+<td style="padding:8px">{{ r.outcome }}</td>
+<td style="padding:4px;text-align:center"><span onClick="{{ r.pickA }}" style="margin:auto;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:{{ r.aBg }};color:{{ r.aFg }};box-shadow:inset 0 0 0 1px {{ r.aRing }}">A</span></td>
+<td style="padding:4px;text-align:center"><span onClick="{{ r.pickB }}" style="margin:auto;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;background:{{ r.bBg }};color:{{ r.bFg }};box-shadow:inset 0 0 0 1px {{ r.bRing }}">B</span></td>
+<td style="padding:4px 8px;position:relative"><span onClick="{{ r.toggleMenu }}" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer" style-hover="background:#e5e5e5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span>
+<sc-if value="{{ r.menuOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:8px;top:36px;width:240px;background:#fff;border-radius:10px;box-shadow:0 0 0 1px rgba(10,10,10,.1),0 8px 24px rgba(0,0,0,.08);padding:4px;z-index:5;text-align:left"><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Open operation {{ r.op }}</div><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Plans for {{ r.version }}</div><div style="height:1px;background:#e5e5e5;margin:4px -4px"></div><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Copy script (as executed)</div><div style="padding:6px 8px;border-radius:6px" style-hover="background:#f5f5f5">Copy script (local variables)</div></div></sc-if></td>
+</tr></sc-for></tbody></table>
+</div>
+<div style="height:1px;background:#e5e5e5"></div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px"><span style="font-weight:500">{{ a.pair.label }}</span><span style="color:#737373">{{ a.pair.basis }} · {{ a.pair.equiv }}</span><span style="margin-left:auto;display:flex;gap:16px;color:#525252;font-variant-numeric:tabular-nums"><span>Reads {{ a.pair.reads }}</span><span>Elapsed {{ a.pair.elapsed }}</span><span>CPU {{ a.pair.cpu }}</span></span></div>
+<div style="display:flex;align-items:center;gap:16px;font-size:13px">
+<div style="display:flex;padding:2px;background:#f5f5f5;border-radius:9px;font-size:12.8px;font-weight:500"><span onClick="{{ a.setSide }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ a.sideBg }};box-shadow:{{ a.sideShadow }}">Side by side</span><span onClick="{{ a.setUnified }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ a.uniBg }};box-shadow:{{ a.uniShadow }}">Unified</span></div>
+<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" checked="{{ a.ignoreFmt }}" onChange="{{ a.toggleFmt }}">Ignore formatting</label>
+<span style="margin-left:auto;display:flex;align-items:center;gap:4px;color:#525252"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>Copy diff</span></div>
+<div style="height:380px;border:1px solid #e5e5e5;border-radius:6px;overflow:hidden;position:relative"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#737373;font-size:13px;pointer-events:none;opacity:1">Full SQL diff is shown in <a href="#4a" style="margin-left:4px;pointer-events:auto">4a</a></div></div>
+<div onClick="{{ a.toggleStmts }}" style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;padding:4px 0"><span style="display:flex;transform:rotate({{ a.stmtRot }});transition:transform .15s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg></span>Statements <span style="color:#737373;font-weight:400">{{ a.pair.stmtSummary }}</span></div>
+<sc-if value="{{ a.stmtsOpen }}" hint-placeholder-val="{{ false }}"><table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:36px;padding:0 8px;text-align:left;font-weight:500">Statement</th><th style="padding:0 8px;text-align:left;font-weight:500">Status</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads before</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads after</th><th style="padding:0 8px;text-align:right;font-weight:500">Change</th></tr></thead>
+<tbody><sc-for list="{{ a.pair.stmts }}" as="s" hint-placeholder-count="2"><tr style="border-bottom:1px solid #f0f0f0"><td style="padding:8px;font-family:'Geist Mono',monospace;font-size:12.5px">{{ s.text }}</td><td style="padding:8px;color:#737373">{{ s.status }}</td><td style="padding:8px;text-align:right">{{ s.before }}</td><td style="padding:8px;text-align:right">{{ s.after }}</td><td style="padding:8px;text-align:right;color:{{ s.color }}">{{ s.change }}</td></tr></sc-for></tbody></table></sc-if>
+</div></div>
+<div style="padding:12px 16px;border:1px dashed #d4d4d4;border-radius:10px;color:#737373;font-size:13px">Add note · Conversations · All operations — bez zmian</div>
+</main></div></div>
+
+<!-- ============ 2b ============ -->
+<div class="dv-opt" id="2b"><div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Jeszcze prościej: nagłówek bez karty (tytuł strony), Archive jako jedyny przycisk, metadane pod „Details". Para wybierana selectami nad tabelą, klik w wiersz = ustaw B. Pod spodem zakładki: SQL diff (Monaco) · Statements · Tables.</div>
+<div class="dv-card" style="width:1120px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 10px;display:flex;align-items:center">Live</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;background:#f5f5f5">Sessions</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Named operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Usage</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Profiles</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Mutations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Settings</span></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="padding:16px;display:flex;flex-direction:column;gap:16px;font-size:14px">
+
+<div style="display:flex;flex-direction:column;gap:6px;padding:4px 0">
+<div style="display:flex;align-items:center;gap:4px;min-height:36px">
+<sc-if value="{{ b.editing }}" hint-placeholder-val="{{ false }}"><input autofocus="autofocus" value="{{ b.draft }}" onChange="{{ b.onDraft }}" onKeyDown="{{ b.onKey }}" onBlur="{{ b.cancel }}" style="font:600 20px 'Geist',sans-serif;height:36px;padding:0 10px;border:1px solid #d4d4d4;border-radius:8px;outline:none;box-shadow:0 0 0 3px rgba(161,161,161,.35);width:460px"></sc-if>
+<sc-if value="{{ b.notEditing }}" hint-placeholder-val="{{ true }}"><div onMouseEnter="{{ b.hoverOn }}" onMouseLeave="{{ b.hoverOff }}" onClick="{{ b.startEdit }}" style="display:flex;align-items:center;gap:6px;cursor:text"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">{{ b.title }}</h1><span style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:#737373;opacity:{{ b.pencilOpacity }};transition:opacity .12s"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg></span></div></sc-if>
+<span onClick="{{ b.toggleStar }}" title="Star session" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{ b.starFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span>
+<sc-if value="{{ b.archived }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #e5e5e5">Archived</span></sc-if>
+<span onClick="{{ b.toggleArchive }}" style="margin-left:auto;height:28px;padding:0 10px;display:flex;align-items:center;gap:4px;border:1px solid #e5e5e5;border-radius:8px;font-size:12.8px;font-weight:500;cursor:pointer" style-hover="background:#f5f5f5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>{{ b.archiveLabel }}</span>
+</div>
+<div style="color:#737373;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px"><span>Claude Code via stdio</span><span>·</span><span style="font-family:'Geist Mono',monospace;font-size:13px">mcp:7f3c2a91-orders</span><span>·</span><span>3 operations</span><span>·</span><span onClick="{{ b.toggleMeta }}" style="display:flex;align-items:center;gap:2px;color:#0a0a0a;cursor:pointer">Details<span style="display:flex;transform:rotate({{ b.metaRot }})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span></span></div>
+<sc-if value="{{ b.metaOpen }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 16px;padding-top:8px">
+<div><div style="font-size:13px;color:#737373">Client</div><div>claude-code 2.4.1</div></div><div><div style="font-size:13px;color:#737373">MCP protocol</div><div>2025-06-18</div></div><div><div style="font-size:13px;color:#737373">Working directory</div><div>C:\work\tickets\ORD-412</div></div><div><div style="font-size:13px;color:#737373">Failed / rejected</div><div>0 / 0</div></div>
+</div></sc-if>
+</div>
+
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px 0 0;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+<div style="padding:0 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div style="display:grid;gap:4px"><div style="font-size:16px;font-weight:500">Optimization</div><div style="color:#737373">orders-report · shop · SqlServer · whole query</div></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.8px;font-weight:500"><span style="color:#737373;font-weight:400;font-size:14px">Compare</span>
+<select value="{{ b.a }}" onChange="{{ b.onSelA }}" style="height:28px;padding:0 6px;border:1px solid #e5e5e5;border-radius:8px;font:500 12.8px 'Geist',sans-serif;background:#fff"><sc-for list="{{ versionNames }}" as="v" hint-placeholder-count="3"><option value="{{ v }}">A: {{ v }}</option></sc-for></select>
+<span style="color:#737373">→</span>
+<select value="{{ b.b }}" onChange="{{ b.onSelB }}" style="height:28px;padding:0 6px;border:1px solid #e5e5e5;border-radius:8px;font:500 12.8px 'Geist',sans-serif;background:#fff"><sc-for list="{{ versionNames }}" as="v" hint-placeholder-count="3"><option value="{{ v }}">B: {{ v }}</option></sc-for></select>
+<span style="width:1px;height:20px;background:#e5e5e5;margin:0 4px"></span>
+<span style="height:28px;padding:0 8px 0 10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e5e5;border-radius:8px">All cases · Sum<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span></div></div>
+<div style="padding:0 16px">
+<table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:40px;padding:0 8px;text-align:left;font-weight:500">Version</th><th style="padding:0 8px;text-align:right;font-weight:500">Logical reads</th><th style="padding:0 8px;text-align:right;font-weight:500">Elapsed median</th><th style="padding:0 8px;text-align:right;font-weight:500">CPU</th><th style="padding:0 8px;text-align:left;font-weight:500">Outcome</th><th style="padding:0 8px;text-align:left;font-weight:500">Observed in</th></tr></thead>
+<tbody><sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="3"><tr onClick="{{ r.pickB }}" style="border-bottom:1px solid #e5e5e5;cursor:pointer;background:{{ r.bg }}" style-hover="background:#fafafa">
+<td style="padding:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:500">{{ r.version }}</span><sc-if value="{{ r.isA }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:5px;background:#e5e5e5">A</span></sc-if><sc-if value="{{ r.isB }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:5px;background:#171717;color:#fff">B</span></sc-if><sc-if value="{{ r.best }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #15803d;color:#15803d">Best</span></sc-if></div></td>
+<td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums"><span>{{ r.reads }}</span> <span style="font-size:12px;color:{{ r.dReadsColor }};display:inline-block;min-width:44px">{{ r.dReads }}</span></td>
+<td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums"><span>{{ r.elapsed }}</span> <span style="font-size:12px;color:{{ r.dElColor }};display:inline-block;min-width:44px">{{ r.dEl }}</span></td>
+<td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">{{ r.cpu }}</td>
+<td style="padding:8px">{{ r.outcome }}</td><td style="padding:8px;color:#525252">{{ r.op }}</td>
+</tr></sc-for></tbody></table>
+<div style="padding:8px 8px 0;font-size:12px;color:#737373">Kliknij wiersz, aby ustawić go jako B. Δ względem A.</div>
+</div>
+<div style="display:flex;flex-direction:column;border-top:1px solid #e5e5e5;background:#fff">
+<div style="padding:0 16px;display:flex;align-items:center;gap:20px;border-bottom:1px solid #e5e5e5;font-weight:500">
+<span onClick="{{ b.tabDiff }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ b.tDiffLine }};color:{{ b.tDiffColor }}">SQL diff</span>
+<span onClick="{{ b.tabStmts }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ b.tStmtLine }};color:{{ b.tStmtColor }}">Statements <span style="font-weight:400;color:#737373">{{ b.pair.stmtCount }}</span></span>
+<span onClick="{{ b.tabTables }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ b.tTabLine }};color:{{ b.tTabColor }}">Tables <span style="font-weight:400;color:#737373">3</span></span>
+<span style="margin-left:auto;font-weight:400;color:#525252;font-size:13px;font-variant-numeric:tabular-nums">{{ b.pair.label }} · {{ b.pair.basis }} · {{ b.pair.equiv }} · reads {{ b.pair.reads }} · elapsed {{ b.pair.elapsed }}</span></div>
+<div style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:{{ b.diffDisplay }};flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:16px;font-size:13px">
+<div style="display:flex;padding:2px;background:#f5f5f5;border-radius:9px;font-size:12.8px;font-weight:500"><span onClick="{{ b.setSide }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ b.sideBg }};box-shadow:{{ b.sideShadow }}">Side by side</span><span onClick="{{ b.setUnified }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ b.uniBg }};box-shadow:{{ b.uniShadow }}">Unified</span></div>
+<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" checked="{{ b.ignoreFmt }}" onChange="{{ b.toggleFmt }}">Ignore formatting</label>
+<span style="margin-left:auto;display:flex;align-items:center;gap:4px;color:#525252"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>Copy diff</span><span style="color:#525252">Copy script ▾</span></div>
+<div style="height:380px;border:1px solid #e5e5e5;border-radius:6px;overflow:hidden;position:relative"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#737373;font-size:13px;pointer-events:none;opacity:1">Full SQL diff is shown in <a href="#4a" style="margin-left:4px;pointer-events:auto">4a</a></div></div>
+</div>
+<sc-if value="{{ b.showStmts }}" hint-placeholder-val="{{ false }}"><table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:36px;padding:0 8px;text-align:left;font-weight:500">Statement</th><th style="padding:0 8px;text-align:left;font-weight:500">Status</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads before</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads after</th><th style="padding:0 8px;text-align:right;font-weight:500">Change</th></tr></thead>
+<tbody><sc-for list="{{ b.pair.stmts }}" as="s" hint-placeholder-count="2"><tr style="border-bottom:1px solid #f0f0f0"><td style="padding:8px;font-family:'Geist Mono',monospace;font-size:12.5px">{{ s.text }}<div style="margin-top:4px;font-family:'Geist',sans-serif;font-size:12px;display:flex;gap:8px"><a href="#">Plan before</a><a href="#">Plan after</a></div></td><td style="padding:8px;color:#737373">{{ s.status }}</td><td style="padding:8px;text-align:right">{{ s.before }}</td><td style="padding:8px;text-align:right">{{ s.after }}</td><td style="padding:8px;text-align:right;color:{{ s.color }}">{{ s.change }}</td></tr></sc-for></tbody></table></sc-if>
+<sc-if value="{{ b.showTables }}" hint-placeholder-val="{{ false }}"><table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:36px;padding:0 8px;text-align:left;font-weight:500">Table</th><th style="padding:0 8px;text-align:right;font-weight:500">Scans before</th><th style="padding:0 8px;text-align:right;font-weight:500">Scans after</th><th style="padding:0 8px;text-align:right;font-weight:500">Logical reads before</th><th style="padding:0 8px;text-align:right;font-weight:500">Logical reads after</th></tr></thead>
+<tbody><sc-for list="{{ b.pair.tables }}" as="t" hint-placeholder-count="3"><tr style="border-bottom:1px solid #f0f0f0"><td style="padding:8px">{{ t.name }}</td><td style="padding:8px;text-align:right">{{ t.sb }}</td><td style="padding:8px;text-align:right">{{ t.sa }}</td><td style="padding:8px;text-align:right">{{ t.rb }}</td><td style="padding:8px;text-align:right">{{ t.ra }}</td></tr></sc-for></tbody></table></sc-if>
+</div></div></div>
+<div style="padding:12px 16px;border:1px dashed #d4d4d4;border-radius:10px;color:#737373;font-size:13px">Add note · Conversations · All operations — bez zmian</div>
+</main></div></div>
+
+</div>
+<p class="dv-next">Try next: "nagłówek z <a class="dv-oid" href="#2b">2b</a>, optimization z <a class="dv-oid" href="#2a">2a</a>" · "w <a class="dv-oid" href="#2a">2a</a> statementy jako zakładka jak w <a class="dv-oid" href="#2b">2b</a>" · "pokaż 8 wersji"</p>
+</section>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Sesja z sekcją Optimization — dziś (<a class="dv-oid" href="#1a">1a</a>) i trzy uproszczenia</span></div>
+<div class="dv-opts">
+
+<!-- ============ 1b ============ -->
+<div class="dv-opt" id="1b"><div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Jedna karta, ranking wersji. Brak ramek w ramkach; wiersz = wybór (zawsze vs v0); linki i skrypty w menu ⋯.</div>
+<div class="dv-card" style="width:1120px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px">Live</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;background:#f5f5f5">Sessions</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Named operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Usage</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Profiles</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Mutations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Settings</span></nav>
+<span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"></rect><line x1="8" x2="16" y1="21" y2="21"></line><line x1="12" x2="12" y1="17" y2="21"></line></svg></span></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="padding:16px;display:flex;flex-direction:column;gap:16px;font-size:14px">
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px;display:flex;flex-direction:column;gap:16px">
+<div style="display:grid;gap:4px"><div style="display:flex;align-items:center;gap:8px;font-size:16px;font-weight:500"><span>Optimize orders report</span><span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg></span><span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span><span style="height:28px;padding:0 10px;display:flex;align-items:center;gap:4px;border:1px solid #e5e5e5;border-radius:8px;font-size:12.8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>Archive</span></div>
+<div style="font-family:'Geist Mono',monospace">mcp:7f3c2a91-orders</div><div style="color:#737373">Claude Code via stdio (mcp)</div></div>
+<div style="font-weight:500">Session metadata</div></div>
+
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px 0;display:flex;flex-direction:column;gap:16px">
+<div style="padding:0 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div style="display:grid;gap:4px"><div style="font-size:16px;font-weight:500">Optimization</div><div style="color:#737373">orders-report · shop · SqlServer · whole query</div></div>
+<div style="display:flex;align-items:center;gap:8px"><span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:8px;font-size:12.8px;font-weight:500">SQL diff</span></div></div>
+<div style="padding:0 16px;position:relative">
+<table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:40px;padding:0 8px;text-align:left;font-weight:500">Version</th><th style="padding:0 8px;text-align:right;font-weight:500">Logical reads</th><th style="padding:0 8px;text-align:right;font-weight:500">vs v0</th><th style="padding:0 8px;text-align:right;font-weight:500">Elapsed median</th><th style="padding:0 8px;text-align:right;font-weight:500">vs v0</th><th style="padding:0 8px;text-align:left;font-weight:500">Results</th><th style="width:40px"></th></tr></thead>
+<tbody>
+<tr style="border-bottom:1px solid #e5e5e5"><td style="padding:8px;display:flex;align-items:center;gap:8px"><span style="font-weight:500">v0</span><span style="font-size:12px;color:#737373">baseline</span></td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">48,212</td><td style="padding:8px;text-align:right;color:#737373">—</td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">412 ms</td><td style="padding:8px;text-align:right;color:#737373">—</td><td style="padding:8px;color:#737373">—</td><td style="padding:4px 8px"><span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span></td></tr>
+<tr style="border-bottom:1px solid #e5e5e5"><td style="padding:8px;font-weight:500">v1</td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">12,904</td><td style="padding:8px;text-align:right;color:#15803d;font-variant-numeric:tabular-nums">−73%</td><td style="padding:8px;text-align:right;font-variant-numeric:tabular-nums">188 ms</td><td style="padding:8px;text-align:right;color:#15803d">−54%</td><td style="padding:8px">equivalent</td><td style="padding:4px 8px"><span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span></td></tr>
+<tr style="background:#f5f5f5"><td style="padding:8px;display:flex;align-items:center;gap:8px"><span style="font-weight:500">v2</span><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #15803d;color:#15803d">Best</span></td><td style="padding:8px;text-align:right;font-weight:500;font-variant-numeric:tabular-nums">7,630</td><td style="padding:8px;text-align:right;color:#15803d;font-weight:500">−84%</td><td style="padding:8px;text-align:right;font-weight:500">151 ms</td><td style="padding:8px;text-align:right;color:#15803d;font-weight:500">−63%</td><td style="padding:8px">equivalent</td><td style="padding:4px 8px"><span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#e5e5e5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span></td></tr>
+</tbody></table>
+<div style="position:absolute;right:24px;top:166px;width:244px;background:#fff;border-radius:10px;box-shadow:0 0 0 1px rgba(10,10,10,.1),0 8px 24px rgba(0,0,0,.08);padding:4px;font-size:14px;z-index:2"><div style="padding:6px 8px;border-radius:6px">Open operation #214</div><div style="padding:6px 8px;border-radius:6px">Plans for v2</div><div style="height:1px;background:#e5e5e5;margin:4px -4px"></div><div style="padding:6px 8px;border-radius:6px;background:#f5f5f5">Copy script (as executed)</div><div style="padding:6px 8px">Copy script (local variables)</div></div>
+</div>
+<div style="height:1px;background:#e5e5e5"></div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px"><div style="display:flex;align-items:baseline;gap:10px"><span style="font-weight:500">v0 → v2</span><span style="color:#737373">measured together in <a href="#" style="color:#737373">#214</a> · results equivalent (multiset)</span></div>
+<div style="display:flex;gap:8px;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 8px 0 10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e5e5;border-radius:8px">All cases<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span><span style="height:28px;padding:0 8px 0 10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e5e5;border-radius:8px">Sum<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span></div></div>
+<table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:40px;padding:0 8px;text-align:left;font-weight:500">Changed statement</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads before</th><th style="padding:0 8px;text-align:right;font-weight:500">Reads after</th><th style="padding:0 8px;text-align:right;font-weight:500">Change</th></tr></thead>
+<tbody><tr style="border-bottom:1px solid #e5e5e5;vertical-align:top"><td style="padding:8px;max-width:640px"><div style="font-family:'Geist Mono',monospace;font-size:12.5px;line-height:1.5">SELECT o.OrderId, o.CustomerId, SUM(l.Amount) AS Total FROM dbo.Orders o JOIN dbo.OrderLines l ON l.OrderId = o.OrderId WHERE o.CustomerId = @CustomerId GROUP BY o.OrderId, o.CustomerId</div><div style="margin-top:4px;font-size:12px;color:#737373">different work · 1 execution</div></td><td style="padding:8px;text-align:right">46,880</td><td style="padding:8px;text-align:right">6,412</td><td style="padding:8px;text-align:right;color:#15803d">−86%</td></tr>
+<tr style="vertical-align:top"><td style="padding:8px"><div style="font-family:'Geist Mono',monospace;font-size:12.5px;line-height:1.5">SELECT c.Name FROM dbo.Customers c WHERE c.CustomerId = @CustomerId</div><div style="margin-top:4px;font-size:12px;color:#737373">shared · 1 execution</div></td><td style="padding:8px;text-align:right">1,332</td><td style="padding:8px;text-align:right">1,218</td><td style="padding:8px;text-align:right;color:#15803d">−9%</td></tr></tbody></table>
+<div style="display:flex;gap:24px;color:#737373;font-size:13px"><span>Elapsed 412 → 151 ms · pass</span><span>CPU 380 → 122 ms</span><span style="text-decoration:underline">More views (whole batch, by statement)</span></div>
+</div></div>
+<div style="padding:12px 16px;border:1px dashed #d4d4d4;border-radius:10px;color:#737373;font-size:13px">Add note · Conversations · All operations — bez zmian</div>
+</main></div></div>
+
+<!-- ============ 1c ============ -->
+<div class="dv-opt" id="1c"><div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Wersje jako kolumny. Przy 2–3 wersjach widać wszystko naraz, najlepsza kolumna wyróżniona. Szczegóły zmian pod spodem, wybór pary w dwóch selectach.</div>
+<div class="dv-card" style="width:1120px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 10px;display:flex;align-items:center">Live</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;background:#f5f5f5">Sessions</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Named operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Usage</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Profiles</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Mutations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Settings</span></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="padding:16px;display:flex;flex-direction:column;gap:16px;font-size:14px">
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px;display:grid;gap:4px"><div style="font-size:16px;font-weight:500">Optimize orders report</div><div style="font-family:'Geist Mono',monospace">mcp:7f3c2a91-orders</div><div style="color:#737373">Claude Code via stdio (mcp)</div></div>
+
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px 0;display:flex;flex-direction:column;gap:16px">
+<div style="padding:0 16px;display:flex;justify-content:space-between;align-items:flex-start"><div style="display:grid;gap:4px"><div style="font-size:16px;font-weight:500">Optimization</div><div style="color:#737373">orders-report · shop · SqlServer · whole query · @CustomerId = 9001</div></div>
+<span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></span></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid #e5e5e5;border-bottom:1px solid #e5e5e5">
+<div style="padding:16px;display:flex;flex-direction:column;gap:12px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;gap:8px;align-items:baseline"><span style="font-weight:600;font-size:15px">v0</span><span style="font-size:12px;color:#737373">baseline · #201</span></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></div>
+<div><div style="font-size:12px;color:#737373">Logical reads</div><div style="font-size:22px;font-weight:500;font-variant-numeric:tabular-nums">48,212</div></div><div><div style="font-size:12px;color:#737373">Elapsed median</div><div style="font-size:16px;font-variant-numeric:tabular-nums">412 ms</div></div><div style="font-size:13px;color:#737373">CPU 380 ms · 14 scans</div></div>
+<div style="padding:16px;display:flex;flex-direction:column;gap:12px;border-left:1px solid #e5e5e5"><div style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;gap:8px;align-items:baseline"><span style="font-weight:600;font-size:15px">v1</span><span style="font-size:12px;color:#737373">#207</span></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></div>
+<div><div style="font-size:12px;color:#737373">Logical reads</div><div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:22px;font-weight:500;font-variant-numeric:tabular-nums">12,904</span><span style="color:#15803d;font-size:13px">−73%</span></div></div><div><div style="font-size:12px;color:#737373">Elapsed median</div><div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:16px">188 ms</span><span style="color:#15803d;font-size:13px">−54%</span></div></div><div style="font-size:13px;color:#737373">CPU 171 ms · 6 scans · results equivalent</div></div>
+<div style="padding:16px;display:flex;flex-direction:column;gap:12px;border-left:1px solid #e5e5e5;background:#fafafa;box-shadow:inset 0 3px 0 #10AC61"><div style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;gap:8px;align-items:center"><span style="font-weight:600;font-size:15px">v2</span><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;border:1px solid #15803d;color:#15803d">Best</span><span style="font-size:12px;color:#737373">#214</span></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></div>
+<div><div style="font-size:12px;color:#737373">Logical reads</div><div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:22px;font-weight:600;font-variant-numeric:tabular-nums">7,630</span><span style="color:#15803d;font-size:13px;font-weight:500">−84%</span></div></div><div><div style="font-size:12px;color:#737373">Elapsed median</div><div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:16px;font-weight:500">151 ms</span><span style="color:#15803d;font-size:13px;font-weight:500">−63%</span></div></div><div style="font-size:13px;color:#737373">CPU 122 ms · 3 scans · results equivalent</div></div>
+</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="font-weight:500">What changed</span>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 8px 0 10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e5e5;border-radius:8px">v0<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span><span style="color:#737373">→</span><span style="height:28px;padding:0 8px 0 10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e5e5;border-radius:8px">v2<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#737373" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:8px;margin-left:8px">SQL diff</span></div></div>
+<div style="display:flex;flex-direction:column">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:24px;padding:10px 0;border-top:1px solid #e5e5e5"><div><div style="font-family:'Geist Mono',monospace;font-size:12.5px;line-height:1.5">SELECT o.OrderId, o.CustomerId, SUM(l.Amount) AS Total FROM dbo.Orders o JOIN dbo.OrderLines l ON l.OrderId = o.OrderId WHERE o.CustomerId = @CustomerId …</div><div style="margin-top:4px;font-size:12px;color:#737373">different work · 1 execution</div></div><div style="text-align:right;font-variant-numeric:tabular-nums"><div>46,880 → 6,412</div><div style="color:#15803d;font-size:13px">−86% reads</div></div></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:24px;padding:10px 0;border-top:1px solid #e5e5e5"><div><div style="font-family:'Geist Mono',monospace;font-size:12.5px;line-height:1.5">SELECT c.Name FROM dbo.Customers c WHERE c.CustomerId = @CustomerId</div><div style="margin-top:4px;font-size:12px;color:#737373">shared · 1 execution</div></div><div style="text-align:right;font-variant-numeric:tabular-nums"><div>1,332 → 1,218</div><div style="color:#15803d;font-size:13px">−9% reads</div></div></div>
+</div></div></div>
+<div style="padding:12px 16px;border:1px dashed #d4d4d4;border-radius:10px;color:#737373;font-size:13px">Add note · Conversations · All operations — bez zmian</div>
+</main></div></div>
+
+<!-- ============ 1d ============ -->
+<div class="dv-opt" id="1d"><div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Werdykt na górze. Jedno zdanie odpowiada „która najlepsza", reszta w płaskich rozwijanych wierszach (tylko linie, bez ramek).</div>
+<div class="dv-card" style="width:1120px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 10px;display:flex;align-items:center">Live</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;background:#f5f5f5">Sessions</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Named operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Usage</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Profiles</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Mutations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Settings</span></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="padding:16px;display:flex;flex-direction:column;gap:16px;font-size:14px">
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px;display:grid;gap:4px"><div style="font-size:16px;font-weight:500">Optimize orders report</div><div style="font-family:'Geist Mono',monospace">mcp:7f3c2a91-orders</div><div style="color:#737373">Claude Code via stdio (mcp)</div></div>
+
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px 0 4px;display:flex;flex-direction:column;gap:16px">
+<div style="padding:0 16px;display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="font-size:16px;font-weight:500">Optimization <span style="color:#737373;font-weight:400;font-size:14px">· orders-report · shop</span></div>
+<div style="display:flex;align-items:center;gap:4px;padding:2px;background:#f5f5f5;border-radius:9px;font-size:12.8px;font-weight:500"><span style="height:24px;padding:0 10px;display:flex;align-items:center;color:#737373">v0</span><span style="height:24px;padding:0 10px;display:flex;align-items:center;color:#737373">v1</span><span style="height:24px;padding:0 10px;display:flex;align-items:center;background:#fff;border-radius:7px;box-shadow:0 1px 2px rgba(0,0,0,.08)">v2</span></div></div>
+<div style="padding:0 16px;display:grid;gap:6px"><div style="font-size:22px;font-weight:600;letter-spacing:-.01em">v2 is the best version</div><div style="color:#525252">−84% logical reads and −63% elapsed vs v0 · results equivalent · measured together in <a href="#">#214</a></div></div>
+<div style="padding:0 16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+<div><div style="font-size:12px;color:#737373">Logical reads</div><div style="font-variant-numeric:tabular-nums;font-size:16px"><span style="color:#737373">48,212 →</span> <span style="font-weight:600">7,630</span></div></div>
+<div><div style="font-size:12px;color:#737373">Elapsed median</div><div style="font-size:16px"><span style="color:#737373">412 →</span> <span style="font-weight:600">151 ms</span> <span style="font-size:12px;color:#15803d">pass</span></div></div>
+<div><div style="font-size:12px;color:#737373">CPU</div><div style="font-size:16px"><span style="color:#737373">380 →</span> <span style="font-weight:600">122 ms</span></div></div></div>
+<div>
+<div style="padding:12px 16px;border-top:1px solid #e5e5e5;display:flex;align-items:center;gap:8px;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg>Changed statements <span style="color:#737373;font-weight:400">2</span></div>
+<div style="padding:0 16px 12px 40px;display:flex;flex-direction:column">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:24px;padding:8px 0"><div style="font-family:'Geist Mono',monospace;font-size:12.5px;line-height:1.5">SELECT o.OrderId, o.CustomerId, SUM(l.Amount) AS Total FROM dbo.Orders o JOIN dbo.OrderLines l …</div><div style="text-align:right;font-variant-numeric:tabular-nums">46,880 → 6,412 <span style="color:#15803d">−86%</span></div></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:24px;padding:8px 0;border-top:1px solid #f0f0f0"><div style="font-family:'Geist Mono',monospace;font-size:12.5px;line-height:1.5">SELECT c.Name FROM dbo.Customers c WHERE c.CustomerId = @CustomerId</div><div style="text-align:right;font-variant-numeric:tabular-nums">1,332 → 1,218 <span style="color:#15803d">−9%</span></div></div></div>
+<div style="padding:12px 16px;border-top:1px solid #e5e5e5;display:flex;align-items:center;gap:8px;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg>All versions <span style="color:#737373;font-weight:400">3</span><span style="margin-left:auto;font-weight:400;color:#737373;font-size:13px">v0 48,212 · v1 12,904 · v2 7,630</span></div>
+<div style="padding:12px 16px;border-top:1px solid #e5e5e5;display:flex;align-items:center;gap:8px;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg>SQL diff <span style="color:#737373;font-weight:400">v0 → v2</span></div>
+<div style="padding:12px 16px;border-top:1px solid #e5e5e5;display:flex;align-items:center;gap:8px;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg>Operations &amp; scripts <span style="color:#737373;font-weight:400">#201, #214</span></div>
+</div></div>
+<div style="padding:12px 16px;border:1px dashed #d4d4d4;border-radius:10px;color:#737373;font-size:13px">Add note · Conversations · All operations — bez zmian</div>
+</main></div></div>
+
+<!-- ============ 1a current ============ -->
+<div class="dv-opt" id="1a"><div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Dziś — odtworzenie z SessionPage / OptimizationSection / VersionTable / ComparisonPanel. 4 poziomy ramek, 3 rzędy przełączników, 2× „Copy script" na wersję.</div>
+<div class="dv-card" style="width:1120px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 10px;display:flex;align-items:center">Live</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;background:#f5f5f5">Sessions</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Named operations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Usage</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Profiles</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Mutations</span><span style="height:28px;padding:0 10px;display:flex;align-items:center">Settings</span></nav>
+<span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"></rect><line x1="8" x2="16" y1="21" y2="21"></line><line x1="12" x2="12" y1="17" y2="21"></line></svg></span></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="padding:16px;display:flex;flex-direction:column;gap:16px;font-size:14px">
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px;display:flex;flex-direction:column;gap:16px">
+<div style="display:grid;gap:4px"><div style="display:flex;align-items:center;gap:8px;font-size:16px;font-weight:500"><span>Optimize orders report</span><span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg></span><span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span><span style="height:28px;padding:0 10px;display:flex;align-items:center;gap:4px;border:1px solid #e5e5e5;border-radius:8px;font-size:12.8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>Archive</span></div>
+<div style="font-family:'Geist Mono',monospace">mcp:7f3c2a91-orders</div><div style="color:#737373">Claude Code via stdio (mcp)</div></div>
+<div style="font-weight:500">Session metadata</div></div>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+<div><h2 style="margin:0;font-size:18px;font-weight:500">Optimization</h2><p style="margin:0;color:#737373">Compare retained SQL versions and review measurements within their conditions and scope.</p></div>
+<article style="border:1px solid #e5e5e5;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:12px">
+<div><h3 style="margin:0;font-size:14px;font-weight:500">orders-report</h3><p style="margin:0;color:#737373">shop · SqlServer</p></div>
+<p style="margin:0;font-weight:500">whole query</p>
+<table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:40px;padding:0 8px;text-align:left;font-weight:500">Version</th><th style="padding:0 8px;text-align:left;font-weight:500">Logical reads (sum)</th><th style="padding:0 8px;text-align:left;font-weight:500">Scans</th><th style="padding:0 8px;text-align:left;font-weight:500">Elapsed median (ms)</th><th style="padding:0 8px;text-align:left;font-weight:500">Outcome</th><th style="padding:0 8px;text-align:left;font-weight:500">Observed in</th><th style="padding:0 8px;text-align:left;font-weight:500">A</th><th style="padding:0 8px;text-align:left;font-weight:500">B</th></tr></thead>
+<tbody>
+<tr style="border-bottom:1px solid #e5e5e5"><th style="padding:8px;text-align:left;font-weight:500">v0</th><td style="padding:8px">48,212</td><td style="padding:8px">14</td><td style="padding:8px">412</td><td style="padding:8px">1/1 ok<span style="margin-left:4px;font-size:12px;color:#737373">basis: whole batch</span></td><td style="padding:8px"><a href="#">Operation #201</a> <a href="#">Operation #214</a></td><td style="padding:8px"><label style="display:flex;align-items:center;gap:4px"><input type="radio" checked="checked" name="cura">A</label></td><td style="padding:8px"><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="curb">B</label></td></tr>
+<tr style="border-bottom:1px solid #e5e5e5"><th style="padding:8px;text-align:left;font-weight:500">v1</th><td style="padding:8px">12,904</td><td style="padding:8px">6</td><td style="padding:8px">188</td><td style="padding:8px">1/1 ok<span style="margin-left:4px;font-size:12px;color:#737373">basis: whole batch</span></td><td style="padding:8px"><a href="#">Operation #207</a></td><td style="padding:8px"><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="cura">A</label></td><td style="padding:8px"><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="curb">B</label></td></tr>
+<tr><th style="padding:8px;text-align:left;font-weight:500">v2</th><td style="padding:8px">7,630</td><td style="padding:8px">3</td><td style="padding:8px">151</td><td style="padding:8px">1/1 ok<span style="margin-left:4px;font-size:12px;color:#737373">basis: whole batch</span></td><td style="padding:8px"><a href="#">Operation #214</a></td><td style="padding:8px"><label style="display:flex;align-items:center;gap:4px"><input type="radio" name="cura">A</label></td><td style="padding:8px"><label style="display:flex;align-items:center;gap:4px"><input type="radio" checked="checked" name="curb">B</label></td></tr>
+</tbody></table>
+<div style="margin-top:16px;border:1px solid #e5e5e5;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;align-items:center;gap:8px"><span style="border:1px solid #e5e5e5;border-radius:999px;padding:4px 8px;font-size:12px">measured together in #214</span><span>results equivalent (multiset)</span></div>
+<div style="display:flex;align-items:center;gap:8px"><span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:8px;font-size:12.8px;font-weight:500">SQL diff</span></div></div>
+<div style="display:flex;gap:8px;font-size:12.8px;font-weight:500"><span style="height:28px;padding:0 10px;display:flex;align-items:center;background:#f5f5f5;border-radius:8px">Changed statements</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:8px">Whole batch</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:8px">By statement</span></div>
+<div style="background:rgba(245,245,245,.4);border-radius:8px;padding:12px;font-weight:500">whole batch: 48,212 → 7,630 logical reads (−84%)</div>
+<p style="margin:0">basis: whole batch</p>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.8px;font-weight:500"><span style="font-size:14px">Case</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;background:#f5f5f5;border-radius:8px">All cases</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:8px">@CustomerId = 9001</span><span style="font-size:14px;margin-left:8px">Aggregate</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;background:#f5f5f5;border-radius:8px">Sum</span><span style="height:28px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:8px">Mean</span></div>
+<p style="margin:0;color:#737373">1 of 1 cases measured together</p>
+<table style="width:100%;font-size:14px"><thead><tr style="border-bottom:1px solid #e5e5e5"><th style="height:40px;padding:0 8px;text-align:left;font-weight:500">Statement</th><th style="padding:0 8px;text-align:left;font-weight:500">Status</th><th style="padding:0 8px;text-align:left;font-weight:500">Executions</th><th style="padding:0 8px;text-align:left;font-weight:500">Reads before</th><th style="padding:0 8px;text-align:left;font-weight:500">Reads after</th><th style="padding:0 8px;text-align:left;font-weight:500">Change</th></tr></thead>
+<tbody><tr style="border-bottom:1px solid #e5e5e5;vertical-align:top"><td style="padding:8px;max-width:520px">SELECT o.OrderId, o.CustomerId, SUM(l.Amount) AS Total FROM dbo.Orders o JOIN dbo.OrderLines l ON l.OrderId = o.OrderId WHERE o.CustomerId = @CustomerId GROUP BY o.OrderId, o.CustomerId<div style="margin-top:4px;display:flex;gap:8px;font-size:12px"><a href="#">Plan before</a><a href="#">Plan after</a></div><div style="margin-top:8px">Objects (2)</div></td><td style="padding:8px">different work</td><td style="padding:8px;white-space:nowrap">1 execution</td><td style="padding:8px">46,880</td><td style="padding:8px">6,412</td><td style="padding:8px">−86%</td></tr>
+<tr style="vertical-align:top"><td style="padding:8px">SELECT c.Name FROM dbo.Customers c WHERE c.CustomerId = @CustomerId<div style="margin-top:4px;display:flex;gap:8px;font-size:12px"><a href="#">Plan before</a><a href="#">Plan after</a></div><div style="margin-top:8px">Objects (1)</div></td><td style="padding:8px">shared</td><td style="padding:8px">1 execution</td><td style="padding:8px">1,332</td><td style="padding:8px">1,218</td><td style="padding:8px">−9%</td></tr></tbody></table>
+<dl style="margin:0;display:flex;flex-wrap:wrap;gap:4px 24px"><dt style="font-weight:500">Elapsed (median)</dt><dd style="margin:0">412 ms → 151 ms</dd><dd style="margin:0">pass</dd><dt style="font-weight:500">CPU (ms)</dt><dd style="margin:0">380 → 122</dd></dl>
+<a href="#" style="font-size:14px">Operation #214</a>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div style="display:grid;gap:4px"><h3 style="margin:0;font-size:14px;font-weight:500">v0 · baseline</h3><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><a href="#">Plans for v0</a><span style="height:32px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:10px;font-weight:500">Copy script (as executed)</span><span style="height:32px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:10px;font-weight:500">Copy script (local variables)</span></div></div>
+<div style="display:grid;gap:4px"><h3 style="margin:0;font-size:14px;font-weight:500">v2 · candidate</h3><div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><a href="#">Plans for v2</a><span style="height:32px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:10px;font-weight:500">Copy script (as executed)</span><span style="height:32px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:10px;font-weight:500">Copy script (local variables)</span></div></div></div>
+</div></article></section>
+<span style="align-self:flex-start;height:32px;padding:0 10px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:10px;font-weight:500">Add note</span>
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:16px;display:flex;flex-direction:column;gap:16px"><div style="display:grid;gap:4px"><div style="font-size:16px;font-weight:500">All operations</div><div style="color:#737373">Newest first. Loaded 3 of 3 operations.</div></div><div style="font-size:14px;font-weight:500;color:#737373">☐ Show internal operations · tabela operacji…</div></div>
+</main></div></div>
+
+</div>
+<p class="dv-next">Try next: "rozwiń <a class="dv-oid" href="#1b">1b</a> z działającym menu ⋯" · "<a class="dv-oid" href="#1c">1c</a> ale z werdyktem z <a class="dv-oid" href="#1d">1d</a>" · "pokaż wariant z 2 subjectami"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;starPosition&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;right&quot;,&quot;left&quot;],&quot;default&quot;:&quot;right&quot;,&quot;tsType&quot;:&quot;'right' | 'left'&quot;,&quot;section&quot;:&quot;3a header&quot;}}">
+const V = [
+  { version: "v0", reads: 48212, elapsed: 412, cpu: 380, scans: 14, outcome: "1/1 ok", op: "#201", label: "Baseline as submitted", keep: false, s1: 46880, s2: 1332,
+    t: { "dbo.Orders": [1, 31840], "dbo.OrderLines": [1, 15040], "dbo.Customers": [1, 1332] },
+    sql: "DECLARE @from date = DATEADD(day, -90, @AsOf);\n\nSELECT o.OrderId, o.CustomerId, SUM(l.Amount) AS Total\nFROM dbo.Orders o\nJOIN dbo.OrderLines l ON l.OrderId = o.OrderId\nWHERE o.CustomerId = @CustomerId\n  AND CONVERT(date, o.CreatedAt) >= @from\nGROUP BY o.OrderId, o.CustomerId\nORDER BY Total DESC;\n\nSELECT c.Name\nFROM dbo.Customers c\nWHERE c.CustomerId = @CustomerId;\n" },
+  { version: "v1", reads: 12904, elapsed: 188, cpu: 171, scans: 6, outcome: "1/1 ok", op: "#207", label: "SARGable CreatedAt filter", keep: false, s1: 11686, s2: 1218,
+    t: { "dbo.Orders": [1, 4210], "dbo.OrderLines": [1, 7476], "dbo.Customers": [1, 1218] },
+    sql: "DECLARE @from date = DATEADD(day, -90, @AsOf);\n\nSELECT o.OrderId, o.CustomerId, SUM(l.Amount) AS Total\nFROM dbo.Orders o\nJOIN dbo.OrderLines l ON l.OrderId = o.OrderId\nWHERE o.CustomerId = @CustomerId\n  AND o.CreatedAt >= @from\nGROUP BY o.OrderId, o.CustomerId\nORDER BY Total DESC;\n\nSELECT c.Name\nFROM dbo.Customers c\nWHERE c.CustomerId = @CustomerId;\n" },
+  { version: "v2", reads: 7630, elapsed: 151, cpu: 122, scans: 3, outcome: "1/1 ok", op: "#214", label: "Pre-aggregate lines via CROSS APPLY", keep: true, s1: 6412, s2: 1218,
+    t: { "dbo.Orders": [1, 2104], "dbo.OrderLines": [1, 4308], "dbo.Customers": [1, 1218] },
+    sql: "DECLARE @from datetime2 = DATEADD(day, -90, @AsOf);\n\nSELECT o.OrderId, o.CustomerId, t.Total\nFROM dbo.Orders o\nCROSS APPLY (\n  SELECT SUM(l.Amount) AS Total\n  FROM dbo.OrderLines l\n  WHERE l.OrderId = o.OrderId\n) t\nWHERE o.CustomerId = @CustomerId\n  AND o.CreatedAt >= @from\nORDER BY t.Total DESC;\n\nSELECT c.Name\nFROM dbo.Customers c\nWHERE c.CustomerId = @CustomerId;\n" },
+];
+const TOGETHER = { "v0|v2": "#214", "v0|v1": "#207" };
+const fmt = n => n.toLocaleString("en-US");
+const pct = (a, b) => a ? Math.round((b - a) / a * 100) : 0;
+const pctTxt = p => (p > 0 ? "+" : p < 0 ? "−" : "±") + Math.abs(p) + "%";
+const good = "#15803d", bad = "#b91c1c", mute = "#737373";
+const S1 = "SELECT o.OrderId, o.CustomerId, SUM(l.Amount) … FROM dbo.Orders o …";
+const S2 = "SELECT c.Name FROM dbo.Customers c WHERE c.CustomerId = @CustomerId";
+const KEYWORDS = ["all","alter","and","as","asc","begin","by","case","cast","coalesce","column","commit","create","cross","current_date","current_timestamp","database","delete","desc","distinct","drop","else","end","except","exists","false","fetch","for","foreign","from","full","group","having","in","index","inner","insert","intersect","into","is","join","left","like","limit","not","null","offset","on","or","order","outer","primary","references","returning","right","rollback","select","set","table","then","true","union","unique","update","values","when","where","with","declare","apply"];
+
+const STMT_STARTS = ["SELECT o.OrderId", "SELECT c.Name"];
+const CUST = { op: "SELECT", obj: "statement root", est: 1, act: 1, cost: 0, conf: "exact", rule: "statement root", match: "*", kids: [
+  { op: "Clustered Index Seek", obj: "dbo.Customers · PK_Customers (c)", est: 1, act: 1, cost: 100, conf: "exact", rule: "seek predicate", match: "c.CustomerId = @CustomerId" }] };
+const PLANS = {
+  v0: [{ op: "SELECT", obj: "statement root", est: 120, act: 118, cost: 0, conf: "exact", rule: "statement root", match: "*", kids: [
+    { op: "Sort", obj: "Total DESC", est: 120, act: 118, cost: 4, conf: "exact", rule: "ORDER BY", match: "ORDER BY Total DESC", kids: [
+      { op: "Hash Match", obj: "Aggregate", est: 120, act: 118, cost: 9, conf: "exact", rule: "GROUP BY", match: "GROUP BY o.OrderId, o.CustomerId", kids: [
+        { op: "Hash Match", obj: "Inner Join", est: 2400, act: 1960, cost: 21, conf: "exact", rule: "join condition", match: "JOIN dbo.OrderLines l ON l.OrderId = o.OrderId", kids: [
+          { op: "Clustered Index Scan", obj: "dbo.Orders · PK_Orders (o)", est: 140, act: 118, cost: 38, conf: "inferred", rule: "residual predicate", match: "CONVERT(date, o.CreatedAt) >= @from", warn: "Implicit conversion on o.CreatedAt prevents a seek" },
+          { op: "Clustered Index Scan", obj: "dbo.OrderLines · PK_OrderLines (l)", est: 410000, act: 410000, cost: 28, conf: "exact", rule: "table reference", match: "dbo.OrderLines l" }] }] }] }] }, CUST],
+  v1: [{ op: "SELECT", obj: "statement root", est: 120, act: 118, cost: 0, conf: "exact", rule: "statement root", match: "*", kids: [
+    { op: "Sort", obj: "Total DESC", est: 120, act: 118, cost: 3, conf: "exact", rule: "ORDER BY", match: "ORDER BY Total DESC", kids: [
+      { op: "Hash Match", obj: "Aggregate", est: 120, act: 118, cost: 12, conf: "exact", rule: "GROUP BY", match: "GROUP BY o.OrderId, o.CustomerId", kids: [
+        { op: "Nested Loops", obj: "Inner Join", est: 2100, act: 1960, cost: 6, conf: "exact", rule: "join condition", match: "JOIN dbo.OrderLines l ON l.OrderId = o.OrderId", kids: [
+          { op: "Index Seek", obj: "dbo.Orders · IX_Orders_Customer_Created (o)", est: 124, act: 118, cost: 14, conf: "exact", rule: "seek predicate", match: "o.CustomerId = @CustomerId" },
+          { op: "Index Seek", obj: "dbo.OrderLines · IX_OrderLines_OrderId (l)", est: 2100, act: 1960, cost: 65, conf: "inferred", rule: "seek predicate (join)", match: "l.OrderId = o.OrderId" }] }] }] }] }, CUST],
+  v2: [{ op: "SELECT", obj: "statement root", est: 120, act: 118, cost: 0, conf: "exact", rule: "statement root", match: "*", kids: [
+    { op: "Sort", obj: "t.Total DESC", est: 120, act: 118, cost: 6, conf: "exact", rule: "ORDER BY", match: "ORDER BY t.Total DESC", kids: [
+      { op: "Nested Loops", obj: "Inner Join · APPLY", est: 120, act: 118, cost: 4, conf: "exact", rule: "CROSS APPLY", match: "CROSS APPLY", kids: [
+        { op: "Index Seek", obj: "dbo.Orders · IX_Orders_Customer_Created (o)", est: 124, act: 118, cost: 22, conf: "exact", rule: "seek predicate", match: "o.CustomerId = @CustomerId" },
+        { op: "Stream Aggregate", obj: "SUM(l.Amount)", est: 1, act: 1, cost: 3, conf: "exact", rule: "aggregate", match: "SUM(l.Amount)", kids: [
+          { op: "Index Seek", obj: "dbo.OrderLines · IX_OrderLines_OrderId_Amount (l)", est: 17, act: 17, cost: 65, conf: "exact", rule: "seek predicate", match: "l.OrderId = o.OrderId" }] }] }] }] }, CUST],
+};
+const PW = 172, PH = 96, PG = 36, PROW = 112, PP = 12;
+
+const TOK_C = { kw: ["#2F4BBF", 600, "normal"], str: ["#1D6B38", 400, "normal"], num: ["#A8461A", 400, "normal"], com: ["#737373", 400, "italic"], id: ["#0A0A0A", 400, "normal"] };
+const KW = new Set(KEYWORDS);
+function tokenize(line, base) {
+  const out = [], re = /(--.*$)|('(?:[^']|'')*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_@][\w$]*)|(\s+)|(.)/g; let m;
+  while ((m = re.exec(line))) { const t = m[0]; out.push({ t, s: base + m.index, k: m[1] ? "com" : m[2] ? "str" : m[3] ? "num" : m[4] ? (KW.has(t.toLowerCase()) ? "kw" : "id") : "id" }); }
+  return out;
+}
+function segs(line, base, hs, he) {
+  const res = [];
+  for (const tk of tokenize(line, base)) {
+    const a = tk.s, b = a + tk.t.length, cuts = [a, b];
+    if (hs > a && hs < b) cuts.push(hs); if (he > a && he < b) cuts.push(he);
+    cuts.sort((x, y) => x - y);
+    const [c, w, i] = TOK_C[tk.k];
+    for (let j = 0; j < cuts.length - 1; j++) { const x = cuts[j], y = cuts[j + 1]; if (y > x) res.push({ t: tk.t.slice(x - a, y - a), c, w, i, s: x, hl: hs >= 0 && x >= hs && y <= he }); }
+  }
+  return res;
+}
+function lineDiff(A, B, norm) {
+  const nA = A.map(norm), nB = B.map(norm), n = A.length, m = B.length;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = nA[i] === nB[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const ops = []; let i = 0, j = 0;
+  while (i < n && j < m) { if (nA[i] === nB[j]) { ops.push({ t: "eq", a: i++, b: j++ }); } else if (dp[i + 1][j] >= dp[i][j + 1]) ops.push({ t: "del", a: i++ }); else ops.push({ t: "add", b: j++ }); }
+  while (i < n) ops.push({ t: "del", a: i++ }); while (j < m) ops.push({ t: "add", b: j++ });
+  return ops;
+}
+function pane(cells, withLn2) {
+  const segsOut = [], signs = [], bands = [];
+  cells.forEach((c, i) => {
+    for (const s of c.segs) segsOut.push(s);
+    segsOut.push({ t: "\n", c: "#000", w: 400, i: "normal", bg: "transparent", click: null });
+    signs.push({ t: (c.sign || " ") + "\n", c: c.sc || "#737373" });
+    if (c.bg && c.bg !== "transparent") bands.push({ top: i * 19, bg: c.bg });
+  });
+  return { segs: segsOut, signs, bands, lnText: cells.map(c => c.ln).join("\n"), ln2Text: withLn2 ? cells.map(c => c.ln2).join("\n") : "" };
+}
+const plainSegs = arr => arr.map(s => ({ t: s.t, c: s.c, w: s.w, i: s.i, bg: "transparent", click: null }));
+const DEL_BG = "#fdecec", ADD_BG = "#e6f6ee", EMPTY_BG = "#fafafa";
+
+const VIO = {
+  v0: [{ rows: [["dbo.Orders", 1, 31840, 0, 280, 0], ["dbo.OrderLines", 1, 15040, 412, 1890, 0], ["Worktable", 2, 0, 0, 0, 0, 1]], mem: [4.2, 4.2, "Hash spill · level 1"] }, { rows: [["dbo.Customers", 1, 1332, 0, 0, 0]], mem: null }],
+  v1: [{ rows: [["dbo.Orders", 1, 4210, 0, 0, 0], ["dbo.OrderLines", 118, 7476, 0, 0, 0], ["Worktable", 1, 0, 0, 0, 0, 1]], mem: [3.8, 2.9, ""] }, { rows: [["dbo.Customers", 1, 1218, 0, 0, 0]], mem: null }],
+  v2: [{ rows: [["dbo.Orders", 1, 2104, 0, 0, 0], ["dbo.OrderLines", 118, 4308, 0, 0, 0]], mem: [1.1, 0.3, ""] }, { rows: [["dbo.Customers", 1, 1218, 0, 0, 0]], mem: null }],
+};
+const VIO_SQL = ["SELECT o.OrderId, o.CustomerId, … FROM dbo.Orders o …", "SELECT c.Name FROM dbo.Customers c WHERE c.CustomerId = @CustomerId"];
+const VIO_COLS = [["s", "Scans", 1], ["l", "Logical reads", 1], ["p", "Physical", 0], ["ra", "Read-ahead", 0], ["lob", "LOB reads", 0]];
+const VIO_IDX = { s: 1, l: 2, p: 3, ra: 4, lob: 5 };
+[["v0", [360, 392], [20, 20]], ["v1", [152, 170], [19, 18]], ["v2", [104, 131], [18, 20]]].forEach(([v, s1, s2]) => { VIO[v][0].cpu = s1[0]; VIO[v][0].el = s1[1]; VIO[v][1].cpu = s2[0]; VIO[v][1].el = s2[1]; });
+const VIO_STATUS = ["different work", "shared"];
+
+class Component extends DCLogic {
+  state = {
+    a: { title: "Optimize orders report", hover: false, editing: false, draft: "", star: false, archived: false, menu: false, meta: false, A: "v0", B: "v2", side: true, fmt: false, stmts: false, rowMenu: null },
+    b: { title: "Optimize orders report", hover: false, editing: false, draft: "", star: true, archived: false, meta: false, A: "v0", B: "v2", side: true, fmt: false, tab: "diff" },
+    c: { title: "Optimize orders report", hover: false, editing: false, draft: "", star: true, archived: false, meta: false, A: "v0", B: "v2", side: true, fmt: false, tab: "diff", rowMenu: null, tip: null },
+    d: { title: "Optimize orders report", hover: false, editing: false, draft: "", star: true, archived: false, meta: false, A: "v0", B: "v2", side: true, fmt: false, tab: "plan", rowMenu: null, tip: null, planV: "v2", planStmt: 0, planNode: null },
+  };
+  planScrollRef = React.createRef();
+  layouts = {};
+  diffs = {};
+
+  set(k, patch) { this.setState(s => ({ [k]: { ...s[k], ...(typeof patch === "function" ? patch(s[k]) : patch) } })); }
+
+  componentDidUpdate() {
+    const c = this.state.d || {}, p = this._prevD || {};
+    this._prevD = { planNode: c.planNode, planV: c.planV, planStmt: c.planStmt, tab: c.tab };
+    if (p.planNode !== c.planNode || p.planV !== c.planV || p.planStmt !== c.planStmt || p.tab !== c.tab) { try { this.scrollPlan(); } catch (e) { console.warn("scrollPlan:", e && e.message); } }
+  }
+
+  scrollPlan() {
+    const el = this.planScrollRef.current; if (!el) return;
+    const st = this.state.d, sql = V.find(x => x.version === st.planV).sql, L = this.layout(st.planV, st.planStmt);
+    const sel = L.nodes.find(n => n.key === st.planNode);
+    const off = sel ? sel.s : L.start;
+    const line = sql.slice(0, off).split("\n").length - 1;
+    const top = line * 19 + 8, bottom = top + 19;
+    if (top < el.scrollTop || bottom > el.scrollTop + el.clientHeight) el.scrollTop = Math.max(0, top - 2 * 19);
+  }
+
+  layout(v, si) {
+    const key = v + "|" + si;
+    if (this.layouts[key]) return this.layouts[key];
+    const sql = V.find(x => x.version === v).sql;
+    const start = sql.indexOf(STMT_STARTS[si]), end = sql.indexOf(";", start) + 1;
+    const tree = PLANS[v][si];
+    const depth = n => (n.kids || []).reduce((m, k) => Math.max(m, 1 + depth(k)), 0);
+    const deepest = depth(tree);
+    const nodes = [], edges = [];
+    let row = 0, id = 0;
+    const place = (n, d) => {
+      const me = { ...n, key: key + ":" + id++ };
+      if (n.match === "*") { me.s = start; me.e = end; } else { me.s = sql.indexOf(n.match, start); me.e = me.s + n.match.length; }
+      const kids = (n.kids || []).map(k => place(k, d + 1));
+      me.ry = kids.length ? kids.reduce((a, k) => a + k.ry, 0) / kids.length : row++;
+      me.x = PP + (deepest - d) * (PW + PG);
+      me.y = PP + me.ry * PROW + (PROW - PH) / 2;
+      nodes.push(me);
+      for (const k of kids) edges.push({ from: k, to: me });
+      return me;
+    };
+    place(tree, 0);
+    const W = PP * 2 + (deepest + 1) * PW + deepest * PG, H = PP * 2 + row * PROW;
+    const out = { start, end, nodes, W, H, edges: edges.map(({ from, to }) => {
+      const x1 = from.x + PW, y1 = from.y + PH / 2, x2 = to.x, y2 = to.y + PH / 2, mx = (x1 + x2) / 2;
+      const w = Math.round(Math.min(6, 1.5 + Math.log10(from.act + 1)) * 2) / 2, hw = w / 2;
+      return { w, h1x: x1, h1y: y1 - hw, h1w: mx - x1 + hw, vx: mx - hw, vy: Math.min(y1, y2) - hw, vh: Math.abs(y2 - y1) + w, h2x: mx - hw, h2y: y2 - hw, h2w: x2 - mx + hw, lx: x1 + 3, ly: y1 - 18, rows: fmt(from.act) };
+    }) };
+    return (this.layouts[key] = out);
+  }
+
+  pickAt(off) {
+    const st = this.state.d;
+    let si = st.planStmt;
+    for (const i of [0, 1]) { const L = this.layout(st.planV, i); if (off >= L.start && off <= L.end) si = i; }
+    const L = this.layout(st.planV, si);
+    const hit = L.nodes.filter(n => n.s <= off && off <= n.e).sort((a, b) => (a.e - a.s) - (b.e - b.s))[0];
+    this.set("d", { planStmt: si, planNode: hit ? hit.key : null });
+  }
+
+  diff(A, B, fmtOn) {
+    const key = A + "|" + B + "|" + fmtOn;
+    if (this.diffs[key]) return this.diffs[key];
+    const la = V.find(x => x.version === A).sql.replace(/\n$/, "").split("\n"), lb = V.find(x => x.version === B).sql.replace(/\n$/, "").split("\n");
+    const norm = fmtOn ? (s => s.replace(/\s+/g, " ").trim().toLowerCase()) : (s => s);
+    const ops = lineDiff(la, lb, norm);
+    const cell = (lines, i, kind) => i == null
+      ? { ln: "", sign: "", sc: "#737373", segs: [], bg: EMPTY_BG }
+      : { ln: String(i + 1), sign: kind === "del" ? "−" : kind === "add" ? "+" : "", sc: kind === "del" ? "#b91c1c" : "#15803d", segs: plainSegs(segs(lines[i], 0, -1, -1)), bg: kind === "del" ? DEL_BG : kind === "add" ? ADD_BG : "transparent" };
+    const side = [], uni = [];
+    let k = 0;
+    while (k < ops.length) {
+      if (ops[k].t === "eq") { side.push({ l: cell(la, ops[k].a, "eq"), r: cell(lb, ops[k].b, "eq") }); k++; continue; }
+      const dels = [], adds = [];
+      while (k < ops.length && ops[k].t !== "eq") { (ops[k].t === "del" ? dels : adds).push(ops[k]); k++; }
+      for (let i = 0; i < Math.max(dels.length, adds.length); i++) side.push({ l: cell(la, dels[i] ? dels[i].a : null, "del"), r: cell(lb, adds[i] ? adds[i].b : null, "add") });
+    }
+    for (const o of ops) {
+      const ln = o.t === "add" ? lb[o.b] : la[o.a];
+      uni.push({ ln: o.t === "add" ? "" : String(o.a + 1), ln2: o.t === "del" ? "" : String(o.b + 1), sign: o.t === "del" ? "−" : o.t === "add" ? "+" : "", sc: o.t === "del" ? "#b91c1c" : "#15803d", segs: plainSegs(segs(ln, 0, -1, -1)), bg: o.t === "del" ? DEL_BG : o.t === "add" ? ADD_BG : "transparent" });
+    }
+    return (this.diffs[key] = { L: pane(side.map(r => r.l)), R: pane(side.map(r => r.r)), U: pane(uni, true) });
+  }
+
+  ioView(A, B, opt) {
+    opt = opt || {}; const single = !B; if (single) B = A;
+    const ui = this.state.ioUi || { mode: "stmt", cols: { p: true, ra: true, lob: false }, open: { 0: true, 1: true } };
+    const setUi = fn => this.setState(s => ({ ioUi: fn(s.ioUi || ui) }));
+    const f = n => n.toLocaleString("en-US");
+    const pcx = (a, b) => a ? Math.round((b - a) * 100 / a) : 0;
+    const ptx = p => (p > 0 ? "+" : p < 0 ? "−" : "±") + Math.abs(p) + "%";
+    const cell = ([b, a]) => { if (single) return { v: f(b), d: "", color: b ? "#0a0a0a" : "#737373" }; if (b === 0 && a === 0) return { v: "0", d: "", color: "#737373" }; const p = pcx(b, a); return { v: f(b) + " → " + f(a), d: b === 0 ? "new" : ptx(p), color: p < 0 ? "#15803d" : p > 0 ? "#b45309" : "#737373" }; };
+    const cols = VIO_COLS.filter(([k, , fixed]) => fixed || ui.cols[k]);
+    const stmts = VIO_SQL.map((sql, i) => {
+      const a = VIO[A][i], b = VIO[B][i], names = [];
+      [a, b].forEach(x => x.rows.forEach(r => { if (!names.includes(r[0])) names.push(r[0]); }));
+      const rows = names.map(n => { const ra = a.rows.find(r => r[0] === n), rb = b.rows.find(r => r[0] === n); const o = { name: n, wt: !!((ra && ra[6]) || (rb && rb[6])) }; for (const k in VIO_IDX) o[k] = [ra ? ra[VIO_IDX[k]] : 0, rb ? rb[VIO_IDX[k]] : 0]; return o; });
+      return { sql, rows, mem: a.mem || b.mem ? { a: a.mem, b: b.mem } : null };
+    });
+    const sum = rows => Object.fromEntries(Object.keys(VIO_IDX).map(k => [k, [rows.reduce((t, r) => t + r[k][0], 0), rows.reduce((t, r) => t + r[k][1], 0)]]));
+    const byName = {};
+    stmts.forEach(st => st.rows.forEach(r => { const t = byName[r.name] || (byName[r.name] = { name: r.name, wt: r.wt, s: [0, 0], l: [0, 0], p: [0, 0], ra: [0, 0], lob: [0, 0] }); for (const k in VIO_IDX) t[k] = [t[k][0] + r[k][0], t[k][1] + r[k][1]]; }));
+    const all = Object.values(byName);
+    const cellsOf = r => cols.map(([k]) => cell(r[k]));
+    const mb = x => x == null ? "—" : x + " MB";
+    const memOf = m => { if (!m) return [{ k: "Memory grant", v: "none", warn: false, warnText: "" }]; const sa = m.a && m.a[2], sb = m.b && m.b[2];
+      if (single) return [{ k: "Memory grant", v: mb(m.a && m.a[0]), warn: false, warnText: "" }, { k: "Max used", v: mb(m.a && m.a[1]), warn: false, warnText: "" }, { k: "Spills", v: sa ? "1" : "0", warn: !!sa, warnText: sa || "" }];
+      return [{ k: "Memory grant", v: mb(m.a && m.a[0]) + " → " + mb(m.b && m.b[0]), warn: false, warnText: "" }, { k: "Max used", v: mb(m.a && m.a[1]) + " → " + mb(m.b && m.b[1]), warn: false, warnText: "" }, { k: "Spills", v: (sa ? 1 : 0) + " → " + (sb ? 1 : 0), warn: !!(sa || sb), warnText: sa ? A + ": " + sa : B + ": " + sb }]; };
+    const two = (x, y, u) => single ? x + u : x + " → " + y + u;
+    const metaOf = (st, i) => { const a = VIO[A][i], b = VIO[B][i]; return [{ k: "Executions", v: "1", warn: false, warnText: "" }, { k: "CPU", v: two(a.cpu, b.cpu, " ms"), warn: false, warnText: "" }, { k: "Elapsed", v: two(a.el, b.el, " ms"), warn: false, warnText: "" }].concat(memOf(st.mem)); };
+    const planLinks = i => (single ? [[A, "Show plan"]] : [[A, "Plan " + A], [B, "Plan " + B]]).map(([v, label]) => ({ label, open: e => { e.stopPropagation(); opt.onPlan && opt.onPlan(v, i); } }));
+    const memSum = side => stmts.reduce((t, st) => t + (st.mem && st.mem[side] ? st.mem[side][0] : 0), 0);
+    const usedSum = side => stmts.reduce((t, st) => t + (st.mem && st.mem[side] ? st.mem[side][1] : 0), 0);
+    const spills = side => stmts.filter(st => st.mem && st.mem[side] && st.mem[side][2]).length;
+    const on = "#fff", sh = "0 1px 2px rgba(0,0,0,.08)";
+    return {
+      pairLabel: single ? A : A + " → " + B,
+      byStmt: ui.mode === "stmt", whole: ui.mode === "whole",
+      modes: [["stmt", "By statement"], ["whole", "Whole batch"]].map(([k, label]) => ({ label, bg: ui.mode === k ? on : "transparent", sh: ui.mode === k ? sh : "none", fg: ui.mode === k ? "#0a0a0a" : "#525252", pick: () => setUi(u => ({ ...u, mode: k })) })),
+      colChips: VIO_COLS.filter(c => !c[2]).map(([k, label]) => { const o = !!ui.cols[k]; const nz = all.some(r => r[k][0] || r[k][1]); return { label, hint: nz ? "" : "all 0", bg: o ? "#171717" : "#fff", fg: o ? "#fff" : "#0a0a0a", ring: o ? "#171717" : "#e5e5e5", toggle: () => setUi(u => ({ ...u, cols: { ...u.cols, [k]: !u.cols[k] } })) }; }),
+      cols: "minmax(0,1fr) " + cols.map(([k]) => k === "s" ? "90px" : "150px").join(" "),
+      head: [{ label: ui.mode === "stmt" ? "Statement / table" : "Table", align: "left" }].concat(cols.map(([, label]) => ({ label, align: "right" }))),
+      groups: stmts.map((st, i) => { const open = !!ui.open[i]; return { sql: st.sql, open, rot: open ? "90deg" : "0deg", toggle: () => setUi(u => ({ ...u, open: { ...u.open, [i]: !u.open[i] } })),
+        cells: cols.map(([k]) => cell(sum(st.rows)[k])), mem: metaOf(st, i), plans: planLinks(i),
+        hasStatus: !single, status: A === B ? "identical" : VIO_STATUS[i], statusBg: VIO_STATUS[i] === "shared" || A === B ? "#f5f5f5" : "#eef2ff", statusFg: VIO_STATUS[i] === "shared" || A === B ? "#525252" : "#3730a3",
+        rows: st.rows.map(r => ({ name: r.name, nameColor: r.wt ? "#737373" : "#0a0a0a", cells: cellsOf(r) })) }; }),
+      wholeRows: all.map(r => ({ name: r.name, nameColor: r.wt ? "#737373" : "#0a0a0a", cells: cellsOf(r) })),
+      totalCells: cols.map(([k]) => cell(sum(all)[k])),
+      memTotal: single ? ["grant " + memSum("a").toFixed(1) + " MB", "max used " + usedSum("a").toFixed(1) + " MB", "spills " + spills("a")] : ["grant " + memSum("a").toFixed(1) + " MB → " + memSum("b").toFixed(1) + " MB", "max used " + usedSum("a").toFixed(1) + " MB → " + usedSum("b").toFixed(1) + " MB", "spills " + spills("a") + " → " + spills("b")],
+    };
+  }
+  pair(A, B) {
+    const a = V.find(x => x.version === A), b = V.find(x => x.version === B);
+    const key = [A, B].sort().join("|");
+    const basis = A === B ? "same SQL" : TOGETHER[key] ? "measured together in " + TOGETHER[key] : "different runs, same conditions";
+    const rp = pct(a.reads, b.reads), ep = pct(a.elapsed, b.elapsed);
+    const stmt = (text, x, y) => { const p = pct(x, y); return { text, before: fmt(x), after: fmt(y), change: pctTxt(p), color: p < 0 ? good : p > 0 ? bad : mute, status: x === y ? "shared" : "different work" }; };
+    const stmts = [stmt(S1, a.s1, b.s1), stmt(S2, a.s2, b.s2)];
+    const changed = stmts.filter(s => s.before !== s.after).length;
+    return {
+      label: A + " → " + B, basis, equiv: A === B ? "identical" : "results equivalent (multiset)",
+      reads: fmt(a.reads) + " → " + fmt(b.reads) + " (" + pctTxt(rp) + ")",
+      elapsed: a.elapsed + " → " + b.elapsed + " ms (" + pctTxt(ep) + ")",
+      cpu: a.cpu + " → " + b.cpu + " ms",
+      stmts, stmtCount: String(stmts.length), stmtSummary: changed + " changed of " + stmts.length,
+      tables: Object.keys(a.t).map(name => { const p = pct(a.t[name][1], b.t[name][1]); return { name, sb: a.t[name][0], sa: b.t[name][0], rb: fmt(a.t[name][1]), ra: fmt(b.t[name][1]), change: pctTxt(p), color: p < 0 ? good : p > 0 ? bad : mute }; }),
+    };
+  }
+
+  header(k) {
+    const st = this.state[k];
+    return {
+      title: st.title, editing: st.editing, notEditing: !st.editing, draft: st.draft,
+      pencilOpacity: st.hover ? 1 : 0,
+      hoverOn: () => this.set(k, { hover: true }), hoverOff: () => this.set(k, { hover: false }),
+      startEdit: () => this.set(k, s => ({ editing: true, draft: s.title, menu: false })),
+      onDraft: e => this.set(k, { draft: e.target.value }),
+      onKey: e => { if (e.key === "Enter") this.set(k, s => ({ editing: false, hover: false, title: s.draft.trim() || s.title })); if (e.key === "Escape") this.set(k, { editing: false }); },
+      cancel: () => this.set(k, { editing: false, hover: false }),
+      starFill: st.star ? "currentColor" : "none", toggleStar: () => this.set(k, s => ({ star: !s.star })),
+      archived: st.archived, archiveLabel: st.archived ? "Unarchive" : "Archive",
+      metaOpen: st.meta, metaRot: st.meta ? "180deg" : "0deg",
+    };
+  }
+
+  diffCtl(k) {
+    const st = this.state[k];
+    const on = "#fff", sh = "0 1px 2px rgba(0,0,0,.08)";
+    return {
+      sideBg: st.side ? on : "transparent", sideShadow: st.side ? sh : "none", uniBg: st.side ? "transparent" : on, uniShadow: st.side ? "none" : sh,
+      setSide: () => this.set(k, { side: true }), setUnified: () => this.set(k, { side: false }),
+      ignoreFmt: st.fmt, toggleFmt: () => this.set(k, s => ({ fmt: !s.fmt })),
+      pair: this.pair(st.A, st.B),
+    };
+  }
+
+  rows(k) {
+    const st = this.state[k];
+    const base = V.find(x => x.version === st.A);
+    const best = V.reduce((m, x) => x.reads < m.reads ? x : m, V[0]).version;
+    return V.map(v => {
+      const isA = v.version === st.A, isB = v.version === st.B;
+      const rp = pct(base.reads, v.reads), ep = pct(base.elapsed, v.elapsed);
+      return {
+        version: v.version, best: v.version === best, isA, isB, op: v.op, outcome: v.outcome,
+        reads: fmt(v.reads), elapsed: v.elapsed + " ms", cpu: v.cpu + " ms",
+        dReads: isA ? "—" : pctTxt(rp), dReadsColor: isA ? mute : rp < 0 ? good : rp > 0 ? bad : mute,
+        dEl: isA ? "—" : pctTxt(ep), dElColor: isA ? mute : ep < 0 ? good : ep > 0 ? bad : mute,
+        bg: isB ? "#f5f5f5" : "transparent",
+        aBg: isA ? "#e5e5e5" : "transparent", aFg: isA ? "#0a0a0a" : "#a3a3a3", aRing: isA ? "#d4d4d4" : "#e5e5e5",
+        bBg: isB ? "#171717" : "transparent", bFg: isB ? "#fff" : "#a3a3a3", bRing: isB ? "#171717" : "#e5e5e5",
+        pickA: () => this.set(k, { A: v.version }), pickB: () => this.set(k, { B: v.version }),
+        menuOpen: st.rowMenu === v.version,
+        keep: !!v.keep, label: v.label || "", hasLabel: !!v.label, keepTip: st.tip === "keep:" + v.version,
+        keepOn: () => this.set(k, { tip: "keep:" + v.version }), keepOff: () => this.set(k, { tip: null }),
+        openPlan: () => this.set(k, { tab: "plan", planV: v.version, planNode: null, rowMenu: null }),
+        toggleMenu: e => { e.stopPropagation(); this.set(k, s => ({ rowMenu: s.rowMenu === v.version ? null : v.version })); },
+      };
+    });
+  }
+
+  iconHeader(k) {
+    const c = this.state[k], left = (this.props.starPosition ?? "right") === "left";
+    return {
+      starLeft: left, starRight: !left,
+      starColor: c.star ? "#ca8a04" : "#0a0a0a", starFill: c.star ? "#facc15" : "none",
+      starLabel: c.star ? "Unstar session" : "Star session",
+      tipStar: c.tip === "star", tipArch: c.tip === "arch",
+      tipStarOn: () => this.set(k, { tip: "star" }), tipArchOn: () => this.set(k, { tip: "arch" }), tipOff: () => this.set(k, { tip: null }),
+      archBg: c.archived ? "#f5f5f5" : "transparent",
+      archiveLabel: c.archived ? "Unarchive session" : "Archive session",
+      toggleArchive: () => this.set(k, s => ({ archived: !s.archived })),
+      toggleMeta: () => this.set(k, s => ({ meta: !s.meta })),
+    };
+  }
+
+  renderVals() {
+    const a = this.state.a, b = this.state.b;
+    return {
+      loadingOpacity: 0,
+      versionNames: V.map(v => v.version),
+      planScrollRef: this.planScrollRef,
+      a: {
+        ...this.header("a"), ...this.diffCtl("a"), rows: this.rows("a"),
+        menuOpen: a.menu, menuBtnBg: a.menu ? "#f5f5f5" : "transparent",
+        toggleMenu: () => this.set("a", s => ({ menu: !s.menu })),
+        menuEdit: () => this.set("a", s => ({ menu: false, editing: true, draft: s.title })),
+        menuMeta: () => this.set("a", s => ({ menu: false, meta: !s.meta })),
+        menuArchive: () => this.set("a", s => ({ menu: false, archived: !s.archived })),
+        metaLabel: a.meta ? "Hide session metadata" : "Session metadata",
+        stmtsOpen: a.stmts, stmtRot: a.stmts ? "90deg" : "0deg", toggleStmts: () => this.set("a", s => ({ stmts: !s.stmts })),
+      },
+      b: {
+        ...this.header("b"), ...this.diffCtl("b"), rows: this.rows("b"), a: b.A, b: b.B,
+        toggleArchive: () => this.set("b", s => ({ archived: !s.archived })),
+        toggleMeta: () => this.set("b", s => ({ meta: !s.meta })),
+        onSelA: e => this.set("b", { A: e.target.value }), onSelB: e => this.set("b", { B: e.target.value }),
+        tabDiff: () => this.set("b", { tab: "diff" }), tabStmts: () => this.set("b", { tab: "stmts" }), tabTables: () => this.set("b", { tab: "tables" }),
+        diffDisplay: b.tab === "diff" ? "flex" : "none", showStmts: b.tab === "stmts", showTables: b.tab === "tables",
+        tDiffLine: b.tab === "diff" ? "#0a0a0a" : "transparent", tDiffColor: b.tab === "diff" ? "#0a0a0a" : "#737373",
+        tStmtLine: b.tab === "stmts" ? "#0a0a0a" : "transparent", tStmtColor: b.tab === "stmts" ? "#0a0a0a" : "#737373",
+        tTabLine: b.tab === "tables" ? "#0a0a0a" : "transparent", tTabColor: b.tab === "tables" ? "#0a0a0a" : "#737373",
+      },
+      c: (() => {
+        const t = this.state.c.tab;
+        const on = x => (t === x ? "#0a0a0a" : "transparent"), col = x => (t === x ? "#0a0a0a" : "#737373");
+        return {
+          ...this.header("c"), ...this.diffCtl("c"), ...this.iconHeader("c"), rows: this.rows("c"),
+          tabDiff: () => this.set("c", { tab: "diff" }), tabStmts: () => this.set("c", { tab: "stmts" }), tabTables: () => this.set("c", { tab: "tables" }),
+          diffDisplay: t === "diff" ? "flex" : "none", showStmts: t === "stmts", showTables: t === "tables",
+          tDiffLine: on("diff"), tDiffColor: col("diff"), tStmtLine: on("stmts"), tStmtColor: col("stmts"), tTabLine: on("tables"), tTabColor: col("tables"),
+        };
+      })(),
+      d: (() => {
+        const d = this.state.d, t = d.tab;
+        const on = x => (t === x ? "#0a0a0a" : "transparent"), col = x => (t === x ? "#0a0a0a" : "#737373");
+        const pr = this.pair(d.A, d.B);
+        const L = this.layout(d.planV, d.planStmt);
+        const sel = L.nodes.find(n => n.key === d.planNode);
+        const openPlan = (v, i) => () => this.set("d", { tab: "plan", planV: v, planStmt: i, planNode: null });
+        const confBorder = c => c === "exact" ? "2px solid #059669" : c === "inferred" ? "2px dashed #0284c7" : "1px solid #e5e5e5";
+        const confBg = c => c === "inferred" ? "#f5fbfe" : c === "none" ? "#f5f5f5" : "#fff";
+        const emptyPane = { segs: [], signs: [], bands: [], lnText: "", ln2Text: "" };
+        const df = t === "diff" ? this.diff(d.A, d.B, d.fmt) : { L: emptyPane, R: emptyPane, U: emptyPane };
+        let paneP = emptyPane;
+        if (t === "plan") {
+          const sql = V.find(x => x.version === d.planV).sql.replace(/\n$/, "");
+          const hs = sel ? sel.s : -1, he = sel ? sel.e : -1;
+          let off = 0;
+          paneP = pane(sql.split("\n").map((ln, i) => {
+            const base = off; off += ln.length + 1;
+            const inStmt = base + ln.length >= L.start && base <= L.end && ln.length > 0;
+            return { ln: String(i + 1), bg: inStmt ? "#fafafa" : "transparent",
+              segs: segs(ln, base, hs, he).map(s => ({ t: s.t, c: s.c, w: s.w, i: s.i, bg: s.hl ? "rgba(16,172,97,.28)" : "transparent", click: () => this.pickAt(s.s) })) };
+          }));
+        }
+        return {
+          ...this.header("d"), ...this.diffCtl("d"), ...this.iconHeader("d"), rows: this.rows("d"),
+          side: d.side, unified: !d.side, paneL: df.L, paneR: df.R, paneU: df.U,
+          tabDiff: () => this.set("d", { tab: "diff" }), tabStmts: () => this.set("d", { tab: "stmts" }), tabTables: () => this.set("d", { tab: "tables" }), tabPlan: () => this.set("d", { tab: "plan" }),
+          diffDisplay: t === "diff" ? "flex" : "none", showStmts: t === "stmts", showTables: t === "tables", planDisplay: t === "plan" ? "flex" : "none",
+          tDiffLine: on("diff"), tDiffColor: col("diff"), tStmtLine: on("stmts"), tStmtColor: col("stmts"), tTabLine: on("tables"), tTabColor: col("tables"), tPlanLine: on("plan"), tPlanColor: col("plan"),
+          io: this.ioView(d.A, d.B, { onPlan: (v, i) => openPlan(v, i)() }),
+          stmts: pr.stmts.map((s, i) => ({ ...s, planALabel: "Plan " + d.A, planBLabel: "Plan " + d.B, openA: openPlan(d.A, i), openB: openPlan(d.B, i) })),
+          planVersions: V.map(v => { const cur = v.version === d.planV; return { version: v.version, isA: v.version === d.A, isB: v.version === d.B, bg: cur ? "#fff" : "transparent", shadow: cur ? "0 1px 2px rgba(0,0,0,.08)" : "none", color: cur ? "#0a0a0a" : "#737373", pick: () => this.set("d", { planV: v.version, planNode: null }) }; }),
+          planStmtVal: String(d.planStmt), onPlanStmt: e => this.set("d", { planStmt: Number(e.target.value), planNode: null }),
+          planStmtOptions: [{ v: "0", label: "Statement 1 · SELECT … FROM dbo.Orders" }, { v: "1", label: "Statement 2 · SELECT … FROM dbo.Customers" }],
+          planOp: V.find(x => x.version === d.planV).op,
+          paneP,
+          graph: { w: L.W, h: L.H, edges: L.edges.map(x => ({ ...x })), nodes: L.nodes.map(n => ({
+            op: n.op, obj: n.obj, est: fmt(n.est), act: fmt(n.act), cost: n.cost + "%", conf: n.conf,
+            costColor: n.cost >= 30 ? "#b91c1c" : "#0a0a0a", costWeight: n.cost >= 30 ? 600 : 400,
+            hasWarn: !!n.warn, tip: n.warn || (n.op + " · " + n.obj),
+            left: n.x, top: n.y, border: confBorder(n.conf), bg: confBg(n.conf),
+            ring: n.key === d.planNode ? "0 0 0 2px #fff, 0 0 0 4px #0a0a0a" : "0 1px 2px rgba(0,0,0,.05)",
+            select: () => this.set("d", s => ({ planNode: s.planNode === n.key ? null : n.key })),
+          })) },
+          hasSel: !!sel, noSel: !sel,
+          sel: sel ? { title: sel.op + " · " + sel.obj, est: fmt(sel.est), act: fmt(sel.act), cost: sel.cost + "%", conf: sel.conf, rule: sel.rule, hasWarn: !!sel.warn, warn: sel.warn || "" } : { title: "", est: "", act: "", cost: "", conf: "", rule: "", hasWarn: false, warn: "" },
+        };
+      })(),
+    };
+  }
+}
+</script>
+</body>
+</html>

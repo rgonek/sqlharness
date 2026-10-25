@@ -1,9 +1,12 @@
 import { act, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
-import type { OperationSummary } from "@/api/types"
-import { operation, session } from "@/test/fixtures"
+import type { OperationSummary, SessionSummary } from "@/api/types"
+import { operation as fixtureOperation, session as fixtureSession } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
+
+const operation = (over: Partial<OperationSummary> = {}) => fixtureOperation({ startedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...over })
+const session = (over: Partial<SessionSummary> = {}) => fixtureSession({ firstSeen: new Date().toISOString(), lastSeen: new Date().toISOString(), ...over })
 
 class FakeEventSource {
   static readonly CONNECTING = 0
@@ -66,7 +69,7 @@ test("live page shows running, recent and pushed operations", async () => {
   renderApp("/")
   await waitFor(() => expect(FakeEventSource.instances.filter(source => source.url === "/api/live")).toHaveLength(1))
 
-  const running = await screen.findByRole("region", { name: "Running" })
+  const running = await screen.findByRole("region", { name: "Activity feed" })
   expect(await within(running).findByText("watch")).toBeInTheDocument()
   expect(within(running).getByText("4 polls")).toBeInTheDocument()
   expect(await screen.findByText("cli:abc")).toBeInTheDocument()
@@ -76,7 +79,7 @@ test("live page shows running, recent and pushed operations", async () => {
     liveFeed().emit("operation", operation({ id: 3, operation: "measure" }))
   })
 
-  const recent = screen.getByRole("region", { name: "Recent operations" })
+  const recent = screen.getByRole("region", { name: "Activity feed" })
   expect(await within(recent).findByText("measure")).toBeInTheDocument()
   expect(screen.getByText("connected")).toBeInTheDocument()
 })
@@ -88,7 +91,7 @@ test("an enabled safety notice from the live feed links to its operation", async
     [RECENT]: page([]), [RUNNING]: page([]), [STARRED]: page([]), [SESSIONS]: page([]),
   })
   const { client } = renderApp("/")
-  await screen.findByRole("region", { name: "Running" })
+  await screen.findByRole("region", { name: "Activity feed" })
   await waitFor(() => expect(client.getQueryData(["settings"])).toBeDefined())
 
   act(() => {
@@ -109,7 +112,8 @@ test("an archived session that is still active stays on the live page", async ()
     [SESSIONS]: page([session({ id: 9, sessionKey: "cli:archived", archived: true, lastSeen: new Date().toISOString() })]),
   })
   renderApp("/")
-  const active = await screen.findByRole("region", { name: "Active sessions" })
+  const active = await screen.findByRole("region", { name: "Activity feed" })
+  await userEvent.click(screen.getByRole("button", { name: "Include archived" }))
   expect(await within(active).findByText("cli:archived")).toBeInTheDocument()
 })
 
@@ -130,7 +134,7 @@ test("starring a live session updates its row", async () => {
   })
 
   renderApp("/")
-  const active = await screen.findByRole("region", { name: "Active sessions" })
+  const active = await screen.findByRole("region", { name: "Activity feed" })
   await userEvent.click(await within(active).findByRole("button", { name: "Star session cli:live" }))
 
   expect(await within(active).findByRole("button", { name: "Unstar session cli:live" })).toHaveAttribute("aria-pressed", "true")
@@ -153,7 +157,7 @@ test("empty running and active sections share one compact status line", async ()
   useFakeEventSource()
   stubFetch({ [RECENT]: page([]), [RUNNING]: page([]), [STARRED]: page([]), [SESSIONS]: page([]) })
   renderApp("/")
-  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
+  expect(await screen.findByText("Nothing matches these filters.")).toBeInTheDocument()
 })
 
 test("artifact-only running rows share the empty state and remain revealable", async () => {
@@ -166,12 +170,12 @@ test("artifact-only running rows share the empty state and remain revealable", a
     [SESSIONS]: page([]),
   })
   renderApp("/")
-  const running = await screen.findByRole("region", { name: "Running" })
-  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
+  const running = await screen.findByRole("region", { name: "Activity feed" })
+  expect(await screen.findByText("Nothing matches these filters.")).toBeInTheDocument()
   expect(within(running).queryByText("sqlharness_artifact")).not.toBeInTheDocument()
-  await userEvent.click(within(running).getByText("Show internal operations"))
+  await userEvent.click(screen.getByText("Show internal operations"))
   expect(await within(running).findByText("sqlharness_artifact")).toBeInTheDocument()
-  expect(screen.queryByText("Nothing running · no active sessions")).not.toBeInTheDocument()
+  expect(screen.queryByText("Nothing matches these filters.")).not.toBeInTheDocument()
 })
 
 test("live lists are refetched on every (re)connect so changes made during a gap show", async () => {
@@ -188,7 +192,7 @@ test("live lists are refetched on every (re)connect so changes made during a gap
   })
 
   renderApp("/")
-  const running = await screen.findByRole("region", { name: "Running" })
+  const running = await screen.findByRole("region", { name: "Activity feed" })
   expect(await within(running).findByText("watch")).toBeInTheDocument()
 
   act(() => liveFeed().open())
@@ -204,8 +208,9 @@ test("live lists are refetched on every (re)connect so changes made during a gap
   await waitFor(() => expect(count(calls, RECENT)).toBe(3))
   await waitFor(() => expect(count(calls, RUNNING)).toBe(3))
   expect(count(calls, SESSIONS)).toBe(3)
-  expect(await within(running).findByText("Nothing is running.")).toBeInTheDocument()
-  const recent = screen.getByRole("region", { name: "Recent operations" })
+  await waitFor(() => expect(within(running).queryByText("watch")).not.toBeInTheDocument())
+  await userEvent.click(within(running).getByRole("button", { name: /Expand/ }))
+  const recent = screen.getByRole("region", { name: "Activity feed" })
   expect(await within(recent).findByText("succeeded")).toBeInTheDocument()
 })
 
@@ -215,7 +220,7 @@ test("clearing transcript data removes stale titles and models from the live cac
   const liveOperation = () => operation({ id: 12, status: "running", operation: "watch", agentModel: cleared ? null : "claude-opus-5-5",
     agentModelSource: cleared ? null : "transcript", updatedAt: "2026-10-07T09:00:01.000Z" })
   const liveSession = () => session({ id: 14, sessionKey: "cli:live", running: 1, agentTitle: cleared ? null : "Optimize orders",
-    lastSeen: "2026-10-07T09:00:01.000Z" })
+    lastSeen: new Date().toISOString() })
   const calls = stubFetch({
     [RECENT]: () => json(page([liveOperation()])),
     [RUNNING]: () => json(page([liveOperation()])),
@@ -238,7 +243,7 @@ test("clearing transcript data removes stale titles and models from the live cac
   })
 
   renderApp("/")
-  const running = await screen.findByRole("region", { name: "Running" })
+  const running = await screen.findByRole("region", { name: "Activity feed" })
   expect(await screen.findByRole("link", { name: "Optimize orders" })).toBeInTheDocument()
   expect(within(running).getByText("Claude Code")).toHaveAttribute("title", "claude-opus-5-5 (transcript)")
   expect(count(calls, RECENT)).toBe(1)
@@ -252,8 +257,8 @@ test("clearing transcript data removes stale titles and models from the live cac
   await userEvent.click(within(dialog).getByRole("button", { name: "Clear matched data" }))
   await waitFor(() => expect(calls).toContain("/api/transcripts/clear"))
 
-  await userEvent.click(screen.getByRole("link", { name: "Live" }))
-  await screen.findByRole("region", { name: "Running" })
+  await userEvent.click(screen.getByRole("link", { name: "Activity" }))
+  await screen.findByRole("region", { name: "Activity feed" })
   await waitFor(() => {
     expect(count(calls, RECENT)).toBe(2)
     expect(count(calls, RUNNING)).toBe(2)
@@ -276,7 +281,7 @@ test("a long-running operation outside the recent page still shows in Running", 
 
   renderApp("/")
 
-  const running = await screen.findByRole("region", { name: "Running" })
+  const running = await screen.findByRole("region", { name: "Activity feed" })
   expect(await within(running).findByText("watch")).toBeInTheDocument()
 })
 
@@ -294,7 +299,7 @@ test("a running operation missing from the refetched running list leaves Running
   })
 
   renderApp("/")
-  const running = await screen.findByRole("region", { name: "Running" })
+  const running = await screen.findByRole("region", { name: "Activity feed" })
   expect(await within(running).findByText("watch")).toBeInTheDocument()
 
   act(() => liveFeed().open())
@@ -302,7 +307,7 @@ test("a running operation missing from the refetched running list leaves Running
   gone = true
   act(() => liveFeed().open())
 
-  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
+  await waitFor(() => expect(within(running).queryByText("watch")).not.toBeInTheDocument())
 })
 
 test("pushed events add running rows and remove finished ones without the recent cap", async () => {
@@ -311,8 +316,8 @@ test("pushed events add running rows and remove finished ones without the recent
   stubFetch({ [RECENT]: page(recent), [RUNNING]: page([]), [STARRED]: page([]), [SESSIONS]: page([]) })
 
   renderApp("/")
-  const running = await screen.findByRole("region", { name: "Running" })
-  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
+  const running = await screen.findByRole("region", { name: "Activity feed" })
+  expect(within(running).queryByText("running")).not.toBeInTheDocument()
   act(() => liveFeed().open())
 
   const old = operation({ id: 5, status: "running", operation: "watch", updatedAt: "2026-10-07T09:00:01.000Z" })
@@ -320,7 +325,7 @@ test("pushed events add running rows and remove finished ones without the recent
   expect(await within(running).findByText("watch")).toBeInTheDocument()
 
   act(() => liveFeed().emit("operation", { ...old, status: "succeeded", updatedAt: "2026-10-07T09:00:02.000Z" }))
-  expect(await screen.findByText("Nothing running · no active sessions")).toBeInTheDocument()
+  await waitFor(() => expect(within(running).queryByText("running")).not.toBeInTheDocument())
 })
 
 test("a feed the server refuses (401) shows the reopen message without retrying", async () => {
@@ -330,7 +335,7 @@ test("a feed the server refuses (401) shows the reopen message without retrying"
   const calls = stubFetch({ [RECENT]: respond(page([])), [RUNNING]: respond(page([])), [STARRED]: respond(page([])), [SESSIONS]: respond(page([])) })
 
   renderApp("/")
-  await screen.findByRole("region", { name: "Running" })
+  await screen.findByRole("region", { name: "Activity feed" })
   act(() => liveFeed().open())
   await waitFor(() => expect(count(calls, RECENT)).toBe(2))
 
@@ -342,4 +347,46 @@ test("a feed the server refuses (401) shows the reopen message without retrying"
   await new Promise(resolve => setTimeout(resolve, 50))
   expect(calls.length).toBe(settled)
   expect(count(calls, RECENT)).toBe(3)
+})
+
+test("the grouped feed retains every running page beyond the recent-operation cap", async () => {
+  useFakeEventSource()
+  const running = Array.from({ length: 200 }, (_, index) => operation({ id: index + 2, status: "running", operation: "watch" }))
+  stubFetch({
+    [RECENT]: page([]),
+    [RUNNING]: { items: running, nextCursor: 2 },
+    "/api/operations?status=running&limit=200&cursor=2": page([operation({ id: 1, status: "running", operation: "watch" })]),
+    [STARRED]: page([]), [SESSIONS]: page([]),
+  })
+  renderApp("/")
+  const feed = await screen.findByRole("region", { name: "Activity feed" })
+  expect(within(feed).getByRole("button", { name: "running (201)" })).toBeInTheDocument()
+  expect(within(feed).getByRole("link", { name: "1" })).toHaveAttribute("href", expect.stringContaining("/operations/1"))
+})
+
+test("Activity filters hide empty session groups and can be reset", async () => {
+  useFakeEventSource()
+  stubFetch({
+    [RECENT]: page([operation({ id: 1, sessionId: 1, operation: "measure", status: "running", agentKind: "codex", agentLabel: "Orders tuning" }), operation({ id: 2, sessionId: 2, operation: "query", agentKind: "claude" })]),
+    [RUNNING]: page([operation({ id: 1, sessionId: 1, operation: "measure", status: "running", agentKind: "codex", agentLabel: "Orders tuning" })]),
+    [STARRED]: page([]),
+    [SESSIONS]: page([session({ id: 1, title: "Orders session", agentKind: "codex" }), session({ id: 2, title: "Billing session", agentKind: "claude" })]),
+  })
+  renderApp("/")
+  await screen.findByRole("region", { name: "Activity feed" })
+  await userEvent.type(screen.getByRole("textbox", { name: "Search activity" }), "Orders tuning")
+  expect(screen.getByRole("link", { name: "Orders session" })).toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "Billing session" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Reset filters" }))
+  expect(screen.getByRole("link", { name: "Billing session" })).toBeInTheDocument()
+  await userEvent.click(screen.getByLabelText("Agent", { selector: "summary" }))
+  await userEvent.click(screen.getByRole("checkbox", { name: "claude" }))
+  expect(screen.queryByRole("link", { name: "Orders session" })).not.toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Billing session" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "running (0)" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("checkbox", { name: "codex" }))
+  expect(screen.getByRole("link", { name: "Orders session" })).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Billing session" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Named (1)" }))
+  expect(screen.queryByRole("link", { name: "Billing session" })).not.toBeInTheDocument()
 })

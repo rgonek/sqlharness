@@ -11,11 +11,12 @@ const spread = (value: { min: number; median: number; max: number } | null, unit
   value ? `${formatNumber(value.median)}${unit}` : "—"
 const range = (value: { min: number; max: number } | null) => (value ? `${formatNumber(value.min)}–${formatNumber(value.max)}` : undefined)
 
-export function VariantPanel({ operationId, variant, engine, compareMetrics = false, planTarget }: { operationId: number; variant: VariantDetail; engine: string | null; compareMetrics?: boolean; planTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
+export function VariantPanel({ operationId, variant, engine, compareMetrics = false, mode = "all", planTarget }: { operationId: number; variant: VariantDetail; engine: string | null; compareMetrics?: boolean; mode?: "all" | "plan" | "io"; planTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
   const sqlServer = !compareMetrics || engine?.toLowerCase() === "sqlserver" || engine?.toLowerCase() === "sql-server"
   const tableIoRows = tableIoDelta(variant.tableIo, []).rows.flatMap(row => row.baseline ? [row.baseline] : [])
   return (
     <div className="space-y-4">
+      {mode !== "plan" && <>
       <section aria-label="Key metrics" className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Kpi label="Elapsed (median)" value={spread(variant.elapsedMs, " ms")} hint={range(variant.elapsedMs)} />
         <Kpi label="CPU (median)" value={spread(variant.cpuMs, " ms")} hint={range(variant.cpuMs)} />
@@ -107,7 +108,8 @@ export function VariantPanel({ operationId, variant, engine, compareMetrics = fa
           </CardContent>
         </Card>
       )}
-      <PlanWorkbench operationId={operationId} variant={variant} engine={engine} initialTarget={planTarget} />
+      </>}
+      {mode !== "io" && <PlanWorkbench operationId={operationId} variant={variant} engine={engine} initialTarget={planTarget} />}
     </div>
   )
 }

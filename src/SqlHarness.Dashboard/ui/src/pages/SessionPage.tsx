@@ -49,15 +49,15 @@ function SessionView({ id }: { id: number }) {
   const loadedOperations = [...new Map((operationPages.data?.pages.flatMap(page => page.items) ?? []).map(operation => [operation.id, operation])).values()]
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
+      <Card className="border-0 shadow-none">
+        <CardHeader className="px-0">
           <CardTitle>
             <SessionAnnotationHeader key={session.id} session={session} />
           </CardTitle>
           {session.title && <div className="font-mono">{session.sessionKey}</div>}
           <CardDescription>{agentLabel(session.agentKind)} via {session.transport} ({session.source})</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0">
           <Collapsible>
             <CollapsibleTrigger className="cursor-pointer text-sm font-medium">Session metadata</CollapsibleTrigger>
             <CollapsibleContent keepMounted><div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -91,7 +91,7 @@ function SessionView({ id }: { id: number }) {
           </Collapsible>
         </CardContent>
       </Card>
-      {session.hasCompare && <OptimizationSection sessionId={id} />}
+      {session.hasCompare && <OptimizationSection sessionId={id} operations={loadedOperations} />}
       <SessionNoteCard key={session.id} sessionId={session.id} note={note} />
       {conversations.length > 0 && <SessionConversations conversations={conversations} />}
       <Card>

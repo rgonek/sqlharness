@@ -290,7 +290,7 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget }: {
     {sqlSelection && documentSelection !== "all" && sqlMatchedLinks.length === 0 && <p role="status" className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source link matches this SQL selection in the selected plan document.</p>}
     {!isUnmatched && !isOmitted && source && visibleStatementLinks.length === 0 && <p className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source links were produced for the selected statement and document.</p>}
 
-    {source && <div className="grid gap-3 xl:grid-cols-2">
+    {source && <div className="grid min-w-0 gap-3">
       <PlanSourceView executedText={source.executedText} engine={source.engine ?? engine} highlightedSpans={highlightedSpans} revealSpan={revealSpan} onSelectionChange={handleSqlSelection} />
       <div className="space-y-3">
         {graphError ? <PlanErrorState error={graphError} onRetry={() => { for (const query of graphQueries) void query.refetch() }} />

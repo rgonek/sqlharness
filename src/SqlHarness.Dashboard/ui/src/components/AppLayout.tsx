@@ -14,13 +14,9 @@ import { SafetyNoticeToast, type SafetyNotice } from "@/components/SafetyNoticeT
 import { useLiveFeed, subscribeSafetyNotices } from "@/live/useLiveFeed"
 
 const links = [
-  { to: "/", label: "Live", exact: true },
-  { to: "/sessions", label: "Sessions", exact: false },
-  { to: "/operations", label: "Operations", exact: false },
-  { to: "/named-operations", label: "Named operations", exact: false },
+  { to: "/", label: "Activity", exact: true },
   { to: "/stats", label: "Usage", exact: false },
   { to: "/profiles", label: "Profiles", exact: false },
-  { to: "/mutations", label: "Mutations", exact: false },
   { to: "/settings", label: "Settings", exact: false },
 ] as const
 
@@ -54,7 +50,7 @@ export function AppLayout() {
         </Link>
         <nav aria-label="Main navigation" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
           {links.map(link => {
-            const active = link.exact ? pathname === link.to : pathname === link.to || pathname.startsWith(`${link.to}/`)
+            const active = link.exact ? pathname === link.to || /^\/(sessions|agent-sessions|operations|named-operations|mutations)(\/|$)/.test(pathname) : pathname === link.to || pathname.startsWith(`${link.to}/`)
             return (
               <Link key={link.to} to={link.to} className={buttonVariants({ variant: active ? "secondary" : "ghost", size: "sm" })}>
                 {link.label}

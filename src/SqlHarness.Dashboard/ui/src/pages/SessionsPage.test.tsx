@@ -221,6 +221,7 @@ test("matching off returns immediately to per-session rows even when agent rows 
   let matching = true
   let enabled = true
   const calls = stubFetch({
+    "/api/operations": { items: [], nextCursor: null },
     "/api/agents": [],
     "/api/sessions": (url: URL) => new Response(JSON.stringify({ items: url.searchParams.get("starred") === "true" ? [] : [session({ id: 2, sessionKey: "mcp:plain" })], nextCursor: null, matching }), { status: 200 }),
     "/api/agent-sessions": (url: URL) => new Response(JSON.stringify({ items: url.searchParams.get("starred") === "true" ? [] : [{
@@ -252,7 +253,8 @@ test("matching off returns immediately to per-session rows even when agent rows 
   await userEvent.click(screen.getByRole("link", { name: "Settings" }))
   await userEvent.click(await screen.findByRole("switch", { name: "Read agent transcripts" }))
   await waitFor(() => expect(enabled).toBe(false))
-  await userEvent.click(screen.getByRole("link", { name: "Sessions" }))
+  await userEvent.click(screen.getByRole("link", { name: "Activity" }))
+  await userEvent.click(await screen.findByRole("link", { name: "Browse all sessions" }))
   expect((await screen.findAllByText("mcp:plain")).length).toBe(1)
   expect(screen.queryByText("stale agent row")).not.toBeInTheDocument()
   expect(calls).toContain("/api/sessions?archived=false&starred=false&limit=50")

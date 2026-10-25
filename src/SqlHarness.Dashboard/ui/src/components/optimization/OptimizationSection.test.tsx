@@ -39,6 +39,7 @@ function sessionWithCompare(hasCompare: boolean) {
 
 function stubSession(routes: Parameters<typeof stubFetch>[0]) {
   return stubFetch({
+    "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false },
     "/api/sessions/7/operations": { items: [operation({ id: 70, operation: "compare" })], nextCursor: null },
     ...routes,
   })
@@ -55,6 +56,7 @@ test("does not request or render optimization when the session has no compare", 
 test("puts the optimization section first, preserves scope defaults and lists unassigned compares", async () => {
   stubSession({
     "/api/sessions/7": sessionWithCompare(true),
+    "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false },
     "/api/sessions/7/optimization": section,
     "/api/sessions/7/optimization/compare": comparison,
   })
@@ -76,6 +78,7 @@ test("puts the optimization section first, preserves scope defaults and lists un
 test("renders forty versions and updates the URL when a version picker changes", async () => {
   stubSession({
     "/api/sessions/7": sessionWithCompare(true),
+    "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false },
     "/api/sessions/7/optimization": section,
     "/api/sessions/7/optimization/compare": comparison,
   })
@@ -106,6 +109,7 @@ test("version table shows measure-only outcomes and unverified comparison label"
   }] }] }
   stubSession({
     "/api/sessions/7": sessionWithCompare(true),
+    "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false },
     "/api/sessions/7/optimization": measured,
     "/api/sessions/7/optimization/compare": { ...comparison, basis: "DifferentRunsSameConditions", operationId: null, equivalenceLabel: "results not compared" },
   })
@@ -118,6 +122,7 @@ test("version table shows measure-only outcomes and unverified comparison label"
 test("shows group and scope selectors only when the selected group has choices", async () => {
   stubSession({
     "/api/sessions/7": sessionWithCompare(true),
+    "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false },
     "/api/sessions/7/optimization": sectionWithChoices,
     "/api/sessions/7/optimization/compare": comparison,
   })
@@ -138,6 +143,7 @@ test("shows group and scope selectors only when the selected group has choices",
 test("changing conditions group selects its first scope and clears all dependent selections", async () => {
   stubSession({
     "/api/sessions/7": sessionWithCompare(true),
+    "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false },
     "/api/sessions/7/optimization": sectionWithChoices,
     "/api/sessions/7/optimization/compare": comparison,
   })
@@ -174,7 +180,7 @@ test("hides one-option controls and gives each subject its own accessible select
       },
     ],
   }
-  stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": multiple, "/api/sessions/7/optimization/compare": comparison })
+  stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false }, "/api/sessions/7/optimization": multiple, "/api/sessions/7/optimization/compare": comparison })
   renderApp("/sessions/7?subject=Orders&db=shop&group=fp-2")
 
   expect(await screen.findByRole("combobox", { name: "Orders conditions group" })).toBeInTheDocument()
@@ -190,7 +196,7 @@ test("keeps B unset when the selected scope has no qualified default", async () 
     ...sectionWithChoices.subjects[0]!.groups[1]!,
     scopes: [{ scope: "fragment A", defaultA: "v4", defaultB: null, versions: versions.slice(4, 10) }, sectionWithChoices.subjects[0]!.groups[1]!.scopes[1]!],
   }] }] }
-  const calls = stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": scoped })
+  const calls = stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false }, "/api/sessions/7/optimization": scoped })
   renderApp("/sessions/7?subject=Orders&db=shop&group=fp-2&scope=fragment%20A")
   expect(await screen.findByRole("radio", { name: "A v4" })).toBeChecked()
   expect(screen.getByText("Select a version for B to compare it with v4.")).toBeInTheDocument()
@@ -204,7 +210,7 @@ test("renders a separate card for every subject and database", async () => {
     scopes: [{ ...section.subjects[0]!.groups[0]!.scopes[0]!, versions: versions.slice(0, 2) }],
   }] }] }
   stubSession({
-    "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": multiple,
+    "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false }, "/api/sessions/7/optimization": multiple,
     "/api/sessions/7/optimization/compare": comparison,
   })
   const { router } = renderApp("/sessions/7?subject=Customers&db=crm&group=fp-customers&scope=whole%20query")
@@ -224,7 +230,7 @@ test("links every retained measurement operation with the current session return
       { ...versions[1]!, measuredIn: [219], latestOperationId: 219 },
     ],
   }] }] }] }
-  stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": measured, "/api/sessions/7/optimization/compare": comparison })
+  stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false }, "/api/sessions/7/optimization": measured, "/api/sessions/7/optimization/compare": comparison })
   renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query")
   const one = await screen.findByRole("link", { name: "Operation #201" })
   const two = screen.getByRole("link", { name: "Operation #214" })

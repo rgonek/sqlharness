@@ -31,6 +31,7 @@ test("agent detail shows membership counts, markers, annotations, and child opti
       patches.push(JSON.parse(String(init?.body)))
       return new Response(JSON.stringify({ title: null, note: "full owner note", starred: true, archived: false }), { status: 200 })
     },
+    "/api/agent-sessions/codex/conversation-1/sql": { hash: "", text: null, tooLarge: false },
     "/api/agent-sessions/codex/conversation-1/optimization": { subjects: [], unassigned: [], versionLabelsProvisional: true, versionLabelNote: "versions may renumber while matching catches up" },
   })
   renderApp("/agent-sessions/codex/conversation-1")
@@ -54,6 +55,7 @@ test("agent operation pages load older rows, retain rows on retry, and filter in
   const calls = stubFetch({
     "/api/settings": settings,
     "/api/agent-sessions/codex/conversation-1": { agentSession: summary, note: null, operations: [] },
+    "/api/agent-sessions/codex/conversation-1/sql": { hash: "", text: null, tooLarge: false },
     "/api/agent-sessions/codex/conversation-1/optimization": { subjects: [], unassigned: [] },
     "/api/agent-sessions/codex/conversation-1/operations": (url: URL) => {
       const cursor = url.searchParams.get("cursor")
@@ -109,6 +111,7 @@ test("an exact operation after 500 newer unassigned rows remains reachable", asy
   stubFetch({
     "/api/settings": settings,
     "/api/agent-sessions/codex/conversation-1": { agentSession, note: null, operations: firstPage },
+    "/api/agent-sessions/codex/conversation-1/sql": { hash: "", text: null, tooLarge: false },
     "/api/agent-sessions/codex/conversation-1/optimization": { subjects: [], unassigned: [] },
     "/api/agent-sessions/codex/conversation-1/operations": (url: URL) => {
       const cursor = url.searchParams.get("cursor")
@@ -145,6 +148,7 @@ test("agent session note drafts cancel cleanly and save the current value after 
       savedNote = patch.note ?? ""
       return new Response(JSON.stringify({ title: null, note: savedNote, starred: false, archived: false }), { status: 200 })
     },
+    "/api/agent-sessions/codex/conversation-1/sql": { hash: "", text: null, tooLarge: false },
     "/api/agent-sessions/codex/conversation-1/optimization": { subjects: [], unassigned: [] },
   })
   renderApp("/agent-sessions/codex/conversation-1")
@@ -184,6 +188,7 @@ test("subagent fallback label is visible", async () => {
     "/api/settings": settings,
     "/api/agent-sessions/codex/subagent": { agentSession: { ...summary, key: { agentKind: "codex", conversationId: "subagent" }, title: "subagent of unknown parent", children: [] }, operations: [] },
     "/api/agent-sessions/codex/subagent/operations": { items: [], nextCursor: null },
+    "/api/agent-sessions/codex/subagent/sql": { hash: "", text: null, tooLarge: false },
     "/api/agent-sessions/codex/subagent/optimization": { subjects: [], unassigned: [] },
   })
   renderApp("/agent-sessions/codex/subagent")
@@ -226,6 +231,7 @@ test("aggregate measure from a second MCP child keeps the agent-session return r
       { session: session({ id: 8, sessionKey: "mcp:second-child", hasCompare: true }), exact: 1, inferred: 0, unassigned: 0 },
     ] }, operations: [] },
     "/api/agent-sessions/claude/conversation-1/operations": { items: [], nextCursor: null },
+    "/api/agent-sessions/claude/conversation-1/sql": { hash: "", text: null, tooLarge: false },
     "/api/agent-sessions/claude/conversation-1/optimization": { subjects: [{
       subject: "orders", database: "db", engine: "sqlserver", groups: [{ fingerprint: "fp", label: "default", subject: "orders", database: "db", defaultA: "v0", defaultB: "v1", scopes: [{
         scope: "whole", defaultA: "v0", defaultB: "v1", versions: [

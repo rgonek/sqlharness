@@ -1,17 +1,19 @@
-import { Fragment, useState } from "react"
+import { Fragment, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import type { AgentSessionKey, OptimizationActionReference, OptimizationComparison, ScopeVersions } from "@/api/types"
 import { CopyButton } from "@/components/CopyButton"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { SessionVersionDiff } from "@/components/SessionVersionDiff"
 import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { IoDetails } from "./IoDetails"
+import { VersionPlan } from "./VersionPlan"
 import { conditionsDifferMessage, optimizationMarkdown, optimizationMetricRows } from "@/lib/optimizationMarkdown"
 import { badgeTier } from "@/lib/flags"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SqlVersionOption } from "@/lib/compare"
 import type { SessionSearch } from "@/router"
-import { StatementHiddenWork, StatementRows } from "./StatementRows"
+import { StatementHiddenWork } from "./StatementRows"
 
 function basisLabel(comparison: OptimizationComparison): string {
   switch (comparison.basis) {
@@ -43,8 +45,13 @@ function VersionAction({ label, action, selectedCase, sessionId, sessionSearch, 
   </section>
 }
 
-export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange, hideCaseSelector = false }: {
+export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange, hideCaseSelector = false, diff, timing, details, activeTab, onTabChange }: {
   comparison: OptimizationComparison
+  activeTab?: string
+  onTabChange?: (value: string) => void
+  diff?: ReactNode
+  timing?: ReactNode
+  details?: ReactNode
   sessionId: number
   agentSessionKey?: AgentSessionKey
   subject: string
@@ -58,9 +65,8 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
 }) {
   const activeCase = searchState?.case ?? comparison.selectedCase
   const activeAggregate = searchState?.agg ?? comparison.aggregate
-  const activeView = comparison.view ?? searchState?.view ?? "changed"
+  const activeView = comparison.view ?? searchState?.view ?? "statements"
   const scriptCase = activeCase === "all" ? comparison.cases[0]?.id ?? "all" : activeCase
-  const [showDiff, setShowDiff] = useState(false)
   const sqlOptions: SqlVersionOption[] = versions.map(version => ({ version: version.version, hash: version.hash }))
   function updateSearch(patch: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }) {
     onSelectionChange?.(patch)
@@ -74,15 +80,10 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
       </div>
       <div className="flex items-center gap-2">
         <CopyButton label="Copy summary" getText={() => optimizationMarkdown(comparison, subject, scope)} />
-        <Button type="button" variant="outline" size="sm" disabled={sqlOptions.length < 2} aria-expanded={showDiff} onClick={() => setShowDiff(value => !value)}>{showDiff ? "Hide SQL diff" : "SQL diff"}</Button>
+
       </div>
     </div>
 
-    <div className="flex flex-wrap items-center gap-2" aria-label="Statement views">
-      <Button type="button" size="sm" variant={activeView === "changed" ? "secondary" : "outline"} aria-pressed={activeView === "changed"} onClick={() => updateSearch({ view: "changed" })}>Changed statements</Button>
-      <Button type="button" size="sm" variant={activeView === "whole" ? "secondary" : "outline"} aria-pressed={activeView === "whole"} onClick={() => updateSearch({ view: "whole" })}>Whole batch</Button>
-      <Button type="button" size="sm" variant={activeView === "statements" ? "secondary" : "outline"} aria-pressed={activeView === "statements"} onClick={() => updateSearch({ view: "statements" })}>By statement</Button>
-    </div>
     {comparison.wholeBatch?.label && <div className="space-y-2 rounded-md bg-muted/40 p-3">
       <p className="text-sm font-medium">{comparison.wholeBatch.label}</p>
       <StatementHiddenWork rows={comparison.statements ?? []} />
@@ -105,22 +106,22 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
     {comparison.coverageLabel && <p className="text-sm text-muted-foreground">{comparison.coverageLabel}</p>}
     {comparison.versionLabelsProvisional && comparison.versionLabelNote && <p role="note" className="text-sm text-muted-foreground">{comparison.versionLabelNote}</p>}
     {comparison.mixed && <p data-tier={badgeTier("mixed")} className="text-sm text-amber-700 dark:text-amber-300">Mixed: {comparison.mixed.better} better, {comparison.mixed.worse} worse — {comparison.mixed.worstCaseLabel}: logical reads {comparison.mixed.worstChangePercent > 0 ? "+" : ""}{Math.round(comparison.mixed.worstChangePercent)}%</p>}
-    {comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <>
-      {activeView === "statements" || activeView === "changed"
-        ? <StatementRows rows={comparison.statements ?? []} postgres={comparison.tableIoUnavailable ?? false} />
-        : comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <Table>
-        <TableHeader><TableRow><TableHead>Table</TableHead><TableHead>Scans before</TableHead><TableHead>Scans after</TableHead><TableHead>Logical reads before</TableHead><TableHead>Logical reads after</TableHead><TableHead>Change</TableHead></TableRow></TableHeader>
-        <TableBody>{comparison.tables.map(row => <TableRow key={row.table}><TableHead scope="row" className="whitespace-normal">{row.table}</TableHead><TableCell>{row.scansBefore ?? "—"}</TableCell><TableCell>{row.scansAfter ?? "—"}</TableCell><TableCell>{row.readsBefore ?? "—"}</TableCell><TableCell>{row.readsAfter ?? "—"}</TableCell><TableCell className="whitespace-normal">{row.change}</TableCell></TableRow>)}
-          {comparison.collapsed && <TableRow><TableCell colSpan={6} className="whitespace-normal text-muted-foreground">{comparison.collapsed.label}</TableCell></TableRow>}</TableBody>
-      </Table>}
-      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict}</dd>}
+    {comparison.basis === "ConditionsDiffer" && <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p>}
+      <Tabs value={activeTab} onValueChange={value => onTabChange?.(String(value))} defaultValue="diff" className="space-y-3">
+        <TabsList variant="line"><TabsTrigger value="diff">SQL diff</TabsTrigger><TabsTrigger value="io">IO</TabsTrigger><TabsTrigger value="plan">Plan</TabsTrigger>{timing && <TabsTrigger value="timing">Timing</TabsTrigger>}{details && <TabsTrigger value="details">Details</TabsTrigger>}</TabsList>
+        <TabsContent value="diff">{diff ?? (sqlOptions.length > 1 ? <SessionVersionDiff key={`${comparison.a}:${comparison.b}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} selectionControls={false} /> : <p className="text-sm text-muted-foreground">SQL diff requires two retained SQL versions.</p>)}</TabsContent>
+        <TabsContent value="io">{comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <IoDetails comparison={comparison} byStatement={activeView !== "whole"} onViewChange={view => updateSearch({ view })} />}</TabsContent>
+        <TabsContent value="plan"><VersionPlan a={comparison.a} b={comparison.b} before={comparison.beforeAction} after={comparison.afterAction} engine={engine} selectedCase={scriptCase} /></TabsContent>
+        {timing && <TabsContent value="timing">{timing}</TabsContent>}
+        {details && <TabsContent value="details">{details}</TabsContent>}
+      </Tabs>
+      {comparison.basis !== "ConditionsDiffer" && <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict}</dd>}
         {optimizationMetricRows(comparison).map(row => <Fragment key={row.label}><dt className="font-medium">{row.label}</dt><dd>{row.before} → {row.after}</dd></Fragment>)}
-      </dl>
-    </>}
+      </dl>}
     {comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="text-sm underline">Operation #{comparison.operationId}</Link>
       : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></div>}
     <div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></div>
-    {showDiff && sqlOptions.length > 1 && <SessionVersionDiff key={`${comparison.a}:${comparison.b}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} />}
+
   </section>
 }
 
