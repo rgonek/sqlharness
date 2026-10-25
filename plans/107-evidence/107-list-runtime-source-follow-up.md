@@ -1,6 +1,6 @@
 # Plan 107 follow-up: source list classification
 
-**Status: IMPLEMENTED; final Windows gate, review, and commit pending.** The task report is [task-1-report.md](../../.superpowers/sdd/107-list-runtime-source-follow-up/task-1-report.md).
+**Status: IMPLEMENTED in `a8aded98`; final Windows gate and branch formatting passed; scoped task review approved; Sol low whole-branch review pending.** See [implementation report](follow-up-implementation.md) and [task review](follow-up-review.md).
 
 ## Scope
 

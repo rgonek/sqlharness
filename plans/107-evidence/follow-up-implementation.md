@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Implementation is complete; final Windows gate and review status are pending. Worktree: `D:/Dev/sqlharness/.worktrees/plan-107-followup`, branch `plan-107-followup`, assigned base `81d0fa59`. No live database, credentials, installation, or historical workload was used.
+Implemented in commit `a8aded980e3f46c0663e238f7afb82db74b82069` on `plan-107-followup`, based on `81d0fa59`. Final Windows gate and branch formatting passed; the scoped Luna xhigh task review approved with no findings. The Sol low whole-branch review remains pending. No live database, credentials, installation, or historical workload was used.
 
 ## Diagnosis
 
@@ -51,12 +51,33 @@ Passed 1, Failed 0. The test covered 12 requests across both SQL spellings, veri
 
 ## Windows gate
 
-First gate attempt (before `just fix`) passed UI install, build, UI check, and tests; formatting failed only on missing final newlines in four changed C# files. The failure output is preserved in `plans/107-evidence/windows-gate-follow-up/format.log`; its build/test/UI logs are in that directory. `just fix` reported `format: OK`.
+The first gate attempt passed UI install, build, UI check, and tests; formatting failed only on missing final newlines in the four changed C# files. The failing `format.log` and other stage logs are preserved in `plans/107-evidence/windows-gate-follow-up/`. `just fix` reported `format: OK`.
 
-Final gate: pending. Intended command: `just verify -LogDirectory plans/107-evidence/windows-gate-follow-up-final`. Record the tested revision/tree, all stage results, and final log paths here before commit.
+The second gate attempt passed install/build/UI checks, but one unrelated Core test timed out waiting for its process marker: `SqlHarness.Tests.Auth.ProcessRunnerTests.PidPublicationError_PreservesOriginalWhenMarkerWriteFails` (`test-SqlHarness.Tests.log`). The MCP project passed 535 tests with 4 skipped. The unchanged failing test was rerun alone and passed 1/1 in 996 ms. The timeout remains recorded as an observed transient; its root cause is unproven. Logs are preserved in `plans/107-evidence/windows-gate-follow-up-final/`.
+
+The final gate passed on commit `a8aded980e3f46c0663e238f7afb82db74b82069`:
+
+```text
+just verify -LogDirectory plans/107-evidence/windows-gate-follow-up-final2
+exit 0; verify: OK stages=5; elapsed 10m51s
+ui-install: skipped (lockfile unchanged)
+build: passed
+ui-check: passed in 6m33s
+Core: 4,718 passed, 11 skipped, 0 failed
+MCP: 535 passed, 4 skipped, 0 failed
+format: skipped (0 changed C# files; committed clean tree)
+```
+
+The final gate logs are in `plans/107-evidence/windows-gate-follow-up-final2/`. The required explicit branch formatting check then passed against the assigned base, covering all four changed C# files:
+
+```text
+pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 81d0fa59
+format: 4 changed C# file(s) (branch)
+format: OK; exit 0
+```
 
 ## Files and concerns
 
 Changed product/test files: `src/SqlHarness.Core/CompareCellRunner.cs`, `src/SqlHarness.Core/SqlHarnessModule.cs`, `tests/SqlHarness.Tests/CompareTests.cs`, and `tests/SqlHarness.Mcp.Tests/McpParameterBatchTests.cs`.
 
-No known product concerns. The full gate has not yet completed; commit and review remain pending.
+No known product concerns. A previous full-gate run observed the process-marker timeout described above; its unchanged focused rerun and the final full gate passed. The whole-branch review remains pending.
