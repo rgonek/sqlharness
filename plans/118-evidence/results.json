@@ -1,0 +1,540 @@
+{
+  "schema": "plan118-condition-explanation-results-v1",
+  "revision": "f15da015f290647ef6ddafd8e09694992d0dd7cd",
+  "evaluationState": "working tree evidence based on revision above",
+  "serializer": "PowerShell ConvertTo-Json -Depth 80 -Compress; UTF-8 byte count via System.Text.Encoding",
+  "limits": {
+    "differences": 32,
+    "gaps": 16,
+    "explanationUtf8Bytes": 8192
+  },
+  "caseCount": 17,
+  "totalExplanationUtf8Bytes": 6163,
+  "maxObservedExplanationUtf8Bytes": 3709,
+  "results": [
+    {
+      "name": "equal conditions",
+      "basis": {
+        "verdict": "MeasuredTogether",
+        "group": "g1"
+      },
+      "conditionExplanation": {
+        "availability": "complete",
+        "differences": [],
+        "gaps": [],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 77
+    },
+    {
+      "name": "changed setup hash",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g2"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "conditions-unavailable"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 104
+    },
+    {
+      "name": "changed retained setup text",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g17"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "setup.text",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "SET NOCOUNT ON",
+            "after": "SET XACT_ABORT ON"
+          }
+        ],
+        "gaps": [
+          "conditions-unavailable"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 228
+    },
+    {
+      "name": "changed effective type",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g3"
+      },
+      "conditionExplanation": {
+        "availability": "complete",
+        "differences": [
+          {
+            "field": "parameters.@id.effectiveType",
+            "parameterIdentity": "@id",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "int",
+            "after": "bigint"
+          }
+        ],
+        "gaps": [],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 227
+    },
+    {
+      "name": "added removed case",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g4"
+      },
+      "conditionExplanation": {
+        "availability": "complete",
+        "differences": [
+          {
+            "field": "cases",
+            "caseIdentity": "baseline-b",
+            "kind": "removed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "cases",
+            "caseIdentity": "candidate-c",
+            "kind": "added",
+            "relation": "measurement-condition"
+          }
+        ],
+        "gaps": [],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 271
+    },
+    {
+      "name": "informational repeat timeout",
+      "basis": {
+        "verdict": "MeasuredTogether",
+        "group": "g5"
+      },
+      "conditionExplanation": {
+        "availability": "complete",
+        "differences": [
+          {
+            "field": "execution.repeat",
+            "kind": "changed",
+            "relation": "informational",
+            "before": 2,
+            "after": 5
+          },
+          {
+            "field": "execution.timeoutSeconds",
+            "kind": "changed",
+            "relation": "informational",
+            "before": 20,
+            "after": 40
+          }
+        ],
+        "gaps": [],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 274
+    },
+    {
+      "name": "changed comparison mode only",
+      "basis": {
+        "verdict": "MeasuredTogether",
+        "group": "g6"
+      },
+      "conditionExplanation": {
+        "availability": "complete",
+        "differences": [
+          {
+            "field": "execution.comparisonMode",
+            "kind": "changed",
+            "relation": "informational",
+            "before": "ordered",
+            "after": "unordered"
+          }
+        ],
+        "gaps": [],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 196
+    },
+    {
+      "name": "hidden values with mismatching combined fingerprints",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g7"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "conditions-unavailable"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 104
+    },
+    {
+      "name": "unavailable old model",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g8"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "legacy-model-unsupported"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 106
+    },
+    {
+      "name": "omitted long fields",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g9"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "field-omitted"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 95
+    },
+    {
+      "name": "ambiguous case rename and order",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g10"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "case-pairing-ambiguous"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 104
+    },
+    {
+      "name": "cross-journal fingerprints without verified common key domain",
+      "basis": {
+        "verdict": "MeasuredTogether",
+        "group": "g11"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "fingerprint-domain-unverified"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 111
+    },
+    {
+      "name": "unresolved subject scope",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g12"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "identity-unresolved"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 101
+    },
+    {
+      "name": "identical SQL with different cases",
+      "basis": {
+        "verdict": "SameSql",
+        "group": "g13"
+      },
+      "conditionExplanation": {
+        "availability": "complete",
+        "differences": [
+          {
+            "field": "cases",
+            "caseIdentity": "new-case",
+            "kind": "added",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "cases",
+            "caseIdentity": "old-case",
+            "kind": "removed",
+            "relation": "measurement-condition"
+          }
+        ],
+        "gaps": [],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 266
+    },
+    {
+      "name": "typed NULL versus absent value",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g14"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "field-omitted"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 95
+    },
+    {
+      "name": "unknown value versus empty collection",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g15"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "field-omitted"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 95
+    },
+    {
+      "name": "multibyte differences exceed caps",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g16"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "parameters.@p00.value",
+            "parameterIdentity": "@p00",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p01.value",
+            "parameterIdentity": "@p01",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p02.value",
+            "parameterIdentity": "@p02",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p03.value",
+            "parameterIdentity": "@p03",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p04.value",
+            "parameterIdentity": "@p04",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p05.value",
+            "parameterIdentity": "@p05",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p06.value",
+            "parameterIdentity": "@p06",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p07.value",
+            "parameterIdentity": "@p07",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p08.value",
+            "parameterIdentity": "@p08",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p09.value",
+            "parameterIdentity": "@p09",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p10.value",
+            "parameterIdentity": "@p10",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p11.value",
+            "parameterIdentity": "@p11",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p12.value",
+            "parameterIdentity": "@p12",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p13.value",
+            "parameterIdentity": "@p13",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p14.value",
+            "parameterIdentity": "@p14",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p15.value",
+            "parameterIdentity": "@p15",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p16.value",
+            "parameterIdentity": "@p16",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p17.value",
+            "parameterIdentity": "@p17",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p18.value",
+            "parameterIdentity": "@p18",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p19.value",
+            "parameterIdentity": "@p19",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p20.value",
+            "parameterIdentity": "@p20",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p21.value",
+            "parameterIdentity": "@p21",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p22.value",
+            "parameterIdentity": "@p22",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p23.value",
+            "parameterIdentity": "@p23",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p24.value",
+            "parameterIdentity": "@p24",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p25.value",
+            "parameterIdentity": "@p25",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p26.value",
+            "parameterIdentity": "@p26",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p27.value",
+            "parameterIdentity": "@p27",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p28.value",
+            "parameterIdentity": "@p28",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p29.value",
+            "parameterIdentity": "@p29",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p30.value",
+            "parameterIdentity": "@p30",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          },
+          {
+            "field": "parameters.@p31.value",
+            "parameterIdentity": "@p31",
+            "kind": "changed",
+            "relation": "measurement-condition"
+          }
+        ],
+        "gaps": [
+          "budget-exceeded"
+        ],
+        "omittedDifferences": 16
+      },
+      "explanationUtf8Bytes": 3709
+    }
+  ],
+  "knownLimits": [
+    "Synthetic records only; no production serializer or browser measurement.",
+    "Fingerprint keys are fixture labels and never explanation values.",
+    "The 8 KiB ceiling applies to conditionExplanation JSON only, not its enclosing comparison response."
+  ]
+}

@@ -1,0 +1,33 @@
+# Plan 118 Task 2: condition difference explanation study
+
+## Decision boundary
+
+This is a synthetic, offline study of an optional future dashboard explanation. It does not change the product contract, journal capture, fingerprints, grouping, authorization, or comparison policy. The evaluator consumes two retained-condition records plus an existing comparison basis. It returns explanation material only and copies the supplied basis byte-for-byte at the JSON value level; it never derives or replaces that verdict.
+
+The candidate payload is `conditionExplanation: { availability, differences, gaps, omittedDifferences }`. `availability` is `complete`, `partial`, or `unavailable`. A difference has `field`, optional exact retained `caseIdentity` and `parameterIdentity`, `kind` (`changed|added|removed`), `relation` (`measurement-condition|informational`), and optional `before` / `after` display values. A gap has only a stable `code`. `omittedDifferences` is an integer when known, including zero. Candidate bounds are 32 difference items, 16 gap items, and 8,192 UTF-8 bytes for the complete explanation JSON. These are study limits, not runtime policy.
+
+## Evidence and comparison rules
+
+- Compare only fields represented in both retained records. A present JSON null, typed SQL NULL, absent property, explicit `unknown`, explicit `omitted`, and empty collection are distinct states.
+- Explain setup SQL only when both sides retain its text; a setup-hash change alone is opaque. For parameters, compare retained effective type, list/TVP kind and shape metadata, and value only if both values are retained.
+- Emit display values only when the source record marks the value `retained` and the value is present. The display layer does not interpret labels, SQL hashes, journal-keyed hashes, or whole-operation fingerprints as parameter/setup values.
+- Compare parameter records only by exact parameter identity inside a uniquely paired case. Pair cases only when the fixture supplies one verified, unambiguous common measurement key. Do not pair by array position, label, ordinal, or renamed set name. Duplicate or absent keys create `case-pairing-ambiguous` or `identity-unresolved` gaps.
+- A fingerprint mismatch is not itself a field difference. If retained fields explain none of it, emit `conditions-unavailable`. If journals do not share a verified fingerprint-key domain, emit `fingerprint-domain-unverified` and do not use those fingerprints to pair cases.
+- `omitted` paths yield `field-omitted`; unavailable legacy records yield `legacy-model-unsupported`. Known differences can coexist with gaps, resulting in `partial` availability.
+- Repeat, timeout, comparison mode, warmup, operation kind, and compare-nullability are informational in this study. Their differences do not alter the immutable basis or become measurement incompatibilities. Existing measurement fingerprints omit repeat and timeout; measurement fingerprints omit comparison mode. No equality claim about untracked settings follows from a matching fingerprint.
+- Difference order is deterministic by field path, exact retained case identity, parameter identity, and kind. Gaps are unique and sorted by stable code. Omission accounting counts every candidate item removed by an item or UTF-8 budget.
+- The evaluator reserves a truthful `budget-exceeded` gap when truncating. It preserves item identities and reports exact omitted item count; if the serialized explanation itself cannot fit after dropping values, it retains identity/kind/relation and removes display values before dropping differences. A final irreducible overflow is represented by `availability: partial`, the budget gap, and a known omission count.
+
+## User-facing wording
+
+Use “Recorded measurement conditions differ” for known measurement-condition differences, “Some recorded details are unavailable” for gaps, and “These settings changed but do not determine this comparison group” for informational changes. Show actual retained values only when available. Do not expose serializer terms such as null JSON or HMAC; do not call an unavailable value “NULL” or say that a hidden parameter changed.
+
+## Future dashboard route/component map
+
+The current group-selector path can identify the selection safely: `OptimizationSection` sends explicit `subject`, `database`, `group`, `scope`, `a`, `b`, case, aggregate, and view selectors to session or agent-session `/optimization/compare`; the response type includes the selected `beforeAction` and `afterAction` operation references and immutable `basis` (`ui/src/components/optimization/OptimizationSection.tsx`, `ui/src/api/queries.ts`, `ui/src/api/types.ts`, `DashboardServer.cs`). Therefore a later explanation can be attached to the exact operation pair already chosen by the existing comparison result, without adding an API selector. Keep the selector values and comparison result authoritative; do not resolve by display label. The operation path `/api/operations/{id}/optimization` provides an alternate operation-anchored route (`useOperationOptimization`), but future work must still use the exact paired action reference in the result. `ComparisonPanel` renders comparison and basis; `optimizationMarkdown.ts` owns copied Markdown wording. These locations are a map for a later implementation, not edits in this study.
+
+Use the existing group-selected comparison result and its before/after action references as the preferred later surface. An operation-pair view can reuse the same explanation contract when the selected pair is explicit. Both paths must keep explanation computation downstream of existing grouping/comparison and must not alter `basis`.
+
+## Study output and limits
+
+`cases.json` contains synthetic records only. `evaluate.ps1` is a standalone candidate evaluator; `verify.ps1` is a separate oracle with hard-coded expected availability, difference identities/kinds/relations, gaps, omission counts, basis preservation, value-protection assertions, and UTF-8 bounds. `results.json` records serializer, revision, output sizes, and limitations. The study does not measure dashboard transport overhead, production serializer behavior, browser rendering, or actual journal-version prevalence.
