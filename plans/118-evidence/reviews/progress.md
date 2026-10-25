@@ -32,3 +32,6 @@ Task 3: in progress; BASE e1e6cd08.
 Task 3: complete (commits e1e6cd08..b50c44f9, review clean).
 Task 3 cannot-verify oracle outside diff: resolved via approved Task 2 reviews and controller final verify27 at b50c44f9, exit0. Controller git diff --check baseline..HEAD passed; src/tests/scripts diff empty.
 Whole-branch review pending, user-selected Sol low; no deferred/parked findings.
+Whole-branch review 52b71b05: Needs fixes, 2 Important: asymmetric duplicate case pairing and duplicate parameter identities can emit arbitrary specific change. Single final fix wave BASE 52b71b05; Luna high fixes both, Sol low scoped re-review.
+Whole-branch final fix wave: commits 52b71b05..4a270abe; both Important findings addressed, no new breakage; Sol low scoped re-review approved.
+Final result: RESEARCH COMPLETE;34 scenarios, tested executable890053e2; no open/deferred findings. Accepted bounded subset for separately selected implementation; cross-group UI deferred. All task reviews approved. Preserve local branch/worktree; no merge/push authority.

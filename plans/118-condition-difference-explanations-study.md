@@ -19,7 +19,7 @@
 
 ## Execution setup
 
-Use an isolated `plan-118` checkout after inspecting `git status --short` and `git worktree list --porcelain`. Before changes run `$studyStart = (git rev-parse HEAD).Trim()` and retain the revision/initial status. Preserve unrelated edits; no automatic commit/merge/push. Apply `docs/agents/verification.md` scoped documentation/study checks. All experiment/verifier scripts must exit nonzero for missing evidence or failed assertions.
+Use an isolated `plan-118` checkout after inspecting `git status --short` and `git worktree list --porcelain`. Before changes run `$studyStart = (git rev-parse HEAD).Trim()` and retain the revision/initial status. Preserve unrelated edits. Normal commits are authorized by the operator for this execution; no merge/push. Apply `docs/agents/verification.md` scoped documentation/study checks. All experiment/verifier scripts must exit nonzero for missing evidence or failed assertions.
 
 ## Why this matters
 
@@ -94,7 +94,7 @@ Show repeat, timeout and comparison-only differences as informational unless cur
 
 - [x] Write `decision.md`: accept the bounded explanation subset, defer or reject, with demand assumptions, costs and unanswered questions. A design that changes comparability or requires recovering unstored values is a no-go.
 - [x] Future implementation tests must pin comparer output invariance, legacy gaps, stable case identity, sensitive-off payloads, UI/Markdown parity and overflow. Commands: `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~OptimizationComparerTests|FullyQualifiedName~OptimizationSummaryBuilderTests'`; `npm --prefix src/SqlHarness.Dashboard/ui run test -- src/components/optimization/ComparisonPanel.test.tsx`; then `just verify` and explicit branch C# formatting on separately selected product work.
-- [x] Run study verification, Markdown link/whitespace checks and source immutability check; update the index to RESEARCH COMPLETE with the decision. Task/final review closeout remains pending.
+- [x] Run study verification, Markdown link/whitespace checks and source immutability check; update the index to RESEARCH COMPLETE with the decision. All Luna xhigh task reviews and Sol low whole-study/final scoped review are approved; see [final review](118-evidence/reviews/final-scoped-review.md).
 
 ## Done criteria
 
