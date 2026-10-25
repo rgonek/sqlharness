@@ -17,3 +17,7 @@ Revision before Task 3 edits: `10b27690a8c80e2d1d38645971b8dbb6ec9cea1c` (`plan-
 The whole-branch review accepted these five boundaries as unverified: historical external cause; historical loaded-binary identity; MCP publisher/journal integration; Linux and live database/install behavior; attribution of npm audit and Vite diagnostics. See the archived [Sol review](113-evidence/reviews/whole-branch-review.md) and [ledger](113-evidence/reviews/sdd-progress-ledger.md).
 
 The diagnostic disposition is **mitigation present; original cause unresolved; no further change**. No later recurrence was found in the inspected observation and Plan 076 record; this does not establish a global absence of recurrence. Task 3 Luna xhigh and Sol low whole-branch reviews approved commit `8ed91395` with no findings. The plan is DIAGNOSIS COMPLETE. Controller checks on `8ed91395`: `git diff --check` passed and 82 relative Markdown links resolved. The current closeout remains documentation-only; no code or tests changed.
+
+## Local main integration (2026-10-25)
+
+Merged plan-113 at f8030a4f. The index conflict retained entries 111, 112 and 113. The integration changes documentation/evidence only; src and tests are unchanged from pre-merge main e5967703. Scoped diff/link checks passed; no full product gate was required. Existing local README and plan-index edits were restored; the original untracked plan draft remains recoverable from the integration stash and temporary backup. No push, install or live acceptance.
