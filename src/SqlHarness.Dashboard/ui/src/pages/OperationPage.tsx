@@ -1,3 +1,5 @@
+import { CopyButton } from "@/components/CopyButton"
+import { MoreHorizontal, Sparkles, Star } from "lucide-react"
 import { useState, type ReactNode } from "react"
 import type { OperationDetail } from "@/api/types"
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
@@ -17,7 +19,7 @@ import { displayCaseLabel } from "@/lib/caseLabel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -31,6 +33,19 @@ import type { OperationDetailSearch } from "@/router"
 import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
 import { StatementRows } from "@/components/optimization/StatementRows"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+
+function OperationHeading({ detail, returnSearch, metadata }: { detail: OperationDetail; returnSearch: OperationDetailSearch; metadata?: ReactNode }) {
+  const op = detail.operation
+  const update = useUpdateOperationAnnotation(op.id)
+  const returnAgent = agentReturnKey(returnSearch)
+  const title = op.operation === "compare" ? `${detail.compareSubject ?? "Unassigned compare"} · ${detail.baselineVersion ?? "?"} → ${detail.candidateVersion ?? "?"}` : op.agentLabel ?? op.subject ?? `Operation #${op.id}`
+  return <div className="operation-heading">
+    <div className="operation-breadcrumb"><Link to="/">Activity</Link><span>/</span>{returnAgent ? <Link to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)}>Back to agent session</Link> : <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSearch.returnSession === op.sessionId ? sessionSearchFromOperation(returnSearch) : undefined}>{detail.session.title ?? detail.session.sessionKey}</Link>}<span>/</span><span>#{op.id}</span></div>
+    <div className="flex items-center gap-2"><h1 aria-label={title} className="min-w-0 flex-1">{op.operation === "compare" ? <>{detail.compareSubject ?? "Unassigned compare"} · <span className="heading-version-pair">{detail.baselineVersion ?? "?"} → {detail.candidateVersion ?? "?"}</span></> : title}{op.agentKeep && <Sparkles className="ml-2 inline size-4 text-violet-600" aria-label="Kept by agent" />}</h1><Button variant="ghost" size="icon-sm" aria-label={op.ownerStarred ? "★ Owner starred" : "☆ Star operation"} aria-pressed={op.ownerStarred} disabled={update.isPending} onClick={() => update.mutate({ starred: !op.ownerStarred })}><Star className={op.ownerStarred ? "fill-amber-400 text-amber-500" : ""} /></Button>{detail.sqlText && <CopyButton label="Copy stored SQL" getText={() => detail.sqlText!} />}<details className="operation-owner-menu"><summary aria-label="Operation actions"><MoreHorizontal className="size-4" /></summary><div><OperationOwnerAnnotations key={op.id} operation={op} /></div></details></div>
+    <div className="operation-subtitle"><StatusBadge operation={op} /><span className="capitalize">{op.operation} #{op.id}</span>{op.operation === "compare" && <><span>·</span><span>{detail.compareScope === "whole" ? "whole query" : detail.compareScope ?? "Unassigned scope"}</span></>}<span>·</span><span>{agentLabel(op.agentKind)}</span><code>{detail.session.transport}</code><span>·</span><time title={op.startedAt}>{formatTimestamp(op.startedAt)}</time><span>·</span><span>{formatDuration(op.durationMs)}</span><span>·</span><span>{op.profile && <>{op.profile} / </>}<span>{op.database ?? "—"}</span></span><FlagBadges operation={op} />{metadata && <><span>·</span>{metadata}</>}</div>
+    {update.error && <p role="alert" className="text-sm text-destructive">Could not save operation annotations: {update.error.message}</p>}
+  </div>
+}
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -69,8 +84,6 @@ function OperationOwnerAnnotations({ operation }: { operation: OperationDetail["
   const update = useUpdateOperationAnnotation(operation.id)
   const [note, setNote] = useState(operation.ownerNote ?? "")
   return <section className="flex flex-wrap items-center gap-2" aria-label="Operation annotations">
-    <Button variant="outline" size="sm" aria-pressed={operation.ownerStarred}
-      onClick={() => update.mutate({ starred: !operation.ownerStarred })}>{operation.ownerStarred ? "★ Owner starred" : "☆ Star operation"}</Button>
     {operation.agentKeep && <Badge variant="secondary">Agent keep</Badge>}
     {operation.agentLabel && <span className="rounded border px-2 py-1 text-sm">{operation.agentLabel}</span>}
     <div className="flex items-center gap-2 text-sm">
@@ -163,8 +176,6 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
   const detail = query.data
   const op = detail.operation
   if (op.operation === "compare") return <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
-  const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
-  const returnAgent = agentReturnKey(returnSearch)
   const hasPlanParameterSet = returnSearch.planParameterSetNull === true || returnSearch.planParameterSet !== undefined
   const planTarget = hasPlanParameterSet && returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
     && returnSearch.planDocument !== undefined && returnSearch.planStatement !== undefined
@@ -174,28 +185,8 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
     && variant.variant === returnSearch.planVariant && variant.parameterSet === planTarget.parameterSet) : undefined
   const tabVariant = targetVariant ?? detail.variants[0]
   return (
-    <div className="space-y-4">
-      <Card className="gap-2 border-0 shadow-none">
-        <CardHeader className="px-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle>
-              <h1>{op.agentLabel ?? op.subject ?? `Operation #${op.id}`}</h1>
-            </CardTitle>
-            <StatusBadge operation={op} />
-            <FlagBadges operation={op} />
-          </div>
-          <OperationOwnerAnnotations key={op.id} operation={op} />
-          <CardDescription>
-            {op.operation} by {agentLabel(op.agentKind)} in{" "}
-            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined}>
-              {detail.session.sessionKey}
-            </Link>
-              {returnAgent && <Link className="ml-3 underline" to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }}
-                search={sessionSearchFromOperation(returnSearch)}>Back to agent session</Link>}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 px-0">
-          <Collapsible><CollapsibleTrigger className="text-sm text-muted-foreground underline">Details</CollapsibleTrigger><CollapsibleContent keepMounted>
+    <div className="operation-page space-y-4">
+      <OperationHeading detail={detail} returnSearch={returnSearch} metadata={<Collapsible className="operation-heading-metadata"><CollapsibleTrigger className="text-sm text-muted-foreground underline">Details</CollapsibleTrigger><CollapsibleContent keepMounted>
           <div className="mt-3 grid grid-cols-2 gap-4 md:grid-cols-4">
             <Fact label="Started">{formatTimestamp(op.startedAt)}</Fact>
             <Fact label="Finished">{formatTimestamp(op.finishedAt)}</Fact>
@@ -232,18 +223,13 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
               </Link>
             })}
           </div>}
-          </CollapsibleContent></Collapsible>
-          {detail.summary && op.operation !== "compare" && <SummaryFacts summary={detail.summary} />}
-        </CardContent>
-      </Card>
+          {detail.summary && <SummaryFacts summary={detail.summary} />}</CollapsibleContent></Collapsible>} />
 
-      <div className="grid grid-cols-2 gap-4 border-y py-4 md:grid-cols-4" aria-label="Operation metrics">
-        <Fact label={op.operation === "measure" ? "Elapsed median" : "Duration"}>{formatDuration(op.operation === "measure" ? tabVariant?.elapsedMs?.median ?? null : op.durationMs)}</Fact>
-        <Fact label="Logical reads">{formatNumber(op.logicalReadsMedian)}</Fact>
-        <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>
-        <Fact label="CPU">{formatDuration(tabVariant?.cpuMs?.median ?? null)}</Fact>
+      <div className={`operation-metrics ${op.operation === "measure" ? "measure-metrics" : ""}`} aria-label="Operation metrics">
+        {op.operation === "query" ? <><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact><Fact label="Columns">—</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Output">{formatNumber(detail.emittedBytes)} B</Fact></> : op.operation === "mutation" ? <><Fact label="Rows affected">—</Fact><Fact label="Estimated">—</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Waited for approval">{formatDuration(detail.phases.find(phase => /approval/i.test(phase.phase))?.totalMs ?? null)}</Fact></> : <><Fact label="Logical reads">{formatNumber(op.logicalReadsMedian)}</Fact><Fact label="Elapsed median">{formatDuration(tabVariant?.elapsedMs?.median ?? null)}</Fact><Fact label="CPU">{formatDuration(tabVariant?.cpuMs?.median ?? null)}</Fact><Fact label="Scans">{tabVariant?.tableIo.length && tabVariant.tableIo.every(row => row.scanCount !== null) ? formatNumber(tabVariant.tableIo.reduce((sum, row) => sum + row.scanCount!, 0)) : "—"}</Fact><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact></>}
+
       </div>
-      <Tabs defaultValue="sql" className="space-y-4">
+      <Tabs defaultValue="sql" className="operation-tabs">
         <TabsList variant="line" className="flex flex-wrap">
           <TabsTrigger value="sql">{op.operation === "measure" ? "SQL & plan" : "SQL"}</TabsTrigger>
           {op.operation === "measure" && <TabsTrigger value="io">IO</TabsTrigger>}
@@ -252,13 +238,11 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
           <TabsTrigger value="timing">Timing</TabsTrigger>
           <TabsTrigger value="details">Details</TabsTrigger>
         </TabsList>
-        <TabsContent value="sql">      {op.operation === "compare" && <CompareDetail detail={detail} />}
+        <TabsContent value="sql"><div className="operation-parameters"><span>Parameters</span>{Object.entries(detail.vars ?? {}).map(([key,value]) => <code key={key}>@{key} = {value}</code>)}</div>      {op.operation === "compare" && <CompareDetail detail={detail} />}
 
-      {op.operation !== "compare" && <Card>
-        <CardHeader>
-          <CardTitle>SQL</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
+      {op.operation !== "compare" && <Card className="operation-sql-card">
+
+        <CardContent className="space-y-2 p-0">
           {detail.sqlText === null ? (
             <p className="text-sm text-muted-foreground">SQL text is not stored (journal.storeSensitive is off).</p>
           ) : (
@@ -270,7 +254,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
                   <SqlBlock sql={detail.setupSqlText} engine={op.engine} initiallyFormatted={false} />
                 </section>
               )}
-              <SqlBlock sql={detail.sqlText} engine={op.engine} label={detail.candidateSqlText !== null ? "Baseline" : undefined} />
+              {op.operation === "measure" && detail.variants.some(variant => variant.plans.some(plan => plan.stored)) ? null : <SqlBlock sql={detail.sqlText} engine={op.engine} initiallyFormatted={false} label={detail.candidateSqlText !== null ? "Baseline" : undefined} />}
               {detail.candidateSqlText !== null && <SqlBlock sql={detail.candidateSqlText} engine={op.engine} label="Candidate" />}
             </>
           )}
@@ -285,6 +269,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
           {detail.variants.map(v => <TabsContent key={v.ordinal} value={String(v.ordinal)}><VariantPanel operationId={op.id} variant={v} engine={op.engine} mode="plan" planTarget={v === targetVariant ? planTarget : undefined} /></TabsContent>)}
         </Tabs>
       )}
+      {detail.sqlText !== null && op.operation === "measure" && detail.variants.some(variant => variant.plans.some(plan => plan.stored)) && <Collapsible><CollapsibleTrigger className="cursor-pointer text-xs text-muted-foreground underline">Stored SQL</CollapsibleTrigger><CollapsibleContent><SqlBlock sql={detail.sqlText} engine={op.engine} initiallyFormatted={false} /></CollapsibleContent></Collapsible>}
         </TabsContent>
         <TabsContent value="io">      {op.operation === "measure" && <Card>
         <CardHeader><CardTitle>Statement IO</CardTitle></CardHeader>
@@ -344,31 +329,20 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
   const comparison = useOperationOptimization(id, selectedCase, aggregate, view)
   const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
   const returnAgent = agentReturnKey(returnSearch)
-  const title = detail.session.title ?? detail.session.clientTitle ?? detail.session.sessionKey
+  const returnLink = returnAgent ? <Link aria-label="Back to session Optimization" to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)} className="underline">Open in session Optimization →</Link> : <Link aria-label="Back to session Optimization" to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined} className="underline">Open in session Optimization →</Link>
   if (comparison.error) return <ErrorState error={comparison.error} />
-  return <div className="space-y-4">
-    <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b pb-3">
-      <h1 className="font-heading text-lg font-medium">{detail.compareSubject ?? "Unassigned compare"}</h1>
-      <span className="text-sm">{detail.compareScope === "whole" ? "whole query" : detail.compareScope ?? "Unassigned scope"}</span>
-      <span className="text-sm">{detail.baselineVersion ?? "Unknown"} → {detail.candidateVersion ?? "Unknown"}</span>
-      <span className="text-sm">{op.database ?? "Unknown database"}</span>
-      <time className="text-sm" dateTime={op.startedAt}>{formatTimestamp(op.startedAt)}</time>
-      <StatusBadge operation={op} />
-      <OperationOwnerAnnotations key={op.id} operation={op} />
-      {returnAgent
-        ? <Link to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)} className="ml-auto text-sm underline">Back to agent session</Link>
-        : <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined} className="ml-auto text-sm underline">Back to {title}</Link>}
-    </header>
-    <div className="grid grid-cols-2 gap-4 border-b pb-4 md:grid-cols-4" aria-label="Operation metrics">
+  return <div className="operation-page space-y-4">
+    <OperationHeading detail={detail} returnSearch={returnSearch} />
+
+    <div className="operation-metrics" aria-label="Operation metrics">
       <Fact label="Logical reads">{formatNumber(comparison.data?.wholeBatch?.after ?? op.logicalReadsMedian)}</Fact>
       <Fact label="Elapsed median">{formatDuration(comparison.data?.elapsed.afterMs ?? null)}</Fact>
       <Fact label="CPU">{formatDuration(comparison.data?.cpuAfterMs ?? null)}</Fact>
       <Fact label="Results">{comparison.data?.equivalenceLabel ?? "—"}</Fact>
     </div>
-    <StoredSqlReuse detail={detail} />
-    {detail.vars && <div className="flex flex-wrap gap-2" aria-label="Variables">{Object.entries(detail.vars).map(([key, value]) => <Badge key={key} variant="outline">{key}=<span>{value}</span></Badge>)}</div>}
+
     {comparison.isPending ? <Skeleton className="h-64 w-full" /> : comparison.data ? <>
-      <ComparisonPanel comparison={comparison.data} sessionId={op.sessionId} agentSessionKey={returnAgent} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector activeTab={comparisonTab} onTabChange={setComparisonTab} details={<><CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data?.selectedCase ?? "all" : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }) }) }} />    <Collapsible className="rounded-lg border p-4"><CollapsibleTrigger className="cursor-pointer font-medium">Run diagnostics</CollapsibleTrigger><CollapsibleContent keepMounted><div className="mt-4 space-y-4">
+      <ComparisonPanel navigation={returnLink} headerContent={detail.vars && <div className="operation-parameters"><span>Parameters</span><div aria-label="Variables" className="flex flex-wrap gap-2">{Object.entries(detail.vars).map(([key,value]) => <code key={key}>@{key} = {value}</code>)}</div></div>} comparison={comparison.data} sessionId={op.sessionId} agentSessionKey={returnAgent} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector activeTab={comparisonTab} onTabChange={setComparisonTab} details={<><CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data?.selectedCase ?? "all" : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }) }) }} />    <Collapsible className="rounded-lg border p-4"><CollapsibleTrigger className="cursor-pointer font-medium">Run diagnostics</CollapsibleTrigger><CollapsibleContent keepMounted><div className="mt-4 space-y-4">
       <Card><CardHeader><CardTitle>Output size</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Fact label="Output bytes (raw / emitted)">{formatNumber(detail.rawBytes)} / {formatNumber(detail.emittedBytes)}</Fact>
         <Fact label="Estimated output tokens (raw / emitted)">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
@@ -379,11 +353,12 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
         <Fact label="Model">{detail.agent.model ?? detail.agent.transcriptModel ?? "—"}</Fact><Fact label="Effort">{detail.agent.reasoningEffort ?? detail.agent.transcriptReasoningEffort ?? "—"}</Fact>
         {detail.agent.conversationTitle && <Fact label="Conversation">{detail.agent.conversationTitle}</Fact>}<Fact label="Agent session">{detail.agent.sessionId ?? "—"}</Fact><Fact label="Turn">{detail.agent.turnId ?? "—"}</Fact><Fact label="Trigger">{detail.agent.turnTrigger ?? "—"}</Fact><Fact label="Thread source">{detail.agent.threadSource ?? "—"}</Fact><Fact label="Call id">{detail.agent.callId ?? "—"}</Fact>
       </CardContent></Card>}
-    </div></CollapsibleContent></Collapsible></>} diff={<SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={op.engine} />} timing={<OperationTimings detail={detail} />}
+    </div></CollapsibleContent></Collapsible></>} diff={<SqlDiff embedded baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={op.engine} />} timing={<OperationTimings detail={detail} />}
         searchState={{ case: selectedCase, agg: aggregate, view }} sessionSearch={sessionSearchFromOperation(returnSearch)}
         onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }) }) }} />
 
     </> : null}
+    <StoredSqlReuse detail={detail} />
 
   </div>
 }

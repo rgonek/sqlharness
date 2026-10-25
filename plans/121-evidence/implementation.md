@@ -39,10 +39,21 @@ in the existing Mutations interface; no approval is supplied by this change.
 
 Two source-review axes and scoped corrections are recorded in [reviews](reviews.md).
 Browser inventory was empty and `createBrowserTab("iab", ...)` reported that the
-browser was unavailable. Visual and responsive browser acceptance remain unverified.
+browser was unavailable. Visual and responsive browser acceptance were unverified at that delivery; the [visual follow-up](visual-verification.md) now records actual browser evidence.
 
 ## Delivery
 
 Locally integrated and published after green Windows verification. See
 [verification](verification.md), [integration](integration.json) and
 [publication](publication.json). User README/index edits remain uncommitted.
+
+## Browser correction follow-up (2026-10-25)
+
+The unavailable-browser statements above describe the original delivery only.
+The subsequent authorized Playwright/Chromium run rendered the selected exports
+and actual application, saved before/after matched states, and corrected material
+layout differences. See [design QA](../../design-qa.md),
+[screenshot gallery](visual/index.html), and [follow-up review](visual-review.md).
+Missing journal data remains explicitly unavailable by operator decision; no API
+or persistence contract was expanded. Final gate and delivery receipts are recorded
+separately for this follow-up.

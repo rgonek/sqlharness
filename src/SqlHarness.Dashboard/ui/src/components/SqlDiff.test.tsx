@@ -78,3 +78,14 @@ test("formatted expansion over the limit never reaches the merge editor", async 
   expect(await screen.findByText(/exceeds the 256 KiB or 4,000 line limit/)).toBeInTheDocument()
   expect(screen.queryByLabelText(/merge /)).not.toBeInTheDocument()
 })
+
+
+test("embedded over-limit diff keeps full candidate SQL copyable", async () => {
+  const candidate = "SELECT 2;\n".repeat(5000)
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  setClipboard(writeText)
+  render(<SqlDiff embedded baseline="SELECT 1;" candidate={candidate} engine={null} />)
+  expect(screen.getByText(/exceeds the 256 KiB or 4,000 line limit/)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Copy candidate SQL" }))
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(candidate))
+})

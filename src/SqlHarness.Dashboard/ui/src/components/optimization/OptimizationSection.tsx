@@ -31,7 +31,7 @@ export function OptimizationSection({ sessionId, agentSessionKey, operations = [
   const section = activeQuery.data
   if (!section) return null
   return <section aria-labelledby="optimization-heading" className="space-y-4">
-    <div><h2 id="optimization-heading" className="font-heading text-lg font-medium">Optimization</h2><p className="text-sm text-muted-foreground">Compare retained SQL versions and review measurements within their conditions and scope.</p></div>
+    <h2 id="optimization-heading" className="sr-only">Optimization</h2>
     {section.subjects.map(subject => <SubjectCard key={subjectKey(subject)} sessionId={sessionId} agentSessionKey={agentSessionKey} search={search} subject={subject} operations={operations} />)}
     {!!section.unassigned.length && <Collapsible className="rounded-lg border p-3">
       <CollapsibleTrigger className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</CollapsibleTrigger>
@@ -72,9 +72,9 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
       scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined } : {}), ...patch }), replace: false })
   }
 
-  return <article aria-current={matchesCard ? "true" : undefined} className="space-y-3 rounded-lg border p-3">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-medium">{subject.subject}</h3><p className="text-sm text-muted-foreground">{subject.database || "(no database)"} · {subject.engine}</p></div>
-      {!matchesCard && <Button type="button" variant="outline" size="sm" onClick={() => update({ a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })}>Select comparison</Button>}
+  return <article aria-current={matchesCard ? "true" : undefined} className="optimization-card">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-base font-semibold">Optimization</div><p className="mt-1 text-sm text-muted-foreground"><span role="heading" aria-level={3}>{subject.subject}</span> · {subject.database || "(no database)"} · {subject.engine} · <span>{scope?.scope}</span></p></div>
+      {!!search.subject && !matchesCard && <Button type="button" variant="outline" size="sm" onClick={() => update({ a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })}>Select comparison</Button>}
     </div>
     {groups.length > 1 && group && <div className="grid max-w-xl gap-1 text-sm">
       <Label htmlFor={`${controlId}-group`}>Conditions group</Label>
@@ -101,14 +101,14 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
       </Select>
     </div>}
     {group && scope ? <>
-      <p className="text-sm font-medium">{scope.scope}</p>
+
       {versions.length > 0 ? <VersionTable subject={`${subject.subject}-${subject.database}`} sessionId={sessionId} agentSessionKey={agentSessionKey} sessionSearch={selectedSearch}
         versions={versions} operations={operations} selectedA={selectedA} selectedB={selectedB || null}
         onSelect={(side, version) => update({ a: selectedA, b: selectedB || undefined, [side]: version })} /> : <p className="text-sm text-muted-foreground">No retained versions for this scope.</p>}
       {!selectedB && <p className="text-sm text-muted-foreground">Select a version for B to compare it with {selectedA}.</p>}
       {activeCompareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
       {activeCompareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {activeCompareQuery.error.message}</p>}
-      {activeCompareQuery.data && <div className="mt-4"><ComparisonPanel activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
+      {activeCompareQuery.data && <div className="optimization-comparison"><ComparisonPanel activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
         sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={patch => update(patch)} /></div>}
     </> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
   </article>

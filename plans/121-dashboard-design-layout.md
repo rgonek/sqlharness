@@ -1,6 +1,6 @@
 # Plan 121: Dashboard design layout
 
-Status: DONE; locally integrated into main at `fc83e808`; `just publish fast` completed and installed binary verified. No push. Original base `443f468e`; current main `05a414a4` incorporated before the final gate.
+Original delivery: DONE; locally integrated into main at `fc83e808`; `just publish fast` completed and installed binary verified. No push. Original base `443f468e`; current main `05a414a4` incorporated before the final gate.
 
 ## Approved references
 
@@ -30,4 +30,23 @@ Preserve the operator's dirty main documents. The operator subsequently authoriz
 
 ## Verification
 
-See [verification](121-evidence/verification.md), [implementation](121-evidence/implementation.md) and [reviews](121-evidence/reviews.md). Browser comparison remains unverified.
+See [verification](121-evidence/verification.md), [implementation](121-evidence/implementation.md) and [reviews](121-evidence/reviews.md). The original delivery lacked browser acceptance. The follow-up below supersedes that limitation with actual screenshot evidence.
+## Visual correction follow-up (2026-10-25)
+
+Status: VISUAL AND GATE ACCEPTED; local delivery in progress on `dashboard-visual-fidelity`, base `7c1b2fbf`.
+The previous DONE status describes delivery, not visual acceptance.
+
+- [x] Render local exports with support.js and capture selected source screens.
+- [x] Run the worktree's Vite app at 127.0.0.1:48122 with explicitly isolated API fixtures; capture before states.
+- [x] Correct ActivityFeed/ActivityOperations and shared AppLayout geometry; verify filters, counts and expansion.
+- [x] Correct SettingsPage into six cards with two-column rows; preserve save queues and confirmations.
+- [x] Correct OperationPage headers, metric strips and tab panels for measure/query/mutation/compare.
+- [x] Correct SessionPage, VersionTable, ComparisonPanel/IoComparison and PlanWorkbench geometry.
+- [x] Re-capture matched states, inspect full views and readable details; verify narrow layouts and console.
+- [ ] Run focused checks and final just verify, review, integrate locally preserving dirty main, publish fast and verify installed artifact. No push.
+
+Final Windows gate: UI 384, Core 4718, MCP 535 passed; local xUnit collections sequential. See [follow-up verification](121-evidence/visual-verification.md).
+
+Evidence: `121-evidence/visual/`; reproducible capture uses Playwright with browser-only API interception. Fixtures never reach databases or the installed journal. Missing journal result cells and statement memory remain explicitly unavailable.
+
+Visual acceptance: [design QA](../design-qa.md), [44-state screenshot gallery](121-evidence/visual/index.html), and [follow-up review](121-evidence/visual-review.md). The operator explicitly chose unavailable-data labels without new contracts.

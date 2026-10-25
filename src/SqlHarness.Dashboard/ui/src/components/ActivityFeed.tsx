@@ -10,56 +10,59 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { sessionDisplayName } from "@/lib/sessionName"
 import { agentLabel } from "@/lib/agents"
-import { formatTimestamp } from "@/lib/format"
+function formatRelativeTime(value: string, now: number) {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(value)) / 60000))
+  return minutes < 1 ? "now" : minutes < 60 ? `${minutes} min ago` : minutes < 1440 ? `${Math.floor(minutes / 60)} hr ago` : `${Math.floor(minutes / 1440)} days ago`
+}
 
 function TimeFilter({ label, value, values, onChange }: { label: string; value: string; values: { value: string; label: string }[]; onChange: (value: string) => void }) {
   return <Select items={values} value={value} onValueChange={next => { if (next !== null) onChange(next) }}>
-    <SelectTrigger aria-label={label} className="w-auto min-w-32"><SelectValue /></SelectTrigger>
+    <SelectTrigger aria-label={label} className="h-8 w-auto min-w-32"><span className="text-muted-foreground">Time</span><SelectValue /></SelectTrigger>
     <SelectContent>{values.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
   </Select>
 }
 
-function Facet({ label, selected, values, onChange }: { label: string; selected: string[]; values: { value: string; label: string }[]; onChange: (values: string[]) => void }) {
+function Facet({ label, selected, values, onChange }: { label: string; selected: string[]; values: { value: string; label: string; count?: number }[]; onChange: (values: string[]) => void }) {
   return <details name="activity-facets" className="relative">
     <summary aria-label={label} className="flex h-8 cursor-pointer list-none items-center gap-2 rounded-lg border bg-background px-2.5 text-sm">
       <span className="text-muted-foreground">{label}</span><span>{selected.length ? selected.length === 1 ? values.find(item => item.value === selected[0])?.label : `${selected.length} selected` : "Any"}</span><ChevronDown className="size-3.5" />
     </summary>
     <div className="absolute left-0 z-20 mt-1 grid max-h-72 min-w-56 max-w-[min(32rem,85vw)] gap-2 overflow-y-auto rounded-lg border bg-popover p-3 shadow-md">
       <Button size="sm" variant="ghost" onClick={() => onChange([])}>Clear {label.toLowerCase()}</Button>
-      {values.map(item => <label key={item.value} className="flex min-w-0 items-start gap-2 text-sm"><input type="checkbox" checked={selected.includes(item.value)} onChange={() => onChange(selected.includes(item.value) ? selected.filter(value => value !== item.value) : [...selected, item.value])} /><span className="break-all">{item.label}</span></label>)}
+      {values.map(item => <label key={item.value} className="flex min-w-0 items-start gap-2 text-sm"><input type="checkbox" aria-label={item.label} checked={selected.includes(item.value)} onChange={() => onChange(selected.includes(item.value) ? selected.filter(value => value !== item.value) : [...selected, item.value])} /><span className="min-w-0 flex-1 break-all">{item.label}</span><span className="text-xs text-muted-foreground tabular-nums">{item.count}</span></label>)}
     </div>
   </details>
 }
 
-function SessionGroup({ session, operations, now }: { session: SessionSummary; operations: OperationSummary[]; now: number }) {
+function SessionGroup({ session, operations, now, expanded, onExpand }: { session: SessionSummary; operations: OperationSummary[]; now: number; expanded: boolean; onExpand: () => void }) {
   const active = operations.some(operation => operation.status === "running")
-  const [expanded, setExpanded] = useState<boolean | null>(null)
-  const open = expanded ?? active
+  const open = expanded
   const update = useUpdateSessionAnnotation(session.id)
   return <section className="border-b last:border-b-0" aria-label={sessionDisplayName(session)}>
-    <div className="flex flex-wrap items-center gap-3 px-2 py-3 hover:bg-muted/40">
-      <Button variant="ghost" size="icon-sm" aria-label={`${open ? "Collapse" : "Expand"} ${sessionDisplayName(session)}`} aria-expanded={open} onClick={() => setExpanded(!open)}>
+    <div className="activity-session-row">
+      <Button variant="ghost" size="icon-sm" aria-label={`${open ? "Collapse" : "Expand"} ${sessionDisplayName(session)}`} aria-expanded={open} onClick={onExpand}>
         <ChevronRight className={open ? "rotate-90 transition-transform" : "transition-transform"} />
       </Button>
       <Button variant="ghost" size="icon-sm" disabled={update.isPending} aria-label={`${session.starred ? "Unstar" : "Star"} session ${sessionDisplayName(session)}`} aria-pressed={session.starred} onClick={() => update.mutate({ starred: !session.starred })}>
         <Star className={session.starred ? "fill-current text-amber-500" : "text-muted-foreground"} />
       </Button>
-      <div className="min-w-40 flex-1">
-        <div className="flex items-center gap-2"><Link to="/sessions/$id" params={{ id: String(session.id) }} className="font-medium hover:underline">{sessionDisplayName(session)}</Link>{session.archived && <Badge variant="outline">Archived</Badge>}</div>
-        <p className="text-xs text-muted-foreground">{agentLabel(session.agentKind)} · {session.transport}</p>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2"><Link to="/sessions/$id" params={{ id: String(session.id) }} className="block truncate font-medium underline">{sessionDisplayName(session)}</Link>{session.archived && <Badge variant="outline">Archived</Badge>}</div>
+        <p className="text-xs text-muted-foreground"><span>{agentLabel(session.agentKind)}</span> · {session.transport}</p>
       </div>
-      <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground" title={session.cwd ?? undefined}>{session.cwd ?? "—"}</span>
-      <time className="text-xs text-muted-foreground">{formatTimestamp(session.lastSeen)}</time>
-      {session.optimization?.map(item => <Badge key={item.subject} variant="outline">{item.subject} {item.change}</Badge>)}
-      {active && <Badge variant="secondary">Running</Badge>}
-      <span className="text-xs text-muted-foreground">{operations.length} shown / {session.operations} operations</span>
+      <span className="activity-directory min-w-0 truncate font-mono text-[13px] text-muted-foreground" title={session.cwd ?? undefined}>{session.cwd ?? "—"}</span>
+      <time className="activity-last-seen text-[13px] text-muted-foreground" title={session.lastSeen}>{formatRelativeTime(session.lastSeen, now)}</time>
+      <div className="activity-optimization">{session.optimization?.map(item => <Badge key={item.subject} variant="outline">{item.subject} {item.change}</Badge>)}</div>
+      <div className="activity-session-counts">{active && <span className="activity-running">{operations.filter(item => item.status === "running").length} running</span>}
+      <span className="text-xs text-muted-foreground">{operations.length === session.operations ? `${operations.length} ops` : `${operations.length} shown / ${session.operations} ops`}</span></div>
     </div>
     {update.error && <p role="alert" className="px-4 text-sm text-destructive">Could not update session: {update.error.message}</p>}
-    {open && <div className="overflow-x-auto pb-3 pl-4 sm:pl-16"><ActivityOperations operations={operations} now={now} /><Link to="/sessions/$id" params={{ id: String(session.id) }} className="mt-2 inline-block text-xs text-muted-foreground underline">All session operations</Link></div>}
+    {open && <div className="activity-session-operations"><ActivityOperations operations={operations} now={now} /></div>}
   </section>
 }
 
 export function ActivityFeed({ sessions, operations, now }: { sessions: SessionSummary[]; operations: OperationSummary[]; now: number }) {
+  const [expansion, setExpansion] = useState<Record<number, boolean>>({})
   const [time, setTime] = useState("604800000")
   const [agent, setAgent] = useState<string[]>([])
   const [cwd, setCwd] = useState<string[]>([])
@@ -73,14 +76,14 @@ export function ActivityFeed({ sessions, operations, now }: { sessions: SessionS
   const options = (items: (string | null)[]) => [...new Set(items.filter((item): item is string => !!item))].sort().map(value => ({ value, label: value }))
   const sessionById = new Map(sessions.map(session => [session.id, session]))
   const targetKey = (operation: OperationSummary) => [operation.profile, operation.server, operation.database].filter(Boolean).join(" / ")
-  const matches = (operation: OperationSummary, candidate: { status?: string[]; kind?: string[]; named?: boolean; starred?: boolean } = {}) => {
+  const matches = (operation: OperationSummary, candidate: { status?: string[]; kind?: string[]; named?: boolean; starred?: boolean; agent?: string[]; cwd?: string[]; target?: string[]; archived?: boolean } = {}) => {
     const session = sessionById.get(operation.sessionId)
     return (time === "all" || Date.parse(operation.startedAt) >= now - Number(time))
-      && (!agent.length || agent.includes(operation.agentKind))
-      && (!cwd.length || (session?.cwd !== null && session?.cwd !== undefined && cwd.includes(session.cwd)))
-      && (!target.length || target.includes(targetKey(operation)))
+      && (!(candidate.agent ?? agent).length || (candidate.agent ?? agent).includes(operation.agentKind))
+      && (!(candidate.cwd ?? cwd).length || (session?.cwd !== null && session?.cwd !== undefined && (candidate.cwd ?? cwd).includes(session.cwd)))
+      && (!(candidate.target ?? target).length || (candidate.target ?? target).includes(targetKey(operation)))
       && (!(candidate.starred ?? starred) || !!session?.starred)
-      && (archived || !session?.archived)
+      && ((candidate.archived ?? archived) || !session?.archived)
       && (!(candidate.named ?? named) || !!(operation.agentLabel || operation.agentKeep || operation.ownerStarred))
       && (!(candidate.status ?? status).length || (candidate.status ?? status).includes(operation.status))
       && (!(candidate.kind ?? kind).length || (candidate.kind ?? kind).includes(operation.operation))
@@ -92,23 +95,35 @@ export function ActivityFeed({ sessions, operations, now }: { sessions: SessionS
     .sort((left, right) => Number(right.operations.some(operation => operation.status === "running")) - Number(left.operations.some(operation => operation.status === "running")) || Date.parse(right.session.lastSeen) - Date.parse(left.session.lastSeen))
   const ungrouped = filtered.filter(operation => !sessionById.has(operation.sessionId))
   const toggle = (items: string[], item: string) => items.includes(item) ? items.filter(value => value !== item) : [...items, item]
-  return <section aria-label="Activity feed" className="space-y-4">
-    <div className="flex flex-wrap items-center gap-2" aria-label="Activity filters">
+  const forceOpen = !!(text || status.length || kind.length || named || target.length)
+  const isOpen = (group: typeof groups[number]) => expansion[group.session.id] ?? (forceOpen || group.operations.some(item => item.status === "running"))
+  const allOpen = groups.length > 0 && groups.every(isOpen)
+  const dirty = time !== "604800000" || !!(agent.length || cwd.length || target.length || status.length || kind.length || text || starred || archived || named)
+  const facetOptions = (dimension: "agent" | "cwd" | "target", values: ReturnType<typeof options>) => values.map(item => ({ ...item, count: operations.filter(operation => matches(operation, { [dimension]: [item.value] })).length }))
+  const chip = (label: string, count: number, pressed: boolean, onClick: () => void) => <button type="button" className="activity-chip" aria-pressed={pressed} onClick={onClick}>{label}<span>{count}</span></button>
+  return <section aria-label="Activity feed" className="space-y-3">
+    <div className="activity-filterbar" aria-label="Activity filters">
+      <h1>Activity</h1>
+      <div className="activity-search"><Search className="size-3.5 text-muted-foreground" /><Input aria-label="Search activity" placeholder="Search label, session, target" value={text} onChange={event => { setText(event.target.value); setExpansion({}) }} /></div>
       <TimeFilter label="Time" value={time} onChange={setTime} values={[{ value: "all", label: "All time" }, { value: "604800000", label: "Last 7 days" }, { value: "86400000", label: "Last 24 hours" }, { value: "3600000", label: "Last hour" }]} />
-      <Facet label="Agent" selected={agent} onChange={setAgent} values={options([...operations.map(operation => operation.agentKind), ...sessions.map(session => session.agentKind)])} />
-      <Facet label="Working directory" selected={cwd} onChange={setCwd} values={options(sessions.map(session => session.cwd))} />
-      <Facet label="Target" selected={target} onChange={setTarget} values={options(operations.map(targetKey))} />
-      <Button size="sm" variant={starred ? "secondary" : "outline"} aria-pressed={starred} onClick={() => setStarred(!starred)}>Starred ({operations.filter(operation => matches(operation, { starred: true })).length})</Button>
-      <Button size="sm" variant={archived ? "secondary" : "outline"} aria-pressed={archived} onClick={() => setArchived(!archived)}>Include archived</Button>
-      <div className="relative ml-auto min-w-48 flex-1 sm:max-w-72"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input aria-label="Search activity" placeholder="Search activity…" value={text} onChange={event => setText(event.target.value)} className="pl-9" /></div>
+      <Facet label="Agent" selected={agent} onChange={setAgent} values={facetOptions("agent", options([...operations.map(operation => operation.agentKind), ...sessions.map(session => session.agentKind)]))} />
+      <Facet label="Directory" selected={cwd} onChange={setCwd} values={facetOptions("cwd", options(sessions.map(session => session.cwd)))} />
+      <Facet label="Target" selected={target} onChange={values => { setTarget(values); setExpansion({}) }} values={facetOptions("target", options(operations.map(targetKey)))} />
+      {chip("Starred", operations.filter(operation => matches(operation, { starred: true })).length, starred, () => setStarred(!starred))}
+      <button type="button" className="activity-chip" aria-pressed={archived} onClick={() => setArchived(!archived)}>Include archived</button>
     </div>
-    <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="mr-1 text-muted-foreground">Status</span>{["running", "succeeded", "failed", "rejected", "abandoned"].map(value => <Button key={value} size="sm" variant={status.includes(value) ? "secondary" : "ghost"} aria-pressed={status.includes(value)} onClick={() => setStatus(toggle(status, value))}>{`${value} (${operations.filter(operation => matches(operation, { status: [value] })).length})`}</Button>)}
-      <span className="ml-3 mr-1 text-muted-foreground">Type</span>{[...new Set(operations.map(operation => operation.operation))].sort().map(value => <Button key={value} size="sm" variant={kind.includes(value) ? "secondary" : "ghost"} aria-pressed={kind.includes(value)} onClick={() => setKind(toggle(kind, value))}>{`${value} (${operations.filter(operation => matches(operation, { kind: [value] })).length})`}</Button>)}
-      <span className="ml-3 text-muted-foreground">Marked</span><Button size="sm" variant={named ? "secondary" : "ghost"} aria-pressed={named} onClick={() => setNamed(!named)}>Named ({operations.filter(operation => matches(operation, { named: true })).length})</Button>
-      <Button variant="ghost" size="sm" onClick={() => { setTime("604800000"); setAgent([]); setCwd([]); setTarget([]); setStatus([]); setKind([]); setText(""); setStarred(false); setArchived(false); setNamed(false) }}>Reset filters</Button>
+    <div className="activity-chipbar">
+      <div className="activity-chipgroup"><span>Status</span>{["running", "failed", "rejected", ...(status.includes("succeeded") ? ["succeeded"] : []), ...(operations.some(item => item.status === "abandoned") ? ["abandoned"] : [])].map(value => <span key={value}>{chip(value[0].toUpperCase() + value.slice(1), operations.filter(operation => matches(operation, { status: [value] })).length, status.includes(value), () => { setStatus(toggle(status, value)); setExpansion({}) })}</span>)}<details className="activity-more-status"><summary aria-label="More statuses">…</summary>{["succeeded", "abandoned"].map(value => <button type="button" key={value} onClick={() => { setStatus(toggle(status, value)); setExpansion({}) }}>{value[0].toUpperCase() + value.slice(1)}</button>)}</details></div>
+      <div className="activity-chipgroup"><span>Type</span>{[...new Set(operations.map(operation => operation.operation))].sort().map(value => <span key={value}>{chip(value[0].toUpperCase() + value.slice(1), operations.filter(operation => matches(operation, { kind: [value] })).length, kind.includes(value), () => { setKind(toggle(kind, value)); setExpansion({}) })}</span>)}</div>
+      <div className="activity-chipgroup"><span>Marked</span>{chip("Named", operations.filter(operation => matches(operation, { named: true })).length, named, () => { setNamed(!named); setExpansion({}) })}</div>
+      <span className="text-xs text-muted-foreground">Counts respect other filters</span>
     </div>
-    <div className="overflow-hidden rounded-lg border">{groups.map(group => <SessionGroup key={group.session.id} {...group} now={now} />)}{ungrouped.length > 0 && <ActivityOperations operations={ungrouped} now={now} />}{!filtered.length && !groups.length && <p className="p-10 text-center text-sm text-muted-foreground">Nothing matches these filters.</p>}</div>
-    <p className="text-xs text-muted-foreground">Showing recent activity and all running operations. <Link to="/operations" className="underline">Browse operation history</Link> · <Link to="/sessions" className="underline">Browse all sessions</Link> · <Link to="/named-operations" className="underline">Named operations</Link> · <Link to="/mutations" className="underline">Mutations</Link></p>
+    <div className="flex flex-wrap items-center gap-3 text-[13px] text-muted-foreground">
+      <span>{groups.length} sessions · {filtered.length} loaded operations · {time === "604800000" ? "last 7 days" : time === "all" ? "all time" : time === "86400000" ? "last 24 hours" : "last hour"}</span>
+      {dirty && <button type="button" className="underline" onClick={() => { setTime("604800000"); setAgent([]); setCwd([]); setTarget([]); setStatus([]); setKind([]); setText(""); setStarred(false); setArchived(false); setNamed(false); setExpansion({}) }}>Reset filters</button>}
+      <button type="button" className="ml-auto underline" onClick={() => setExpansion(Object.fromEntries(groups.map(group => [group.session.id, !allOpen])))}>{allOpen ? "Collapse all" : "Expand all"}</button>
+    </div>
+    <div className="border-t">{groups.map(group => <SessionGroup key={group.session.id} {...group} now={now} expanded={isOpen(group)} onExpand={() => setExpansion(current => ({ ...current, [group.session.id]: !isOpen(group) }))} />)}{ungrouped.length > 0 && <ActivityOperations operations={ungrouped} now={now} />}{!filtered.length && !groups.length && <p className="p-10 text-center text-sm text-muted-foreground">Nothing matches these filters.</p>}</div>
+    <p className="text-xs text-muted-foreground">Showing recent activity and all running operations. SQL previews and SQL-text search are not available in this list. <Link to="/operations" className="underline">Browse operation history</Link> · <Link to="/sessions" className="underline">Browse all sessions</Link> · <Link to="/named-operations" className="underline">Named operations</Link> · <Link to="/mutations" className="underline">Mutations</Link></p>
   </section>
 }

@@ -1,0 +1,32 @@
+[
+  {
+    "file": "Activity.dc.html",
+    "normalizedTextMatches": true,
+    "referenceNormalizedSha256": "4bb709470537c03cc94fb4349f714cb73a86d804c8849019d63fbd49a8ae1b4b",
+    "exportNormalizedSha256": "4bb709470537c03cc94fb4349f714cb73a86d804c8849019d63fbd49a8ae1b4b"
+  },
+  {
+    "file": "Operation v2.dc.html",
+    "normalizedTextMatches": true,
+    "referenceNormalizedSha256": "aa7d94e5826f8bc267c71e1fce2699970d0068744db56710b6d5f567e091a556",
+    "exportNormalizedSha256": "aa7d94e5826f8bc267c71e1fce2699970d0068744db56710b6d5f567e091a556"
+  },
+  {
+    "file": "Session Optimization.dc.html",
+    "normalizedTextMatches": true,
+    "referenceNormalizedSha256": "b5351cf26150bd40db245493dc13d54dab4f53dd21950629b48b873337ca9410",
+    "exportNormalizedSha256": "b5351cf26150bd40db245493dc13d54dab4f53dd21950629b48b873337ca9410"
+  },
+  {
+    "file": "Settings.dc.html",
+    "normalizedTextMatches": true,
+    "referenceNormalizedSha256": "b306d9c95162f74a3880f87de04d8ec351357edc87c411263101d9b6914fb455",
+    "exportNormalizedSha256": "b306d9c95162f74a3880f87de04d8ec351357edc87c411263101d9b6914fb455"
+  },
+  {
+    "file": "support.js",
+    "normalizedTextMatches": true,
+    "referenceNormalizedSha256": "8fe7df74405f3c55f49b7249c74ea1397e65d07dea2b1bd3b4a489bec2e28cbe",
+    "exportNormalizedSha256": "8fe7df74405f3c55f49b7249c74ea1397e65d07dea2b1bd3b4a489bec2e28cbe"
+  }
+]

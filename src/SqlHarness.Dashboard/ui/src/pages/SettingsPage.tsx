@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { FieldErrorsError } from "@/api/client"
 import { useClearTranscripts, usePrices, useRefreshPrices, useSaveSettings, useSettings, useTranscriptStatus } from "@/api/queries"
 import type { Settings } from "@/api/types"
@@ -6,7 +6,6 @@ import { ErrorState } from "@/components/ErrorState"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,17 +16,15 @@ import { createSaveQueue } from "@/lib/saveQueue"
 import { isDestructive } from "@/lib/settingsRules"
 import { BUILT_IN_SOUNDS, getSoundPreferences, MAX_CUSTOM_SOUND_BYTES, previewApprovalSound, saveSoundPreferences, validateCustomSound, type SoundPreferences } from "@/mutations/sound"
 
+function SettingRow({ title, description, children, restart = false, tag }: { tag?: string; title: string; description: ReactNode; children: ReactNode; restart?: boolean }) {
+  return <div className="setting-row"><div className="setting-copy"><div className="flex flex-wrap items-center gap-2 font-medium">{title}{tag && <span className="setting-tag">{tag}</span>}{restart && <span className="setting-tag">Restart mcp serve</span>}</div><div className="setting-description">{description}</div></div><div className="setting-control">{children}</div></div>
+}
 function Toggle({ id, label, checked, onChange }: { id: string; label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <Label htmlFor={id}>{label}</Label>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} aria-label={label} />
-    </div>
-  )
+  return <Switch id={id} checked={checked} onCheckedChange={onChange} aria-label={label} />
 }
 
 /** Typing stays local; a valid integer in range is committed on blur or Enter, anything else shows an error and is not sent. */
-function NumberField({ id, label, value, min, max, error, onCommit }: { id: string; label: string; value: number; min: number; max: number; error?: string; onCommit: (value: number) => void }) {
+function NumberField({ id, label, value, min, max, error, onCommit, description, unit }: { description?: ReactNode; unit?: string; id: string; label: string; value: number; min: number; max: number; error?: string; onCommit: (value: number) => void }) {
   const [text, setText] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string>()
   const commit = () => {
@@ -43,20 +40,19 @@ function NumberField({ id, label, value, min, max, error, onCommit }: { id: stri
   }
   const shownError = localError ?? error
   return (
-    <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_160px] sm:items-center sm:gap-x-5">
-      <Label htmlFor={id}>{label}</Label>
+    <SettingRow title={label.replace(/ \(.*\)$/, "")} description={description}><div className="setting-number"><Label htmlFor={id} className="sr-only">{label}</Label>
       <Input
         id={id}
-        type="number"
+        type="number" min={min} max={max} step={1}
         value={text ?? String(value)}
         aria-invalid={shownError ? true : undefined}
         onChange={event => { setText(event.target.value); setLocalError(undefined) }}
         onBlur={commit}
         onKeyDown={event => { if (event.key === "Enter") commit() }}
-        className="w-40"
-      />
-      {shownError && <p className="text-sm text-destructive sm:col-start-2">{shownError}</p>}
-    </div>
+        className="w-[84px] text-right"
+      />{unit && <span className="text-[13px] text-muted-foreground">{unit}</span>}</div>
+      {shownError && <p className="text-sm text-destructive">{shownError}</p>}
+    </SettingRow>
   )
 }
 
@@ -73,21 +69,10 @@ function ModelPricesCard() {
   const prices = usePrices()
   const refresh = useRefreshPrices()
   return (
-    <Card className="gap-3 border-0 shadow-none">
-      <CardHeader className="px-0">
-        <CardTitle>Model prices</CardTitle>
-          <CardDescription>Stored pricing reference data. Refreshing downloads the current table from models.dev.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 px-0">
-        {prices.data && (
-          <p>Model prices: {prices.data.source}, {prices.data.fetchedAt.slice(0, 10)} ({prices.data.origin === "embedded" ? "built in" : "refreshed"})</p>
-        )}
-        <div>
-          <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>Refresh model prices</Button>
-        </div>
-        {refresh.error && <p className="text-sm text-destructive">{refresh.error.message}</p>}
-      </CardContent>
-    </Card>
+    <SettingRow title="Price table" description={prices.data ? `models.dev · fetched ${prices.data.fetchedAt.slice(0, 10)} · ${prices.data.origin === "embedded" ? "built in" : "refreshed"}` : "Stored pricing reference data from models.dev."}>
+      <Button variant="outline" aria-label="Refresh model prices" onClick={() => refresh.mutate()} disabled={refresh.isPending}>Refresh</Button>
+      {refresh.error && <p className="text-sm text-destructive">{refresh.error.message}</p>}
+    </SettingRow>
   )
 }
 
@@ -130,48 +115,20 @@ function BrowserSoundSettings() {
   }
 
   return (
-    <Card className="gap-3 border-0 shadow-none">
-      <CardHeader className="px-0"><CardTitle>Browser notifications and approval sound</CardTitle>
-        <CardDescription>Sound choices and custom audio stay in this browser. Custom audio is stored locally in IndexedDB, up to 2 MiB.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 px-0">
-        {preferences ? <>
-          <div className="grid gap-1">
-            <Label htmlFor="approval-sound">Approval sound</Label>
-            <Select items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : [])]}
-              value={preferences.selection} onValueChange={value => { if (value !== null) store({ ...preferences, selection: value as SoundPreferences["selection"] }) }}>
-              <SelectTrigger id="approval-sound" className="w-full max-w-sm"><SelectValue>
-                {value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}
-              </SelectValue></SelectTrigger>
-              <SelectContent>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}
-                {preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {BUILT_IN_SOUNDS.map(sound => <Button key={sound.id} type="button" variant="outline" disabled={preferences.muted}
-              aria-label={`Preview ${sound.label}`} onClick={() => store({ ...preferences, selection: sound.id }, true)}>Preview {sound.label}</Button>)}
-            {preferences.selection === "custom" && preferences.customAudio && <Button type="button" variant="outline" disabled={preferences.muted}
-              aria-label="Preview custom audio" onClick={() => { void previewApprovalSound() }}>Preview custom audio</Button>}
-          </div>
-          <Toggle id="approval-sound-muted" label="Mute approval sound" checked={preferences.muted} onChange={muted => store({ ...preferences, muted })} />
-          <div className="grid gap-1">
-            <Label htmlFor="custom-audio">Custom audio file</Label>
-            <Input id="custom-audio" type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg"
-              onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} />
-            <p className="text-sm text-muted-foreground">Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p>
-          </div>
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
-        </> : <p className="text-sm text-muted-foreground">Loading browser-local sound settings…</p>}
-        <div className="grid gap-1">
-          <Button type="button" variant="outline" className="w-fit" onClick={() => { void requestNotifications() }}>
-            {permission === "granted" ? "Browser notifications enabled" : "Enable browser notifications"}
-          </Button>
-          <p className="text-sm text-muted-foreground">Permission: {permission}. The browser asks only after you press the button.</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div>
+      <SettingRow title="Approval sound" tag="This browser only" description="Played when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.">
+        {preferences ? <div className="flex flex-wrap items-center justify-end gap-2"><Select<SoundPreferences["selection"] | "upload"> items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : []), { value: "upload", label: "Custom audio…" }]} value={preferences.selection} onValueChange={value => { if (value === "upload") document.getElementById("custom-audio")?.click(); else if (value !== null) store({ ...preferences, selection: value }) }}>
+          <SelectTrigger id="approval-sound" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
+          <SelectContent>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectContent>
+        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}>Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
+      </SettingRow>
+      {preferences && <><div className="sr-only"><Label htmlFor="custom-audio">Custom audio file</Label><Input id="custom-audio" tabIndex={-1} type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg" onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} /><p>Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p></div>
+      <SettingRow title="Mute approval sound" tag="This browser only" description="Keep notifications, silence the sound."><Toggle id="approval-sound-muted" label="Mute approval sound" checked={preferences.muted} onChange={muted => store({ ...preferences, muted })} /></SettingRow></>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
+      <SettingRow title="Browser notifications" tag="This browser only" description="Show a system notification when approval is needed. The browser asks only after you press Enable.">
+        <Button type="button" variant="outline" aria-label={permission === "granted" ? "Browser notifications enabled" : "Enable browser notifications"} onClick={() => { void requestNotifications() }}>{permission === "granted" ? "Enabled" : "Enable"}</Button><span className="sr-only">Permission: {permission}. The browser asks only after you press the button.</span>
+      </SettingRow>
+    </div>
   )
 }
 
@@ -209,6 +166,7 @@ function AgentTranscriptsStatus() {
 }
 
 export function SettingsPage() {
+  const [activeSection, setActiveSection] = useState("database")
   const query = useSettings()
   const save = useSaveSettings()
   // Edits are kept as a patch over the server copy, so the form follows the query without an effect.
@@ -273,8 +231,8 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-4">
-<div className="grid gap-6 lg:grid-cols-[180px_minmax(0,760px)] lg:gap-10 lg:justify-center"><nav aria-label="Settings sections" className="flex flex-wrap gap-1 text-sm lg:sticky lg:top-6 lg:flex-col lg:self-start"><span className="px-3 py-2 font-semibold">Settings</span><a href="#settings-database" className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Database</a><a href="#settings-mutations" className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Mutations</a><a href="#settings-journal" className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Journal & privacy</a><a href="#settings-agents" className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Agents</a><a href="#settings-dashboard" className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Dashboard</a><a href="#settings-prices" className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Model prices</a></nav><div className="space-y-7">      <h1>Settings</h1>
-      <p className="text-sm text-muted-foreground">{query.data.path}</p>
+<div className="grid gap-6 settings-layout lg:grid-cols-[200px_minmax(0,760px)] lg:gap-10 lg:justify-center"><nav aria-label="Settings sections" className="flex flex-wrap gap-1 text-sm lg:sticky lg:top-6 lg:flex-col lg:self-start"><span className="px-3 py-2 font-semibold">Settings</span><a href="#settings-database" aria-current={activeSection === "database" ? "location" : undefined} onClick={() => setActiveSection("database")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Database</a><a href="#settings-mutations" aria-current={activeSection === "mutations" ? "location" : undefined} onClick={() => setActiveSection("mutations")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Mutations</a><a href="#settings-journal" aria-current={activeSection === "journal" ? "location" : undefined} onClick={() => setActiveSection("journal")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Journal & privacy</a><a href="#settings-agents" aria-current={activeSection === "agents" ? "location" : undefined} onClick={() => setActiveSection("agents")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Agents</a><a href="#settings-dashboard" aria-current={activeSection === "dashboard" ? "location" : undefined} onClick={() => setActiveSection("dashboard")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Dashboard</a><a href="#settings-prices" aria-current={activeSection === "prices" ? "location" : undefined} onClick={() => setActiveSection("prices")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Model prices</a></nav><div className="settings-content space-y-4">      <h1>Settings</h1>
+      <p className="settings-path text-xs text-muted-foreground">{query.data.path}</p>
       {query.data.status === "invalid" && (
         <Alert variant="destructive">
           <AlertTitle>config.json is invalid</AlertTitle>
@@ -285,107 +243,37 @@ export function SettingsPage() {
         </Alert>
       )}
       <p className="text-sm text-muted-foreground">Changes save as you make them. New processes use these settings; restart running <code>mcp serve</code> sessions to apply them.</p>
-<section id="settings-database" aria-label="Database" className="scroll-mt-6 space-y-5 border-b pb-7 last:border-b-0"><h2 className="text-lg font-semibold">Database</h2><div className="space-y-3">
-        <div className="space-y-1"><CardTitle>Database connection</CardTitle><CardDescription>Maximum time to establish a SQL Server or PostgreSQL connection, including driver-managed authentication. Azure CLI token acquisition has its own existing time budget.</CardDescription></div>
-        <div className="grid gap-4">
-          <NumberField id="connection-timeout" label="Connection timeout (seconds)" value={draft.connection.timeoutSeconds} min={1} max={300} error={fieldErrors["connection.timeoutSeconds"]} onCommit={value => setConnection({ timeoutSeconds: value })} />
-          <StatusLine status={status.connection} />
-        </div>
-      </div><div className="space-y-3">
-        <div className="space-y-1"><CardTitle>SQL execution</CardTitle><CardDescription>Default command timeout for queries, mutations, benchmarks, and watches when no explicit timeout is passed. Capped at 1..300 seconds.</CardDescription></div>
-        <div className="grid gap-4">
-          <NumberField id="execution-default-timeout" label="Default execution timeout (seconds)" value={draft.execution.defaultTimeoutSeconds} min={1} max={300}
-            error={fieldErrors["execution.defaultTimeoutSeconds"]} onCommit={value => setExecution({ defaultTimeoutSeconds: value })} />
-          <StatusLine status={status.execution} />
-        </div>
-      </div><div className="space-y-3">
-        <div className="space-y-1">
-          <CardTitle>Connection diagnostics</CardTitle>
-          <CardDescription>Record safe metadata about database connection attempts. Credentials and target names are excluded.</CardDescription>
-        </div>
-        <div className="grid gap-4">
-          <Toggle id="diagnostics-enabled" label="Connection diagnostics" checked={draft.diagnostics.enabled} onChange={value => setDiagnostics({ enabled: value })} />
-          <StatusLine status={status.diagnostics} />
-        </div>
-      </div></section><section id="settings-mutations" aria-label="Mutations" className="scroll-mt-6 space-y-5 border-b pb-7 last:border-b-0"><h2 className="text-lg font-semibold">Mutations</h2><div className="space-y-3">
-        <div className="space-y-1"><CardTitle>Mutations</CardTitle><CardDescription>Choose the default approval behavior and the time an approval request remains open.</CardDescription></div>
-        <div className="grid gap-4">
-          <div className="grid gap-1">
-            <Label htmlFor="mutation-default-mode">Default mutation mode</Label>
-            <Select items={[{ value: "never", label: "Never" }, { value: "operator", label: "Operator approval" }, { value: "yolo", label: "YOLO" }]}
-              value={draft.mutations.defaultMode} onValueChange={value => { if (value !== null) setMutations({ defaultMode: value as Settings["mutations"]["defaultMode"] }) }}>
-              <SelectTrigger id="mutation-default-mode" className="w-full max-w-sm"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="never">Never</SelectItem><SelectItem value="operator">Operator approval</SelectItem><SelectItem value="yolo">YOLO</SelectItem></SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1">
-            <span className="text-sm">Verification</span>
-            <code>{draft.mutations.verification}</code>
-            {draft.mutations.verification !== "click" && <p role="alert" className="text-sm text-destructive">Verification value “{draft.mutations.verification}” is unsupported. This plan supports click verification only; the value was retained without changing it.</p>}
-            <p className="text-sm text-muted-foreground">Approval decisions use a deliberate click. WebAuthn is not available in this plan.</p>
-          </div>
-          <NumberField id="mutation-approval-timeout" label="Approval timeout (seconds)" value={draft.mutations.approvalTimeoutSeconds} min={1} max={3600}
-            error={fieldErrors["mutations.approvalTimeoutSeconds"]} onCommit={value => setMutations({ approvalTimeoutSeconds: value })} />
-          <StatusLine status={status.mutations} />
-        </div>
-      </div><BrowserSoundSettings /></section><section id="settings-journal" aria-label="Journal & privacy" className="scroll-mt-6 space-y-5 border-b pb-7 last:border-b-0"><h2 className="text-lg font-semibold">Journal & privacy</h2><div className="space-y-3">
-        <div className="space-y-1">
-          <CardTitle>Activity journal</CardTitle>
-          <CardDescription>What SQLHarness records about each operation.</CardDescription>
-        </div>
-        <div className="grid gap-4">
-          <Toggle id="journal-enabled" label="Journal enabled" checked={journal.enabled} onChange={value => setJournal(value ? { enabled: true } : { enabled: false, operationAnnotations: false })} />
-          <Toggle
-            id="journal-sensitive"
-            label="Store sensitive data"
-            checked={journal.storeSensitive}
-            onChange={value => (value ? setConfirmingSensitive(true) : setJournal({ storeSensitive: false }))}
-          />
-          <div className="grid gap-1">
-            <Toggle id="journal-operation-annotations" label="Agent operation annotations" checked={journal.operationAnnotations}
-              onChange={value => setJournal(value ? { enabled: true, operationAnnotations: true } : { operationAnnotations: false })} />
-            <p className="text-sm text-muted-foreground">Allows agents to label operations and mark them for keeping. Requires the activity journal. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention.</p>
-            <p className="text-sm text-muted-foreground">Enabling agent annotations also enables the activity journal automatically.</p>
-            <p className="text-sm text-muted-foreground">Disabling the journal also disables agent annotations.</p>
-          </div>
-          <Toggle id="retention-enabled" label="Retention enabled" checked={journal.retention.enabled} onChange={value => setRetention({ enabled: value })} />
-          <NumberField id="retention-age" label="Maximum age (days)" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} />
-          <NumberField id="retention-size" label="Maximum size (MB)" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} />
-          <StatusLine status={status.journal} />
-        </div>
-      </div></section><section id="settings-agents" aria-label="Agents" className="scroll-mt-6 space-y-5 border-b pb-7 last:border-b-0"><h2 className="text-lg font-semibold">Agents</h2>          <div className="grid gap-2">
-            <Toggle id="dashboard-agent-transcripts" label="Read agent transcripts" checked={draft.dashboard.agentTranscripts.enabled}
-              onChange={value => setDashboard({ agentTranscripts: { enabled: value } })} />
-            <p className="text-sm text-muted-foreground">Reads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored.</p>
-            <AgentTranscriptsStatus />
-          </div><div className="space-y-3">
-        <div className="space-y-1">
-          <CardTitle>Compare context</CardTitle>
-          <CardDescription>CLI applies changes on the next invocation. Restart running MCP servers and reconnect their clients to apply changes; saving here does not restart them.</CardDescription>
-        </div>
-        <div className="grid gap-4">
-          <Toggle id="compare-require-context" label="Require compare subject and scope" checked={draft.compare.requireContext} onChange={value => setCompare({ requireContext: value })} />
-          <p className="text-sm text-muted-foreground">When enabled, CLI compare needs both <code>--subject</code> and <code>--scope</code>, and MCP compare needs both fields. This setting is on by default.</p>
-          <StatusLine status={status.compare} />
-        </div>
-      </div></section><section id="settings-dashboard" aria-label="Dashboard" className="scroll-mt-6 space-y-5 border-b pb-7 last:border-b-0"><h2 className="text-lg font-semibold">Dashboard</h2><div className="space-y-3">
-        <div className="space-y-1">
-          <CardTitle>Dashboard</CardTitle>
-        </div>
-        <div className="grid gap-4">
-          <Toggle id="dashboard-autostart" label="Start with mcp serve" checked={draft.dashboard.autoStart} onChange={value => setDashboard({ autoStart: value })} />
-          <Toggle id="dashboard-safety-notifications" label="Safety notifications" checked={draft.dashboard.safetyNotifications}
-            onChange={value => setDashboard({ safetyNotifications: value })} />
-
-          <NumberField id="dashboard-idle" label="Idle shutdown (hours)" value={draft.dashboard.idleShutdownHours} min={1} max={168} error={fieldErrors["dashboard.idleShutdownHours"]} onCommit={value => setDashboard({ idleShutdownHours: value })} />
-          <div className="grid gap-1">
-            <span className="text-sm">Port</span>
-            <span>{draft.dashboard.port}</span>
-            <span className="text-sm text-muted-foreground">Change the port in config.json; the running dashboard keeps its port.</span>
-          </div>
-          <StatusLine status={status.dashboard} />
-        </div>
-      </div></section><section id="settings-prices" aria-label="Model prices" className="scroll-mt-6 space-y-5 border-b pb-7 last:border-b-0"><h2 className="text-lg font-semibold">Model prices</h2><ModelPricesCard /></section></div></div>
+<section id="settings-database" aria-label="Database" className="settings-card"><h2>Database</h2><p>How SQLHarness connects and how long statements may run.</p>
+  <NumberField id="connection-timeout" label="Connection timeout (seconds)" unit="sec" description="Time to open a SQL Server or PostgreSQL connection, including driver-managed authentication. Azure CLI token acquisition has its own budget." value={draft.connection.timeoutSeconds} min={1} max={300} error={fieldErrors["connection.timeoutSeconds"]} onCommit={value => setConnection({ timeoutSeconds: value })} /><StatusLine status={status.connection} />
+  <NumberField id="execution-default-timeout" label="Default execution timeout (seconds)" unit="sec" description="Used by queries, mutations, benchmarks and watches when no explicit timeout is passed." value={draft.execution.defaultTimeoutSeconds} min={1} max={300} error={fieldErrors["execution.defaultTimeoutSeconds"]} onCommit={value => setExecution({ defaultTimeoutSeconds: value })} /><StatusLine status={status.execution} />
+  <SettingRow title="Connection diagnostics" description="Record safe metadata about database connection attempts. Credentials and target names are excluded."><Toggle id="diagnostics-enabled" label="Connection diagnostics" checked={draft.diagnostics.enabled} onChange={value => setDiagnostics({ enabled: value })} /></SettingRow><StatusLine status={status.diagnostics} />
+</section>
+<section id="settings-mutations" aria-label="Mutations" className="settings-card"><h2>Mutations</h2><p>Default approval behavior for write operations.</p>
+  <SettingRow title="Default mode" description="Applies when a profile does not set its own mode."><div><div role="group" aria-label="Default mutation mode" className="setting-segment">{([{value:"never",label:"Never"},{value:"operator",label:"Operator approval"},{value:"yolo",label:"YOLO"}] as const).map(mode => <button key={mode.value} type="button" aria-pressed={draft.mutations.defaultMode === mode.value} onClick={() => setMutations({ defaultMode: mode.value })}>{mode.label}</button>)}</div><p className="setting-mode-hint">{draft.mutations.defaultMode === "operator" ? "Each mutation waits for approval here." : draft.mutations.defaultMode === "never" ? "Write operations are rejected by default." : "Write operations do not wait for operator approval."}</p></div></SettingRow>
+  <NumberField id="mutation-approval-timeout" label="Approval timeout (seconds)" unit="sec" description="How long an approval request stays open before it is rejected." value={draft.mutations.approvalTimeoutSeconds} min={1} max={3600} error={fieldErrors["mutations.approvalTimeoutSeconds"]} onCommit={value => setMutations({ approvalTimeoutSeconds: value })} />
+  <SettingRow title="Verification" description="Approval decisions use a deliberate click. WebAuthn is not available in this plan."><code className="rounded bg-muted px-2 py-1">{draft.mutations.verification}</code></SettingRow>
+  {draft.mutations.verification !== "click" && <p role="alert" className="text-sm text-destructive">Verification value “{draft.mutations.verification}” is unsupported. This plan supports click verification only; the value was retained without changing it.</p>}
+  <StatusLine status={status.mutations} /><BrowserSoundSettings />
+</section>
+<section id="settings-journal" aria-label="Journal & privacy" className="settings-card"><h2>Journal & privacy</h2><p>What SQLHarness records about each operation, and for how long.</p>
+  <SettingRow title="Activity journal" description="Record operations so they appear in Activity and sessions. Disabling the journal also disables agent annotations."><Toggle id="journal-enabled" label="Journal enabled" checked={journal.enabled} onChange={value => setJournal(value ? { enabled: true } : { enabled: false, operationAnnotations: false })} /></SettingRow>
+  <SettingRow title="Store sensitive data" description="Store SQL text, full plans (may include parameter values) and error messages for new operations. Existing rows are not changed."><Toggle id="journal-sensitive" label="Store sensitive data" checked={journal.storeSensitive} onChange={value => value ? setConfirmingSensitive(true) : setJournal({ storeSensitive: false })} /></SettingRow>
+  <SettingRow title="Agent annotations" restart description="Allows agents to label operations and mark them for keeping. Enabling agent annotations also enables the activity journal automatically. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention."><Toggle id="journal-operation-annotations" label="Agent operation annotations" checked={journal.operationAnnotations} onChange={value => setJournal(value ? { enabled: true, operationAnnotations: true } : { operationAnnotations: false })} /></SettingRow>
+  <SettingRow title="Retention" description="Delete old journal data on dashboard start, hourly, and on the next mcp serve."><Toggle id="retention-enabled" label="Retention enabled" checked={journal.retention.enabled} onChange={value => setRetention({ enabled: value })} /></SettingRow>
+  <div className="settings-retention"><NumberField id="retention-age" label="Maximum age (days)" unit="days" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} /><NumberField id="retention-size" label="Maximum size (MB)" unit="MB" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} /></div><StatusLine status={status.journal} />
+</section>
+<section id="settings-agents" aria-label="Agents" className="settings-card"><h2>Agents</h2><p>Reading agent transcripts and compare rules for agents.</p>
+  <SettingRow title="Read agent transcripts" description="Reads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored."><Toggle id="dashboard-agent-transcripts" label="Read agent transcripts" checked={draft.dashboard.agentTranscripts.enabled} onChange={value => setDashboard({ agentTranscripts: { enabled: value } })} /></SettingRow>
+  <div className="settings-transcript-status"><AgentTranscriptsStatus /></div>
+  <SettingRow title="Require compare subject and scope" restart description={<><p>When enabled, CLI compare needs both <code>--subject</code> and <code>--scope</code>, and MCP compare needs both fields. This setting is on by default.</p><p>CLI applies changes on the next invocation. Restart running MCP servers and reconnect their clients to apply changes; saving here does not restart them.</p></>}><Toggle id="compare-require-context" label="Require compare subject and scope" checked={draft.compare.requireContext} onChange={value => setCompare({ requireContext: value })} /></SettingRow><StatusLine status={status.compare} />
+</section>
+<section id="settings-dashboard" aria-label="Dashboard" className="settings-card"><h2>Dashboard</h2><p>This dashboard process.</p>
+  <SettingRow title="Start with mcp serve" description="Launch the dashboard when an MCP server starts."><Toggle id="dashboard-autostart" label="Start with mcp serve" checked={draft.dashboard.autoStart} onChange={value => setDashboard({ autoStart: value })} /></SettingRow>
+  <SettingRow title="Safety notifications" description="Show safety warnings raised by running sessions."><Toggle id="dashboard-safety-notifications" label="Safety notifications" checked={draft.dashboard.safetyNotifications} onChange={value => setDashboard({ safetyNotifications: value })} /></SettingRow>
+  <NumberField id="dashboard-idle" label="Idle shutdown (hours)" unit="hours" description="Stop the dashboard after this long without activity." value={draft.dashboard.idleShutdownHours} min={1} max={168} error={fieldErrors["dashboard.idleShutdownHours"]} onCommit={value => setDashboard({ idleShutdownHours: value })} />
+  <SettingRow title="Port" description="Change the port in config.json; the running dashboard keeps its port."><code className="rounded bg-muted px-2 py-1">{draft.dashboard.port}</code></SettingRow><StatusLine status={status.dashboard} />
+</section>
+<section id="settings-prices" aria-label="Model prices" className="settings-card"><h2>Model prices</h2><p>Reference data used for Usage costs.</p><ModelPricesCard /></section></div></div>
       {replaceError && <ErrorState error={replaceError} />}
 
       <Dialog open={confirmingSensitive} onOpenChange={setConfirmingSensitive}>

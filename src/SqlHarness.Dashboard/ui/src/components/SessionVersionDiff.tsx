@@ -87,7 +87,7 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
     return unifiedDiffText(normalizedFrom, normalizedTo)
   }
 
-  return <div className="space-y-3">
+  return <div className="session-version-diff space-y-3">
     {selectionControls ? <div className="grid gap-3 sm:grid-cols-2">
       <label className="grid min-w-0 gap-1 text-sm">From version
         <Select items={selectItems} value={keyOf(fromOption)} onValueChange={value => setFromSelection(value)}>
@@ -101,7 +101,7 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
           <SelectContent>{options.map(option => <SelectItem key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</SelectItem>)}</SelectContent>
         </Select>
       </label>
-    </div> : <p className="text-xs text-muted-foreground">{fromOption?.version ?? "—"} → {toOption?.version ?? "—"}</p>}
+    </div> : null}
     <div className="space-y-3">
       {fromState}
       {toState}

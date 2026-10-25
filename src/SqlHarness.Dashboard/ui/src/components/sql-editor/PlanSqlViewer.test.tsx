@@ -117,6 +117,9 @@ test("PlanSqlViewer applies source spans and keeps the latest selection callback
   expect(firstSelection).not.toHaveBeenCalled()
   expect(latestSelection).toHaveBeenCalledWith({ start: 2, end: 6 })
 
+  await act(async () => mocks.emitSelection(3, 3))
+  expect(latestSelection).toHaveBeenLastCalledWith({ start: 2, end: 3 })
+
   view.unmount()
   expect(mocks.dispose).toHaveBeenCalledOnce()
 })

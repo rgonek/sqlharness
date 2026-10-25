@@ -48,18 +48,17 @@ function SessionView({ id }: { id: number }) {
   const { session, note = null, conversations = [] } = detail.data
   const loadedOperations = [...new Map((operationPages.data?.pages.flatMap(page => page.items) ?? []).map(operation => [operation.id, operation])).values()]
   return (
-    <div className="space-y-4">
-      <Card className="border-0 shadow-none">
+    <div className="session-page space-y-4">
+      <Card className="session-heading border-0 shadow-none">
         <CardHeader className="px-0">
           <CardTitle>
             <SessionAnnotationHeader key={session.id} session={session} />
           </CardTitle>
-          {session.title && <div className="font-mono">{session.sessionKey}</div>}
-          <CardDescription>{agentLabel(session.agentKind)} via {session.transport} ({session.source})</CardDescription>
+
         </CardHeader>
         <CardContent className="px-0">
           <Collapsible>
-            <CollapsibleTrigger className="cursor-pointer text-sm font-medium">Session metadata</CollapsibleTrigger>
+<div className="session-subtitle"><span>{agentLabel(session.agentKind)} via {session.transport}</span><span>·</span>{session.title && <><code>{session.sessionKey}</code><span>·</span></>}<span>{session.operations} operations</span><span>·</span><CollapsibleTrigger aria-label="Session metadata" className="cursor-pointer text-sm font-medium">Details</CollapsibleTrigger></div>
             <CollapsibleContent keepMounted><div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
               <Fact label="Client" value={clientLabel(session)} />
               <Fact label="MCP mode" value={session.mcpMode} />
