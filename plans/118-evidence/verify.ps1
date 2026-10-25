@@ -42,6 +42,13 @@ $expected = @{
     'null cases collection versus nonempty'=@{ availability='unavailable'; differences=@(); gaps=@('field-omitted'); omitted=0 }
     'null paired-case parameter collection versus empty'=@{ availability='unavailable'; differences=@(); gaps=@('field-omitted'); omitted=0 }
     'null paired-case parameter collection versus nonempty'=@{ availability='unavailable'; differences=@(); gaps=@('field-omitted'); omitted=0 }
+    'top-level duplicate before single after'=@{ availability='partial'; differences=@('parameters.@stable.value|changed|measurement-condition|"@stable"|<absent>|"left"|"right"'); gaps=@('identity-unresolved'); omitted=0 }
+    'top-level duplicate after single before'=@{ availability='partial'; differences=@('parameters.@stable.value|changed|measurement-condition|"@stable"|<absent>|"left"|"right"'); gaps=@('identity-unresolved'); omitted=0 }
+    'top-level duplicate without counterpart'=@{ availability='partial'; differences=@('parameters.@stable.value|changed|measurement-condition|"@stable"|<absent>|"left"|"right"'); gaps=@('identity-unresolved'); omitted=0 }
+    'paired-case duplicate before single after'=@{ availability='partial'; differences=@('cases.parameters.@stable.value|changed|measurement-condition|"@stable"|{"before":"base-safe","after":"candidate-safe"}|"left"|"right"'); gaps=@('identity-unresolved'); omitted=0 }
+    'paired-case duplicate after without counterpart'=@{ availability='partial'; differences=@('cases.parameters.@stable.value|changed|measurement-condition|"@stable"|{"before":"base-safe","after":"candidate-safe"}|"left"|"right"'); gaps=@('identity-unresolved'); omitted=0 }
+    'duplicate case key before single after'=@{ availability='partial'; differences=@('cases.parameters.@stable.value|changed|measurement-condition|"@stable"|{"before":"base-safe","after":"candidate-safe"}|"left"|"right"'); gaps=@('case-pairing-ambiguous'); omitted=0 }
+    'duplicate case key after without counterpart'=@{ availability='partial'; differences=@('cases.parameters.@stable.value|changed|measurement-condition|"@stable"|{"before":"base-safe","after":"candidate-safe"}|"left"|"right"'); gaps=@('case-pairing-ambiguous'); omitted=0 }
 }
 Assert ($fixture.cases.Count -eq $expected.Count) "Named fixture coverage mismatch: fixture=$($fixture.cases.Count), oracle=$($expected.Count)."
 Assert ($actual.caseCount -eq $expected.Count) "Evaluator case count mismatch: $($actual.caseCount)."
@@ -101,4 +108,14 @@ Assert ($pairedResult.conditionExplanation.differences[0].field -ceq 'cases.para
 Assert ($actual.results | Where-Object name -CEQ 'changed comparison mode only' | ForEach-Object { $_.conditionExplanation.gaps.Count -eq 0 }) 'Comparison mode incorrectly changed the measurement-key explanation.'
 $measurementMismatch = $actual.results | Where-Object name -CEQ 'informational-only with unexplained measurement mismatch'
 Assert ($measurementMismatch.conditionExplanation.gaps -contains 'conditions-unavailable') 'Informational-only differences suppressed an unexplained measurement-fingerprint mismatch.'
+$duplicateParameterCases = @($actual.results | Where-Object { $_.name -in @('top-level duplicate before single after','top-level duplicate after single before','top-level duplicate without counterpart','paired-case duplicate before single after','paired-case duplicate after without counterpart') })
+foreach ($duplicateCase in $duplicateParameterCases) {
+    Assert ($duplicateCase.conditionExplanation.gaps -contains 'identity-unresolved') "Duplicate parameter identity lacked a gap: $($duplicateCase.name)."
+    Assert (@($duplicateCase.conditionExplanation.differences | Where-Object { (Has-Property $_ 'parameterIdentity') -and $_.parameterIdentity -ceq '@dup' }).Count -eq 0) "Ambiguous duplicate parameter produced a change/add/remove claim: $($duplicateCase.name)."
+}
+$duplicateCaseKeyCases = @($actual.results | Where-Object { $_.name -in @('duplicate case key before single after','duplicate case key after without counterpart') })
+foreach ($duplicateCase in $duplicateCaseKeyCases) {
+    Assert ($duplicateCase.conditionExplanation.gaps -contains 'case-pairing-ambiguous') "Duplicate case key lacked a pairing gap: $($duplicateCase.name)."
+    Assert (@($duplicateCase.conditionExplanation.differences | Where-Object { (Has-Property $_ 'parameterIdentity') -and $_.parameterIdentity -ceq '@dup' -or (Has-Property $_ 'caseIdentity') -and ((Json $_.caseIdentity) -match 'dup') }).Count -eq 0) "Ambiguous duplicate case key produced a pair-specific or case addition/removal claim: $($duplicateCase.name)."
+}
 Write-Output "VERIFIED: $($expected.Count) named scenarios; exact oracle values, basis preservation, absent-property states, fingerprint semantics, pairing non-disclosure, omissions, and UTF-8 limits passed."

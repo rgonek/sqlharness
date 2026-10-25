@@ -44,9 +44,24 @@ function Compare-Scalar($list, $gaps, [string]$field, $left, $right, [bool]$left
     Add-Difference $list $field 'changed' $relation $caseIdentity $parameterIdentity $left $right $true $true
 }
 function Compare-Parameters($list, $gaps, $leftItems, $rightItems, [string]$fieldPrefix, $caseIdentity) {
-    $leftMap = @{}; $rightMap = @{}
-    foreach ($p in @($leftItems | Where-Object { $null -ne $_ })) { if (-not (Has-Property $p 'identity') -or $leftMap.ContainsKey([string]$p.identity)) { Add-Gap $gaps 'identity-unresolved'; continue }; $leftMap[[string]$p.identity] = $p }
-    foreach ($p in @($rightItems | Where-Object { $null -ne $_ })) { if (-not (Has-Property $p 'identity') -or $rightMap.ContainsKey([string]$p.identity)) { Add-Gap $gaps 'identity-unresolved'; continue }; $rightMap[[string]$p.identity] = $p }
+    $leftMap = @{}; $rightMap = @{}; $leftCounts = @{}; $rightCounts = @{}
+    foreach ($p in @($leftItems | Where-Object { $null -ne $_ })) {
+        if (-not (Has-Property $p 'identity') -or [string]::IsNullOrEmpty([string]$p.identity)) { Add-Gap $gaps 'identity-unresolved'; continue }
+        $id = [string]$p.identity
+        if ($leftCounts.ContainsKey($id)) { $leftCounts[$id]++ } else { $leftCounts[$id] = 1 }
+    }
+    foreach ($p in @($rightItems | Where-Object { $null -ne $_ })) {
+        if (-not (Has-Property $p 'identity') -or [string]::IsNullOrEmpty([string]$p.identity)) { Add-Gap $gaps 'identity-unresolved'; continue }
+        $id = [string]$p.identity
+        if ($rightCounts.ContainsKey($id)) { $rightCounts[$id]++ } else { $rightCounts[$id] = 1 }
+    }
+    $ambiguousIds = @{}
+    foreach ($id in @(@($leftCounts.Keys) + @($rightCounts.Keys) | Sort-Object -Unique)) {
+        if ($leftCounts[$id] -gt 1 -or $rightCounts[$id] -gt 1) { $ambiguousIds[$id] = $true }
+    }
+    if ($ambiguousIds.Count -gt 0) { Add-Gap $gaps 'identity-unresolved' }
+    foreach ($p in @($leftItems | Where-Object { $null -ne $_ })) { if (Has-Property $p 'identity') { $id = [string]$p.identity; if (-not [string]::IsNullOrEmpty($id) -and -not $ambiguousIds.ContainsKey($id) -and -not $leftMap.ContainsKey($id)) { $leftMap[$id] = $p } } }
+    foreach ($p in @($rightItems | Where-Object { $null -ne $_ })) { if (Has-Property $p 'identity') { $id = [string]$p.identity; if (-not [string]::IsNullOrEmpty($id) -and -not $ambiguousIds.ContainsKey($id) -and -not $rightMap.ContainsKey($id)) { $rightMap[$id] = $p } } }
     foreach ($id in @(@($leftMap.Keys) + @($rightMap.Keys) | Sort-Object -Unique)) {
         $l = $leftMap[$id]; $r = $rightMap[$id]
         $path = if ($fieldPrefix) { "$fieldPrefix.parameters.$id" } else { "parameters.$id" }
@@ -119,9 +134,24 @@ foreach ($scenario in $fixture.cases) {
         $rightCasesUsable = Has-UsableCollection $after.conditions 'cases' $gaps
         if ($leftCasesUsable -and $rightCasesUsable -and $before.fingerprintDomainVerified -and $after.fingerprintDomainVerified) {
             $leftCases = @($before.conditions.cases | Where-Object { $null -ne $_ }); $rightCases = @($after.conditions.cases | Where-Object { $null -ne $_ })
-            $leftKeys = @{}; $rightKeys = @{}
-            foreach ($case in $leftCases) { if (-not $case.pairKey -or $leftKeys.ContainsKey([string]$case.pairKey)) { Add-Gap $gaps 'case-pairing-ambiguous' } else { $leftKeys[[string]$case.pairKey] = $case } }
-            foreach ($case in $rightCases) { if (-not $case.pairKey -or $rightKeys.ContainsKey([string]$case.pairKey)) { Add-Gap $gaps 'case-pairing-ambiguous' } else { $rightKeys[[string]$case.pairKey] = $case } }
+            $leftKeys = @{}; $rightKeys = @{}; $leftKeyCounts = @{}; $rightKeyCounts = @{}
+            foreach ($case in $leftCases) {
+                if (-not (Has-Property $case 'pairKey') -or [string]::IsNullOrEmpty([string]$case.pairKey)) { Add-Gap $gaps 'case-pairing-ambiguous'; continue }
+                $key = [string]$case.pairKey
+                if ($leftKeyCounts.ContainsKey($key)) { $leftKeyCounts[$key]++ } else { $leftKeyCounts[$key] = 1 }
+            }
+            foreach ($case in $rightCases) {
+                if (-not (Has-Property $case 'pairKey') -or [string]::IsNullOrEmpty([string]$case.pairKey)) { Add-Gap $gaps 'case-pairing-ambiguous'; continue }
+                $key = [string]$case.pairKey
+                if ($rightKeyCounts.ContainsKey($key)) { $rightKeyCounts[$key]++ } else { $rightKeyCounts[$key] = 1 }
+            }
+            $ambiguousKeys = @{}
+            foreach ($key in @(@($leftKeyCounts.Keys) + @($rightKeyCounts.Keys) | Sort-Object -Unique)) {
+                if ($leftKeyCounts[$key] -gt 1 -or $rightKeyCounts[$key] -gt 1) { $ambiguousKeys[$key] = $true }
+            }
+            if ($ambiguousKeys.Count -gt 0) { Add-Gap $gaps 'case-pairing-ambiguous' }
+            foreach ($case in $leftCases) { if (Has-Property $case 'pairKey') { $key = [string]$case.pairKey; if (-not [string]::IsNullOrEmpty($key) -and -not $ambiguousKeys.ContainsKey($key) -and -not $leftKeys.ContainsKey($key)) { $leftKeys[$key] = $case } } }
+            foreach ($case in $rightCases) { if (Has-Property $case 'pairKey') { $key = [string]$case.pairKey; if (-not [string]::IsNullOrEmpty($key) -and -not $ambiguousKeys.ContainsKey($key) -and -not $rightKeys.ContainsKey($key)) { $rightKeys[$key] = $case } } }
             foreach ($key in @(@($leftKeys.Keys) + @($rightKeys.Keys) | Sort-Object -Unique)) {
                 $l = $leftKeys[$key]; $r = $rightKeys[$key]
                 if ($null -eq $l) {
