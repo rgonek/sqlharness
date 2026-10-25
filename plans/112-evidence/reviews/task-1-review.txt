@@ -1,0 +1,31 @@
+### Spec Compliance
+
+- ✅ Spec compliant: Task 1 asks for a bounded count, recurrence limits, reconciliation with Plans 063/083, candidate-only expanded-list grouping, an evidence ledger, and no incidental production changes. The artifact covers these at `plans/112-evidence/task-1-coverage.md:5`, `:7`, `:11-14`, `:16-25`, `:27-33`, and `:35-37`; the supplied diff contains only the research artifact and Plan 112 source plan.
+- ⚠️ Cannot verify from diff: the report says no database access or mutations occurred, but a documentation diff cannot establish execution history. The controller should treat this as reported evidence unless its execution record independently confirms it.
+
+### Strengths
+
+- The count is explicitly limited to one of one documented qualifying investigations and disclaims recurrence inference (`plans/112-evidence/task-1-coverage.md:5`, `:7`). The observation source describes Query Store prioritization and the expanded-list `DELETE` family (`docs/observations/write-statement-and-index-maintenance-evidence.md:8-19`).
+- The Plan 063 boundary is accurate: its contract captures bounded inventory for tables with missing-index hints and classifies each hint (`plans/063-missing-index-overlap.md:7-10`, `:26-31`); the artifact does not extend that to index-pair redundancy or maintenance cost (`plans/112-evidence/task-1-coverage.md:11`).
+- The Plan 083 distinction is accurate: TVP/list parameters are supported on read-only paths, mutation rejects them, list length remains a condition rather than version identity, and live SQL Server UAT is still pending (`plans/083-table-and-list-parameters.md:7`, `:18-22`, `:27`, `:32-39`). The artifact keeps this separate from DML benchmarking (`plans/112-evidence/task-1-coverage.md:12-14`).
+- The evidence ledger records source, command/fixture, expected result, and observed result; the grouping recommendation remains a candidate requiring source and query-shape confirmation (`plans/112-evidence/task-1-coverage.md:14`, `:16-25`).
+
+### Issues
+
+#### Critical (Must Fix)
+
+None.
+
+#### Important (Should Fix)
+
+None.
+
+#### Minor (Nice to Have)
+
+None.
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** The research artifact meets the Task 1 scope, accurately limits its sole demand signal, and reconciles existing coverage without implying a product change or live acceptance. The only unverified point is the execution-history claim that no database access occurred.

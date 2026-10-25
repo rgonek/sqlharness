@@ -1,0 +1,87 @@
+# Plan 112 Task 3 report
+
+## Status
+
+Research and documentation decision record prepared at base `d3a6826d`. The independent Task 3 review and final Sol whole-branch review are still pending; this report does not approve its own work. No implementation direction is accepted, so no numbered follow-up plan was justified. No implementation, diagnosis, live benchmark, UAT, or production behavior change is claimed.
+
+Committed the four requested Task 3 files as `39b900e0` (`docs(112): prepare task 3 decision matrix`), then committed the deterministic workload refinement as `b33c4801` (`docs(112): specify deterministic workload`). The Round 1 correction and verification record are commits `acd726d9` and `c85767b7`; observed final HEAD: `c85767b7` on `plan-112`.
+
+## Changes
+
+- Added `plans/112-evidence/task-3-decision-matrix.md` with separate ranked decisions for estimated DML plans, actual write benchmarks, and descriptive index/list-family evidence; rejected and low-value options; a reproducible synthetic workload proposal with a fixed key generator/hash and A/B sequence; future authorized UAT requirements; and applicability assessments for all five review-focus items.
+- Updated `plans/112-write-and-index-evidence-study.md` with Task 1–3 outcomes, scoped checks, tested base, and pending review state.
+- Added `plans/112-verification-evidence.md` and linked it and the decision matrix from `plans/README.md`.
+- No source, test, fixture, executable SQL, or product behavior changed. No database, DML/DDL, mutation, install, merge, push, paid trial, live-agent trial, or UAT was used.
+
+## Checks
+
+- `git diff --check`: passed, exit 0.
+- Relative Markdown links: passed for the updated plan and index plus the new matrix and verification record. Exact command:
+
+  ```powershell
+  $files = @('plans/112-write-and-index-evidence-study.md','plans/README.md','plans/112-evidence/task-3-decision-matrix.md','plans/112-verification-evidence.md')
+  $bad = @()
+  foreach ($file in $files) {
+    $content = Get-Content -LiteralPath $file -Raw
+    foreach ($match in [regex]::Matches($content, '\[[^\]]*\]\(([^)]+)\)')) {
+      $target = $match.Groups[1].Value.Trim()
+      if ($target -match '^(https?:|mailto:|#)') { continue }
+      $path = ($target -split '[?#]', 2)[0]
+      if ([string]::IsNullOrWhiteSpace($path)) { continue }
+      $resolved = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $file).Path) $path
+      if (-not (Test-Path -LiteralPath $resolved)) { $bad += "$file -> $target" }
+    }
+  }
+  if ($bad.Count) { $bad; exit 1 } else { "PASS: relative Markdown targets resolve in $($files.Count) files" }
+  ```
+
+  Observed output: `PASS: relative Markdown targets resolve in 4 files`.
+- Inspected the Task 3 decision matrix, verification record, plan/index diff, and prior Task 1/2 evidence for decision coherence. The inspected diffs contain only the requested Plan 112 documentation files.
+- After the refinement commit, `git diff --check d3a6826d..HEAD` passed with exit 0; `git diff --name-only d3a6826d..HEAD` listed exactly `plans/112-evidence/task-3-decision-matrix.md`, `plans/112-verification-evidence.md`, `plans/112-write-and-index-evidence-study.md`, and `plans/README.md`; relative Markdown links resolved; `git status --short --branch` showed clean branch `plan-112`; and `git log -2 --oneline --decorate` showed `b33c4801` then `39b900e0`.
+- No product gate, unit suite, Linux check, SQL command, fixture execution, or UAT was run; this was notes-only scoped work.
+
+## Concerns and limits
+
+- The decision record has not received its independent Task 3 review or final Sol whole-branch review. Preserve both as pending until their verdicts arrive.
+- The workload refinement is included in `b33c4801`; post-refinement diff, link, path-scope, and clean-worktree checks were rerun.
+- The workload and UAT contract are proposals only. No target has been named or authorized, no workload has been executed, and recurrence, runtime savings, complete metadata visibility, and target-specific side effects remain unverified.
+- Linux and all live acceptance remain unverified. The decision record does not authorize merge, push, install, or database access.
+
+## Round 1 review correction
+
+**Finding:** the original `n=5000` scalar-list case generated 5000 parameters for one DELETE, exceeding Plan 083's 2100-parameter command cap. The smallest fix was to cap scalar cardinality at 2100. The corrected workload declares cardinalities 10, 100, 1000, and 2100 and retains the same deterministic key generator, paired variants, and expected affected-row counts. No SQL/UAT was run and no product code changed.
+
+The decision matrix correction is `acd726d9`; the verification evidence update is `c85767b7`. Final HEAD observed: `c85767b7` (`docs(112): record scalar cap verification`). Task 3 review and final Sol review remain pending for the controller.
+
+Commands and observed results:
+
+```powershell
+git diff --check b33c4801..HEAD
+# PASS: git diff --check b33c4801..HEAD
+
+git diff --name-only b33c4801..HEAD
+# plans/112-evidence/task-3-decision-matrix.md
+# plans/112-verification-evidence.md
+
+$counts = @(10, 100, 1000, 2100)
+foreach ($n in $counts) {
+  $keys = [System.Collections.Generic.List[int]]::new()
+  for ($i = 0; $i -lt $n; $i++) { $keys.Add(1 + ((112 * 7919 + $i * 4729) % 100000)) }
+  $unique = @($keys | Sort-Object -Unique).Count
+  if ($keys.Count -ne $n -or $unique -ne $n -or $n -gt 2100) { throw "cardinality check failed for $n" }
+  "PASS cardinality=$n generated=$($keys.Count) unique=$unique parameters=$n"
+}
+'PASS: all scalar cases <= 2100 parameters'
+```
+
+Arithmetic output:
+
+```text
+PASS cardinality=10 generated=10 unique=10 parameters=10
+PASS cardinality=100 generated=100 unique=100 parameters=100
+PASS cardinality=1000 generated=1000 unique=1000 parameters=1000
+PASS cardinality=2100 generated=2100 unique=2100 parameters=2100
+PASS: all scalar cases <= 2100 parameters
+```
+
+The four-file relative-link checker was rerun and printed `PASS: relative Markdown links resolve in four docs`. `git status --short --branch` showed clean `plan-112`; `git log -3 --oneline --decorate` showed `c85767b7`, `acd726d9`, and `b33c4801`. `rg -n '5000|2100' plans/112-evidence/task-3-decision-matrix.md plans/112-verification-evidence.md` showed only the 2100 limit/cardinality references, with no 5000 scalar case. Self-review of `git diff b33c4801..HEAD` confirmed the only change is the cardinality cap and its evidence record.

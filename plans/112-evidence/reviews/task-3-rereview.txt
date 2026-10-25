@@ -1,0 +1,15 @@
+**5,000 scalar parameters exceeded the 2,100-command limit** — ADDRESSED. `plans/112-evidence/task-3-decision-matrix.md:37` now caps scalar cardinality at 2,100 and explicitly ties it to Plan 083's command limit. The appended correction evidence records unique generated sets and parameter counts for 10, 100, 1000, and 2100.
+
+### New Breakage in the Fix Diff
+
+None. The fix only changes the maximum scalar cardinality and updates the scoped verification record. The expected affected-row count, deterministic key generator, and A/B sequence remain coherent at 2,100 (`plans/112-evidence/task-3-decision-matrix.md:37`).
+
+### Out-of-Scope Observations
+
+None.
+
+### Verdict
+
+**Fix round:** All findings addressed, no new Critical/Important breakage.
+
+**Checks reviewed:** The appended report shows passing cardinality and uniqueness output for all four scalar sizes, link-check output, and clean committed documentation scope at `acd726d9`. No product tests, SQL workload, or UAT were run; that matches the notes-only task boundary.
