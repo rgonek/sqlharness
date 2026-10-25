@@ -1,0 +1,11 @@
+FIX_BASE=52b71b0511db124cdf004f255a2bea720b8c679e
+EXECUTABLE_COMMIT=890053e25f7929b7d588b8cba9c586ada6cd67dc
+COMMAND: git diff --check FIX_BASE
+warning: in the working copy of 'plans/118-evidence/reviews/implementer-reports/final-fix-report.md', LF will be replaced by CRLF the next time Git touches it
+EXIT_CODE=0
+COMMAND: source immutability - git diff --name-only FIX_BASE -- src tests scripts
+SOURCE_IMMUTABILITY_EXIT_CODE=0
+COMMAND: relative Markdown link target check over seven affected documents
+MARKDOWN_LINKS=100 FILES=7
+LINK_CHECK_EXIT_CODE=0
+SCOPE_CHECK_EXIT_CODE=0

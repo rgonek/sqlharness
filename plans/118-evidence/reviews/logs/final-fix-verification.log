@@ -1,0 +1,9 @@
+FIX_BASE=52b71b0511db124cdf004f255a2bea720b8c679e
+EXECUTABLE_COMMIT=890053e25f7929b7d588b8cba9c586ada6cd67dc
+COMMAND: pwsh -NoProfile -File plans/118-evidence/evaluate.ps1
+cases=34 output=D:\Dev\sqlharness\.worktrees\plan-118\plans\118-evidence\results.json
+EXIT_CODE=0
+COMMAND: pwsh -NoProfile -File plans/118-evidence/verify.ps1
+cases=34 output=D:\Dev\sqlharness\.worktrees\plan-118\plans\118-evidence\results.json
+VERIFIED: 34 named scenarios; exact oracle values, basis preservation, absent-property states, fingerprint semantics, pairing non-disclosure, omissions, and UTF-8 limits passed.
+EXIT_CODE=0
