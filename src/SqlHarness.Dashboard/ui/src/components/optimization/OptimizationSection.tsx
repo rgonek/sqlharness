@@ -8,7 +8,7 @@ import { VersionTable } from "@/components/optimization/VersionTable"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SessionSearch } from "@/router"
 
@@ -85,7 +85,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
         <SelectTrigger id={`${controlId}-group`} aria-label={`${subject.subject} conditions group`} className="w-full">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>{groups.map(item => <SelectItem key={item.fingerprint} value={item.fingerprint}>{item.label}</SelectItem>)}</SelectContent>
+        <SelectContent><SelectGroup>{groups.map(item => <SelectItem key={item.fingerprint} value={item.fingerprint}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
       </Select>
     </div>}
     {scopes.length > 1 && group && scope && <div className="grid max-w-md gap-1 text-sm">
@@ -97,7 +97,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
         <SelectTrigger id={`${controlId}-scope`} aria-label={`${subject.subject} scope`} className="w-full">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>{scopes.map(item => <SelectItem key={item.scope} value={item.scope}>{item.scope}</SelectItem>)}</SelectContent>
+        <SelectContent><SelectGroup>{scopes.map(item => <SelectItem key={item.scope} value={item.scope}>{item.scope}</SelectItem>)}</SelectGroup></SelectContent>
       </Select>
     </div>}
     {group && scope ? <>

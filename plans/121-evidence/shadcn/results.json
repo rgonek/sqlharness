@@ -1,0 +1,29 @@
+{
+  "screens": [
+    "session-long-title",
+    "session-edit-long-title",
+    "session-details-hover",
+    "session-details-open",
+    "version-popover",
+    "comparison-options",
+    "io-statement-hover",
+    "io-plan-hover",
+    "io-columns",
+    "io-whole-batch",
+    "sql-diff",
+    "activity-facet",
+    "activity-search-focus",
+    "activity-chevron-hover",
+    "activity-star-hover",
+    "settings-yolo",
+    "settings-switch",
+    "session-edit-768",
+    "activity-768",
+    "settings-768",
+    "session-edit-390",
+    "activity-390",
+    "settings-390"
+  ],
+  "errors": [],
+  "titleCharacters": 950
+}

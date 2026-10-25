@@ -16,6 +16,7 @@ import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
 import { useShowInternalOperations } from "@/lib/internalOperations"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const unknownRootsHint =
@@ -51,14 +52,14 @@ function SessionView({ id }: { id: number }) {
     <div className="session-page space-y-4">
       <Card className="session-heading border-0 shadow-none">
         <CardHeader className="px-0">
-          <CardTitle>
+          <CardTitle className="min-w-0">
             <SessionAnnotationHeader key={session.id} session={session} />
           </CardTitle>
 
         </CardHeader>
         <CardContent className="px-0">
           <Collapsible>
-<div className="session-subtitle"><span>{agentLabel(session.agentKind)} via {session.transport}</span><span>·</span>{session.title && <><code>{session.sessionKey}</code><span>·</span></>}<span>{session.operations} operations</span><span>·</span><CollapsibleTrigger aria-label="Session metadata" className="cursor-pointer text-sm font-medium">Details</CollapsibleTrigger></div>
+<div className="session-subtitle"><span>{agentLabel(session.agentKind)} via {session.transport}</span><span>·</span>{session.title && <><code>{session.sessionKey}</code><span>·</span></>}<span>{session.operations} operations</span><span>·</span><CollapsibleTrigger aria-label="Session metadata" render={<Button variant="ghost" size="sm" />}>Details<ChevronDown data-icon="inline-end" /></CollapsibleTrigger></div>
             <CollapsibleContent keepMounted><div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
               <Fact label="Client" value={clientLabel(session)} />
               <Fact label="MCP mode" value={session.mcpMode} />

@@ -1,12 +1,16 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { ChevronDown, ChevronRight, Search, Star } from "lucide-react"
 import type { OperationSummary, SessionSummary } from "@/api/types"
 import { useUpdateSessionAnnotation } from "@/api/queries"
 import { ActivityOperations } from "@/components/ActivityOperations"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Toggle } from "@/components/ui/toggle"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Field, FieldLabel, FieldSet, FieldLegend, FieldGroup } from "@/components/ui/field"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { sessionDisplayName } from "@/lib/sessionName"
 import { agentLabel } from "@/lib/agents"
@@ -18,20 +22,23 @@ function formatRelativeTime(value: string, now: number) {
 function TimeFilter({ label, value, values, onChange }: { label: string; value: string; values: { value: string; label: string }[]; onChange: (value: string) => void }) {
   return <Select items={values} value={value} onValueChange={next => { if (next !== null) onChange(next) }}>
     <SelectTrigger aria-label={label} className="h-8 w-auto min-w-32"><span className="text-muted-foreground">Time</span><SelectValue /></SelectTrigger>
-    <SelectContent>{values.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+    <SelectContent><SelectGroup>{values.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
   </Select>
 }
 
 function Facet({ label, selected, values, onChange }: { label: string; selected: string[]; values: { value: string; label: string; count?: number }[]; onChange: (values: string[]) => void }) {
-  return <details name="activity-facets" className="relative">
-    <summary aria-label={label} className="flex h-8 cursor-pointer list-none items-center gap-2 rounded-lg border bg-background px-2.5 text-sm">
-      <span className="text-muted-foreground">{label}</span><span>{selected.length ? selected.length === 1 ? values.find(item => item.value === selected[0])?.label : `${selected.length} selected` : "Any"}</span><ChevronDown className="size-3.5" />
-    </summary>
-    <div className="absolute left-0 z-20 mt-1 grid max-h-72 min-w-56 max-w-[min(32rem,85vw)] gap-2 overflow-y-auto rounded-lg border bg-popover p-3 shadow-md">
+  const id = useId()
+  return <Popover>
+    <PopoverTrigger render={<Button variant="outline" size="sm" />} aria-label={label}>
+      <span className="text-muted-foreground">{label}</span><span>{selected.length ? selected.length === 1 ? values.find(item => item.value === selected[0])?.label : `${selected.length} selected` : "Any"}</span><ChevronDown data-icon="inline-end" />
+    </PopoverTrigger>
+    <PopoverContent align="start" className="max-h-72 max-w-[85vw] overflow-y-auto">
       <Button size="sm" variant="ghost" onClick={() => onChange([])}>Clear {label.toLowerCase()}</Button>
-      {values.map(item => <label key={item.value} className="flex min-w-0 items-start gap-2 text-sm"><input type="checkbox" aria-label={item.label} checked={selected.includes(item.value)} onChange={() => onChange(selected.includes(item.value) ? selected.filter(value => value !== item.value) : [...selected, item.value])} /><span className="min-w-0 flex-1 break-all">{item.label}</span><span className="text-xs text-muted-foreground tabular-nums">{item.count}</span></label>)}
-    </div>
-  </details>
+      <FieldSet><FieldLegend className="sr-only">{label}</FieldLegend><FieldGroup>
+      {values.map((item, index) => <Field key={item.value} orientation="horizontal"><Checkbox id={`${id}-${index}`} checked={selected.includes(item.value)} onCheckedChange={() => onChange(selected.includes(item.value) ? selected.filter(value => value !== item.value) : [...selected, item.value])} /><FieldLabel htmlFor={`${id}-${index}`} className="min-w-0 flex-1 break-all">{item.label}</FieldLabel><span aria-hidden="true" className="text-muted-foreground tabular-nums">{item.count}</span></Field>)}
+      </FieldGroup></FieldSet>
+    </PopoverContent>
+  </Popover>
 }
 
 function SessionGroup({ session, operations, now, expanded, onExpand }: { session: SessionSummary; operations: OperationSummary[]; now: number; expanded: boolean; onExpand: () => void }) {
@@ -43,16 +50,16 @@ function SessionGroup({ session, operations, now, expanded, onExpand }: { sessio
       <Button variant="ghost" size="icon-sm" aria-label={`${open ? "Collapse" : "Expand"} ${sessionDisplayName(session)}`} aria-expanded={open} onClick={onExpand}>
         <ChevronRight className={open ? "rotate-90 transition-transform" : "transition-transform"} />
       </Button>
-      <Button variant="ghost" size="icon-sm" disabled={update.isPending} aria-label={`${session.starred ? "Unstar" : "Star"} session ${sessionDisplayName(session)}`} aria-pressed={session.starred} onClick={() => update.mutate({ starred: !session.starred })}>
+      <Toggle size="sm" disabled={update.isPending} aria-label={`${session.starred ? "Unstar" : "Star"} session ${sessionDisplayName(session)}`} pressed={session.starred} onPressedChange={starred => update.mutate({ starred })}>
         <Star className={session.starred ? "fill-current text-amber-500" : "text-muted-foreground"} />
-      </Button>
+      </Toggle>
       <div className="min-w-0">
         <div className="flex items-center gap-2"><Link to="/sessions/$id" params={{ id: String(session.id) }} className="block truncate font-medium underline">{sessionDisplayName(session)}</Link>{session.archived && <Badge variant="outline">Archived</Badge>}</div>
         <p className="text-xs text-muted-foreground"><span>{agentLabel(session.agentKind)}</span> · {session.transport}</p>
       </div>
       <span className="activity-directory min-w-0 truncate font-mono text-[13px] text-muted-foreground" title={session.cwd ?? undefined}>{session.cwd ?? "—"}</span>
       <time className="activity-last-seen text-[13px] text-muted-foreground" title={session.lastSeen}>{formatRelativeTime(session.lastSeen, now)}</time>
-      <div className="activity-optimization">{session.optimization?.map(item => <Badge key={item.subject} variant="outline">{item.subject} {item.change}</Badge>)}</div>
+      <div className="activity-optimization min-w-0"><p className="truncate text-xs text-muted-foreground" title={session.optimization?.map(item => `${item.subject} ${item.change}`).join(" · ")}>{session.optimization?.map(item => `${item.subject} ${item.change}`).join(" · ")}</p></div>
       <div className="activity-session-counts">{active && <span className="activity-running">{operations.filter(item => item.status === "running").length} running</span>}
       <span className="text-xs text-muted-foreground">{operations.length === session.operations ? `${operations.length} ops` : `${operations.length} shown / ${session.operations} ops`}</span></div>
     </div>
@@ -100,28 +107,28 @@ export function ActivityFeed({ sessions, operations, now }: { sessions: SessionS
   const allOpen = groups.length > 0 && groups.every(isOpen)
   const dirty = time !== "604800000" || !!(agent.length || cwd.length || target.length || status.length || kind.length || text || starred || archived || named)
   const facetOptions = (dimension: "agent" | "cwd" | "target", values: ReturnType<typeof options>) => values.map(item => ({ ...item, count: operations.filter(operation => matches(operation, { [dimension]: [item.value] })).length }))
-  const chip = (label: string, count: number, pressed: boolean, onClick: () => void) => <button type="button" className="activity-chip" aria-pressed={pressed} onClick={onClick}>{label}<span>{count}</span></button>
-  return <section aria-label="Activity feed" className="space-y-3">
+  const chip = (label: string, count: number, pressed: boolean, onClick: () => void) => <Toggle variant="outline" size="sm" pressed={pressed} onPressedChange={onClick}>{label}<span className="text-muted-foreground tabular-nums">{count}</span></Toggle>
+  return <section aria-label="Activity feed" className="flex flex-col gap-3">
     <div className="activity-filterbar" aria-label="Activity filters">
       <h1>Activity</h1>
-      <div className="activity-search"><Search className="size-3.5 text-muted-foreground" /><Input aria-label="Search activity" placeholder="Search label, session, target" value={text} onChange={event => { setText(event.target.value); setExpansion({}) }} /></div>
+      <InputGroup className="activity-search"><InputGroupAddon><Search /></InputGroupAddon><InputGroupInput aria-label="Search activity" placeholder="Search label, session, target" value={text} onChange={event => { setText(event.target.value); setExpansion({}) }} /></InputGroup>
       <TimeFilter label="Time" value={time} onChange={setTime} values={[{ value: "all", label: "All time" }, { value: "604800000", label: "Last 7 days" }, { value: "86400000", label: "Last 24 hours" }, { value: "3600000", label: "Last hour" }]} />
       <Facet label="Agent" selected={agent} onChange={setAgent} values={facetOptions("agent", options([...operations.map(operation => operation.agentKind), ...sessions.map(session => session.agentKind)]))} />
       <Facet label="Directory" selected={cwd} onChange={setCwd} values={facetOptions("cwd", options(sessions.map(session => session.cwd)))} />
       <Facet label="Target" selected={target} onChange={values => { setTarget(values); setExpansion({}) }} values={facetOptions("target", options(operations.map(targetKey)))} />
       {chip("Starred", operations.filter(operation => matches(operation, { starred: true })).length, starred, () => setStarred(!starred))}
-      <button type="button" className="activity-chip" aria-pressed={archived} onClick={() => setArchived(!archived)}>Include archived</button>
+      <Toggle variant="outline" size="sm" pressed={archived} onPressedChange={setArchived}>Include archived</Toggle>
     </div>
     <div className="activity-chipbar">
-      <div className="activity-chipgroup"><span>Status</span>{["running", "failed", "rejected", ...(status.includes("succeeded") ? ["succeeded"] : []), ...(operations.some(item => item.status === "abandoned") ? ["abandoned"] : [])].map(value => <span key={value}>{chip(value[0].toUpperCase() + value.slice(1), operations.filter(operation => matches(operation, { status: [value] })).length, status.includes(value), () => { setStatus(toggle(status, value)); setExpansion({}) })}</span>)}<details className="activity-more-status"><summary aria-label="More statuses">…</summary>{["succeeded", "abandoned"].map(value => <button type="button" key={value} onClick={() => { setStatus(toggle(status, value)); setExpansion({}) }}>{value[0].toUpperCase() + value.slice(1)}</button>)}</details></div>
+      <div className="activity-chipgroup"><span>Status</span>{["running", "failed", "rejected", "succeeded", "abandoned"].map(value => <span key={value}>{chip(value[0].toUpperCase() + value.slice(1), operations.filter(operation => matches(operation, { status: [value] })).length, status.includes(value), () => { setStatus(toggle(status, value)); setExpansion({}) })}</span>)}</div>
       <div className="activity-chipgroup"><span>Type</span>{[...new Set(operations.map(operation => operation.operation))].sort().map(value => <span key={value}>{chip(value[0].toUpperCase() + value.slice(1), operations.filter(operation => matches(operation, { kind: [value] })).length, kind.includes(value), () => { setKind(toggle(kind, value)); setExpansion({}) })}</span>)}</div>
       <div className="activity-chipgroup"><span>Marked</span>{chip("Named", operations.filter(operation => matches(operation, { named: true })).length, named, () => { setNamed(!named); setExpansion({}) })}</div>
       <span className="text-xs text-muted-foreground">Counts respect other filters</span>
     </div>
     <div className="flex flex-wrap items-center gap-3 text-[13px] text-muted-foreground">
       <span>{groups.length} sessions · {filtered.length} loaded operations · {time === "604800000" ? "last 7 days" : time === "all" ? "all time" : time === "86400000" ? "last 24 hours" : "last hour"}</span>
-      {dirty && <button type="button" className="underline" onClick={() => { setTime("604800000"); setAgent([]); setCwd([]); setTarget([]); setStatus([]); setKind([]); setText(""); setStarred(false); setArchived(false); setNamed(false); setExpansion({}) }}>Reset filters</button>}
-      <button type="button" className="ml-auto underline" onClick={() => setExpansion(Object.fromEntries(groups.map(group => [group.session.id, !allOpen])))}>{allOpen ? "Collapse all" : "Expand all"}</button>
+      {dirty && <Button variant="link" size="sm" onClick={() => { setTime("604800000"); setAgent([]); setCwd([]); setTarget([]); setStatus([]); setKind([]); setText(""); setStarred(false); setArchived(false); setNamed(false); setExpansion({}) }}>Reset filters</Button>}
+      <Button variant="link" size="sm" className="ml-auto" onClick={() => setExpansion(Object.fromEntries(groups.map(group => [group.session.id, !allOpen])))}>{allOpen ? "Collapse all" : "Expand all"}</Button>
     </div>
     <div className="border-t">{groups.map(group => <SessionGroup key={group.session.id} {...group} now={now} expanded={isOpen(group)} onExpand={() => setExpansion(current => ({ ...current, [group.session.id]: !isOpen(group) }))} />)}{ungrouped.length > 0 && <ActivityOperations operations={ungrouped} now={now} />}{!filtered.length && !groups.length && <p className="p-10 text-center text-sm text-muted-foreground">Nothing matches these filters.</p>}</div>
     <p className="text-xs text-muted-foreground">Showing recent activity and all running operations. SQL previews and SQL-text search are not available in this list. <Link to="/operations" className="underline">Browse operation history</Link> · <Link to="/sessions" className="underline">Browse all sessions</Link> · <Link to="/named-operations" className="underline">Named operations</Link> · <Link to="/mutations" className="underline">Mutations</Link></p>

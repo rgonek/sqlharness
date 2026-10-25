@@ -23,7 +23,7 @@ test("tabs show each side and the diff; mode and ignore formatting are remembere
   render(<SqlDiff baseline="select a from t" candidate="select a from t where x = 1" engine="sqlserver" />)
   expect(screen.getByRole("tab", { name: "Diff" })).toHaveAttribute("aria-selected", "true")
   expect(await screen.findByLabelText("merge side-by-side")).toBeInTheDocument()
-  await userEvent.click(screen.getByRole("radio", { name: "Unified" }))
+  await userEvent.click(screen.getByRole("button", { name: "Unified" }))
   expect(await screen.findByLabelText("merge unified")).toBeInTheDocument()
   expect(localStorage.getItem("sqlharness.sqlDiff.mode")).toBe("unified")
   await userEvent.click(screen.getByText("Ignore formatting"))
@@ -33,20 +33,20 @@ test("tabs show each side and the diff; mode and ignore formatting are remembere
   expect(screen.getByLabelText("SQL viewer")).toHaveTextContent("select a from t")
 })
 
-test("diff radio groups stay independent when multiple comparisons are rendered", async () => {
+test("diff toggle groups stay independent when multiple comparisons are rendered", async () => {
   render(<>
     <SqlDiff baseline="SELECT 1" candidate="SELECT 2" engine={null} />
     <SqlDiff baseline="SELECT 3" candidate="SELECT 4" engine={null} />
   </>)
-  const [firstSideBySide, secondSideBySide] = screen.getAllByRole("radio", { name: "Side by side" })
-  const [firstUnified, secondUnified] = screen.getAllByRole("radio", { name: "Unified" })
+  const [firstSideBySide, secondSideBySide] = screen.getAllByRole("button", { name: "Side by side" })
+  const [firstUnified, secondUnified] = screen.getAllByRole("button", { name: "Unified" })
 
   firstSideBySide.focus()
-  await userEvent.keyboard("{ArrowRight}")
+  await userEvent.keyboard("{ArrowRight} ")
 
-  expect(firstUnified).toBeChecked()
-  expect(secondSideBySide).toBeChecked()
-  expect(secondUnified).not.toBeChecked()
+  expect(firstUnified).toHaveAttribute("aria-pressed", "true")
+  expect(secondSideBySide).toHaveAttribute("aria-pressed", "true")
+  expect(secondUnified).toHaveAttribute("aria-pressed", "false")
   expect(localStorage.getItem("sqlharness.sqlDiff.mode")).toBe("unified")
 })
 

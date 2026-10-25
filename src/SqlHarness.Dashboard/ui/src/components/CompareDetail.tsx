@@ -10,7 +10,7 @@ import { ConditionsList } from "@/components/ConditionsList"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { badgeTier } from "@/lib/flags"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type JsonObject = Record<string, unknown>
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
@@ -67,13 +67,13 @@ function Cases({ detail, selectedCase, onCaseChange }: { detail: OperationDetail
         <Select items={selectableCards.map(item => ({ value: item.pair!.baseline.caseId, label: item.label }))}
           value={selectableCards.length > 0 ? card?.pair?.baseline.caseId ?? selectedCase : null} onValueChange={value => { if (value !== null) onCaseChange?.(value) }}>
           <SelectTrigger aria-label="Case" className="w-full min-w-0"><SelectValue placeholder="No cases available" /></SelectTrigger>
-          <SelectContent>{selectableCards.map(item => <SelectItem key={item.pair!.baseline.caseId} value={item.pair!.baseline.caseId} aria-label={accessibleLabel(item)}>{item.label}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectGroup>{selectableCards.map(item => <SelectItem key={item.pair!.baseline.caseId} value={item.pair!.baseline.caseId} aria-label={accessibleLabel(item)}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
         </Select>
       </label>
       <label className="grid min-w-0 gap-1 text-sm">Side
         <Select items={[{ value: "baseline", label: "Baseline" }, { value: "candidate", label: "Candidate" }]} value={side} onValueChange={value => { if (value !== null) setSide(value) }}>
           <SelectTrigger aria-label="Side" className="w-full min-w-0"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="baseline">Baseline</SelectItem><SelectItem value="candidate">Candidate</SelectItem></SelectContent>
+          <SelectContent><SelectGroup><SelectItem value="baseline">Baseline</SelectItem><SelectItem value="candidate">Candidate</SelectItem></SelectGroup></SelectContent>
         </Select>
       </label>
       {card && <span className="text-sm text-muted-foreground">Execution {detail.operation.status} · <span data-tier={card.regression?.verdict === "fail" ? badgeTier("regression") : undefined} title={regressionLabel(card.regression) === "No assessment" ? "No regression assessment is available for this comparison." : typeof card.regression?.policyVersion === "number" ? `Policy v${card.regression.policyVersion}` : undefined}>{regressionLabel(card.regression)}</span> · <span data-tier={card.equivalence?.equivalent === false ? badgeTier("results-differ") : undefined}>{equivalenceLabel(card.equivalence)}</span></span>}

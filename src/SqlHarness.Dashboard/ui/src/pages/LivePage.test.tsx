@@ -379,7 +379,7 @@ test("Activity filters hide empty session groups and can be reset", async () => 
   expect(screen.queryByRole("link", { name: "Billing session" })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Reset filters" }))
   expect(screen.getByRole("link", { name: "Billing session" })).toBeInTheDocument()
-  await userEvent.click(screen.getByLabelText("Agent", { selector: "summary" }))
+  await userEvent.click(screen.getByRole("button", { name: "Agent" }))
   await userEvent.click(screen.getByRole("checkbox", { name: "claude" }))
   expect(screen.queryByRole("link", { name: "Orders session" })).not.toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Billing session" })).toBeInTheDocument()

@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDuration, formatNumber, formatPercent } from "@/lib/format"
 
@@ -90,12 +90,12 @@ function DimensionFilter({
           onSelect(value === "all:" ? undefined : parseValueOption(value))
         }}>
         <SelectTrigger id={`dimension-filter-${dimension.name}`} aria-label={dimension.name} className="w-full min-w-0"><SelectValue /></SelectTrigger>
-        <SelectContent>
+        <SelectContent><SelectGroup>
           <SelectItem value="all:">All values</SelectItem>
           {dimension.values.map(value => (
             <SelectItem key={identityKey(value)} value={valueOption(value)}>{value.isUnknown ? "Unknown (missing)" : value.value === "" ? "(empty)" : dimensionLabel(value)}</SelectItem>
           ))}
-        </SelectContent>
+        </SelectGroup></SelectContent>
       </Select>
     </div>
   )
@@ -231,7 +231,7 @@ export function Matrix({
           <Select items={[10, 25, 50, 100].map(value => ({ value: String(value), label: String(value) }))}
             value={String(limit)} onValueChange={value => { if (value !== null) setLimit(Number(value)) }}>
             <SelectTrigger id="matrix-limit" aria-label="Display limit per axis" className="w-full"><SelectValue /></SelectTrigger>
-            <SelectContent>{[10, 25, 50, 100].map(value => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectContent>
+            <SelectContent><SelectGroup>{[10, 25, 50, 100].map(value => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectGroup></SelectContent>
           </Select>
         </div>
       </div>
@@ -387,7 +387,7 @@ export function ProfileDimensionsPanel({
                   chooseAxes({ row, column: axes.column === row ? names.find(name => name !== row) ?? "" : axes.column })
                 }}>
                   <SelectTrigger id="matrix-row" aria-label="Rows" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{names.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectGroup>{names.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
               </div>
               <div className="grid min-w-40 flex-1 gap-1.5">
@@ -398,7 +398,7 @@ export function ProfileDimensionsPanel({
                   chooseAxes({ row: axes.row === column ? names.find(name => name !== column) ?? "" : axes.row, column })
                 }}>
                   <SelectTrigger id="matrix-column" aria-label="Columns" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{names.map(name => <SelectItem key={name} value={name} disabled={name === axes.row}>{name}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectGroup>{names.map(name => <SelectItem key={name} value={name} disabled={name === axes.row}>{name}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
               </div>
               <div className="grid min-w-48 flex-1 gap-1.5">
@@ -406,7 +406,7 @@ export function ProfileDimensionsPanel({
                 <Select items={(Object.entries(metricLabels) as [Metric, string][]).map(([value, label]) => ({ value, label }))}
                   value={metric} onValueChange={value => { if (value !== null) setMetric(value as Metric) }}>
                   <SelectTrigger id="matrix-metric" aria-label="Metric" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{(Object.entries(metricLabels) as [Metric, string][]).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectGroup>{(Object.entries(metricLabels) as [Metric, string][]).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
               </div>
             </div>

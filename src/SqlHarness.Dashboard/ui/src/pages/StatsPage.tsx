@@ -9,7 +9,7 @@ import { Kpi } from "@/components/Kpi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -170,9 +170,9 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
             }}
           >
             <SelectTrigger id="stats-profile" className="w-full min-w-0"><SelectValue /></SelectTrigger>
-            <SelectContent>{profileOptions.map(name => <SelectItem key={name} value={`profile:${name}`}>{name}</SelectItem>)}
+            <SelectContent><SelectGroup>{profileOptions.map(name => <SelectItem key={name} value={`profile:${name}`}>{name}</SelectItem>)}
               <SelectItem value="unprofiled">No profile</SelectItem>
-            </SelectContent>
+            </SelectGroup></SelectContent>
           </Select>
         </div>
         <Tabs value={range} onValueChange={value => {

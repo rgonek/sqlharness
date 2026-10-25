@@ -50,7 +50,7 @@ export function AgentSessionPage() {
   return <div className="session-page space-y-4">
     <Card className="session-heading">
       <CardHeader className="px-0">
-        <CardTitle><div className="session-title-row flex flex-wrap items-center gap-2">
+        <CardTitle className="min-w-0"><div className="session-title-row flex flex-wrap items-center gap-2">
           {titleDraft === null ? <><h1 className="min-w-0 flex-1">{displayTitle}</h1><Button className="session-edit-title" size="icon" variant="ghost" aria-label="Edit title" onClick={() => setTitleDraft(agentSession.ownerTitle ?? "")}><Pencil /></Button></>
             : <><Input aria-label="Agent session title" maxLength={200} value={titleDraft} onChange={event => setTitleDraft(event.target.value)} />
               <Button size="sm" disabled={update.isPending} onClick={() => update.mutate({ title: titleDraft.trim() || null }, { onSuccess: () => setTitleDraft(null) })}>Save title</Button>

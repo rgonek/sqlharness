@@ -5,7 +5,7 @@ import { fetchPlanGraph, queryKeys, useOperationPlans, usePlanSourceMap, type Pl
 import type { VariantDetail } from "@/api/types"
 import type { SqlSourceSelection, SqlSourceSpan } from "@/lib/sqlDiff"
 import { PlanErrorState } from "./PlanErrorState"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { PlanGraphDocument, PlanGraphLink, PlanGraphSelection } from "./PlanGraphView"
 import { planNodeKey, resolvePlanSourceLinks, type PlanGraphDocumentData, type ResolvedPlanSourceLink } from "./planSourceLinks"
 import { PlanPropertiesPanel } from "./PlanPropertiesPanel"
@@ -237,9 +237,9 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
           setSelectedNodeKey(null)
         }}>
           <SelectTrigger aria-label="Case" className="min-w-48 max-w-[min(32rem,80vw)]"><SelectValue /></SelectTrigger>
-          <SelectContent className="!w-max !max-w-[calc(100vw-2rem)] [&_*]:whitespace-normal">
+          <SelectContent className="!w-max !max-w-[calc(100vw-2rem)] [&_*]:whitespace-normal"><SelectGroup>
             {caseOptions.map(([id, label]) => <SelectItem key={id} value={id}>{label}</SelectItem>)}
-          </SelectContent>
+          </SelectGroup></SelectContent>
         </Select>
       </label>
       {repetitions.length > 1 && <label className="grid gap-1 text-sm">Repetition
@@ -252,7 +252,7 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
           setSqlSelection(null)
         }}>
           <SelectTrigger aria-label="Repetition"><SelectValue /></SelectTrigger>
-          <SelectContent>{repetitions.map(value => <SelectItem key={value} value={value}>Repetition {value}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectGroup>{repetitions.map(value => <SelectItem key={value} value={value}>Repetition {value}</SelectItem>)}</SelectGroup></SelectContent>
         </Select>
       </label>}
       {documentOptions.length > 0 && <label className="grid gap-1 text-sm">Plan document
@@ -265,12 +265,12 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
           setSqlSelection(null)
         }}>
           <SelectTrigger aria-label="Plan document"><SelectValue /></SelectTrigger>
-          <SelectContent>
+          <SelectContent><SelectGroup>
             <SelectItem value="all">All plan documents</SelectItem>
             {documentOptions.map(document => <SelectItem key={documentKey(document)} value={documentKey(document)}>
               Document {document.documentOrdinal + 1} · {document.documentSha256.slice(0, 8)}
             </SelectItem>)}
-          </SelectContent>
+          </SelectGroup></SelectContent>
         </Select>
       </label>}
       <PlanStatementSwitcher occurrences={occurrences} selectedIndex={statementIndex} onChange={value => {

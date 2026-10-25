@@ -4,7 +4,7 @@ import { useOperationPlans, usePlanGraph, usePlanSourceMap, type PlanSourceMapPa
 import type { DistilledPlan, PlanNode } from "@/api/types"
 import { PlanErrorState } from "@/components/plan/PlanErrorState"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { ComparePair } from "@/lib/compare"
@@ -108,7 +108,7 @@ function ExactOccurrenceSelect({
       <SelectTrigger aria-label={`${sideName} occurrence`} className="min-w-64 max-w-[min(32rem,80vw)]">
         <SelectValue placeholder="Choose exact occurrence" />
       </SelectTrigger>
-      <SelectContent>{items.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+      <SelectContent><SelectGroup>{items.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
     </Select>
   </label>
 }

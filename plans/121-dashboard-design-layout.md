@@ -52,3 +52,9 @@ Evidence: `121-evidence/visual/`; reproducible capture uses Playwright with brow
 Visual acceptance: [design QA](../design-qa.md), [44-state screenshot gallery](121-evidence/visual/index.html), and [follow-up review](121-evidence/visual-review.md). The operator explicitly chose unavailable-data labels without new contracts.
 
 Follow-up delivery: [integration](121-evidence/visual-integration.json), [publication](121-evidence/visual-publication.json). Installed UI assets and four browser screens verified.
+
+## shadcn correction follow-up (2026-10-25)
+
+Status: IMPLEMENTED AND VERIFIED on `dashboard-shadcn-fixes`, base `0b589b40`, in a new worktree. The operator supplied 19 concrete screenshots and requested standard shadcn composition without modifying primitive sources. Default Select alignment is preserved and documented.
+
+Implementation, independent review and 23-state browser QA are recorded in [verification](121-evidence/shadcn/verification.md) and the [gallery](121-evidence/shadcn/index.html). Final Windows gate passed: UI 384, Core 4718, MCP 535; output-only sequential xUnit collections as documented. The operator subsequently authorized publication from this branch and `sqlharness dashboard --restart` after verification. No merge or push.

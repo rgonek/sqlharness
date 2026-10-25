@@ -42,11 +42,13 @@ test("shows basis, case chips, mixed warning, collapsed rows and URL-backed sele
   const { router } = renderPanel()
   expect(await screen.findByText("measured together in #214")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("tab", { name: "IO" }))
+  await userEvent.click(screen.getByRole("button", { name: "All cases · Sum" }))
   expect(screen.getByRole("button", { name: "@CustomerId = 9001" })).toBeInTheDocument()
   expect(screen.getByText("Mixed: 2 better, 1 worse — @CustomerId = 9001: logical reads +35%")).toBeInTheDocument()
   expect(await screen.findByText("2 smaller tables")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "@CustomerId = 9001" }))
   expect(router.state.location.search).toMatchObject({ case: "customer-9001" })
+  await userEvent.click(screen.getByRole("button", { name: "@CustomerId = 9001 · Sum" }))
   await userEvent.click(screen.getByRole("button", { name: "Mean" }))
   expect(router.state.location.search).toMatchObject({ agg: "mean" })
 })
@@ -121,6 +123,7 @@ test("reproduction actions resolve a selected fingerprint to each side's raw cas
   }
   const { calls } = renderPanel(payload)
 
+  await userEvent.click(await screen.findByRole("button", { name: "All cases · Sum" }))
   await userEvent.click(await screen.findByRole("button", { name: "@CustomerId = 2" }))
 
   await expect.poll(() => calls.some(call => call.includes("/repro?") && call.includes("case=baseline-raw-b"))).toBe(true)

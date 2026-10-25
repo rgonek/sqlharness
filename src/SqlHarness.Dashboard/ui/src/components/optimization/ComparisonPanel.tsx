@@ -1,3 +1,5 @@
+import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ChevronDown } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
@@ -76,19 +78,19 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
   }
 
   const copy = <div className="comparison-copy"><CopyButton label="Copy summary" getText={() => optimizationMarkdown(comparison, subject, scope)} /></div>
-  const selectors = <details className="comparison-selectors"><summary>{activeCase === "all" ? "All cases" : comparison.cases.find(item => item.id === activeCase)?.label ?? activeCase} · {activeAggregate === "mean" ? "Mean" : "Sum"}<ChevronDown className="size-3.5 text-muted-foreground" /></summary><div className="flex flex-wrap items-center gap-2" aria-label="Cases">
+  const selectors = <Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}>{activeCase === "all" ? "All cases" : comparison.cases.find(item => item.id === activeCase)?.label ?? activeCase} · {activeAggregate === "mean" ? "Mean" : "Sum"}<ChevronDown data-icon="inline-end" /></PopoverTrigger><PopoverContent align="end" className="max-h-80 max-w-[calc(100vw-2rem)] overflow-auto"><PopoverTitle>Comparison options</PopoverTitle><div className="flex flex-col gap-2" aria-label="Cases">
       {!hideCaseSelector && <><span className="text-sm font-medium">Case</span>
-        <Button type="button" size="sm" variant={activeCase === "all" ? "secondary" : "outline"} aria-pressed={activeCase === "all"} onClick={() => updateSearch({ case: "all" })}>All cases</Button>
-        {comparison.cases.filter(option => option.id !== "all").map(option => <Button key={option.id} type="button" size="sm" variant={activeCase === option.id ? "secondary" : "outline"} aria-pressed={activeCase === option.id} onClick={() => updateSearch({ case: option.id })}>{option.label}</Button>)}</>}
+        <ToggleGroup variant="outline" size="sm" className="max-w-full flex-wrap" value={[activeCase]} onValueChange={values => { if (values[0]) updateSearch({ case: values[0] }) }}><ToggleGroupItem value="all">All cases</ToggleGroupItem>
+        {comparison.cases.filter(option => option.id !== "all").map(option => <ToggleGroupItem key={option.id} value={option.id} className="max-w-full"><span className="truncate" title={option.label}>{option.label}</span></ToggleGroupItem>)}</ToggleGroup></>}
       <span className="ml-2 text-sm font-medium">Aggregate</span>
-      <Button type="button" size="sm" variant={activeAggregate === "sum" ? "secondary" : "outline"} aria-pressed={activeAggregate === "sum"} onClick={() => updateSearch({ agg: "sum" })}>Sum</Button>
-      <Button type="button" size="sm" variant={activeAggregate === "mean" ? "secondary" : "outline"} aria-pressed={activeAggregate === "mean"} onClick={() => updateSearch({ agg: "mean" })}>Mean</Button>
+      <ToggleGroup variant="outline" spacing={0} size="sm" value={[activeAggregate]} onValueChange={values => { if (values[0]) updateSearch({ agg: values[0] }) }}><ToggleGroupItem value="sum">Sum</ToggleGroupItem>
+      <ToggleGroupItem value="mean">Mean</ToggleGroupItem></ToggleGroup>
     </div>
-    </details>
+    </PopoverContent></Popover>
   const context = <div className="comparison-context"><span>{comparison.a} → {comparison.b}</span><span> · </span><span>{basisLabel(comparison)}</span><span> · </span><span>{comparison.equivalenceLabel}</span></div>
 
   return <section aria-label="Version comparison" className="comparison-panel">
-    {!navigation && <>{copy}{selectors}</>}
+    {!navigation && <div className="comparison-toolbar">{selectors}{copy}</div>}
 
 
     <StatementHiddenWork rows={comparison.statements ?? []} />
@@ -104,7 +106,7 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
     {comparison.mixed && <p data-tier={badgeTier("mixed")} className="text-sm text-amber-700 dark:text-amber-300">Mixed: {comparison.mixed.better} better, {comparison.mixed.worse} worse — {comparison.mixed.worstCaseLabel}: logical reads {comparison.mixed.worstChangePercent > 0 ? "+" : ""}{Math.round(comparison.mixed.worstChangePercent)}%</p>}
     {comparison.basis === "ConditionsDiffer" && <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p>}
       <Tabs className="comparison-tabs" value={activeTab} onValueChange={value => onTabChange?.(String(value))} defaultValue="diff">
-        <TabsList variant="line"><TabsTrigger value="diff">SQL diff</TabsTrigger><TabsTrigger value="io">IO</TabsTrigger><TabsTrigger value="plan">Plan</TabsTrigger>{timing && <TabsTrigger value="timing">Timing</TabsTrigger>}{details && <TabsTrigger value="details">Details</TabsTrigger>}{navigation ?? context}</TabsList>
+        <TabsList variant="line"><TabsTrigger value="diff">SQL diff</TabsTrigger><TabsTrigger value="io">IO</TabsTrigger><TabsTrigger value="plan">Plan</TabsTrigger>{timing && <TabsTrigger value="timing">Timing</TabsTrigger>}{details && <TabsTrigger value="details">Details</TabsTrigger>}</TabsList>{navigation ?? context}
         {headerContent && <div className="comparison-header-content">{headerContent}</div>}
         {navigation && <div className="comparison-operation-context">{context}<div className="comparison-operation-actions">{selectors}{copy}</div></div>}
         <TabsContent value="diff">{diff ?? (sqlOptions.length > 1 ? <SessionVersionDiff key={`${comparison.a}:${comparison.b}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} selectionControls={false} /> : <p className="text-sm text-muted-foreground">SQL diff requires two retained SQL versions.</p>)}</TabsContent>

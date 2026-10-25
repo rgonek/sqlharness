@@ -1,4 +1,7 @@
-import { Sparkles } from "lucide-react"
+import { Toggle } from "@/components/ui/toggle"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
+import { MoreHorizontal, Sparkles } from "lucide-react"
 import type { AgentSessionKey, OperationSummary, OptimizationVersion } from "@/api/types"
 import { Link } from "@tanstack/react-router"
 import { operationReturnSearch } from "@/lib/sessionSearch"
@@ -21,9 +24,9 @@ export function VersionTable({ subject, sessionId, agentSessionKey, sessionSearc
       <TableCell className="text-right tabular-nums">{metric(version.logicalReadsSum)}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.logicalReadsSum !== null && baseline?.logicalReadsSum !== null && baseline?.logicalReadsSum !== undefined && version.logicalReadsSum < baseline.logicalReadsSum ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.logicalReadsSum, baseline?.logicalReadsSum) ?? "—"}</TableCell>
       <TableCell className="text-right tabular-nums">{metric(version.elapsedMedianMs)}{version.elapsedMedianMs !== null && " ms"}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== undefined && version.elapsedMedianMs < baseline.elapsedMedianMs ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.elapsedMedianMs, baseline?.elapsedMedianMs) ?? "—"}</TableCell><TableCell title={`basis: ${version.verdictBasis}`}>{version.caseOutcome}</TableCell>
 
-      <TableCell><label className="version-choice" data-side="a"><input type="radio" name={`${subject}-a`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} />A</label></TableCell>
-      <TableCell><label className="version-choice"><input type="radio" name={`${subject}-b`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} />B</label></TableCell>
-      <TableCell><details className="version-provenance"><summary aria-label={`Details for ${version.version}`}>…</summary><div><p>basis: {version.verdictBasis}</p><p>Scans: {metric(version.scansSum)}</p>{version.measuredIn.map(operationId => <Link key={operationId} to="/operations/$id" params={{ id: String(operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="block underline">Operation #{operationId}</Link>)}</div></details></TableCell>
+      <TableCell><Toggle size="sm" variant="outline" aria-label={`A ${version.version}`} pressed={selectedA === version.version} onPressedChange={() => onSelect("a", version.version)}>A</Toggle></TableCell>
+      <TableCell><Toggle size="sm" variant="outline" aria-label={`B ${version.version}`} pressed={selectedB === version.version} onPressedChange={() => onSelect("b", version.version)}>B</Toggle></TableCell>
+      <TableCell><Popover><PopoverTrigger render={<Button variant="ghost" size="icon-sm" />} aria-label={`Details for ${version.version}`}><MoreHorizontal /></PopoverTrigger><PopoverContent align="end"><PopoverTitle>{version.version}</PopoverTitle><p>basis: {version.verdictBasis}</p><p>Scans: {metric(version.scansSum)}</p>{version.measuredIn.map(operationId => <Link key={operationId} to="/operations/$id" params={{ id: String(operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="block underline">Operation #{operationId}</Link>)}</PopoverContent></Popover></TableCell>
     </TableRow>)}</TableBody>
   </Table>
 }

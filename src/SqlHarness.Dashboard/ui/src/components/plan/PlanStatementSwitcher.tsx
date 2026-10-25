@@ -1,5 +1,5 @@
 import type { PlanOccurrenceManifest } from "@/api/types"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export function PlanStatementSwitcher({
   occurrences,
@@ -22,9 +22,9 @@ export function PlanStatementSwitcher({
       if (typeof value === "number") onChange(value)
     }}>
       <SelectTrigger aria-label="Statement"><SelectValue /></SelectTrigger>
-      <SelectContent>{options.map(occurrence => <SelectItem key={occurrence.statementIndex} value={occurrence.statementIndex}>
+      <SelectContent><SelectGroup>{options.map(occurrence => <SelectItem key={occurrence.statementIndex} value={occurrence.statementIndex}>
         Statement {occurrence.statementIndex + 1}{occurrence.matchKind === "unmatched" ? " · unmatched" : ""}
-      </SelectItem>)}</SelectContent>
+      </SelectItem>)}</SelectGroup></SelectContent>
     </Select>
   </label>
 }
