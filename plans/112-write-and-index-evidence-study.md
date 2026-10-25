@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: TASK 3 RESEARCH PREPARED at `d3a6826d`; Task 3 review and final Sol whole-branch review pending. Tasks 1 and 2 reviews approved. No implementation, integration, or live UAT is claimed.
+- Status: RESEARCH COMPLETE; content reviewed at `c85767b7`. All Luna xhigh task reviews and Sol low whole-branch review approved. No implementation, integration, or live UAT is claimed.
 - Priority: **P4** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: L; change risk: HIGH.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
@@ -79,7 +79,7 @@ For implementation, map applicable review-focus items to assertions in the ownin
 
 ### Task 3: Deliver independent go/no-go decisions
 
-- [x] Prepare the independent risk/evidence matrix, ranked decisions, rejected alternatives, reproducible synthetic workload, and future authorized UAT requirements. No direction is accepted, so no numbered follow-up plan was justified. Task 3 review is pending.
+- [x] Prepare the independent risk/evidence matrix, ranked decisions, rejected alternatives, reproducible synthetic workload, and future authorized UAT requirements. No direction is accepted, so no numbered follow-up plan was justified. Task 3 review approved after correcting the scalar workload cap to 2100.
 - [x] Record inspected sources, commands/fixtures, expected and observed outcomes, and unresolved causes in the Task 3 evidence ledger.
 - [x] Save the Task 3 evidence and inspect the diff; no production behavior changed.
 
@@ -88,11 +88,11 @@ For implementation, map applicable review-focus items to assertions in the ownin
 Documentation/research checks only unless executable fixtures change.
 
 - [x] `git diff --check` exits 0; inspect the diff and resolve every new relative Markdown link.
-- [x] Task outcomes, source paths, current revision, completed Task 1/2 reviews, pending Task 3/Sol reviews, and deferred UAT are recorded.
+- [x] Task outcomes, source paths, current revision, approved Task 1–3 and Sol whole-branch reviews, and deferred UAT are recorded.
 - [x] Notes-only scope: diff/link/example checks are the scoped checks; no product gate is claimed.
 - [x] Linux and live acceptance remain unverified. No product behavior changed.
 - [x] Research decisions include go/defer/reject outcomes; no product change was invented.
-- [x] Update this plan and index with tested base revision `d3a6826d`, docs-only scope, completed Task 1/2 reviews, pending Task 3 and Sol reviews, and deferred UAT.
+- [x] Update this plan and index with reviewed content revision `c85767b7`, docs-only scope, approved Task 1–3 and Sol reviews, and deferred UAT.
 
 ## STOP conditions
 

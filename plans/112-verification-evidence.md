@@ -4,7 +4,7 @@ Date: 2026-10-25 · Branch: `plan-112` · Worktree: `D:/Dev/sqlharness/.worktree
 
 ## Scope and outcome
 
-Task 3 produced a ranked decision matrix, rejected alternatives, a reproducible synthetic workload specification, future authorized UAT requirements, and an applicability assessment for all five Plan 112 review-focus items. It created no numbered follow-up plan because no direction is accepted on the current one-case evidence. No source, test, fixture, executable SQL, or product behavior changed. No database, DML/DDL, mutation, install, paid trial, merge, push, or live UAT occurred. Task 1 and Task 2 reviews are approved. Task 3 review and final Sol whole-branch review remain pending.
+Task 3 produced a ranked decision matrix, rejected alternatives, a reproducible synthetic workload specification, future authorized UAT requirements, and an applicability assessment for all five Plan 112 review-focus items. It created no numbered follow-up plan because no direction is accepted on the current one-case evidence. No source, test, fixture, executable SQL, or product behavior changed. No database, DML/DDL, mutation, install, paid trial, merge, push, or live UAT occurred. All Luna xhigh task reviews and the Sol low whole-branch review are approved. Task 3 required one correction: cap scalar workload cardinality at 2100; scoped re-review approved. See the [review archive](112-evidence/reviews/README.md).
 
 The earlier workload proposal was committed at `b33c4801`; the scalar-list limit correction is committed at `acd726d9` and is the tested workload revision. The current checks cover that exact correction. `d3a6826d` and `b33c4801` are historical bases, not the final tested workload revision.
 
@@ -31,4 +31,10 @@ No Windows `just verify`, Linux gate, unit tests, SQL command, fixture execution
 
 ## Remaining limits
 
-This record is not a Task 3 review or final Sol verdict. The workload has not been executed, no target has been named or authorized, and the recommendations do not establish demand across installations or runtime savings. The index entry must remain in review status until the controller records the pending review results.
+This record is not a Task 3 review or final Sol verdict. The workload has not been executed, no target has been named or authorized, and the recommendations do not establish demand across installations or runtime savings. The index records completed research; no implementation, integration or live acceptance is claimed.
+
+## Final controller record
+
+Research content reviewed: `c85767b7`; whole branch range `0f1109c7..c85767b7`. Final review archive and status updates are documentation bookkeeping. Final scoped checks cover the complete delivered branch; no product gate is claimed.
+
+Ruling: research-only scope governs generic implementation wording because the Contract forbids incidental product edits. If wrong, additional work requires a separately authorized implementation plan.

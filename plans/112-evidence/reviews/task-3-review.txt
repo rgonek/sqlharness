@@ -1,0 +1,32 @@
+### Spec Compliance
+
+- ❌ Issues found: The proposed workload's 5,000-key case uses one scalar parameter per key, exceeding the established 2,100-parameter-per-command ceiling. This makes one required workload case non-executable as specified; see Important finding below.
+- ⚠️ Cannot verify from diff: No SQL Server workload or UAT was run, as the brief requires. The proposal therefore has no measured latency, resource, or side-effect outcomes; keep all live acceptance and savings claims deferred.
+
+### Strengths
+
+- `plans/112-evidence/task-3-decision-matrix.md:17`, `:18`, and `:19` give separate ranked outcomes for estimated DML plans, descriptive index/list-family evidence, and actual write benchmarks. It accepts no implementation direction and explains why no numbered follow-up plan was created (`:3`, `:9`). I checked the reasoning against the prior Task 1 and Task 2 evidence and the cited Plan 063/083 boundaries.
+- The rejected alternatives explain the safety and evidence reasons for rejection (`plans/112-evidence/task-3-decision-matrix.md:23`, `:24`, `:25`, `:26`, `:27`, `:28`, and `:29`), including the prohibition on rollback-only benchmarking and unsupported index-drop conclusions.
+- The proposal records workload identity, A/B ordering, expected row counts, reset conditions, invalidation conditions, and separate estimated-plan versus actual-write evidence (`plans/112-evidence/task-3-decision-matrix.md:35`, `:36`, `:37`, `:38`, `:39`, and `:40`). A focused arithmetic check confirmed the 5,000 generated keys are unique; the defect is their parameter count.
+- Future UAT authorization and cleanup requirements are explicit, and the record clearly says no UAT or database operation occurred (`plans/112-evidence/task-3-decision-matrix.md:44`, `:46`). All five review-focus items are assessed at `:60`, `:61`, `:62`, `:63`, and `:64`.
+- Notes-only verification is appropriately scoped: `docs/agents/verification.md` says a product gate is unnecessary when executable behavior is unchanged, and `plans/112-verification-evidence.md:21` accurately reports no product gate or live test.
+
+### Issues
+
+#### Critical (Must Fix)
+
+None.
+
+#### Important (Should Fix)
+
+- `plans/112-evidence/task-3-decision-matrix.md:37`: the `n = 5000` case generates 5,000 scalar parameters for one `DELETE`. Plan 083 sets a maximum of 2,100 parameters per command after expansion (`plans/083-table-and-list-parameters.md:34`), and [Microsoft's ADO.NET guidance](https://learn.microsoft.com/en-us/sql/connect/ado-net/sql/table-valued-parameters?view=sql-server-ver17) says individual-parameter passing is limited by SQL Server's parameter maximum. The case cannot run as one parameterized SQL Server command, so the workload is not fully reproducible. Cap scalar cardinalities at 2,100 or define a separate TVP-based case and identify its distinct input shape and comparison boundary.
+
+#### Minor (Nice to Have)
+
+None.
+
+### Assessment
+
+**Task quality:** Needs fixes
+
+**Reasoning:** The decision record is well-scoped, independently ranks the directions, and keeps future UAT explicitly deferred. The 5,000-parameter case violates the existing command limit, so the proposed workload needs a bounded scalar cardinality or a separately defined TVP case before it can serve as reproducible future evidence.

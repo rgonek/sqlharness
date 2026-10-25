@@ -1,0 +1,35 @@
+# Task 2 review: capability options
+
+### Spec Compliance
+
+- ✅ **Spec compliant.** The assessment covers estimated-only plans, actual write benchmarks, and read-only index/list-family discovery, including the brief’s required feasibility boundaries and unresolved risks. The three source tables record inspected sources, commands, expected outcomes, and observed outcomes. See [task-2-options.md](../../../plans/112-evidence/task-2-options.md:17), [task-2-options.md](../../../plans/112-evidence/task-2-options.md:41), [task-2-options.md](../../../plans/112-evidence/task-2-options.md:65), and [task-2-options.md](../../../plans/112-evidence/task-2-options.md:23).
+- ⚠️ **Cannot verify from this diff alone:** the “one selected DML bottleneck” premise used to defer implementation is cross-task evidence. The targeted Task 1 coverage note states one qualifying investigation and a sample size of one ([task-1-coverage.md](../../../plans/112-evidence/task-1-coverage.md:5)); the controller should ensure that Task 1 evidence is accepted before relying on it as a plan-wide decision input.
+
+### Strengths
+
+- The estimated-plan discussion distinguishes the engine’s no-statement-execution guarantee from unmeasured compile-time effects and runtime/write-cost evidence. It also covers permissions, batch restrictions, required source context, and capture failure cases ([task-2-options.md](../../../plans/112-evidence/task-2-options.md:17), [task-2-options.md](../../../plans/112-evidence/task-2-options.md:19)).
+- The benchmark analysis explains why rollback is not a complete safety boundary and sets a concrete disposable-target, operator-authorization, and unknown-outcome cleanup boundary ([task-2-options.md](../../../plans/112-evidence/task-2-options.md:41), [task-2-options.md](../../../plans/112-evidence/task-2-options.md:45)).
+- The inventory discussion names structural and usage evidence, describes reset and metadata-visibility limits, and rejects key-prefix-only redundancy/drop claims ([task-2-options.md](../../../plans/112-evidence/task-2-options.md:65), [task-2-options.md](../../../plans/112-evidence/task-2-options.md:67), [task-2-options.md](../../../plans/112-evidence/task-2-options.md:82)).
+- The report and option note stay within research scope; the diff adds only those two evidence documents and does not change product behavior ([task-2-report.md](../../../plans/112-evidence/task-2-report.md:3), [task-2-report.md](../../../plans/112-evidence/task-2-report.md:23)).
+
+### Issues
+
+#### Critical (Must Fix)
+
+- None.
+
+#### Important (Should Fix)
+
+- None.
+
+#### Minor (Nice to Have)
+
+- None.
+
+### Assessment
+
+**Task quality:** Approved
+
+**Reasoning:** The brief’s three option analyses and evidence ledger are present, and the technical claims are carefully bounded. Official Microsoft Learn pages linked in the note support the central claims about SHOWPLAN, STATISTICS XML, sequence rollback behavior, index usage counters, Query Store aggregation, and metadata visibility ([task-2-options.md](../../../plans/112-evidence/task-2-options.md:90)). No product tests were rerun because no product or test code changed.
+
+**Focused checks:** Read the commit-range diff once. Checked the named Task 1 evidence premise, current plan/MCP capture surfaces, and Plan 063/083 boundaries; checked the linked Microsoft Learn sources for the technical claims. No database or product mutation was performed.
