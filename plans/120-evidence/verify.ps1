@@ -42,7 +42,8 @@ try {
     $script:results = Get-Content -LiteralPath $resultsPath -Raw | ConvertFrom-Json
     $caseDoc = Get-Content -LiteralPath (Join-Path $root 'cases.json') -Raw | ConvertFrom-Json
     $expectedIds = @(
-        'all-success','valid-non-equivalence','ticket-b-boundary-date','regression','inconclusive','error-entry-2','timeout-entry-2',
+        'all-success','malformed-version-string','malformed-version-boolean','malformed-version-double',
+        'valid-non-equivalence','ticket-b-boundary-date','regression','inconclusive','error-entry-2','timeout-entry-2',
         'cancellation-entry-2','unknown-completion-entry-2','changed-sql-hash','changed-parameter-hash',
         'changed-setup-hash','missing-file','duplicate-entry-id','invalid-entry-count','invalid-manifest-size',
         'malformed-nullability-type','parameter-budget-overflow','path-escape','symlink-reparse-escape','mixed-inputs',
@@ -142,6 +143,9 @@ try {
         @{ id = 'duplicate-entry-id'; error = 'duplicate-entry-id' },
         @{ id = 'invalid-entry-count'; error = 'invalid-manifest-count' },
         @{ id = 'invalid-manifest-size'; error = 'manifest-size-limit' },
+        @{ id = 'malformed-version-string'; error = 'invalid-manifest-version' },
+        @{ id = 'malformed-version-boolean'; error = 'invalid-manifest-version' },
+        @{ id = 'malformed-version-double'; error = 'invalid-manifest-version' },
         @{ id = 'malformed-nullability-type'; error = 'invalid-nullability-policy-type' },
         @{ id = 'parameter-budget-overflow'; error = 'parameter-ingress-budget-exceeded' },
         @{ id = 'path-escape'; error = 'path-traversal' },

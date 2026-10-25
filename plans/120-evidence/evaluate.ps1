@@ -143,7 +143,7 @@ function Test-EntryShape([object] $Entry) {
 
 function Test-SuitePreflight([System.Collections.IDictionary] $Suite, [string] $InputRoot, [bool] $SimulatedReparse) {
     if (-not (Has-Keys $Suite @('version','comparisons'))) { throw 'invalid-manifest-shape' }
-    if ($Suite.version -ne 1) { throw 'invalid-manifest-version' }
+    if (($Suite.version -isnot [int] -and $Suite.version -isnot [long]) -or $Suite.version -ne 1) { throw 'invalid-manifest-version' }
     if ($Suite.comparisons -isnot [array] -or $Suite.comparisons.Count -lt 1 -or $Suite.comparisons.Count -gt $script:MaxComparisons) { throw 'invalid-manifest-count' }
     $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($entry in $Suite.comparisons) {
@@ -240,6 +240,9 @@ function Set-InjectedStopOutcome([System.Collections.IDictionary] $Outcome, [str
 function Set-CaseMutation([string] $Action, [System.Collections.IDictionary] $Suite, [System.Collections.IDictionary] $Outcomes, [string] $InputRoot, [string] $CaseRoot, [ref] $VirtualLink, [ref] $LinkProof) {
     switch ($Action) {
         'none' { }
+        'malformed-version-string' { $Suite.version = '1' }
+        'malformed-version-boolean' { $Suite.version = $true }
+        'malformed-version-double' { $Suite.version = [double]1.0 }
         'stale-candidate-hash' { }
         'dispatch-duplicate-negative' {
             $Suite.comparisons = @($Suite.comparisons | Where-Object { $_.id -eq 'duplicate-counts' })

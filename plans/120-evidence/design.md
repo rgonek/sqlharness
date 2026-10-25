@@ -2,7 +2,7 @@
 
 ## Candidate v1 grammar
 
-The simulator accepts an UTF-8 JSON object with exactly the study-level fields `version` and `comparisons`. `version` is integer `1`; `comparisons` is an ordered array with 1–16 entries. The source manifest file must be at most 1 MiB in raw UTF-8 bytes, measured before parsing. Each comparison has exactly these fields:
+The simulator accepts an UTF-8 JSON object with exactly the study-level fields `version` and `comparisons`. `version` must have an integer runtime type and value `1`; strings, booleans, and floating-point `1.0` are rejected even if PowerShell comparison coercion would treat them as equal. `comparisons` is an ordered array with 1–16 entries. The source manifest file must be at most 1 MiB in raw UTF-8 bytes, measured before parsing. Each comparison has exactly these fields:
 
 ```json
 {
@@ -55,4 +55,4 @@ The study deliberately makes no universal winner choice. It reports feasibility 
 
 ## Case inventory
 
-`cases.json` names each deterministic synthetic run. The verifier contains its own expected call counts/order and status assertions rather than trusting expected values supplied by the case data. Cases include successful and negative completions, stop outcomes and unexecuted tails, all-suite file/hash/manifest/input rejection, an after-preflight hash change, and a real symlink attempt with explicit simulated fallback if the OS denies link creation. No case can supply an executable command.
+`cases.json` names each deterministic synthetic run. The verifier contains its own expected call counts/order and status assertions rather than trusting expected values supplied by the case data. Cases include successful and negative completions, stop outcomes and unexecuted tails, all-suite file/hash/manifest/input rejection (including independently asserted string, boolean, and floating-point malformed version values), an after-preflight hash change, and a real symlink attempt with explicit simulated fallback if the OS denies link creation. No case can supply an executable command.

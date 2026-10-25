@@ -10,7 +10,7 @@ This is a research-complete disposition, not implementation approval. The study 
 
 The hypothesized need is to repeat a multi-subject comparison without manually rebuilding each invocation or losing which input bytes and outcome belong to each comparison. Existing compare commands and MCP named-set inputs already perform individual comparisons; the possible gap is organizing several explicit comparisons together.
 
-The mock gives evidence about safe sequencing and evidence retention, not user demand, target authorization, real operation/artifact identifiers, database snapshot identity, production path-race behavior, or real comparison behavior. It exercised 26 synthetic cases and 17 in-memory dispatches with zero database and external-process calls. The OS did not permit creation of a test symlink; escape rejection was simulated and labeled as such. Do not treat this as an executed filesystem proof.
+The mock gives evidence about safe sequencing and evidence retention, not user demand, target authorization, real operation/artifact identifiers, database snapshot identity, production path-race behavior, or real comparison behavior. It exercises 29 synthetic cases and 17 in-memory dispatches with zero database and external-process calls. Three independently asserted malformed-version cases reject JSON string `"1"`, boolean `true`, and floating-point `1.0` while the checked-in integer `1` fixture remains accepted. The OS did not permit creation of a test symlink; escape rejection was simulated and labeled as such. Do not treat this as an executed filesystem proof.
 
 ## Alternatives
 
@@ -44,5 +44,5 @@ No accepted feature means there is no future product file map or product test pl
 
 - [Input and contract inventory](inventory.md) maps proposed fields to their current authorities.
 - [Dispatch study design](design.md), [case inventory](cases.json), [evaluator](evaluate.ps1), [independent verifier](verify.ps1), and [synthetic results](results.json) define and record the bounded mock.
-- [Historical task reports and reviews](logs/README.md) preserve the preceding task evidence. Their earlier case counts describe earlier revisions; the final study count above is 26 cases and 17 mock dispatches.
+- [Task reports and reviews](logs/README.md) preserve implementation and review evidence. Historical reports retain their original counts; current evaluator evidence is 29 cases and 17 mock dispatches.
 - Scoped study checks validate generated synthetic evidence and documents only. No product build, SQLHarness invocation, database access, runtime installation, CI dispatch, or live acceptance is claimed.

@@ -2,6 +2,9 @@
   "version": 1,
   "cases": [
     { "id": "all-success", "fixture": "ticket-a", "action": "none" },
+    { "id": "malformed-version-string", "fixture": "ticket-a", "action": "malformed-version-string" },
+    { "id": "malformed-version-boolean", "fixture": "ticket-a", "action": "malformed-version-boolean" },
+    { "id": "malformed-version-double", "fixture": "ticket-a", "action": "malformed-version-double" },
     { "id": "valid-non-equivalence", "fixture": "ticket-b", "action": "dispatch-duplicate-negative" },
     { "id": "ticket-b-boundary-date", "fixture": "ticket-b", "action": "dispatch-date-boundary" },
     { "id": "regression", "fixture": "ticket-a", "action": "outcome-regression" },

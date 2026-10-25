@@ -160,6 +160,51 @@
       "realConnectionCapability": false
     },
     {
+      "id": "malformed-version-string",
+      "manifestBytes": 2615,
+      "preflight": {
+        "passed": false,
+        "error": "invalid-manifest-version"
+      },
+      "dispatchCount": 0,
+      "dispatchOrder": [],
+      "invocations": [],
+      "outcomes": [],
+      "stopReason": "invalid-manifest-version",
+      "symlinkProof": "not-applicable",
+      "realConnectionCapability": false
+    },
+    {
+      "id": "malformed-version-boolean",
+      "manifestBytes": 2615,
+      "preflight": {
+        "passed": false,
+        "error": "invalid-manifest-version"
+      },
+      "dispatchCount": 0,
+      "dispatchOrder": [],
+      "invocations": [],
+      "outcomes": [],
+      "stopReason": "invalid-manifest-version",
+      "symlinkProof": "not-applicable",
+      "realConnectionCapability": false
+    },
+    {
+      "id": "malformed-version-double",
+      "manifestBytes": 2615,
+      "preflight": {
+        "passed": false,
+        "error": "invalid-manifest-version"
+      },
+      "dispatchCount": 0,
+      "dispatchOrder": [],
+      "invocations": [],
+      "outcomes": [],
+      "stopReason": "invalid-manifest-version",
+      "symlinkProof": "not-applicable",
+      "realConnectionCapability": false
+    },
+    {
       "id": "valid-non-equivalence",
       "manifestBytes": 3262,
       "preflight": {

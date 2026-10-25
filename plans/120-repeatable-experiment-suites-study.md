@@ -7,7 +7,7 @@
 
 ## Status
 
-- **Status:** RESEARCH COMPLETE — choose C (no new supported feature now); defer B pending the explicit demand and design gates in [decision](120-evidence/decision.md). Synthetic scope only; fixed typed scalar and MCP named-set-file shapes in mock; no full reader grammar parity or executed symlink proof. Task 3 is committed locally on `plan-120`; not integrated or pushed; whole-branch review remains pending.
+- **Status:** RESEARCH COMPLETE — choose C (no new supported feature now); defer B pending the explicit demand and design gates in [decision](120-evidence/decision.md). Current evaluator/verifier evidence: 29 synthetic cases and 17 mock dispatches, including strict integer-version validation; fixed typed scalar and MCP named-set-file shapes only, with no full reader grammar parity or executed symlink proof. The initial whole-branch review is approved after its single Minor correction; final scoped rereview is pending. Local `plan-120` only; not integrated or pushed.
 - **Priority:** P3; selected direction proposal 5; recurring multi-subject demand remains unconfirmed.
 - **Effort / risk / confidence:** M study, L potential implementation / MED-HIGH / MED grounding.
 - **Depends on:** none of 116-119. Existing compare/parameter-set contracts are implemented; Plan 036 is a different testing-infrastructure feature.
@@ -95,7 +95,7 @@ The simulator is a pure function of synthetic manifest, fixture files and inject
 - [x] `cases.json` covers success and negative outcomes, stop/tail behavior, changed and missing inputs, invalid manifests, path escapes, unsupported inputs, reuse/resume and mutation rejection.
 - [x] Simulate first-error/cancellation stop and preserve completed negatives. Preflight and immediate per-entry hash checks are explicit; prior completed entries survive an after-preflight change without claiming atomicity.
 - [x] Implement independent `verify.ps1` assertions for every case: exact dispatch count/order, unchanged parameter/case semantics, preserved outcome IDs, no invocation for unexecuted tails, no retries/resume/reuse, and no real connection capability.
-- [x] Verify evaluator and verifier exit 0; every case accounted for, with no external process or DB call. The OS denied test-symlink creation; results label the simulated rejection and do not claim executed filesystem proof.
+- [x] Verify evaluator and verifier exit 0; every case accounted for, with no external process or DB call. The OS denied test-symlink creation; results label the simulated rejection and do not claim executed filesystem proof. The final scoped version-gate correction adds three independently asserted malformed-version cases; current count is 29 cases and 17 mock dispatches.
 
 ### Task 3: Decide whether a supported feature is justified
 
@@ -107,7 +107,7 @@ The simulator is a pure function of synthetic manifest, fixture files and inject
 ## Done criteria
 
 - [x] Two generated workspaces reproduce from repository-local synthetic inputs, with real computed input hashes and an explicit supported-input matrix.
-- [x] Study verifier independently verifies all named scenarios, stop/retention behavior and preflight policy.
+- [x] Study verifier independently verifies all named scenarios, including string, boolean, and floating-point version rejection, stop/retention behavior and preflight policy.
 - [x] A/B/C alternatives, coarse cost, demand assumptions and a go/no-go decision are documented; no unsupported CLI flag or hidden semantic conversion is claimed.
 - [x] Product paths are unchanged; changed/untracked paths are scoped; links and whitespace pass.
 - [x] No real suite, real target, mutation, runtime install, paid agent, CI dispatch or token-savings claim occurred.
