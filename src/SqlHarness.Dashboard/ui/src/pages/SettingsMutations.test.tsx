@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react"
+import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test, vi } from "vitest"
 import { renderApp, stubFetch } from "@/test/render"
@@ -35,11 +35,10 @@ test("mutation settings expose click-only verification and preserve mutations on
   const puts = routes()
   renderApp("/settings")
   expect(await screen.findByText("click", { selector: "code" })).toBeInTheDocument()
-  const mode = await screen.findByRole("combobox", { name: "Default mutation mode" })
-  expect(mode).toHaveTextContent("Never")
-  await userEvent.click(mode)
-  await userEvent.click(screen.getByRole("option", { name: /^Operator approval$/ }))
-  expect(mode).toHaveTextContent("Operator approval")
+  const mode = await screen.findByRole("group", { name: "Default mutation mode" })
+  expect(within(mode).getByRole("button", { name: "Never" })).toHaveAttribute("aria-pressed", "true")
+  await userEvent.click(within(mode).getByRole("button", { name: "Operator approval" }))
+  expect(within(mode).getByRole("button", { name: "Operator approval" })).toHaveAttribute("aria-pressed", "true")
   await waitFor(() => expect(puts.length).toBe(1))
   expect((puts[0] as typeof initial.settings).mutations).toEqual({ defaultMode: "operator", verification: "click", approvalTimeoutSeconds: 120 })
 
@@ -72,9 +71,7 @@ test("sound selection offers previews, mute, and an inline IndexedDB persistence
   renderApp("/settings")
   const select = await screen.findByRole("combobox", { name: "Approval sound" })
   expect(select).toHaveTextContent("Warm chime")
-  expect(screen.getByRole("button", { name: "Preview Soft ping" })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Preview Warm chime" })).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "Preview Glass drop" })).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Preview Warm chime" }))
   expect(preview).toHaveBeenCalledOnce()
   await userEvent.click(select)

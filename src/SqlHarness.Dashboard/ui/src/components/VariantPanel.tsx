@@ -109,7 +109,7 @@ export function VariantPanel({ operationId, variant, engine, compareMetrics = fa
         </Card>
       )}
       </>}
-      {mode !== "io" && <PlanWorkbench operationId={operationId} variant={variant} engine={engine} initialTarget={planTarget} />}
+      {mode !== "io" && <PlanWorkbench sourceHeight={300} operationId={operationId} variant={variant} engine={engine} initialTarget={planTarget} />}
     </div>
   )
 }

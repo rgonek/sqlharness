@@ -8,7 +8,9 @@ export function PlanSourceView({
   highlightedSpans,
   revealSpan,
   onSelectionChange,
+  height,
 }: {
+  height?: number
   executedText: string | null
   engine: string | null
   highlightedSpans: SqlSourceSpan[]
@@ -17,6 +19,7 @@ export function PlanSourceView({
 }) {
   if (executedText === null) return <section aria-label="Executed SQL" className="rounded border p-3 text-sm text-muted-foreground">The operation did not retain its executed SQL text.</section>
   return <LazyPlanSqlViewer
+    height={height}
     sql={executedText}
     dialect={dialectOf(engine)}
     highlightedSpans={highlightedSpans}

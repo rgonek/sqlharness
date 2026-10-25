@@ -44,7 +44,7 @@ export function AppLayout() {
       <ApprovalToast />
       {safetyNotificationsEnabled && <SafetyNoticeFeed />}
       <ApprovalDialog requestId={mutationState.openRequestId} />
-      <header className="mx-auto flex max-w-7xl items-center gap-3 p-4">
+      <header className="app-header flex items-center gap-3 p-4">
         <Link to="/" aria-label="SQLHarness home" className="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
           <BrandLogo />
         </Link>
@@ -61,7 +61,7 @@ export function AppLayout() {
         <div className="shrink-0"><ThemeMenu /></div>
       </header>
       <Separator />
-      <main className="mx-auto max-w-7xl space-y-4 p-4">
+      <main className="app-main mx-auto min-w-0 space-y-4 p-4" data-page={pathname === "/" ? "activity" : pathname.split("/")[1]}>
         <Outlet />
       </main>
     </div>

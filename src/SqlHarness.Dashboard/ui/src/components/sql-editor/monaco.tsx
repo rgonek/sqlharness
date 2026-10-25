@@ -110,6 +110,7 @@ const editorOptions: MonacoEditorApi.IStandaloneEditorConstructionOptions = {
   scrollBeyondLastLine: false,
   automaticLayout: true,
   padding: { top: 8, bottom: 8 },
+  fontFamily: "Geist Mono Variable, monospace",
   fontSize: 12,
   lineHeight: 19,
 }
@@ -137,9 +138,9 @@ function languageFor(dialect: SqlViewerProps["dialect"]): string {
 export function SqlViewer({ sql, dialect }: SqlViewerProps) {
   const theme = useSqlTheme()
   return (
-    <div className="h-[32rem] max-h-[32rem] overflow-hidden rounded border">
+    <div className="h-[320px] max-h-[320px] overflow-hidden rounded border">
       <Editor
-        height="32rem"
+        height="320px"
         language={languageFor(dialect)}
         value={sql}
         theme={theme}
@@ -208,8 +209,8 @@ export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeVie
   }, [theme])
 
   return (
-    <div className="h-[32rem] max-h-[32rem] overflow-hidden rounded border">
-      <div ref={container} className="h-[32rem] w-full" />
+    <div className="h-[320px] max-h-[320px] overflow-hidden rounded border">
+      <div ref={container} className="h-[320px] w-full" />
     </div>
   )
 }
@@ -224,7 +225,7 @@ function sourceRange(model: MonacoEditorApi.ITextModel, span: SqlSourceSpan): Mo
 }
 
 /** Read-only executed SQL with source-map decorations; input text and offsets stay byte-for-byte as captured. */
-export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSelectionChange }: PlanSqlViewerProps) {
+export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSelectionChange, height = 250 }: PlanSqlViewerProps) {
   const theme = useSqlTheme()
   const editorRef = useRef<MonacoEditorApi.IStandaloneCodeEditor | null>(null)
   const decorationIdsRef = useRef<string[]>([])
@@ -265,7 +266,11 @@ export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSe
       if (!model) return
       const start = model.getOffsetAt(event.selection.getStartPosition())
       const end = model.getOffsetAt(event.selection.getEndPosition())
-      selectionRef.current(end > start ? { start, end } : null)
+      if (event.source === "api") return
+      const length = model.getValueLength()
+      // A caret click is a one-character source selection; keep EOF inside the model.
+      const caretStart = Math.min(start, Math.max(0, length - 1))
+      selectionRef.current(end > start ? { start, end } : length > 0 ? { start: caretStart, end: caretStart + 1 } : null)
     })
     return () => listener.dispose()
   }, [ready])
@@ -277,10 +282,10 @@ export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSe
 
   return (
     <section aria-label="Executed SQL" className="space-y-2">
-      <h3 className="text-sm font-medium">Executed SQL batch</h3>
-      <div className="h-[32rem] max-h-[32rem] overflow-hidden rounded border">
+      <h3 className="sr-only">Executed SQL batch</h3>
+      <div className="overflow-hidden rounded border" style={{ height }}>
         <Editor
-          height="32rem"
+          height={height}
           language={languageFor(dialect)}
           value={sql}
           theme={theme}

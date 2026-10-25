@@ -1,0 +1,11 @@
+{
+  "testedIndexSnapshot": "2e279ba84cd35be13dda8c28761c232797443210",
+  "productTrees": {
+    "src": "7818715125f00b35c10904b2567f0d5f02132e2a",
+    "tests": "bf4fece77afdba3a307054e56f7a108f0f110971",
+    "scripts": "a935609d4653cce07424c4776bcd416fb0bcb7c6",
+    "Directory.Build.props": "b21fa5e6c40c1ab85bc9c7e8287f97294c707ced",
+    "Directory.Packages.props": "69bf1f977fc2bf84fec0192d7b2be163e7d0d1df",
+    "justfile": "56f596ef44486f71f298435ac692a948734dbc9a"
+  }
+}

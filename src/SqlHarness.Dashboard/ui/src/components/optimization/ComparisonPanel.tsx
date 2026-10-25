@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import type { AgentSessionKey, OptimizationActionReference, OptimizationComparison, ScopeVersions } from "@/api/types"
@@ -45,8 +46,10 @@ function VersionAction({ label, action, selectedCase, sessionId, sessionSearch, 
   </section>
 }
 
-export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange, hideCaseSelector = false, diff, timing, details, activeTab, onTabChange }: {
+export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange, hideCaseSelector = false, diff, timing, details, activeTab, onTabChange, navigation, headerContent }: {
   comparison: OptimizationComparison
+  navigation?: ReactNode
+  headerContent?: ReactNode
   activeTab?: string
   onTabChange?: (value: string) => void
   diff?: ReactNode
@@ -72,30 +75,8 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
     onSelectionChange?.(patch)
   }
 
-  return <section aria-label="Version comparison" className="space-y-4 rounded-lg border p-4">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full border px-2 py-1 text-xs">{basisLabel(comparison)}</span>
-        <span className="text-sm">{comparison.equivalenceLabel}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <CopyButton label="Copy summary" getText={() => optimizationMarkdown(comparison, subject, scope)} />
-
-      </div>
-    </div>
-
-    {comparison.wholeBatch?.label && <div className="space-y-2 rounded-md bg-muted/40 p-3">
-      <p className="text-sm font-medium">{comparison.wholeBatch.label}</p>
-      <StatementHiddenWork rows={comparison.statements ?? []} />
-    </div>}
-    <p className="text-sm">basis: {comparison.verdictBasis ?? "whole batch"}</p>
-    {comparison.fallbackNote && <p className="text-sm text-muted-foreground">{comparison.fallbackNote}</p>}
-    {((comparison.omittedStatementsBefore ?? 0) > 0 || (comparison.omittedStatementsAfter ?? 0) > 0) && <div className="space-y-1 text-sm text-muted-foreground">
-      {(comparison.omittedStatementsBefore ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsBefore} (their reads remain in the batch total)</p>}
-      {(comparison.omittedStatementsAfter ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsAfter} (their reads remain in the batch total)</p>}
-    </div>}
-
-    <div className="flex flex-wrap items-center gap-2" aria-label="Cases">
+  const copy = <div className="comparison-copy"><CopyButton label="Copy summary" getText={() => optimizationMarkdown(comparison, subject, scope)} /></div>
+  const selectors = <details className="comparison-selectors"><summary>{activeCase === "all" ? "All cases" : comparison.cases.find(item => item.id === activeCase)?.label ?? activeCase} · {activeAggregate === "mean" ? "Mean" : "Sum"}<ChevronDown className="size-3.5 text-muted-foreground" /></summary><div className="flex flex-wrap items-center gap-2" aria-label="Cases">
       {!hideCaseSelector && <><span className="text-sm font-medium">Case</span>
         <Button type="button" size="sm" variant={activeCase === "all" ? "secondary" : "outline"} aria-pressed={activeCase === "all"} onClick={() => updateSearch({ case: "all" })}>All cases</Button>
         {comparison.cases.filter(option => option.id !== "all").map(option => <Button key={option.id} type="button" size="sm" variant={activeCase === option.id ? "secondary" : "outline"} aria-pressed={activeCase === option.id} onClick={() => updateSearch({ case: option.id })}>{option.label}</Button>)}</>}
@@ -103,18 +84,36 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
       <Button type="button" size="sm" variant={activeAggregate === "sum" ? "secondary" : "outline"} aria-pressed={activeAggregate === "sum"} onClick={() => updateSearch({ agg: "sum" })}>Sum</Button>
       <Button type="button" size="sm" variant={activeAggregate === "mean" ? "secondary" : "outline"} aria-pressed={activeAggregate === "mean"} onClick={() => updateSearch({ agg: "mean" })}>Mean</Button>
     </div>
+    </details>
+  const context = <div className="comparison-context"><span>{comparison.a} → {comparison.b}</span><span> · </span><span>{basisLabel(comparison)}</span><span> · </span><span>{comparison.equivalenceLabel}</span></div>
+
+  return <section aria-label="Version comparison" className="comparison-panel">
+    {!navigation && <>{copy}{selectors}</>}
+
+
+    <StatementHiddenWork rows={comparison.statements ?? []} />
+    {comparison.fallbackNote && <p className="text-sm text-muted-foreground">{comparison.fallbackNote}</p>}
+    {((comparison.omittedStatementsBefore ?? 0) > 0 || (comparison.omittedStatementsAfter ?? 0) > 0) && <div className="space-y-1 text-sm text-muted-foreground">
+      {(comparison.omittedStatementsBefore ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsBefore} (their reads remain in the batch total)</p>}
+      {(comparison.omittedStatementsAfter ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsAfter} (their reads remain in the batch total)</p>}
+    </div>}
+
+
     {comparison.coverageLabel && <p className="text-sm text-muted-foreground">{comparison.coverageLabel}</p>}
     {comparison.versionLabelsProvisional && comparison.versionLabelNote && <p role="note" className="text-sm text-muted-foreground">{comparison.versionLabelNote}</p>}
     {comparison.mixed && <p data-tier={badgeTier("mixed")} className="text-sm text-amber-700 dark:text-amber-300">Mixed: {comparison.mixed.better} better, {comparison.mixed.worse} worse — {comparison.mixed.worstCaseLabel}: logical reads {comparison.mixed.worstChangePercent > 0 ? "+" : ""}{Math.round(comparison.mixed.worstChangePercent)}%</p>}
     {comparison.basis === "ConditionsDiffer" && <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p>}
-      <Tabs value={activeTab} onValueChange={value => onTabChange?.(String(value))} defaultValue="diff" className="space-y-3">
-        <TabsList variant="line"><TabsTrigger value="diff">SQL diff</TabsTrigger><TabsTrigger value="io">IO</TabsTrigger><TabsTrigger value="plan">Plan</TabsTrigger>{timing && <TabsTrigger value="timing">Timing</TabsTrigger>}{details && <TabsTrigger value="details">Details</TabsTrigger>}</TabsList>
+      <Tabs className="comparison-tabs" value={activeTab} onValueChange={value => onTabChange?.(String(value))} defaultValue="diff">
+        <TabsList variant="line"><TabsTrigger value="diff">SQL diff</TabsTrigger><TabsTrigger value="io">IO</TabsTrigger><TabsTrigger value="plan">Plan</TabsTrigger>{timing && <TabsTrigger value="timing">Timing</TabsTrigger>}{details && <TabsTrigger value="details">Details</TabsTrigger>}{navigation ?? context}</TabsList>
+        {headerContent && <div className="comparison-header-content">{headerContent}</div>}
+        {navigation && <div className="comparison-operation-context">{context}<div className="comparison-operation-actions">{selectors}{copy}</div></div>}
         <TabsContent value="diff">{diff ?? (sqlOptions.length > 1 ? <SessionVersionDiff key={`${comparison.a}:${comparison.b}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} selectionControls={false} /> : <p className="text-sm text-muted-foreground">SQL diff requires two retained SQL versions.</p>)}</TabsContent>
         <TabsContent value="io">{comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <IoDetails comparison={comparison} byStatement={activeView !== "whole"} onViewChange={view => updateSearch({ view })} />}</TabsContent>
         <TabsContent value="plan"><VersionPlan a={comparison.a} b={comparison.b} before={comparison.beforeAction} after={comparison.afterAction} engine={engine} selectedCase={scriptCase} /></TabsContent>
         {timing && <TabsContent value="timing">{timing}</TabsContent>}
         {details && <TabsContent value="details">{details}</TabsContent>}
       </Tabs>
+      <details className="comparison-evidence"><summary>Comparison evidence and scripts</summary><div className="space-y-3 pt-3"><p className="text-sm">basis: {comparison.verdictBasis ?? "whole batch"}</p>{comparison.wholeBatch?.label && <p className="text-sm">{comparison.wholeBatch.label}</p>}
       {comparison.basis !== "ConditionsDiffer" && <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict}</dd>}
         {optimizationMetricRows(comparison).map(row => <Fragment key={row.label}><dt className="font-medium">{row.label}</dt><dd>{row.before} → {row.after}</dd></Fragment>)}
       </dl>}
@@ -122,6 +121,7 @@ export function ComparisonPanel({ comparison, sessionId, agentSessionKey, subjec
       : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></div>}
     <div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></div>
 
+    </div></details>
   </section>
 }
 

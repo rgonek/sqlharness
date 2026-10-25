@@ -64,13 +64,12 @@ export function LivePage() {
   const feedOperations = [...(operations.data ?? []).filter(operation => operation.status !== "running" || runningIds.has(operation.id)), ...visibleRunning]
   const uniqueOperations = [...new Map(feedOperations.map(operation => [operation.id, operation])).values()]
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <h1>Activity</h1>
+    <div className="space-y-3">
+      {operations.isPending || sessions.isPending || runningOperations.isPending ? <><h1>Activity</h1><Skeleton className="h-48 w-full" /></> : <ActivityFeed sessions={sessions.data ?? []} operations={uniqueOperations.filter(operation => showInternal || !isInternalOperation(operation))} now={now} />}
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />
         <Badge variant={state === "connected" ? "secondary" : "outline"}>{state}</Badge>
       </div>
-      <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />
-      {operations.isPending || sessions.isPending || runningOperations.isPending ? <Skeleton className="h-48 w-full" /> : <ActivityFeed sessions={sessions.data ?? []} operations={uniqueOperations.filter(operation => showInternal || !isInternalOperation(operation))} now={now} />}
 
     </div>
   )

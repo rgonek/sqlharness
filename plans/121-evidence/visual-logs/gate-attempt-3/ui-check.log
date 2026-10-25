@@ -1,0 +1,32 @@
+
+> ui@0.0.0 check
+> node scripts/check.mjs
+
+
+> ui@0.0.0 lint
+> oxlint
+
+
+> ui@0.0.0 typecheck
+> tsc -b
+
+
+> ui@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.3 D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/src/SqlHarness.Dashboard/ui
+
+src/pages/SettingsPage.tsx(120,367): error TS2367: This comparison appears to be unintentional because the types '"soft-ping" | "warm-chime" | "glass-drop" | "custom" | null' and '"upload"' have no overlap.
+
+ Test Files  67 passed (67)
+      Tests  384 passed (384)
+   Start at  15:50:13
+   Duration  432.51s (import 31%, tests 29%, environment 27%, setup 10%, transform 4%)
+
+     Import  311 modules were evaluated 3286 times · 125.41s total, 31% of tracked time
+             ~113.54s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+(node:16616) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+check: FAILED (typecheck)

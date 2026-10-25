@@ -1,0 +1,4 @@
+import http from 'node:http';import fs from 'node:fs';import path from 'node:path';
+const root=path.resolve(process.argv[2]),port=Number(process.argv[3]);
+const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.woff2':'font/woff2','.svg':'image/svg+xml','.png':'image/png','.json':'application/json'};
+http.createServer((req,res)=>{let filename=path.resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://127.0.0.1').pathname));if(!filename.startsWith(root+path.sep)&&filename!==root){res.writeHead(403);res.end();return;}if(!fs.existsSync(filename)||fs.statSync(filename).isDirectory())filename=path.join(root,'index.html');res.writeHead(200,{'Content-Type':types[path.extname(filename)]??'application/octet-stream','Cache-Control':'no-store'});fs.createReadStream(filename).pipe(res);}).listen(port,'127.0.0.1',()=>console.log('isolated built UI on '+port+' from '+root));

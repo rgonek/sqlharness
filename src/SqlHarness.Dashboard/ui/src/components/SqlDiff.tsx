@@ -21,7 +21,7 @@ export function DiffControls({ mode, onModeChange, ignoreFormatting, onIgnoreFor
   const sideBySideId = `${id}-side-by-side`
   const unifiedId = `${id}-unified`
   const ignoreFormattingId = `${id}-ignore-formatting`
-  return <div className="flex flex-wrap items-center gap-3">
+  return <div className="diff-controls flex flex-wrap items-center gap-3">
     <RadioGroup aria-label="Diff mode" className="flex gap-2" value={mode} onValueChange={value => {
       if (value === "side-by-side" || value === "unified") onModeChange(value)
     }}>
@@ -63,7 +63,7 @@ function TooLargeMessage({ baseline, candidate }: { baseline: string; candidate:
   </div>
 }
 
-export function SqlDiff({ baseline, candidate, engine }: { baseline: string | null; candidate: string | null; engine: string | null }) {
+export function SqlDiff({ baseline, candidate, engine, embedded = false }: { baseline: string | null; candidate: string | null; engine: string | null; embedded?: boolean }) {
   const hasBaseline = baseline !== null
   const hasCandidate = candidate !== null
   const hasBoth = hasBaseline && hasCandidate
@@ -112,21 +112,23 @@ export function SqlDiff({ baseline, candidate, engine }: { baseline: string | nu
     return unifiedDiffText(normalizedBaseline, normalizedCandidate)
   }
 
-  return <div className="space-y-4">
+  const copySides = embedded && hasBoth ? <span className="inline-flex"><CopyButton label="Copy baseline SQL" getText={() => baseline} /><CopyButton label="Copy candidate SQL" getText={() => candidate} /></span> : null
+
+  return <div className="sql-diff space-y-4">
     {!hasBoth && <p className="text-sm text-muted-foreground">SQL text is not stored for both sides (journal.storeSensitive is off or historical text is unavailable).</p>}
-    {availableTabs.length > 0 && <Tabs value={availableTabs.includes(tab) ? tab : availableTabs.at(-1) ?? "baseline"} onValueChange={changeTab}>
-      <TabsList aria-label="SQL versions" className="grid h-auto w-full grid-cols-3">
+    {availableTabs.length > 0 && <Tabs value={embedded && hasBoth ? "diff" : availableTabs.includes(tab) ? tab : availableTabs.at(-1) ?? "baseline"} onValueChange={changeTab}>
+      {!(embedded && hasBoth) && <TabsList aria-label="SQL versions" className="grid h-auto w-full grid-cols-3">
         {hasBaseline && <TabsTrigger value="baseline">Baseline</TabsTrigger>}
         {hasCandidate && <TabsTrigger value="candidate">Candidate</TabsTrigger>}
         {hasBoth && <TabsTrigger value="diff">Diff</TabsTrigger>}
-      </TabsList>
+      </TabsList>}
       {hasBaseline && <TabsContent value="baseline"><SideContent label="baseline" sql={baseline} engine={engine} /></TabsContent>}
       {hasCandidate && <TabsContent value="candidate"><SideContent label="candidate" sql={candidate} engine={engine} /></TabsContent>}
-      {hasBoth && <TabsContent value="diff" className="space-y-3">
+      {hasBoth && <TabsContent value="diff" className="space-y-3">{diffUnavailable && copySides}
         {tooLargeRaw ? <TooLargeMessage baseline={baseline} candidate={candidate} /> : tooLargeNormalized ? <TooLargeMessage baseline={baseline} candidate={candidate} /> : <>
           <div className="flex flex-wrap items-center gap-3">
             <DiffControls mode={mode} onModeChange={changeMode} ignoreFormatting={ignoreFormatting} onIgnoreFormattingChange={changeIgnoreFormatting} />
-            <CopyButton label="Copy diff" getText={getDiffText} />
+            <span className="inline-flex">{copySides}<CopyButton label="Copy diff" getText={getDiffText} /></span>
           </div>
           {formatFailed && <p className="text-sm text-muted-foreground">Formatting failed; showing the SQL as written.</p>}
           <LazySqlMergeView baseline={normalizedBaseline!} candidate={normalizedCandidate!} dialect={dialectOf(engine)} mode={mode} />

@@ -1,0 +1,11 @@
+
+ RUN  v5.0.3 D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  3 passed (3)
+      Tests  37 passed (37)
+   Start at  15:15:48
+   Duration  27.37s (tests 38%, import 31%, environment 17%, transform 8%, setup 6%)
+
+    Isolate  3 workers spawned · ~1.82s startup each (spawn + environment, per file)
+             at least ~3.63s faster with isolate: false — reuses workers across files instead of one per file

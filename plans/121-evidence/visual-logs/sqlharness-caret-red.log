@@ -1,0 +1,37 @@
+
+ RUN  v5.0.3 D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/src/SqlHarness.Dashboard/ui
+
+ ❯ src/components/sql-editor/PlanSqlViewer.test.tsx (1 test | 1 failed) 183ms
+   × PlanSqlViewer applies source spans and keeps the latest selection callback until unmount 180ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/sql-editor/PlanSqlViewer.test.tsx > PlanSqlViewer applies source spans and keeps the latest selection callback until unmount
+AssertionError: expected last "vi.fn()" call to have been called with [ { start: 2, end: 3 } ]
+
+- Expected
++ Received
+
+  [
+-   {
+-     "end": 3,
+-     "start": 2,
+-   },
++   null,
+  ]
+
+ ❯ src/components/sql-editor/PlanSqlViewer.test.tsx:121:27
+    119|
+    120|   await act(async () => mocks.emitSelection(3, 3))
+    121|   expect(latestSelection).toHaveBeenLastCalledWith({ start: 2, end: 3 …
+       |                           ^
+    122|
+    123|   view.unmount()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  15:14:07
+   Duration  3.36s (environment 63%, setup 22%, tests 6%, transform 6%, import 2%, worker 1%)

@@ -1,9 +1,9 @@
 import type { PlanGraph, PlanGraphEdge, PlanGraphNode } from "@/api/types"
 
-export const PLAN_NODE_WIDTH = 250
+export const PLAN_NODE_WIDTH = 170
 
-const HORIZONTAL_GAP = 92
-const ROW_HEIGHT = 154
+const HORIZONTAL_GAP = 38
+const ROW_HEIGHT = 132
 const TREE_GAP = 72
 
 type LayoutDocument = { documentSha256: string; documentOrdinal: number; graph: PlanGraph }

@@ -1,0 +1,245 @@
+{
+  "records": [
+    {
+      "name": "activity-default",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/activity-default-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "activity-expanded",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/activity-expanded-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "activity-collapsed",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/activity-collapsed-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "activity-search",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/activity-search-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "activity-agent-multi",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/activity-agent-multi-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-measure-sql-and-plan",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-measure-sql-and-plan-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-measure-io",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-measure-io-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-measure-timing",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-measure-timing-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-query-sql",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-query-sql-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-query-results",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-query-results-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-query-timing",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-query-timing-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-mutation-sql",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-mutation-sql-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-mutation-approval",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-mutation-approval-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-mutation-timing",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-mutation-timing-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-compare-sql-diff",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-compare-sql-diff-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-compare-io",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-compare-io-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-compare-plan",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-compare-plan-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "operation-compare-timing",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/operation-compare-timing-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "settings-full",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/settings-full-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "settings-database",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/settings-database-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "settings-mutations",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/settings-mutations-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "settings-journal",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/settings-journal-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "settings-agents",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/settings-agents-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "settings-dashboard",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/settings-dashboard-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "settings-prices",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/settings-prices-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "session-sql-diff",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/session-sql-diff-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "session-io",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/session-io-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "session-io-whole",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/session-io-whole-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "session-io-statement-columns",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/session-io-statement-columns-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    },
+    {
+      "name": "session-plan",
+      "path": "D:/Dev/sqlharness/.worktrees/dashboard-visual-fidelity/plans/121-evidence/visual/session-plan-mock.png",
+      "viewport": {
+        "width": 1280,
+        "height": 1400
+      }
+    }
+  ],
+  "errors": []
+}

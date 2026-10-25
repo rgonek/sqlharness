@@ -27,7 +27,7 @@ test("compare operation returns to its session with the originating subject and 
   stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnSubject=orders&returnScope=history")
 
-  const back = await screen.findByRole("link", { name: "Back to mcp:session" })
+  const back = await screen.findByRole("link", { name: "Back to session Optimization" })
   const target = new URL(back.getAttribute("href")!, "http://dashboard")
   expect(target.pathname).toBe("/sessions/7")
   expect(target.searchParams.get("subject")).toBe("orders")
@@ -47,7 +47,7 @@ test("aggregate measure from a different MCP child returns to the typed agent se
 test("compare operation restores every optimization search selection on return", async () => {
   stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnSubject=orders&returnDb=shop&returnGroup=fp-2&returnScope=fragment%3Acustomer&returnA=v1&returnB=v2&returnCase=customer-9001&returnAgg=mean")
-  const back = await screen.findByRole("link", { name: "Back to mcp:session" })
+  const back = await screen.findByRole("link", { name: "Back to session Optimization" })
   const target = new URL(back.getAttribute("href")!, "http://dashboard")
   expect(Object.fromEntries(target.searchParams)).toMatchObject({ subject: "orders", db: "shop", group: "fp-2", scope: "fragment:customer", a: "v1", b: "v2", case: "customer-9001", agg: "mean" })
 })
@@ -56,7 +56,7 @@ test("compare operation returns to the unassigned group without inventing subjec
   stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnUnassigned=true")
 
-  const back = await screen.findByRole("link", { name: "Back to mcp:session" })
+  const back = await screen.findByRole("link", { name: "Back to session Optimization" })
   const target = new URL(back.getAttribute("href")!, "http://dashboard")
   expect(target.pathname).toBe("/sessions/7")
   expect(target.searchParams.get("unassigned")).toBe("true")
@@ -79,7 +79,7 @@ test("compare opens on the Optimization panel and carries selected case and aggr
 
   expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("orders")
   expect(screen.getByText("whole query")).toBeInTheDocument()
-  expect(screen.getByText("v0 → v3")).toBeInTheDocument()
+  expect(screen.getByText("v0 → v3", { selector: ".heading-version-pair" })).toBeInTheDocument()
   expect(screen.getByText("shop")).toBeInTheDocument()
   expect(await screen.findByRole("region", { name: "Version comparison" })).toBeInTheDocument()
   await userEvent.click(screen.getByRole("tab", { name: "Details" }))
@@ -259,7 +259,7 @@ test("compare shows baseline versus candidate and stored plans with operators", 
 
   await userEvent.click(await screen.findByRole("tab", { name: "Details" }))
   await screen.findByRole("region", { name: "Compare detail" })
-  expect(screen.getByText("v0 → v1")).toBeInTheDocument()
+  expect(screen.getByText("v0 → v1", { selector: ".comparison-context span" })).toBeInTheDocument()
   await userEvent.click(screen.getByText("SQL diff & conditions"))
   expect(screen.getByRole("button", { name: "Copy diff" })).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Plans" }))
@@ -443,4 +443,23 @@ test.each([
   expect(calls).toContain(parameterSet === ""
     ? "/api/operations/10/source-map?variant=measure&parameterSet=&repetition=1&caseId=0"
     : "/api/operations/10/source-map?variant=measure&repetition=1&caseId=0")
+})
+
+
+test("measure retains a stored SQL fallback when its stored plan source is unavailable", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ sqlText: "SELECT 42 AS retained_value", variants: [variant({ plans: [{ repetition: 1, ordinal: 0, hash: "a".repeat(64), stored: true }] })] }) })
+  renderApp("/operations/10")
+  expect(await screen.findByRole("heading", { name: "Plans not stored" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Stored SQL" }))
+  expect(screen.getByText(/retained_value/)).toBeInTheDocument()
+})
+
+
+test("compare panel returns to the originating typed agent optimization", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 8, operation: "compare" }), session: session({ id: 8 }) }) })
+  renderApp("/operations/10?returnAgentKind=claude&returnAgentId=conversation-1&returnSubject=orders&returnScope=whole&returnA=v0&returnB=v1")
+  const back = await screen.findByRole("link", { name: "Back to session Optimization" })
+  const target = new URL(back.getAttribute("href")!, "http://dashboard")
+  expect(target.pathname).toBe("/agent-sessions/claude/conversation-1")
+  expect(Object.fromEntries(target.searchParams)).toMatchObject({ subject: "orders", scope: "whole", a: "v0", b: "v1" })
 })

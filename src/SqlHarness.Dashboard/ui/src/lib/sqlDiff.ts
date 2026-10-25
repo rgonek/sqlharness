@@ -16,6 +16,7 @@ export interface SqlViewerProps {
 export type SqlSourceSpan = { start: number; length: number }
 export type SqlSourceSelection = { start: number; end: number } | null
 export interface PlanSqlViewerProps {
+  height?: number
   sql: string
   dialect: SqlDialect
   highlightedSpans: SqlSourceSpan[]

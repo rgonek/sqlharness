@@ -65,7 +65,7 @@ function matchingOccurrences(occurrences: PlanOccurrenceManifest[], variant: Var
   return occurrences.filter(occurrence => occurrence.variant === variant.variant && occurrence.parameterSet === variant.parameterSet)
 }
 
-export function PlanWorkbench({ operationId, variant, engine, initialTarget }: { operationId: number; variant: VariantDetail; engine: string | null; initialTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
+export function PlanWorkbench({ operationId, variant, engine, initialTarget, sourceHeight }: { operationId: number; variant: VariantDetail; engine: string | null; sourceHeight?: number; initialTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
   const manifest = useOperationPlans(operationId)
   const [selectedCase, setSelectedCase] = useState(initialTarget?.caseId ?? variant.caseId)
   const [selectedRepetition, setSelectedRepetition] = useState<number | null>(initialTarget?.repetition ?? null)
@@ -225,7 +225,7 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget }: {
     link: item.link,
   }))
 
-  return <section aria-label="Plans" className="space-y-3 rounded-lg border border-border p-3">
+  return <section aria-label="Plans" className="plan-workbench space-y-3">
     <div className="flex flex-wrap items-end gap-3">
       <label className="grid gap-1 text-sm">Case
         <Select items={caseOptions.map(([id, label]) => ({ value: id, label }))} value={caseId} onValueChange={value => {
@@ -291,7 +291,7 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget }: {
     {!isUnmatched && !isOmitted && source && visibleStatementLinks.length === 0 && <p className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source links were produced for the selected statement and document.</p>}
 
     {source && <div className="grid min-w-0 gap-3">
-      <PlanSourceView executedText={source.executedText} engine={source.engine ?? engine} highlightedSpans={highlightedSpans} revealSpan={revealSpan} onSelectionChange={handleSqlSelection} />
+      <PlanSourceView height={sourceHeight} executedText={source.executedText} engine={source.engine ?? engine} highlightedSpans={highlightedSpans} revealSpan={revealSpan} onSelectionChange={handleSqlSelection} />
       <div className="space-y-3">
         {graphError ? <PlanErrorState error={graphError} onRetry={() => { for (const query of graphQueries) void query.refetch() }} />
           : isGraphLoading ? <p role="status" className="rounded border p-3 text-sm">Loading plan graph…</p>

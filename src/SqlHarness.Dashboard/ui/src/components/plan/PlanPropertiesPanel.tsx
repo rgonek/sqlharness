@@ -36,6 +36,8 @@ export function PlanPropertiesPanel({
   const properties = usePlanProperties(selected?.documentSha256 ?? "", selected?.node.id ?? "", selected !== null)
   const node = selected?.node
 
+  if (!selected && candidates.length === 0) return null
+
   return <aside aria-label="Plan operator properties" className="space-y-3 rounded-lg border border-border bg-card p-3 text-card-foreground">
     <div>
       <h3 className="font-medium">Operator properties</h3>

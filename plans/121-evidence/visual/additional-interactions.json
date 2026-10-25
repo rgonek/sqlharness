@@ -1,0 +1,13 @@
+{
+  "checked": [
+    "Directory multi-select",
+    "Target multi-select",
+    "Empty activity",
+    "Custom audio option opens existing local file picker; cancelled without upload",
+    "Expected injected plan-manifest HTTP404 leaves stored SQL readable"
+  ],
+  "expectedFaults": [
+    "HTTP404 on isolated plan manifest"
+  ],
+  "targetDatabaseWrites": 0
+}

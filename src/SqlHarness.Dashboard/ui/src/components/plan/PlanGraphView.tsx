@@ -57,13 +57,13 @@ function NodeCard({ data }: NodeProps<FlowNode>) {
   const node = selection.node
   const title = rules.length ? rules.join("\n") : `No source-map rule for ${name}`
   return (
-    <article className={`min-w-[230px] max-w-[250px] rounded-lg ${confidenceClass(confidence)} ${highlighted ? "ring-4 ring-primary/50" : ""} ${selected ? "outline outline-2 outline-primary" : ""}`} data-confidence={confidence} style={{ pointerEvents: "auto" }}>
+    <article className={`w-[170px] rounded-lg ${confidenceClass(confidence)} ${highlighted ? "ring-4 ring-primary/50" : ""} ${selected ? "outline outline-2 outline-primary" : ""}`} data-confidence={confidence} style={{ pointerEvents: "auto" }}>
       <Handle type="source" position={Position.Left} isConnectable={false} aria-hidden style={{ width: 1, height: 1, opacity: 0, border: 0, pointerEvents: "none" }} />
       <Handle type="target" position={Position.Right} isConnectable={false} aria-hidden style={{ width: 1, height: 1, opacity: 0, border: 0, pointerEvents: "none" }} />
       {/* Native by design: the dense multi-line operator card is a React Flow domain surface. */}
       <button
         type="button"
-        className="block w-full rounded-t-md px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="block w-full rounded-t-md px-2.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         aria-label={`${name}; ${confidence} source match`}
         aria-pressed={selected || highlighted}
         title={title}
@@ -81,9 +81,9 @@ function NodeCard({ data }: NodeProps<FlowNode>) {
         </span>
         {node.logicalOperator && node.logicalOperator !== node.physicalOperator && <span className="block text-xs text-muted-foreground">{node.logicalOperator}</span>}
         {objectLabel(node) && <span className="mt-1 block truncate font-mono text-xs" title={objectLabel(node) ?? undefined}>{objectLabel(node)}</span>}
-        <span className="mt-2 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+        <span className="mt-1 flex flex-wrap gap-x-1 text-xs text-muted-foreground">
           <span>Est. {formatNumber(node.estimatedRows)}</span>
-          <span>Actual {formatNumber(node.actualRows)}</span>
+          <span>Act. {formatNumber(node.actualRows)}</span>
         </span>
         <span className="mt-1 flex items-center justify-between text-xs">
           <span>Cost {formatPercent(node.costFraction)}</span>
@@ -130,14 +130,14 @@ function FlowCanvas({
   useEffect(() => {
     if (fitTargets.length === 0) return
     const targets = nodes.filter(node => fitTargets.includes(node.id))
-    if (targets.length) void flow.fitView({ nodes: targets, padding: 0.22, duration: 250 })
+    if (targets.length) void flow.fitView({ nodes: targets, padding: 0.22, maxZoom: 1, duration: 250 })
   }, [fitTargets, fitVersion, flow, nodes])
   return <ReactFlow<FlowNode, FlowEdge>
     nodes={nodes}
     edges={edges}
     nodeTypes={nodeTypes}
     fitView
-    fitViewOptions={{ padding: 0.2 }}
+    fitViewOptions={{ padding: 0.06, maxZoom: 1 }}
     nodesConnectable={false}
     nodesDraggable={false}
     elementsSelectable={false}
@@ -228,24 +228,16 @@ export function PlanGraphView({
   }, [highlightedNodeKeys, selectedNodeKey])
 
   return (
-    <section aria-label="Graphical execution plan" className="space-y-2 rounded-lg border border-border bg-card text-card-foreground dark:border-border">
-      <header className="flex flex-wrap items-center justify-between gap-2 px-3 pt-3">
-        <div>
-          <h3 className="font-medium">Graphical execution plan</h3>
-          <p className="text-xs text-muted-foreground">Operators flow from left to right toward the root. Solid links are exact; dashed links are inferred or ambiguous.</p>
-        </div>
-        <Button type="button" variant="outline" size="sm" disabled={fitTargets.length === 0} onClick={() => setFitVersion(value => value + 1)}>Fit selection</Button>
-      </header>
-      <div className="flex flex-wrap gap-3 px-3 text-xs" aria-label="Source match confidence">
-        <span data-confidence="exact">Exact · solid</span><span data-confidence="inferred">Inferred · dashed</span><span data-confidence="ambiguous">Ambiguous candidates</span><span data-confidence="none">No source link</span>
-      </div>
+    <section aria-label="Graphical execution plan" className="plan-graph space-y-2 rounded-lg border border-border bg-card text-card-foreground dark:border-border">
+      <h3 className="sr-only">Graphical execution plan</h3>
       {documents.length === 0 || graph.nodes.length === 0
         ? <p className="px-3 pb-3 text-sm text-muted-foreground">No plan operators are available for this selection.</p>
-        : <div className="h-[38rem] min-h-[30rem] overflow-hidden rounded-b-lg border-t border-border bg-background">
+        : <div className="plan-graph-canvas h-[250px] overflow-hidden rounded-b-lg border-t border-border bg-background">
           <ReactFlowProvider>
             <FlowCanvas nodes={graph.nodes} edges={graph.edges} fitTargets={fitTargets} fitVersion={fitVersion} />
           </ReactFlowProvider>
         </div>}
+      <div className="plan-graph-footer"><span>Click an operator to highlight its SQL, or click in SQL to find its operator.</span><span>Solid border = exact source match · dashed = inferred or ambiguous</span><Button type="button" variant="ghost" size="sm" disabled={fitTargets.length === 0} onClick={() => setFitVersion(value => value + 1)}>Fit selection</Button></div>
     </section>
   )
 }

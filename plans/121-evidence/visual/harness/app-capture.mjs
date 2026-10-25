@@ -1,0 +1,53 @@
+import {chromium} from 'playwright';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+const workspace=process.env.SQLHARNESS_VISUAL_ROOT??path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../../..');
+const {session,operation,operationDetail,variant}=await import(pathToFileURL(path.join(workspace,'src/SqlHarness.Dashboard/ui/src/test/fixtures.ts')).href);
+export const root=workspace,out=path.join(root,'plans/121-evidence/visual');
+export const settings={status:'valid',path:'isolated-visual-fixture/config.json',settings:{journal:{enabled:true,storeSensitive:true,operationAnnotations:true,retention:{enabled:true,maxAgeDays:30,maxSizeMb:500}},dashboard:{autoStart:true,port:47800,idleShutdownHours:8,safetyNotifications:true,agentTranscripts:{enabled:true}},compare:{requireContext:true},diagnostics:{enabled:false},mutations:{defaultMode:'never',verification:'click',approvalTimeoutSeconds:120},connection:{timeoutSeconds:30},execution:{defaultTimeoutSeconds:30}}};
+const now=new Date().toISOString();
+export const sessions=[session({id:1,title:'Optimizing the orders query',cwd:'D:\\Dev\\shop',starred:true,lastSeen:now,firstSeen:now,operations:8,running:1,failed:0,hasCompare:true}),session({id:2,title:'Inspecting customer records',agentKind:'codex',cwd:'D:\\Dev\\crm',lastSeen:now,firstSeen:now,operations:3,failed:0}),session({id:3,title:'Testing the inventory update',cwd:'D:\\Dev\\shop',lastSeen:now,firstSeen:now,operations:2,failed:1}),session({id:4,title:'Archived investigation',agentKind:'codex',archived:true,lastSeen:now,firstSeen:now})];
+export const ops=[operation({id:10,sessionId:1,operation:'measure',status:'running',startedAt:now,finishedAt:null,updatedAt:now,durationMs:null,profile:'dev',database:'ShopDb',server:'localhost',agentLabel:'Baseline query',logicalReadsMedian:18420}),operation({id:11,sessionId:1,operation:'compare',startedAt:now,updatedAt:now,finishedAt:now,profile:'dev',database:'ShopDb',server:'localhost',agentLabel:'Covering index',agentKeep:true,subject:'orders',readsBefore:18420,readsAfter:1240}),operation({id:12,sessionId:2,agentKind:'codex',startedAt:now,updatedAt:now,finishedAt:now,profile:'dev',database:'CrmDb'}),operation({id:13,sessionId:3,operation:'mutation',status:'rejected',startedAt:now,updatedAt:now,finishedAt:now,profile:'dev',database:'ShopDb'}),operation({id:14,sessionId:4,startedAt:now,updatedAt:now,finishedAt:now})];
+export const sql='SELECT o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nFROM dbo.Orders AS o\nWHERE o.CustomerId = @CustomerId\nORDER BY o.OrderDate DESC;';
+export const details=Object.fromEntries(['measure','query','mutation','compare'].map((kind,i)=>[20+i,operationDetail({operation:operation({id:20+i,sessionId:1,operation:kind,mutationRequested:kind==='mutation',startedAt:now,updatedAt:now,finishedAt:now,agentLabel:'Orders by customer',profile:'dev',database:'ShopDb',server:'localhost',logicalReadsMedian:18420,hasSpill:false,coldCache:false,overGranted:false}),session:sessions[0],sqlText:sql,variants:kind==='query'?[]:[variant({spillCount:0,hasWarnings:false,hasImplicitConversion:false,missingIndexCount:0,plans:[{repetition:1,ordinal:0,hash:"a".repeat(64),stored:true}]})],summary:{kind,resultsStable:true},artifactDirectory:'isolated-visual-fixture',vars:{CustomerId:42}})]));
+
+export const versions=[48212,12904,7630].map((n,i)=>({version:'v'+i,hash:'hash-'+i,logicalReadsSum:n,logicalReadsMean:n,scansSum:3,elapsedMedianMs:[412,188,151][i],caseOutcome:'1/1 ok',measuredIn:[30+i],latestOperationId:30+i,verdictBasis:'whole batch'}));
+export const comp={a:'v0',b:'v2',basis:'MeasuredTogether',operationId:23,equivalenceLabel:'results equivalent (multiset)',cases:[{id:'0',label:'@CustomerId = 42',outcome:'better'}],selectedCase:'all',aggregate:'sum',coverageLabel:'',mixed:null,tables:[{table:'Orders',scansBefore:1,scansAfter:1,readsBefore:48000,readsAfter:7400,change:'−85%'},{table:'Customers',scansBefore:2,scansAfter:2,readsBefore:212,readsAfter:230,change:'+8%'}],collapsed:null,elapsed:{beforeMs:412,afterMs:151,policyVerdict:'better',differentRun:false},beforeAction:{operationId:23,side:'baseline',caseIds:['0']},afterAction:{operationId:23,side:'candidate',caseIds:['0']},view:'statements',verdictBasis:'whole batch',wholeBatch:{before:48212,after:7630,label:'Whole batch'},statements:[{key:'s1',occurrence:1,text:sql,status:'matched',attribution:'exact',scansBefore:3,scansAfter:3,readsBefore:48212,readsAfter:7630,change:'−84%',hiddenWork:[],objects:[{table:'Orders',scansBefore:1,scansAfter:1,readsBefore:48000,readsAfter:7400,change:'−85%'}]}]};
+const labels=['Baseline as submitted','SARGable date filter','Covering index'];
+for(let i=0;i<3;i++)ops.push(operation({id:30+i,sessionId:1,operation:'measure',agentLabel:labels[i],agentKeep:i===2,startedAt:now,updatedAt:now,finishedAt:now}));
+details[23]={...details[23],compareSubject:'orders',compareScope:'whole query',baselineVersion:'v0',candidateVersion:'v2',candidateSqlText:sql.replace('SELECT','SELECT TOP (100)'),variants:[variant({ordinal:0,variant:'baseline',totalLogicalReadsMedian:48212}),variant({ordinal:1,variant:'candidate',totalLogicalReadsMedian:7630})]};
+for(let i=0;i<3;i++)details[30+i]={...details[20],operation:ops.find(o=>o.id===30+i)};
+const hash='a'.repeat(64);
+const graph={engine:'sqlserver',statements:[{index:0,statementId:1,statementCompId:1,rootNodeId:'0:0'}],nodes:['SELECT','Sort','Index Seek'].map((name,i)=>({id:'0:'+i,statementIndex:0,showplanNodeId:i,physicalOperator:name,logicalOperator:name,object:i===2?{database:null,schema:'dbo',table:'Orders',index:'IX_Orders_CustomerId',alias:'o'}:null,tableReferenceId:null,predicates:[],definedValues:[],estimatedRows:124,actualRows:118,executions:1,costFraction:[0,.1,.9][i],warnings:[]})),edges:[{source:'0:0',target:'0:1',actualRows:118,estimatedRows:124,estimatedSizeBytes:null},{source:'0:1',target:'0:2',actualRows:118,estimatedRows:124,estimatedSizeBytes:null}]};
+
+export async function setup(page){
+ await page.addInitScript(()=>{localStorage.setItem('theme','light');class FixtureEvents extends EventTarget{static OPEN=1;static CLOSED=2;static CONNECTING=0;readyState=1;constructor(){super();setTimeout(()=>{this.onopen?.(new Event('open'));this.dispatchEvent(new Event('open'));},20);}close(){this.readyState=2;}}window.EventSource=FixtureEvents;});
+ await page.route('**/api/**',async route=>{
+ const u=new URL(route.request().url()),p=u.pathname;if(!p.startsWith('/api/'))return route.continue();let data;
+ if(p==='/api/live'||p==='/api/mutations/events')return route.fulfill({status:200,contentType:'text/event-stream',body:': fixture\n\n'});
+ if(p==='/api/settings'){if(route.request().method()==='PUT')settings.settings=route.request().postDataJSON();data=settings;}
+ else if(p==='/api/profiles')data={profiles:[],status:'valid'};
+ else if(p==='/api/prices')data={source:'embedded',fetchedAt:now,origin:'embedded'};
+ else if(p==='/api/transcripts')data={enabled:true,matched:12,unmatched:0,readErrors:0,lastCycleAt:now};
+ else if(p==='/api/sessions')data={items:sessions.filter(s=>u.searchParams.get('starred')===String(s.starred)),nextCursor:null};
+ else if(p==='/api/operations')data={items:u.searchParams.get('status')==='running'?ops.filter(o=>o.status==='running'):ops,nextCursor:null};
+ else if(/^\/api\/operations\/\d+$/.test(p))data=details[p.split('/')[3]];
+ else if(p.endsWith('/annotation'))data={};
+ else if(p==='/api/sessions/1')data={session:sessions[0],operations:ops,note:null,conversations:[],compareSubjects:[],unassignedCompareCount:0};
+ else if(p==='/api/sessions/1/operations')data={items:ops,nextCursor:null};
+ else if(p==='/api/sessions/1/optimization')data={subjects:[{subject:'orders',database:'ShopDb',engine:'SqlServer',groups:[{fingerprint:'fp1',label:'@CustomerId = 42',subject:'orders',database:'ShopDb',defaultA:'v0',defaultB:'v2',scopes:[{scope:'whole query',defaultA:'v0',defaultB:'v2',versions}]}]}],unassigned:[]};
+ else if(p.endsWith('/optimization/compare')||p.endsWith('/optimization'))data={...comp,a:u.searchParams.get('a')??'v0',b:u.searchParams.get('b')??'v2',selectedCase:u.searchParams.get('case')??'all',aggregate:u.searchParams.get('aggregate')??'sum',view:u.searchParams.get('view')??'statements'};
+ else if(p.endsWith('/sql'))data={hash:u.searchParams.get('hash'),text:u.searchParams.get('hash')==='hash-0'?sql:sql.replace('SELECT','SELECT TOP (100)'),tooLarge:false};
+ else if(p.endsWith('/repro'))data={text:sql,completeness:'Complete',label:'Ready'};
+ else if(p.endsWith('/plans'))data={operationId:Number(p.split('/')[3]),state:'stored',occurrences:['measure','baseline','candidate'].map(variant=>({variant,parameterSet:null,caseId:'0',caseLabel:'@CustomerId = 42',repetition:1,documentOrdinal:0,statementIndex:0,spanStart:0,spanLength:sql.length,statementId:1,statementCompId:1,documentSha256:hash,shapeHash:'shape',format:'showplan-xml',matchKind:'exact',omitted:false,stored:true}))};
+ else if(p.endsWith('/source-map'))data={operationId:Number(p.split('/')[3]),state:'stored',engine:'sqlserver',variant:u.searchParams.get('variant'),parameterSet:null,caseId:'0',caseLabel:'@CustomerId = 42',repetition:1,executedText:sql,algorithmVersion:1,links:graph.nodes.map(node=>({documentSha256:hash,documentOrdinal:0,link:{nodeId:node.id,spanStart:0,spanLength:sql.length,kind:'statement',state:'exact',rule:'statement'}})),omittedDocuments:[],errors:[]};
+ else if(p.endsWith('/graph'))data={engine:'sqlserver',graph,error:null};
+ else if(p.endsWith('/properties'))data={engine:'sqlserver',nodeId:'0:2',tree:null,error:null};
+ else if(p==='/api/mutations')data={items:[],nextCursor:null};
+ else {console.log('UNHANDLED',p);return route.fulfill({status:404,contentType:'application/json',body:'{}'});}
+ return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+ });
+}
+export async function launch(){return chromium.launch({headless:true});}
+if(process.argv[1].endsWith('app-capture.mjs')){await fs.mkdir(out,{recursive:true});const b=await launch(),p=await b.newPage({viewport:{width:1280,height:900},deviceScaleFactor:1});await setup(p);p.on('pageerror',e=>console.log('PAGEERROR',e.message));for(const [name,path]of [['activity','/'],['settings','/settings'],['operation-measure','/operations/20'],['operation-query','/operations/21'],['operation-mutation','/operations/22'],['operation-compare','/operations/23'],['session','/sessions/1']]){await p.goto('http://127.0.0.1:48122'+path);await p.waitForTimeout(1200);await p.screenshot({path:out+'/'+name+'-app-before.png',fullPage:true});console.log(name,(await p.locator('main').innerText()).slice(0,180));}await b.close();}

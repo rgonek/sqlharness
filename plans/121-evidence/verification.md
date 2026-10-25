@@ -1,4 +1,4 @@
-# Plan 121 verification
+# Plan 121 original-delivery verification
 
 Windows `just verify` exited 0 on 2026-10-25. All five stages succeeded or were
 appropriately skipped: unchanged dependency install skipped, build passed with
@@ -39,7 +39,7 @@ machine-local `sqlharness-layout-121-gate` directory; it was not acceptance evid
 
 Independent standards and specification reviews approved the corrected source;
 see [reviews](reviews.md). No browser surface was available, so visual/responsive
-browser comparison remains unverified. Linux and live database acceptance were
+browser comparison was unverified in this original delivery. The [visual follow-up](visual-verification.md) supersedes that limitation. Linux and live database acceptance were
 not run and are not claimed. Integration and local publication are recorded below.
 
 ## Local integration and publication
@@ -65,3 +65,14 @@ or restarted; new dashboard processes use the new layout. No push was performed.
 
 The follow-up integration/publication documentation commit changes no product code;
 the published product tree remains the current main product tree.
+
+## Browser correction follow-up (2026-10-25)
+
+The unavailable-browser statements above describe the original delivery only.
+The subsequent authorized Playwright/Chromium run rendered the selected exports
+and actual application, saved before/after matched states, and corrected material
+layout differences. See [design QA](../../design-qa.md),
+[screenshot gallery](visual/index.html), and [follow-up review](visual-review.md).
+Missing journal data remains explicitly unavailable by operator decision; no API
+or persistence contract was expanded. Final gate and delivery receipts are recorded
+separately for this follow-up.

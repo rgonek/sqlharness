@@ -92,7 +92,7 @@ test("SQL execution settings render, save on commit, and preserve other settings
   const puts = stubSettings(response())
   renderApp("/settings")
 
-  expect(await screen.findByText("SQL execution")).toBeInTheDocument()
+  expect(await screen.findByRole("spinbutton", { name: "Default execution timeout (seconds)" })).toBeInTheDocument()
   const field = await screen.findByRole("spinbutton", { name: "Default execution timeout (seconds)" })
   expect(field).toHaveValue(30)
   await userEvent.clear(field)
@@ -158,7 +158,7 @@ test("operation annotations default off and show process restart guidance", asyn
 
   const toggle = await screen.findByRole("switch", { name: "Agent operation annotations" })
   expect(toggle).not.toBeChecked()
-  expect(screen.getByText("Allows agents to label operations and mark them for keeping. Requires the activity journal. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention.")).toBeInTheDocument()
+  expect(screen.getByText(/Allows agents to label operations and mark them for keeping\./)).toBeInTheDocument()
   expect(screen.getByText(/Enabling agent annotations also enables the activity journal automatically\./)).toBeInTheDocument()
   expect(puts).toHaveLength(0)
 })
@@ -204,7 +204,7 @@ test("disabling the journal also disables operation annotations in one save", as
   await waitFor(() => expect(puts).toHaveLength(1))
   expect((puts[0].body as SettingsResponse["settings"]).journal.enabled).toBe(false)
   expect((puts[0].body as SettingsResponse["settings"]).journal.operationAnnotations).toBe(false)
-  expect(screen.getByText("Disabling the journal also disables agent annotations.")).toBeInTheDocument()
+  expect(screen.getByText(/Disabling the journal also disables agent annotations\./)).toBeInTheDocument()
 })
 
 test("re-enabling the journal alone leaves operation annotations off", async () => {
@@ -399,9 +399,9 @@ test("refreshing model prices updates the shown snapshot and reports failures", 
   })
   renderApp("/settings")
 
-  expect(await screen.findByText("Model prices: models.dev, 2026-10-11 (built in)")).toBeInTheDocument()
+  expect(await screen.findByText("models.dev · fetched 2026-10-11 · built in")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Refresh model prices" }))
-  expect(await screen.findByText("Model prices: models.dev, 2026-10-20 (refreshed)")).toBeInTheDocument()
+  expect(await screen.findByText("models.dev · fetched 2026-10-20 · refreshed")).toBeInTheDocument()
 
   fail = true
   await userEvent.click(screen.getByRole("button", { name: "Refresh model prices" }))

@@ -20,12 +20,12 @@ export function SessionAnnotationHeader({ session }: { session: SessionSummary }
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="session-title-row flex flex-wrap items-center gap-2">
         {draft === null ? (
           <>
-            <h1 className="cursor-text" onClick={() => setDraft(session.title ?? "")}>{sessionDisplayName(session)}</h1>
+            <h1 className="min-w-0 flex-1 cursor-text" onClick={() => setDraft(session.title ?? "")}>{sessionDisplayName(session)}</h1>
             {!session.title && session.agentTitle && <span className="text-sm font-normal text-muted-foreground">{agentTitleSource(session.agentKind)}</span>}
-            <Button variant="ghost" size="icon" aria-label="Edit title" onClick={() => setDraft(session.title ?? "")}>
+            <Button className="session-edit-title" variant="ghost" size="icon" aria-label="Edit title" onClick={() => setDraft(session.title ?? "")}>
               <Pencil />
             </Button>
           </>
@@ -44,12 +44,11 @@ export function SessionAnnotationHeader({ session }: { session: SessionSummary }
         <Button variant="ghost" size="icon" aria-label={session.starred ? "Unstar session" : "Star session"}
           aria-pressed={session.starred} disabled={update.isPending}
           onClick={() => update.mutate({ starred: !session.starred })}>
-          <Star className={session.starred ? "fill-current" : undefined} />
+          <Star className={session.starred ? "fill-amber-400 text-amber-500" : undefined} />
         </Button>
-        <Button variant="outline" size="sm" disabled={update.isPending}
+        <Button variant="ghost" size="icon" aria-label={session.archived ? "Unarchive" : "Archive"} disabled={update.isPending}
           onClick={() => update.mutate({ archived: !session.archived })}>
           {session.archived ? <ArchiveRestore /> : <Archive />}
-          {session.archived ? "Unarchive" : "Archive"}
         </Button>
         {session.archived && <Badge variant="outline">Archived</Badge>}
       </div>
