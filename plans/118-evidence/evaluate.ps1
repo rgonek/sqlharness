@@ -6,49 +6,53 @@ $MaxBytes = 8192
 
 function Json($value) { ConvertTo-Json -InputObject $value -Depth 80 -Compress }
 function Utf8Size([string]$value) { [System.Text.Encoding]::UTF8.GetByteCount($value) }
+function Has-Property($object, [string]$name) { return ($null -ne $object -and $object.PSObject.Properties.Name -contains $name) }
 function Add-Gap($list, [string]$code) { if (-not $list.Contains($code)) { $list.Add($code) } }
-function Add-Difference($list, [string]$field, [string]$kind, [string]$relation, $caseIdentity, $parameterIdentity, $before, $after) {
+function Add-Difference($list, [string]$field, [string]$kind, [string]$relation, $caseIdentity, $parameterIdentity, $before, $after, [bool]$hasBefore = $false, [bool]$hasAfter = $false) {
     $item = [ordered]@{ field = $field }
     if ($null -ne $caseIdentity) { $item.caseIdentity = $caseIdentity }
     if ($null -ne $parameterIdentity) { $item.parameterIdentity = $parameterIdentity }
     $item.kind = $kind; $item.relation = $relation
-    if ($null -ne $before) { $item.before = $before }
-    if ($null -ne $after) { $item.after = $after }
+    if ($hasBefore) { $item.before = $before }
+    if ($hasAfter) { $item.after = $after }
     $list.Add([pscustomobject]$item)
 }
 function Display-Value($wrapper) {
-    if ($null -eq $wrapper) { return $null }
-    if ($wrapper.state -eq 'retained' -or $wrapper.state -eq 'typed-null') { return [pscustomobject]@{ allowed = $true; value = $wrapper.value } }
-    return $null
+    if ($null -eq $wrapper -or -not (Has-Property $wrapper 'state')) { return [pscustomobject]@{ allowed = $false } }
+    if ($wrapper.state -in @('retained','typed-null') -and (Has-Property $wrapper 'value')) { return [pscustomobject]@{ allowed = $true; value = $wrapper.value } }
+    return [pscustomobject]@{ allowed = $false }
 }
-function Compare-Scalar($list, $gaps, [string]$field, $left, $right, [string]$relation, $caseIdentity, $parameterIdentity, [string]$rightPath) {
-    if ($null -eq $left -or $null -eq $right) { return }
-    if ((Json $left) -ceq (Json $right)) { return }
+function Compare-Scalar($list, $gaps, [string]$field, $left, $right, [bool]$leftPresent, [bool]$rightPresent, [string]$relation, $caseIdentity, $parameterIdentity) {
+    if (-not $leftPresent -or -not $rightPresent) { Add-Gap $gaps 'field-omitted'; return }
+    if ((Json $left) -ceq (Json $right)) {
+        if ($field -match '\.value$' -and -not (Display-Value $left).allowed) { Add-Gap $gaps 'field-omitted' }
+        return
+    }
     if ($field -match '\.value$') {
         $leftShown = Display-Value $left; $rightShown = Display-Value $right
-        if ($null -eq $leftShown -or $null -eq $rightShown) { Add-Gap $gaps 'field-omitted'; return }
-        Add-Difference $list $field 'changed' $relation $caseIdentity $parameterIdentity $leftShown.value $rightShown.value
+        if (-not $leftShown.allowed -or -not $rightShown.allowed) { Add-Gap $gaps 'field-omitted'; return }
+        Add-Difference $list $field 'changed' $relation $caseIdentity $parameterIdentity $leftShown.value $rightShown.value $true $true
         return
     }
     if ($field -match 'setup\.hash$|contentHash|fingerprint') { Add-Gap $gaps 'conditions-unavailable'; return }
-    Add-Difference $list $field 'changed' $relation $caseIdentity $parameterIdentity $left $right
+    Add-Difference $list $field 'changed' $relation $caseIdentity $parameterIdentity $left $right $true $true
 }
-function Compare-Parameters($list, $gaps, $leftItems, $rightItems, [string]$prefix, $caseIdentity) {
+function Compare-Parameters($list, $gaps, $leftItems, $rightItems, [string]$fieldPrefix, $caseIdentity) {
     $leftMap = @{}; $rightMap = @{}
-    foreach ($p in @($leftItems | Where-Object { $null -ne $_ })) { if ($null -eq $p.identity -or $leftMap.ContainsKey([string]$p.identity)) { Add-Gap $gaps 'identity-unresolved'; continue }; $leftMap[[string]$p.identity] = $p }
-    foreach ($p in @($rightItems | Where-Object { $null -ne $_ })) { if ($null -eq $p.identity -or $rightMap.ContainsKey([string]$p.identity)) { Add-Gap $gaps 'identity-unresolved'; continue }; $rightMap[[string]$p.identity] = $p }
+    foreach ($p in @($leftItems | Where-Object { $null -ne $_ })) { if (-not (Has-Property $p 'identity') -or $leftMap.ContainsKey([string]$p.identity)) { Add-Gap $gaps 'identity-unresolved'; continue }; $leftMap[[string]$p.identity] = $p }
+    foreach ($p in @($rightItems | Where-Object { $null -ne $_ })) { if (-not (Has-Property $p 'identity') -or $rightMap.ContainsKey([string]$p.identity)) { Add-Gap $gaps 'identity-unresolved'; continue }; $rightMap[[string]$p.identity] = $p }
     foreach ($id in @(@($leftMap.Keys) + @($rightMap.Keys) | Sort-Object -Unique)) {
         $l = $leftMap[$id]; $r = $rightMap[$id]
-        $path = if ($prefix) { "$prefix.parameters" } else { 'parameters' }
-        if ($null -eq $l) { Add-Difference $list "$path.$id" 'added' 'measurement-condition' $caseIdentity $id $null $null; continue }
-        if ($null -eq $r) { Add-Difference $list "$path.$id" 'removed' 'measurement-condition' $caseIdentity $id $null $null; continue }
-        if ($l.effectiveType -cne $r.effectiveType) { Add-Difference $list "$path.$id.effectiveType" 'changed' 'measurement-condition' $caseIdentity $id $l.effectiveType $r.effectiveType }
-        foreach ($metadata in @('kind','count','columns','columnTypes')) {
-            $leftHas = $l.PSObject.Properties.Name -contains $metadata; $rightHas = $r.PSObject.Properties.Name -contains $metadata
-            if ($leftHas -and $rightHas -and (Json $l.$metadata) -cne (Json $r.$metadata)) { Add-Difference $list "$path.$id.$metadata" 'changed' 'measurement-condition' $caseIdentity $id $l.$metadata $r.$metadata }
-            elseif ($leftHas -ne $rightHas) { Add-Gap $gaps 'field-omitted' }
+        $path = if ($fieldPrefix) { "$fieldPrefix.parameters.$id" } else { "parameters.$id" }
+        if ($null -eq $l) { Add-Difference $list $path 'added' 'measurement-condition' $caseIdentity $id $null $null; continue }
+        if ($null -eq $r) { Add-Difference $list $path 'removed' 'measurement-condition' $caseIdentity $id $null $null; continue }
+        foreach ($metadata in @('effectiveType','kind','count','columns','columnTypes')) {
+            $leftHas = Has-Property $l $metadata; $rightHas = Has-Property $r $metadata
+            if ($leftHas -or $rightHas) { Compare-Scalar $list $gaps "$path.$metadata" $l.$metadata $r.$metadata $leftHas $rightHas 'measurement-condition' $caseIdentity $id }
         }
-        Compare-Scalar $list $gaps "$path.$id.value" $l.value $r.value 'measurement-condition' $caseIdentity $id $null
+        $leftHasValue = Has-Property $l 'value'; $rightHasValue = Has-Property $r 'value'
+        if ($leftHasValue -or $rightHasValue) { Compare-Scalar $list $gaps "$path.value" $l.value $r.value $leftHasValue $rightHasValue 'measurement-condition' $caseIdentity $id }
+        else { Add-Gap $gaps 'field-omitted' }
     }
 }
 
@@ -72,7 +76,10 @@ foreach ($scenario in $fixture.cases) {
     if (-not $before.available -or -not $after.available) { Add-Gap $gaps 'legacy-model-unsupported' }
     if (-not $before.fingerprintDomainVerified -or -not $after.fingerprintDomainVerified) { Add-Gap $gaps 'fingerprint-domain-unverified' }
     foreach ($side in @($before,$after)) { foreach ($omitted in @($side.omitted)) { if ($omitted) { Add-Gap $gaps 'field-omitted' } } }
-    if ($before.available -and $after.available -and $before.identityResolved -and $after.identityResolved) {
+    $leftConditionsPresent = Has-Property $before 'conditions' -and $null -ne $before.conditions
+    $rightConditionsPresent = Has-Property $after 'conditions' -and $null -ne $after.conditions
+    if (-not $leftConditionsPresent -or -not $rightConditionsPresent) { Add-Gap $gaps 'conditions-unavailable' }
+    if ($before.available -and $after.available -and $before.identityResolved -and $after.identityResolved -and $leftConditionsPresent -and $rightConditionsPresent) {
         $fields = @(
             @{ path='context.database'; relation='measurement-condition'; parent='context'; name='database' },
             @{ path='context.engine'; relation='measurement-condition'; parent='context'; name='engine' },
@@ -88,33 +95,45 @@ foreach ($scenario in $fixture.cases) {
             @{ path='setup.hash'; relation='measurement-condition'; parent='setup'; name='hash' }
         )
         foreach ($f in $fields) {
-            $l = $before.conditions.($f.parent).($f.name); $r = $after.conditions.($f.parent).($f.name)
-            if ($null -ne $l -and $null -ne $r) { Compare-Scalar $differences $gaps $f.path $l $r $f.relation $null $null $null }
-            elseif (($null -eq $l) -ne ($null -eq $r)) { Add-Gap $gaps 'field-omitted' }
+            $leftParent = $before.conditions.($f.parent); $rightParent = $after.conditions.($f.parent)
+            $leftHas = Has-Property $leftParent $f.name; $rightHas = Has-Property $rightParent $f.name
+            if ($leftHas -or $rightHas) { Compare-Scalar $differences $gaps $f.path $leftParent.($f.name) $rightParent.($f.name) $leftHas $rightHas $f.relation $null $null }
+            else { Add-Gap $gaps 'field-omitted' }
         }
-        $leftSetupText = $before.conditions.setup.text; $rightSetupText = $after.conditions.setup.text
-        if ($null -ne $leftSetupText -and $null -ne $rightSetupText -and (Json $leftSetupText) -cne (Json $rightSetupText)) {
-            if ($leftSetupText.state -in @('retained','typed-null') -and $rightSetupText.state -in @('retained','typed-null')) { Add-Difference $differences 'setup.text' 'changed' 'measurement-condition' $null $null $leftSetupText.value $rightSetupText.value }
-            elseif ($leftSetupText.state -eq 'omitted' -or $rightSetupText.state -eq 'omitted') { Add-Gap $gaps 'field-omitted' }
-            else { Add-Gap $gaps 'conditions-unavailable' }
-        } elseif (($null -eq $leftSetupText) -ne ($null -eq $rightSetupText)) { Add-Gap $gaps 'field-omitted' }
-        Compare-Parameters $differences $gaps $before.conditions.parameters $after.conditions.parameters '' $null
-        if ($before.fingerprintDomainVerified -and $after.fingerprintDomainVerified) {
+        $leftSetup = $before.conditions.setup; $rightSetup = $after.conditions.setup
+        $leftSetupTextPresent = Has-Property $leftSetup 'text'; $rightSetupTextPresent = Has-Property $rightSetup 'text'
+        if ($leftSetupTextPresent -or $rightSetupTextPresent) {
+            $leftText = $leftSetup.text; $rightText = $rightSetup.text
+            Compare-Scalar $differences $gaps 'setup.text.value' $leftText $rightText $leftSetupTextPresent $rightSetupTextPresent 'measurement-condition' $null $null
+        } else { Add-Gap $gaps 'field-omitted' }
+        $leftParametersPresent = Has-Property $before.conditions 'parameters'; $rightParametersPresent = Has-Property $after.conditions 'parameters'
+        if (-not $leftParametersPresent -or -not $rightParametersPresent) { Add-Gap $gaps 'field-omitted' }
+        else { Compare-Parameters $differences $gaps $before.conditions.parameters $after.conditions.parameters '' $null }
+        $leftCasesPresent = Has-Property $before.conditions 'cases'; $rightCasesPresent = Has-Property $after.conditions 'cases'
+        if (-not $leftCasesPresent -or -not $rightCasesPresent) { Add-Gap $gaps 'field-omitted' }
+        elseif ($before.fingerprintDomainVerified -and $after.fingerprintDomainVerified) {
             $leftCases = @($before.conditions.cases | Where-Object { $null -ne $_ }); $rightCases = @($after.conditions.cases | Where-Object { $null -ne $_ })
             $leftKeys = @{}; $rightKeys = @{}
             foreach ($case in $leftCases) { if (-not $case.pairKey -or $leftKeys.ContainsKey([string]$case.pairKey)) { Add-Gap $gaps 'case-pairing-ambiguous' } else { $leftKeys[[string]$case.pairKey] = $case } }
             foreach ($case in $rightCases) { if (-not $case.pairKey -or $rightKeys.ContainsKey([string]$case.pairKey)) { Add-Gap $gaps 'case-pairing-ambiguous' } else { $rightKeys[[string]$case.pairKey] = $case } }
             foreach ($key in @(@($leftKeys.Keys) + @($rightKeys.Keys) | Sort-Object -Unique)) {
                 $l = $leftKeys[$key]; $r = $rightKeys[$key]
-                if ($null -eq $l) { Add-Difference $differences 'cases' 'added' 'measurement-condition' $r.identity $null $null $null }
-                elseif ($null -eq $r) { Add-Difference $differences 'cases' 'removed' 'measurement-condition' $l.identity $null $null $null }
-                else {
-                    if (-not $l.identity -or -not $r.identity) { Add-Gap $gaps 'identity-unresolved' }
-                    else { Compare-Parameters $differences $gaps $l.parameters $r.parameters "cases.$key" ([pscustomobject]@{ before=$l.identity; after=$r.identity }) }
-                }
+                if ($null -eq $l) {
+                    if ($r.identity) { Add-Difference $differences 'cases' 'added' 'measurement-condition' $r.identity $null $null $null }
+                    else { Add-Gap $gaps 'identity-unresolved' }
+                } elseif ($null -eq $r) {
+                    if ($l.identity) { Add-Difference $differences 'cases' 'removed' 'measurement-condition' $l.identity $null $null $null }
+                    else { Add-Gap $gaps 'identity-unresolved' }
+                } elseif (-not $l.identity -or -not $r.identity) { Add-Gap $gaps 'identity-unresolved' }
+                else { Compare-Parameters $differences $gaps $l.parameters $r.parameters 'cases' ([pscustomobject]@{ before=$l.identity; after=$r.identity }) }
             }
+        } else { Add-Gap $gaps 'fingerprint-domain-unverified' }
+        $leftMeasurementPresent = Has-Property $before 'measurementFingerprint'; $rightMeasurementPresent = Has-Property $after 'measurementFingerprint'
+        if (-not $leftMeasurementPresent -or -not $rightMeasurementPresent) { Add-Gap $gaps 'legacy-model-unsupported' }
+        elseif ($before.measurementFingerprint -cne $after.measurementFingerprint) {
+            $explainedMeasurementDifference = @($differences | Where-Object relation -CEQ 'measurement-condition').Count -gt 0
+            if (-not $explainedMeasurementDifference) { Add-Gap $gaps 'conditions-unavailable' }
         }
-        if ($before.fingerprint -cne $after.fingerprint -and $differences.Count -eq 0 -and $gaps.Count -eq 0) { Add-Gap $gaps 'conditions-unavailable' }
     }
     $sortedDiffs = @($differences | Sort-Object field,caseIdentity,parameterIdentity,kind)
     $knownOmitted = [Math]::Max(0, $sortedDiffs.Count - $MaxDifferences)

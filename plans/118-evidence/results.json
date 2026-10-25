@@ -1,6 +1,6 @@
 {
   "schema": "plan118-condition-explanation-results-v1",
-  "revision": "e2b76bc0999270da1cff9a87a7cd0262552d69f2",
+  "revision": "0697b2c3bf444a5d4bb88055814668e1d571f695",
   "evaluationState": "working tree evidence based on revision above",
   "serializer": "PowerShell ConvertTo-Json -Depth 80 -Compress; UTF-8 byte count via System.Text.Encoding",
   "limits": {
@@ -8,8 +8,8 @@
     "gaps": 16,
     "explanationUtf8Bytes": 8192
   },
-  "caseCount": 17,
-  "totalExplanationUtf8Bytes": 6163,
+  "caseCount": 22,
+  "totalExplanationUtf8Bytes": 7256,
   "maxObservedExplanationUtf8Bytes": 3709,
   "results": [
     {
@@ -36,11 +36,12 @@
         "availability": "unavailable",
         "differences": [],
         "gaps": [
-          "conditions-unavailable"
+          "conditions-unavailable",
+          "field-omitted"
         ],
         "omittedDifferences": 0
       },
-      "explanationUtf8Bytes": 104
+      "explanationUtf8Bytes": 120
     },
     {
       "name": "changed retained setup text",
@@ -52,7 +53,7 @@
         "availability": "partial",
         "differences": [
           {
-            "field": "setup.text",
+            "field": "setup.text.value",
             "kind": "changed",
             "relation": "measurement-condition",
             "before": "SET NOCOUNT ON",
@@ -64,7 +65,7 @@
         ],
         "omittedDifferences": 0
       },
-      "explanationUtf8Bytes": 228
+      "explanationUtf8Bytes": 234
     },
     {
       "name": "changed effective type",
@@ -177,11 +178,12 @@
         "availability": "unavailable",
         "differences": [],
         "gaps": [
-          "conditions-unavailable"
+          "conditions-unavailable",
+          "field-omitted"
         ],
         "omittedDifferences": 0
       },
-      "explanationUtf8Bytes": 104
+      "explanationUtf8Bytes": 120
     },
     {
       "name": "unavailable old model",
@@ -209,11 +211,12 @@
         "availability": "unavailable",
         "differences": [],
         "gaps": [
+          "conditions-unavailable",
           "field-omitted"
         ],
         "omittedDifferences": 0
       },
-      "explanationUtf8Bytes": 95
+      "explanationUtf8Bytes": 120
     },
     {
       "name": "ambiguous case rename and order",
@@ -225,11 +228,12 @@
         "availability": "unavailable",
         "differences": [],
         "gaps": [
-          "case-pairing-ambiguous"
+          "case-pairing-ambiguous",
+          "conditions-unavailable"
         ],
         "omittedDifferences": 0
       },
-      "explanationUtf8Bytes": 104
+      "explanationUtf8Bytes": 129
     },
     {
       "name": "cross-journal fingerprints without verified common key domain",
@@ -241,11 +245,12 @@
         "availability": "unavailable",
         "differences": [],
         "gaps": [
+          "conditions-unavailable",
           "fingerprint-domain-unverified"
         ],
         "omittedDifferences": 0
       },
-      "explanationUtf8Bytes": 111
+      "explanationUtf8Bytes": 136
     },
     {
       "name": "unresolved subject scope",
@@ -300,11 +305,12 @@
         "availability": "unavailable",
         "differences": [],
         "gaps": [
+          "conditions-unavailable",
           "field-omitted"
         ],
         "omittedDifferences": 0
       },
-      "explanationUtf8Bytes": 95
+      "explanationUtf8Bytes": 120
     },
     {
       "name": "unknown value versus empty collection",
@@ -316,11 +322,12 @@
         "availability": "unavailable",
         "differences": [],
         "gaps": [
+          "conditions-unavailable",
           "field-omitted"
         ],
         "omittedDifferences": 0
       },
-      "explanationUtf8Bytes": 95
+      "explanationUtf8Bytes": 120
     },
     {
       "name": "multibyte differences exceed caps",
@@ -530,6 +537,113 @@
         "omittedDifferences": 16
       },
       "explanationUtf8Bytes": 3709
+    },
+    {
+      "name": "informational-only with unexplained measurement mismatch",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g18"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "execution.repeat",
+            "kind": "changed",
+            "relation": "informational",
+            "before": 2,
+            "after": 4
+          }
+        ],
+        "gaps": [
+          "conditions-unavailable"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 193
+    },
+    {
+      "name": "absent parameters collection versus empty",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g19"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "conditions-unavailable",
+          "field-omitted"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 120
+    },
+    {
+      "name": "absent conditions property versus empty object",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g20"
+      },
+      "conditionExplanation": {
+        "availability": "unavailable",
+        "differences": [],
+        "gaps": [
+          "conditions-unavailable"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 104
+    },
+    {
+      "name": "paired case parameter difference with opaque pair key",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g21"
+      },
+      "conditionExplanation": {
+        "availability": "complete",
+        "differences": [
+          {
+            "field": "cases.parameters.@color.value",
+            "caseIdentity": {
+              "before": "baseline-case",
+              "after": "candidate-case"
+            },
+            "parameterIdentity": "@color",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "red",
+            "after": "blue"
+          }
+        ],
+        "gaps": [],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 296
+    },
+    {
+      "name": "typed NULL retained before and after",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g22"
+      },
+      "conditionExplanation": {
+        "availability": "complete",
+        "differences": [
+          {
+            "field": "parameters.@value.value",
+            "parameterIdentity": "@value",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": null,
+            "after": 7
+          }
+        ],
+        "gaps": [],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 217
     }
   ],
   "knownLimits": [
