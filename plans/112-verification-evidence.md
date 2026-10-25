@@ -44,4 +44,3 @@ Final documentation check: 90 local Markdown links resolved across eight Markdow
 ## Local integration
 
 Merged into `main` at `b7847326` on 2026-10-25. The only merge conflict joined adjacent Plan 111/112 history rows; both were preserved. Integrated scoped checks passed: staged diff whitespace, 93 local Markdown links, and unchanged `src`, `tests` and `scripts` versus pre-merge main `81d0fa59`. No product gate was required for documentation-only work. No push or live UAT.
-
