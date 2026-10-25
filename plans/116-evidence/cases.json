@@ -1,0 +1,56 @@
+{
+  "studyRevision": "443f468e620e98c2e65fb109040d91ef06c286c5",
+  "serializer": "PowerShell ConvertTo-Json compact JSON; UTF-8 byte counts are non-wire estimates, not MCP SDK/System.Text.Json measurements",
+  "defaultBudgetBytes": 65536,
+  "minimumBudgetBytes": 4096,
+  "cases": [
+    {
+      "id": "release-identity",
+      "loaded": { "mcp": { "version": "1.2.3", "informationalVersion": "1.2.3+abc123", "moduleVersionId": "00000000-0000-0000-0000-000000000001" }, "core": { "version": "1.2.3", "informationalVersion": "1.2.3+abc123", "moduleVersionId": "00000000-0000-0000-0000-000000000002" } },
+      "expect": { "availability": "available", "reason": null }
+    },
+    {
+      "id": "development-same-version-different-mvid",
+      "loaded": { "mcp": { "version": "0.0.0", "informationalVersion": "0.0.0+dev", "moduleVersionId": "10000000-0000-0000-0000-000000000001" }, "core": { "version": "0.0.0", "informationalVersion": "0.0.0+dev", "moduleVersionId": "10000000-0000-0000-0000-000000000002" } },
+      "alsoLoaded": { "mcp": { "version": "0.0.0", "informationalVersion": "0.0.0+dev", "moduleVersionId": "20000000-0000-0000-0000-000000000001" }, "core": { "version": "0.0.0", "informationalVersion": "0.0.0+dev", "moduleVersionId": "20000000-0000-0000-0000-000000000002" } },
+      "expect": { "availability": "available", "reason": null }
+    },
+    {
+      "id": "optional-metadata-unavailable",
+      "loaded": { "mcp": { "version": "1.2.3", "informationalVersion": null, "moduleVersionId": null }, "core": { "version": "1.2.3", "informationalVersion": "1.2.3", "moduleVersionId": null } },
+      "expect": { "availability": "partial", "reason": "optional_metadata_missing" },
+      "subcases": [
+        {
+          "id": "required-assembly-version-missing",
+          "loaded": { "mcp": { "version": "1.2.3", "informationalVersion": "1.2.3", "moduleVersionId": "00000000-0000-0000-0000-000000000001" }, "core": { "version": null, "informationalVersion": "1.2.3", "moduleVersionId": "00000000-0000-0000-0000-000000000002" } },
+          "expect": { "availability": "unavailable", "reason": "loaded_assembly_metadata_unavailable" }
+        }
+      ]
+    },
+    {
+      "id": "old-artifact-without-producer",
+      "loaded": { "mcp": { "version": "1.2.3", "informationalVersion": "1.2.3+abc123", "moduleVersionId": "00000000-0000-0000-0000-000000000001" }, "core": { "version": "1.2.3", "informationalVersion": "1.2.3+abc123", "moduleVersionId": "00000000-0000-0000-0000-000000000002" } },
+      "artifactProducer": null,
+      "expect": { "availability": "available", "reason": null, "artifactAvailability": "unavailable", "artifactReason": "producer_not_recorded" }
+    },
+    {
+      "id": "reader-build-differs-from-producer",
+      "loaded": { "mcp": { "version": "2.0.0", "informationalVersion": "2.0.0+reader", "moduleVersionId": "30000000-0000-0000-0000-000000000001" }, "core": { "version": "2.0.0", "informationalVersion": "2.0.0+reader", "moduleVersionId": "30000000-0000-0000-0000-000000000002" } },
+      "artifactProducer": { "identityVersion": 1, "availability": "available", "reason": null, "assemblies": { "mcp": { "name": "SqlHarness.Mcp", "version": "1.2.3", "informationalVersion": "1.2.3+producer", "moduleVersionId": "40000000-0000-0000-0000-000000000001" }, "core": { "name": "SqlHarness.Core", "version": "1.2.3", "informationalVersion": "1.2.3+producer", "moduleVersionId": "40000000-0000-0000-0000-000000000002" } } },
+      "expect": { "availability": "available", "reason": null }
+    },
+    {
+      "id": "path-build-differs-from-loaded-facts",
+      "loaded": { "mcp": { "version": "1.2.3", "informationalVersion": "1.2.3+loaded", "moduleVersionId": "50000000-0000-0000-0000-000000000001" }, "core": { "version": "1.2.3", "informationalVersion": "1.2.3+loaded", "moduleVersionId": "50000000-0000-0000-0000-000000000002" } },
+      "candidatePathBuild": { "version": "9.9.9", "moduleVersionId": "90000000-0000-0000-0000-000000000001", "path": "C:\\candidate\\sqlharness.exe" },
+      "expect": { "availability": "available", "reason": null }
+    },
+    {
+      "id": "multiple-capability-root-pages",
+      "loaded": { "mcp": { "version": "1.2.3", "informationalVersion": "1.2.3+abc123", "moduleVersionId": "60000000-0000-0000-0000-000000000001" }, "core": { "version": "1.2.3", "informationalVersion": "1.2.3+abc123", "moduleVersionId": "60000000-0000-0000-0000-000000000002" } },
+      "roots": ["file:///workspace/one", "file:///workspace/two", "file:///workspace/three"],
+      "pageSize": 2,
+      "expect": { "availability": "available", "reason": null }
+    }
+  ]
+}

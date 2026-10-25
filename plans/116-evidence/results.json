@@ -1,0 +1,683 @@
+{
+  "studyRevision": "443f468e620e98c2e65fb109040d91ef06c286c5",
+  "serializer": "PowerShell ConvertTo-Json compact JSON; UTF-8 byte counts are non-wire estimates, not MCP SDK/System.Text.Json measurements",
+  "budgetsBytes": [
+    4096,
+    65536
+  ],
+  "scenariosAccounted": 7,
+  "results": [
+    {
+      "caseId": "release-identity",
+      "proposedJson": {
+        "capabilityPages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "document": {
+              "configurationRef": "synthetic-configuration-ref",
+              "scopeMode": "fixed",
+              "engines": [
+                "sqlserver"
+              ],
+              "producer": {
+                "identityVersion": 1,
+                "availability": "available",
+                "reason": null,
+                "assemblies": {
+                  "mcp": {
+                    "name": "SqlHarness.Mcp",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+abc123",
+                    "moduleVersionId": "00000000-0000-0000-0000-000000000001"
+                  },
+                  "core": {
+                    "name": "SqlHarness.Core",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+abc123",
+                    "moduleVersionId": "00000000-0000-0000-0000-000000000002"
+                  }
+                }
+              },
+              "inputRoots": [],
+              "inputRootCount": 0,
+              "inputRootsComplete": true,
+              "inputRootsNextCursor": null,
+              "inputRootsOmitted": 0
+            }
+          }
+        ],
+        "persistedArtifactProducer": null,
+        "secondDevelopmentProducer": null,
+        "subcases": []
+      },
+      "estimates": {
+        "serializer": "PowerShell ConvertTo-Json compact JSON; UTF-8 byte counts are non-wire estimates, not MCP SDK/System.Text.Json measurements",
+        "pages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "utf8Bytes": 586,
+            "budgets": {
+              "4096": {
+                "fits": true,
+                "nonFit": false
+              },
+              "65536": {
+                "fits": true,
+                "nonFit": false
+              }
+            }
+          }
+        ],
+        "candidateJournalProducerBytes": 369,
+        "candidateArtifactProducerBytes": null
+      },
+      "availability": {
+        "value": "available",
+        "reason": null,
+        "artifactValue": "not_applicable",
+        "artifactReason": null
+      },
+      "omissions": [],
+      "subcases": []
+    },
+    {
+      "caseId": "development-same-version-different-mvid",
+      "proposedJson": {
+        "capabilityPages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "document": {
+              "configurationRef": "synthetic-configuration-ref",
+              "scopeMode": "fixed",
+              "engines": [
+                "sqlserver"
+              ],
+              "producer": {
+                "identityVersion": 1,
+                "availability": "available",
+                "reason": null,
+                "assemblies": {
+                  "mcp": {
+                    "name": "SqlHarness.Mcp",
+                    "version": "0.0.0",
+                    "informationalVersion": "0.0.0+dev",
+                    "moduleVersionId": "10000000-0000-0000-0000-000000000001"
+                  },
+                  "core": {
+                    "name": "SqlHarness.Core",
+                    "version": "0.0.0",
+                    "informationalVersion": "0.0.0+dev",
+                    "moduleVersionId": "10000000-0000-0000-0000-000000000002"
+                  }
+                }
+              },
+              "inputRoots": [],
+              "inputRootCount": 0,
+              "inputRootsComplete": true,
+              "inputRootsNextCursor": null,
+              "inputRootsOmitted": 0
+            }
+          }
+        ],
+        "persistedArtifactProducer": null,
+        "secondDevelopmentProducer": {
+          "identityVersion": 1,
+          "availability": "available",
+          "reason": null,
+          "assemblies": {
+            "mcp": {
+              "name": "SqlHarness.Mcp",
+              "version": "0.0.0",
+              "informationalVersion": "0.0.0+dev",
+              "moduleVersionId": "20000000-0000-0000-0000-000000000001"
+            },
+            "core": {
+              "name": "SqlHarness.Core",
+              "version": "0.0.0",
+              "informationalVersion": "0.0.0+dev",
+              "moduleVersionId": "20000000-0000-0000-0000-000000000002"
+            }
+          }
+        },
+        "subcases": []
+      },
+      "estimates": {
+        "serializer": "PowerShell ConvertTo-Json compact JSON; UTF-8 byte counts are non-wire estimates, not MCP SDK/System.Text.Json measurements",
+        "pages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "utf8Bytes": 580,
+            "budgets": {
+              "4096": {
+                "fits": true,
+                "nonFit": false
+              },
+              "65536": {
+                "fits": true,
+                "nonFit": false
+              }
+            }
+          }
+        ],
+        "candidateJournalProducerBytes": 363,
+        "candidateArtifactProducerBytes": null
+      },
+      "availability": {
+        "value": "available",
+        "reason": null,
+        "artifactValue": "not_applicable",
+        "artifactReason": null
+      },
+      "omissions": [],
+      "subcases": []
+    },
+    {
+      "caseId": "optional-metadata-unavailable",
+      "proposedJson": {
+        "capabilityPages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "document": {
+              "configurationRef": "synthetic-configuration-ref",
+              "scopeMode": "fixed",
+              "engines": [
+                "sqlserver"
+              ],
+              "producer": {
+                "identityVersion": 1,
+                "availability": "partial",
+                "reason": "optional_metadata_missing",
+                "assemblies": {
+                  "mcp": {
+                    "name": "SqlHarness.Mcp",
+                    "version": "1.2.3",
+                    "informationalVersion": null,
+                    "moduleVersionId": null
+                  },
+                  "core": {
+                    "name": "SqlHarness.Core",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3",
+                    "moduleVersionId": null
+                  }
+                }
+              },
+              "inputRoots": [],
+              "inputRootCount": 0,
+              "inputRootsComplete": true,
+              "inputRootsNextCursor": null,
+              "inputRootsOmitted": 0
+            }
+          }
+        ],
+        "persistedArtifactProducer": null,
+        "secondDevelopmentProducer": null,
+        "subcases": [
+          {
+            "id": "required-assembly-version-missing",
+            "producer": {
+              "identityVersion": 1,
+              "availability": "unavailable",
+              "reason": "loaded_assembly_metadata_unavailable",
+              "assemblies": {
+                "mcp": {
+                  "name": "SqlHarness.Mcp",
+                  "version": "1.2.3",
+                  "informationalVersion": "1.2.3",
+                  "moduleVersionId": "00000000-0000-0000-0000-000000000001"
+                },
+                "core": {
+                  "name": "SqlHarness.Core",
+                  "version": null,
+                  "informationalVersion": null,
+                  "moduleVersionId": null
+                }
+              }
+            },
+            "availability": "unavailable",
+            "reason": "loaded_assembly_metadata_unavailable"
+          }
+        ]
+      },
+      "estimates": {
+        "serializer": "PowerShell ConvertTo-Json compact JSON; UTF-8 byte counts are non-wire estimates, not MCP SDK/System.Text.Json measurements",
+        "pages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "utf8Bytes": 522,
+            "budgets": {
+              "4096": {
+                "fits": true,
+                "nonFit": false
+              },
+              "65536": {
+                "fits": true,
+                "nonFit": false
+              }
+            }
+          }
+        ],
+        "candidateJournalProducerBytes": 305,
+        "candidateArtifactProducerBytes": null
+      },
+      "availability": {
+        "value": "partial",
+        "reason": "optional_metadata_missing",
+        "artifactValue": "not_applicable",
+        "artifactReason": null
+      },
+      "omissions": [
+        "one or more optional loaded assembly facts are null"
+      ],
+      "subcases": [
+        {
+          "id": "required-assembly-version-missing",
+          "producer": {
+            "identityVersion": 1,
+            "availability": "unavailable",
+            "reason": "loaded_assembly_metadata_unavailable",
+            "assemblies": {
+              "mcp": {
+                "name": "SqlHarness.Mcp",
+                "version": "1.2.3",
+                "informationalVersion": "1.2.3",
+                "moduleVersionId": "00000000-0000-0000-0000-000000000001"
+              },
+              "core": {
+                "name": "SqlHarness.Core",
+                "version": null,
+                "informationalVersion": null,
+                "moduleVersionId": null
+              }
+            }
+          },
+          "availability": "unavailable",
+          "reason": "loaded_assembly_metadata_unavailable"
+        }
+      ]
+    },
+    {
+      "caseId": "old-artifact-without-producer",
+      "proposedJson": {
+        "capabilityPages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "document": {
+              "configurationRef": "synthetic-configuration-ref",
+              "scopeMode": "fixed",
+              "engines": [
+                "sqlserver"
+              ],
+              "producer": {
+                "identityVersion": 1,
+                "availability": "available",
+                "reason": null,
+                "assemblies": {
+                  "mcp": {
+                    "name": "SqlHarness.Mcp",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+abc123",
+                    "moduleVersionId": "00000000-0000-0000-0000-000000000001"
+                  },
+                  "core": {
+                    "name": "SqlHarness.Core",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+abc123",
+                    "moduleVersionId": "00000000-0000-0000-0000-000000000002"
+                  }
+                }
+              },
+              "inputRoots": [],
+              "inputRootCount": 0,
+              "inputRootsComplete": true,
+              "inputRootsNextCursor": null,
+              "inputRootsOmitted": 0
+            }
+          }
+        ],
+        "persistedArtifactProducer": null,
+        "secondDevelopmentProducer": null,
+        "subcases": []
+      },
+      "estimates": {
+        "serializer": "PowerShell ConvertTo-Json compact JSON; UTF-8 byte counts are non-wire estimates, not MCP SDK/System.Text.Json measurements",
+        "pages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "utf8Bytes": 586,
+            "budgets": {
+              "4096": {
+                "fits": true,
+                "nonFit": false
+              },
+              "65536": {
+                "fits": true,
+                "nonFit": false
+              }
+            }
+          }
+        ],
+        "candidateJournalProducerBytes": 369,
+        "candidateArtifactProducerBytes": null
+      },
+      "availability": {
+        "value": "available",
+        "reason": null,
+        "artifactValue": "unavailable",
+        "artifactReason": "producer_not_recorded"
+      },
+      "omissions": [
+        "historical artifact producer was not recorded; no reader-build substitution"
+      ],
+      "subcases": []
+    },
+    {
+      "caseId": "reader-build-differs-from-producer",
+      "proposedJson": {
+        "capabilityPages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "document": {
+              "configurationRef": "synthetic-configuration-ref",
+              "scopeMode": "fixed",
+              "engines": [
+                "sqlserver"
+              ],
+              "producer": {
+                "identityVersion": 1,
+                "availability": "available",
+                "reason": null,
+                "assemblies": {
+                  "mcp": {
+                    "name": "SqlHarness.Mcp",
+                    "version": "2.0.0",
+                    "informationalVersion": "2.0.0+reader",
+                    "moduleVersionId": "30000000-0000-0000-0000-000000000001"
+                  },
+                  "core": {
+                    "name": "SqlHarness.Core",
+                    "version": "2.0.0",
+                    "informationalVersion": "2.0.0+reader",
+                    "moduleVersionId": "30000000-0000-0000-0000-000000000002"
+                  }
+                }
+              },
+              "inputRoots": [],
+              "inputRootCount": 0,
+              "inputRootsComplete": true,
+              "inputRootsNextCursor": null,
+              "inputRootsOmitted": 0
+            }
+          }
+        ],
+        "persistedArtifactProducer": {
+          "identityVersion": 1,
+          "availability": "available",
+          "reason": null,
+          "assemblies": {
+            "mcp": {
+              "name": "SqlHarness.Mcp",
+              "version": "1.2.3",
+              "informationalVersion": "1.2.3+producer",
+              "moduleVersionId": "40000000-0000-0000-0000-000000000001"
+            },
+            "core": {
+              "name": "SqlHarness.Core",
+              "version": "1.2.3",
+              "informationalVersion": "1.2.3+producer",
+              "moduleVersionId": "40000000-0000-0000-0000-000000000002"
+            }
+          }
+        },
+        "secondDevelopmentProducer": null,
+        "subcases": []
+      },
+      "estimates": {
+        "serializer": "PowerShell ConvertTo-Json compact JSON; UTF-8 byte counts are non-wire estimates, not MCP SDK/System.Text.Json measurements",
+        "pages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "utf8Bytes": 586,
+            "budgets": {
+              "4096": {
+                "fits": true,
+                "nonFit": false
+              },
+              "65536": {
+                "fits": true,
+                "nonFit": false
+              }
+            }
+          }
+        ],
+        "candidateJournalProducerBytes": 369,
+        "candidateArtifactProducerBytes": 373
+      },
+      "availability": {
+        "value": "available",
+        "reason": null,
+        "artifactValue": "available",
+        "artifactReason": null
+      },
+      "omissions": [],
+      "subcases": []
+    },
+    {
+      "caseId": "path-build-differs-from-loaded-facts",
+      "proposedJson": {
+        "capabilityPages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "document": {
+              "configurationRef": "synthetic-configuration-ref",
+              "scopeMode": "fixed",
+              "engines": [
+                "sqlserver"
+              ],
+              "producer": {
+                "identityVersion": 1,
+                "availability": "available",
+                "reason": null,
+                "assemblies": {
+                  "mcp": {
+                    "name": "SqlHarness.Mcp",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+loaded",
+                    "moduleVersionId": "50000000-0000-0000-0000-000000000001"
+                  },
+                  "core": {
+                    "name": "SqlHarness.Core",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+loaded",
+                    "moduleVersionId": "50000000-0000-0000-0000-000000000002"
+                  }
+                }
+              },
+              "inputRoots": [],
+              "inputRootCount": 0,
+              "inputRootsComplete": true,
+              "inputRootsNextCursor": null,
+              "inputRootsOmitted": 0
+            }
+          }
+        ],
+        "persistedArtifactProducer": null,
+        "secondDevelopmentProducer": null,
+        "subcases": []
+      },
+      "estimates": {
+        "serializer": "PowerShell ConvertTo-Json compact JSON; UTF-8 byte counts are non-wire estimates, not MCP SDK/System.Text.Json measurements",
+        "pages": [
+          {
+            "cursor": 0,
+            "nextCursor": null,
+            "utf8Bytes": 586,
+            "budgets": {
+              "4096": {
+                "fits": true,
+                "nonFit": false
+              },
+              "65536": {
+                "fits": true,
+                "nonFit": false
+              }
+            }
+          }
+        ],
+        "candidateJournalProducerBytes": 369,
+        "candidateArtifactProducerBytes": null
+      },
+      "availability": {
+        "value": "available",
+        "reason": null,
+        "artifactValue": "not_applicable",
+        "artifactReason": null
+      },
+      "omissions": [
+        "candidate PATH/build facts excluded; loaded assembly facts retained"
+      ],
+      "subcases": []
+    },
+    {
+      "caseId": "multiple-capability-root-pages",
+      "proposedJson": {
+        "capabilityPages": [
+          {
+            "cursor": 0,
+            "nextCursor": 2,
+            "document": {
+              "configurationRef": "synthetic-configuration-ref",
+              "scopeMode": "fixed",
+              "engines": [
+                "sqlserver"
+              ],
+              "producer": {
+                "identityVersion": 1,
+                "availability": "available",
+                "reason": null,
+                "assemblies": {
+                  "mcp": {
+                    "name": "SqlHarness.Mcp",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+abc123",
+                    "moduleVersionId": "60000000-0000-0000-0000-000000000001"
+                  },
+                  "core": {
+                    "name": "SqlHarness.Core",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+abc123",
+                    "moduleVersionId": "60000000-0000-0000-0000-000000000002"
+                  }
+                }
+              },
+              "inputRoots": [
+                "file:///workspace/one",
+                "file:///workspace/two"
+              ],
+              "inputRootCount": 3,
+              "inputRootsComplete": false,
+              "inputRootsNextCursor": 2,
+              "inputRootsOmitted": 0
+            }
+          },
+          {
+            "cursor": 2,
+            "nextCursor": null,
+            "document": {
+              "configurationRef": "synthetic-configuration-ref",
+              "scopeMode": "fixed",
+              "engines": [
+                "sqlserver"
+              ],
+              "producer": {
+                "identityVersion": 1,
+                "availability": "available",
+                "reason": null,
+                "assemblies": {
+                  "mcp": {
+                    "name": "SqlHarness.Mcp",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+abc123",
+                    "moduleVersionId": "60000000-0000-0000-0000-000000000001"
+                  },
+                  "core": {
+                    "name": "SqlHarness.Core",
+                    "version": "1.2.3",
+                    "informationalVersion": "1.2.3+abc123",
+                    "moduleVersionId": "60000000-0000-0000-0000-000000000002"
+                  }
+                }
+              },
+              "inputRoots": [
+                "file:///workspace/three"
+              ],
+              "inputRootCount": 3,
+              "inputRootsComplete": false,
+              "inputRootsNextCursor": null,
+              "inputRootsOmitted": 0
+            }
+          }
+        ],
+        "persistedArtifactProducer": null,
+        "secondDevelopmentProducer": null,
+        "subcases": []
+      },
+      "estimates": {
+        "serializer": "PowerShell ConvertTo-Json compact JSON; UTF-8 byte counts are non-wire estimates, not MCP SDK/System.Text.Json measurements",
+        "pages": [
+          {
+            "cursor": 0,
+            "nextCursor": 2,
+            "utf8Bytes": 631,
+            "budgets": {
+              "4096": {
+                "fits": true,
+                "nonFit": false
+              },
+              "65536": {
+                "fits": true,
+                "nonFit": false
+              }
+            }
+          },
+          {
+            "cursor": 2,
+            "nextCursor": null,
+            "utf8Bytes": 612,
+            "budgets": {
+              "4096": {
+                "fits": true,
+                "nonFit": false
+              },
+              "65536": {
+                "fits": true,
+                "nonFit": false
+              }
+            }
+          }
+        ],
+        "candidateJournalProducerBytes": 369,
+        "candidateArtifactProducerBytes": null
+      },
+      "availability": {
+        "value": "available",
+        "reason": null,
+        "artifactValue": "not_applicable",
+        "artifactReason": null
+      },
+      "omissions": [],
+      "subcases": []
+    }
+  ]
+}

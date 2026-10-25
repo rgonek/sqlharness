@@ -29,7 +29,7 @@ The operator selected proposals **1-5** from the `improve deep next` review at `
 
 | Plan | Selected direction and deliverable | Priority / effort / risk | Dependencies | Status |
 |---|---|---|---|---|
-| [116](116-loaded-producer-identity-study.md) | **1** Loaded producer identity: MCP capability contract and optional new-evidence provenance decision | P2 / M / MED | No new hard predecessor; use 107/113 incident evidence | TODO |
+| [116](116-loaded-producer-identity-study.md) | **1** Loaded producer identity: MCP capability contract and optional new-evidence provenance decision | P2 / M / MED | No new hard predecessor; use 107/113 incident evidence | RESEARCH COMPLETE — A accepted as a separately selected implementation direction; B/C deferred; synthetic non-wire evidence only; 107/113 historical identity unresolved ([decision](116-evidence/decision.md), [design](116-evidence/design.md), [review archive](116-evidence/reviews/)) |
 | [117](117-equivalence-localization-study.md) | **2** Bounded result-set/schema/ordered-position mismatch localization from original runs | P2 / M / MED | No new hard predecessor; preserve existing equivalence/resource contracts | TODO |
 | [118](118-condition-difference-explanations-study.md) | **3** Known condition differences, informational changes and explicit evidence gaps in dashboard explanations | P2 / M / MED | 079/080/087 implemented; independent of 116/117 | TODO |
 | [119](119-large-cell-streaming-study.md) | **4** Synthetic large-cell allocation/hash spike and per-path streaming go/no-go | P3 / L / HIGH | No new hard predecessor; preserve completed 006 budgets | TODO |

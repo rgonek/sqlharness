@@ -7,7 +7,7 @@
 
 ## Status
 
-- **Status:** TODO; planning authorizes no implementation, installation, restart, live database, merge or push.
+- **Status:** RESEARCH COMPLETE; candidate A accepted as a separately selected implementation direction, B/C deferred; this study authorizes no implementation, installation, restart, live database, merge or push.
 - **Priority:** P2; direction proposal 1 selected on 2026-10-25.
 - **Effort / risk / confidence:** M / MED / HIGH grounding; benefit is not measured.
 - **Depends on:** no new hard predecessor; 107/113 diagnostic records already exist.
@@ -76,30 +76,30 @@ Study three alternatives: A capabilities only; B capabilities plus immutable pro
 
 ### Task 1: Establish the attribution and integration map
 
-- [ ] Read the files above and create `inventory.md` with exact symbols, excerpts, schema/version homes and the two documented incident limits. Record what a capability response can identify now versus what persisted evidence would need later.
-- [ ] Verify: `Select-String -Path plans/116-evidence/inventory.md -Pattern '107|113|McpCapabilitiesDocument|SessionIdentity|ArtifactManifest'` -> all five topics present with source references. Manually reopen every cited excerpt.
+- [x] Read the files above and create `inventory.md` with exact symbols, excerpts, schema/version homes and the two documented incident limits. Record what a capability response can identify now versus what persisted evidence would need later.
+- [x] Verify: `Select-String -Path plans/116-evidence/inventory.md -Pattern '107|113|McpCapabilitiesDocument|SessionIdentity|ArtifactManifest'` -> all five topics present with source references. Manually reopen every cited excerpt.
 
 ### Task 2: Freeze the candidate and exercise synthetic identities
 
-- [ ] Write `design.md` with exact proposed field names/types/nullability, no changes to handshake version semantics, the A/B/C matrix, and a minimal future file/test map. Pin the chosen persistence boundary or explicitly defer it.
-- [ ] Create `cases.json` with separate expected outputs for: release identity, two different development MVIDs with the same numeric version, unavailable metadata, old artifact without producer, reader/build different from producer, PATH/build different from loaded facts, and multiple capability root pages.
-- [ ] Implement `evaluate.ps1` as an offline candidate projector over synthetic records only. `results.json` records case IDs, proposed JSON, UTF-8 byte counts at 4,096 and 65,536 budgets, availability and omissions. Use System.Text.Json for wire estimates, or label another serializer's measurements as non-wire estimates. Do not load a real target process.
-- [ ] Implement `verify.ps1` using independent expected-case assertions: same loaded identity stays stable across pages; distinct module facts remain distinct; historical missing values stay unavailable; no secret/path fields; every candidate result fits the selected budget or explicitly records non-fit. Assert the core capability page remains progress-capable in the proposed reservation design.
-- [ ] Verify: `pwsh -NoProfile -File plans/116-evidence/evaluate.ps1` then `pwsh -NoProfile -File plans/116-evidence/verify.ps1` -> exit 0, all seven scenarios accounted for. Synthetic estimates are not production SDK acceptance.
+- [x] Write `design.md` with exact proposed field names/types/nullability, no changes to handshake version semantics, the A/B/C matrix, and a minimal future file/test map. Pin the chosen persistence boundary or explicitly defer it.
+- [x] Create `cases.json` with separate expected outputs for: release identity, two different development MVIDs with the same numeric version, unavailable metadata, old artifact without producer, reader/build different from producer, PATH/build different from loaded facts, and multiple capability root pages.
+- [x] Implement `evaluate.ps1` as an offline candidate projector over synthetic records only. `results.json` records case IDs, proposed JSON, UTF-8 byte counts at 4,096 and 65,536 budgets, availability and omissions. Use System.Text.Json for wire estimates, or label another serializer's measurements as non-wire estimates. Do not load a real target process.
+- [x] Implement `verify.ps1` using independent expected-case assertions: same loaded identity stays stable across pages; distinct module facts remain distinct; historical missing values stay unavailable; no secret/path fields; every candidate result fits the selected budget or explicitly records non-fit. Assert the core capability page remains progress-capable in the proposed reservation design.
+- [x] Verify: `pwsh -NoProfile -File plans/116-evidence/evaluate.ps1` then `pwsh -NoProfile -File plans/116-evidence/verify.ps1` -> exit 0, all seven scenarios accounted for. Synthetic estimates are not production SDK acceptance.
 
 ### Task 3: Decide and produce the implementation handoff if warranted
 
-- [ ] Write `decision.md`: accept A/B/C, defer, or reject; explain which future incident each accepted surface resolves and which it cannot resolve. Include evidence, alternatives, exact future tests, costs and unresolved questions. Historical 107/113 identity stays unresolved.
-- [ ] If accepted, provide the full implementation contract/file map in `design.md`; reserve a later numbered implementation plan only after checking numbering and separate operator selection. Do not implement or automatically create another plan as part of this study.
-- [ ] Specify future regression commands: `dotnet test tests/SqlHarness.Mcp.Tests --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpTokenBudgetTests'`; `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~DoctorCommandTests|FullyQualifiedName~CapabilitiesCommandTests'`; then Windows `just verify` and explicit changed-branch formatting. These are future product gates, not required for a notes-only study.
-- [ ] Verify: run the study verifier and `git diff --check`; update index status to RESEARCH COMPLETE with decision and limits, not IMPLEMENTED.
+- [x] Write `decision.md`: accept A/B/C, defer, or reject; explain which future incident each accepted surface resolves and which it cannot resolve. Include evidence, alternatives, exact future tests, costs and unresolved questions. Historical 107/113 identity stays unresolved.
+- [x] If accepted, provide the full implementation contract/file map in `design.md`; reserve a later numbered implementation plan only after checking numbering and separate operator selection. Do not implement or automatically create another plan as part of this study.
+- [x] Specify future regression commands: `dotnet test tests/SqlHarness.Mcp.Tests --filter 'FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpTokenBudgetTests'`; `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~DoctorCommandTests|FullyQualifiedName~CapabilitiesCommandTests'`; then Windows `just verify` and explicit changed-branch formatting. These are future product gates, not required for a notes-only study.
+- [x] Verify: run the study verifier and `git diff --check`; update index status to RESEARCH COMPLETE with decision and limits, not IMPLEMENTED.
 
 ## Done criteria and checks
 
-- [ ] `pwsh -NoProfile -File plans/116-evidence/verify.ps1` exits 0 and checks every named scenario and A/B/C disposition.
-- [ ] All seven named evidence files in Scope are present; relative Markdown links resolve; current excerpts were independently reread.
-- [ ] `git diff --name-only $studyStart -- src tests scripts` is empty; new/untracked paths were also checked with `git status --short`.
-- [ ] Evidence says synthetic/offline, exact studied revision and serializer; no claim of live attribution, token savings or product verification.
+- [x] `pwsh -NoProfile -File plans/116-evidence/verify.ps1` exits 0 and checks every named scenario and A/B/C disposition.
+- [x] All seven named evidence files in Scope are present; relative Markdown links resolve; current excerpts were independently reread.
+- [x] `git diff --name-only $studyStart -- src tests scripts` is empty; new/untracked paths were also checked with `git status --short`.
+- [x] Evidence says synthetic/offline, exact studied revision and serializer; no claim of live attribution, token savings or product verification.
 
 ## STOP conditions and maintenance
 
