@@ -23,6 +23,28 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 | [083](083-table-and-list-parameters.md) | Stage D table-valued parameters (inline rows or rows from a read-only query, catalog-resolved types, Structured binding) and Dapper list expansion across read-only tools; conditions, labels and SSMS scripts; mutation rejects them | 077, 079 merged | IMPLEMENTATION VERIFIED; locally integrated into `main` at `55d23ba`; final scoped Sol review approved; live UAT pending; Linux waived ([evidence](083-verification-evidence.md)) |
 | [090](090-matcher-title-backfill-retention.md) | Bound title-backfill state by retained operations and in-flight batch identities while preserving applicable staging and retry/cursor state | 084 merged | DONE; locally integrated into `main` at `7f03ecb`; both task reviews, Sol low whole-branch review and final scoped re-review approved; evidence archive includes 10 tracked raw logs ([evidence](090-verification-evidence.md)) |
 
+## Selected direction studies (2026-10-25)
+
+The operator selected proposals **1-5** from the `improve deep next` review at `5f7342a7`. These are self-contained design/research plans, not product implementation or live execution approval. Product source remains read-only during each study; synthetic experiment code and evidence stay under the selected plan's evidence directory. Complete research may accept, defer or reject a direction; it must not be reported as IMPLEMENTED.
+
+| Plan | Selected direction and deliverable | Priority / effort / risk | Dependencies | Status |
+|---|---|---|---|---|
+| [116](116-loaded-producer-identity-study.md) | **1** Loaded producer identity: MCP capability contract and optional new-evidence provenance decision | P2 / M / MED | No new hard predecessor; use 107/113 incident evidence | TODO |
+| [117](117-equivalence-localization-study.md) | **2** Bounded result-set/schema/ordered-position mismatch localization from original runs | P2 / M / MED | No new hard predecessor; preserve existing equivalence/resource contracts | TODO |
+| [118](118-condition-difference-explanations-study.md) | **3** Known condition differences, informational changes and explicit evidence gaps in dashboard explanations | P2 / M / MED | 079/080/087 implemented; independent of 116/117 | TODO |
+| [119](119-large-cell-streaming-study.md) | **4** Synthetic large-cell allocation/hash spike and per-path streaming go/no-go | P3 / L / HIGH | No new hard predecessor; preserve completed 006 budgets | TODO |
+| [120](120-repeatable-experiment-suites-study.md) | **5** External comparison manifests versus command lists; mock dispatch and repeatability decision | P3 / M study, L potential implementation / MED-HIGH | Existing compare/parameter contracts; 036 is not a predecessor | TODO |
+
+Recommended study order: **116 -> 117 -> 118 -> 119 -> 120**. These arrows are scheduling recommendations, not implementation dependencies. Research work is independent except for index bookkeeping: keep evidence under separate directories and serialize index edits. A future product phase must first select each accepted design's implementation scope. Serialize shared MCP/artifact/projection edits for 116/117 and coordinate 117/118 on dashboard comparison payloads; 119 must characterize current canonical bytes before any later collector change. No study authorizes installation, restart, user-home investigation, database access, merge, push or paid-agent trials. Any executable spike is test-only under `plans/`; only standard ignored build directories may receive build output.
+
+### Direction dispositions and considered alternatives
+
+- Proposal **6**, optimization continuity across separate conversations, was not selected. Plan 084 already spans transports within one conversation; no duplicate 084 plan or cross-conversation schema change is created.
+- Plans **111/112** already defer catalog-plan retrieval, DML evidence/benchmarks and broader index/query-family discovery pending recurring evidence and explicit selection. This review supplies no new recurrence, so those directions remain deferred.
+- Compare baseline/candidate alternation is already implemented; no duplicate interleaving feature is planned.
+- Cross-artifact evidence reuse remains excluded by 109's decision. A suite describes explicit new comparisons and preserves their identities; it does not reuse another run's proof.
+- Additional server-environment capture and mutation-to-postcheck links were considered but are outside the selected five. Plan 118 explains retained conditions only; it does not authorize metadata queries or mutation lifecycle changes.
+
 ## Limit-economics execution notes (2026-10-20)
 
 Recommended order: **093 → 094 → 095 → 096 → 097**, then **089 → 098** for both session views. The arrows are scheduling advice except for 095's hard implementation predecessors 093 and 094: confirm actual implementations on main, not ancestry alone. 096/097 and 089/098 edit shared files and should not run concurrently; neither pair introduces an artificial semantic dependency.
