@@ -7,7 +7,7 @@
 
 ## Status
 
-- **Status:** RESEARCH COMPLETE; candidate A accepted as a separately selected implementation direction, B/C deferred; this study authorizes no implementation, installation, restart, live database, merge or push.
+- **Status:** RESEARCH COMPLETE; locally integrated into `main` at `6ba811d5` with operator authorization; candidate A accepted as a separately selected implementation direction, B/C deferred; this study authorizes no implementation, installation, restart, live database, merge or push.
 - **Priority:** P2; direction proposal 1 selected on 2026-10-25.
 - **Effort / risk / confidence:** M / MED / HIGH grounding; benefit is not measured.
 - **Depends on:** no new hard predecessor; 107/113 diagnostic records already exist.
