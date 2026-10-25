@@ -38,3 +38,5 @@ This record is not a Task 3 review or final Sol verdict. The workload has not be
 Research content reviewed: `c85767b7`; whole branch range `0f1109c7..c85767b7`. Final review archive and status updates are documentation bookkeeping. Final scoped checks cover the complete delivered branch; no product gate is claimed.
 
 Ruling: research-only scope governs generic implementation wording because the Contract forbids incidental product edits. If wrong, additional work requires a separately authorized implementation plan.
+
+Final documentation check: 90 local Markdown links resolved across eight Markdown files. Task 1/3 full execution reports and exact scripts are preserved in `112-evidence/reviews/`; Task 2 report remains `112-evidence/task-2-report.md`.
