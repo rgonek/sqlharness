@@ -1,0 +1,8 @@
+pwsh ./scripts/verify.ps1 -LogDirectory D:/temp/shadcn-final-sequential-gate
+[6 q==> ui-install skipped (lockfile unchanged)
+==> build ok 37,0s
+==> ui-check ok 7m35s
+==> test ok 6m50s
+format: skipped (0 changed C# files)
+==> format skipped (0 changed C# files)
+verify: OK  stages=5  14m26s

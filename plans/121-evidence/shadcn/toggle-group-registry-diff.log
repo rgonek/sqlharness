@@ -1,0 +1,7 @@
+- Resolving items.
+┌ shadcn add @shadcn/toggle-group (dry run)
+│
+├ src\components\ui\toggle-group.tsx (skip)
+│ No changes.
+│
+└ Run without --dry-run to apply.

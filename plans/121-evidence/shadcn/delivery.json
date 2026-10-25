@@ -1,0 +1,13 @@
+{
+  "productCommit": "08d50998",
+  "installedPath": "C:\\Users\\rgone\\.local\\bin\\sqlharness.exe",
+  "sha256": "C322BEE9961C4AA7C14152299EC085F61982FE4D963E3EFF53065DC6AA8A2B0D",
+  "publishedMatchesInstalled": true,
+  "priorPid": 29060,
+  "restartedPid": 35048,
+  "newProcess": true,
+  "executablePath": "C:\\Users\\rgone\\.local\\bin\\sqlharness.exe",
+  "origin": "http://127.0.0.1:47800",
+  "verifiedUiAssets": 2,
+  "tokenRecorded": false
+}
