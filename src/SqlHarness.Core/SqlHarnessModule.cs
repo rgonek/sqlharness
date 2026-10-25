@@ -603,6 +603,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         try
         {
             ValidateCompareContext(operation.Context);
+            var classificationListInputs = (operation.ParameterSets ?? [])
+                .SelectMany(set => SqlParameterInputs.Resolve(set.Parameters, set.TypedParameters))
+                .Where(input => ParameterKindParser.Parse(input) == ParameterKind.List)
+                .GroupBy(input => SqlParameterNames.Normalize(input.Name), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToArray();
             var prepared = CompareOperationPreparer.PrepareFixed(
                 operation.Target,
                 _loadProfiles(),
@@ -613,7 +619,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 operation.TimeoutSeconds,
                 operation.Repeat,
                 knownSecrets,
-                operation.TypedParameters);
+                operation.TypedParameters,
+                classificationListInputs);
 
             var fixedParameters = prepared.FixedParameters;
             var dialect = prepared.Dialect;
@@ -623,6 +630,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var sets = ParameterSetResolver.Resolve(dialect, fixedParameters, matrixInput, operation.ParameterSets);
             if (sets.Count == 0)
                 throw new SqlHarnessSafetyException("A compare matrix or at least one parameter set must be supplied.");
+            var classificationCaseListParameters = new List<IReadOnlyList<SqlHarnessParameter>>(sets.Count);
+            var classificationCaseBaselineSql = new List<string>(sets.Count);
+            var classificationCaseCandidateSql = new List<string>(sets.Count);
             foreach (var set in sets)
             {
                 var caseInputs = prepared.ParameterInputs.Concat(set.Inputs).ToArray();
@@ -630,6 +640,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 var caseTableNames = ParameterSetResolver.ValidateInputs(caseInputs, prepared.Target.Engine);
                 var caseBaseline = SqlParameterInputs.ExpandListsForClassification(operation.BaselineSql, caseInputs);
                 var caseCandidate = SqlParameterInputs.ExpandListsForClassification(operation.CandidateSql, caseInputs);
+                classificationCaseBaselineSql.Add(caseBaseline.Text);
+                classificationCaseCandidateSql.Add(caseCandidate.Text);
                 var caseSetup = string.IsNullOrWhiteSpace(operation.SetupSql)
                     ? new ExpandedSql(operation.SetupSql ?? string.Empty, [])
                     : SqlParameterInputs.ExpandListsForClassification(operation.SetupSql, caseInputs);
@@ -645,9 +657,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 CompareOperationPreparer.EnsureSafe(caseBaselineSafety, "baseline");
                 CompareOperationPreparer.EnsureSafe(caseCandidateSafety, "candidate");
                 var caseScalars = dialect.BindParameters(caseInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
-                var caseBindings = SqlParameterInputs.CombineClassificationParameters(
-                    SqlParameterInputs.CombineClassificationParameters(caseScalars, caseSetup.Parameters),
-                    SqlParameterInputs.CombineClassificationParameters(caseBaseline.Parameters, caseCandidate.Parameters));
+                var caseListBindings = SqlParameterInputs.DeduplicateClassificationListParameters(
+                    caseSetup.Parameters,
+                    caseBaseline.Parameters,
+                    caseCandidate.Parameters);
+                classificationCaseListParameters.Add(caseListBindings);
+                var caseBindings = SqlParameterInputs.CombineClassificationParameters(caseScalars, caseListBindings);
                 SqlSetupVariableReferenceValidator.Validate(caseSetup.Text, caseBindings, caseBaseline.Text, caseCandidate.Text);
                 dialect.ValidateParameterReferences(caseBindings, caseSetup.Text, caseBaseline.Text, caseCandidate.Text);
                 SetupSqlExecution.Validate(dialect.Engine, caseSetup.Text, caseBindings);
@@ -665,7 +680,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 operation.SetupSql,
                 operation.BaselineSql,
                 operation.CandidateSql,
-                cellParameters);
+                cellParameters,
+                validateParameterReferences: false);
 
             var target = prepared.Target;
             RecordConditions(operation, () => ConditionsModelBuilder.Build(
@@ -682,17 +698,18 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     .Where(parameter => !prepared.FixedParameters.Any(fixedParameter => fixedParameter.Name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase)))
                     .ToArray();
                 var classificationSets = cellParameters
-                    .Select(parameters => SqlParameterInputs.CombineClassificationParameters(parameters, representativeParameters))
+                    .Select((parameters, index) => SqlParameterInputs.CombineClassificationParameters(
+                        parameters,
+                        SqlParameterInputs.DeduplicateClassificationListParameters(
+                            classificationCaseListParameters[index],
+                            representativeParameters)))
                     .ToArray();
                 for (var index = 0; index < cellParameters.Length; index++)
                     MissingParameterCheck.RequireSupplied(
                         target.Engine,
                         classificationSets[index],
-                        new[]
-                        {
-                            prepared.ClassificationBaselineSql,
-                            prepared.ClassificationCandidateSql,
-                        }.Where(sql => sql is not null).Select(sql => sql!).ToArray());
+                        classificationCaseBaselineSql[index],
+                        classificationCaseCandidateSql[index]);
                 return DryRunOutcome(
                     "compare",
                     prepared.Classification.Baseline,

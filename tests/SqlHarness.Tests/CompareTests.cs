@@ -29,9 +29,11 @@ public class SqlHarnessCompareTests
             DryRun = true,
         };
 
-        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(operation);
+        var session = FakeCompareSession.Create();
+        var outcome = await Module(session).ExecuteAsync(operation);
 
-        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        Assert.Equal(0, session.FactoryOpenCount);
         var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
         Assert.Equal(["@Category", "@Ids1"], report.Parameters.Select(parameter => parameter.Name));
     }
@@ -50,7 +52,7 @@ public class SqlHarnessCompareTests
 
         var outcome = await Module(session).ExecuteAsync(operation);
 
-        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
         var sideCommands = session.Commands.Where(command => command.Sql == "SELECT Id FROM dbo.Items WHERE Id IN (@Ids1, @Ids2)").ToArray();
         Assert.NotEmpty(sideCommands);
         Assert.All(sideCommands, command => Assert.Equal(new[] { 11, 22 }, command.Parameters.Select(parameter => (int)parameter.Value).ToArray()));
@@ -107,9 +109,9 @@ public class SqlHarnessCompareTests
     }
 
     [Theory]
-    [InlineData("SELECT 1 WHERE 1 IN @Ids", "ParseError")]
-    [InlineData("SELECT 1 WHERE 1 IN (@Ids)", "List expansion parameter '@Ids1' collides")]
-    public async Task Compare_dry_run_characterizes_current_named_set_list_failure(string sql, string expectedError)
+    [InlineData("SELECT 1 WHERE 1 IN @Ids", "@Ids1")]
+    [InlineData("SELECT 1 WHERE 1 IN (@Ids)", "@Ids1")]
+    public async Task Compare_dry_run_classifies_identical_list_sql_for_named_sets_and_setup_reuse(string sql, string expectedParameter)
     {
         var operation = new SqlHarnessCompareMatrixOperation(
             Target(), null, sql, sql, [], 30, 1, "")
@@ -124,18 +126,22 @@ public class SqlHarnessCompareTests
             Context = new CompareContext("plan107-diagnostic", "whole"),
         };
 
-        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(operation);
+        var session = FakeCompareSession.Create();
+        var outcome = await Module(session).ExecuteAsync(operation);
 
-        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.Contains(expectedError, outcome.SafeError ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        Assert.Equal(0, session.FactoryOpenCount);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal(3, report.ParameterSets);
+        Assert.Equal(expectedParameter, Assert.Single(report.Parameters).Name);
     }
 
     [Theory]
-    [InlineData("IN @Ids", "ParseError")]
-    [InlineData("IN (@Ids)", "List expansion parameter '@Ids1' collides")]
-    public async Task Compare_dry_run_characterizes_current_setup_list_reuse_failure(string inClause, string expectedError)
+    [InlineData("IN @Ids", "@Ids1")]
+    [InlineData("IN (@Ids)", "@Ids1")]
+    public async Task Compare_dry_run_classifies_a_list_reused_by_setup_and_both_variants(string inClause, string expectedParameter)
     {
-        var setup = $"SELECT Id INTO #ids FROM dbo.Items WHERE Id {inClause}";
+        var setup = $"SELECT Id INTO #ids FROM dbo.Items; SELECT Id FROM #ids WHERE Id {inClause}";
         var query = $"SELECT Id FROM #ids WHERE Id {inClause}";
         var operation = new SqlHarnessCompareMatrixOperation(Target(), setup, query, query, [], 30, 1, "")
         {
@@ -147,10 +153,13 @@ public class SqlHarnessCompareTests
             Context = new CompareContext("plan107-diagnostic", "whole"),
         };
 
-        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(operation);
+        var session = FakeCompareSession.Create();
+        var outcome = await Module(session).ExecuteAsync(operation);
 
-        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.Contains(expectedError, outcome.SafeError ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        Assert.Equal(0, session.FactoryOpenCount);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal(expectedParameter, Assert.Single(report.Parameters).Name);
     }
 
     [Fact]
@@ -165,9 +174,11 @@ public class SqlHarnessCompareTests
             Context = new CompareContext("plan107-diagnostic", "whole"),
         };
 
-        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(operation);
+        var session = FakeCompareSession.Create();
+        var outcome = await Module(session).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(0, session.FactoryOpenCount);
         Assert.Contains("@Ids1", outcome.SafeError ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 

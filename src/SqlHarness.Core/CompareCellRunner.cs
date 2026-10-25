@@ -49,7 +49,8 @@ internal static class CompareOperationPreparer
         int timeoutSeconds,
         int repeat,
         List<string> knownSecrets,
-        IReadOnlyList<SqlHarnessParameterInput>? typedParameters = null)
+        IReadOnlyList<SqlHarnessParameterInput>? typedParameters = null,
+        IReadOnlyList<SqlHarnessParameterInput>? classificationListInputs = null)
     {
         ArgumentNullException.ThrowIfNull(targetRequest);
         ArgumentNullException.ThrowIfNull(profiles);
@@ -72,15 +73,30 @@ internal static class CompareOperationPreparer
         var tableValuedNames = ParameterSetResolver.ValidateInputs(resolvedParameterInputs, target.Engine);
         var scalarParameters = dialect.BindParameters(
             resolvedParameterInputs.Where(input => ParameterKindParser.Parse(input) == ParameterKind.Scalar));
-        var baselineExpansion = SqlParameterInputs.ExpandListsForClassification(baselineSql, resolvedParameterInputs);
-        var candidateExpansion = SqlParameterInputs.ExpandListsForClassification(candidateSql, resolvedParameterInputs);
+        var additionalLists = (classificationListInputs ?? [])
+            .Where(input => ParameterKindParser.Parse(input) == ParameterKind.List)
+            .Where(input => !resolvedParameterInputs.Any(existing =>
+                ParameterKindParser.Parse(existing) == ParameterKind.List
+                && SqlParameterNames.Normalize(existing.Name).Equals(
+                    SqlParameterNames.Normalize(input.Name), StringComparison.OrdinalIgnoreCase)))
+            .GroupBy(input => SqlParameterNames.Normalize(input.Name), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToArray();
+        var classificationInputs = resolvedParameterInputs.Concat(additionalLists).ToArray();
+        var baselineExpansion = SqlParameterInputs.ExpandListsForClassification(baselineSql, classificationInputs);
+        var candidateExpansion = SqlParameterInputs.ExpandListsForClassification(candidateSql, classificationInputs);
         var setupExpansion = string.IsNullOrWhiteSpace(setupSql)
+            ? new ExpandedSql(setupSql ?? string.Empty, [])
+            : SqlParameterInputs.ExpandListsForClassification(setupSql, classificationInputs);
+        var fixedBaselineExpansion = SqlParameterInputs.ExpandListsForClassification(baselineSql, resolvedParameterInputs);
+        var fixedCandidateExpansion = SqlParameterInputs.ExpandListsForClassification(candidateSql, resolvedParameterInputs);
+        var fixedSetupExpansion = string.IsNullOrWhiteSpace(setupSql)
             ? new ExpandedSql(setupSql ?? string.Empty, [])
             : SqlParameterInputs.ExpandListsForClassification(setupSql, resolvedParameterInputs);
         var representativeListParameters = SqlParameterInputs.DeduplicateClassificationListParameters(
-            setupExpansion.Parameters,
-            baselineExpansion.Parameters,
-            candidateExpansion.Parameters);
+            fixedSetupExpansion.Parameters,
+            fixedBaselineExpansion.Parameters,
+            fixedCandidateExpansion.Parameters);
         var classificationParameters = SqlParameterInputs.CombineClassificationParameters(scalarParameters, representativeListParameters);
 
         SqlSafetyDecision? setupSafety = null;
@@ -134,21 +150,25 @@ internal static class CompareOperationPreparer
         string? setupSql,
         string baselineSql,
         string candidateSql,
-        IReadOnlyList<IReadOnlyList<SqlHarnessParameter>> variants)
+        IReadOnlyList<IReadOnlyList<SqlHarnessParameter>> variants,
+        bool validateParameterReferences = true)
     {
         ArgumentNullException.ThrowIfNull(prepared);
         ArgumentNullException.ThrowIfNull(variants);
-        foreach (var variant in variants)
+        if (validateParameterReferences)
         {
-            var validationParameters = prepared.HasNonScalarParameters
-                ? SqlParameterInputs.CombineClassificationParameters(
-                    variant,
-                    prepared.ClassificationParameters.Where(parameter => !prepared.FixedParameters.Any(scalar => scalar.Name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase))).ToArray())
-                : variant;
-            if (prepared.Dialect.Engine == SqlEngine.SqlServer)
-                SqlSetupVariableReferenceValidator.Validate(prepared.ClassificationSetupSql, validationParameters, prepared.ClassificationBaselineSql, prepared.ClassificationCandidateSql);
-            prepared.Dialect.ValidateParameterReferences(validationParameters, prepared.ClassificationSetupSql, prepared.ClassificationBaselineSql, prepared.ClassificationCandidateSql);
-            SetupSqlExecution.Validate(prepared.Dialect.Engine, prepared.ClassificationSetupSql, validationParameters);
+            foreach (var variant in variants)
+            {
+                var validationParameters = prepared.HasNonScalarParameters
+                    ? SqlParameterInputs.CombineClassificationParameters(
+                        variant,
+                        prepared.ClassificationParameters.Where(parameter => !prepared.FixedParameters.Any(scalar => scalar.Name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase))).ToArray())
+                    : variant;
+                if (prepared.Dialect.Engine == SqlEngine.SqlServer)
+                    SqlSetupVariableReferenceValidator.Validate(prepared.ClassificationSetupSql, validationParameters, prepared.ClassificationBaselineSql, prepared.ClassificationCandidateSql);
+                prepared.Dialect.ValidateParameterReferences(validationParameters, prepared.ClassificationSetupSql, prepared.ClassificationBaselineSql, prepared.ClassificationCandidateSql);
+                SetupSqlExecution.Validate(prepared.Dialect.Engine, prepared.ClassificationSetupSql, validationParameters);
+            }
         }
 
         prepared.Dialect.ValidateMeasuredBatch(baselineSql);

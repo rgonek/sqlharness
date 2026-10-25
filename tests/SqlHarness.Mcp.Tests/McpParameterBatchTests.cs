@@ -84,7 +84,7 @@ public sealed class McpParameterBatchTests
     }
 
     [Fact]
-    public async Task Served_compare_characterizes_current_offline_list_failures_for_both_IN_forms()
+    public async Task Served_compare_classifies_offline_list_paths_for_both_IN_forms()
     {
         var attempts = 0;
         await using var served = await ServedCatalog.CreateAsync(requestScope: false, () => Interlocked.Increment(ref attempts));
@@ -117,8 +117,8 @@ public sealed class McpParameterBatchTests
                     ? sql.Contains("(@Ids)", StringComparison.Ordinal) ? "SELECT Id FROM #ids WHERE Id IN (@Ids)" : "SELECT Id FROM #ids WHERE Id IN @Ids"
                     : sql;
                 var setupSql = sql.Contains("(@Ids)", StringComparison.Ordinal)
-                    ? "SELECT Id INTO #ids FROM dbo.Items WHERE Id IN (@Ids)"
-                    : "SELECT Id INTO #ids FROM dbo.Items WHERE Id IN @Ids";
+                    ? "SELECT Id INTO #ids FROM dbo.Items; SELECT Id FROM #ids WHERE Id IN (@Ids)"
+                    : "SELECT Id INTO #ids FROM dbo.Items; SELECT Id FROM #ids WHERE Id IN @Ids";
                 var arguments = new Dictionary<string, object?>
                 {
                     ["baseline"] = new { sql = querySql },
@@ -135,15 +135,22 @@ public sealed class McpParameterBatchTests
                 var result = await served.Client.CallToolAsync("sqlharness_compare", arguments, cancellationToken: CancellationToken.None);
                 var text = Text(result);
                 var envelope = Envelope(result);
-                var status = envelope.GetProperty("error").GetProperty("code").GetString();
-                var expectedCurrentError = sql.Contains("(@Ids)", StringComparison.Ordinal)
-                    ? values.Length == 0 ? "List expansion parameter '@Ids' collides" : "List expansion parameter '@Ids1' collides"
-                    : "ParseError";
-                _output.WriteLine($"CASE {name} form={sql} expected-current=safety_rejected/{expectedCurrentError} expected-contract={(collision ? "safety_rejected" : "success")} request={JsonSerializer.Serialize(arguments)} observed={text}");
-                var errorMessage = envelope.GetProperty("error").GetProperty("message").GetString() ?? string.Empty;
-                if (!string.Equals("safety_rejected", status, StringComparison.OrdinalIgnoreCase)
-                    || !errorMessage.Contains(expectedCurrentError, StringComparison.OrdinalIgnoreCase))
-                    mismatches.Add($"{name} expected current safety rejection containing '{expectedCurrentError}', observed {text}");
+                var status = envelope.GetProperty("status").GetString();
+                var errorMessage = envelope.TryGetProperty("error", out var error)
+                    ? error.GetProperty("message").GetString() ?? string.Empty
+                    : string.Empty;
+                var errorCode = envelope.TryGetProperty("error", out error)
+                    ? error.GetProperty("code").GetString()
+                    : null;
+                var expectedOutcome = collision ? "safety_rejected" : "success";
+                var matchesContract = collision
+                    ? string.Equals("error", status, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals("safety_rejected", errorCode, StringComparison.OrdinalIgnoreCase)
+                        && errorMessage.Contains("@Ids1", StringComparison.OrdinalIgnoreCase)
+                    : string.Equals("success", status, StringComparison.OrdinalIgnoreCase);
+                _output.WriteLine($"CASE {name} form={sql} expected-contract={expectedOutcome} request={JsonSerializer.Serialize(arguments)} observed={text}");
+                if (!matchesContract)
+                    mismatches.Add($"{name} expected {expectedOutcome}{(collision ? " with the caller @Ids1 collision preserved" : string.Empty)}, observed {text}");
                 observed++;
             }
 
