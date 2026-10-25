@@ -7,7 +7,7 @@
 
 ## Status
 
-- **Status:** RESEARCH COMPLETE — choose C (no new supported feature now); defer B pending the explicit demand and design gates in [decision](120-evidence/decision.md). Current evaluator/verifier evidence: 29 synthetic cases and 17 mock dispatches, including strict integer-version validation; fixed typed scalar and MCP named-set-file shapes only, with no full reader grammar parity or executed symlink proof. The initial whole-branch review is approved after its single Minor correction; final scoped rereview is approved. Local `plan-120` only; not integrated or pushed.
+- **Status:** RESEARCH COMPLETE — choose C (no new supported feature now); defer B pending the explicit demand and design gates in [decision](120-evidence/decision.md). Current evaluator/verifier evidence: 29 synthetic cases and 17 mock dispatches, including strict integer-version validation; fixed typed scalar and MCP named-set-file shapes only, with no full reader grammar parity or executed symlink proof. The initial whole-branch review is approved after its single Minor correction; final scoped rereview is approved. Locally integrated into `main` at `717e08ad`; not pushed. See [integration evidence](120-evidence/logs/integration-main.md).
 - **Priority:** P3; selected direction proposal 5; recurring multi-subject demand remains unconfirmed.
 - **Effort / risk / confidence:** M study, L potential implementation / MED-HIGH / MED grounding.
 - **Depends on:** none of 116-119. Existing compare/parameter-set contracts are implemented; Plan 036 is a different testing-infrastructure feature.
