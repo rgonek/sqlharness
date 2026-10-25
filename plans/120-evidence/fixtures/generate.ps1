@@ -32,8 +32,11 @@ function Write-Json([string]$RelativePath, [object]$Value) {
             return ,$ordered
         }
         if ($Item -is [System.Collections.IEnumerable] -and $Item -isnot [string]) {
-            $items = @($Item | ForEach-Object { ConvertTo-CanonicalJsonValue $_ })
-            return ,$items
+            $items = [System.Collections.Generic.List[object]]::new()
+            foreach ($nestedItem in $Item) {
+                $items.Add((ConvertTo-CanonicalJsonValue $nestedItem))
+            }
+            return ,$items.ToArray()
         }
         return $Item
     }
@@ -74,8 +77,8 @@ Write-Json "$a/mock-outcomes.json" @{ entries = @(
 Write-Utf8 "$b/setup/prepare.sql" "select 1 as fixture_setup;`n"
 Write-Utf8 "$b/revisions/pair-01/baseline.sql" "select event_id, event_date from events where event_date >= @boundaryDate order by event_id;`n"
 Write-Utf8 "$b/revisions/pair-01/candidate.sql" "select event_id, event_date from events where event_date >= @boundaryDate and is_visible = 1 order by event_id;`n"
-Write-Utf8 "$b/revisions/pair-02/baseline.sql" "select account_id, count(*) as event_count from events where is_visible = @includeHidden group by account_id order by account_id;`n"
-Write-Utf8 "$b/revisions/pair-02/candidate.sql" "select account_id, count(distinct event_id) as event_count from events where is_visible = @includeHidden group by account_id order by account_id;`n"
+Write-Utf8 "$b/revisions/pair-02/baseline.sql" "select account_id, event_count from events where is_visible = @includeHidden order by event_id;`n"
+Write-Utf8 "$b/revisions/pair-02/candidate.sql" "select distinct account_id, event_count from events where is_visible = @includeHidden order by account_id, event_count;`n"
 Write-Utf8 "$b/revisions/pair-03/baseline.sql" "select event_id, label from events where event_date = @boundaryDate order by event_id;`n"
 $pair3Path = "$b/revisions/pair-03/candidate.sql"
 $pair3PinnedSql = "select event_id, label from events where event_date = @boundaryDate and is_visible = 1 order by event_id;`n"
@@ -84,6 +87,11 @@ $pair3PinnedHash = Get-Sha256 $pair3Path
 Write-Json "$b/inputs/boundary-date.sqljson" @{ name = 'boundary-date'; parameters = @(@{ name = 'boundaryDate'; type = 'date'; value = '2024-02-29' }) }
 $sharedSetup = File-Reference "$b/setup/prepare.sql"
 $boundaryInputs = File-Reference "$b/inputs/boundary-date.sqljson"
+$duplicateBaselineRows = [System.Collections.Generic.List[object]]::new()
+$duplicateBaselineRows.Add([object[]]@(4, 3))
+$duplicateBaselineRows.Add([object[]]@(4, 3))
+$duplicateCandidateRows = [System.Collections.Generic.List[object]]::new()
+$duplicateCandidateRows.Add([object[]]@(4, 3))
 $bPairs = @(
     @{ id = 'date-boundary'; baseline = (File-Reference "$b/revisions/pair-01/baseline.sql"); candidate = (File-Reference "$b/revisions/pair-01/candidate.sql"); input = @{ kind = 'parameterSetFile'; file = $boundaryInputs } },
     @{ id = 'duplicate-counts'; baseline = (File-Reference "$b/revisions/pair-02/baseline.sql"); candidate = (File-Reference "$b/revisions/pair-02/candidate.sql"); input = @{ kind = 'fixed'; parameters = @(@{ name = 'includeHidden'; type = 'bit'; value = '1' }) } },
@@ -95,7 +103,7 @@ $bComparisons = foreach ($pair in $bPairs) {
 Write-Json "$b/experiment-suite.json" @{ version = 1; comparisons = @($bComparisons) }
 Write-Json "$b/mock-outcomes.json" @{ entries = @(
     @{ id = 'date-boundary'; execution = 'completed'; equivalence = 'equivalent'; performance = 'improved'; coverage = @{ requestedCases = 1; completedCases = 1 }; mockRows = @{ baseline = @(@(11, '2024-02-29'), @(11, '2024-02-29')); candidate = @(@(11, '2024-02-29'), @(11, '2024-02-29')) } },
-    @{ id = 'duplicate-counts'; execution = 'completed'; equivalence = 'different'; performance = 'no-regression'; coverage = @{ requestedCases = 1; completedCases = 1 }; mockRows = @{ baseline = @(@(4, 3), @(4, 3)); candidate = @(@(4, 2), @(4, 2)) } },
+    @{ id = 'duplicate-counts'; execution = 'completed'; equivalence = 'different'; performance = 'no-regression'; coverage = @{ requestedCases = 1; completedCases = 1 }; mockRows = @{ baseline = $duplicateBaselineRows.ToArray(); candidate = $duplicateCandidateRows.ToArray() } },
     @{ id = 'changed-revision'; execution = 'not-dispatched'; equivalence = 'not-evaluated'; performance = 'not-measured'; coverage = @{ requestedCases = 1; completedCases = 0 }; stopReason = 'sha256-mismatch' }
 ) }
 Write-Utf8 $pair3Path "select event_id, label from events where event_date = @boundaryDate and is_visible = 1 and is_public = 1 order by event_id;`n"

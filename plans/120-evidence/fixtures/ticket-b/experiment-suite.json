@@ -35,11 +35,11 @@
     {
       "baseline": {
         "path": "revisions/pair-02/baseline.sql",
-        "sha256": "d5f9b6ea30714a1359f631dd3d57a9a635a9afdc74bb036ca3a783507639f947"
+        "sha256": "2fa736169f914f62cac93e4b46b83bbba998873a085d27c3379cdb9079909662"
       },
       "candidate": {
         "path": "revisions/pair-02/candidate.sql",
-        "sha256": "4b26e3e6d815516846084a5210fcc66e59c88fb1ca0e669aa5945b2293f18ac3"
+        "sha256": "8c6012fb9d3cf00dbd5c9055a4ff42154838442af93dc032eea94975ac4d0f86"
       },
       "compareNullability": true,
       "compareResults": "multiset",

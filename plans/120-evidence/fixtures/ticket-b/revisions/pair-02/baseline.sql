@@ -1,1 +1,1 @@
-select account_id, count(*) as event_count from events where is_visible = @includeHidden group by account_id order by account_id;
+select account_id, event_count from events where is_visible = @includeHidden order by event_id;
