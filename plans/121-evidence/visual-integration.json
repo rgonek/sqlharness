@@ -1,0 +1,22 @@
+{
+  "previousMain": "eb28657d37dc6763938a6220b9463ba910cf50f1",
+  "integratedMain": "2fdfc4924d60193c47bf949db293acec79d83e8a",
+  "featureHead": "44bf6cb327cb24c6b9ddfaa9df17cdc8b09feff4",
+  "testedSnapshot": "2e279ba84cd35be13dda8c28761c232797443210",
+  "productTreesMatch": true,
+  "userReadmeBytesIdentical": true,
+  "userPatchReverseCheck": true,
+  "userIndexMergedSha256": "b9c9f7bae858726125bef020cd16dbd944ba264d083052970889510a6e9364e1",
+  "backup": "D:\\temp\\sqlharness-visual-main-backup",
+  "originalFiles": {
+    "README.md": {
+      "sha256": "275ade0675540c9d383df6b6e6bbf90f1ee2883d6eaf9ebc76314475069986d5",
+      "backup": "D:\\temp\\sqlharness-visual-main-backup\\README.md"
+    },
+    "plans/README.md": {
+      "sha256": "b3a48c80245a518fbdb27024450a8508d838659c424e25df9ef9b743c3bb5f47",
+      "backup": "D:\\temp\\sqlharness-visual-main-backup\\plans-README.md"
+    }
+  },
+  "pushPerformed": false
+}

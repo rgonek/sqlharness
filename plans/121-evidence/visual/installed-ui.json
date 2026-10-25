@@ -1,0 +1,23 @@
+{
+  "origin": "http://127.0.0.1:48125",
+  "isolatedHome": true,
+  "apiFixtures": true,
+  "assets": [
+    {
+      "path": "/assets/index-CtJa0UMV.js",
+      "sha256": "38f4c4fd251c05bb6090657bd883559929c7ca995e554d5f042a824fa6b3d4a6"
+    },
+    {
+      "path": "/assets/index-DM58aeg8.css",
+      "sha256": "050af5fc23e509ce32a41cafac0605998d937c5fefded182e6f7054c00a5f194"
+    }
+  ],
+  "errors": [],
+  "screens": [
+    "activity",
+    "settings",
+    "operation",
+    "session"
+  ],
+  "tokenRecorded": false
+}

@@ -1,0 +1,16 @@
+{
+  "sourceCommit": "2fdfc4924d60193c47bf949db293acec79d83e8a",
+  "command": "just publish fast",
+  "exitCode": 0,
+  "installed": "C:\\Users\\rgone\\.local\\bin\\sqlharness.exe",
+  "artifact": "D:\\Dev\\sqlharness\\artifacts\\publish-single\\sqlharness.exe",
+  "sha256": "591232b33fb6d190d762c43ee09eb53442970a458c611aa083a74f1437cda51e",
+  "binaryMatchesArtifact": true,
+  "version": "0.0.0",
+  "versionIsIdentityProof": false,
+  "installedUiAssetBytesMatchBuild": true,
+  "installedScreens": 4,
+  "browserErrors": [],
+  "isolatedDashboardStopped": true,
+  "pushPerformed": false
+}

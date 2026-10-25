@@ -81,4 +81,6 @@ At 390px, Activity, Settings, Operation and Session were captured and inspected.
 - [x] Open combined full-view and focused comparisons and fix material drift.
 - [x] Verify key interactions, investigate errors and inspect a narrow viewport.
 - [x] Preserve real unavailable/error states and existing safety/data contracts.
-- [ ] Finish the final `just verify` gate, record its exact product tree, then integrate and publish locally.
+- [x] Finish the final `just verify` gate, record its exact product tree, then integrate and publish locally.
+
+Delivery: [verification](plans/121-evidence/visual-verification.md), [integration](plans/121-evidence/visual-integration.json), [publication](plans/121-evidence/visual-publication.json). The installed binary served matching JS/CSS bytes and four captured screens with no browser errors; its isolated process was then stopped.

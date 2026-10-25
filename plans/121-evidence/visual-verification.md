@@ -21,6 +21,12 @@ The caret interaction regression was observed RED, then GREEN ([RED](visual-logs
 
 ## Delivery
 
-Pending final gate, local integration and publication. No push, Linux gate or live database acceptance is claimed.
+Locally merged into `main` at `2fdfc4924d60193c47bf949db293acec79d83e8a`. Incoming main changes were Plan 118 documentation/evidence only. The index conflict retained the corrected Plan 121 entry and incoming Plan 118 entry. Source/test/script/build-input trees exactly match the final gate snapshot; this is integrated product identity evidence, not a separately rerun gate. See [integration receipt](visual-integration.json).
+
+The original README bytes and user patch were preserved; the overlapping index was precomputed with a conflict-free three-way merge after a byte backup and hash/patch capture. Both user files remain uncommitted.
+
+`just publish fast` exited 0. Installed executable SHA-256 equals the publish artifact. An isolated installed dashboard served byte-identical built JS/CSS; Activity, Settings, Operation and Session were captured with zero browser errors ([UI receipt](visual/installed-ui.json), [publication receipt](visual-publication.json), [publish log](visual-logs/publish.txt)). The isolated dashboard was stopped afterward; other sessions were not restarted. Version remains 0.0.0 and is not used as UI identity proof. Vite retains its non-fatal chunk-size notice.
+
+No push, Linux gate or live database acceptance is claimed.
 
 Text logs have trailing whitespace normalized for repository checks; [raw bytes](visual-logs/raw-logs.zip) are retained separately.

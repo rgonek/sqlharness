@@ -33,7 +33,7 @@ Preserve the operator's dirty main documents. The operator subsequently authoriz
 See [verification](121-evidence/verification.md), [implementation](121-evidence/implementation.md) and [reviews](121-evidence/reviews.md). The original delivery lacked browser acceptance. The follow-up below supersedes that limitation with actual screenshot evidence.
 ## Visual correction follow-up (2026-10-25)
 
-Status: VISUAL AND GATE ACCEPTED; local delivery in progress on `dashboard-visual-fidelity`, base `7c1b2fbf`.
+Status: DONE; visually accepted, final Windows gate passed, locally merged into main at `2fdfc492` and published. Branch `dashboard-visual-fidelity`, base `7c1b2fbf`. No push.
 The previous DONE status describes delivery, not visual acceptance.
 
 - [x] Render local exports with support.js and capture selected source screens.
@@ -43,10 +43,12 @@ The previous DONE status describes delivery, not visual acceptance.
 - [x] Correct OperationPage headers, metric strips and tab panels for measure/query/mutation/compare.
 - [x] Correct SessionPage, VersionTable, ComparisonPanel/IoComparison and PlanWorkbench geometry.
 - [x] Re-capture matched states, inspect full views and readable details; verify narrow layouts and console.
-- [ ] Run focused checks and final just verify, review, integrate locally preserving dirty main, publish fast and verify installed artifact. No push.
+- [x] Run focused checks and final just verify, review, integrate locally preserving dirty main, publish fast and verify installed artifact. No push.
 
 Final Windows gate: UI 384, Core 4718, MCP 535 passed; local xUnit collections sequential. See [follow-up verification](121-evidence/visual-verification.md).
 
 Evidence: `121-evidence/visual/`; reproducible capture uses Playwright with browser-only API interception. Fixtures never reach databases or the installed journal. Missing journal result cells and statement memory remain explicitly unavailable.
 
 Visual acceptance: [design QA](../design-qa.md), [44-state screenshot gallery](121-evidence/visual/index.html), and [follow-up review](121-evidence/visual-review.md). The operator explicitly chose unavailable-data labels without new contracts.
+
+Follow-up delivery: [integration](121-evidence/visual-integration.json), [publication](121-evidence/visual-publication.json). Installed UI assets and four browser screens verified.
