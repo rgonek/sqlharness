@@ -1,0 +1,7 @@
+Worktree: D:\Dev\sqlharness\.worktrees\plan-118
+Study start: 7c1b2fbf282d8ee3aa1e970759053156a21550a9
+Whitespace: git diff --check — exit 0
+Markdown links: plans/118-condition-difference-explanations-study.md, plans/README.md, plans/118-evidence/decision.md — passed; all relative targets exist
+Source immutability: git diff --name-only 7c1b2fbf282d8ee3aa1e970759053156a21550a9 -- src tests scripts — empty
+Unexpected files: none outside the intended Plan 118 evidence/review archive and plan/index edits
+Product gate: not run; no product files changed

@@ -29,7 +29,7 @@ The operator selected proposals **1-5** from the `improve deep next` review at `
 
 | Plan | Selected direction and deliverable | Priority / effort / risk | Dependencies | Status |
 |---|---|---|---|---|
-| [118](118-condition-difference-explanations-study.md) | **3** Known condition differences, informational changes and explicit evidence gaps in dashboard explanations | P2 / M / MED | 079/080/087 implemented; independent of 116/117 | TODO |
+| [118](118-condition-difference-explanations-study.md) | **3** Known condition differences, informational changes and explicit evidence gaps in dashboard explanations | P2 / M / MED | 079/080/087 implemented; independent of 116/117 | RESEARCH COMPLETE; bounded subset accepted for separately selected implementation; cross-group UI deferred pending exact-pair interface; task/final review pending ([decision](118-evidence/decision.md)) |
 | [119](119-large-cell-streaming-study.md) | **4** Synthetic large-cell allocation/hash spike and per-path streaming go/no-go | P3 / L / HIGH | No new hard predecessor; preserve completed 006 budgets | TODO |
 | [120](120-repeatable-experiment-suites-study.md) | **5** External comparison manifests versus command lists; mock dispatch and repeatability decision | P3 / M study, L potential implementation / MED-HIGH | Existing compare/parameter contracts; 036 is not a predecessor | TODO |
 
