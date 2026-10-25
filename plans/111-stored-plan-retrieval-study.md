@@ -15,6 +15,7 @@
 ## Status and priority
 
 - Status: RESEARCH COMPLETE — Tasks 1–3, Sol low whole-branch review and final scoped re-review approved. Implementation deferred pending recurrence. No feature or deployment was authorized.
+- Local integration: merged into `main` at `4aea22d4` on 2026-10-25; [integration evidence](111-evidence/integration.md). No push.
 - Priority: **P4** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: M; change risk: MED.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
