@@ -1,0 +1,6 @@
+{
+  "currentSha256": "6396ff03f0fa635d123aa4301ccd88c77dcbd0beb95131ff2aaeb7f5ca55d8d7",
+  "path": "revisions/pair-03/candidate.sql",
+  "pinnedSha256": "8949ef817baf41e8b4b46528ba41e6ed7ea6e3790f1b3aff9e9cb1dbdbaa7f05",
+  "reason": "deliberately changed after manifest pinning"
+}

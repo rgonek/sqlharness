@@ -1,0 +1,83 @@
+{
+  "comparisons": [
+    {
+      "baseline": {
+        "path": "sql/orders-baseline.sql",
+        "sha256": "cffa2b2bd98b8cf5d9f80f2a877f69dd5a578ae78325b9f13390063b9cdd08db"
+      },
+      "candidate": {
+        "path": "sql/orders-candidate.sql",
+        "sha256": "f129fc26d5a819bb4d13b11379e29e3c60bcad33e5918a122d20f9f56a73f4bd"
+      },
+      "compareNullability": false,
+      "compareResults": "ordered",
+      "id": "orders-by-customer",
+      "input": {
+        "files": [
+          {
+            "path": "inputs/small.sqljson",
+            "sha256": "a0e6cf544d230a191894406d19f6c9d631e3864b7d2d30a5de70601b78b305fe"
+          },
+          {
+            "path": "inputs/large.sqljson",
+            "sha256": "022304b0ce71c8de32091433066ea012ee2bbeae746d2926dcedaf7c790da64d"
+          },
+          {
+            "path": "inputs/empty.sqljson",
+            "sha256": "1ad2cb24b9003c75f2f597869e758937c972e65b6439e0d590a0b8c94e937a11"
+          }
+        ],
+        "kind": "parameterSetFiles"
+      },
+      "profile": "synthetic-ticket-a",
+      "repeat": 5,
+      "scope": "customer lookup",
+      "setup": null,
+      "subject": "orders",
+      "timeoutSeconds": 30,
+      "vars": {
+        "dataset": "orders"
+      }
+    },
+    {
+      "baseline": {
+        "path": "sql/returns-baseline.sql",
+        "sha256": "5491b47bcb167741c55c4c7ddd231f8d1be85f1f16fd484a21c5bc53d7c48cf1"
+      },
+      "candidate": {
+        "path": "sql/returns-candidate.sql",
+        "sha256": "48a334ff267be0c94e42e941e0beac7f7befa635b6e9843cd4d46a37c6a3dd6d"
+      },
+      "compareNullability": false,
+      "compareResults": "ordered",
+      "id": "returns-by-customer",
+      "input": {
+        "files": [
+          {
+            "path": "inputs/small.sqljson",
+            "sha256": "a0e6cf544d230a191894406d19f6c9d631e3864b7d2d30a5de70601b78b305fe"
+          },
+          {
+            "path": "inputs/large.sqljson",
+            "sha256": "022304b0ce71c8de32091433066ea012ee2bbeae746d2926dcedaf7c790da64d"
+          },
+          {
+            "path": "inputs/empty.sqljson",
+            "sha256": "1ad2cb24b9003c75f2f597869e758937c972e65b6439e0d590a0b8c94e937a11"
+          }
+        ],
+        "kind": "parameterSetFiles"
+      },
+      "profile": "synthetic-ticket-a",
+      "repeat": 5,
+      "scope": "customer lookup",
+      "setup": null,
+      "subject": "returns",
+      "timeoutSeconds": 30,
+      "vars": {
+        "dataset": "returns"
+      }
+    }
+  ],
+  "version": 1
+}

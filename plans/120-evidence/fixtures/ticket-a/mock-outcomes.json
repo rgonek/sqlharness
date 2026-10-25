@@ -1,0 +1,24 @@
+{
+  "entries": [
+    {
+      "coverage": {
+        "completedCases": 3,
+        "requestedCases": 3
+      },
+      "equivalence": "equivalent",
+      "execution": "completed",
+      "id": "orders-by-customer",
+      "performance": "no-regression"
+    },
+    {
+      "coverage": {
+        "completedCases": 3,
+        "requestedCases": 3
+      },
+      "equivalence": "regression",
+      "execution": "completed",
+      "id": "returns-by-customer",
+      "performance": "inconclusive"
+    }
+  ]
+}

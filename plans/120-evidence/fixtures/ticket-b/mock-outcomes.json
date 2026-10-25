@@ -1,0 +1,79 @@
+{
+  "entries": [
+    {
+      "coverage": {
+        "completedCases": 1,
+        "requestedCases": 1
+      },
+      "equivalence": "equivalent",
+      "execution": "completed",
+      "id": "date-boundary",
+      "mockRows": {
+        "baseline": [
+          [
+            11,
+            "2024-02-29"
+          ],
+          [
+            11,
+            "2024-02-29"
+          ]
+        ],
+        "candidate": [
+          [
+            11,
+            "2024-02-29"
+          ],
+          [
+            11,
+            "2024-02-29"
+          ]
+        ]
+      },
+      "performance": "improved"
+    },
+    {
+      "coverage": {
+        "completedCases": 1,
+        "requestedCases": 1
+      },
+      "equivalence": "different",
+      "execution": "completed",
+      "id": "duplicate-counts",
+      "mockRows": {
+        "baseline": [
+          [
+            4,
+            3
+          ],
+          [
+            4,
+            3
+          ]
+        ],
+        "candidate": [
+          [
+            4,
+            2
+          ],
+          [
+            4,
+            2
+          ]
+        ]
+      },
+      "performance": "no-regression"
+    },
+    {
+      "coverage": {
+        "completedCases": 0,
+        "requestedCases": 1
+      },
+      "equivalence": "not-evaluated",
+      "execution": "not-dispatched",
+      "id": "changed-revision",
+      "performance": "not-measured",
+      "stopReason": "sha256-mismatch"
+    }
+  ]
+}
