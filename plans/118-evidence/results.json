@@ -1,6 +1,6 @@
 {
   "schema": "plan118-condition-explanation-results-v1",
-  "revision": "5ebe862f52abf308e7f33e07178f5f0cf50cf485",
+  "revision": "890053e25f7929b7d588b8cba9c586ada6cd67dc",
   "evaluationState": "working tree evidence based on revision above",
   "serializer": "PowerShell ConvertTo-Json -Depth 80 -Compress; UTF-8 byte count via System.Text.Encoding",
   "limits": {
@@ -8,8 +8,8 @@
     "gaps": 16,
     "explanationUtf8Bytes": 8192
   },
-  "caseCount": 27,
-  "totalExplanationUtf8Bytes": 7731,
+  "caseCount": 34,
+  "totalExplanationUtf8Bytes": 9742,
   "maxObservedExplanationUtf8Bytes": 3709,
   "results": [
     {
@@ -724,6 +724,197 @@
         "omittedDifferences": 0
       },
       "explanationUtf8Bytes": 95
+    },
+    {
+      "name": "top-level duplicate before single after",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g3"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "parameters.@stable.value",
+            "parameterIdentity": "@stable",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "left",
+            "after": "right"
+          }
+        ],
+        "gaps": [
+          "identity-unresolved"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 247
+    },
+    {
+      "name": "top-level duplicate after single before",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g3"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "parameters.@stable.value",
+            "parameterIdentity": "@stable",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "left",
+            "after": "right"
+          }
+        ],
+        "gaps": [
+          "identity-unresolved"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 247
+    },
+    {
+      "name": "top-level duplicate without counterpart",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g3"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "parameters.@stable.value",
+            "parameterIdentity": "@stable",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "left",
+            "after": "right"
+          }
+        ],
+        "gaps": [
+          "identity-unresolved"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 247
+    },
+    {
+      "name": "paired-case duplicate before single after",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g3"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "cases.parameters.@stable.value",
+            "caseIdentity": {
+              "before": "base-safe",
+              "after": "candidate-safe"
+            },
+            "parameterIdentity": "@stable",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "left",
+            "after": "right"
+          }
+        ],
+        "gaps": [
+          "identity-unresolved"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 316
+    },
+    {
+      "name": "paired-case duplicate after without counterpart",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g3"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "cases.parameters.@stable.value",
+            "caseIdentity": {
+              "before": "base-safe",
+              "after": "candidate-safe"
+            },
+            "parameterIdentity": "@stable",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "left",
+            "after": "right"
+          }
+        ],
+        "gaps": [
+          "identity-unresolved"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 316
+    },
+    {
+      "name": "duplicate case key before single after",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g3"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "cases.parameters.@stable.value",
+            "caseIdentity": {
+              "before": "base-safe",
+              "after": "candidate-safe"
+            },
+            "parameterIdentity": "@stable",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "left",
+            "after": "right"
+          }
+        ],
+        "gaps": [
+          "case-pairing-ambiguous"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 319
+    },
+    {
+      "name": "duplicate case key after without counterpart",
+      "basis": {
+        "verdict": "ConditionsDiffer",
+        "group": "g3"
+      },
+      "conditionExplanation": {
+        "availability": "partial",
+        "differences": [
+          {
+            "field": "cases.parameters.@stable.value",
+            "caseIdentity": {
+              "before": "base-safe",
+              "after": "candidate-safe"
+            },
+            "parameterIdentity": "@stable",
+            "kind": "changed",
+            "relation": "measurement-condition",
+            "before": "left",
+            "after": "right"
+          }
+        ],
+        "gaps": [
+          "case-pairing-ambiguous"
+        ],
+        "omittedDifferences": 0
+      },
+      "explanationUtf8Bytes": 319
     }
   ],
   "knownLimits": [
