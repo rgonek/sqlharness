@@ -1,4 +1,4 @@
-pwsh ./scripts/verify.ps1 
+pwsh ./scripts/verify.ps1
 [6 q==> ui-install ok 1m04s
 ==> build ok 2m04s
 ==> ui-check FAILED (exit 1)

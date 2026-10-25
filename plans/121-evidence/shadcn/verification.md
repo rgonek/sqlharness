@@ -54,3 +54,5 @@ Following the existing [Plan 121 verification procedure](../visual-verification.
 `just publish fast` succeeded from product commit `08d50998`. The installed `C:/Users/rgone/.local/bin/sqlharness.exe` matches the published binary SHA-256. `sqlharness dashboard --restart` exited 0 and opened the dashboard at http://127.0.0.1:47800/. The restarted process uses the installed executable; served JavaScript and CSS match this worktree's build byte-for-byte. See [receipt](delivery.json), [asset hashes](installed-assets.json), [restart](restart.json) and [publication log](publication.log). Endpoint credentials were used privately for authentication and were not recorded.
 
 The worktree and branch are preserved. Main's existing README/plan-index edits remain untouched. Delivery documentation does not change the verified product source tree.
+
+Captured failure/registry logs have trailing whitespace normalized for Git diff checks; final gate result content is unchanged.

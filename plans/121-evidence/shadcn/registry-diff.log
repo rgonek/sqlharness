@@ -20,12 +20,12 @@
 │ │ @@ -1,17 +1,19 @@
 │ │ -import * as React from "react"
 │ │ +"use client"
-│ │  
+│ │
 │ │ -import { cn } from "cn"
 │ │ +import * as React from "react"
 │ │ -function Label({ className, ...props }: React.ComponentProps<"label">) {
 │ │ +import { cn } from "cn"
-│ │  
+│ │
 │ │ -  return (
 │ │ +function Label({ className, ...props }: React.ComponentProps<"label">) {
 │ │ -    <label
