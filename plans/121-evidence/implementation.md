@@ -40,3 +40,9 @@ in the existing Mutations interface; no approval is supplied by this change.
 Two source-review axes and scoped corrections are recorded in [reviews](reviews.md).
 Browser inventory was empty and `createBrowserTab("iab", ...)` reported that the
 browser was unavailable. Visual and responsive browser acceptance remain unverified.
+
+## Delivery
+
+Locally integrated and published after green Windows verification. See
+[verification](verification.md), [integration](integration.json) and
+[publication](publication.json). User README/index edits remain uncommitted.

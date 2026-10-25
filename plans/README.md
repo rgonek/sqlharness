@@ -61,7 +61,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 
 | Plan | Scope | Branch status |
 |---|---|---|
-| [121](121-dashboard-design-layout.md) | Selected Claude Design dashboard layouts | IMPLEMENTATION COMPLETE; Windows gate and source reviews passed; authorized local integration/publication pending ([verification](121-evidence/verification.md)) |
+| [121](121-dashboard-design-layout.md) | Selected Claude Design dashboard layouts | DONE; locally integrated into `main`; Windows gate passed (Core 4718, MCP 535, UI 381; local sequential .NET test scheduling); `just publish fast` installed locally; no push ([verification](121-evidence/verification.md)) |
 | [116](116-loaded-producer-identity-study.md) | Loaded producer identity design study | RESEARCH COMPLETE; locally integrated into `main` at `6ba811d5`; A accepted for a later selected implementation, B/C deferred; Luna xhigh task and Sol low whole-study reviews approved; scoped checks passed; no product changes or push ([decision](116-evidence/decision.md), [integration](116-evidence/reviews/integration.md)) |
 | [114](114-compact-statement-discovery.md) | Compact statement CPU/elapsed discovery | DONE; locally integrated into `main` at `48a80042`; reviews approved; combined Windows gate and final branch format passed; post-gate product delta whitespace-only; not pushed ([evidence](114-evidence/integration/implementation-report.md)) |
 | [115](115-query-result-set-selection.md) | Optional query response selection by original result-set ordinal | DONE; locally integrated into `main` at `0d37fa9e`; combined Windows gate and branch format passed; Luna and Sol reviews approved; not pushed ([integration evidence](115-evidence/integration/verification.md)) |

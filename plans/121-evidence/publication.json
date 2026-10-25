@@ -1,0 +1,11 @@
+{
+  "sourceCommit": "fc83e8080a40c665817daa5c877967a1d7931385",
+  "installed": "C:\\Users\\rgone\\.local\\bin\\sqlharness.exe",
+  "artifact": "D:/Dev/sqlharness/artifacts/publish-single/sqlharness.exe",
+  "sha256": "6a042c193469c1d15b3b148a7631607986e9e2661ce994a1b4b4d440933af571",
+  "version": "0.0.0",
+  "command": "just publish fast",
+  "exitCode": 0,
+  "binaryMatchesArtifact": true,
+  "previousBinary": "C:/Users/rgone/.local/bin/sqlharness.previous-20261025-103850.exe"
+}

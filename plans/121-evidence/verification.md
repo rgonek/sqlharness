@@ -2,7 +2,7 @@
 
 Windows `just verify` exited 0 on 2026-10-25. All five stages succeeded or were
 appropriately skipped: unchanged dependency install skipped, build passed with
-zero warnings/errors, UI check passed, .NET tests passed, and formatting skipped
+zero .NET compiler warnings/errors, UI check passed, .NET tests passed, and formatting skipped
 because no C# source changed.
 
 - UI: 67 files, **381 passed**; typecheck and lint passed.
@@ -40,4 +40,28 @@ machine-local `sqlharness-layout-121-gate` directory; it was not acceptance evid
 Independent standards and specification reviews approved the corrected source;
 see [reviews](reviews.md). No browser surface was available, so visual/responsive
 browser comparison remains unverified. Linux and live database acceptance were
-not run and are not claimed. Integration and local publication are recorded next.
+not run and are not claimed. Integration and local publication are recorded below.
+
+## Local integration and publication
+
+`main` fast-forwarded from `05a414a4` to `fc83e808`, including implementation
+commit `95eb43b7`. Its source/test/script trees exactly match the verified candidate;
+there is no additional product merge delta and no separate post-fast-forward gate
+is claimed. The final gate already included current main's Plan 116 changes.
+
+Before temporarily clearing the overlapping plan-index file, raw copies, a patch
+and SHA-256 values were saved. A three-way text merge combined the plan update
+with the user's changes. The user's original patch was verified unchanged after
+integration, and the root README's raw bytes were identical. No implicit stash or
+unrelated-user-work commit was used. Details: [integration receipt](integration.json).
+
+`just publish fast` exited 0 from main and installed
+`C:\Users\rgone\.local\bin\sqlharness.exe`. The installed SHA-256 exactly matches
+the new self-contained artifact, and the installed executable's `--version` smoke
+exited 0. Version remains the repository's existing `0.0.0`; no version bump was
+requested. See [publication receipt](publication.json) and [publish log](logs/publish.txt).
+Vite retains its non-fatal large-chunk notice. Existing processes were not stopped
+or restarted; new dashboard processes use the new layout. No push was performed.
+
+The follow-up integration/publication documentation commit changes no product code;
+the published product tree remains the current main product tree.

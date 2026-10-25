@@ -1,0 +1,43 @@
+pwsh ./scripts/publish-local.ps1 -SkipTests
+[6 q==> SDK 10.0.303
+==> publish win-x64
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+
+  > ui@0.0.0 build
+  > vite build
+
+  [36mvite v8.3.3 [32mbuilding client environment for production...[36m[39m
+  transforming...
+  SqlHarness.Core -> D:\Dev\sqlharness\src\SqlHarness.Core\bin\Release\net10.0\SqlHarness.Core.dll
+  Γ£ô 4021 modules transformed.
+  rendering chunks...
+  SqlHarness.Mcp -> D:\Dev\sqlharness\src\SqlHarness.Mcp\bin\Release\net10.0\SqlHarness.Mcp.dll
+  computing gzip size...
+  dist/index.html                                                0.48 kB Γöé gzip:   0.31 kB
+  dist/assets/geist-cyrillic-ext-wght-normal-DjL33-gN.woff2      7.42 kB
+  dist/assets/geist-vietnamese-wght-normal-6IgcOCM7.woff2        8.00 kB
+  dist/assets/geist-cyrillic-wght-normal-BEAKL7Jp.woff2         15.08 kB
+  dist/assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2        16.51 kB
+  dist/assets/geist-latin-wght-normal-BgDaEnEv.woff2            29.40 kB
+  dist/assets/editor.worker-DWPaKKV_.js                        303.93 kB
+  dist/assets/PlanGraphView-DLioOiRN.css                        15.41 kB Γöé gzip:   2.56 kB
+  dist/assets/index-BzUnqSkq.css                                84.10 kB Γöé gzip:  14.62 kB
+  dist/assets/monaco-DjpsE8to.css                               99.09 kB Γöé gzip:  14.20 kB
+  dist/assets/PlanGraphView-DPsGdTeb.js                        175.36 kB Γöé gzip:  55.62 kB
+  dist/assets/index-CQUjhP8m.js                              1,511.99 kB Γöé gzip: 452.68 kB
+  dist/assets/monaco-C84OKlFU.js                             2,724.40 kB Γöé gzip: 700.44 kB
+
+  [33m[plugin builtin:vite-reporter]
+  (!) Some chunks are larger than 500 kB after minification. Consider:
+  - Using dynamic import() to code-split the application
+  - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+  - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+  [32mΓ£ô built in 6.37s[39m
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\src\SqlHarness.Dashboard\bin\Release\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\src\SqlHarness.Cli\bin\Release\net10.0\win-x64\sqlharness.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\artifacts\publish-single\
+==> install C:\Users\rgone\.local\bin
+Previous binary kept as C:\Users\rgone\.local\bin\sqlharness.previous-20261025-103850.exe
+0.0.0
+Installed C:\Users\rgone\.local\bin\sqlharness.exe

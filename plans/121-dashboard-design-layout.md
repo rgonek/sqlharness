@@ -1,6 +1,6 @@
 # Plan 121: Dashboard design layout
 
-Status: IMPLEMENTATION COMPLETE; Windows gate and source reviews passed. Local integration/publication authorized and pending. Original base `443f468e`; current main `05a414a4` incorporated before the final gate.
+Status: DONE; locally integrated into main at `fc83e808`; `just publish fast` completed and installed binary verified. No push. Original base `443f468e`; current main `05a414a4` incorporated before the final gate.
 
 ## Approved references
 
