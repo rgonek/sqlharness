@@ -1,6 +1,6 @@
 # Plan 107 follow-up: source list classification
 
-**DONE on branch `plan-107-followup`; tested implementation commit `a8aded98`.** Final Windows gate and branch formatting passed; Luna xhigh task review and Sol low whole-branch review approved with no findings. Not integrated or pushed. See the [implementation report](follow-up-implementation.md), [task review](follow-up-review.md), [whole-branch review](follow-up-whole-branch-review.md), and [execution ledger](follow-up-execution-ledger.md).
+**DONE; locally integrated via `1742bd3b`; tested implementation commit `a8aded98`.** Final Windows gate and branch formatting passed; Luna xhigh task review and Sol low whole-branch review approved with no findings. Product/test tree unchanged by integration; not pushed. See [integration evidence](follow-up-integration-main.md). See the [implementation report](follow-up-implementation.md), [task review](follow-up-review.md), [whole-branch review](follow-up-whole-branch-review.md), and [execution ledger](follow-up-execution-ledger.md).
 
 ## Scope
 

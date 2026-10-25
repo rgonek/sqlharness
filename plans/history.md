@@ -1,3 +1,7 @@
+## Plan 107 follow-up locally integrated — 2026-10-25
+
+Compare list classification repair is locally integrated via `1742bd3b`, with the complete tested product/test tree from `a8aded98` unchanged. Luna xhigh task and Sol low whole-branch reviews approved; Windows gate and branch formatting passed. No redundant integrated-tree gate or push. See [integration evidence](107-evidence/follow-up-integration-main.md).
+
 # Plan history
 
 ## Plan 104 locally integrated — 2026-10-24
