@@ -7,7 +7,7 @@
 
 ## Status
 
-- **Status:** RESEARCH COMPLETE; bounded explanation subset accepted for separately selected implementation; cross-group UI explanation deferred until an exact operation pair is available. No product implementation, live DB, merge or push. See [decision](118-evidence/decision.md) and [study evidence](118-evidence/design.md).
+- **Status:** RESEARCH COMPLETE; bounded explanation subset accepted for separately selected implementation; cross-group UI explanation deferred until an exact operation pair is available. Locally integrated into `main` at `907e30ec`; no product implementation, live DB or push. See [decision](118-evidence/decision.md) and [study evidence](118-evidence/design.md).
 - **Priority:** P2; selected direction proposal 3.
 - **Effort / risk / confidence:** M / MED / HIGH grounding.
 - **Depends on:** none of 116-120; implemented 079/080/087 supply conditions/grouping semantics.
