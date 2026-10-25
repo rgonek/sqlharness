@@ -1,0 +1,5176 @@
+{
+  "formatVersion": 1,
+  "purpose": "Derived synthetic equivalence/localization outcomes; expected values were not read by evaluator.",
+  "accounting": {
+    "runMetadataCapBytes": 32768,
+    "cellMetadataCapBytes": 262144,
+    "resultSetDescriptorCap": 64,
+    "columnsPerSetCap": 256,
+    "itemCap": 16,
+    "metadataEstimator": "UTF-8 compact JSON bytes; not production serialization or heap allocation"
+  },
+  "results": [
+    {
+      "caseId": "eq-identical-001",
+      "artifactId": "artifact-eq-a",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": true,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 100,
+        "retainedCellMetadataBytes": 100
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 405,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-a",
+            "caseId": "eq-identical-001",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 405,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-a",
+            "caseId": "eq-identical-001",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-reorder-002",
+      "artifactId": "artifact-eq-b",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-b",
+                "caseId": "eq-reorder-002",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-b",
+                "caseId": "eq-reorder-002",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 1,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-b",
+                "caseId": "eq-reorder-002",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-b",
+                "caseId": "eq-reorder-002",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 1077,
+          "emittedItems": 2,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-b",
+            "caseId": "eq-reorder-002",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-b",
+                      "caseId": "eq-reorder-002",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-b",
+                      "caseId": "eq-reorder-002",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 1,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-b",
+                      "caseId": "eq-reorder-002",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-b",
+                      "caseId": "eq-reorder-002",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 1077,
+          "emittedItems": 2,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-b",
+            "caseId": "eq-reorder-002",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-b",
+                      "caseId": "eq-reorder-002",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-b",
+                      "caseId": "eq-reorder-002",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 1,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-b",
+                      "caseId": "eq-reorder-002",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-b",
+                      "caseId": "eq-reorder-002",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-duplicate-multiplicity-003",
+      "artifactId": "artifact-eq-c",
+      "matrixCell": null,
+      "mode": "multiset",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 1,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "partial",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": [
+          "row-difference-location-unsupported-for-multiset"
+        ]
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 468,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-c",
+            "caseId": "eq-duplicate-multiplicity-003",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "row-difference-location-unsupported-for-multiset"
+              ]
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 468,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-c",
+            "caseId": "eq-duplicate-multiplicity-003",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "row-difference-location-unsupported-for-multiset"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-column-name-change-004",
+      "artifactId": "artifact-eq-d",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 0,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-d",
+                "caseId": "eq-column-name-change-004",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-d",
+                "caseId": "eq-column-name-change-004",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 106,
+        "retainedCellMetadataBytes": 212
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 764,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-d",
+            "caseId": "eq-column-name-change-004",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-d",
+                      "caseId": "eq-column-name-change-004",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-d",
+                      "caseId": "eq-column-name-change-004",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 764,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-d",
+            "caseId": "eq-column-name-change-004",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-d",
+                      "caseId": "eq-column-name-change-004",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-d",
+                      "caseId": "eq-column-name-change-004",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-column-type-change-005",
+      "artifactId": "artifact-eq-e",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-type-change",
+            "columnOrdinal": 0,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-e",
+                "caseId": "eq-column-type-change-005",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-e",
+                "caseId": "eq-column-type-change-005",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 198
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 764,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-e",
+            "caseId": "eq-column-type-change-005",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-type-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-e",
+                      "caseId": "eq-column-type-change-005",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-e",
+                      "caseId": "eq-column-type-change-005",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 764,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-e",
+            "caseId": "eq-column-type-change-005",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-type-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-e",
+                      "caseId": "eq-column-type-change-005",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-e",
+                      "caseId": "eq-column-type-change-005",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-strict-nullability-only-006",
+      "artifactId": "artifact-eq-f",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": false
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "nullability-change",
+            "columnOrdinal": 0,
+            "rowOrdinal": null,
+            "policy": "strict-only",
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-f",
+                "caseId": "eq-strict-nullability-only-006",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-f",
+                "caseId": "eq-strict-nullability-only-006",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 197
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 803,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-f",
+            "caseId": "eq-strict-nullability-only-006",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": false
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "nullability-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "policy": "strict-only",
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-f",
+                      "caseId": "eq-strict-nullability-only-006",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-f",
+                      "caseId": "eq-strict-nullability-only-006",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 803,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-f",
+            "caseId": "eq-strict-nullability-only-006",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": false
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "nullability-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "policy": "strict-only",
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-f",
+                      "caseId": "eq-strict-nullability-only-006",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-f",
+                      "caseId": "eq-strict-nullability-only-006",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-nullability-unknown-007",
+      "artifactId": "artifact-eq-g",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "partial",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": [
+          "nullability-unknown"
+        ]
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 98,
+        "retainedCellMetadataBytes": 98
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 436,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-g",
+            "caseId": "eq-nullability-unknown-007",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "nullability-unknown"
+              ]
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 436,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-g",
+            "caseId": "eq-nullability-unknown-007",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "nullability-unknown"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-ordered-first-difference-008",
+      "artifactId": "artifact-eq-h",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 1,
+        "candidateOnlyCount": 1,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-h",
+                "caseId": "eq-ordered-first-difference-008",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-h",
+                "caseId": "eq-ordered-first-difference-008",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 791,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-h",
+            "caseId": "eq-ordered-first-difference-008",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-h",
+                      "caseId": "eq-ordered-first-difference-008",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-h",
+                      "caseId": "eq-ordered-first-difference-008",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 791,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-h",
+            "caseId": "eq-ordered-first-difference-008",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-h",
+                      "caseId": "eq-ordered-first-difference-008",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-h",
+                      "caseId": "eq-ordered-first-difference-008",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-ordered-middle-difference-009",
+      "artifactId": "artifact-eq-i",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 1,
+        "candidateOnlyCount": 1,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 1,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-i",
+                "caseId": "eq-ordered-middle-difference-009",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-i",
+                "caseId": "eq-ordered-middle-difference-009",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 794,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-i",
+            "caseId": "eq-ordered-middle-difference-009",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 1,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-i",
+                      "caseId": "eq-ordered-middle-difference-009",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-i",
+                      "caseId": "eq-ordered-middle-difference-009",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 794,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-i",
+            "caseId": "eq-ordered-middle-difference-009",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 1,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-i",
+                      "caseId": "eq-ordered-middle-difference-009",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-i",
+                      "caseId": "eq-ordered-middle-difference-009",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-ordered-last-difference-010",
+      "artifactId": "artifact-eq-j",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 1,
+        "candidateOnlyCount": 1,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 2,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-j",
+                "caseId": "eq-ordered-last-difference-010",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-j",
+                "caseId": "eq-ordered-last-difference-010",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 788,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-j",
+            "caseId": "eq-ordered-last-difference-010",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 2,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-j",
+                      "caseId": "eq-ordered-last-difference-010",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-j",
+                      "caseId": "eq-ordered-last-difference-010",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 788,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-j",
+            "caseId": "eq-ordered-last-difference-010",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 2,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-j",
+                      "caseId": "eq-ordered-last-difference-010",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-j",
+                      "caseId": "eq-ordered-last-difference-010",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-added-trailing-row-011",
+      "artifactId": "artifact-eq-k",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 1,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 2,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-k",
+                "caseId": "eq-added-trailing-row-011",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-k",
+                "caseId": "eq-added-trailing-row-011",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 773,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-k",
+            "caseId": "eq-added-trailing-row-011",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 2,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-k",
+                      "caseId": "eq-added-trailing-row-011",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-k",
+                      "caseId": "eq-added-trailing-row-011",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 773,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-k",
+            "caseId": "eq-added-trailing-row-011",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 2,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-k",
+                      "caseId": "eq-added-trailing-row-011",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-k",
+                      "caseId": "eq-added-trailing-row-011",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-removed-trailing-row-012",
+      "artifactId": "artifact-eq-l",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 1,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 2,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-l",
+                "caseId": "eq-removed-trailing-row-012",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-l",
+                "caseId": "eq-removed-trailing-row-012",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 779,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-l",
+            "caseId": "eq-removed-trailing-row-012",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 2,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-l",
+                      "caseId": "eq-removed-trailing-row-012",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-l",
+                      "caseId": "eq-removed-trailing-row-012",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 779,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-l",
+            "caseId": "eq-removed-trailing-row-012",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 2,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-l",
+                      "caseId": "eq-removed-trailing-row-012",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-l",
+                      "caseId": "eq-removed-trailing-row-012",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-empty-results-identical-013",
+      "artifactId": "artifact-eq-m",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": true,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 2,
+        "retainedCellMetadataBytes": 2
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 419,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-m",
+            "caseId": "eq-empty-results-identical-013",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 419,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-m",
+            "caseId": "eq-empty-results-identical-013",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-added-empty-result-set-014",
+      "artifactId": "artifact-eq-n",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 1,
+            "kind": "result-set-added",
+            "columnOrdinal": null,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-n",
+                "caseId": "eq-added-empty-result-set-014",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-n",
+                "caseId": "eq-added-empty-result-set-014",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 135,
+        "retainedCellMetadataBytes": 234
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 777,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-n",
+            "caseId": "eq-added-empty-result-set-014",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 1,
+                  "kind": "result-set-added",
+                  "columnOrdinal": null,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-n",
+                      "caseId": "eq-added-empty-result-set-014",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-n",
+                      "caseId": "eq-added-empty-result-set-014",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 777,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-n",
+            "caseId": "eq-added-empty-result-set-014",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 1,
+                  "kind": "result-set-added",
+                  "columnOrdinal": null,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-n",
+                      "caseId": "eq-added-empty-result-set-014",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-n",
+                      "caseId": "eq-added-empty-result-set-014",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-removed-empty-result-set-015",
+      "artifactId": "artifact-eq-o",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 1,
+            "kind": "result-set-removed",
+            "columnOrdinal": null,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-o",
+                "caseId": "eq-removed-empty-result-set-015",
+                "matrixCell": null,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-o",
+                "caseId": "eq-removed-empty-result-set-015",
+                "matrixCell": null,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 135,
+        "retainedCellMetadataBytes": 234
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 785,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-o",
+            "caseId": "eq-removed-empty-result-set-015",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 1,
+                  "kind": "result-set-removed",
+                  "columnOrdinal": null,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-o",
+                      "caseId": "eq-removed-empty-result-set-015",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-o",
+                      "caseId": "eq-removed-empty-result-set-015",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 785,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-o",
+            "caseId": "eq-removed-empty-result-set-015",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 1,
+                  "kind": "result-set-removed",
+                  "columnOrdinal": null,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-o",
+                      "caseId": "eq-removed-empty-result-set-015",
+                      "matrixCell": null,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-o",
+                      "caseId": "eq-removed-empty-result-set-015",
+                      "matrixCell": null,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-baseline-unstable-016",
+      "artifactId": "artifact-eq-p",
+      "matrixCell": 4,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": false,
+        "candidateStable": true,
+        "baselineOnlyCount": 1,
+        "candidateOnlyCount": 1,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-p",
+                "caseId": "eq-baseline-unstable-016",
+                "matrixCell": 4,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-p",
+                "caseId": "eq-baseline-unstable-016",
+                "matrixCell": 4,
+                "side": "baseline",
+                "repetition": 2
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 761,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-p",
+            "caseId": "eq-baseline-unstable-016",
+            "matrixCell": 4,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": false,
+              "candidateStable": true,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-p",
+                      "caseId": "eq-baseline-unstable-016",
+                      "matrixCell": 4,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-p",
+                      "caseId": "eq-baseline-unstable-016",
+                      "matrixCell": 4,
+                      "side": "baseline",
+                      "repetition": 2
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 761,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-p",
+            "caseId": "eq-baseline-unstable-016",
+            "matrixCell": 4,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": false,
+              "candidateStable": true,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-p",
+                      "caseId": "eq-baseline-unstable-016",
+                      "matrixCell": 4,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-p",
+                      "caseId": "eq-baseline-unstable-016",
+                      "matrixCell": 4,
+                      "side": "baseline",
+                      "repetition": 2
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-candidate-unstable-017",
+      "artifactId": "artifact-eq-q",
+      "matrixCell": 5,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": true,
+        "candidateStable": false,
+        "baselineOnlyCount": 1,
+        "candidateOnlyCount": 1,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-q",
+                "caseId": "eq-candidate-unstable-017",
+                "matrixCell": 5,
+                "side": "candidate",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-q",
+                "caseId": "eq-candidate-unstable-017",
+                "matrixCell": 5,
+                "side": "candidate",
+                "repetition": 2
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 766,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-q",
+            "caseId": "eq-candidate-unstable-017",
+            "matrixCell": 5,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": true,
+              "candidateStable": false,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-q",
+                      "caseId": "eq-candidate-unstable-017",
+                      "matrixCell": 5,
+                      "side": "candidate",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-q",
+                      "caseId": "eq-candidate-unstable-017",
+                      "matrixCell": 5,
+                      "side": "candidate",
+                      "repetition": 2
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 766,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-q",
+            "caseId": "eq-candidate-unstable-017",
+            "matrixCell": 5,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": true,
+              "candidateStable": false,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-q",
+                      "caseId": "eq-candidate-unstable-017",
+                      "matrixCell": 5,
+                      "side": "candidate",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-q",
+                      "caseId": "eq-candidate-unstable-017",
+                      "matrixCell": 5,
+                      "side": "candidate",
+                      "repetition": 2
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-off-018",
+      "artifactId": "artifact-eq-r",
+      "matrixCell": null,
+      "mode": "off",
+      "equivalence": {
+        "equivalent": null,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": null,
+        "candidateOnlyCount": null,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "unavailable",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": [
+          "comparison-off"
+        ]
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 0,
+        "retainedCellMetadataBytes": 0
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 424,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-r",
+            "caseId": "eq-off-018",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": null,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": null,
+              "candidateOnlyCount": null,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "unavailable",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "comparison-off"
+              ]
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 424,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-r",
+            "caseId": "eq-off-018",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": null,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": null,
+              "candidateOnlyCount": null,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "unavailable",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "comparison-off"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-legacy-absent-metadata-019",
+      "artifactId": "artifact-eq-s",
+      "matrixCell": null,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": null,
+        "candidateOnlyCount": null,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "unavailable",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": [
+          "diagnostic-metadata-absent"
+        ]
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 0,
+        "retainedCellMetadataBytes": 0
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 456,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-s",
+            "caseId": "eq-legacy-absent-metadata-019",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": null,
+              "candidateOnlyCount": null,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "unavailable",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "diagnostic-metadata-absent"
+              ]
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 456,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-s",
+            "caseId": "eq-legacy-absent-metadata-019",
+            "matrixCell": null,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": null,
+              "candidateOnlyCount": null,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "unavailable",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "diagnostic-metadata-absent"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-per-run-descriptor-cap-020",
+      "artifactId": "artifact-eq-t",
+      "matrixCell": 7,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "partial",
+        "items": [
+          {
+            "resultSetOrdinal": 64,
+            "kind": "result-set-added",
+            "columnOrdinal": null,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-t",
+                "caseId": "eq-per-run-descriptor-cap-020",
+                "matrixCell": 7,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-t",
+                "caseId": "eq-per-run-descriptor-cap-020",
+                "matrixCell": 7,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 1,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 6445,
+        "retainedCellMetadataBytes": 6445
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 768,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-t",
+            "caseId": "eq-per-run-descriptor-cap-020",
+            "matrixCell": 7,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [
+                {
+                  "resultSetOrdinal": 64,
+                  "kind": "result-set-added",
+                  "columnOrdinal": null,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-t",
+                      "caseId": "eq-per-run-descriptor-cap-020",
+                      "matrixCell": 7,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-t",
+                      "caseId": "eq-per-run-descriptor-cap-020",
+                      "matrixCell": 7,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 1,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 768,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-t",
+            "caseId": "eq-per-run-descriptor-cap-020",
+            "matrixCell": 7,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [
+                {
+                  "resultSetOrdinal": 64,
+                  "kind": "result-set-added",
+                  "columnOrdinal": null,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-t",
+                      "caseId": "eq-per-run-descriptor-cap-020",
+                      "matrixCell": 7,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-t",
+                      "caseId": "eq-per-run-descriptor-cap-020",
+                      "matrixCell": 7,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 1,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-per-run-metadata-cap-021",
+      "artifactId": "artifact-eq-u",
+      "matrixCell": 8,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "partial",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 1,
+          "columns": 256,
+          "metadataBytes": 25014
+        },
+        "gapReasons": [
+          "run-metadata-budget-exceeded"
+        ]
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 2,
+        "retainedCellMetadataBytes": 2
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 449,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-u",
+            "caseId": "eq-per-run-metadata-cap-021",
+            "matrixCell": 8,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 1,
+                "columns": 256,
+                "metadataBytes": 25014
+              },
+              "gapReasons": [
+                "run-metadata-budget-exceeded"
+              ]
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 449,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-u",
+            "caseId": "eq-per-run-metadata-cap-021",
+            "matrixCell": 8,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 1,
+                "columns": 256,
+                "metadataBytes": 25014
+              },
+              "gapReasons": [
+                "run-metadata-budget-exceeded"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-cell-wide-metadata-cap-022",
+      "artifactId": "artifact-eq-u2",
+      "matrixCell": 8,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": false,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "partial",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 5,
+          "columns": 1280,
+          "metadataBytes": 16790
+        },
+        "gapReasons": [
+          "cell-metadata-budget-exceeded"
+        ]
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 26550,
+        "retainedCellMetadataBytes": 238952
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 455,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-u2",
+            "caseId": "eq-cell-wide-metadata-cap-022",
+            "matrixCell": 8,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": false,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 5,
+                "columns": 1280,
+                "metadataBytes": 16790
+              },
+              "gapReasons": [
+                "cell-metadata-budget-exceeded"
+              ]
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 455,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-u2",
+            "caseId": "eq-cell-wide-metadata-cap-022",
+            "matrixCell": 8,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": false,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 5,
+                "columns": 1280,
+                "metadataBytes": 16790
+              },
+              "gapReasons": [
+                "cell-metadata-budget-exceeded"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-per-run-row-limit-023",
+      "artifactId": "artifact-eq-v",
+      "matrixCell": 9,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": null,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": null,
+        "candidateOnlyCount": null,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "unavailable",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": [
+          "per-run-compared-row-limit-exceeded"
+        ]
+      },
+      "captureOutcome": "rejected-before-comparison",
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 0,
+        "retainedCellMetadataBytes": 0
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 456,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-v",
+            "caseId": "eq-per-run-row-limit-023",
+            "matrixCell": 9,
+            "equivalence": {
+              "equivalent": null,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": null,
+              "candidateOnlyCount": null,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "unavailable",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "per-run-compared-row-limit-exceeded"
+              ]
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 456,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-v",
+            "caseId": "eq-per-run-row-limit-023",
+            "matrixCell": 9,
+            "equivalence": {
+              "equivalent": null,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": null,
+              "candidateOnlyCount": null,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "unavailable",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "per-run-compared-row-limit-exceeded"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-cell-unique-fingerprint-budget-024",
+      "artifactId": "artifact-eq-v2",
+      "matrixCell": 9,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": null,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": null,
+        "candidateOnlyCount": null,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "unavailable",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": [
+          "cell-unique-fingerprint-budget-exceeded"
+        ]
+      },
+      "captureOutcome": "rejected-before-verdict",
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 0,
+        "retainedCellMetadataBytes": 0
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 474,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-v2",
+            "caseId": "eq-cell-unique-fingerprint-budget-024",
+            "matrixCell": 9,
+            "equivalence": {
+              "equivalent": null,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": null,
+              "candidateOnlyCount": null,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "unavailable",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "cell-unique-fingerprint-budget-exceeded"
+              ]
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 474,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-v2",
+            "caseId": "eq-cell-unique-fingerprint-budget-024",
+            "matrixCell": 9,
+            "equivalence": {
+              "equivalent": null,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": null,
+              "candidateOnlyCount": null,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "unavailable",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "cell-unique-fingerprint-budget-exceeded"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-shared-identical-metadata-025",
+      "artifactId": "artifact-eq-w",
+      "matrixCell": 10,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": true,
+        "baselineStable": true,
+        "candidateStable": true,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 419,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-w",
+            "caseId": "eq-shared-identical-metadata-025",
+            "matrixCell": 10,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": true,
+              "candidateStable": true,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 419,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-w",
+            "caseId": "eq-shared-identical-metadata-025",
+            "matrixCell": 10,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": true,
+              "candidateStable": true,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-escaped-multibyte-names-026",
+      "artifactId": "artifact-eq-x",
+      "matrixCell": 11,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 0,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-x",
+                "caseId": "eq-escaped-multibyte-names-026",
+                "matrixCell": 11,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-x",
+                "caseId": "eq-escaped-multibyte-names-026",
+                "matrixCell": 11,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 125,
+        "retainedCellMetadataBytes": 242
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 773,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-x",
+            "caseId": "eq-escaped-multibyte-names-026",
+            "matrixCell": 11,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-x",
+                      "caseId": "eq-escaped-multibyte-names-026",
+                      "matrixCell": 11,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-x",
+                      "caseId": "eq-escaped-multibyte-names-026",
+                      "matrixCell": 11,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 773,
+          "emittedItems": 1,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-x",
+            "caseId": "eq-escaped-multibyte-names-026",
+            "matrixCell": 11,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-x",
+                      "caseId": "eq-escaped-multibyte-names-026",
+                      "matrixCell": 11,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-x",
+                      "caseId": "eq-escaped-multibyte-names-026",
+                      "matrixCell": 11,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-set-duplicate-insensitive-027",
+      "artifactId": "artifact-eq-y",
+      "matrixCell": 12,
+      "mode": "set",
+      "equivalence": {
+        "equivalent": true,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 419,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-y",
+            "caseId": "eq-set-duplicate-insensitive-027",
+            "matrixCell": 12,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 419,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-y",
+            "caseId": "eq-set-duplicate-insensitive-027",
+            "matrixCell": 12,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-column-cap-overflow-equivalent-028",
+      "artifactId": "artifact-eq-z",
+      "matrixCell": 13,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": true,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "partial",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 1,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 17334,
+        "retainedCellMetadataBytes": 17334
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 423,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-z",
+            "caseId": "eq-column-cap-overflow-equivalent-028",
+            "matrixCell": 13,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 1,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 423,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-z",
+            "caseId": "eq-column-cap-overflow-equivalent-028",
+            "matrixCell": 13,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 1,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-item-cap-overflow-known-omissions-029",
+      "artifactId": "artifact-eq-aa",
+      "matrixCell": 14,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": null
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "partial",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 0,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 1,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 2,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 3,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 4,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 5,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 6,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 7,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 8,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 9,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 10,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 11,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 12,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 13,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 14,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "column-name-change",
+            "columnOrdinal": 15,
+            "rowOrdinal": null,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-eq-aa",
+                "caseId": "eq-item-cap-overflow-known-omissions-029",
+                "matrixCell": 14,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 2,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 1232,
+        "retainedCellMetadataBytes": 2464
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 3860,
+          "emittedItems": 9,
+          "omittedItems": 9,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-aa",
+            "caseId": "eq-item-cap-overflow-known-omissions-029",
+            "matrixCell": 14,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 1,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 2,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 3,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 4,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 5,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 6,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 7,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 8,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 9,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": [
+                "response-budget-items-omitted"
+              ]
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 6481,
+          "emittedItems": 16,
+          "omittedItems": 2,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-eq-aa",
+            "caseId": "eq-item-cap-overflow-known-omissions-029",
+            "matrixCell": 14,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": null
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "partial",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 0,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 1,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 2,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 3,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 4,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 5,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 6,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 7,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 8,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 9,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 10,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 11,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 12,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 13,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 14,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "column-name-change",
+                  "columnOrdinal": 15,
+                  "rowOrdinal": null,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-eq-aa",
+                      "caseId": "eq-item-cap-overflow-known-omissions-029",
+                      "matrixCell": 14,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 2,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-unstable-and-cross-side-difference-030",
+      "artifactId": "artifact-cross-side-instability",
+      "matrixCell": 15,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": false,
+        "baselineStable": false,
+        "candidateStable": null,
+        "baselineOnlyCount": 1,
+        "candidateOnlyCount": 1,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-cross-side-instability",
+                "caseId": "eq-unstable-and-cross-side-difference-030",
+                "matrixCell": 15,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-cross-side-instability",
+                "caseId": "eq-unstable-and-cross-side-difference-030",
+                "matrixCell": 15,
+                "side": "candidate",
+                "repetition": 1
+              }
+            }
+          },
+          {
+            "resultSetOrdinal": 0,
+            "kind": "ordered-position-difference",
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": {
+              "left": {
+                "artifactId": "artifact-cross-side-instability",
+                "caseId": "eq-unstable-and-cross-side-difference-030",
+                "matrixCell": 15,
+                "side": "baseline",
+                "repetition": 1
+              },
+              "right": {
+                "artifactId": "artifact-cross-side-instability",
+                "caseId": "eq-unstable-and-cross-side-difference-030",
+                "matrixCell": 15,
+                "side": "baseline",
+                "repetition": 2
+              }
+            }
+          }
+        ],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 1292,
+          "emittedItems": 2,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-cross-side-instability",
+            "caseId": "eq-unstable-and-cross-side-difference-030",
+            "matrixCell": 15,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": false,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-cross-side-instability",
+                      "caseId": "eq-unstable-and-cross-side-difference-030",
+                      "matrixCell": 15,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-cross-side-instability",
+                      "caseId": "eq-unstable-and-cross-side-difference-030",
+                      "matrixCell": 15,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-cross-side-instability",
+                      "caseId": "eq-unstable-and-cross-side-difference-030",
+                      "matrixCell": 15,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-cross-side-instability",
+                      "caseId": "eq-unstable-and-cross-side-difference-030",
+                      "matrixCell": 15,
+                      "side": "baseline",
+                      "repetition": 2
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 1292,
+          "emittedItems": 2,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-cross-side-instability",
+            "caseId": "eq-unstable-and-cross-side-difference-030",
+            "matrixCell": 15,
+            "equivalence": {
+              "equivalent": false,
+              "baselineStable": false,
+              "candidateStable": null,
+              "baselineOnlyCount": 1,
+              "candidateOnlyCount": 1,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-cross-side-instability",
+                      "caseId": "eq-unstable-and-cross-side-difference-030",
+                      "matrixCell": 15,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-cross-side-instability",
+                      "caseId": "eq-unstable-and-cross-side-difference-030",
+                      "matrixCell": 15,
+                      "side": "candidate",
+                      "repetition": 1
+                    }
+                  }
+                },
+                {
+                  "resultSetOrdinal": 0,
+                  "kind": "ordered-position-difference",
+                  "columnOrdinal": null,
+                  "rowOrdinal": 0,
+                  "pair": {
+                    "left": {
+                      "artifactId": "artifact-cross-side-instability",
+                      "caseId": "eq-unstable-and-cross-side-difference-030",
+                      "matrixCell": 15,
+                      "side": "baseline",
+                      "repetition": 1
+                    },
+                    "right": {
+                      "artifactId": "artifact-cross-side-instability",
+                      "caseId": "eq-unstable-and-cross-side-difference-030",
+                      "matrixCell": 15,
+                      "side": "baseline",
+                      "repetition": 2
+                    }
+                  }
+                }
+              ],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "eq-whole-budget-031",
+      "artifactId": "artifact-long-iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+      "matrixCell": 16,
+      "mode": "ordered",
+      "equivalence": {
+        "equivalent": true,
+        "baselineStable": null,
+        "candidateStable": null,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "nullabilityEquivalent": true
+      },
+      "equivalenceDiagnostics": {
+        "version": 1,
+        "availability": "complete",
+        "items": [],
+        "omissionCounts": {
+          "items": 0,
+          "resultSetDescriptors": 0,
+          "columns": 0,
+          "metadataBytes": 0
+        },
+        "gapReasons": []
+      },
+      "captureEstimate": {
+        "maximumRetainedRunMetadataBytes": 99,
+        "retainedCellMetadataBytes": 99
+      },
+      "serializationViews": [
+        {
+          "budgetBytes": 4096,
+          "serializedBytes": 4077,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": true,
+          "projectedEnvelope": {
+            "artifactId": "artifact-long-iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+            "caseId": "eq-whole-budget-031",
+            "matrixCell": 16,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "diagnosticsOmitted": "response-budget-diagnostics-omitted",
+            "diagnosticItemsOmitted": 0
+          }
+        },
+        {
+          "budgetBytes": 65536,
+          "serializedBytes": 4167,
+          "emittedItems": 0,
+          "omittedItems": 0,
+          "diagnosticsObjectOmitted": false,
+          "projectedEnvelope": {
+            "artifactId": "artifact-long-iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+            "caseId": "eq-whole-budget-031",
+            "matrixCell": 16,
+            "equivalence": {
+              "equivalent": true,
+              "baselineStable": null,
+              "candidateStable": null,
+              "baselineOnlyCount": 0,
+              "candidateOnlyCount": 0,
+              "nullabilityEquivalent": true
+            },
+            "equivalenceDiagnostics": {
+              "version": 1,
+              "availability": "complete",
+              "items": [],
+              "omissionCounts": {
+                "items": 0,
+                "resultSetDescriptors": 0,
+                "columns": 0,
+                "metadataBytes": 0
+              },
+              "gapReasons": []
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

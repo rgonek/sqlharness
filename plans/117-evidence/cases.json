@@ -1,0 +1,2796 @@
+{
+  "formatVersion": 1,
+  "purpose": "Independent expected verdicts and diagnostic locations for Plan 117; fixtures are synthetic and are not generated from ResultComparer.",
+  "identityRules": {
+    "sqlHash": "sha256:shared-synthetic-query-hash",
+    "sqlHashReuse": "The same SQL hash is intentionally reused across all artifact and case IDs. It is not an execution identity.",
+    "runIdentityFields": [
+      "artifactId",
+      "caseId",
+      "matrixCell",
+      "side",
+      "repetition"
+    ],
+    "ordinals": "Result-set, column, and row ordinals are zero-based.",
+    "nullability": "true/false is known; null means provider-unknown. Strict nullability policy follows existing verdict behavior.",
+    "expectedAvailability": "complete means all required source facts fit the candidate budgets; partial means at least one known omission; unavailable means source metadata is absent or comparison is off."
+  },
+  "cases": [
+    {
+      "caseId": "eq-identical-001",
+      "artifactId": "artifact-eq-a",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "id",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": true,
+        "baselineStable": null,
+        "candidateStable": null,
+        "availability": "complete",
+        "items": [],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-reorder-002",
+      "artifactId": "artifact-eq-b",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "string",
+                  "nullable": true
+                }
+              ],
+              "rows": [
+                [
+                  "a"
+                ],
+                [
+                  "b"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "string",
+                  "nullable": true
+                }
+              ],
+              "rows": [
+                [
+                  "b"
+                ],
+                [
+                  "a"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 0
+          },
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 1
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-duplicate-multiplicity-003",
+      "artifactId": "artifact-eq-c",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "multiset",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "string",
+                  "nullable": true
+                }
+              ],
+              "rows": [
+                [
+                  "x"
+                ],
+                [
+                  "x"
+                ],
+                [
+                  "y"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "string",
+                  "nullable": true
+                }
+              ],
+              "rows": [
+                [
+                  "x"
+                ],
+                [
+                  "y"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "partial",
+        "items": [],
+        "omissions": 0,
+        "gapReasons": [
+          "row-difference-location-unsupported-for-multiset"
+        ],
+        "baselineOnlyCount": 1,
+        "candidateOnlyCount": 0
+      }
+    },
+    {
+      "caseId": "eq-column-name-change-004",
+      "artifactId": "artifact-eq-d",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "old_name",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "new_name",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 0,
+            "rowOrdinal": null
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-column-type-change-005",
+      "artifactId": "artifact-eq-e",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int64",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "column-type-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 0,
+            "rowOrdinal": null
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-strict-nullability-only-006",
+      "artifactId": "artifact-eq-f",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": true,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": true
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "nullabilityEquivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "nullability-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 0,
+            "rowOrdinal": null,
+            "policy": "strict-only"
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-nullability-unknown-007",
+      "artifactId": "artifact-eq-g",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": true,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": null
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": null
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "nullabilityEquivalent": null,
+        "availability": "partial",
+        "items": [],
+        "omissions": 0,
+        "gapReasons": [
+          "nullability-unknown"
+        ]
+      }
+    },
+    {
+      "caseId": "eq-ordered-first-difference-008",
+      "artifactId": "artifact-eq-h",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ],
+                [
+                  3
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  9
+                ],
+                [
+                  2
+                ],
+                [
+                  3
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 0
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-ordered-middle-difference-009",
+      "artifactId": "artifact-eq-i",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ],
+                [
+                  3
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  9
+                ],
+                [
+                  3
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 1
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-ordered-last-difference-010",
+      "artifactId": "artifact-eq-j",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ],
+                [
+                  3
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ],
+                [
+                  9
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 2
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-added-trailing-row-011",
+      "artifactId": "artifact-eq-k",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ],
+                [
+                  3
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 2
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-removed-trailing-row-012",
+      "artifactId": "artifact-eq-l",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ],
+                [
+                  3
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ],
+                [
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 2
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-empty-results-identical-013",
+      "artifactId": "artifact-eq-m",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": []
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": []
+        }
+      ],
+      "expected": {
+        "equivalent": true,
+        "availability": "complete",
+        "items": [],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-added-empty-result-set-014",
+      "artifactId": "artifact-eq-n",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            },
+            {
+              "columns": [],
+              "rows": []
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "result-set-added",
+            "resultSetOrdinal": 1,
+            "columnOrdinal": null,
+            "rowOrdinal": null
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-removed-empty-result-set-015",
+      "artifactId": "artifact-eq-o",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            },
+            {
+              "columns": [],
+              "rows": []
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "result-set-removed",
+            "resultSetOrdinal": 1,
+            "columnOrdinal": null,
+            "rowOrdinal": null
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-baseline-unstable-016",
+      "artifactId": "artifact-eq-p",
+      "matrixCell": 4,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "side": "baseline",
+          "repetition": 2,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "side": "candidate",
+          "repetition": 2,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "baselineStable": false,
+        "candidateStable": true,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": [
+              {
+                "side": "baseline",
+                "repetition": 1
+              },
+              {
+                "side": "baseline",
+                "repetition": 2
+              }
+            ]
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-candidate-unstable-017",
+      "artifactId": "artifact-eq-q",
+      "matrixCell": 5,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "side": "baseline",
+          "repetition": 2,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "side": "candidate",
+          "repetition": 2,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "baselineStable": true,
+        "candidateStable": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": [
+              {
+                "side": "candidate",
+                "repetition": 1
+              },
+              {
+                "side": "candidate",
+                "repetition": 2
+              }
+            ]
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-off-018",
+      "artifactId": "artifact-eq-r",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "off",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": null,
+        "availability": "unavailable",
+        "items": [],
+        "omissions": 0,
+        "gapReasons": [
+          "comparison-off"
+        ]
+      }
+    },
+    {
+      "caseId": "eq-legacy-absent-metadata-019",
+      "artifactId": "artifact-eq-s",
+      "matrixCell": null,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "legacyArtifact": {
+        "equivalence": {
+          "mode": "ordered",
+          "equivalent": false,
+          "differingPositions": 1
+        },
+        "equivalenceDiagnostics": null,
+        "runIdentitySample": {
+          "artifactId": "artifact-eq-s",
+          "caseId": "eq-legacy-absent-metadata-019",
+          "side": "baseline",
+          "repetition": 1
+        }
+      },
+      "expected": {
+        "equivalent": false,
+        "availability": "unavailable",
+        "items": [],
+        "omissions": 0,
+        "gapReasons": [
+          "diagnostic-metadata-absent"
+        ],
+        "neverInferEmptySuccess": true
+      }
+    },
+    {
+      "caseId": "eq-per-run-descriptor-cap-020",
+      "artifactId": "artifact-eq-t",
+      "matrixCell": 7,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "c0",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c1",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c2",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c3",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c4",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c5",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c6",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c7",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c8",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c9",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c10",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c11",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c12",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c13",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c14",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c15",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c16",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c17",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c18",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c19",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c20",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c21",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c22",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c23",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c24",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c25",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c26",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c27",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c28",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c29",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c30",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c31",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c32",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c33",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c34",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c35",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c36",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c37",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c38",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c39",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c40",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c41",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c42",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c43",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c44",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c45",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c46",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c47",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c48",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c49",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c50",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c51",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c52",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c53",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c54",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c55",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c56",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c57",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c58",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c59",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c60",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c61",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c62",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            },
+            {
+              "columns": [
+                {
+                  "name": "c63",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": []
+            }
+          ]
+        }
+      ],
+      "generatedInput": {
+        "side": "candidate",
+        "repetition": 1,
+        "resultSetCount": 65,
+        "columnsPerSet": 1,
+        "uniqueMetadata": true,
+        "rowCount": 0,
+        "generator": "set-ordinal 0..64; each set has one column named c<ordinal> of type int32"
+      },
+      "expected": {
+        "equivalent": false,
+        "availability": "partial",
+        "items": [
+          {
+            "kind": "result-set-added",
+            "resultSetOrdinal": 64,
+            "columnOrdinal": null,
+            "rowOrdinal": null
+          }
+        ],
+        "omissions": {
+          "resultSetDescriptors": 1
+        },
+        "omissionsKnownBeforeProjection": true,
+        "verdictUnchangedByCap": true
+      }
+    },
+    {
+      "caseId": "eq-per-run-metadata-cap-021",
+      "artifactId": "artifact-eq-u",
+      "matrixCell": 8,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": []
+        }
+      ],
+      "generatedInput": {
+        "side": "candidate",
+        "repetition": 1,
+        "resultSetCount": 1,
+        "columnsPerSet": 256,
+        "namePrefix": "schema-0123456789-",
+        "nameWidthUtf8BytesAtLeast": 140,
+        "uniqueMetadata": true,
+        "generator": "vary each column name by ordinal; encoded descriptor metadata exceeds proposed 32768-byte per-run cap"
+      },
+      "expected": {
+        "equivalent": false,
+        "availability": "partial",
+        "items": [],
+        "omissions": {
+          "metadataBytes": "positive; exact count computed by byte-budget evaluator",
+          "resultSetDescriptors": 1
+        },
+        "gapReasons": [
+          "run-metadata-budget-exceeded"
+        ],
+        "verdictUnchangedByCap": true
+      }
+    },
+    {
+      "caseId": "eq-cell-wide-metadata-cap-022",
+      "artifactId": "artifact-eq-u2",
+      "matrixCell": 8,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": []
+        }
+      ],
+      "generatedInput": {
+        "side": "candidate",
+        "repetitions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14
+        ],
+        "resultSetCountPerRun": 1,
+        "columnsPerSet": 256,
+        "namePrefix": "schema-0123456789-",
+        "nameWidthUtf8BytesAtLeast": 40,
+        "uniqueMetadata": true,
+        "generator": "vary each column name by repetition and ordinal; each run remains under the proposed 32768-byte per-run cap while aggregate retained descriptor metadata exceeds proposed 262144-byte cell cap"
+      },
+      "expected": {
+        "equivalent": false,
+        "availability": "partial",
+        "items": [],
+        "omissions": {
+          "metadataBytes": "positive; exact count computed by byte-budget evaluator",
+          "resultSetDescriptors": 5
+        },
+        "gapReasons": [
+          "cell-metadata-budget-exceeded"
+        ],
+        "verdictUnchangedByCap": true
+      }
+    },
+    {
+      "caseId": "eq-per-run-row-limit-023",
+      "artifactId": "artifact-eq-v",
+      "matrixCell": 9,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "generatedInput": {
+        "side": "baseline",
+        "repetition": 1,
+        "uniqueRowsPerRun": 1000001,
+        "rowCountPerRun": 1000001,
+        "maxComparedRows": 1000000
+      },
+      "expected": {
+        "capture": "rejected-before-comparison",
+        "equivalent": null,
+        "availability": "unavailable",
+        "items": [],
+        "gapReasons": [
+          "per-run-compared-row-limit-exceeded"
+        ],
+        "mustNotTruncateAuthoritativeComparison": true
+      }
+    },
+    {
+      "caseId": "eq-cell-unique-fingerprint-budget-024",
+      "artifactId": "artifact-eq-v2",
+      "matrixCell": 9,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "generatedInput": {
+        "baselineRepetitions": [
+          1
+        ],
+        "candidateRepetitions": [
+          1,
+          2
+        ],
+        "uniqueRowsPerRun": 700000,
+        "rowCountPerRun": 700000,
+        "rowsDisjointAcrossRuns": true,
+        "maxComparedRows": 1000000,
+        "maxUniqueFingerprintsPerCell": 2000000
+      },
+      "expected": {
+        "comparison": "rejected-before-verdict",
+        "equivalent": null,
+        "availability": "unavailable",
+        "items": [],
+        "gapReasons": [
+          "cell-unique-fingerprint-budget-exceeded"
+        ],
+        "mustNotTruncateAuthoritativeComparison": true
+      }
+    },
+    {
+      "caseId": "eq-shared-identical-metadata-025",
+      "artifactId": "artifact-eq-w",
+      "matrixCell": 10,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "side": "baseline",
+          "repetition": 2,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "side": "candidate",
+          "repetition": 2,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": true,
+        "baselineStable": true,
+        "candidateStable": true,
+        "availability": "complete",
+        "items": [],
+        "omissions": 0,
+        "uniqueMetadataCharge": "one canonical schema representation per cell, not four run copies",
+        "pairProvenanceStillDistinct": true
+      }
+    },
+    {
+      "caseId": "eq-escaped-multibyte-names-026",
+      "artifactId": "artifact-eq-x",
+      "matrixCell": 11,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "a\\\"b/λ/表/😀",
+                  "type": "string",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  "x"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "a\\\"b/λ/表/😀 changed",
+                  "type": "string",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  "x"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 0,
+            "rowOrdinal": null
+          }
+        ],
+        "omissions": 0,
+        "nameEncoding": "UTF-8 byte-counted, JSON-escaped on wire, exact Unicode preserved"
+      }
+    },
+    {
+      "caseId": "eq-set-duplicate-insensitive-027",
+      "artifactId": "artifact-eq-y",
+      "matrixCell": 12,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "set",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "string",
+                  "nullable": true
+                }
+              ],
+              "rows": [
+                [
+                  "x"
+                ],
+                [
+                  "x"
+                ],
+                [
+                  "y"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "string",
+                  "nullable": true
+                }
+              ],
+              "rows": [
+                [
+                  "x"
+                ],
+                [
+                  "y"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": true,
+        "baselineOnlyCount": 0,
+        "candidateOnlyCount": 0,
+        "availability": "complete",
+        "items": [],
+        "omissions": 0,
+        "oracleNote": "Set mode compares distinct row membership; duplicate multiplicity does not affect the verdict."
+      }
+    },
+    {
+      "caseId": "eq-column-cap-overflow-equivalent-028",
+      "artifactId": "artifact-eq-z",
+      "matrixCell": 13,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "generatedInput": {
+        "baseline": {
+          "side": "baseline",
+          "repetition": 1
+        },
+        "candidate": {
+          "side": "candidate",
+          "repetition": 1
+        },
+        "resultSetCount": 1,
+        "columnsPerSet": 257,
+        "rowsPerSet": 0,
+        "generator": "both sides have byte-identical columns c000..c256, type int32, nullability false"
+      },
+      "expected": {
+        "equivalent": true,
+        "availability": "partial",
+        "items": [],
+        "omissions": {
+          "columns": 1
+        },
+        "omissionsKnownBeforeProjection": true,
+        "authoritativeSchemaComparisonUsesAllColumns": true,
+        "verdictUnchangedByCap": true
+      }
+    },
+    {
+      "caseId": "eq-item-cap-overflow-known-omissions-029",
+      "artifactId": "artifact-eq-aa",
+      "matrixCell": 14,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "generatedInput": {
+        "baseline": {
+          "side": "baseline",
+          "repetition": 1
+        },
+        "candidate": {
+          "side": "candidate",
+          "repetition": 1
+        },
+        "resultSetCount": 1,
+        "columnsPerSet": 18,
+        "rowsPerSet": 0,
+        "generator": "baseline names b000..b017; candidate names c000..c017; all type int32 and nullability false"
+      },
+      "expected": {
+        "equivalent": false,
+        "availability": "partial",
+        "items": [
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 0,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 1,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 2,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 3,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 4,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 5,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 6,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 7,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 8,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 9,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 10,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 11,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 12,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 13,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 14,
+            "rowOrdinal": null
+          },
+          {
+            "kind": "column-name-change",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": 15,
+            "rowOrdinal": null
+          }
+        ],
+        "omissions": 2,
+        "omissionsKnownBeforeProjection": true,
+        "emissionCap": 16,
+        "verdictUnchangedByCap": true,
+        "serializationViews": [
+          {
+            "budgetBytes": 4096,
+            "emittedItems": 9,
+            "omittedItems": 9,
+            "diagnosticsObjectOmitted": false
+          },
+          {
+            "budgetBytes": 65536,
+            "emittedItems": 16,
+            "omittedItems": 2,
+            "diagnosticsObjectOmitted": false
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "eq-unstable-and-cross-side-difference-030",
+      "artifactId": "artifact-cross-side-instability",
+      "matrixCell": 15,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "side": "baseline",
+          "repetition": 2,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  3
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": false,
+        "baselineStable": false,
+        "candidateStable": null,
+        "availability": "complete",
+        "items": [
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": [
+              {
+                "side": "baseline",
+                "repetition": 1
+              },
+              {
+                "side": "candidate",
+                "repetition": 1
+              }
+            ]
+          },
+          {
+            "kind": "ordered-position-difference",
+            "resultSetOrdinal": 0,
+            "columnOrdinal": null,
+            "rowOrdinal": 0,
+            "pair": [
+              {
+                "side": "baseline",
+                "repetition": 1
+              },
+              {
+                "side": "baseline",
+                "repetition": 2
+              }
+            ]
+          }
+        ],
+        "omissions": 0
+      }
+    },
+    {
+      "caseId": "eq-whole-budget-031",
+      "artifactId": "artifact-long-iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+      "matrixCell": 16,
+      "sqlHash": "sha256:shared-synthetic-query-hash",
+      "mode": "ordered",
+      "compareNullability": false,
+      "baselineRuns": [
+        {
+          "side": "baseline",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "candidateRuns": [
+        {
+          "side": "candidate",
+          "repetition": 1,
+          "sets": [
+            {
+              "columns": [
+                {
+                  "name": "v",
+                  "type": "int32",
+                  "nullable": false
+                }
+              ],
+              "rows": [
+                [
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "equivalent": true,
+        "baselineStable": null,
+        "candidateStable": null,
+        "availability": "complete",
+        "items": [],
+        "omissions": 0,
+        "serializationViews": [
+          {
+            "budgetBytes": 4096,
+            "emittedItems": 0,
+            "omittedItems": 0,
+            "diagnosticsObjectOmitted": true
+          },
+          {
+            "budgetBytes": 65536,
+            "emittedItems": 0,
+            "omittedItems": 0,
+            "diagnosticsObjectOmitted": false
+          }
+        ]
+      }
+    }
+  ]
+}

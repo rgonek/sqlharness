@@ -1,0 +1,1 @@
+Negative verifier checks: missing results.json -> exit 1 (required evidence missing); tampered eq-identical-001 verdict -> exit 1 (expected true, got false). Final plans/117-evidence/results.json remained unchanged.

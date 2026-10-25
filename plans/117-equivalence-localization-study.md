@@ -7,7 +7,7 @@
 
 ## Status
 
-- **Status:** TODO; design/fixture work only, no implementation/live DB/merge/push.
+- **Status:** RESEARCH COMPLETE; bounded optional diagnostics accepted for a separately selected implementation, with unordered row alignment and raw-value localization excluded. Synthetic oracle only; production capture/heap/serializer limits remain unmeasured. All task reviews and the Sol whole-study review are approved; the generated-fixture recipe limitation is accepted for the fixed oracle; final scoped Sol closeout re-review is approved. No implementation/live DB/merge/push. See [decision](117-evidence/decision.md) and archived [study verification](117-evidence/logs/task-3-verification.log).
 - **Priority:** P2; selected direction proposal 2.
 - **Effort / risk / confidence:** M / MED / HIGH grounding.
 - **Depends on:** none of 116-120; existing compare and artifact foundations are implemented.
@@ -68,36 +68,36 @@ Propose an optional versioned `equivalenceDiagnostics` object with availability 
 
 Evaluate caps of 16 emitted items, 64 result-set descriptors and 256 columns per described set, plus independent maxima of 32 KiB additional retained metadata per captured run and 256 KiB per comparison cell across all runs (share identical metadata). These are study candidates, not existing runtime limits. Record omitted descriptors before projecting. Evaluate fewer retained descriptors or deferral if these caps cannot support useful locations without unbounded names. Keep all original row fingerprints for comparison within current budgets; never truncate the authoritative comparison to satisfy diagnostic limits.
 
-Start with schema/result-set localization in every mode and positional row localization only in `ordered`. For multiset/set row differences, return an explicit unsupported diagnostic gap while preserving existing counts. A row fingerprint can locate a different row, not a different cell; never invent a column location from a row hash.
+For active comparison modes `ordered`, `multiset`, and `set`, localize schema/result-set differences; localize positional row differences only in `ordered`. Mode `off` remains unavailable. For multiset/set row differences, return an explicit unsupported diagnostic gap while preserving existing counts. A row fingerprint can locate a different row, not a different cell; never invent a column location from a row hash.
 
 ## Tasks
 
 ### Task 1: Map evidence loss and freeze independent oracles
 
-- [ ] Write `inventory.md` tracing reader -> accumulator -> comparer -> report -> artifact/projection, noting exactly which proposed fields require new capture metadata.
-- [ ] Create `cases.json` with independent expected verdicts/locations for: identical; ordered reorder; duplicate multiplicity difference; changed name/type; strict-only nullability; unknown nullability; first/middle/last ordered difference; added/removed trailing rows; empty and added/removed result sets; unstable baseline; unstable candidate; `off`; legacy absent metadata; per-run and cell-wide caps exceeded; repeated identical schemas sharing metadata; escaped/multibyte names. Use explicit repetition and case IDs, including equal SQL hashes in different cases/artifacts.
-- [ ] Verify: `Select-String -Path plans/117-evidence/inventory.md -Pattern 'capture|accumulator|comparer|artifact|projection'` -> all five stages documented; reopen source references.
+- [x] Write `inventory.md` tracing reader -> accumulator -> comparer -> report -> artifact/projection, noting exactly which proposed fields require new capture metadata.
+- [x] Create `cases.json` with independent expected verdicts/locations for: identical; ordered reorder; duplicate multiplicity difference; changed name/type; strict-only nullability; unknown nullability; first/middle/last ordered difference; added/removed trailing rows; empty and added/removed result sets; unstable baseline; unstable candidate; `off`; legacy absent metadata; per-run and cell-wide caps exceeded; repeated identical schemas sharing metadata; escaped/multibyte names. Use explicit repetition and case IDs, including equal SQL hashes in different cases/artifacts.
+- [x] Verify: `Select-String -Path plans/117-evidence/inventory.md -Pattern 'capture|accumulator|comparer|artifact|projection'` -> all five stages documented; reopen source references.
 
 ### Task 2: Specify and exercise the bounded candidate
 
-- [ ] Write `design.md` with exact DTO fields, count meanings, deterministic pair/item ordering, capture memory accounting, artifact compatibility, and minimum-budget fallback retaining identities or omitting the whole item with a truthful gap. Explain how per-set row ranges are captured; do not pretend current flattened fingerprints already retain them.
-- [ ] Build `evaluate.ps1` over synthetic capture records only and produce `results.json`. Keep expected outcomes in the case data, separate from the projector. Serialize at 4,096/65,536 budgets; label estimates if not using production-compatible serialization.
-- [ ] Implement `verify.ps1` asserting expected verdicts are unchanged, locations are from the named original run pair, no value/hash output, no positional items in unordered modes, explicit `off`/legacy gaps, exact known omission counts and bounded output/capture estimates.
-- [ ] Verify: `pwsh -NoProfile -File plans/117-evidence/evaluate.ps1` then `pwsh -NoProfile -File plans/117-evidence/verify.ps1` -> exit 0; every named scenario has a result and independent assertion.
+- [x] Write `design.md` with exact DTO fields, count meanings, deterministic pair/item ordering, capture memory accounting, artifact compatibility, and minimum-budget fallback retaining identities or omitting the whole item with a truthful gap. Explain how per-set row ranges are captured; do not pretend current flattened fingerprints already retain them.
+- [x] Build `evaluate.ps1` over synthetic capture records only and produce `results.json`. Keep expected outcomes in the case data, separate from the projector. Serialize at 4,096/65,536 budgets; label estimates if not using production-compatible serialization.
+- [x] Implement `verify.ps1` asserting expected verdicts are unchanged, locations are from the named original run pair, no value/hash output, no positional items in unordered modes, explicit `off`/legacy gaps, exact known omission counts and bounded output/capture estimates.
+- [x] Verify: `pwsh -NoProfile -File plans/117-evidence/evaluate.ps1` then `pwsh -NoProfile -File plans/117-evidence/verify.ps1` -> exit 0; every named scenario has a result and independent assertion.
 
 ### Task 3: Decide scope and produce a future implementation map
 
-- [ ] Write `decision.md` accepting a bounded subset, deferring or rejecting. Include deterministic examples and a matrix separating schema, ordered-row, unordered-row and raw-value diagnostics. Do not accept raw-value or unordered alignment as incidental scope.
-- [ ] Name future characterization tests in `ResultEquivalenceTests.cs`/`CanonicalResultsTests.cs`, saved-artifact legacy/budget tests and presentation tests; preserve existing fixture conventions. Future commands: `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CanonicalResultsTests|FullyQualifiedName~ArtifactReaderTests'`; MCP budget/schema checks; Windows `just verify` and branch formatting on a separately selected implementation.
-- [ ] Verify study scripts, links, `git diff --check` and source immutability. Mark RESEARCH COMPLETE with explicit acceptance limits, never IMPLEMENTED.
+- [x] Write `decision.md` accepting a bounded subset, deferring or rejecting. Include deterministic examples and a matrix separating schema, ordered-row, unordered-row and raw-value diagnostics. Do not accept raw-value or unordered alignment as incidental scope.
+- [x] Name future characterization tests in `ResultEquivalenceTests.cs`/`CanonicalResultsTests.cs`, saved-artifact legacy/budget tests and presentation tests; preserve existing fixture conventions. Future commands: `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~ResultEquivalenceTests|FullyQualifiedName~CanonicalResultsTests|FullyQualifiedName~ArtifactReaderTests'`; MCP budget/schema checks; Windows `just verify` and branch formatting on a separately selected implementation.
+- [x] Verify study scripts, links, `git diff --check` and source immutability. Mark RESEARCH COMPLETE with explicit acceptance limits, never IMPLEMENTED.
 
 ## Done criteria
 
-- [ ] Study verifier exits 0 and asserts every named case, including zero-row schema differences and same-side instability provenance.
-- [ ] Design accounts for capture memory, repetition identity, old artifacts and output omissions independently of authoritative equivalence.
-- [ ] Decision and a precise future file/test/contract map exist, or a documented no-go with reopening criteria exists.
-- [ ] `git diff --name-only $studyStart -- src tests scripts` is empty; `git status --short` contains no unexpected new paths; docs links/whitespace pass.
-- [ ] No claim of live correctness, deployed behavior or model-token savings; no product gate required for these notes/fixtures alone.
+- [x] Study verifier exits 0 and asserts every named case, including zero-row schema differences and same-side instability provenance.
+- [x] Design accounts for capture memory, repetition identity, old artifacts and output omissions independently of authoritative equivalence.
+- [x] Decision and a precise future file/test/contract map exist, or a documented no-go with reopening criteria exists.
+- [x] `git diff --name-only $studyStart -- src tests scripts` is empty; `git status --short` contains no unexpected new paths; docs links/whitespace pass.
+- [x] No claim of live correctness, deployed behavior or model-token savings; no product gate required for these notes/fixtures alone.
 
 ## STOP conditions and maintenance
 

@@ -1,0 +1,1 @@
+verify.ps1: PASS; scenarios=31; independent expected verdicts and locations checked; pair provenance, omission counts, no-value/hash shape, descriptor/output caps, off/legacy gaps and 4096/65536 views checked.
