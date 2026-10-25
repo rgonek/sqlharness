@@ -40,3 +40,8 @@ Research content reviewed: `c85767b7`; whole branch range `0f1109c7..c85767b7`. 
 Ruling: research-only scope governs generic implementation wording because the Contract forbids incidental product edits. If wrong, additional work requires a separately authorized implementation plan.
 
 Final documentation check: 90 local Markdown links resolved across eight Markdown files. Task 1/3 full execution reports and exact scripts are preserved in `112-evidence/reviews/`; Task 2 report remains `112-evidence/task-2-report.md`.
+
+## Local integration
+
+Merged into `main` at `b7847326` on 2026-10-25. The only merge conflict joined adjacent Plan 111/112 history rows; both were preserved. Integrated scoped checks passed: staged diff whitespace, 93 local Markdown links, and unchanged `src`, `tests` and `scripts` versus pre-merge main `81d0fa59`. No product gate was required for documentation-only work. No push or live UAT.
+

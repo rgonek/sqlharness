@@ -14,7 +14,7 @@
 
 ## Status and priority
 
-- Status: RESEARCH COMPLETE; content reviewed at `c85767b7`. All Luna xhigh task reviews and Sol low whole-branch review approved. No implementation, integration, or live UAT is claimed.
+- Status: RESEARCH COMPLETE; content reviewed at `c85767b7`. All Luna xhigh task reviews and Sol low whole-branch review approved. Locally integrated into main at `b7847326`; no product implementation or live UAT is claimed.
 - Priority: **P4** (P1 correctness/evidence interpretation, P2 useful diagnostics, P3 ergonomics or cost research, P4 exploratory/residual work).
 - Effort: L; change risk: HIGH.
 - Planned at: `677b2f93b66c06d3dc0bda8475c7570ef29738d9`.
