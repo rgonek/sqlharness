@@ -1,0 +1,52 @@
+# Plan 112 Task 1 execution report
+
+## Result
+
+DONE_WITH_CONCERNS. Task 1 produced `plans/112-evidence/task-1-coverage.md`. The evidence count is one explicitly selected DML bottleneck among one documented qualifying non-report investigation. This is a sample size of one and cannot estimate recurrence. Plan 063 covers missing-index hint overlap against an inventory; Plan 083 covers TVP/list input representation for read-only paths. Neither covers DML write-cost measurement or existing-index redundancy.
+
+## Changes
+
+- Added `plans/112-evidence/task-1-coverage.md` with the count, denominator limit, 063/083 reconciliation, candidate grouping boundary, inspected evidence ledger, and Plan 112 review-focus assessment.
+- Kept the copied source plan `plans/112-write-and-index-evidence-study.md` unchanged and included it in the assigned first commit.
+- No product files changed. No DB access, DML/DDL, tests, paid trials, installation, merge, or push occurred.
+
+## Evidence commands and results
+
+- `git status --short`, `git log -5 --oneline`, `git worktree list --porcelain`: worktree branch `plan-112` was at assigned base `0f1109c7d8ba601cdcf24d017270fb4aac4cc47d`; before edits the copied Plan 112 file was the only untracked item and tracked files were clean.
+- `Get-ChildItem docs/observations -File` and `rg -n -i "DML|delete|insert|update|write|bottleneck|case|report" docs/observations -g '*.md'`: found one explicit selected DML bottleneck case in `write-statement-and-index-maintenance-evidence.md`; excluded report cases and incidental DML strings. Other matches do not select DML as their bottleneck. Recurrence remains unknown.
+- `Get-Content plans/063-missing-index-overlap.md -TotalCount 78`: confirmed bounded inventory is captured for measured-plan missing-index hints and is evaluated per hint. Existing-index pairwise redundancy and write-maintenance measurement are outside its scope.
+- `Get-Content plans/083-table-and-list-parameters.md -TotalCount 140`; `Get-Content plans/083-verification-evidence.md -TotalCount 75`; source/test inspection of `ListParameterExpander.cs` and `ListParameterExpanderTests.cs`: confirmed TVP/list paths and coverage, while preserving the documented live SQL Server/SSMS UAT pending status. List expansion is not Query Store canonical normalization.
+- Plan 112 drift command comparing `677b2f93b66c06d3dc0bda8475c7570ef29738d9..HEAD` over the prescribed paths: only `docs/mcp/tools.md` changed (8 lines: 4 additions, 4 deletions). The changes concern the tool catalog test ceiling, `engineGuidance.tableIo`, query result-set selection metadata, and `statement-summary`; none alters Task 1's safety/coverage conclusions. The other prescribed paths had no diff.
+- `git diff --check`: exit 0.
+- Relative Markdown-link check on `plans/112-evidence/task-1-coverage.md`: 5 links checked, 0 unresolved.
+
+The inspected sources and expected/observed outcomes are also recorded in the evidence ledger. The existing Plan 083 verification statements above are cited as prior plan evidence; no test or verification command was rerun in this documentation-only task.
+
+## Files
+
+- `plans/112-write-and-index-evidence-study.md` — assigned source plan, unchanged, staged for the first commit.
+- `plans/112-evidence/task-1-coverage.md` — Task 1 research deliverable.
+- `.superpowers/sdd/112-write-and-index-evidence-study/task-1-report.md` — this full execution report.
+
+## Self-review
+
+- Confirmed the evidence count is one selected bottleneck case, not one per DML statement, query, report entry, or hypothesis.
+- Confirmed the count's denominator is limited to the single qualifying documented investigation; it is not a population or recurrence rate.
+- Confirmed Plan 063's hint-to-inventory verdicts do not imply existing-index redundancy.
+- Confirmed Plan 083's TVP/list binding does not relax persistent-DML rejection or supply write benchmarking.
+- Kept expanded-list grouping as a candidate heuristic requiring application source and query-shape confirmation.
+- Confirmed review focus is assessed without implying artifact changes or live acceptance.
+- Confirmed no production behavior changed and no tests were run.
+
+## Concerns / limitations
+
+The observation corpus supplies only one qualifying, explicitly selected bottleneck investigation. This supports documenting a real demand signal but cannot support a recurrence estimate or a broad implementation priority on its own. Historical source/observation facts were assessed from repository artifacts; no live database or installed-binary behavior was checked.
+
+Additional execution note: the initial plan read used `-TotalCount 100`, which extended past the requested Contract-only scope into task sections. I did not rely on later task details for Task 1. The verbatim copied source plan also contains a trailing blank line; `git diff --cached --check` reports that existing source-plan whitespace. I preserved the assigned source plan unchanged. The new coverage document passed the whitespace and link checks.
+
+Per controller direction, I normalized only the copied source plan's terminal blank lines to a single final newline. No plan text changed; this mechanical normalization removes the `git diff --check` warning.
+
+## Commit
+
+- `cf26d9fc` — `docs(112): record task 1 evidence coverage`
+- Post-commit `git status --short` was clean.
