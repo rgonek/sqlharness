@@ -29,3 +29,5 @@ The [initial candidate gate](windows-interrupted.log) was stopped after review f
 The [exact two failed tests](focused-environment-retry.log) then passed 2/2 without source changes, followed by the full successful gate above. Failed and interrupted runs are not counted as passing evidence.
 
 Primary checkout README/index edits and untracked Plans 111/112/113 were backed up with hashes under `D:/temp/sqlharness-plan115-preserve-20261024T211020`. Only the overlapping local plan index was temporarily stashed for fast-forward; the final restoration checks are recorded in the integration ledger. No live database, installation, publication or paid-agent run occurred. Linux was not run.
+
+Restoration completed on 2026-10-25: the original 35-line local index patch is identical after apply; root README and untracked Plans 111/112/113 match their saved hashes. The final main source/test/script tree is byte-identical to Windows-verified `0d37fa9e`. Managed worktree retained; no push.
