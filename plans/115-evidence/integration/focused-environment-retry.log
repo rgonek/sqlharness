@@ -1,0 +1,16 @@
+Test run for C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\afac\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.43]   Discovering: SqlHarness.Tests
+[xUnit.net 00:00:01.96]   Discovered:  SqlHarness.Tests
+[xUnit.net 00:00:02.04]   Starting:    SqlHarness.Tests
+[xUnit.net 00:00:03.27]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Auth.ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree [766 ms]
+  Passed SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Published_host_returns_Stopped_and_releases_the_lock [1 s]
+
+Test Run Successful.
+Total tests: 2
+     Passed: 2
+ Total time: 4,4919 Seconds
+Direct exit code: 0

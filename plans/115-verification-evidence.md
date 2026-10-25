@@ -1,6 +1,6 @@
 # Plan 115 verification evidence
 
-Implementation on branch `plan-115`, based on `9718b052f40335d3647cd96750d80431248f9140`. Final product/test revision: `3ffc574b`. **IMPLEMENTATION COMPLETE; all reviews approved; final Windows gate and explicit branch formatting passed.** Subsequent changes only archive evidence and update plan/index status; they do not alter the verified product/test tree.
+Implementation on branch `plan-115`, based on `9718b052f40335d3647cd96750d80431248f9140`. Feature product/test revision: `3ffc574b`. **IMPLEMENTATION COMPLETE; all reviews approved; final Windows gate and explicit branch formatting passed.** This section records the original feature gate. The subsequently combined Plans 104/114/115 product was verified on `0d37fa9e` and locally integrated into `main`; see [local integration evidence](115-evidence/integration/verification.md).
 
 ## Behavior
 
@@ -31,4 +31,4 @@ Initial baseline installation encountered npm ENOTEMPTY; generated modules were 
 
 The handoff has no numbered task headings or separate named spec. Its complete Contract was used as one integrated task and copied verbatim into the brief; the cost if that division is wrong is coarser review/rework granularity.
 
-No local integration, push, installation, publication, live database, paid-agent trial or tokenizer measurement was performed. Linux was not run. The main checkout's unrelated edits were preserved.
+Local integration into `main` completed on 2026-10-25 using verified combined product `0d37fa9e`. No push, installation, publication, live database, paid-agent trial or tokenizer measurement was performed. Linux was not run. The main checkout's unrelated edits were preserved.

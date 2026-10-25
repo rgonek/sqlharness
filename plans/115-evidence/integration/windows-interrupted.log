@@ -1,0 +1,5 @@
+pwsh ./scripts/verify.ps1 -LogDirectory .superpowers/sdd/115-query-result-set-selection/integration/windows-final
+[6 q==> ui-install skipped (lockfile unchanged)
+==> build ok 2m02s
+error: recipe `verify` failed on line 12 with exit code 1
+Direct exit code: 1

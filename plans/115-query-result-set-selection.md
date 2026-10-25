@@ -1,6 +1,6 @@
 # Plan 115: Select relevant query result sets
 
-> **Status:** IMPLEMENTATION COMPLETE on `plan-115`; Windows `just verify` passed on `3ffc574b`; Luna xhigh task review and Sol low whole-branch/scoped reviews approved. Not merged or pushed. See [verification evidence](115-verification-evidence.md). No live database or paid-agent acceptance was run.
+> **Status:** DONE; locally integrated into `main` at `0d37fa9e`. Combined Windows `just verify`, explicit branch format, Luna xhigh task/scoped reviews and Sol low combined review passed. Not pushed. See [verification evidence](115-verification-evidence.md) and [integration evidence](115-evidence/integration/verification.md). No live database or paid-agent acceptance was run.
 
 ## Evidence and goal
 

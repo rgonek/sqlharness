@@ -1,0 +1,3 @@
+[xUnit.net 00:01:12.22]     SqlHarness.Tests.Dashboard.DashboardLifecycleTests.Published_host_returns_Stopped_and_releases_the_lock [FAIL]
+[xUnit.net 00:01:19.80]     SqlHarness.Tests.Auth.ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree [FAIL]
+
