@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Dashboard;
@@ -110,6 +112,7 @@ public sealed record CompareStatementEvidence(
     public string? PlanLink { get; init; }
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<PairBasis>))]
 public enum PairBasis { MeasuredTogether, DifferentRunsSameConditions, ConditionsDiffer, SameSql }
 
 public sealed record OptimizationComparison(

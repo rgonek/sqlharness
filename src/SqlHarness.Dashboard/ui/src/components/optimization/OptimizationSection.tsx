@@ -46,6 +46,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
   const navigate = useNavigate({ from: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id" } as never)
   const controlId = useId()
   const [comparisonTab, setComparisonTab] = useState("diff")
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(null)
   const matchesSubject = search.subject === subject.subject && (search.db ?? "") === subject.database
   const groups = subject.groups
   const group = (matchesSubject && groups.find(item => item.fingerprint === search.group)) || groups[0]
@@ -75,7 +76,10 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
 
   return <article aria-current={matchesCard ? "true" : undefined} className="optimization-card">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-base font-semibold">Optimization</div><p className="mt-1 text-sm text-muted-foreground"><span role="heading" aria-level={3}>{subject.subject}</span> · {subject.database || "(no database)"} · {subject.engine} · <span>{scope?.scope}</span></p></div>
-      {!!search.subject && !matchesCard && <Tooltip><TooltipTrigger aria-describedby={`${controlId}-comparison-help`} render={<Button type="button" variant="outline" size="sm" onClick={() => update({ a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })} />}>Select comparison</TooltipTrigger><TooltipContent id={`${controlId}-comparison-help`} role="tooltip">Select this optimization history and use its default versions and cases.</TooltipContent></Tooltip>}
+      <div className="flex max-w-full flex-wrap items-center gap-2">
+        {!!search.subject && !matchesCard && <Tooltip><TooltipTrigger aria-describedby={`${controlId}-comparison-help`} render={<Button type="button" variant="outline" size="sm" onClick={() => update({ a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })} />}>Select comparison</TooltipTrigger><TooltipContent id={`${controlId}-comparison-help`} role="tooltip">Select this optimization history and use its default versions and cases.</TooltipContent></Tooltip>}
+        <div ref={setToolbarTarget} />
+      </div>
     </div>
     {groups.length > 1 && group && <div className="grid max-w-xl gap-1 text-sm">
       <Label htmlFor={`${controlId}-group`}>Conditions group</Label>
@@ -109,7 +113,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
       {!selectedB && <p className="text-sm text-muted-foreground">Select a version for B to compare it with {selectedA}.</p>}
       {activeCompareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
       {activeCompareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {activeCompareQuery.error.message}</p>}
-      {activeCompareQuery.data && <div className="optimization-comparison"><ComparisonPanel pending={activeCompareQuery.isPlaceholderData} activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
+      {activeCompareQuery.data && <div className="optimization-comparison"><ComparisonPanel toolbarTarget={toolbarTarget} pending={activeCompareQuery.isPlaceholderData} activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
         sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={patch => update(patch)} /></div>}
     </> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
   </article>

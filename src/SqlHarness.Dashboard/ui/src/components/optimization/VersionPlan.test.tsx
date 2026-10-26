@@ -6,8 +6,21 @@ import { operationDetail, variant } from "@/test/fixtures"
 import { stubFetch } from "@/test/render"
 import { trackQueryClient } from "@/test/network"
 import { VersionPlan } from "./VersionPlan"
+import userEvent from "@testing-library/user-event"
 
 vi.mock("@/components/plan/PlanWorkbench", () => ({ PlanWorkbench: ({ variant }: { variant: { caseId: string } }) => <div>Selected plan case: {variant.caseId}</div> }))
+
+test("plan version is a single radio choice with keyboard navigation", async () => {
+  render(<VersionPlan a="v0" b="v1" before={null} after={null} engine="SqlServer" selectedCase="selected" />)
+  const candidate = screen.getByRole("radio", { name: "v1 B" })
+  expect(candidate).toBeChecked()
+  candidate.focus()
+  await userEvent.keyboard("{ArrowLeft}")
+  const baseline = screen.getByRole("radio", { name: "v0 A" })
+  expect(baseline).toBeChecked()
+  await userEvent.keyboard(" ")
+  expect(baseline).toBeChecked()
+})
 
 test.each(["missing mapping", "missing variant"])("plan does not substitute a different case with %s", async reason => {
   stubFetch({ "/api/operations/10": operationDetail({ variants: [variant({ variant: "candidate", caseId: "other-case" })] }) })

@@ -1,9 +1,22 @@
+using System.Text.Json;
+
 using SqlHarness.Dashboard;
 
 namespace SqlHarness.Tests.Dashboard;
 
 public sealed class OptimizationComparerTests
 {
+    [Theory]
+    [InlineData(PairBasis.MeasuredTogether, "MeasuredTogether")]
+    [InlineData(PairBasis.DifferentRunsSameConditions, "DifferentRunsSameConditions")]
+    [InlineData(PairBasis.ConditionsDiffer, "ConditionsDiffer")]
+    [InlineData(PairBasis.SameSql, "SameSql")]
+    public void Pair_basis_json_matches_dashboard_frontend_contract(PairBasis basis, string expected)
+    {
+        var json = JsonSerializer.SerializeToElement(new { basis }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(expected, json.GetProperty("basis").GetString());
+    }
+
     [Fact]
     public void Op203_shape_focuses_on_changed_statement()
     {

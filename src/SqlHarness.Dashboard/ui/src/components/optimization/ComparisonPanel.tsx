@@ -3,6 +3,7 @@ import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
 import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { Fragment, useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { Link } from "@tanstack/react-router"
 import type { AgentSessionKey, OptimizationActionReference, OptimizationComparison, ScopeVersions } from "@/api/types"
 import { CopyButton } from "@/components/CopyButton"
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IoDetails } from "./IoDetails"
 import { VersionPlan } from "./VersionPlan"
-import { conditionsDifferMessage, optimizationMarkdown, optimizationMetricRows } from "@/lib/optimizationMarkdown"
+import { conditionsDifferMessage, optimizationBasisLabel, optimizationMarkdown, optimizationMetricRows } from "@/lib/optimizationMarkdown"
 import { badgeTier } from "@/lib/flags"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SqlVersionOption } from "@/lib/compare"
@@ -20,15 +21,6 @@ import type { SessionSearch } from "@/router"
 import { StatementHiddenWork } from "./StatementRows"
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
-
-function basisLabel(comparison: OptimizationComparison): string {
-  switch (comparison.basis) {
-    case "MeasuredTogether": return `measured together in #${comparison.operationId}`
-    case "DifferentRunsSameConditions": return "different runs, same conditions"
-    case "ConditionsDiffer": return "conditions differ"
-    case "SameSql": return "same SQL"
-  }
-}
 
 function actionCase(action: OptimizationActionReference | null | undefined, selectedCase: string): string | null {
   if (!action?.caseIds.length) return null
@@ -51,11 +43,12 @@ function VersionAction({ label, action, selectedCase, sessionId, sessionSearch, 
   </section>
 }
 
-export function ComparisonPanel({ pending = false, comparison, sessionId, agentSessionKey, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange, hideCaseSelector = false, diff, timing, details, activeTab, onTabChange, navigation, headerContent }: {
+export function ComparisonPanel({ pending = false, comparison, sessionId, agentSessionKey, subject, scope, versions = [], engine = null, searchState, sessionSearch = {}, onSelectionChange, hideCaseSelector = false, diff, timing, details, activeTab, onTabChange, navigation, headerContent, toolbarTarget }: {
   comparison: OptimizationComparison
   pending?: boolean
   navigation?: ReactNode
   headerContent?: ReactNode
+  toolbarTarget?: HTMLElement | null
   activeTab?: string
   onTabChange?: (value: string) => void
   diff?: ReactNode
@@ -91,10 +84,11 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
       <SegmentedRadioGroup label="Comparison aggregate" value={activeAggregate} options={[{ value: "sum", label: "Sum" }, { value: "mean", label: "Mean" }]} onValueChange={value => updateSearch({ agg: value })} />
     </div>
     </PopoverContent></Popover>
-  const context = <div className="comparison-context"><span>{comparison.a} → {comparison.b}</span><span> · </span><span>{basisLabel(comparison)}</span><span> · </span><span>{comparison.equivalenceLabel}</span></div>
+  const context = <div className="comparison-context">{[`${comparison.a} → ${comparison.b}`, optimizationBasisLabel(comparison), comparison.equivalenceLabel].filter(Boolean).map((part, index) => <Fragment key={part}>{index > 0 && " · "}<span>{part}</span></Fragment>)}</div>
+  const toolbar = <div className="comparison-toolbar">{selectors}{copy}</div>
 
   return <section aria-label="Version comparison" className="comparison-panel" aria-busy={pending}>
-    {!navigation && <div className="comparison-toolbar">{selectors}{copy}</div>}
+    {!navigation && (toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar)}
 
 
     <ComparisonPending pending={pending} className="comparison-notices"><StatementHiddenWork rows={comparison.statements ?? []} />
@@ -112,7 +106,7 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
     </ComparisonPending>
       <Tabs className="comparison-tabs" value={activeTab} onValueChange={value => onTabChange?.(String(value))} defaultValue="diff">
         <Separator />
-        <TabsList variant="line"><TabsTrigger value="diff">SQL diff</TabsTrigger><TabsTrigger value="io">IO</TabsTrigger><TabsTrigger value="plan">Plan</TabsTrigger>{timing && <TabsTrigger value="timing">Timing</TabsTrigger>}{details && <TabsTrigger value="details">Details</TabsTrigger>}</TabsList><Separator />{navigation ?? <ComparisonPending pending={pending} className="mx-4">{context}</ComparisonPending>}
+        <div className="comparison-tab-header"><TabsList variant="line"><TabsTrigger value="diff">SQL diff</TabsTrigger><TabsTrigger value="io">IO</TabsTrigger><TabsTrigger value="plan">Plan</TabsTrigger>{timing && <TabsTrigger value="timing">Timing</TabsTrigger>}{details && <TabsTrigger value="details">Details</TabsTrigger>}</TabsList>{navigation ?? <ComparisonPending pending={pending}>{context}</ComparisonPending>}</div><Separator />
         {headerContent && <div className="comparison-header-content">{headerContent}</div>}
         {navigation && <div className="comparison-operation-context"><ComparisonPending pending={pending}>{context}</ComparisonPending><div className="comparison-operation-actions">{selectors}{copy}</div></div>}
         <TabsContent value="diff"><ComparisonPending pending={pending} announce>{diff ?? (sqlOptions.length > 1 ? <SessionVersionDiff key={`${comparison.a}:${comparison.b}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} selectionControls={false} /> : <p className="text-sm text-muted-foreground">SQL diff requires two retained SQL versions.</p>)}</ComparisonPending></TabsContent>

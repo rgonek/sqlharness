@@ -2,14 +2,18 @@ import { useState } from "react"
 import type { OptimizationActionReference } from "@/api/types"
 import { useOperation } from "@/api/queries"
 import { PlanWorkbench } from "@/components/plan/PlanWorkbench"
-import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { ErrorState } from "@/components/ErrorState"
 
 export function VersionPlan({ a, b, before, after, engine, selectedCase }: { a: string; b: string; before: OptimizationActionReference | null | undefined; after: OptimizationActionReference | null | undefined; engine: string | null; selectedCase: string }) {
   const [side, setSide] = useState<"a" | "b">("b")
   const action = side === "a" ? before : after
-  return <section className="space-y-3" aria-label="Version plan">
-    <div className="flex gap-2"><Button size="sm" variant={side === "a" ? "secondary" : "outline"} aria-pressed={side === "a"} onClick={() => setSide("a")}>{a} · A</Button><Button size="sm" variant={side === "b" ? "secondary" : "outline"} aria-pressed={side === "b"} onClick={() => setSide("b")}>{b} · B</Button></div>
+  return <section className="version-plan flex flex-col gap-3" aria-label="Version plan">
+    <SegmentedRadioGroup label="Plan version" appearance="soft" value={side} onValueChange={value => { if (value === "a" || value === "b") setSide(value) }} options={[
+      { value: "a", ariaLabel: `${a} A`, label: <>{a}<Badge variant="secondary" className="rounded-sm bg-border px-1 py-0">A</Badge></> },
+      { value: "b", ariaLabel: `${b} B`, label: <>{b}<Badge className="rounded-sm px-1 py-0">B</Badge></> },
+    ]} />
     {action ? <ActionPlan key={`${action.operationId}:${action.side}:${selectedCase}`} action={action} engine={engine} selectedCase={selectedCase} /> : <p className="text-sm text-muted-foreground">No retained plan operation for this version.</p>}
   </section>
 }
