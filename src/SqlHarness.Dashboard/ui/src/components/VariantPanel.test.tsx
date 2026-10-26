@@ -168,6 +168,8 @@ test("uses occurrence identity and keeps graph selection linked to the exact bat
 
   renderVariantPanel()
 
+  expect(screen.queryByRole("combobox", { name: "Repetition" })).not.toBeInTheDocument()
+  await userEvent.click(await screen.findByRole("button", { name: "Advanced" }))
   const repetition = await screen.findByRole("combobox", { name: "Repetition" })
   expect(repetition).toHaveTextContent("Repetition 2")
   expect(screen.getByRole("combobox", { name: "Case" })).toHaveTextContent("Gold customers")
@@ -289,7 +291,10 @@ test("labels plans not stored and unmatched occurrences without rendering an emp
     [`/api/plan-documents/${documentA}/graph`]: () => new Response(JSON.stringify({ error: { code: "plan_document_unavailable", message: "Plan document is unavailable." } }), { status: 404, headers: { "Content-Type": "application/json" } }),
   })
   renderVariantPanel(fixtureVariant({ variant: "measure", parameterSet: "set-a", caseId: "case-a", caseLabel: "Gold customers", plans: [{ repetition: 2, ordinal: 0, hash: shapeHash, stored: true }] }))
-  expect(await screen.findByText("Document 1, statement 1: unmatched SQL statement.")).toBeInTheDocument()
+  expect(screen.queryByText(/unmatched SQL statement/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/SQL linking unavailable/)).not.toBeInTheDocument()
+  await userEvent.click(await screen.findByRole("button", { name: "Advanced" }))
+  expect(await screen.findByText("SQL linking unavailable for 1 plan fragment.")).toBeInTheDocument()
   expect(screen.queryByRole("region", { name: "Graphical execution plan" })).toBeNull()
 })
 

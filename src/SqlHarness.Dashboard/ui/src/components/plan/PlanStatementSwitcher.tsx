@@ -12,7 +12,7 @@ export function PlanStatementSwitcher({
 }) {
   const options = [...new Map(occurrences.map(occurrence => [occurrence.statementIndex, occurrence])).values()]
     .sort((left, right) => left.statementIndex - right.statementIndex)
-  if (options.length <= 1) return <p className="text-sm text-muted-foreground">Batch SQL stays visible while its linked statement is selected.</p>
+  if (options.length <= 1) return null
   return <label className="grid min-w-48 gap-1 text-sm">
     Statement
     <Select items={options.map(occurrence => ({

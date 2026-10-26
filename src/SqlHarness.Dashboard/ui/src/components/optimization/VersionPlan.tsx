@@ -1,24 +1,27 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import type { OptimizationActionReference } from "@/api/types"
 import { useOperation } from "@/api/queries"
 import { PlanWorkbench } from "@/components/plan/PlanWorkbench"
 import { Badge } from "@/components/ui/badge"
-import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
 import { ErrorState } from "@/components/ErrorState"
 
 export function VersionPlan({ a, b, before, after, engine, selectedCase }: { a: string; b: string; before: OptimizationActionReference | null | undefined; after: OptimizationActionReference | null | undefined; engine: string | null; selectedCase: string }) {
   const [side, setSide] = useState<"a" | "b">("b")
+  const id = useId()
   const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(null)
   const action = side === "a" ? before : after
+  const plan = action ? <ActionPlan key={`${action.operationId}:${action.side}:${selectedCase}`} toolbarTarget={toolbarTarget} action={action} engine={engine} selectedCase={selectedCase} /> : <p className="text-sm text-muted-foreground">No retained plan operation for this version.</p>
   return <section className="version-plan flex flex-col gap-3" aria-label="Version plan">
     <div className="plan-version-toolbar flex flex-wrap items-center gap-3">
-      <SegmentedRadioGroup label="Plan version" appearance="soft" value={side} onValueChange={value => { if (value === "a" || value === "b") setSide(value) }} options={[
-        { value: "a", ariaLabel: `${a} A`, label: <>{a}<Badge variant="secondary" className="h-3.5 rounded-sm bg-border px-1 py-0 text-[10.5px]">A</Badge></> },
-        { value: "b", ariaLabel: `${b} B`, label: <>{b}<Badge className="h-3.5 rounded-sm px-1 py-0 text-[10.5px]">B</Badge></> },
-      ]} />
+      <RadioGroup aria-label="Plan version" value={side} onValueChange={value => { if (value === "a" || value === "b") setSide(value) }} className="flex flex-wrap gap-3">
+        <div className="flex items-center gap-2"><RadioGroupItem id={`${id}-a`} value="a" aria-label={`${a} A`} /><Label htmlFor={`${id}-a`}>{a}<Badge variant="secondary" className="h-3.5 rounded-sm bg-border px-1 py-0 text-[10.5px]">A</Badge></Label></div>
+        <div className="flex items-center gap-2"><RadioGroupItem id={`${id}-b`} value="b" aria-label={`${b} B`} /><Label htmlFor={`${id}-b`}>{b}<Badge className="h-3.5 rounded-sm px-1 py-0 text-[10.5px]">B</Badge></Label></div>
+      </RadioGroup>
       <div ref={setToolbarTarget} className="min-w-0 flex-1 basis-full sm:basis-auto" />
     </div>
-    {action ? <ActionPlan key={`${action.operationId}:${action.side}:${selectedCase}`} toolbarTarget={toolbarTarget} action={action} engine={engine} selectedCase={selectedCase} /> : <p className="text-sm text-muted-foreground">No retained plan operation for this version.</p>}
+    {plan}
   </section>
 }
 

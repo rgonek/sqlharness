@@ -103,7 +103,9 @@ test("case, repetition, document and statement selections preserve their distinc
 
   const casePicker = await screen.findByRole("combobox", { name: "Case" })
   expect(casePicker).toHaveTextContent("A very long initial case label that must remain readable")
-  const repetitionPicker = screen.getByRole("combobox", { name: "Repetition" })
+  expect(screen.queryByRole("combobox", { name: "Repetition" })).not.toBeInTheDocument()
+  await user.click(screen.getByRole("button", { name: "Advanced" }))
+  const repetitionPicker = await screen.findByRole("combobox", { name: "Repetition" })
   expect(repetitionPicker).toHaveTextContent("Repetition 2")
   const documentPicker = screen.getByRole("combobox", { name: "Plan document" })
   expect(documentPicker).toHaveTextContent("All plan documents")
