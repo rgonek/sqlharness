@@ -1,0 +1,36 @@
+{
+  "screens": [
+    "io-whole-scroll",
+    "round-ab",
+    "details-and-separators",
+    "diff-radio",
+    "select-comparison-tooltip",
+    "activity-optimization-tooltip",
+    "operation-io-scroll",
+    "settings-radio",
+    "mobile",
+    "settings-radio-mobile"
+  ],
+  "scroll": {
+    "before": 321,
+    "during": 321,
+    "after": 321
+  },
+  "operationScroll": {
+    "before": 220,
+    "after": 220
+  },
+  "aStyle": {
+    "bg": "oklch(0.92 0.004 286.32)",
+    "w": 24,
+    "h": 24,
+    "r": 33554400
+  },
+  "bStyle": {
+    "bg": "oklch(0.21 0.006 285.885)",
+    "w": 24,
+    "h": 24,
+    "r": 33554400
+  },
+  "errors": []
+}

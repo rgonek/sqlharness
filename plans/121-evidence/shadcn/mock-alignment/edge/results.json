@@ -1,0 +1,13 @@
+{
+  "records": [
+    {
+      "basis": "SameSql",
+      "text": "v0 → v2 · same SQL"
+    },
+    {
+      "basis": "ConditionsDiffer",
+      "text": "v0 → v2 · conditions differ"
+    }
+  ],
+  "errors": []
+}

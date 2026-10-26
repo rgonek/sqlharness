@@ -57,3 +57,7 @@ layout differences. See [design QA](../../design-qa.md),
 Missing journal data remains explicitly unavailable by operator decision; no API
 or persistence contract was expanded. Final gate and delivery receipts are recorded
 separately for this follow-up.
+
+## Updated data-gap inventory (2026-10-26)
+
+The [mock/data audit](shadcn/mock-alignment/data-audit.md) distinguishes unretained data from missing dashboard projections. In particular, CPU/elapsed per statement are already persisted in operation_statements; the current dashboard comparison model does not expose them. Earlier unavailable-data wording must not be interpreted as absence of all collection. The audit also lists safe UI simplifications and existing-data navigation gaps.

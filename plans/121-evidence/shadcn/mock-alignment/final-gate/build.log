@@ -1,0 +1,52 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+
+  > ui@0.0.0 build
+  > vite build
+
+  SqlHarness.Mcp.WorkflowHost -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  [36mvite v8.3.3 [32mbuilding client environment for production...[36m[39m
+  transforming...
+  Γ£ô 8198 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                                                     0.48 kB Γöé gzip:   0.31 kB
+  dist/assets/geist-mono-symbols2-wght-normal-CO5SzqOn.woff2          5.81 kB
+  dist/assets/geist-mono-cyrillic-ext-wght-normal-X_5orZeX.woff2      6.17 kB
+  dist/assets/geist-mono-vietnamese-wght-normal-DadHysG0.woff2        7.69 kB
+  dist/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2            10.25 kB
+  dist/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2             11.23 kB
+  dist/assets/geist-mono-cyrillic-wght-normal-DiZS0aHC.woff2         12.94 kB
+  dist/assets/geist-mono-latin-ext-wght-normal-Bwz-egvJ.woff2        14.69 kB
+  dist/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2              18.74 kB
+  dist/assets/inter-greek-wght-normal-CkhJZR-_.woff2                 18.99 kB
+  dist/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2            23.12 kB
+  dist/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2          25.96 kB
+  dist/assets/inter-latin-wght-normal-Dx4kXJAl.woff2                 48.25 kB
+  dist/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2             85.06 kB
+  dist/assets/editor.worker-DWPaKKV_.js                             303.93 kB
+  dist/assets/PlanGraphView-DLioOiRN.css                             15.41 kB Γöé gzip:   2.56 kB
+  dist/assets/monaco-DjpsE8to.css                                    99.09 kB Γöé gzip:  14.20 kB
+  dist/assets/index-w5qDJcfj.css                                    118.97 kB Γöé gzip:  20.12 kB
+  dist/assets/PlanGraphView-V-ks2FCW.js                             174.90 kB Γöé gzip:  55.54 kB
+  dist/assets/index-TahgBz32.js                                   1,545.79 kB Γöé gzip: 462.55 kB
+  dist/assets/monaco-ZhePMYdJ.js                                  2,724.54 kB Γöé gzip: 700.52 kB
+
+  [33m[plugin builtin:vite-reporter]
+  (!) Some chunks are larger than 500 kB after minification. Consider:
+  - Using dynamic import() to code-split the application
+  - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+  - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+  [32mΓ£ô built in 5.78s[39m
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:54.15

@@ -1,0 +1,22 @@
+{
+  "records": [
+    {
+      "tab": "SQL diff",
+      "mockWidth": 1088,
+      "appWidth": 1088,
+      "scaled": false
+    },
+    {
+      "tab": "IO",
+      "mockWidth": 1088,
+      "appWidth": 1088,
+      "scaled": false
+    },
+    {
+      "tab": "Plan",
+      "mockWidth": 1088,
+      "appWidth": 1088,
+      "scaled": false
+    }
+  ]
+}

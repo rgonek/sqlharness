@@ -1,0 +1,12 @@
+
+ RUN  v5.0.3 D:/Dev/sqlharness/.worktrees/dashboard-shadcn-fixes/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  4 passed (4)
+      Tests  16 passed (16)
+   Start at  20:35:28
+   Duration  61.59s (import 61%, tests 23%, environment 8%, transform 4%, setup 4%)
+
+     Import  253 modules were evaluated 491 times · 36.40s total, 61% of tracked time
+             ~17.64s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
