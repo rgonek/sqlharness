@@ -14,6 +14,8 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 ## Pending
 
+Plan [122](122-dashboard-data-value-new-sessions.md): **PLANNED** — useful dashboard evidence for new sessions only; no backfill; remove unsupported data placeholders; other UX deferred. Documentation only, implementation not started. Requires Plan 121 product and mock-alignment corrections; see [spec](../docs/superpowers/specs/2026-10-26-dashboard-data-value.md).
+
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
