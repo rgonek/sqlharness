@@ -1,3 +1,4 @@
+import { ComparisonPending } from "@/components/optimization/ComparisonPending"
 import { CopyButton } from "@/components/CopyButton"
 import { MoreHorizontal, Sparkles, Star } from "lucide-react"
 import { useState, type ReactNode } from "react"
@@ -334,15 +335,15 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
   return <div className="operation-page space-y-4">
     <OperationHeading detail={detail} returnSearch={returnSearch} />
 
-    <div className="operation-metrics" aria-label="Operation metrics">
+    <ComparisonPending pending={comparison.isPlaceholderData}><div className="operation-metrics" aria-label="Operation metrics">
       <Fact label="Logical reads">{formatNumber(comparison.data?.wholeBatch?.after ?? op.logicalReadsMedian)}</Fact>
       <Fact label="Elapsed median">{formatDuration(comparison.data?.elapsed.afterMs ?? null)}</Fact>
       <Fact label="CPU">{formatDuration(comparison.data?.cpuAfterMs ?? null)}</Fact>
       <Fact label="Results">{comparison.data?.equivalenceLabel ?? "—"}</Fact>
-    </div>
+    </div></ComparisonPending>
 
     {comparison.isPending ? <Skeleton className="h-64 w-full" /> : comparison.data ? <>
-      <ComparisonPanel navigation={returnLink} headerContent={detail.vars && <div className="operation-parameters"><span>Parameters</span><div aria-label="Variables" className="flex flex-wrap gap-2">{Object.entries(detail.vars).map(([key,value]) => <code key={key}>@{key} = {value}</code>)}</div></div>} comparison={comparison.data} sessionId={op.sessionId} agentSessionKey={returnAgent} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector activeTab={comparisonTab} onTabChange={setComparisonTab} details={<><CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data?.selectedCase ?? "all" : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }) }) }} />    <Collapsible className="rounded-lg border p-4"><CollapsibleTrigger className="cursor-pointer font-medium">Run diagnostics</CollapsibleTrigger><CollapsibleContent keepMounted><div className="mt-4 space-y-4">
+      <ComparisonPanel pending={comparison.isPlaceholderData} navigation={returnLink} headerContent={detail.vars && <div className="operation-parameters"><span>Parameters</span><div aria-label="Variables" className="flex flex-wrap gap-2">{Object.entries(detail.vars).map(([key,value]) => <code key={key}>@{key} = {value}</code>)}</div></div>} comparison={comparison.data} sessionId={op.sessionId} agentSessionKey={returnAgent} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector activeTab={comparisonTab} onTabChange={setComparisonTab} details={<><CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data?.selectedCase ?? "all" : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }), resetScroll: false }) }} />    <Collapsible className="rounded-lg border p-4"><CollapsibleTrigger className="cursor-pointer font-medium">Run diagnostics</CollapsibleTrigger><CollapsibleContent keepMounted><div className="mt-4 space-y-4">
       <Card><CardHeader><CardTitle>Output size</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Fact label="Output bytes (raw / emitted)">{formatNumber(detail.rawBytes)} / {formatNumber(detail.emittedBytes)}</Fact>
         <Fact label="Estimated output tokens (raw / emitted)">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
@@ -355,7 +356,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
       </CardContent></Card>}
     </div></CollapsibleContent></Collapsible></>} diff={<SqlDiff embedded baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={op.engine} />} timing={<OperationTimings detail={detail} />}
         searchState={{ case: selectedCase, agg: aggregate, view }} sessionSearch={sessionSearchFromOperation(returnSearch)}
-        onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }) }) }} />
+        onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }), resetScroll: false }) }} />
 
     </> : null}
     <StoredSqlReuse detail={detail} />

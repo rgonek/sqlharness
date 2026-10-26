@@ -60,3 +60,7 @@ Status: IMPLEMENTED AND VERIFIED on `dashboard-shadcn-fixes`, base `0b589b40`, i
 Implementation, independent review and 23-state browser QA are recorded in [verification](121-evidence/shadcn/verification.md) and the [gallery](121-evidence/shadcn/index.html). Final Windows gate passed: UI 384, Core 4718, MCP 535; output-only sequential xUnit collections as documented. The operator subsequently authorized publication from this branch and `sqlharness dashboard --restart` after verification. No merge or push.
 
 Delivery: locally published from `08d50998` and ran `sqlharness dashboard --restart`; installed binary and two served UI assets verified. Worktree retained; no merge or push. [Receipt](121-evidence/shadcn/delivery.json).
+
+## Controls, scroll and Mira follow-up (2026-10-26)
+
+Status: IN PROGRESS on the same isolated `dashboard-shadcn-fixes` worktree. Fixes for the six additional screenshots and explicit RadioGroup request have passed ten browser states and 53 focused tests. The operator additionally requested Mira/Zinc after these corrections; preset strategy clarification is pending. Full final gate and authorized local publication/restart follow migration. [Evidence](121-evidence/shadcn/followup/verification.md), [gallery](121-evidence/shadcn/followup/index.html).

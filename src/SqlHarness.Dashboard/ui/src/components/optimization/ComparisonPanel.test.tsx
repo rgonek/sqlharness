@@ -43,13 +43,13 @@ test("shows basis, case chips, mixed warning, collapsed rows and URL-backed sele
   expect(await screen.findByText("measured together in #214")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("tab", { name: "IO" }))
   await userEvent.click(screen.getByRole("button", { name: "All cases · Sum" }))
-  expect(screen.getByRole("button", { name: "@CustomerId = 9001" })).toBeInTheDocument()
+  expect(screen.getByRole("radio", { name: "@CustomerId = 9001" })).toBeInTheDocument()
   expect(screen.getByText("Mixed: 2 better, 1 worse — @CustomerId = 9001: logical reads +35%")).toBeInTheDocument()
   expect(await screen.findByText("2 smaller tables")).toBeInTheDocument()
-  await userEvent.click(screen.getByRole("button", { name: "@CustomerId = 9001" }))
+  await userEvent.click(screen.getByRole("radio", { name: "@CustomerId = 9001" }))
   expect(router.state.location.search).toMatchObject({ case: "customer-9001" })
-  await userEvent.click(screen.getByRole("button", { name: "@CustomerId = 9001 · Sum" }))
-  await userEvent.click(screen.getByRole("button", { name: "Mean" }))
+  await userEvent.click(await screen.findByRole("button", { name: "@CustomerId = 9001 · Sum" }))
+  await userEvent.click(await screen.findByRole("radio", { name: "Mean" }))
   expect(router.state.location.search).toMatchObject({ agg: "mean" })
 })
 
@@ -124,7 +124,7 @@ test("reproduction actions resolve a selected fingerprint to each side's raw cas
   const { calls } = renderPanel(payload)
 
   await userEvent.click(await screen.findByRole("button", { name: "All cases · Sum" }))
-  await userEvent.click(await screen.findByRole("button", { name: "@CustomerId = 2" }))
+  await userEvent.click(await screen.findByRole("radio", { name: "@CustomerId = 2" }))
 
   await expect.poll(() => calls.some(call => call.includes("/repro?") && call.includes("case=baseline-raw-b"))).toBe(true)
   await expect.poll(() => calls.some(call => call.includes("/repro?") && call.includes("case=candidate-raw-b"))).toBe(true)
@@ -187,12 +187,12 @@ test("view selection is URL-backed and the query receives the selected view", as
     "/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v0&b=v3&case=all&agg=sum")
 
   await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
-  expect(screen.getByRole("button", { name: "By statement" })).toHaveAttribute("aria-pressed", "true")
+  expect(screen.getByRole("radio", { name: "By statement" })).toBeChecked()
   expect(screen.getByText("whole batch: 500 → 650 reads (shared statements: 100)")).toBeInTheDocument()
-  await userEvent.click(screen.getByRole("button", { name: "Whole batch" }))
+  await userEvent.click(screen.getByRole("radio", { name: "Whole batch" }))
   expect(router.state.location.search).toMatchObject({ view: "whole" })
   await expect.poll(() => calls.some(call => new URL(call, "http://dashboard").searchParams.get("view") === "whole")).toBe(true)
-  await userEvent.click(screen.getByRole("button", { name: "By statement" }))
+  await userEvent.click(screen.getByRole("radio", { name: "By statement" }))
   expect(router.state.location.search).toMatchObject({ view: "statements" })
 })
 
@@ -203,6 +203,6 @@ test("incomplete attribution visibly falls back to Whole batch", async () => {
 
   expect(await screen.findByText("per-statement attribution incomplete")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("tab", { name: "IO" }))
-  expect(screen.getByRole("button", { name: "Whole batch" })).toHaveAttribute("aria-pressed", "true")
+  expect(screen.getByRole("radio", { name: "Whole batch" })).toBeChecked()
   expect(screen.getByText("basis: whole batch")).toBeInTheDocument()
 })

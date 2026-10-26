@@ -162,7 +162,7 @@ test("changing conditions group selects its first scope and clears all dependent
   expect(await screen.findByRole("button", { name: "A v0" })).toHaveAttribute("aria-pressed", "true")
   expect(screen.getByRole("button", { name: "B v39" })).toHaveAttribute("aria-pressed", "true")
   await userEvent.click(screen.getByRole("button", { name: "All cases · Sum" }))
-  expect(screen.getByRole("button", { name: /^All cases$/ })).toHaveAttribute("aria-pressed", "true")
+  expect(screen.getByRole("radio", { name: /^All cases$/ })).toBeChecked()
 })
 
 test("hides one-option controls and gives each subject its own accessible selector names", async () => {

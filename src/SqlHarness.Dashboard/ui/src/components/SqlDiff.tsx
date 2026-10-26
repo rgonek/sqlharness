@@ -3,7 +3,7 @@ import { CopyButton } from "@/components/CopyButton"
 import { LazySqlMergeView, LazySqlViewer, loadUnifiedDiffText } from "@/components/SqlEditors"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { boundedPreview, diffTooLarge, dialectOf, MAX_DIFF_BYTES, normalizeForDiff, readPreference, utf8BytesWithin, writePreference, type DiffMode, type SqlTab } from "@/lib/sqlDiff"
 
@@ -20,13 +20,9 @@ export function DiffControls({ mode, onModeChange, ignoreFormatting, onIgnoreFor
   const id = useId()
   const ignoreFormattingId = `${id}-ignore-formatting`
   return <div className="diff-controls flex flex-wrap items-center gap-3">
-    <ToggleGroup variant="outline" spacing={0} size="sm" aria-label="Diff mode" value={[mode]} onValueChange={values => {
-      const value = values[0]
+    <SegmentedRadioGroup label="Diff mode" value={mode} options={[{ value: "side-by-side", label: "Side by side" }, { value: "unified", label: "Unified" }]} onValueChange={value => {
       if (value === "side-by-side" || value === "unified") onModeChange(value)
-    }}>
-      <ToggleGroupItem value="side-by-side">Side by side</ToggleGroupItem>
-      <ToggleGroupItem value="unified">Unified</ToggleGroupItem>
-    </ToggleGroup>
+    }} />
     <div className="flex items-center gap-2">
       <Checkbox id={ignoreFormattingId} checked={ignoreFormatting} onCheckedChange={onIgnoreFormattingChange} />
       <Label htmlFor={ignoreFormattingId}>Ignore formatting</Label>

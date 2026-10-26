@@ -134,7 +134,8 @@ export function useAgentSessionOptimization(key: AgentSessionKey, enabled = true
 
 export function useAgentSessionOptimizationComparison(key: AgentSessionKey, params: OptimizationCompareParams | null) {
   return useQuery({
-    queryKey: ["agent-session-optimization-comparison", key, params],
+    queryKey: ["agent-session-optimization-comparison", key, params] as const,
+    placeholderData: (previousData, previousQuery) => params !== null && previousQuery?.queryKey[1].agentKind === key.agentKind && previousQuery.queryKey[1].conversationId === key.conversationId ? previousData : undefined,
     queryFn: () => getJson<OptimizationComparison>(`/api/agent-sessions/${encodeURIComponent(key.agentKind)}/${encodeURIComponent(key.conversationId)}/optimization/compare`, {
       subject: params!.subject, database: params!.database, group: params!.group, scope: params!.scope,
       a: params!.a, b: params!.b, case: params!.case, aggregate: params!.aggregate, view: params!.view ?? "changed",
@@ -213,6 +214,7 @@ export function useSessionOptimization(id: number, enabled = true) {
 export function useSessionOptimizationComparison(id: number, params: OptimizationCompareParams | null) {
   return useQuery({
     queryKey: params ? queryKeys.optimizationComparison(id, params) : ["session-optimization-comparison", id, null],
+    placeholderData: (previousData, previousQuery) => params !== null && previousQuery?.queryKey[1] === id ? previousData : undefined,
     queryFn: () => getJson<OptimizationComparison>(`/api/sessions/${id}/optimization/compare`, {
       subject: params!.subject, database: params!.database, group: params!.group, scope: params!.scope,
       a: params!.a, b: params!.b, case: params!.case, aggregate: params!.aggregate, view: params!.view ?? "changed",
@@ -223,7 +225,8 @@ export function useSessionOptimizationComparison(id: number, params: Optimizatio
 
 export function useOperationOptimization(id: number, selectedCase = "all", aggregate = "sum", view: "changed" | "whole" | "statements" = "changed") {
   return useQuery({
-    queryKey: ["operation-optimization", id, selectedCase, aggregate, view],
+    queryKey: ["operation-optimization", id, selectedCase, aggregate, view] as const,
+    placeholderData: (previousData, previousQuery) => previousQuery?.queryKey[1] === id ? previousData : undefined,
     queryFn: () => getJson<OptimizationComparison>(`/api/operations/${id}/optimization`, { case: selectedCase, aggregate, view }),
   })
 }

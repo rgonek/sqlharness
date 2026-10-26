@@ -1,3 +1,4 @@
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { Link, Outlet, useRouterState } from "@tanstack/react-router"
 import { buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -38,7 +39,7 @@ export function AppLayout() {
   useLiveFeed()
   const productionYoloProfiles = profiles?.profiles.filter(profile => profile.mutationMode?.toLowerCase() === "yolo" && profile.acknowledgeProductionYolo && /^(prod|production|staging)$/i.test(profile.environment ?? "")) ?? []
   return (
-    <div className="min-h-screen">
+    <TooltipProvider><div className="min-h-screen">
       <ConnectionBanner />
       {productionYoloProfiles.map(profile => <div key={profile.name} role="alert" className="border-b border-destructive/40 bg-destructive/10 px-4 py-3 text-center font-semibold text-destructive">YOLO is on for production profile {profile.name}</div>)}
       <ApprovalToast />
@@ -64,6 +65,6 @@ export function AppLayout() {
       <main className="app-main mx-auto min-w-0 space-y-4 p-4" data-page={pathname === "/" ? "activity" : pathname.split("/")[1]}>
         <Outlet />
       </main>
-    </div>
+    </div></TooltipProvider>
   )
 }

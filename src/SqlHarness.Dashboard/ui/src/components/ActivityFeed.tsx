@@ -1,3 +1,4 @@
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { useId, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { ChevronDown, ChevronRight, Search, Star } from "lucide-react"
@@ -42,6 +43,7 @@ function Facet({ label, selected, values, onChange }: { label: string; selected:
 }
 
 function SessionGroup({ session, operations, now, expanded, onExpand }: { session: SessionSummary; operations: OperationSummary[]; now: number; expanded: boolean; onExpand: () => void }) {
+  const optimizationTooltipId = useId()
   const active = operations.some(operation => operation.status === "running")
   const open = expanded
   const update = useUpdateSessionAnnotation(session.id)
@@ -59,7 +61,7 @@ function SessionGroup({ session, operations, now, expanded, onExpand }: { sessio
       </div>
       <span className="activity-directory min-w-0 truncate font-mono text-[13px] text-muted-foreground" title={session.cwd ?? undefined}>{session.cwd ?? "—"}</span>
       <time className="activity-last-seen text-[13px] text-muted-foreground" title={session.lastSeen}>{formatRelativeTime(session.lastSeen, now)}</time>
-      <div className="activity-optimization min-w-0"><p className="truncate text-xs text-muted-foreground" title={session.optimization?.map(item => `${item.subject} ${item.change}`).join(" · ")}>{session.optimization?.map(item => `${item.subject} ${item.change}`).join(" · ")}</p></div>
+      <div className="activity-optimization min-w-0">{!!session.optimization?.length && <Tooltip><TooltipTrigger aria-describedby={optimizationTooltipId} render={<span tabIndex={0} className="block truncate text-xs text-muted-foreground" />}>{session.optimization.map(item => `${item.subject} ${item.change}`).join(" · ")}</TooltipTrigger><TooltipContent id={optimizationTooltipId} role="tooltip" className="max-w-sm"><ul className="flex flex-col gap-1">{session.optimization.map((item, index) => <li key={`${item.subject}:${index}`} className="break-all">{item.subject} {item.change}</li>)}</ul></TooltipContent></Tooltip>}</div>
       <div className="activity-session-counts">{active && <span className="activity-running">{operations.filter(item => item.status === "running").length} running</span>}
       <span className="text-xs text-muted-foreground">{operations.length === session.operations ? `${operations.length} ops` : `${operations.length} shown / ${session.operations} ops`}</span></div>
     </div>

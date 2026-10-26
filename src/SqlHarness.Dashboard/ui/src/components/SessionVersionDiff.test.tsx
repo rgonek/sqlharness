@@ -73,10 +73,10 @@ test("defaults to retained endpoints, fetches each selected hash, and keeps mode
     `/api/sessions/5/sql?hash=${encodeURIComponent(hash3)}`,
   ])
 
-  const unified = screen.getByRole("button", { name: "Unified" })
-  screen.getByRole("button", { name: "Side by side" }).focus()
-  await user.keyboard("{ArrowRight} ")
-  expect(unified).toHaveAttribute("aria-pressed", "true")
+  const unified = screen.getByRole("radio", { name: "Unified" })
+  screen.getByRole("radio", { name: "Side by side" }).focus()
+  await user.keyboard("{ArrowRight}")
+  expect(unified).toBeChecked()
   expect(await screen.findByLabelText("merge unified")).toBeInTheDocument()
 
   await user.click(screen.getByRole("combobox", { name: "To version" }))
