@@ -84,7 +84,8 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
       <SegmentedRadioGroup label="Comparison aggregate" value={activeAggregate} options={[{ value: "sum", label: "Sum" }, { value: "mean", label: "Mean" }]} onValueChange={value => updateSearch({ agg: value })} />
     </div>
     </PopoverContent></Popover>
-  const context = <div className="comparison-context">{[`${comparison.a} → ${comparison.b}`, optimizationBasisLabel(comparison), comparison.equivalenceLabel].filter(Boolean).map((part, index) => <Fragment key={part}>{index > 0 && " · "}<span>{part}</span></Fragment>)}</div>
+  const contextParts = [...new Set([`${comparison.a} → ${comparison.b}`, optimizationBasisLabel(comparison), comparison.equivalenceLabel].filter(Boolean))]
+  const context = <div className="comparison-context">{contextParts.map((part, index) => <Fragment key={part}>{index > 0 && " · "}<span>{part}</span></Fragment>)}</div>
   const toolbar = <div className="comparison-toolbar">{selectors}{copy}</div>
 
   return <section aria-label="Version comparison" className="comparison-panel" aria-busy={pending}>
