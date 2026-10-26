@@ -97,7 +97,7 @@ test("compare opens on the Optimization panel and carries selected case and aggr
   await userEvent.click(screen.getByRole("button", { name: "Per-case & per-run details" }))
   await userEvent.click(screen.getByRole("combobox", { name: "Case" }))
   await userEvent.click(await screen.findByRole("option", { name: /other/ }))
-  await screen.findByText("@tenant = N'other'")
+  expect(await within(screen.getByRole("combobox", { name: "Case" })).findByText("@tenant = N'other'")).toBeInTheDocument()
   expect(requestedCase("1")).toBe(true)
   expect(router.state.location.search).toMatchObject({ returnSubject: "orders", returnAgg: "sum", case: "1", agg: "sum" })
 })
