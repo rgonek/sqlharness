@@ -1,0 +1,15 @@
+{
+  "productRevision": "3f87a261d61bb6f24d92cf50b1536aa633c89713",
+  "sourceTree": "d28470cf673eceba23001c54b1b469f2cec09b89",
+  "publicationExitCode": 0,
+  "restartExitCode": 0,
+  "installedPath": "C:\\Users\\rgone\\.local\\bin\\sqlharness.exe",
+  "installedSha256": "79a05c7c2b16f85799f7e42e876a5fb91d44a386f2d8e372594ffb7ddc1629a3",
+  "publishedSha256": "79a05c7c2b16f85799f7e42e876a5fb91d44a386f2d8e372594ffb7ddc1629a3",
+  "dashboardPid": 12596,
+  "dashboardExecutable": "C:\\Users\\rgone\\.local\\bin\\sqlharness.exe",
+  "origin": "http://127.0.0.1:47800",
+  "tokenRecorded": false,
+  "merged": false,
+  "pushed": false
+}

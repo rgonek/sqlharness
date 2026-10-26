@@ -1,0 +1,14 @@
+pwsh ./scripts/publish-local.ps1 -SkipTests
+[6 q==> SDK 10.0.303
+==> publish win-x64
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Core\bin\Release\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Mcp\bin\Release\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Dashboard\bin\Release\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Cli\bin\Release\net10.0\win-x64\sqlharness.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\artifacts\publish-single\
+==> install C:\Users\rgone\.local\bin
+Previous binary kept as C:\Users\rgone\.local\bin\sqlharness.previous-20261026-180501.exe
+0.0.0
+Installed C:\Users\rgone\.local\bin\sqlharness.exe

@@ -1,0 +1,88 @@
+{
+  "origin": "http://127.0.0.1:47800",
+  "pid": 12596,
+  "startedAt": "2026-10-26T18:05:12.3476927+01:00",
+  "assets": [
+    {
+      "path": "/assets/index-o06MtFlz.js",
+      "sha256": "55127634b66d8d32559a72a1c0acda31877b1b6340121a803087acda17e588b7"
+    },
+    {
+      "path": "/assets/index-CujC6U2X.css",
+      "sha256": "3525ca8fa3f4ea522d33dabe01d49ebd34aae24f70f5f78dc9a901d2d25f391e"
+    },
+    {
+      "path": "/assets/editor.worker-DWPaKKV_.js",
+      "sha256": "9ae6f27737ab392047db742b346c1711b685cee3b38b0fe04718eb9a9de6e0a2"
+    },
+    {
+      "path": "/assets/geist-mono-cyrillic-ext-wght-normal-X_5orZeX.woff2",
+      "sha256": "cd8800999070b729e1cc0bf7a48da6c3ac096a044251171b9a7574b56d96d4b4"
+    },
+    {
+      "path": "/assets/geist-mono-cyrillic-wght-normal-DiZS0aHC.woff2",
+      "sha256": "4866787fc952dbdbd591d6923d67bc21c2d894b93f34ab69d0cdf25d47bfb2df"
+    },
+    {
+      "path": "/assets/geist-mono-latin-ext-wght-normal-Bwz-egvJ.woff2",
+      "sha256": "1a189eb997c3e2ece68373e387afaec9e8617424186c4b1ab3cff7c54ba6223b"
+    },
+    {
+      "path": "/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
+      "sha256": "684ad5b531f81d43c1e8c7038262d5db7cdc1f68006e04d6c7769efa8d33c8cc"
+    },
+    {
+      "path": "/assets/geist-mono-symbols2-wght-normal-CO5SzqOn.woff2",
+      "sha256": "5bb66d8319ba1602bb2eb67dce8d79c2b4687be8ce183a0574433e949b3c60ad"
+    },
+    {
+      "path": "/assets/geist-mono-vietnamese-wght-normal-DadHysG0.woff2",
+      "sha256": "d39b60889a94a527a7f73c7988a2d6efb6c081614aef683b0b386c02d74c2175"
+    },
+    {
+      "path": "/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2",
+      "sha256": "ca157063339ac4ad418f214f3abfed119b0798ab4d377386ce5c9e5a7a435ebd"
+    },
+    {
+      "path": "/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2",
+      "sha256": "71d5ee93cc1e9f1d520a3a8b66456de18c7879d8df09d57fcd2eaff75fef0075"
+    },
+    {
+      "path": "/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2",
+      "sha256": "6e9e020a25f9b56d418f2c085b1d3c09725a4da23fe693a5b463064606732190"
+    },
+    {
+      "path": "/assets/inter-greek-wght-normal-CkhJZR-_.woff2",
+      "sha256": "1be3448e292fbf05ffe176fe1e43f135013d50b1e7d324ad1a558f623d3bb6f6"
+    },
+    {
+      "path": "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2",
+      "sha256": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956"
+    },
+    {
+      "path": "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+    },
+    {
+      "path": "/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2",
+      "sha256": "5c66f9e07e90c6d4ac4922cc68d60de26c17b1858e677fb5e603fce3952b3ff2"
+    },
+    {
+      "path": "/assets/monaco-DjpsE8to.css",
+      "sha256": "797aa85d5570a0ebbb047093f58e9adc13945078495425b27133073e5b15a9da"
+    },
+    {
+      "path": "/assets/monaco-DKo90vgC.js",
+      "sha256": "3704210a9319edd6ed44898f4abc86740afebe0c69a32d5bcb940a1e3f7a9131"
+    },
+    {
+      "path": "/assets/PlanGraphView-DLioOiRN.css",
+      "sha256": "b0cb7bd6fec5951c9c8f5808821438206604b1629a912c96009ac427f38e7d69"
+    },
+    {
+      "path": "/assets/PlanGraphView-DVDJEvbh.js",
+      "sha256": "c70bbc0af1e561bd7f5102887e10144af31cdf4751704a3a3b63a9726ad6d670"
+    }
+  ],
+  "tokenRecorded": false
+}

@@ -1,0 +1,11 @@
+{
+  "exitCode": 0,
+  "oldPid": null,
+  "newPid": 12596,
+  "origin": "http://127.0.0.1:47800",
+  "output": [
+    "SQLHarness dashboard: http://127.0.0.1:47800/"
+  ],
+  "tokenRecorded": false,
+  "previousEndpointPresent": false
+}

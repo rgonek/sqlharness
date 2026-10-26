@@ -1,0 +1,7 @@
+just verify -LogDirectory D:/temp/sqlharness-mira-final-retry
+==> ui-install skipped (lockfile unchanged)
+==> build ok 41.6s
+==> ui-check ok 8m31s
+==> test ok 6m37s
+==> format skipped (0 changed C# files)
+verify: OK stages=5 15m09s; exit=0
