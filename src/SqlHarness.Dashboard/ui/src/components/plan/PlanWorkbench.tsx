@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import { useQueries } from "@tanstack/react-query"
 import type { PlanGraph, PlanOccurrenceManifest, PlanSourceMapLink } from "@/api/types"
 import { fetchPlanGraph, queryKeys, useOperationPlans, usePlanSourceMap, type PlanSourceMapParams } from "@/api/queries"
@@ -65,7 +66,7 @@ function matchingOccurrences(occurrences: PlanOccurrenceManifest[], variant: Var
   return occurrences.filter(occurrence => occurrence.variant === variant.variant && occurrence.parameterSet === variant.parameterSet)
 }
 
-export function PlanWorkbench({ operationId, variant, engine, initialTarget, sourceHeight }: { operationId: number; variant: VariantDetail; engine: string | null; sourceHeight?: number; initialTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
+export function PlanWorkbench({ operationId, variant, engine, initialTarget, sourceHeight, toolbarTarget }: { operationId: number; variant: VariantDetail; engine: string | null; sourceHeight?: number; toolbarTarget?: HTMLElement | null; initialTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
   const manifest = useOperationPlans(operationId)
   const [selectedCase, setSelectedCase] = useState(initialTarget?.caseId ?? variant.caseId)
   const [selectedRepetition, setSelectedRepetition] = useState<number | null>(initialTarget?.repetition ?? null)
@@ -225,8 +226,7 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
     link: item.link,
   }))
 
-  return <section aria-label="Plans" className="plan-workbench space-y-3">
-    <div className="flex flex-wrap items-end gap-3">
+  const toolbar = <div className="plan-workbench-toolbar flex flex-wrap items-end gap-3">
       <label className="grid gap-1 text-sm">Case
         <Select items={caseOptions.map(([id, label]) => ({ value: id, label }))} value={caseId} onValueChange={value => {
           if (typeof value !== "string") return
@@ -281,7 +281,8 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
       }} />
       {selectedDocument && <a className="rounded border px-2 py-1 text-sm underline" href={`/api/plan-documents/${selectedDocument.documentSha256}`} download>Download selected plan</a>}
     </div>
-
+  return <section aria-label="Plans" className="plan-workbench space-y-3">
+    {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
     {sourceMap.isPending && <p role="status" className="text-sm text-muted-foreground">Loading source links for repetition {repetition}…</p>}
     {omittedOccurrences.map(occurrence => <p key={`omitted:${occurrence.documentOrdinal}:${occurrence.statementIndex}`} className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">Document {occurrence.documentOrdinal + 1}, statement {occurrence.statementIndex + 1}: this plan occurrence was omitted or not stored.</p>)}
     {sourceMapOmissions.filter(omission => omission.omitted || !omission.stored).map(omission => <p key={`source-omitted:${omission.documentOrdinal}:${omission.statementIndex}`} className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">Document {omission.documentOrdinal + 1}, statement {omission.statementIndex + 1}: source links are unavailable because the plan was omitted or not stored.</p>)}

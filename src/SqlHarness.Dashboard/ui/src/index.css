@@ -302,9 +302,9 @@
 .plan-graph article > div { position:absolute; right:0; bottom:-24px; opacity:0 }
 .plan-graph article:hover > div,.plan-graph article:focus-within > div { opacity:1 }
 .plan-graph article button { min-width:0 }
-.plan-workbench > div:first-child { align-items:center }
-.plan-workbench > div:first-child > label { display:flex; align-items:center; gap:8px; font-size:12px }
-.plan-workbench [data-slot="select-trigger"] { height:28px; min-width:0; font-size:12px }
+.plan-workbench-toolbar { align-items:center }
+.plan-workbench-toolbar > label { display:flex; align-items:center; gap:8px; font-size:12px }
+:is(.plan-workbench,.plan-workbench-toolbar) [data-slot="select-trigger"] { height:28px; min-width:0; font-size:12px }
 .operation-tabs > [data-slot="tabs-list"] > [data-slot="tabs-trigger"] { flex:none; padding-inline:0; font-weight:400 }
 .session-heading { border:0!important }
 .comparison-panel { position:static }
@@ -315,11 +315,11 @@
 .operation-page .comparison-copy { top:6px }
 .operation-page .comparison-context { font-size:11px }
 .plan-workbench { padding-bottom:24px }
-.plan-workbench > div:first-child { gap:12px }
-.plan-workbench > div:first-child > label { display:flex; font-size:0; gap:0 }
-.plan-workbench > div:first-child > label [data-slot="select-trigger"] { font-size:12px }
-.plan-workbench > div:first-child > p { font-size:11px; margin-left:auto }
-@media(max-width:760px) { .comparison-context { max-width:55%; white-space:normal; font-size:10px } .comparison-selectors,.comparison-copy { position:static; margin:8px 16px; display:inline-block } .plan-workbench > div:first-child > label { max-width:100% } }
+.plan-workbench-toolbar { gap:12px }
+.plan-workbench-toolbar > label { display:flex; font-size:0; gap:0 }
+.plan-workbench-toolbar > label [data-slot="select-trigger"] { font-size:12px }
+.plan-workbench-toolbar > p { font-size:11px; margin-left:auto }
+@media(max-width:760px) { .comparison-context { max-width:55%; white-space:normal; font-size:10px } .comparison-selectors,.comparison-copy { position:static; margin:8px 16px; display:inline-block } .plan-workbench-toolbar > label { max-width:100% } }
 .session-heading { box-shadow:none!important; outline:0!important; overflow:visible!important }
 .session-version-diff .diff-controls { display:flex; flex-direction:row; width:auto; align-items:center }
 .session-version-diff > div > div:has(> .diff-controls) { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between }
