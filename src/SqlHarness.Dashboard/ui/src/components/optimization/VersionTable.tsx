@@ -1,12 +1,13 @@
 import { Toggle } from "@/components/ui/toggle"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
-import { MoreHorizontal, Sparkles } from "lucide-react"
 import type { AgentSessionKey, OperationSummary, OptimizationVersion } from "@/api/types"
 import { Link } from "@tanstack/react-router"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SessionSearch } from "@/router"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { HugeiconsIcon } from "@hugeicons/react";
+import { MoreHorizontalCircle01Icon, SparklesIcon } from "@hugeicons/core-free-icons";
 
 function metric(value: number | null): string {
   return value === null ? "—" : value.toLocaleString("en-US")
@@ -20,13 +21,13 @@ export function VersionTable({ subject, sessionId, agentSessionKey, sessionSearc
   return <Table className="version-table" aria-label={`${subject} versions`}>
     <TableHeader><TableRow><TableHead>Version</TableHead><TableHead className="text-right">Logical reads</TableHead><TableHead className="text-right">vs A</TableHead><TableHead className="text-right">Elapsed median</TableHead><TableHead className="text-right">vs A</TableHead><TableHead>Outcome</TableHead><TableHead>A</TableHead><TableHead>B</TableHead><TableHead className="w-10"><span className="sr-only">Observed in</span></TableHead></TableRow></TableHeader>
     <TableBody>{versions.map(version => <TableRow key={`${version.version}:${version.hash}`} className={selectedA === version.version || selectedB === version.version ? "bg-muted/40" : undefined}>
-      <TableHead scope="row" className="whitespace-normal"><div className="flex items-center gap-2">{version.version}{operations.some(operation => version.measuredIn.includes(operation.id) && operation.agentKeep) && <Sparkles className="size-3.5 text-violet-600" aria-label="Kept by agent" />}</div>{operations.filter(operation => version.measuredIn.includes(operation.id) && operation.agentLabel).map(operation => <div key={operation.id} className="mt-1 text-xs font-normal text-muted-foreground" title={`Agent label for operation #${operation.id}`}>{operation.agentLabel}</div>)}</TableHead>
+      <TableHead scope="row" className="whitespace-normal"><div className="flex items-center gap-2">{version.version}{operations.some(operation => version.measuredIn.includes(operation.id) && operation.agentKeep) && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-3.5 text-violet-600" aria-label="Kept by agent" />}</div>{operations.filter(operation => version.measuredIn.includes(operation.id) && operation.agentLabel).map(operation => <div key={operation.id} className="mt-1 text-xs font-normal text-muted-foreground" title={`Agent label for operation #${operation.id}`}>{operation.agentLabel}</div>)}</TableHead>
       <TableCell className="text-right tabular-nums">{metric(version.logicalReadsSum)}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.logicalReadsSum !== null && baseline?.logicalReadsSum !== null && baseline?.logicalReadsSum !== undefined && version.logicalReadsSum < baseline.logicalReadsSum ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.logicalReadsSum, baseline?.logicalReadsSum) ?? "—"}</TableCell>
       <TableCell className="text-right tabular-nums">{metric(version.elapsedMedianMs)}{version.elapsedMedianMs !== null && " ms"}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== undefined && version.elapsedMedianMs < baseline.elapsedMedianMs ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.elapsedMedianMs, baseline?.elapsedMedianMs) ?? "—"}</TableCell><TableCell title={`basis: ${version.verdictBasis}`}>{version.caseOutcome}</TableCell>
 
       <TableCell><Toggle className="size-6 min-w-6 rounded-full p-0 aria-pressed:bg-border" size="sm" variant="outline" aria-label={`A ${version.version}`} pressed={selectedA === version.version} onPressedChange={() => onSelect("a", version.version)}>A</Toggle></TableCell>
       <TableCell><Toggle className="size-6 min-w-6 rounded-full p-0 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground" size="sm" variant="outline" aria-label={`B ${version.version}`} pressed={selectedB === version.version} onPressedChange={() => onSelect("b", version.version)}>B</Toggle></TableCell>
-      <TableCell><Popover><PopoverTrigger render={<Button variant="ghost" size="icon-sm" />} aria-label={`Details for ${version.version}`}><MoreHorizontal /></PopoverTrigger><PopoverContent align="end"><PopoverTitle>{version.version}</PopoverTitle><p>basis: {version.verdictBasis}</p><p>Scans: {metric(version.scansSum)}</p>{version.measuredIn.map(operationId => <Link key={operationId} to="/operations/$id" params={{ id: String(operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="block underline">Operation #{operationId}</Link>)}</PopoverContent></Popover></TableCell>
+      <TableCell><Popover><PopoverTrigger render={<Button variant="ghost" size="icon-sm" />} aria-label={`Details for ${version.version}`}><HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} /></PopoverTrigger><PopoverContent align="end"><PopoverTitle>{version.version}</PopoverTitle><p>basis: {version.verdictBasis}</p><p>Scans: {metric(version.scansSum)}</p>{version.measuredIn.map(operationId => <Link key={operationId} to="/operations/$id" params={{ id: String(operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="block underline">Operation #{operationId}</Link>)}</PopoverContent></Popover></TableCell>
     </TableRow>)}</TableBody>
   </Table>
 }

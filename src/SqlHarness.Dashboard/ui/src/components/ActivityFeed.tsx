@@ -1,7 +1,6 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { useId, useState } from "react"
 import { Link } from "@tanstack/react-router"
-import { ChevronDown, ChevronRight, Search, Star } from "lucide-react"
 import type { OperationSummary, SessionSummary } from "@/api/types"
 import { useUpdateSessionAnnotation } from "@/api/queries"
 import { ActivityOperations } from "@/components/ActivityOperations"
@@ -15,6 +14,9 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Badge } from "@/components/ui/badge"
 import { sessionDisplayName } from "@/lib/sessionName"
 import { agentLabel } from "@/lib/agents"
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown01Icon, ArrowRight01Icon, SearchIcon, StarIcon } from "@hugeicons/core-free-icons";
+
 function formatRelativeTime(value: string, now: number) {
   const minutes = Math.max(0, Math.floor((now - Date.parse(value)) / 60000))
   return minutes < 1 ? "now" : minutes < 60 ? `${minutes} min ago` : minutes < 1440 ? `${Math.floor(minutes / 60)} hr ago` : `${Math.floor(minutes / 1440)} days ago`
@@ -31,7 +33,7 @@ function Facet({ label, selected, values, onChange }: { label: string; selected:
   const id = useId()
   return <Popover>
     <PopoverTrigger render={<Button variant="outline" size="sm" />} aria-label={label}>
-      <span className="text-muted-foreground">{label}</span><span>{selected.length ? selected.length === 1 ? values.find(item => item.value === selected[0])?.label : `${selected.length} selected` : "Any"}</span><ChevronDown data-icon="inline-end" />
+      <span className="text-muted-foreground">{label}</span><span>{selected.length ? selected.length === 1 ? values.find(item => item.value === selected[0])?.label : `${selected.length} selected` : "Any"}</span><HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" />
     </PopoverTrigger>
     <PopoverContent align="start" className="max-h-72 max-w-[85vw] overflow-y-auto">
       <Button size="sm" variant="ghost" onClick={() => onChange([])}>Clear {label.toLowerCase()}</Button>
@@ -50,10 +52,10 @@ function SessionGroup({ session, operations, now, expanded, onExpand }: { sessio
   return <section className="border-b last:border-b-0" aria-label={sessionDisplayName(session)}>
     <div className="activity-session-row">
       <Button variant="ghost" size="icon-sm" aria-label={`${open ? "Collapse" : "Expand"} ${sessionDisplayName(session)}`} aria-expanded={open} onClick={onExpand}>
-        <ChevronRight className={open ? "rotate-90 transition-transform" : "transition-transform"} />
+        <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={open ? "rotate-90 transition-transform" : "transition-transform"} />
       </Button>
       <Toggle size="sm" disabled={update.isPending} aria-label={`${session.starred ? "Unstar" : "Star"} session ${sessionDisplayName(session)}`} pressed={session.starred} onPressedChange={starred => update.mutate({ starred })}>
-        <Star className={session.starred ? "fill-current text-amber-500" : "text-muted-foreground"} />
+        <HugeiconsIcon icon={StarIcon} strokeWidth={2} className={session.starred ? "fill-current text-amber-500" : "text-muted-foreground"} />
       </Toggle>
       <div className="min-w-0">
         <div className="flex items-center gap-2"><Link to="/sessions/$id" params={{ id: String(session.id) }} className="block truncate font-medium underline">{sessionDisplayName(session)}</Link>{session.archived && <Badge variant="outline">Archived</Badge>}</div>
@@ -113,7 +115,7 @@ export function ActivityFeed({ sessions, operations, now }: { sessions: SessionS
   return <section aria-label="Activity feed" className="flex flex-col gap-3">
     <div className="activity-filterbar" aria-label="Activity filters">
       <h1>Activity</h1>
-      <InputGroup className="activity-search"><InputGroupAddon><Search /></InputGroupAddon><InputGroupInput aria-label="Search activity" placeholder="Search label, session, target" value={text} onChange={event => { setText(event.target.value); setExpansion({}) }} /></InputGroup>
+      <InputGroup className="activity-search"><InputGroupAddon><HugeiconsIcon icon={SearchIcon} strokeWidth={2} /></InputGroupAddon><InputGroupInput aria-label="Search activity" placeholder="Search label, session, target" value={text} onChange={event => { setText(event.target.value); setExpansion({}) }} /></InputGroup>
       <TimeFilter label="Time" value={time} onChange={setTime} values={[{ value: "all", label: "All time" }, { value: "604800000", label: "Last 7 days" }, { value: "86400000", label: "Last 24 hours" }, { value: "3600000", label: "Last hour" }]} />
       <Facet label="Agent" selected={agent} onChange={setAgent} values={facetOptions("agent", options([...operations.map(operation => operation.agentKind), ...sessions.map(session => session.agentKind)]))} />
       <Facet label="Directory" selected={cwd} onChange={setCwd} values={facetOptions("cwd", options(sessions.map(session => session.cwd)))} />

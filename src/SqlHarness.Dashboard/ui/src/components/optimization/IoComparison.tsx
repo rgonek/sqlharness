@@ -4,12 +4,13 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Field, FieldLabel, FieldSet, FieldLegend, FieldGroup } from "@/components/ui/field"
 import { Fragment, useState } from "react"
-import { ChevronRight } from "lucide-react"
 import type { OptimizationComparison } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { IoExtraMetric, IoExtras } from "@/lib/ioComparison"
 import { HiddenWorkFlag } from "./HiddenWorkFlag"
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 
 type IoRow = OptimizationComparison["tables"][number]
 const number = (value: number | null) => value == null ? "—" : value.toLocaleString("en-US")
@@ -39,7 +40,7 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
         const key = `${row.key}:${row.occurrence}`
         const open = !closed.includes(key)
         return <Fragment key={key}><TableRow className="bg-muted/40"><TableHead scope="row" className="whitespace-normal">
-          <Button variant="ghost" className="w-full justify-start" aria-expanded={open} onClick={() => setClosed(current => open ? [...current, key] : current.filter(item => item !== key))}><ChevronRight className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} /><span className="truncate" title={row.text}>{row.text}</span></Button>
+          <Button variant="ghost" className="w-full justify-start" aria-expanded={open} onClick={() => setClosed(current => open ? [...current, key] : current.filter(item => item !== key))}><HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} /><span className="truncate" title={row.text}>{row.text}</span></Button>
           <div className="mt-1 flex flex-wrap gap-2 pl-6 text-xs font-normal text-muted-foreground"><span>{row.status}</span><span>attribution: {row.attribution}</span>{row.planLinkBefore && <a href={row.planLinkBefore} className="underline hover:text-foreground focus-visible:outline-ring">Plan before</a>}{row.planLinkAfter && <a href={row.planLinkAfter} className="underline hover:text-foreground focus-visible:outline-ring">Plan after</a>}{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}</div>
           {open && <div className="statement-metrics"><span>Executions <strong>{number(row.executions)}</strong></span><span>CPU <strong>—</strong></span><span>Elapsed <strong>—</strong></span><span>Memory grant <strong>—</strong></span><span>Max used <strong>—</strong></span><span>Spills <strong>—</strong></span><span title="CPU, elapsed, memory and spills are not retained per statement in the journal.">Statement metrics unavailable</span></div>}
         </TableHead>{scans && <TableCell><Pair before={row.scansBefore} after={row.scansAfter} /></TableCell>}<TableCell><Pair before={row.readsBefore} after={row.readsAfter} change={row.change} /></TableCell>{extraCells()}</TableRow>{open && row.objects.map((item, index) => renderRow(item, `${key}:${index}`))}</Fragment>

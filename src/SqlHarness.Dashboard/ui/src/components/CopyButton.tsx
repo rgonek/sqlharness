@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react"
-import { Check, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Tick02Icon, Copy01Icon } from "@hugeicons/core-free-icons";
 
 export function CopyButton({ label, getText }: { label: string; getText: () => string | Promise<string> }) {
   const [copied, setCopied] = useState(false)
@@ -41,7 +42,7 @@ export function CopyButton({ label, getText }: { label: string; getText: () => s
 
   return <>
     <Button type="button" variant="ghost" size="icon" aria-label={label} title={label} onClick={() => void copy()}>
-      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+      {copied ? <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} aria-hidden="true" /> : <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} aria-hidden="true" />}
     </Button>
     <span role="status" className="sr-only">{copied ? "Copied" : ""}</span>
     <Dialog open={manualText !== null} onOpenChange={open => { if (!open) setManualText(null) }}>

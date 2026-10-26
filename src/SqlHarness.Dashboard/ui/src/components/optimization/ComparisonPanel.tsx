@@ -2,7 +2,6 @@ import { ComparisonPending } from "./ComparisonPending"
 import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
 import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
-import { ChevronDown } from "lucide-react"
 import { Fragment, useState, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import type { AgentSessionKey, OptimizationActionReference, OptimizationComparison, ScopeVersions } from "@/api/types"
@@ -19,6 +18,8 @@ import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SqlVersionOption } from "@/lib/compare"
 import type { SessionSearch } from "@/router"
 import { StatementHiddenWork } from "./StatementRows"
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
 function basisLabel(comparison: OptimizationComparison): string {
   switch (comparison.basis) {
@@ -83,7 +84,7 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
   }
 
   const copy = <div className="comparison-copy"><ComparisonPending pending={pending}><CopyButton label="Copy summary" getText={() => optimizationMarkdown(comparison, subject, scope)} /></ComparisonPending></div>
-  const selectors = <Popover open={selectorsOpen && !pending} onOpenChange={open => setSelectorsOpen(pending ? false : open)}><PopoverTrigger render={<Button variant="outline" size="sm" />}>{activeCase === "all" ? "All cases" : comparison.cases.find(item => item.id === activeCase)?.label ?? activeCase} · {activeAggregate === "mean" ? "Mean" : "Sum"}<ChevronDown data-icon="inline-end" /></PopoverTrigger><PopoverContent align="end" className="max-h-80 max-w-[calc(100vw-2rem)] overflow-auto"><PopoverTitle>Comparison options</PopoverTitle><div className="flex flex-col gap-2" aria-label="Cases">
+  const selectors = <Popover open={selectorsOpen && !pending} onOpenChange={open => setSelectorsOpen(pending ? false : open)}><PopoverTrigger render={<Button variant="outline" size="sm" />}>{activeCase === "all" ? "All cases" : comparison.cases.find(item => item.id === activeCase)?.label ?? activeCase} · {activeAggregate === "mean" ? "Mean" : "Sum"}<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" /></PopoverTrigger><PopoverContent align="end" className="max-h-80 max-w-[calc(100vw-2rem)] overflow-auto"><PopoverTitle>Comparison options</PopoverTitle><div className="flex flex-col gap-2" aria-label="Cases">
       {!hideCaseSelector && <><span className="text-sm font-medium">Case</span>
         <SegmentedRadioGroup label="Comparison case" value={activeCase} options={[{ value: "all", label: "All cases" }, ...comparison.cases.filter(option => option.id !== "all").map(option => ({ value: option.id, label: option.label }))]} onValueChange={value => updateSearch({ case: value })} /></>}
       <span className="ml-2 text-sm font-medium">Aggregate</span>

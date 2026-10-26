@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router"
 import { useState } from "react"
-import { Archive, ArchiveRestore, ChevronDown, ChevronRight, Star, StickyNote, TriangleAlert } from "lucide-react"
 import type { AgentSessionSummary, SessionSummary } from "@/api/types"
 import { useUpdateAgentSessionAnnotation, useUpdateSessionAnnotation } from "@/api/queries"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +10,8 @@ import { formatAge, formatTimestamp } from "@/lib/format"
 import { agentLabel } from "@/lib/agents"
 import { clientLabel } from "@/lib/roots"
 import { sessionDisplayName } from "@/lib/sessionName"
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Archive02Icon, ArrowDown01Icon, ArrowRight01Icon, StarIcon, Alert02Icon, ArchiveRestoreIcon, StickyNote01Icon } from "@hugeicons/core-free-icons";
 
 function SessionRow({ session, now }: { session: SessionSummary; now: number }) {
   const update = useUpdateSessionAnnotation(session.id)
@@ -22,7 +23,7 @@ function SessionRow({ session, now }: { session: SessionSummary; now: number }) 
           aria-label={`${session.starred ? "Unstar" : "Star"} session ${session.sessionKey}`}
           aria-pressed={session.starred}
           onClick={() => update.mutate({ starred: !session.starred })}>
-          <Star className={session.starred ? "fill-current" : undefined} />
+          <HugeiconsIcon icon={StarIcon} strokeWidth={2} className={session.starred ? "fill-current" : undefined} />
         </Button>
       </TableCell>
       <TableCell>
@@ -32,7 +33,7 @@ function SessionRow({ session, now }: { session: SessionSummary; now: number }) 
           </Link>
           {session.notePreview && (
             <Tooltip>
-              <TooltipTrigger aria-label={`Note: ${session.notePreview}`}><StickyNote className="size-4 text-muted-foreground" /></TooltipTrigger>
+              <TooltipTrigger aria-label={`Note: ${session.notePreview}`}><HugeiconsIcon icon={StickyNote01Icon} strokeWidth={2} className="text-muted-foreground" /></TooltipTrigger>
               <TooltipContent>{session.notePreview}</TooltipContent>
             </Tooltip>
           )}
@@ -52,7 +53,7 @@ function SessionRow({ session, now }: { session: SessionSummary; now: number }) 
       <TableCell>
         {session.hasCompare && <Link to="/sessions/$id" params={{ id: String(session.id) }} className="flex flex-wrap gap-1" aria-label="Optimization subjects">
           {session.optimization.map(item => <Badge key={item.subject} variant="outline" className="gap-1" title={`Verdict basis: ${item.verdictBasis}`}>
-            {item.warning && <TriangleAlert aria-label="Warning" className="size-3 text-amber-600" />}
+            {item.warning && <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} aria-label="Warning" className="size-3 text-amber-600" />}
             {item.subject} {item.change}
           </Badge>)}
         </Link>}
@@ -69,7 +70,7 @@ function SessionRow({ session, now }: { session: SessionSummary; now: number }) 
         <Button variant="ghost" size="icon" disabled={update.isPending}
           aria-label={`${session.archived ? "Unarchive" : "Archive"} session ${session.sessionKey}`}
           onClick={() => update.mutate({ archived: !session.archived })}>
-          {session.archived ? <ArchiveRestore /> : <Archive />}
+          {session.archived ? <HugeiconsIcon icon={ArchiveRestoreIcon} strokeWidth={2} /> : <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />}
         </Button>
       </TableCell>
     </TableRow>
@@ -115,16 +116,16 @@ function AgentSessionRow({ agentSession, now }: { agentSession: AgentSessionSumm
   return <>
     <TableRow>
       <TableCell><Button variant="ghost" size="icon" disabled={update.isPending} aria-label={`${agentSession.starred ? "Unstar" : "Star"} agent session ${title}`} aria-pressed={agentSession.starred}
-        onClick={() => update.mutate({ starred: !agentSession.starred })}><Star className={agentSession.starred ? "fill-current" : undefined} /></Button></TableCell>
+        onClick={() => update.mutate({ starred: !agentSession.starred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={agentSession.starred ? "fill-current" : undefined} /></Button></TableCell>
       <TableCell><div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? <ChevronDown /> : <ChevronRight />}</Button>
+        <Button variant="ghost" size="icon" aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} /> : <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />}</Button>
         <Link to="/agent-sessions/$kind/$id" params={{ kind: agentSession.key.agentKind, id: agentSession.key.conversationId }}>{title}</Link>
-        {agentSession.notePreview && <Tooltip><TooltipTrigger aria-label={`Note: ${agentSession.notePreview}`}><StickyNote className="size-4 text-muted-foreground" /></TooltipTrigger><TooltipContent>{agentSession.notePreview}</TooltipContent></Tooltip>}
+        {agentSession.notePreview && <Tooltip><TooltipTrigger aria-label={`Note: ${agentSession.notePreview}`}><HugeiconsIcon icon={StickyNote01Icon} strokeWidth={2} className="text-muted-foreground" /></TooltipTrigger><TooltipContent>{agentSession.notePreview}</TooltipContent></Tooltip>}
       </div><div className="ml-9 text-sm text-muted-foreground">{agentSession.exact} exact · {agentSession.inferred} inferred · {agentSession.unassigned} unassigned</div></TableCell>
       <TableCell>{agentSession.key.agentKind}</TableCell><TableCell>Agent session</TableCell><TableCell>—</TableCell>
       <TableCell>—</TableCell><TableCell className="whitespace-nowrap">{formatAge(agentSession.lastSeen, now)}</TableCell>
       <TableCell className="text-right">{agentSession.exact + agentSession.inferred + agentSession.unassigned}</TableCell><TableCell>—</TableCell><TableCell>—</TableCell>
-      <TableCell><Button variant="ghost" size="icon" disabled={update.isPending} aria-label={`${agentSession.archived ? "Unarchive" : "Archive"} agent session ${title}`} onClick={() => update.mutate({ archived: !agentSession.archived })}>{agentSession.archived ? <ArchiveRestore /> : <Archive />}</Button></TableCell>
+      <TableCell><Button variant="ghost" size="icon" disabled={update.isPending} aria-label={`${agentSession.archived ? "Unarchive" : "Archive"} agent session ${title}`} onClick={() => update.mutate({ archived: !agentSession.archived })}>{agentSession.archived ? <HugeiconsIcon icon={ArchiveRestoreIcon} strokeWidth={2} /> : <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />}</Button></TableCell>
     </TableRow>
     {expanded && children.map(child => <TableRow key={child.session.id}>
       <TableCell />

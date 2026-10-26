@@ -110,15 +110,15 @@ export function CompareDetail({ detail, selectedCase = "all", onCaseChange }: { 
   return <section className="space-y-3" aria-label="Compare detail">
     <Accordion multiple keepMounted>
       <AccordionItem value="sql-diff" className="rounded-lg border p-4">
-        <AccordionTrigger headingLevel="h2">SQL diff &amp; conditions</AccordionTrigger>
+        <AccordionTrigger headingLevel="h2" className="focus-visible:ring-ring/50 focus-visible:ring-[3px]">SQL diff &amp; conditions</AccordionTrigger>
         <AccordionContent keepMounted><div className="mt-4 space-y-4"><SetupSql detail={detail} /><SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={detail.operation.engine} /><Conditions detail={detail} /></div></AccordionContent>
       </AccordionItem>
       <AccordionItem value="plans" className="rounded-lg border p-4">
-        <AccordionTrigger headingLevel="h2">Plans</AccordionTrigger>
+        <AccordionTrigger headingLevel="h2" className="focus-visible:ring-ring/50 focus-visible:ring-[3px]">Plans</AccordionTrigger>
         <AccordionContent keepMounted><div className="mt-4 space-y-4">{activePair ? <><TableIoComparison pairs={[activePair]} engine={detail.operation.engine} /><PlanChanges operationId={detail.operation.id} pair={activePair} /><section aria-label="Selected variant plan" className="space-y-2"><VariantPanel operationId={detail.operation.id} variant={activePair.baseline} engine={detail.operation.engine} compareMetrics /><VariantPanel operationId={detail.operation.id} variant={activePair.candidate} engine={detail.operation.engine} compareMetrics /></section></> : <p className="text-sm text-muted-foreground">No paired plans or IO are available.</p>}</div></AccordionContent>
       </AccordionItem>
       <AccordionItem value="case-details" className="rounded-lg border p-4">
-        <AccordionTrigger headingLevel="h2">Per-case &amp; per-run details</AccordionTrigger>
+        <AccordionTrigger headingLevel="h2" className="focus-visible:ring-ring/50 focus-visible:ring-[3px]">Per-case &amp; per-run details</AccordionTrigger>
         <AccordionContent keepMounted><div className="mt-4"><Cases detail={detail} selectedCase={activeCase} onCaseChange={onCaseChange} /></div></AccordionContent>
       </AccordionItem>
     </Accordion>

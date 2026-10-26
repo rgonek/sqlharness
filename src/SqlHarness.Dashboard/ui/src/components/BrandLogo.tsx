@@ -1,4 +1,3 @@
-/** SQLHarness stacked database mark and two-tone wordmark. */
 export function BrandLogo() {
   return (
     <span className="inline-flex items-center gap-2 whitespace-nowrap">
