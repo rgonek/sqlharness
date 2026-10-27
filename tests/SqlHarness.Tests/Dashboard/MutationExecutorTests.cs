@@ -113,6 +113,7 @@ public sealed class MutationExecutorTests
         var result = await executor.ExecuteAsync(Request(), Context("request-success"), default);
 
         Assert.Equal(MutationStatus.Success, result.Status);
+        Assert.Equal(("request-success", 0), Assert.Single(journal.Results));
         Assert.Equal(new[] { "executing", "succeeded" }, journal.Updates
             .Where(update => update.RequestId == "request-success")
             .Select(update => update.State));
@@ -266,6 +267,8 @@ public sealed class MutationExecutorTests
     private sealed class RecordingJournal : IActivityJournal
     {
         public List<(string RequestId, string State, string? Status)> Updates { get; } = [];
+        public List<(string RequestId, int Records)> Results { get; } = [];
+        public void RecordMutationResult(string requestId, int recordsAffected) => Results.Add((requestId, recordsAffected));
 
         public JournalHandle? Begin(SessionIdentity session, OperationStart start) => null;
         public bool Complete(JournalHandle? handle, OperationEnd end) => false;

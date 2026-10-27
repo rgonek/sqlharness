@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 
 using SqlHarness.Core.Journal;
+using SqlHarness.Core.Mutations;
 
 namespace SqlHarness.Core;
 
@@ -108,6 +110,20 @@ public sealed class JournalingModule : ISqlHarnessModule
             {
                 Complete(journal, handle, phaseRecorder, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct), outcome.SessionWarnings));
                 return outcome with { OperationRef = operation.OperationRef, Journaled = handle is not null, OperationRefEligible = EligibleRef(operation) };
+            }
+
+            if (journal is not null && handle is not null && operation is SqlHarnessMutationOperation { DryRun: false, Approval: null }
+                && outcome.ExitCode == SqlHarnessExitCode.Success && outcome.Report is SqlHarnessMutationPrepared prepared)
+            {
+                try
+                {
+                    var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+                    outcome = outcome with { Report = prepared with { Request = prepared.Request with { PreparationToken = token } } };
+                }
+                catch
+                {
+                    // Correlation is best effort and cannot affect mutation preparation.
+                }
             }
 
             var completed = Complete(journal, handle, phaseRecorder,

@@ -109,6 +109,12 @@ internal sealed class MutationExecutor(
                 SecretRedactor.Redact(exception, secrets));
         }
 
+        if (result.Status == MutationStatus.Success && result.Result is { } confirmed)
+        {
+            try { journal.RecordMutationResult(context.RequestId, confirmed.RecordsAffected); }
+            catch { /* Journal failure must not change the mutation result. */ }
+        }
+
         var state = result.Status switch
         {
             MutationStatus.Success => "succeeded",

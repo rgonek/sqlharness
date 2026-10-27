@@ -48,9 +48,13 @@ internal static class MutationEndpoints
     private static async Task<IResult> SubmitAsync(HttpContext context, MutationEndpointServices services)
     {
         MutationRequest? request;
+        string? preparationToken;
         try
         {
-            request = await JsonSerializer.DeserializeAsync<MutationRequest>(context.Request.Body, services.Json, context.RequestAborted);
+            using var document = await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted);
+            request = document.RootElement.Deserialize<MutationRequest>(services.Json);
+            preparationToken = document.RootElement.TryGetProperty("preparationToken", out var tokenElement)
+                && tokenElement.ValueKind == JsonValueKind.String ? tokenElement.GetString() : null;
             ValidateRequest(request);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NullReferenceException)
@@ -111,6 +115,7 @@ internal static class MutationEndpoints
         if (preparedOutcome.ExitCode != SqlHarnessExitCode.Success || preparedOutcome.Report is not SqlHarnessMutationPrepared prepared ||
             !string.Equals(prepared.Request.Digest, request.Digest, StringComparison.Ordinal))
             return Error(StatusCodes.Status400BadRequest, "request_mismatch");
+        var operationRef = request.OperationRef;
         request = prepared.Request;
 
         if (!Enum.TryParse<MutationMode>(profile.Mutations?.Mode ?? config.Mutations.DefaultMode, true, out var mode))
@@ -129,7 +134,8 @@ internal static class MutationEndpoints
         try
         {
             brokerResult = await services.Broker.SubmitAsync(request, decision.Kind,
-                TimeSpan.FromSeconds(config.Mutations.ApprovalTimeoutSeconds), view, context.RequestAborted).ConfigureAwait(false);
+                TimeSpan.FromSeconds(config.Mutations.ApprovalTimeoutSeconds), view, context.RequestAborted,
+                () => services.Journal.LinkMutation(id, operationRef, request.Digest, preparationToken)).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {

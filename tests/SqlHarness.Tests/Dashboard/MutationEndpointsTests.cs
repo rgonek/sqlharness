@@ -1,6 +1,6 @@
+using System.IO;
 using System.Net;
 using System.Net.Http.Json;
-using System.IO;
 using System.Net.Sockets;
 using System.Text.Json;
 
@@ -15,6 +15,197 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class MutationEndpointsTests
 {
+    private static System.Text.Json.Nodes.JsonObject Wire(MutationRequest request)
+    {
+        var result = JsonSerializer.SerializeToNode(request, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.AsObject();
+        result["preparationToken"] = request.PreparationToken;
+        return result;
+    }
+
+    private static readonly string PreparationToken = new('A', 64);
+    private static void MarkPrepared(IActivityJournal journal, JournalHandle handle, MutationRequest request) =>
+        Assert.True(journal.Complete(handle, new OperationEnd("succeeded", 0, null, 1, null, null, null, null, null,
+            MutationPreparationDigest: request.Digest, MutationPreparationTokenHash: Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(PreparationToken))))));
+
+    [Fact]
+    public async Task Http_broker_transports_token_while_normal_serialization_omits_it()
+    {
+        using var home = new TempHome();
+        var token = DashboardToken.LoadOrCreate(home.Path);
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        var current = ProcessInfo.Current.Get(Environment.ProcessId);
+        held.Publish(new DashboardEndpoint(Environment.ProcessId, current?.StartedAt, 47899, token));
+        var handler = new CaptureCorrelationHandler();
+        var client = new HttpMutationBrokerClient(() => new SqlHarnessConfig(), home.Path, ProcessInfo.Current,
+            new RecordingLauncher(), handlerFactory: () => handler);
+        var request = Request() with { OperationRef = "ref", PreparationToken = PreparationToken };
+        Assert.DoesNotContain(PreparationToken, JsonSerializer.Serialize(request));
+        Assert.DoesNotContain(PreparationToken, request.ToString());
+        await client.SubmitAsync(request, null, CancellationToken.None);
+        Assert.True(handler.CorrelationPresent);
+    }
+
+    [Fact]
+    public async Task Real_preparation_binds_http_request_and_rejects_mismatch_and_replay()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        File.WriteAllText(Path.Combine(home.Path, "targets.json"), """
+            {"app":{"server":"srv","database":"db","auth":"integrated","engine":"sqlserver","vars":{},"mutations":{"mode":"yolo","writer":{"sameAsReader":true}}}}
+            """);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var session = new SessionIdentity("prepare-evidence", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
+        var module = new JournalingModule(new SqlHarnessModule(() => ProfileStore.Load(Path.Combine(home.Path, "targets.json"))), () => journal, () => session);
+        var operation = new SqlHarnessMutationOperation(new SqlTargetRequest("app", new Dictionary<string, string>()),
+            "UPDATE dbo.T SET x = 1", [], 30, 10, "db")
+        { SessionKey = "session" };
+        var preparedOutcome = await module.ExecuteAsync(operation);
+        var prepared = Assert.IsType<SqlHarnessMutationPrepared>(preparedOutcome.Report);
+        Assert.NotNull(prepared.Request.PreparationToken);
+        Assert.DoesNotContain(prepared.Request.PreparationToken, JsonSerializer.Serialize(prepared));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT mutation_preparation_token_hash FROM operations WHERE operation_ref = $ref";
+            command.Parameters.AddWithValue("$ref", preparedOutcome.OperationRef!);
+            Assert.NotEqual(prepared.Request.PreparationToken, command.ExecuteScalar());
+        }
+        var correlation = prepared.Request with { OperationRef = preparedOutcome.OperationRef };
+        var otherRequest = Request(sql: "UPDATE dbo.T SET x = 2") with { OperationRef = correlation.OperationRef, PreparationToken = correlation.PreparationToken };
+        using var mismatched = await client.PostAsJsonAsync("/api/mutations", Wire(otherRequest));
+        Assert.Equal(HttpStatusCode.OK, mismatched.StatusCode);
+        var reader = new JournalReader(home.DatabasePath, ProcessInfo.Current);
+        var operationId = reader.Operations(new OperationQuery()).Items.Single().Id;
+        Assert.Null(reader.Operation(operationId)!.MutationRequest);
+        using var matched = await client.PostAsJsonAsync("/api/mutations", Wire(correlation));
+        Assert.Equal(HttpStatusCode.OK, matched.StatusCode);
+        var detail = reader.Operation(operationId)!;
+        Assert.NotNull(detail.MutationRequest);
+        Assert.Equal(1, detail.Operation.RecordsAffected);
+        var requestId = detail.MutationRequest!.RequestId;
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM mutation_requests WHERE request_id = $id";
+            command.Parameters.AddWithValue("$id", requestId);
+            command.ExecuteNonQuery();
+        }
+        using var replay = await client.PostAsJsonAsync("/api/mutations", Wire(correlation));
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Null(reader.Operation(operationId)!.MutationRequest);
+    }
+
+    [Fact]
+    public async Task Dry_run_reference_cannot_be_used_for_approval_evidence()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        File.WriteAllText(Path.Combine(home.Path, "targets.json"), """
+            {"app":{"server":"srv","database":"db","auth":"integrated","engine":"sqlserver","vars":{},"mutations":{"mode":"yolo","writer":{"sameAsReader":true}}}}
+            """);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var session = new SessionIdentity("dry-evidence", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
+        var module = new JournalingModule(new SqlHarnessModule(() => ProfileStore.Load(Path.Combine(home.Path, "targets.json"))), () => journal, () => session);
+        var outcome = await module.ExecuteAsync(new SqlHarnessMutationOperation(new SqlTargetRequest("app", new Dictionary<string, string>()),
+            "UPDATE dbo.T SET x = 1", [], 30, 10, "db")
+        { SessionKey = "session", DryRun = true });
+        using var response = await client.PostAsJsonAsync("/api/mutations", Wire(Request() with { OperationRef = outcome.OperationRef, PreparationToken = PreparationToken }));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var reader = new JournalReader(home.DatabasePath, ProcessInfo.Current);
+        var detail = reader.Operation(reader.Operations(new OperationQuery()).Items.Single().Id)!;
+        Assert.True(detail.Operation.DryRun);
+        Assert.Null(detail.MutationRequest);
+        Assert.Null(detail.Operation.RecordsAffected);
+    }
+
+    [Fact]
+    public async Task Automatic_execution_records_provider_total_without_operator_verification()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        File.WriteAllText(Path.Combine(home.Path, "targets.json"), """
+            {"app":{"server":"srv","database":"db","auth":"integrated","engine":"sqlserver","vars":{},"mutations":{"mode":"yolo","writer":{"sameAsReader":true}}}}
+            """);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var session = new SessionIdentity("session-auto", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
+        var handle = journal.Begin(session, new OperationStart("mutation", "app", null, true, null, null, null, null, OperationRef: "ref-auto"))!;
+        MarkPrepared(journal, handle, Request());
+        using var response = await client.PostAsJsonAsync("/api/mutations", Wire(Request() with { OperationRef = "ref-auto", PreparationToken = PreparationToken }));
+        var detail = new JournalReader(home.DatabasePath, ProcessInfo.Current).Operation(handle.OperationId)!;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("succeeded", detail.MutationRequest!.State);
+        Assert.Null(detail.MutationRequest.Verification);
+        Assert.Equal(1, detail.Operation.RecordsAffected);
+    }
+
+    [Fact]
+    public async Task Operator_result_and_joined_request_have_only_canonical_evidence()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var session = new SessionIdentity("session-for-evidence", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
+        var first = journal.Begin(session, new OperationStart("mutation", "app", null, true, null, null, null, null, OperationRef: "ref-first"))!;
+        var joined = journal.Begin(session, new OperationStart("mutation", "app", null, true, null, null, null, null, OperationRef: "ref-joined"))!;
+        MarkPrepared(journal, first, Request(sql: "UPDATE dbo.T SET x = 1; UPDATE dbo.T SET x = 2"));
+        MarkPrepared(journal, joined, Request(sql: "UPDATE dbo.T SET x = 1; UPDATE dbo.T SET x = 2"));
+        var firstSubmit = client.PostAsJsonAsync("/api/mutations", Wire(Request(sql: "UPDATE dbo.T SET x = 1; UPDATE dbo.T SET x = 2") with { OperationRef = "ref-first", PreparationToken = PreparationToken }));
+        var requestId = await WaitForRequestId(client);
+        var secondSubmit = client.PostAsJsonAsync("/api/mutations", Wire(Request(sql: "UPDATE dbo.T SET x = 1; UPDATE dbo.T SET x = 2") with { OperationRef = "ref-joined", PreparationToken = PreparationToken }));
+        await WaitForRequestCount(client, 2);
+        AddWriteHeaders(client, server.Port);
+        using var approval = await client.PostAsJsonAsync($"/api/mutations/{requestId}/approve", new { });
+        using var firstResponse = await firstSubmit;
+        using var secondResponse = await secondSubmit;
+        Assert.Equal(HttpStatusCode.OK, approval.StatusCode);
+        var reader = new JournalReader(home.DatabasePath, ProcessInfo.Current);
+        var firstDetail = reader.Operation(first.OperationId)!;
+        var joinedDetail = reader.Operation(joined.OperationId)!;
+        Assert.Equal(1, firstDetail.Operation.RecordsAffected); // provider's batch total, not per statement
+        Assert.Equal(requestId, firstDetail.MutationRequest!.RequestId);
+        Assert.Equal("click", firstDetail.MutationRequest.Verification);
+        Assert.Null(joinedDetail.MutationRequest);
+        Assert.Null(joinedDetail.Operation.RecordsAffected);
+    }
+
+    [Fact]
+    public async Task Denied_request_keeps_recorded_decision_without_affected_rows()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var session = new SessionIdentity("session-denied", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
+        var handle = journal.Begin(session, new OperationStart("mutation", "app", null, true, null, null, null, null, OperationRef: "ref-denied"))!;
+        MarkPrepared(journal, handle, Request());
+        var submission = client.PostAsJsonAsync("/api/mutations", Wire(Request() with { OperationRef = "ref-denied", PreparationToken = PreparationToken }));
+        var requestId = await WaitForRequestId(client);
+        AddWriteHeaders(client, server.Port);
+        using var denial = await client.PostAsJsonAsync($"/api/mutations/{requestId}/deny", new { });
+        using var response = await submission;
+        var detail = new JournalReader(home.DatabasePath, ProcessInfo.Current).Operation(handle.OperationId)!;
+        Assert.Equal("denied", detail.MutationRequest!.State);
+        Assert.Equal("click", detail.MutationRequest.Verification);
+        Assert.Null(detail.Operation.RecordsAffected);
+    }
+
     [Fact]
     public async Task Mutation_submit_requires_bearer_authentication()
     {
@@ -498,6 +689,17 @@ public sealed class MutationEndpointsTests
             Sends++;
             _ = await request.Content!.ReadAsByteArrayAsync(cancellationToken);
             throw new HttpRequestException("connection dropped");
+        }
+    }
+
+    private sealed class CaptureCorrelationHandler : HttpMessageHandler
+    {
+        public bool CorrelationPresent { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            CorrelationPresent = document.RootElement.GetProperty("preparationToken").GetString() == PreparationToken;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new MutationBrokerResult(MutationStatus.Success, null, null)) };
         }
     }
 

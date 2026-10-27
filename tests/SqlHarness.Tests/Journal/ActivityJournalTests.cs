@@ -16,6 +16,54 @@ public sealed class ActivityJournalTests
             time ?? new FixedTimeProvider(JournalTestData.T0));
 
     [Fact]
+    public void Dashboard_evidence_marks_only_new_session_keys_even_under_concurrent_upserts()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var handles = Enumerable.Range(0, 8).AsParallel().Select(_ =>
+            journal.Begin(JournalTestData.Session("concurrent"), JournalTestData.Start())).ToArray();
+        Assert.All(handles, Assert.NotNull);
+        Assert.Equal(8, JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operations").Count);
+        Assert.Equal(1L, JournalDb.Rows(temp.DatabasePath, "SELECT dashboard_evidence_version FROM sessions WHERE session_key = 'concurrent'").Single()["dashboard_evidence_version"]);
+    }
+
+    [Fact]
+    public void Dashboard_evidence_migration_preserves_old_rows_and_resumed_keys()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        Assert.NotNull(journal.Begin(JournalTestData.Session("old"), JournalTestData.Start()));
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'dashboard_evidence_version'";
+            if ((long)command.ExecuteScalar()! != 0)
+            {
+                command.CommandText = "ALTER TABLE sessions DROP COLUMN dashboard_evidence_version";
+                command.ExecuteNonQuery();
+            }
+            command.CommandText = "ALTER TABLE operation_statements DROP COLUMN grant_requested_kb; ALTER TABLE operation_statements DROP COLUMN grant_granted_kb; ALTER TABLE operation_statements DROP COLUMN grant_max_used_kb; ALTER TABLE operation_statements DROP COLUMN has_spill_warning; ALTER TABLE operations DROP COLUMN mutation_preparation_digest; ALTER TABLE operations DROP COLUMN mutation_preparation_token_hash; ALTER TABLE operations DROP COLUMN records_affected; DROP INDEX ix_mutation_requests_operation; ALTER TABLE mutation_requests DROP COLUMN operation_id; PRAGMA user_version = 21";
+            command.ExecuteNonQuery();
+        }
+        var before = JournalDb.Rows(temp.DatabasePath, "SELECT id, session_key, agent_kind, source, first_seen, last_seen FROM sessions").Single();
+        var oldOperation = JournalDb.Rows(temp.DatabasePath, "SELECT id, session_id, operation, started_at, status FROM operations").Single();
+        journal = Open(temp, TextWriter.Null);
+        Assert.Equal(before, JournalDb.Rows(temp.DatabasePath, "SELECT id, session_key, agent_kind, source, first_seen, last_seen FROM sessions").Single());
+        Assert.Equal(oldOperation, JournalDb.Rows(temp.DatabasePath, "SELECT id, session_id, operation, started_at, status FROM operations").Single());
+        Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT dashboard_evidence_version FROM sessions WHERE session_key = 'old'").Single()["dashboard_evidence_version"]);
+        var resumed = Enumerable.Range(0, 8).AsParallel().Select(_ =>
+            journal.Begin(JournalTestData.Session("old"), JournalTestData.Start())).ToArray();
+        Assert.All(resumed, Assert.NotNull);
+        Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT dashboard_evidence_version FROM sessions WHERE session_key = 'old'").Single()["dashboard_evidence_version"]);
+        Assert.NotNull(journal.Begin(JournalTestData.Session("new"), JournalTestData.Start()));
+        var rows = JournalDb.Rows(temp.DatabasePath, "SELECT s.session_key, s.dashboard_evidence_version FROM operations o JOIN sessions s ON s.id = o.session_id ORDER BY o.id");
+        Assert.Equal(10, rows.Count);
+        Assert.All(rows.Take(9), row => Assert.Null(row["dashboard_evidence_version"]));
+        Assert.Equal(1L, rows[9]["dashboard_evidence_version"]);
+    }
+
+    [Fact]
     public void Open_creates_current_schema_in_wal_mode()
     {
         using var temp = new JournalTempDirectory();

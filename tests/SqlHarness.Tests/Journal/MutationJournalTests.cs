@@ -29,12 +29,12 @@ public sealed class MutationJournalTests
 
         Open(temp);
 
-        Assert.Equal(21, JournalSchema.CurrentVersion);
+        Assert.Equal(25, JournalSchema.CurrentVersion);
         var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "activity.db.v12-*.bak"));
         Assert.Single(JournalDb.Rows(backup, "SELECT id FROM old_rows"));
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
         Assert.Equal(new[] { "id", "request_id", "session_key", "host_pid", "host_started_at", "profile", "engine", "server", "database_name", "tier", "mode", "digest",
-            "environment", "sql_text", "parameters_json", "state", "status", "verification", "created_at", "decided_at", "finished_at" },
+            "environment", "sql_text", "parameters_json", "state", "status", "verification", "created_at", "decided_at", "finished_at", "operation_id" },
             JournalDb.Rows(temp.DatabasePath, "SELECT name FROM pragma_table_info('mutation_requests') ORDER BY cid")
                 .Select(row => (string)row["name"]!).ToArray());
         Assert.Single(JournalDb.Rows(temp.DatabasePath,

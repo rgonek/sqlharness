@@ -67,6 +67,10 @@ public sealed record OperationSummary(
     public bool AgentKeep { get; init; }
     public bool OwnerStarred { get; init; }
     public string? OwnerNote { get; init; }
+    public int? DashboardEvidenceVersion { get; init; }
+    public int? RecordsAffected { get; init; }
+    public string? SqlPreview { get; init; }
+    public bool SqlPreviewTruncated { get; init; }
 }
 
 public sealed record OperationAnnotation(string? AgentLabel, bool AgentKeep, bool OwnerStarred, string? OwnerNote);
@@ -137,9 +141,13 @@ public sealed record OperationDetail(
     string? SetupSqlText = null, JsonElement? Conditions = null,
     IReadOnlyList<StatementRow>? Statements = null)
 {
+    public MutationLifecycle? MutationRequest { get; init; }
+    public string? MutationRequestId => MutationRequest?.RequestId;
     public int OmittedStatements { get; init; }
     public string StatementAttribution { get; init; } = "unavailable";
 }
+
+public sealed record MutationLifecycle(string RequestId, string State, string? Status, string? Verification, string CreatedAt, string? DecidedAt, string? FinishedAt);
 
 public sealed record OperationPhaseSummary(string Phase, int Count, long TotalMs, long MaxMs);
 

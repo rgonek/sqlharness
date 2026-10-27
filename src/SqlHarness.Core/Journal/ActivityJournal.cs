@@ -165,11 +165,19 @@ public sealed class ActivityJournal : IActivityJournal
                 UPDATE operations SET status = $status, exit_code = $exit, error_kind = $error, error_message = $message, duration_ms = $duration,
                     engine = $engine, server = $server, database = $database, result_sets = $sets, rows_returned = $rows,
                     raw_tokens = COALESCE($raw, raw_tokens), artifact_dir = $artifact, summary_json = $summary, cancel_reason = $cancel,
-                    parent_operation_ref = $parentOperationRef, warnings_json = $warningsJson, finished_at = $now, updated_at = $now
+                    parent_operation_ref = $parentOperationRef, warnings_json = $warningsJson, finished_at = $now, updated_at = $now,
+                    mutation_preparation_digest = CASE WHEN operation = 'mutation' AND dry_run = 0 AND $status = 'succeeded'
+                        AND EXISTS (SELECT 1 FROM sessions WHERE id = operations.session_id AND dashboard_evidence_version = 1)
+                        THEN $preparationDigest END,
+                    mutation_preparation_token_hash = CASE WHEN operation = 'mutation' AND dry_run = 0 AND $status = 'succeeded'
+                        AND EXISTS (SELECT 1 FROM sessions WHERE id = operations.session_id AND dashboard_evidence_version = 1)
+                        THEN $preparationHash END
                 WHERE id = $id;
                 UPDATE sessions SET last_seen = $now
                 WHERE id = (SELECT session_id FROM operations WHERE id = $id);
                 """;
+            update.Parameters.AddWithValue("$preparationDigest", (object?)end.MutationPreparationDigest ?? DBNull.Value);
+            update.Parameters.AddWithValue("$preparationHash", (object?)end.MutationPreparationTokenHash ?? DBNull.Value);
             update.Parameters.AddWithValue("$id", handle.OperationId);
             update.Parameters.AddWithValue("$status", end.Status);
             update.Parameters.AddWithValue("$exit", end.ExitCode);
@@ -453,6 +461,59 @@ public sealed class ActivityJournal : IActivityJournal
         }
     }
 
+    public void LinkMutation(string requestId, string? operationRef, string? digest, string? preparationToken)
+    {
+        if (string.IsNullOrEmpty(operationRef) || string.IsNullOrEmpty(digest) || preparationToken is not { Length: 64 }
+            || preparationToken.Any(c => !Uri.IsHexDigit(c))) return;
+        try
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(preparationToken)));
+            using var connection = Connect();
+            using var transaction = connection.BeginTransaction();
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+                UPDATE mutation_requests SET operation_id =
+                    (SELECT o.id FROM operations o JOIN sessions s ON s.id = o.session_id
+                     WHERE o.operation_ref = $ref AND o.operation = 'mutation' AND o.dry_run = 0 AND o.status = 'succeeded'
+                       AND o.mutation_preparation_digest = $digest AND o.mutation_preparation_token_hash = $hash
+                       AND s.dashboard_evidence_version = 1
+                       AND (SELECT COUNT(*) FROM operations x WHERE x.operation_ref = $ref) = 1
+                       AND NOT EXISTS (SELECT 1 FROM mutation_requests m WHERE m.operation_id = o.id))
+                WHERE request_id = $requestId AND digest = $digest AND operation_id IS NULL;
+                UPDATE operations SET mutation_preparation_token_hash = NULL
+                WHERE id = (SELECT operation_id FROM mutation_requests WHERE request_id = $requestId)
+                  AND mutation_preparation_token_hash = $hash AND mutation_preparation_digest = $digest;
+                """;
+            command.Parameters.AddWithValue("$requestId", requestId);
+            command.Parameters.AddWithValue("$ref", operationRef);
+            command.Parameters.AddWithValue("$digest", digest);
+            command.Parameters.AddWithValue("$hash", hash);
+            command.ExecuteNonQuery();
+            transaction.Commit();
+        }
+        catch (Exception) { Warn(); }
+    }
+
+    public void RecordMutationResult(string requestId, int recordsAffected)
+    {
+        if (recordsAffected < 0) return;
+        try
+        {
+            using var connection = Connect();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE operations SET records_affected = $records
+                WHERE id = (SELECT operation_id FROM mutation_requests WHERE request_id = $requestId)
+                  AND EXISTS (SELECT 1 FROM sessions WHERE id = operations.session_id AND dashboard_evidence_version = 1);
+                """;
+            command.Parameters.AddWithValue("$requestId", requestId);
+            command.Parameters.AddWithValue("$records", recordsAffected);
+            command.ExecuteNonQuery();
+        }
+        catch (Exception) { Warn(); }
+    }
+
     public void UpdateMutation(string requestId, string state, string? status, string? verification, DateTimeOffset at)
     {
         try
@@ -554,11 +615,15 @@ public sealed class ActivityJournal : IActivityJournal
                     INSERT INTO operation_statements (operation_id, ordinal, variant, parameter_set, matrix_cell,
                         case_id, case_label, statement_ordinal, statement_hash, statement_key, occurrence, statement_text,
                         executions, plan_hash, plan_repetition, plan_document_ordinal, plan_statement_index,
-                        status, cpu_ms, elapsed_ms, dop, operators_json, udf_elapsed_ms, hidden_work_json)
+                        status, cpu_ms, elapsed_ms, dop, operators_json, udf_elapsed_ms, hidden_work_json, grant_requested_kb, grant_granted_kb, grant_max_used_kb, has_spill_warning)
                     VALUES ($operation, $ordinal, $variant, $set, $cell, $caseId, $caseLabel,
                         $statementOrdinal, $hash, $statementKey, $occurrence, $text,
                         $executions, $planHash, $planRepetition, $planDocumentOrdinal, $planStatementIndex,
-                        $status, $cpu, $elapsed, $dop, $operators, $udfElapsed, $hiddenWork)
+                        $status, $cpu, $elapsed, $dop, $operators, $udfElapsed, $hiddenWork,
+                        CASE WHEN EXISTS (SELECT 1 FROM operations op JOIN sessions sess ON sess.id = op.session_id WHERE op.id = $operation AND sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver') THEN $requested END,
+                        CASE WHEN EXISTS (SELECT 1 FROM operations op JOIN sessions sess ON sess.id = op.session_id WHERE op.id = $operation AND sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver') THEN $granted END,
+                        CASE WHEN EXISTS (SELECT 1 FROM operations op JOIN sessions sess ON sess.id = op.session_id WHERE op.id = $operation AND sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver') THEN $used END,
+                        CASE WHEN EXISTS (SELECT 1 FROM operations op JOIN sessions sess ON sess.id = op.session_id WHERE op.id = $operation AND sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver') THEN $spill END)
                     RETURNING id;
                     """);
                 insert.Parameters.AddWithValue("$operation", handle.OperationId);
@@ -586,6 +651,10 @@ public sealed class ActivityJournal : IActivityJournal
                 insert.Parameters.AddWithValue("$operators", JsonSerializer.Serialize(statement.TopOperators, WaitJson));
                 insert.Parameters.AddWithValue("$udfElapsed", (object?)statement.UdfElapsedMilliseconds ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$hiddenWork", JsonSerializer.Serialize(statement.HiddenWork, WaitJson));
+                insert.Parameters.AddWithValue("$requested", (object?)statement.GrantRequestedKb ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$granted", (object?)statement.GrantGrantedKb ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$used", (object?)statement.GrantMaxUsedKb ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$spill", statement.HasSpillWarning is bool spill ? (object)(spill ? 1 : 0) : DBNull.Value);
                 var statementId = (long)insert.ExecuteScalar()!;
                 foreach (var counters in statement.Objects)
                 {
@@ -1125,9 +1194,9 @@ public sealed class ActivityJournal : IActivityJournal
         upsert.Transaction = transaction;
         upsert.CommandText = """
             INSERT INTO sessions (session_key, agent_kind, transport, source, client_name, client_version, client_title, mcp_mode,
-                agent_pid, agent_started_at, host_pid, host_started_at, cwd, roots_json, protocol_version, first_seen, last_seen)
+                agent_pid, agent_started_at, host_pid, host_started_at, cwd, roots_json, protocol_version, first_seen, last_seen, dashboard_evidence_version)
             VALUES ($key, $kind, $transport, $source, $clientName, $clientVersion, $clientTitle, $mcpMode,
-                $agentPid, $agentStarted, $hostPid, $hostStarted, $cwd, $roots, $protocol, $now, $now)
+                $agentPid, $agentStarted, $hostPid, $hostStarted, $cwd, $roots, $protocol, $now, $now, 1)
             ON CONFLICT(session_key) DO UPDATE SET
                 last_seen = excluded.last_seen,
                 client_name = COALESCE(sessions.client_name, excluded.client_name),

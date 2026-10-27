@@ -18,6 +18,115 @@ public sealed class OptimizationComparerTests
     }
 
     [Fact]
+    public void Statement_projections_preserve_side_availability_and_are_unavailable_for_all_cases()
+    {
+        var before = Statement("work", "SELECT work", 45, "old") with
+        {
+            CpuMs = 0,
+            ElapsedMs = 17,
+            PlanRepetition = 2,
+            GrantRequestedKb = 30,
+            GrantGrantedKb = 20,
+            GrantMaxUsedKb = 10,
+            HasSpillWarning = false,
+            Objects = [new TableRow("Orders", 1, 1, 45, 45, "0%") { LobLogicalReadsBefore = 5, LobLogicalReadsAfter = 5 }],
+        };
+        var after = Statement("work", "SELECT work", 20, "new") with
+        {
+            Objects = [new TableRow("Orders", 1, 1, 20, 20, "0%")],
+        };
+        var evidence = Evidence(203, "h1", "h2", (45, 20)) with
+        {
+            Metrics = [StatementMetric("baseline", 0, 45, before), StatementMetric("candidate", 0, 20, after)],
+        };
+        OptimizationComparison Run(string selected) => OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", selected, "sum", "statements");
+        var row = Assert.Single(Run("0").Statements);
+        Assert.Equal(0, row.CpuBeforeMs);
+        Assert.Equal(17, row.ElapsedBeforeMs);
+        Assert.Equal(2, row.PlanRepetitionBefore);
+        Assert.Equal(30, row.GrantRequestedKbBefore);
+        Assert.Equal(20, row.GrantGrantedKbBefore);
+        Assert.Equal(10, row.GrantMaxUsedKbBefore);
+        Assert.False(row.HasSpillWarningBefore);
+        Assert.Null(row.CpuAfterMs);
+        Assert.Equal(5, Assert.Single(row.Objects).LobLogicalReadsBefore);
+        Assert.Null(Assert.Single(row.Objects).LobLogicalReadsAfter);
+        Assert.Equal(45, row.ReadsBefore);
+        var allResult = Run("all");
+        Assert.NotNull(allResult.StatementMetricsUnavailableReason);
+        var all = Assert.Single(allResult.Statements);
+        Assert.Null(all.CpuBeforeMs);
+        Assert.Null(all.GrantRequestedKbBefore);
+        Assert.Null(all.HasSpillWarningBefore);
+        Assert.Null(all.PlanRepetitionBefore);
+        Assert.Null(Assert.Single(all.Objects).LobLogicalReadsBefore);
+        evidence = evidence with { Metrics = [evidence.Metrics[0] with { StatementAttribution = "partial" }, evidence.Metrics[1]] };
+        Assert.Null(Assert.Single(Run("0").Statements).CpuBeforeMs);
+        Assert.Null(Assert.Single(Run("0").Statements).GrantRequestedKbBefore);
+    }
+
+    [Fact]
+    public void Ambiguous_or_incomplete_object_contributions_have_no_lob_value()
+    {
+        var before = Statement("work", "SELECT work", 45, "old") with
+        {
+            Objects = [
+                new TableRow("Orders", 1, 1, 20, 20, "0%") { ObjectKind = "table", LobLogicalReadsBefore = 5 },
+                new TableRow("Orders", 1, 1, 25, 25, "0%") { ObjectKind = "index", LobLogicalReadsBefore = 7 },
+            ],
+        };
+        var after = Statement("work", "SELECT work", 20, "new") with
+        {
+            Objects = [new TableRow("Orders", 1, 1, 20, 20, "0%") { ObjectKind = "table", LobLogicalReadsAfter = 3 }],
+        };
+        var evidence = Evidence(203, "h1", "h2", (45, 20)) with
+        {
+            Metrics = [StatementMetric("baseline", 0, 45, before), StatementMetric("candidate", 0, 20, after)],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum", "statements");
+        Assert.Null(Assert.Single(Assert.Single(result.Statements).Objects).LobLogicalReadsBefore);
+        before = before with { Objects = [before.Objects[0], before.Objects[1] with { LobLogicalReadsBefore = null }] };
+        evidence = evidence with { Metrics = [StatementMetric("baseline", 0, 45, before), evidence.Metrics[1]] };
+        result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum", "statements");
+        Assert.Null(Assert.Single(Assert.Single(result.Statements).Objects).LobLogicalReadsBefore);
+        before = before with { Objects = [before.Objects[1] with { LobLogicalReadsBefore = 7 }] };
+        evidence = evidence with { Metrics = [StatementMetric("baseline", 0, 45, before), evidence.Metrics[1]] };
+        result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum", "statements");
+        var differentKinds = Assert.Single(Assert.Single(result.Statements).Objects);
+        Assert.Null(differentKinds.LobLogicalReadsBefore);
+        Assert.Null(differentKinds.LobLogicalReadsAfter);
+    }
+
+    [Fact]
+    public void Occurrences_and_unmatched_hidden_work_do_not_mix_new_evidence()
+    {
+        var first = Statement("work", "SELECT same", 10, "a") with { CpuMs = 11, PlanRepetition = 1 };
+        var second = Statement("work", "SELECT same", 20, "b") with { Occurrence = 1, CpuMs = 22, PlanRepetition = 2 };
+        var unmatched = Statement("other", "SELECT other", 5, "c") with
+        {
+            CpuMs = 33,
+            HiddenWork = [new SqlHarness.Core.HiddenWork("udf", "fn", 1, null)],
+        };
+        var evidence = Evidence(203, "h1", "h2", (35, 10)) with
+        {
+            Metrics = [StatementMetric("baseline", 0, 35, first, second, unmatched),
+                StatementMetric("candidate", 0, 10, first with { CpuMs = 44 })],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum", "statements");
+        var occurrence0 = Assert.Single(result.Statements, row => row.Key == "work" && row.Occurrence == 0);
+        var occurrence1 = Assert.Single(result.Statements, row => row.Key == "work" && row.Occurrence == 1);
+        Assert.Equal(11, occurrence0.CpuBeforeMs);
+        Assert.Equal(44, occurrence0.CpuAfterMs);
+        Assert.Equal(22, occurrence1.CpuBeforeMs);
+        Assert.Equal(2, occurrence1.PlanRepetitionBefore);
+        Assert.Null(occurrence1.CpuAfterMs);
+        var hidden = Assert.Single(result.Statements, row => row.Key == "other");
+        Assert.Equal(33, hidden.CpuBeforeMs);
+        Assert.Null(hidden.CpuAfterMs);
+        Assert.Single(hidden.HiddenWork);
+    }
+
+    [Fact]
     public void Op203_shape_focuses_on_changed_statement()
     {
         var evidence = Evidence(203, "h1", "h2", (12010, 11960)) with

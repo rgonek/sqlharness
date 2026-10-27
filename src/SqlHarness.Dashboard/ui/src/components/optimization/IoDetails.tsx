@@ -20,7 +20,6 @@ export function IoDetails({ pending = false, comparison, byStatement, onViewChan
     <IoComparison pending={pending} comparison={comparison} byStatement={byStatement} onViewChange={onViewChange} extras={{ before: tableExtras(before, mean), after: tableExtras(after, mean) }} />
     <ComparisonPending pending={pending}><div className="flex flex-wrap gap-x-5 gap-y-2 rounded-md bg-muted/40 p-3 text-xs tabular-nums" aria-label="Batch memory">
       <span className="font-medium">Memory ({mean ? "mean" : "sum"} of selected case medians)</span>{memory.map(metric => <span key={metric.label}><span className="text-muted-foreground">{metric.label} </span>{metric.before?.toLocaleString() ?? "—"} → {metric.after?.toLocaleString() ?? "—"} KB</span>)}
-      <span className="text-muted-foreground">Statement memory is not retained in the journal.</span>
     </div></ComparisonPending>
   </div>
 }

@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 
+using SqlHarness.Core.Mutations;
+
 namespace SqlHarness.Core;
 
 /// <summary>
@@ -61,6 +63,7 @@ internal static class OperationJournalDescriber
     private static bool IsDryRun(SqlHarnessOperation operation) => operation switch
     {
         SqlHarnessQueryOperation value => value.DryRun,
+        SqlHarnessMutationOperation value => value.DryRun,
         SqlHarnessMeasureOperation value => value.DryRun,
         SqlHarnessCompareOperation value => value.DryRun,
         SqlHarnessCompareMatrixOperation value => value.DryRun,
@@ -98,7 +101,11 @@ internal static class OperationJournalDescriber
             ErrorMessage: status is "failed" or "rejected" ? Message(outcome.MachineError) : null,
             ParentOperationRef: outcome.ParentOperationRef,
             Warnings: ReportWarnings(outcome.Report).Concat(outcome.SessionWarnings)
-                .Where(SafetyNoticeTexts.Contains).Distinct(StringComparer.Ordinal).ToArray());
+                .Where(SafetyNoticeTexts.Contains).Distinct(StringComparer.Ordinal).ToArray(),
+            MutationPreparationDigest: outcome.Report is SqlHarnessMutationPrepared { Request.PreparationToken: not null } prepared
+                ? prepared.Request.Digest : null,
+            MutationPreparationTokenHash: outcome.Report is SqlHarnessMutationPrepared { Request.PreparationToken: { } token }
+                ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))) : null);
     }
 
     private static IReadOnlyList<string> ReportWarnings(object? report) => report switch

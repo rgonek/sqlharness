@@ -10,6 +10,33 @@ public sealed class MutationBrokerTests
     private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(5);
 
     [Fact]
+    public async Task Journal_link_failure_does_not_change_approval_or_execution()
+    {
+        var broker = new MutationBroker(TimeProvider.System, (_, _) => Task.FromResult(new MutationBrokerResult(MutationStatus.Success, null, null)));
+        var request = Request();
+        var submission = broker.SubmitAsync(request, MutationDecisionKind.AskOperator, Ttl, View("first", request), default,
+            () => throw new InvalidOperationException("journal unavailable"));
+        Assert.True(broker.TryApprove("first", "click"));
+        Assert.Equal(MutationStatus.Success, (await submission).Status);
+    }
+
+    [Fact]
+    public async Task Joined_request_never_runs_its_own_acceptance_callback()
+    {
+        var broker = new MutationBroker(TimeProvider.System, (_, _) => Task.FromResult(new MutationBrokerResult(MutationStatus.Success, null, null)));
+        var request = Request();
+        var firstAccepted = 0;
+        var secondAccepted = 0;
+        var first = broker.SubmitAsync(request, MutationDecisionKind.AskOperator, Ttl, View("first", request), default, () => firstAccepted++);
+        var second = broker.SubmitAsync(request, MutationDecisionKind.AskOperator, Ttl, View("second", request), default, () => secondAccepted++);
+        Assert.Equal(1, firstAccepted);
+        Assert.Equal(0, secondAccepted);
+        Assert.True(broker.TryDeny("first"));
+        Assert.Equal(MutationStatus.Denied, (await first).Status);
+        Assert.Equal(MutationStatus.Denied, (await second).Status);
+    }
+
+    [Fact]
     public async Task Approving_pending_request_executes_once_and_returns_success()
     {
         var clock = new ManualTimeProvider(Start);

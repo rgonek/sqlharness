@@ -87,14 +87,20 @@ internal sealed class MutationBroker
 
     /// <summary>Completes with the terminal result. Cancelling ct before execution starts cancels the request.</summary>
     internal Task<MutationBrokerResult> SubmitAsync(MutationRequest request, MutationDecisionKind kind,
-        TimeSpan ttl, PendingMutationView view, CancellationToken ct)
+        TimeSpan ttl, PendingMutationView view, CancellationToken ct, Action? onAccepted = null)
     {
         ct.ThrowIfCancellationRequested();
         if (kind == MutationDecisionKind.Reject)
+        {
+            NotifyAccepted(onAccepted);
             return Task.FromResult(Result(MutationStatus.Disabled));
+        }
 
         if (kind == MutationDecisionKind.Execute)
+        {
+            NotifyAccepted(onAccepted);
             return StartImmediateExecution(request, view.RequestId, ct);
+        }
 
         PendingRequest? created = null;
         PendingRequest? join = null;
@@ -124,6 +130,7 @@ internal sealed class MutationBroker
                     rejection = Result(MutationStatus.Denied);
                 else if (join is null)
                 {
+                    NotifyAccepted(onAccepted);
                     var expiresAt = now + ttl;
                     created = new PendingRequest(request, view with { Request = request, ExpiresAt = expiresAt });
                     _pendingById.Add(view.RequestId, created);
@@ -133,7 +140,11 @@ internal sealed class MutationBroker
             }
         }
 
-        if (rejection is not null) return Task.FromResult(rejection);
+        if (rejection is not null)
+        {
+            NotifyAccepted(onAccepted);
+            return Task.FromResult(rejection);
+        }
         if (join is not null) return AwaitWithCancellation(join.Completion.Task, ct);
 
         var pending = created!;
@@ -356,6 +367,12 @@ internal sealed class MutationBroker
 
     private static Task<MutationBrokerResult> AwaitWithCancellation(Task<MutationBrokerResult> task, CancellationToken ct) =>
         ct.CanBeCanceled ? task.WaitAsync(ct) : task;
+
+    private static void NotifyAccepted(Action? callback)
+    {
+        try { callback?.Invoke(); }
+        catch { /* Journal failure must not affect mutation decisions. */ }
+    }
 
     private static MutationBrokerResult Result(string status) => new(status, null, null);
 

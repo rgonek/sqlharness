@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Mutations;
@@ -170,7 +171,14 @@ public sealed class HttpMutationBrokerClient : IMutationBrokerClient
 
     private sealed class TrackedJsonContent(MutationRequest request) : HttpContent
     {
-        private readonly byte[] _json = JsonSerializer.SerializeToUtf8Bytes(request, Json);
+        private readonly byte[] _json = SerializeRequest(request);
+
+        private static byte[] SerializeRequest(MutationRequest request)
+        {
+            var json = JsonSerializer.SerializeToNode(request, Json)!.AsObject();
+            if (request.PreparationToken is { } token) json["preparationToken"] = token;
+            return JsonSerializer.SerializeToUtf8Bytes(json, Json);
+        }
         private int _serializationStarted;
         internal bool SerializationStarted => Volatile.Read(ref _serializationStarted) != 0;
 

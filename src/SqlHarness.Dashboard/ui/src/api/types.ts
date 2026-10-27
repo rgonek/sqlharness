@@ -62,8 +62,12 @@ export type OperationSummary = {
   server: string | null
   database: string | null
   mutationRequested: boolean
+  sqlPreview?: string | null
+  sqlPreviewTruncated?: boolean
   sqlHash: string | null
   rowsReturned: number | null
+  recordsAffected?: number | null
+  dashboardEvidenceVersion?: number | null
   logicalReadsMedian: number | null
   hasSpill: boolean
   coldCache: boolean
@@ -178,14 +182,20 @@ export type StatementRow = {
   status: "shared" | "different-work" | "only-baseline" | "only-candidate" | "not-executed" | "measured" | string
   readsBefore: number | null; readsAfter: number | null; scansBefore: number | null; scansAfter: number | null
   executions: number | null; change: string; attribution: "confirmed" | "partial" | "unavailable" | string
-  hiddenWork: HiddenWork[]; objects: { table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
+  hiddenWork: HiddenWork[]; objects: { table: string; lobLogicalReadsBefore?: number | null; lobLogicalReadsAfter?: number | null; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
   planHashBefore: string | null; planHashAfter: string | null; planLinkBefore: string | null; planLinkAfter: string | null
+  cpuBeforeMs?: number | null; cpuAfterMs?: number | null; elapsedBeforeMs?: number | null; elapsedAfterMs?: number | null
+  grantRequestedKbBefore?: number | null; grantRequestedKbAfter?: number | null
+  grantGrantedKbBefore?: number | null; grantGrantedKbAfter?: number | null
+  grantMaxUsedKbBefore?: number | null; grantMaxUsedKbAfter?: number | null
+  hasSpillWarningBefore?: boolean | null; hasSpillWarningAfter?: boolean | null
+  planRepetitionBefore?: number | null; planRepetitionAfter?: number | null
   udfElapsedMilliseconds: number | null
 }
 export type OptimizationComparison = {
   a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql"
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]
-  selectedCase: string; aggregate: string; coverageLabel: string
+  selectedCase: string; aggregate: string; coverageLabel: string; statementMetricsUnavailableReason?: string | null
   versionLabelsProvisional?: boolean; versionLabelNote?: string | null
   mixed: { better: number; worse: number; worstCaseLabel: string; worstChangePercent: number } | null
   tables: { table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
@@ -374,7 +384,11 @@ export type VariantDetail = {
   caseLabel: string
 }
 
+export type MutationLifecycle = { requestId: string; state: string; status: string | null; verification: string | null; createdAt: string; decidedAt: string | null; finishedAt: string | null }
+
 export type OperationDetail = {
+  mutationRequestId?: string | null
+  mutationRequest?: MutationLifecycle | null
   operation: OperationSummary
   session: SessionSummary
   vars: Record<string, string> | null

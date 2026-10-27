@@ -32,7 +32,7 @@ public sealed class JournalContractTests : IDisposable
             new FixedTimeProvider(JournalTestData.T0));
 
         Assert.Equal(18, JournalSchema.FirstRetainedVersion);
-        Assert.Equal(21, JournalSchema.CurrentVersion);
+        Assert.Equal(25, JournalSchema.CurrentVersion);
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         var operationColumns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operations')")
             .Select(row => (string)row["name"]!).ToArray();
@@ -86,14 +86,14 @@ public sealed class JournalContractTests : IDisposable
         {
             connection.Open();
             using var downgrade = connection.CreateCommand();
-            downgrade.CommandText = "DROP TRIGGER anchor_agent_session_link_insert; DROP TRIGGER anchor_agent_session_direct_operation; DROP TRIGGER anchor_agent_session_annotation_insert; DROP TABLE operation_annotations; DROP TABLE agent_session_annotation_operations; DROP TABLE agent_session_annotations; DROP TABLE compare_version_labels; ALTER TABLE operation_statements DROP COLUMN plan_statement_index; ALTER TABLE operation_statements DROP COLUMN plan_document_ordinal; ALTER TABLE operation_statements DROP COLUMN plan_repetition; PRAGMA user_version = 18;";
+            downgrade.CommandText = "ALTER TABLE operation_statements DROP COLUMN grant_requested_kb; ALTER TABLE operation_statements DROP COLUMN grant_granted_kb; ALTER TABLE operation_statements DROP COLUMN grant_max_used_kb; ALTER TABLE operation_statements DROP COLUMN has_spill_warning; DROP TRIGGER anchor_agent_session_link_insert; DROP TRIGGER anchor_agent_session_direct_operation; DROP TRIGGER anchor_agent_session_annotation_insert; DROP TABLE operation_annotations; DROP TABLE agent_session_annotation_operations; DROP TABLE agent_session_annotations; DROP TABLE compare_version_labels; ALTER TABLE operation_statements DROP COLUMN plan_statement_index; ALTER TABLE operation_statements DROP COLUMN plan_document_ordinal; ALTER TABLE operation_statements DROP COLUMN plan_repetition; ALTER TABLE sessions DROP COLUMN dashboard_evidence_version; ALTER TABLE operations DROP COLUMN mutation_preparation_digest; ALTER TABLE operations DROP COLUMN mutation_preparation_token_hash; ALTER TABLE operations DROP COLUMN records_affected; DROP INDEX ix_mutation_requests_operation; ALTER TABLE mutation_requests DROP COLUMN operation_id; PRAGMA user_version = 18;";
             downgrade.ExecuteNonQuery();
         }
 
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(21L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(25L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         var columns = JournalDb.Rows(path, "SELECT name FROM pragma_table_info('operation_statements')")
             .Select(row => (string)row["name"]!).ToArray();
         Assert.Contains("plan_repetition", columns);
@@ -113,14 +113,14 @@ public sealed class JournalContractTests : IDisposable
         {
             connection.Open();
             using var downgrade = connection.CreateCommand();
-            downgrade.CommandText = "DROP TRIGGER anchor_agent_session_link_insert; DROP TRIGGER anchor_agent_session_direct_operation; DROP TRIGGER anchor_agent_session_annotation_insert; DROP TABLE operation_annotations; DROP TABLE agent_session_annotation_operations; DROP TABLE agent_session_annotations; DROP TABLE compare_version_labels; PRAGMA user_version = 19;";
+            downgrade.CommandText = "ALTER TABLE operation_statements DROP COLUMN grant_requested_kb; ALTER TABLE operation_statements DROP COLUMN grant_granted_kb; ALTER TABLE operation_statements DROP COLUMN grant_max_used_kb; ALTER TABLE operation_statements DROP COLUMN has_spill_warning; DROP TRIGGER anchor_agent_session_link_insert; DROP TRIGGER anchor_agent_session_direct_operation; DROP TRIGGER anchor_agent_session_annotation_insert; DROP TABLE operation_annotations; DROP TABLE agent_session_annotation_operations; DROP TABLE agent_session_annotations; DROP TABLE compare_version_labels; ALTER TABLE sessions DROP COLUMN dashboard_evidence_version; ALTER TABLE operations DROP COLUMN mutation_preparation_digest; ALTER TABLE operations DROP COLUMN mutation_preparation_token_hash; ALTER TABLE operations DROP COLUMN records_affected; DROP INDEX ix_mutation_requests_operation; ALTER TABLE mutation_requests DROP COLUMN operation_id; PRAGMA user_version = 19;";
             downgrade.ExecuteNonQuery();
         }
 
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(21L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(25L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         Assert.Equal(new[] { "context_kind", "context_key", "subject", "scope", "sql_hash", "label" },
             JournalDb.Rows(path, "SELECT name FROM pragma_table_info('compare_version_labels') ORDER BY cid")
                 .Select(row => (string)row["name"]!).ToArray());
@@ -138,13 +138,13 @@ public sealed class JournalContractTests : IDisposable
         {
             connection.Open();
             using var downgrade = connection.CreateCommand();
-            downgrade.CommandText = "INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen) VALUES ('old', 'codex', 'cli', 'test', 1, 'now', 'now'); PRAGMA user_version = 16;";
+            downgrade.CommandText = "ALTER TABLE operation_statements DROP COLUMN grant_requested_kb; ALTER TABLE operation_statements DROP COLUMN grant_granted_kb; ALTER TABLE operation_statements DROP COLUMN grant_max_used_kb; ALTER TABLE operation_statements DROP COLUMN has_spill_warning; INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen) VALUES ('old', 'codex', 'cli', 'test', 1, 'now', 'now'); PRAGMA user_version = 16;";
             downgrade.ExecuteNonQuery();
         }
 
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null, new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(21L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(25L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         Assert.Empty(JournalDb.Rows(path, "SELECT id FROM sessions"));
         var backup = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "activity.db.v16-*.bak"));
         Assert.Single(JournalDb.Rows(backup, "SELECT session_key FROM sessions WHERE session_key = 'old'"));
@@ -168,7 +168,7 @@ public sealed class JournalContractTests : IDisposable
         _ = ActivityJournal.Open(path, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(21L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
+        Assert.Equal(25L, JournalDb.Rows(path, "PRAGMA user_version").Single()["user_version"]);
         Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "activity.db.v15-*.bak"));
     }
 

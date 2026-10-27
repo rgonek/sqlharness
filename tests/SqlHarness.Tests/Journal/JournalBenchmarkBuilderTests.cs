@@ -38,7 +38,7 @@ public sealed class JournalBenchmarkBuilderTests
     {
         static string Plan(long reads) => $"""
             <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements>
-            <StmtSimple StatementText="SELECT Value FROM dbo.Orders" StatementCompId="1" QueryPlanHash="0x01"><QueryPlan><RelOp NodeId="0" PhysicalOp="Table Scan"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualExecutions="2" ActualLogicalReads="{reads}" ActualLobLogicalReads="0" ActualScans="3"/></RunTimeInformation><TableScan><Object Table="[dbo].[Orders]"/></TableScan></RelOp></QueryPlan></StmtSimple>
+            <StmtSimple StatementText="SELECT Value FROM dbo.Orders" StatementCompId="1" QueryPlanHash="0x01"><QueryPlan><MemoryGrantInfo RequestedMemory="{reads}" GrantedMemory="{reads}" MaxUsedMemory="{reads}"/><QueryTimeStats CpuTime="{100 - reads}" ElapsedTime="{200 - reads}"/><RelOp NodeId="0" PhysicalOp="Table Scan"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualExecutions="2" ActualLogicalReads="{reads}" ActualLobLogicalReads="0" ActualScans="3"/></RunTimeInformation><TableScan><Object Table="[dbo].[Orders]"/></TableScan></RelOp></QueryPlan></StmtSimple>
             </Statements></Batch></BatchSequence></ShowPlanXML>
             """;
 
@@ -54,9 +54,28 @@ public sealed class JournalBenchmarkBuilderTests
         Assert.Equal(20, Assert.Single(statement.Objects!).LogicalReads);
         Assert.Equal(2, statement.Executions);
         Assert.Equal(StatementStatus.Confirmed, statement.Status);
+        Assert.Equal(80, statement.CpuMilliseconds);
+        Assert.Equal(180, statement.ElapsedMilliseconds);
         Assert.Equal(2, statement.PlanRepetition);
+        Assert.Equal(20, statement.GrantRequestedKb);
+        Assert.Equal(20, statement.GrantGrantedKb);
+        Assert.Equal(20, statement.GrantMaxUsedKb);
+        Assert.Null(statement.HasSpillWarning);
         Assert.Equal(0, statement.PlanDocumentOrdinal);
         Assert.Equal(0, statement.PlanStatementIndex);
+    }
+
+    [Fact]
+    public void Spill_tristate_is_retained_for_selected_run()
+    {
+        var clean = StatementMetricsTests.JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1);
+        var unknown = StatementMetricsTests.JournalPlan("SELECT dbo.f()", 1, 1, "0x01", 0, 1);
+        var warning = unknown.Replace("<RelOp", "<Warnings><SpillToTempDb /></Warnings><RelOp", StringComparison.Ordinal);
+        static JournalStatementMetrics Build(string plan) => Assert.Single(JournalBenchmarkBuilder.Build(
+        [Run("measure", 1, 1, 1, 0, plans: [plan], io: [new TableIoCounters("@P", 0, 0, 0, 0, 0, 0, 0, 0)])]).Statements);
+        Assert.False(Build(clean).HasSpillWarning);
+        Assert.Null(Build(unknown).HasSpillWarning);
+        Assert.True(Build(warning).HasSpillWarning);
     }
 
     [Fact]

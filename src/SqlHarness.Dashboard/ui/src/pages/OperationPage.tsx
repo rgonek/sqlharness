@@ -197,7 +197,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
             <Fact label="Profile">{op.profile ?? "—"}</Fact>
             <Fact label="Engine">{op.engine ?? "—"}</Fact>
             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
-            <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>
+            {op.operation === "query" && <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>}
             <Fact label="SQL hash"><span className="break-all font-mono">{op.sqlHash ?? "—"}</span></Fact>
             {op.dryRun && <Fact label="Execution mode">Dry run; output counted, no database execution</Fact>}
             {op.operationRef && <Fact label="Operation reference"><span className="font-mono">{op.operationRef}</span></Fact>}
@@ -228,7 +228,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
           {detail.summary && <SummaryFacts summary={detail.summary} />}</CollapsibleContent></Collapsible>} />
 
       <div className={`operation-metrics ${op.operation === "measure" ? "measure-metrics" : ""}`} aria-label="Operation metrics">
-        {op.operation === "query" ? <><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Output">{formatNumber(detail.emittedBytes)} B</Fact></> : op.operation === "mutation" ? <><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Waited for approval">{formatDuration(detail.phases.find(phase => /approval/i.test(phase.phase))?.totalMs ?? null)}</Fact></> : <><Fact label="Logical reads">{formatNumber(op.logicalReadsMedian)}</Fact><Fact label="Elapsed median">{formatDuration(tabVariant?.elapsedMs?.median ?? null)}</Fact><Fact label="CPU">{formatDuration(tabVariant?.cpuMs?.median ?? null)}</Fact><Fact label="Scans">{tabVariant?.tableIo.length && tabVariant.tableIo.every(row => row.scanCount !== null) ? formatNumber(tabVariant.tableIo.reduce((sum, row) => sum + row.scanCount!, 0)) : "—"}</Fact><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact></>}
+        {op.operation === "query" ? <><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Output">{formatNumber(detail.emittedBytes)} B</Fact></> : op.operation === "mutation" ? <><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Rows affected">{op.recordsAffected == null ? "Unavailable" : formatNumber(op.recordsAffected)}</Fact><Fact label="Waited for approval">{formatDuration(detail.phases.find(phase => /approval/i.test(phase.phase))?.totalMs ?? null)}</Fact></> : <><Fact label="Logical reads">{formatNumber(op.logicalReadsMedian)}</Fact><Fact label="Elapsed median">{formatDuration(tabVariant?.elapsedMs?.median ?? null)}</Fact><Fact label="CPU">{formatDuration(tabVariant?.cpuMs?.median ?? null)}</Fact><Fact label="Scans">{tabVariant?.tableIo.length && tabVariant.tableIo.every(row => row.scanCount !== null) ? formatNumber(tabVariant.tableIo.reduce((sum, row) => sum + row.scanCount!, 0)) : "—"}</Fact></>}
 
       </div>
       <Tabs defaultValue="sql" className="operation-tabs">
@@ -285,7 +285,18 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
           {detail.variants.map(variant => <VariantPanel key={variant.ordinal} operationId={op.id} variant={variant} engine={op.engine} mode="io" />)}
         </TabsContent>
         <TabsContent value="results"><p className="text-sm text-muted-foreground">{formatNumber(op.rowsReturned)} rows returned. Result cells are not retained in the activity journal.</p></TabsContent>
-        <TabsContent value="approval"><p className="text-sm">Approval decisions and their status are available in <Link to="/mutations" className="underline">Mutations</Link>.</p></TabsContent>
+        <TabsContent value="approval"><div className="flex flex-col gap-4">
+          {detail.mutationRequest ? <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <Fact label="Request ID">{detail.mutationRequest.requestId}</Fact>
+            <Fact label="Request state">{detail.mutationRequest.state}</Fact>
+            {detail.mutationRequest.status != null && <Fact label="Recorded status">{detail.mutationRequest.status}</Fact>}
+            {detail.mutationRequest.verification != null && <Fact label="Verification">{detail.mutationRequest.verification}</Fact>}
+            <Fact label="Created at">{detail.mutationRequest.createdAt}</Fact>
+            {detail.mutationRequest.decidedAt != null && <Fact label="Decided at">{detail.mutationRequest.decidedAt}</Fact>}
+            {detail.mutationRequest.finishedAt != null && <Fact label="Finished at">{detail.mutationRequest.finishedAt}</Fact>}
+          </div> : <p className="text-sm">No linked approval lifecycle was recorded for this operation.</p>}
+          <p className="text-sm">View requests in <Link to="/mutations" className="underline">Mutations</Link>.</p>
+        </div></TabsContent>
         <TabsContent value="timing"><OperationTimings detail={detail} /></TabsContent>
         <TabsContent value="details">      {op.operation === "measure" && <Card>
         <CardHeader><CardTitle>Measurement conditions</CardTitle></CardHeader>
