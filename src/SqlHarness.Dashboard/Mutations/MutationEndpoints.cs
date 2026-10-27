@@ -111,6 +111,7 @@ internal static class MutationEndpoints
         if (preparedOutcome.ExitCode != SqlHarnessExitCode.Success || preparedOutcome.Report is not SqlHarnessMutationPrepared prepared ||
             !string.Equals(prepared.Request.Digest, request.Digest, StringComparison.Ordinal))
             return Error(StatusCodes.Status400BadRequest, "request_mismatch");
+        var operationRef = request.OperationRef;
         request = prepared.Request;
 
         if (!Enum.TryParse<MutationMode>(profile.Mutations?.Mode ?? config.Mutations.DefaultMode, true, out var mode))
@@ -129,7 +130,8 @@ internal static class MutationEndpoints
         try
         {
             brokerResult = await services.Broker.SubmitAsync(request, decision.Kind,
-                TimeSpan.FromSeconds(config.Mutations.ApprovalTimeoutSeconds), view, context.RequestAborted).ConfigureAwait(false);
+                TimeSpan.FromSeconds(config.Mutations.ApprovalTimeoutSeconds), view, context.RequestAborted,
+                () => services.Journal.LinkMutation(id, operationRef)).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {

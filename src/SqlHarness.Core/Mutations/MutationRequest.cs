@@ -51,6 +51,9 @@ public sealed record MutationRequest
     public IReadOnlyList<string> Grantees { get; }
     public string SessionKey { get; }
 
+    /// <summary>Optional local journal correlation; excluded from mutation digest and policy.</summary>
+    public string? OperationRef { get; init; }
+
     /// <summary>SHA-256 over canonical JSON. Lowercase hexadecimal.</summary>
     public string Digest { get; }
 

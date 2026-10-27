@@ -80,7 +80,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         (SELECT owner_note FROM operation_annotations a WHERE a.operation_id = o.id) AS owner_note,
         s.dashboard_evidence_version,
         CASE WHEN s.dashboard_evidence_version = 1 AND instr(o.sql_text, char(0)) = 0 THEN substr(o.sql_text, 1, 240) END AS sql_preview,
-        CASE WHEN s.dashboard_evidence_version = 1 AND instr(o.sql_text, char(0)) = 0 AND length(substr(o.sql_text, 241, 1)) > 0 THEN 1 ELSE 0 END AS sql_preview_truncated
+        CASE WHEN s.dashboard_evidence_version = 1 AND instr(o.sql_text, char(0)) = 0 AND length(substr(o.sql_text, 241, 1)) > 0 THEN 1 ELSE 0 END AS sql_preview_truncated,
+        CASE WHEN s.dashboard_evidence_version = 1 THEN o.records_affected END AS records_affected
         """;
 
     private const string SessionColumns = """
@@ -1075,6 +1076,13 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             : null;
         if (compareVersion is not null)
             compareVersion = CompareHistoryBuilder.WithEvidence(compareVersion, extra.Summary, extra.CompareConditions);
+        var lifecycle = summary.DashboardEvidenceVersion == 1
+            ? Query(connection, """
+                SELECT request_id, state, status, verification, created_at, decided_at, finished_at
+                FROM mutation_requests WHERE operation_id = $id ORDER BY id DESC LIMIT 1;
+                """, [("$id", id)], r => new MutationLifecycle(r.GetString(0), r.GetString(1), NullableString(r, 2),
+                    NullableString(r, 3), r.GetString(4), NullableString(r, 5), NullableString(r, 6))).FirstOrDefault()
+            : null;
         var statementEvidence = OperationStatements(connection, id, storeSensitive);
         return new OperationDetail(
             summary,
@@ -1105,6 +1113,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             Conditions: extra.CompareConditions,
             Statements: statementEvidence.Rows)
         {
+            MutationRequest = lifecycle,
             OmittedStatements = statementEvidence.OmittedStatements,
             StatementAttribution = statementEvidence.Attribution,
         };
@@ -1807,6 +1816,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         DashboardEvidenceVersion = NullableInt(r, 42),
         SqlPreview = NullableString(r, 43),
         SqlPreviewTruncated = r.GetInt64(44) != 0,
+        RecordsAffected = NullableInt(r, 45),
     };
 
     private static IReadOnlyList<string> StringArray(string? text)

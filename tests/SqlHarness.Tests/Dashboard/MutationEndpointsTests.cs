@@ -16,6 +16,81 @@ namespace SqlHarness.Tests.Dashboard;
 public sealed class MutationEndpointsTests
 {
     [Fact]
+    public async Task Automatic_execution_records_provider_total_without_operator_verification()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        File.WriteAllText(Path.Combine(home.Path, "targets.json"), """
+            {"app":{"server":"srv","database":"db","auth":"integrated","engine":"sqlserver","vars":{},"mutations":{"mode":"yolo","writer":{"sameAsReader":true}}}}
+            """);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var session = new SessionIdentity("session-auto", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
+        var handle = journal.Begin(session, new OperationStart("mutation", "app", null, true, null, null, null, null, OperationRef: "ref-auto"))!;
+        using var response = await client.PostAsJsonAsync("/api/mutations", Request() with { OperationRef = "ref-auto" });
+        var detail = new JournalReader(home.DatabasePath, ProcessInfo.Current).Operation(handle.OperationId)!;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("succeeded", detail.MutationRequest!.State);
+        Assert.Null(detail.MutationRequest.Verification);
+        Assert.Equal(1, detail.Operation.RecordsAffected);
+    }
+
+    [Fact]
+    public async Task Operator_result_and_joined_request_have_only_canonical_evidence()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var session = new SessionIdentity("session-for-evidence", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
+        var first = journal.Begin(session, new OperationStart("mutation", "app", null, true, null, null, null, null, OperationRef: "ref-first"))!;
+        var joined = journal.Begin(session, new OperationStart("mutation", "app", null, true, null, null, null, null, OperationRef: "ref-joined"))!;
+        var firstSubmit = client.PostAsJsonAsync("/api/mutations", Request(sql: "UPDATE dbo.T SET x = 1; UPDATE dbo.T SET x = 2") with { OperationRef = "ref-first" });
+        var requestId = await WaitForRequestId(client);
+        var secondSubmit = client.PostAsJsonAsync("/api/mutations", Request(sql: "UPDATE dbo.T SET x = 1; UPDATE dbo.T SET x = 2") with { OperationRef = "ref-joined" });
+        await WaitForRequestCount(client, 2);
+        AddWriteHeaders(client, server.Port);
+        using var approval = await client.PostAsJsonAsync($"/api/mutations/{requestId}/approve", new { });
+        using var firstResponse = await firstSubmit;
+        using var secondResponse = await secondSubmit;
+        Assert.Equal(HttpStatusCode.OK, approval.StatusCode);
+        var reader = new JournalReader(home.DatabasePath, ProcessInfo.Current);
+        var firstDetail = reader.Operation(first.OperationId)!;
+        var joinedDetail = reader.Operation(joined.OperationId)!;
+        Assert.Equal(1, firstDetail.Operation.RecordsAffected); // provider's batch total, not per statement
+        Assert.Equal(requestId, firstDetail.MutationRequest!.RequestId);
+        Assert.Equal("click", firstDetail.MutationRequest.Verification);
+        Assert.Null(joinedDetail.MutationRequest);
+        Assert.Null(joinedDetail.Operation.RecordsAffected);
+    }
+
+    [Fact]
+    public async Task Denied_request_keeps_recorded_decision_without_affected_rows()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var session = new SessionIdentity("session-denied", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
+        var handle = journal.Begin(session, new OperationStart("mutation", "app", null, true, null, null, null, null, OperationRef: "ref-denied"))!;
+        var submission = client.PostAsJsonAsync("/api/mutations", Request() with { OperationRef = "ref-denied" });
+        var requestId = await WaitForRequestId(client);
+        AddWriteHeaders(client, server.Port);
+        using var denial = await client.PostAsJsonAsync($"/api/mutations/{requestId}/deny", new { });
+        using var response = await submission;
+        var detail = new JournalReader(home.DatabasePath, ProcessInfo.Current).Operation(handle.OperationId)!;
+        Assert.Equal("denied", detail.MutationRequest!.State);
+        Assert.Equal("click", detail.MutationRequest.Verification);
+        Assert.Null(detail.Operation.RecordsAffected);
+    }
+
+    [Fact]
     public async Task Mutation_submit_requires_bearer_authentication()
     {
         using var home = new TempHome();

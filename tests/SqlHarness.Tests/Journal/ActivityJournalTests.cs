@@ -43,7 +43,7 @@ public sealed class ActivityJournalTests
                 command.CommandText = "ALTER TABLE sessions DROP COLUMN dashboard_evidence_version";
                 command.ExecuteNonQuery();
             }
-            command.CommandText = "PRAGMA user_version = 21";
+            command.CommandText = "ALTER TABLE operations DROP COLUMN records_affected; DROP INDEX ix_mutation_requests_operation; ALTER TABLE mutation_requests DROP COLUMN operation_id; PRAGMA user_version = 21";
             command.ExecuteNonQuery();
         }
         var before = JournalDb.Rows(temp.DatabasePath, "SELECT id, session_key, agent_kind, source, first_seen, last_seen FROM sessions").Single();

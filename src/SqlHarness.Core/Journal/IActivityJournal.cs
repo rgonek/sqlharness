@@ -30,6 +30,12 @@ public interface IActivityJournal
     /// <summary>Records a mutation approval request; SQL and values are retained only when storeSensitive is enabled.</summary>
     void RecordMutation(MutationJournalRecord record) { }
 
+    /// <summary>Links an accepted request to its unique journaled operation, when eligible.</summary>
+    void LinkMutation(string requestId, string? operationRef) { }
+
+    /// <summary>Records a confirmed provider total for the exactly linked request.</summary>
+    void RecordMutationResult(string requestId, int recordsAffected) { }
+
     /// <summary>Updates the latest state and lifecycle timestamps for a mutation request.</summary>
     void UpdateMutation(string requestId, string state, string? status, string? verification, DateTimeOffset at) { }
 }

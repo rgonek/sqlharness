@@ -79,7 +79,7 @@ public sealed class MutationCommand(
 
             if (outcome.Report is SqlHarnessMutationPrepared prepared && !settings.DryRun)
             {
-                var brokerResult = await SubmitWithProgressAsync(prepared.Request, ct);
+                var brokerResult = await SubmitWithProgressAsync(prepared.Request with { OperationRef = outcome.Journaled ? outcome.OperationRef : null }, ct);
                 var terminal = new SqlHarnessOutcome(ExitCode(brokerResult.Status), brokerResult,
                     brokerResult.Message, Error: brokerResult.Status == MutationStatus.Success
                         ? null

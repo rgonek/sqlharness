@@ -184,7 +184,7 @@ public sealed class McpToolHandlers(
             MutationBrokerResult brokerResult;
             try
             {
-                brokerResult = await _mutationBroker.SubmitAsync(prepared.Request, progress: null, token);
+                brokerResult = await _mutationBroker.SubmitAsync(prepared.Request with { OperationRef = outcome.Journaled ? outcome.OperationRef : null }, progress: null, token);
             }
             finally
             {

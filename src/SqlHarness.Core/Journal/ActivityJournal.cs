@@ -453,6 +453,47 @@ public sealed class ActivityJournal : IActivityJournal
         }
     }
 
+    public void LinkMutation(string requestId, string? operationRef)
+    {
+        if (string.IsNullOrEmpty(operationRef)) return;
+        try
+        {
+            using var connection = Connect();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE mutation_requests SET operation_id =
+                    (SELECT o.id FROM operations o JOIN sessions s ON s.id = o.session_id
+                     WHERE o.operation_ref = $ref AND o.operation = 'mutation' AND s.dashboard_evidence_version = 1
+                       AND (SELECT COUNT(*) FROM operations x WHERE x.operation_ref = $ref) = 1
+                       AND NOT EXISTS (SELECT 1 FROM mutation_requests m WHERE m.operation_id = o.id))
+                WHERE request_id = $requestId AND operation_id IS NULL;
+                """;
+            command.Parameters.AddWithValue("$requestId", requestId);
+            command.Parameters.AddWithValue("$ref", operationRef);
+            command.ExecuteNonQuery();
+        }
+        catch (Exception) { Warn(); }
+    }
+
+    public void RecordMutationResult(string requestId, int recordsAffected)
+    {
+        if (recordsAffected < 0) return;
+        try
+        {
+            using var connection = Connect();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE operations SET records_affected = $records
+                WHERE id = (SELECT operation_id FROM mutation_requests WHERE request_id = $requestId)
+                  AND EXISTS (SELECT 1 FROM sessions WHERE id = operations.session_id AND dashboard_evidence_version = 1);
+                """;
+            command.Parameters.AddWithValue("$requestId", requestId);
+            command.Parameters.AddWithValue("$records", recordsAffected);
+            command.ExecuteNonQuery();
+        }
+        catch (Exception) { Warn(); }
+    }
+
     public void UpdateMutation(string requestId, string state, string? status, string? verification, DateTimeOffset at)
     {
         try
