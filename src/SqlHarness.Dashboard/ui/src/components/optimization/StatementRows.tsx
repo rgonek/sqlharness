@@ -22,10 +22,12 @@ function changeMagnitude(row: StatementRow, measured: boolean): number {
 }
 
 export function StatementMetrics({ row, measured = false }: { row: StatementRow; measured?: boolean }) {
-  const values = [row.cpuBeforeMs, row.cpuAfterMs, row.elapsedBeforeMs, row.elapsedAfterMs]
+  const values = [row.cpuBeforeMs, row.cpuAfterMs, row.elapsedBeforeMs, row.elapsedAfterMs, row.grantRequestedKbBefore, row.grantRequestedKbAfter, row.grantGrantedKbBefore, row.grantGrantedKbAfter, row.grantMaxUsedKbBefore, row.grantMaxUsedKbAfter, row.hasSpillWarningBefore, row.hasSpillWarningAfter]
   if (values.every(value => value == null)) return <span>Additional statement metrics unavailable</span>
   const pair = (before: number | null | undefined, after: number | null | undefined) => measured ? number(after ?? null) : `${number(before ?? null)} → ${number(after ?? null)}`
-  return <div className="statement-metrics"><span>CPU (ms): {pair(row.cpuBeforeMs, row.cpuAfterMs)}</span><span>Elapsed (ms): {pair(row.elapsedBeforeMs, row.elapsedAfterMs)}</span><span>Showplan; run selected by median total logical reads{row.planRepetitionBefore != null && !measured ? `; before repetition ${row.planRepetitionBefore}` : ""}{row.planRepetitionAfter != null ? `; after repetition ${row.planRepetitionAfter}` : ""}</span></div>
+  const spill = (value: boolean | null | undefined) => value == null ? "—" : value ? "Yes" : "No"
+  const spillPair = measured ? spill(row.hasSpillWarningAfter) : `${spill(row.hasSpillWarningBefore)} → ${spill(row.hasSpillWarningAfter)}`
+  return <div className="statement-metrics"><span>CPU (ms): {pair(row.cpuBeforeMs, row.cpuAfterMs)}</span><span>Elapsed (ms): {pair(row.elapsedBeforeMs, row.elapsedAfterMs)}</span><span>Requested grant (KB): {pair(row.grantRequestedKbBefore, row.grantRequestedKbAfter)}</span><span>Granted grant (KB): {pair(row.grantGrantedKbBefore, row.grantGrantedKbAfter)}</span><span>Max used grant (KB): {pair(row.grantMaxUsedKbBefore, row.grantMaxUsedKbAfter)}</span><span>Spill warning: {spillPair}</span><span>Showplan; run selected by median total logical reads{row.planRepetitionBefore != null && !measured ? `; before repetition ${row.planRepetitionBefore}` : ""}{row.planRepetitionAfter != null ? `; after repetition ${row.planRepetitionAfter}` : ""}</span></div>
 }
 
 function Objects({ row, measured }: { row: StatementRow; measured: boolean }) {

@@ -64,3 +64,24 @@ test("keeps the all-cases explanation visible when a statement is collapsed", as
   await userEvent.click(screen.getByRole("button", { name: "SELECT * FROM Orders" }))
   expect(screen.getByText("Select a single case for statement metrics.")).toBeInTheDocument()
 })
+
+test("shows nullable grant values and tri-state spill with selected-run provenance", () => {
+  const statement = { ...comparison.statements![0], grantRequestedKbBefore: 0, grantRequestedKbAfter: 100, grantGrantedKbBefore: null, grantGrantedKbAfter: 512, grantMaxUsedKbBefore: 12, grantMaxUsedKbAfter: null, hasSpillWarningBefore: false, hasSpillWarningAfter: true, planRepetitionBefore: 2, planRepetitionAfter: 3, planLinkBefore: "/before", planLinkAfter: "/after" }
+  render(<IoComparison comparison={{ ...comparison, selectedCase: "case1", statements: [statement] }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText("Requested grant (KB): 0 → 100")).toBeInTheDocument()
+  expect(screen.getByText("Granted grant (KB): — → 512")).toBeInTheDocument()
+  expect(screen.getByText("Max used grant (KB): 12 → —")).toBeInTheDocument()
+  expect(screen.getByText("Spill warning: No → Yes")).toBeInTheDocument()
+  expect(screen.getByText(/before repetition 2; after repetition 3/)).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Plan before" })).toHaveAttribute("href", "/before")
+  expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/after")
+})
+
+test("does not turn unknown spill into no warning or sum metrics across cases", () => {
+  const statement = { ...comparison.statements![0], hasSpillWarningBefore: null, hasSpillWarningAfter: false, grantRequestedKbAfter: 0 }
+  const { rerender } = render(<IoComparison comparison={{ ...comparison, selectedCase: "case1", statements: [statement] }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText("Spill warning: — → No")).toBeInTheDocument()
+  rerender(<IoComparison comparison={{ ...comparison, statements: [statement], statementMetricsUnavailableReason: "Select a single case for statement metrics." }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.queryByText(/Spill warning:/)).not.toBeInTheDocument()
+  expect(screen.getByText("Select a single case for statement metrics.")).toBeInTheDocument()
+})

@@ -184,6 +184,10 @@ export type StatementRow = {
   hiddenWork: HiddenWork[]; objects: { table: string; lobLogicalReadsBefore?: number | null; lobLogicalReadsAfter?: number | null; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
   planHashBefore: string | null; planHashAfter: string | null; planLinkBefore: string | null; planLinkAfter: string | null
   cpuBeforeMs?: number | null; cpuAfterMs?: number | null; elapsedBeforeMs?: number | null; elapsedAfterMs?: number | null
+  grantRequestedKbBefore?: number | null; grantRequestedKbAfter?: number | null
+  grantGrantedKbBefore?: number | null; grantGrantedKbAfter?: number | null
+  grantMaxUsedKbBefore?: number | null; grantMaxUsedKbAfter?: number | null
+  hasSpillWarningBefore?: boolean | null; hasSpillWarningAfter?: boolean | null
   planRepetitionBefore?: number | null; planRepetitionAfter?: number | null
   udfElapsedMilliseconds: number | null
 }
