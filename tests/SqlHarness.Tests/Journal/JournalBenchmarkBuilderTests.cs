@@ -60,9 +60,22 @@ public sealed class JournalBenchmarkBuilderTests
         Assert.Equal(20, statement.GrantRequestedKb);
         Assert.Equal(20, statement.GrantGrantedKb);
         Assert.Equal(20, statement.GrantMaxUsedKb);
-        Assert.False(statement.HasSpillWarning);
+        Assert.Null(statement.HasSpillWarning);
         Assert.Equal(0, statement.PlanDocumentOrdinal);
         Assert.Equal(0, statement.PlanStatementIndex);
+    }
+
+    [Fact]
+    public void Spill_tristate_is_retained_for_selected_run()
+    {
+        var clean = StatementMetricsTests.JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1);
+        var unknown = StatementMetricsTests.JournalPlan("SELECT dbo.f()", 1, 1, "0x01", 0, 1);
+        var warning = unknown.Replace("<RelOp", "<Warnings><SpillToTempDb /></Warnings><RelOp", StringComparison.Ordinal);
+        JournalStatementMetrics Build(string plan) => Assert.Single(JournalBenchmarkBuilder.Build(
+        [Run("measure", 1, 1, 1, 0, plans: [plan], io: [new TableIoCounters("@P", 0, 0, 0, 0, 0, 0, 0, 0)])]).Statements);
+        Assert.False(Build(clean).HasSpillWarning);
+        Assert.Null(Build(unknown).HasSpillWarning);
+        Assert.True(Build(warning).HasSpillWarning);
     }
 
     [Fact]

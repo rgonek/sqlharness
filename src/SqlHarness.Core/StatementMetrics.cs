@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml;
 using System.Xml.Linq;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
+using SqlHarness.Core.Dialect;
 
 namespace SqlHarness.Core;
 
@@ -300,8 +302,13 @@ internal static class JournalStatementMetricsExtractor
         var objectValues = new Dictionary<string, MutableObjectCounters>(StringComparer.Ordinal);
         var tvfValues = new Dictionary<string, long?>(StringComparer.Ordinal);
         var allOperatorsHaveRuntime = true;
-        var spill = queryPlan?.Elements(Showplan + "Warnings").SelectMany(warnings => warnings.Elements())
-            .Any(IsSpillWarning) == true;
+        var warnings = uniqueQueryPlan?.Descendants(Showplan + "Warnings")
+            .Where(element => element.Ancestors(Showplan + "QueryPlan").FirstOrDefault() == uniqueQueryPlan)
+            .ToArray() ?? [];
+        var warningElements = warnings.SelectMany(element => element.Elements()).ToArray();
+        var spill = warningElements.Any(IsSpillWarning);
+        var unsupportedWarning = warnings.Any(element => element.HasAttributes || !element.HasElements)
+            || warningElements.Any(element => !IsSpillWarning(element));
         foreach (var relOp in queryPlan?.Descendants(Showplan + "RelOp") ?? [])
         {
             var own = relOp.DescendantsAndSelf().Where(element => element == relOp
@@ -310,7 +317,6 @@ internal static class JournalStatementMetricsExtractor
             var table = Attribute(objectElement, "Table");
             var runtime = own.Where(element => element.Name == Showplan + "RunTimeCountersPerThread").ToArray();
             allOperatorsHaveRuntime &= runtime.Length > 0;
-            spill |= own.Any(element => element.Ancestors(Showplan + "QueryPlan").FirstOrDefault() == queryPlan && IsSpillWarning(element));
             var reads = SumCounters(runtime, "ActualLogicalReads");
             var lobReads = SumCounters(runtime, "ActualLobLogicalReads");
             var scans = SumCounters(runtime, "ActualScans");
@@ -399,10 +405,9 @@ internal static class JournalStatementMetricsExtractor
             GrantGrantedKb = LongValue(Attribute(uniqueQueryPlan?.Element(Showplan + "MemoryGrantInfo"), "GrantedMemory")),
             GrantMaxUsedKb = LongValue(Attribute(uniqueQueryPlan?.Element(Showplan + "MemoryGrantInfo"), "MaxUsedMemory")),
             HasSpillWarning = uniqueQueryPlan is null ? null : spill ? true
-                : root is not null && rootCounters.Length > 0 && allOperatorsHaveRuntime && hidden.Count == 0
-                    && !text.TrimStart().StartsWith("EXEC", StringComparison.OrdinalIgnoreCase)
+                : !unsupportedWarning && root is not null && rootCounters.Length > 0 && allOperatorsHaveRuntime && hidden.Count == 0
                     && !uniqueQueryPlan.Descendants(Showplan + "StmtSimple").Any()
-                    && udfAttributes.Length == 0 ? false : null,
+                    && udfAttributes.Length == 0 && IsLiteralSelect(text) ? false : null,
         };
     }
 
@@ -479,6 +484,25 @@ internal static class JournalStatementMetricsExtractor
             StatementId = first.StatementId,
             StatementCompId = first.StatementCompId,
         };
+    }
+
+    // A literal-only SELECT has no source, function or expression that could hide execution.
+    // Longer Showplan text may be truncated; all other SQL is intentionally unknown.
+    private static bool IsLiteralSelect(string text)
+    {
+        if (text.Length == 0 || text.Length >= 3999)
+            return false;
+        var parsed = SqlServerDocument.Parse(text);
+        return !parsed.HasErrors && parsed.Fragment is TSqlScript { Batches.Count: 1 } script
+            && script.Batches[0].Statements is [SelectStatement select]
+            && select.WithCtesAndXmlNamespaces is null && select.Into is null && select.On is null
+            && select.ComputeClauses.Count == 0 && select.OptimizerHints.Count == 0
+            && select.QueryExpression is QuerySpecification query
+            && query.FromClause is null && query.WhereClause is null && query.GroupByClause is null
+            && query.HavingClause is null && query.OrderByClause is null && query.TopRowFilter is null
+            && query.ForClause is null && query.OffsetClause is null && query.WindowClause is null
+            && query.SelectElements.Count > 0
+            && query.SelectElements.All(element => element is SelectScalarExpression { Expression: Literal });
     }
 
     private static bool IsSpillWarning(XElement element) =>

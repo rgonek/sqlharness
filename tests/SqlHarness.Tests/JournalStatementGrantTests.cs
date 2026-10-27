@@ -38,6 +38,50 @@ public sealed class JournalStatementGrantTests
         Assert.Null(Assert.Single(JournalStatementMetricsExtractor.Extract([plan], out _)).HasSpillWarning);
     }
 
+    [Theory]
+    [InlineData("ExchangeSpillDetails")]
+    [InlineData("SpillOccurred")]
+    [InlineData("UnknownWarning")]
+    public void Unsupported_warning_never_proves_no_spill(string warning)
+    {
+        var plan = StatementMetricsTests.JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1)
+            .Replace("<RelOp", $"<Warnings><{warning} /></Warnings><RelOp", StringComparison.Ordinal);
+        Assert.Null(Assert.Single(JournalStatementMetricsExtractor.Extract([plan], out _)).HasSpillWarning);
+    }
+
+    [Fact]
+    public void Unknown_warning_attributes_do_not_prove_no_spill()
+    {
+        var plan = StatementMetricsTests.JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1)
+            .Replace("<RelOp", "<Warnings SpillOccurred=\"1\" /><RelOp", StringComparison.Ordinal);
+        Assert.Null(Assert.Single(JournalStatementMetricsExtractor.Extract([plan], out _)).HasSpillWarning);
+    }
+
+    [Fact]
+    public void Known_spill_remains_true_when_udf_or_other_warning_is_unresolved()
+    {
+        var plan = StatementMetricsTests.JournalPlan("SELECT dbo.f()", 1, 1, "0x01", 0, 1)
+            .Replace("<RelOp", "<Warnings><SpillToTempDb /><UnknownWarning /></Warnings><RelOp", StringComparison.Ordinal);
+        Assert.True(Assert.Single(JournalStatementMetricsExtractor.Extract([plan], out _)).HasSpillWarning);
+    }
+
+    [Theory]
+    [InlineData("SELECT 1 FROM dbo.ViewWithHiddenFunction")]
+    [InlineData("SELECT 1 WHERE dbo.f() = 1")]
+    [InlineData("SELECT 1 + 1")]
+    public void Non_literal_only_queries_leave_spill_unknown(string text)
+    {
+        var plan = StatementMetricsTests.JournalPlan(text, 1, 1, "0x01", 0, 1);
+        Assert.Null(Assert.Single(JournalStatementMetricsExtractor.Extract([plan], out _)).HasSpillWarning);
+    }
+
+    [Fact]
+    public void Unmarked_scalar_udf_cannot_prove_absence_of_spill()
+    {
+        var plan = StatementMetricsTests.JournalPlan("SELECT dbo.f()", 1, 1, "0x01", 0, 1);
+        Assert.Null(Assert.Single(JournalStatementMetricsExtractor.Extract([plan], out _)).HasSpillWarning);
+    }
+
     [Fact]
     public void Each_statement_owns_its_grant()
     {
