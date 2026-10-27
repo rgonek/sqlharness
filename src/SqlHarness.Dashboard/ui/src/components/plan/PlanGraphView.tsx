@@ -237,7 +237,7 @@ export function PlanGraphView({
             <FlowCanvas nodes={graph.nodes} edges={graph.edges} fitTargets={fitTargets} fitVersion={fitVersion} />
           </ReactFlowProvider>
         </div>}
-      <div className="plan-graph-footer"><span>Click an operator to highlight its SQL, or click in SQL to find its operator.</span><span>Solid border = exact source match · dashed = inferred or ambiguous</span><Button type="button" variant="ghost" size="sm" disabled={fitTargets.length === 0} onClick={() => setFitVersion(value => value + 1)}>Fit selection</Button></div>
+      <div className="plan-graph-footer"><span>Select SQL or an operator to highlight its match.</span><span>Solid = exact link · dashed = inferred or ambiguous</span><Button type="button" variant="ghost" size="sm" disabled={fitTargets.length === 0} onClick={() => setFitVersion(value => value + 1)}>Fit selection</Button></div>
     </section>
   )
 }

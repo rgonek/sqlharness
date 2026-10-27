@@ -1,4 +1,3 @@
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import { useId, useState } from "react"
 import type { OperationSummary, OptimizationSubject, ScopeVersions } from "@/api/types"
@@ -77,7 +76,6 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
   return <article aria-current={matchesCard ? "true" : undefined} className="optimization-card">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-base font-semibold">Optimization</div><p className="mt-1 text-sm text-muted-foreground"><span role="heading" aria-level={3}>{subject.subject}</span> · {subject.database || "(no database)"} · {subject.engine} · <span>{scope?.scope}</span></p></div>
       <div className="flex max-w-full flex-wrap items-center gap-2">
-        {!!search.subject && !matchesCard && <Tooltip><TooltipTrigger aria-describedby={`${controlId}-comparison-help`} render={<Button type="button" variant="outline" size="sm" onClick={() => update({ a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })} />}>Select comparison</TooltipTrigger><TooltipContent id={`${controlId}-comparison-help`} role="tooltip">Select this optimization history and use its default versions and cases.</TooltipContent></Tooltip>}
         <div ref={setToolbarTarget} />
       </div>
     </div>

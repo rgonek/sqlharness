@@ -127,7 +127,6 @@ export function ActivityFeed({ sessions, operations, now }: { sessions: SessionS
       <div className="activity-chipgroup"><span>Status</span>{["running", "failed", "rejected", "succeeded", "abandoned"].map(value => <span key={value}>{chip(value[0].toUpperCase() + value.slice(1), operations.filter(operation => matches(operation, { status: [value] })).length, status.includes(value), () => { setStatus(toggle(status, value)); setExpansion({}) })}</span>)}</div>
       <div className="activity-chipgroup"><span>Type</span>{[...new Set(operations.map(operation => operation.operation))].sort().map(value => <span key={value}>{chip(value[0].toUpperCase() + value.slice(1), operations.filter(operation => matches(operation, { kind: [value] })).length, kind.includes(value), () => { setKind(toggle(kind, value)); setExpansion({}) })}</span>)}</div>
       <div className="activity-chipgroup"><span>Marked</span>{chip("Named", operations.filter(operation => matches(operation, { named: true })).length, named, () => { setNamed(!named); setExpansion({}) })}</div>
-      <span className="text-xs text-muted-foreground">Counts respect other filters</span>
     </div>
     <div className="flex flex-wrap items-center gap-3 text-[13px] text-muted-foreground">
       <span>{groups.length} sessions · {filtered.length} loaded operations · {time === "604800000" ? "last 7 days" : time === "all" ? "all time" : time === "86400000" ? "last 24 hours" : "last hour"}</span>
@@ -135,6 +134,6 @@ export function ActivityFeed({ sessions, operations, now }: { sessions: SessionS
       <Button variant="link" size="sm" className="ml-auto" onClick={() => setExpansion(Object.fromEntries(groups.map(group => [group.session.id, !allOpen])))}>{allOpen ? "Collapse all" : "Expand all"}</Button>
     </div>
     <div className="border-t">{groups.map(group => <SessionGroup key={group.session.id} {...group} now={now} expanded={isOpen(group)} onExpand={() => setExpansion(current => ({ ...current, [group.session.id]: !isOpen(group) }))} />)}{ungrouped.length > 0 && <ActivityOperations operations={ungrouped} now={now} />}{!filtered.length && !groups.length && <p className="p-10 text-center text-sm text-muted-foreground">Nothing matches these filters.</p>}</div>
-    <p className="text-xs text-muted-foreground">Showing recent activity and all running operations. SQL previews and SQL-text search are not available in this list. <Link to="/operations" className="underline">Browse operation history</Link> · <Link to="/sessions" className="underline">Browse all sessions</Link> · <Link to="/named-operations" className="underline">Named operations</Link> · <Link to="/mutations" className="underline">Mutations</Link></p>
+    <p className="text-xs text-muted-foreground">Recent activity and all running operations. <Link to="/operations" className="underline">Browse operation history</Link> · <Link to="/sessions" className="underline">Browse all sessions</Link> · <Link to="/named-operations" className="underline">Named operations</Link> · <Link to="/mutations" className="underline">Mutations</Link></p>
   </section>
 }

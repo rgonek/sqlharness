@@ -120,6 +120,5 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
         </>
       )}
     </div>
-    <p className="text-sm text-muted-foreground">SQL only. Metrics live on each compare; different compares are not compared with each other.</p>
   </div>
 }

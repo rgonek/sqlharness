@@ -1,7 +1,7 @@
 import { Editor, loader } from "@monaco-editor/react"
 import * as monaco from "monaco-editor/editor/editor.api"
 import EditorWorker from "monaco-editor/editor/editor.worker?worker"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import type { editor as MonacoEditorApi } from "monaco-editor"
 import type { PlanSqlViewerProps, SqlMergeViewProps, SqlViewerProps, SqlSourceSpan } from "@/lib/sqlDiff"
 
@@ -135,18 +135,22 @@ function languageFor(dialect: SqlViewerProps["dialect"]): string {
   return dialect === "postgres" ? postgresLanguage : tsqlLanguage
 }
 
+function ResizableSqlFrame({ height, children }: { height: number; children: ReactNode }) {
+  return <div data-slot="sql-editor-frame" className="min-h-32 min-w-0 max-h-[1200px] resize-y overflow-hidden rounded border" style={{ height }}>{children}</div>
+}
+
 export function SqlViewer({ sql, dialect }: SqlViewerProps) {
   const theme = useSqlTheme()
   return (
-    <div className="h-[320px] max-h-[320px] overflow-hidden rounded border">
+    <ResizableSqlFrame height={320}>
       <Editor
-        height="320px"
+        height="100%"
         language={languageFor(dialect)}
         value={sql}
         theme={theme}
         options={editorOptions}
       />
-    </div>
+    </ResizableSqlFrame>
   )
 }
 
@@ -209,9 +213,9 @@ export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeVie
   }, [theme])
 
   return (
-    <div className="h-[320px] max-h-[320px] overflow-hidden rounded border">
-      <div ref={container} className="h-[320px] w-full" />
-    </div>
+    <ResizableSqlFrame height={320}>
+      <div ref={container} className="size-full" />
+    </ResizableSqlFrame>
   )
 }
 
@@ -283,16 +287,16 @@ export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSe
   return (
     <section aria-label="Executed SQL" className="space-y-2">
       <h3 className="sr-only">Executed SQL batch</h3>
-      <div className="overflow-hidden rounded border" style={{ height }}>
+      <ResizableSqlFrame height={height}>
         <Editor
-          height={height}
+          height="100%"
           language={languageFor(dialect)}
           value={sql}
           theme={theme}
           onMount={onMount}
           options={{ ...editorOptions, wordWrap: "off" }}
         />
-      </div>
+      </ResizableSqlFrame>
     </section>
   )
 }

@@ -219,7 +219,7 @@ test("renders a separate card for every subject and database", async () => {
   expect(screen.getByRole("heading", { name: "Customers" })).toBeInTheDocument()
   expect(screen.getByRole("table", { name: "Orders-shop versions" })).toBeInTheDocument()
   expect(screen.getByRole("table", { name: "Customers-crm versions" })).toBeInTheDocument()
-  await userEvent.click(within(screen.getByRole("heading", { name: "Orders" }).closest("article")!).getByRole("button", { name: "Select comparison" }))
+  await userEvent.click(within(screen.getByRole("table", { name: "Orders-shop versions" })).getByRole("button", { name: "A v0" }))
   expect(router.state.location.search).toMatchObject({ subject: "Orders", db: "shop", group: "fp-1", scope: "whole query" })
   expect(router.state.location.search).not.toMatchObject({ subject: "Customers", db: "crm" })
 })

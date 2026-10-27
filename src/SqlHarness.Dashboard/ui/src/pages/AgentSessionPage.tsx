@@ -65,9 +65,8 @@ export function AgentSessionPage() {
       </CardHeader>
 
     </Card>
-    {<OptimizationSection sessionId={optimizationSessionId ?? 0} agentSessionKey={key} operations={operations.map(item => item.operation)} />}
     <Card>      <CardContent className="space-y-3">
-        {noteDraft === null ? <><p className="whitespace-pre-wrap">{detail.data.note ?? "No note"}</p>
+        {noteDraft === null ? <>{detail.data.note && <p className="whitespace-pre-wrap">{detail.data.note}</p>}
           <Button size="sm" variant="outline" onClick={() => setNoteDraft(detail.data.note ?? "")}>{detail.data.note ? "Edit note" : "Add note"}</Button></>
           : <><Textarea aria-label="Agent session note" maxLength={10_000} rows={5} className="w-full rounded border p-2" value={noteDraft} onChange={event => setNoteDraft(event.target.value)} />
             <Button size="sm" disabled={update.isPending} onClick={() => update.mutate({ note: noteDraft.trim() || null }, { onSuccess: () => setNoteDraft(null) })}>Save note</Button>
@@ -79,6 +78,7 @@ export function AgentSessionPage() {
           {child.session.hasCompare && <> · <Link className="underline" to="/sessions/$id" params={{ id: String(child.session.id) }}>Optimization history</Link></>}
         </li>)}</ul></div>}
       </CardContent></Card>
+    <OptimizationSection sessionId={optimizationSessionId ?? 0} agentSessionKey={key} operations={operations.map(item => item.operation)} />
     {optimization.data?.versionLabelsProvisional && optimization.data.versionLabelNote && <p role="note" className="text-sm text-muted-foreground">{optimization.data.versionLabelNote}</p>}
     {agentSession.children.some(child => child.session.hasCompare) && <Card><CardHeader><CardTitle>Child Optimization histories</CardTitle><CardDescription>Each child session keeps its own history, including inferred and CLI compares.</CardDescription></CardHeader>
       <CardContent><ul className="list-disc pl-5">{agentSession.children.filter(child => child.session.hasCompare).map(child => <li key={child.session.id}><Link className="underline" to="/sessions/$id" params={{ id: String(child.session.id) }}>{child.session.title ?? child.session.sessionKey}</Link> · Optimization history</li>)}</ul></CardContent></Card>}
