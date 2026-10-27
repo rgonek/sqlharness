@@ -31,7 +31,7 @@ public interface IActivityJournal
     void RecordMutation(MutationJournalRecord record) { }
 
     /// <summary>Links an accepted request to its unique journaled operation, when eligible.</summary>
-    void LinkMutation(string requestId, string? operationRef) { }
+    void LinkMutation(string requestId, string? operationRef, string? digest, string? preparationToken) { }
 
     /// <summary>Records a confirmed provider total for the exactly linked request.</summary>
     void RecordMutationResult(string requestId, int recordsAffected) { }

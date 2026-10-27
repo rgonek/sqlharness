@@ -165,11 +165,19 @@ public sealed class ActivityJournal : IActivityJournal
                 UPDATE operations SET status = $status, exit_code = $exit, error_kind = $error, error_message = $message, duration_ms = $duration,
                     engine = $engine, server = $server, database = $database, result_sets = $sets, rows_returned = $rows,
                     raw_tokens = COALESCE($raw, raw_tokens), artifact_dir = $artifact, summary_json = $summary, cancel_reason = $cancel,
-                    parent_operation_ref = $parentOperationRef, warnings_json = $warningsJson, finished_at = $now, updated_at = $now
+                    parent_operation_ref = $parentOperationRef, warnings_json = $warningsJson, finished_at = $now, updated_at = $now,
+                    mutation_preparation_digest = CASE WHEN operation = 'mutation' AND dry_run = 0 AND $status = 'succeeded'
+                        AND EXISTS (SELECT 1 FROM sessions WHERE id = operations.session_id AND dashboard_evidence_version = 1)
+                        THEN $preparationDigest END,
+                    mutation_preparation_token_hash = CASE WHEN operation = 'mutation' AND dry_run = 0 AND $status = 'succeeded'
+                        AND EXISTS (SELECT 1 FROM sessions WHERE id = operations.session_id AND dashboard_evidence_version = 1)
+                        THEN $preparationHash END
                 WHERE id = $id;
                 UPDATE sessions SET last_seen = $now
                 WHERE id = (SELECT session_id FROM operations WHERE id = $id);
                 """;
+            update.Parameters.AddWithValue("$preparationDigest", (object?)end.MutationPreparationDigest ?? DBNull.Value);
+            update.Parameters.AddWithValue("$preparationHash", (object?)end.MutationPreparationTokenHash ?? DBNull.Value);
             update.Parameters.AddWithValue("$id", handle.OperationId);
             update.Parameters.AddWithValue("$status", end.Status);
             update.Parameters.AddWithValue("$exit", end.ExitCode);
@@ -453,24 +461,36 @@ public sealed class ActivityJournal : IActivityJournal
         }
     }
 
-    public void LinkMutation(string requestId, string? operationRef)
+    public void LinkMutation(string requestId, string? operationRef, string? digest, string? preparationToken)
     {
-        if (string.IsNullOrEmpty(operationRef)) return;
+        if (string.IsNullOrEmpty(operationRef) || string.IsNullOrEmpty(digest) || preparationToken is not { Length: 64 }
+            || preparationToken.Any(c => !Uri.IsHexDigit(c))) return;
         try
         {
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(preparationToken)));
             using var connection = Connect();
+            using var transaction = connection.BeginTransaction();
             using var command = connection.CreateCommand();
+            command.Transaction = transaction;
             command.CommandText = """
                 UPDATE mutation_requests SET operation_id =
                     (SELECT o.id FROM operations o JOIN sessions s ON s.id = o.session_id
-                     WHERE o.operation_ref = $ref AND o.operation = 'mutation' AND s.dashboard_evidence_version = 1
+                     WHERE o.operation_ref = $ref AND o.operation = 'mutation' AND o.dry_run = 0 AND o.status = 'succeeded'
+                       AND o.mutation_preparation_digest = $digest AND o.mutation_preparation_token_hash = $hash
+                       AND s.dashboard_evidence_version = 1
                        AND (SELECT COUNT(*) FROM operations x WHERE x.operation_ref = $ref) = 1
                        AND NOT EXISTS (SELECT 1 FROM mutation_requests m WHERE m.operation_id = o.id))
-                WHERE request_id = $requestId AND operation_id IS NULL;
+                WHERE request_id = $requestId AND digest = $digest AND operation_id IS NULL;
+                UPDATE operations SET mutation_preparation_token_hash = NULL
+                WHERE id = (SELECT operation_id FROM mutation_requests WHERE request_id = $requestId)
+                  AND mutation_preparation_token_hash = $hash AND mutation_preparation_digest = $digest;
                 """;
             command.Parameters.AddWithValue("$requestId", requestId);
             command.Parameters.AddWithValue("$ref", operationRef);
+            command.Parameters.AddWithValue("$digest", digest);
+            command.Parameters.AddWithValue("$hash", hash);
             command.ExecuteNonQuery();
+            transaction.Commit();
         }
         catch (Exception) { Warn(); }
     }

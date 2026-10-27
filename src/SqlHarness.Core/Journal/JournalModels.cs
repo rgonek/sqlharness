@@ -76,7 +76,9 @@ public sealed record OperationEnd(
     string? ErrorMessage = null,
     string? CancelReason = null,
     string? ParentOperationRef = null,
-    IReadOnlyList<string>? Warnings = null);
+    IReadOnlyList<string>? Warnings = null,
+    string? MutationPreparationDigest = null,
+    string? MutationPreparationTokenHash = null);
 
 public sealed record JournalHandle(long OperationId);
 

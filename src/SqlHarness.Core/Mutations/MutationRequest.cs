@@ -53,6 +53,8 @@ public sealed record MutationRequest
 
     /// <summary>Optional local journal correlation; excluded from mutation digest and policy.</summary>
     public string? OperationRef { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal string? PreparationToken { get; init; }
 
     /// <summary>SHA-256 over canonical JSON. Lowercase hexadecimal.</summary>
     public string Digest { get; }

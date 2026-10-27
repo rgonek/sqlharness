@@ -5,7 +5,7 @@ namespace SqlHarness.Core;
 internal static class JournalSchema
 {
     internal const int FirstRetainedVersion = 18;
-    internal const int CurrentVersion = 23;
+    internal const int CurrentVersion = 24;
 
     internal static readonly IReadOnlyDictionary<int, string> Migrations = new Dictionary<int, string>
     {
@@ -16,6 +16,7 @@ internal static class JournalSchema
         [20] = "CREATE TABLE agent_session_annotations (agent_kind TEXT NOT NULL, conversation_id TEXT NOT NULL, title TEXT, note TEXT, starred INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY(agent_kind, conversation_id)); CREATE TABLE agent_session_annotation_operations (agent_kind TEXT NOT NULL, conversation_id TEXT NOT NULL, operation_id INTEGER NOT NULL REFERENCES operations(id) ON DELETE CASCADE, PRIMARY KEY(agent_kind, conversation_id, operation_id), FOREIGN KEY(agent_kind, conversation_id) REFERENCES agent_session_annotations(agent_kind, conversation_id) ON DELETE CASCADE); CREATE TRIGGER anchor_agent_session_annotation_insert AFTER INSERT ON agent_session_annotations BEGIN INSERT OR IGNORE INTO agent_session_annotation_operations SELECT NEW.agent_kind, NEW.conversation_id, o.id FROM operations o JOIN sessions s ON s.id = o.session_id WHERE s.agent_kind = NEW.agent_kind AND o.agent_session_id = NEW.conversation_id; INSERT OR IGNORE INTO agent_session_annotation_operations SELECT NEW.agent_kind, NEW.conversation_id, l.operation_id FROM agent_conversations c JOIN operation_agent_links l ON l.conversation = c.id WHERE c.agent_kind = NEW.agent_kind AND c.conversation_id = NEW.conversation_id; END; CREATE TRIGGER anchor_agent_session_direct_operation AFTER INSERT ON operations WHEN NEW.agent_session_id IS NOT NULL BEGIN INSERT OR IGNORE INTO agent_session_annotation_operations SELECT s.agent_kind, NEW.agent_session_id, NEW.id FROM sessions s JOIN agent_session_annotations a ON a.agent_kind = s.agent_kind AND a.conversation_id = NEW.agent_session_id WHERE s.id = NEW.session_id; END; CREATE TRIGGER anchor_agent_session_link_insert AFTER INSERT ON operation_agent_links BEGIN INSERT OR IGNORE INTO agent_session_annotation_operations SELECT c.agent_kind, c.conversation_id, NEW.operation_id FROM agent_conversations c JOIN agent_session_annotations a ON a.agent_kind = c.agent_kind AND a.conversation_id = c.conversation_id WHERE c.id = NEW.conversation; END; CREATE TABLE compare_version_labels (context_kind TEXT NOT NULL, context_key TEXT NOT NULL, subject TEXT NOT NULL, scope TEXT NOT NULL, sql_hash TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY(context_kind, context_key, subject, scope, sql_hash));",
         [21] = "CREATE TABLE operation_annotations (operation_id INTEGER PRIMARY KEY REFERENCES operations(id) ON DELETE CASCADE, agent_label_initial TEXT, agent_label TEXT, agent_keep INTEGER, owner_starred INTEGER NOT NULL DEFAULT 0, owner_note TEXT, updated_at TEXT NOT NULL);",
         [22] = "ALTER TABLE sessions ADD COLUMN dashboard_evidence_version INTEGER;",
+        [24] = "ALTER TABLE operations ADD COLUMN mutation_preparation_digest TEXT; ALTER TABLE operations ADD COLUMN mutation_preparation_token_hash TEXT;",
         [23] = "ALTER TABLE operations ADD COLUMN records_affected INTEGER; ALTER TABLE mutation_requests ADD COLUMN operation_id INTEGER REFERENCES operations(id) ON DELETE SET NULL; CREATE UNIQUE INDEX ix_mutation_requests_operation ON mutation_requests(operation_id) WHERE operation_id IS NOT NULL;",
     };
 
@@ -96,7 +97,9 @@ internal static class JournalSchema
             conditions_fingerprint TEXT,
             measurement_fingerprint TEXT,
             warnings_json TEXT NOT NULL DEFAULT '[]',
-            records_affected INTEGER
+            records_affected INTEGER,
+            mutation_preparation_digest TEXT,
+            mutation_preparation_token_hash TEXT
         );
         CREATE INDEX ix_operations_session ON operations(session_id, id);
         CREATE INDEX ix_operations_updated ON operations(updated_at);
