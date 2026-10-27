@@ -7,8 +7,11 @@ Original delivery: DONE; locally integrated into main at `fc83e808`; `just publi
 The operator requested implementation of the Claude Design export and selected
 Activity 3a (the 1c session feed and 3a filters), Operation v2, and Session
 Optimization turn 4 including its final IO tab. Settings uses the six-section
-export. The selected references are in
-[docs/design/dashboard-2026-10-25](../docs/design/dashboard-2026-10-25/README.md).
+export. Those historical references are available in Git at commit
+`95eb43b7a705146df261673470f037c62b872612`, under
+`docs/design/dashboard-2026-10-25`. The current reference set is
+[docs/design/dashboard-2026-10-27](../docs/design/dashboard-2026-10-27/README.md);
+it is not the reference set used for this plan's original acceptance.
 
 ## Scope and constraints
 

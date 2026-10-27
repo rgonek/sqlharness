@@ -4,7 +4,7 @@ This isolated harness intercepts API requests in its own Playwright contexts. It
 
 Requirements: Node 24, Playwright 1.64.1 and its Chromium 1248 browser. Install this harness separately from the application (`npm install` here, then `npx playwright install chromium`). Pillow is used only for side-by-side comparison sheets.
 
-1. Serve the exported references with support.js from `docs/design/dashboard-2026-10-25` on 127.0.0.1:48121 (`python -m http.server 48121 --bind 127.0.0.1 --directory <reference-directory>`).
+1. Extract the historical `docs/design/dashboard-2026-10-25` reference directory from Git commit `95eb43b7a705146df261673470f037c62b872612` outside the repository. Serve those exported references with support.js on 127.0.0.1:48121 (`python -m http.server 48121 --bind 127.0.0.1 --directory <reference-directory>`). The current mocks are a different reference set and do not reproduce this historical evidence.
 2. Build the actual UI, then run `node static-server.mjs <ui-dist-directory> 48122`. This server uses only Node built-ins, so it does not keep the Windows Rolldown native binding open during npm ci.
 3. Run `node mock-matrix.mjs` and `node matrix.mjs after http://127.0.0.1:48122`.
 4. For before evidence, use a detached checkout at 7c1b2fbf and its own built UI on 48124, then run `node matrix.mjs before-baseline http://127.0.0.1:48124`.

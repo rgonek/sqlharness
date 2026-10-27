@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#f0eee9;font-family:'Geist',system-ui,sans-serif;color:#0a0a0a}a{color:#0a0a0a}a:hover{color:#525252}.param-hl{background:#eef2ff;border-radius:3px}.param-hl,.param-hl span{color:#3730a3 !important}@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(217,119,6,.45)}70%{box-shadow:0 0 0 6px rgba(217,119,6,0)}100%{box-shadow:0 0 0 0 rgba(217,119,6,0)}}</style></helmet>
+<section id="t1" style="padding:40px 44px 32px">
+<div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t1" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">1</a><span style="font:600 13px system-ui,sans-serif;color:#1a1a1a">Approval mutacji: toast + okno decyzji</span></div>
+<p style="margin:0 0 20px;font:12.5px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.6);max-width:960px">Zasady z kodu bez zmian: Approve aktywny dopiero po 1 s od otwarcia, odliczanie do wygaśnięcia, środowisko prod/staging na czerwono, ostrzeżenia o wielu statementach i o writerze = reader, digest. W <a href="#1b">1b</a> wszystko jest klikalne, a odliczanie działa.</p>
+<div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+
+<div id="1a" style="display:flex;flex-direction:column;gap:9px"><div style="display:flex;align-items:baseline;gap:8px;font:11px/1.3 system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1100px"><a href="#1a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">1a</a>Dziś (ApprovalToast + ApprovalDialog). Toast nie mówi, gdzie ani co: „A change needs your decision” + Review. Dopiero okno pokazuje środowisko, a parametry są w osobnej tabeli pod SQL.</div>
+<div style="width:1100px;height:640px;position:relative;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;font-size:14px">
+<div style="padding:16px;display:flex;flex-direction:column;gap:10px;opacity:.5"><div style="height:28px;width:220px;border-radius:6px;background:#f0f0f0"></div><div style="height:16px;width:60%;border-radius:4px;background:#f5f5f5"></div><div style="height:16px;width:72%;border-radius:4px;background:#f5f5f5"></div><div style="height:16px;width:54%;border-radius:4px;background:#f5f5f5"></div></div>
+<div style="position:absolute;inset:0;background:rgba(10,10,10,.45)"></div>
+<div style="position:absolute;left:50%;top:24px;transform:translateX(-50%);width:640px;background:#fff;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 0 0 1px rgba(10,10,10,.1)">
+<div style="display:flex;align-items:center;gap:12px"><span style="font-size:28px;font-weight:700">staging</span><span style="font-size:12px;padding:1px 8px;border:1px solid #e5e5e5;border-radius:999px">data change</span></div>
+<div style="color:#737373">Review the requested database change before deciding.</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:13px"><div><div style="color:#737373">Profile</div>billing-stg</div><div><div style="color:#737373">Server</div>sql-stg-02</div><div><div style="color:#737373">Database</div>billing</div></div>
+<div style="font-weight:500">SQL</div><pre style="margin:0;padding:10px;background:#fafafa;border-radius:6px;font:12px/1.5 'Geist Mono',monospace;white-space:pre-wrap">UPDATE i SET i.DueDate = DATEADD(day, c.PaymentTermsDays, i.IssuedAt) FROM dbo.Invoices i JOIN dbo.Customers c ON c.CustomerId = i.CustomerId WHERE i.BatchId = @b AND i.DueDate IS NULL;</pre>
+<div style="font-weight:500">Parameters</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;font-size:13px;border-top:1px solid #e5e5e5"><span style="padding:6px 0;font-weight:500">Name</span><span style="padding:6px 0;font-weight:500">Type</span><span style="padding:6px 0;font-weight:500">Value</span><span style="padding:6px 0;border-top:1px solid #f0f0f0">@b</span><span style="padding:6px 0;border-top:1px solid #f0f0f0">varchar</span><span style="padding:6px 0;border-top:1px solid #f0f0f0">B-2026-10-24</span></div>
+<div style="font-size:13px;color:#737373">Digest 7a91c04e2b33 · Expires in 241s</div>
+<div style="display:flex;justify-content:flex-end;gap:8px"><span style="height:32px;padding:0 12px;display:flex;align-items:center;border:1px solid #e5e5e5;border-radius:8px">Deny</span><span style="height:32px;padding:0 12px;display:flex;align-items:center;border-radius:8px;background:#171717;color:#fff">Approve</span></div>
+</div>
+<div style="position:absolute;right:16px;bottom:16px;width:340px;display:flex;flex-direction:column;gap:8px"><div style="background:#fff;border-radius:12px;padding:14px;box-shadow:0 0 0 1px #e5e5e5,0 8px 24px rgba(0,0,0,.12)"><div style="font-weight:500">A change needs your decision</div><span style="margin-top:10px;display:inline-flex;height:28px;padding:0 10px;align-items:center;border-radius:8px;background:#171717;color:#fff;font-size:12.8px">Review</span></div></div>
+</div></div>
+
+<div id="1b" style="display:flex;flex-direction:column;gap:9px"><div style="display:flex;align-items:baseline;gap:8px;font:11px/1.3 system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1100px"><a href="#1b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">1b</a>Propozycja. Toast od razu mówi gdzie, co i ile: środowisko, tier, pierwsza linia SQL, sesja, odliczanie jako pasek. Kilka próśb tworzy kolejkę (+1). Okno ma nagłówek z kontekstem, SQL z parametrami wstawionymi inline, ostrzeżenia nad SQL i stopkę z odliczaniem.</div>
+<div style="width:1100px;height:640px;position:relative;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;font-size:14px">
+<div style="padding:16px;display:flex;flex-direction:column;gap:10px;opacity:.5"><div style="height:28px;width:220px;border-radius:6px;background:#f0f0f0"></div><div style="height:16px;width:60%;border-radius:4px;background:#f5f5f5"></div><div style="height:16px;width:72%;border-radius:4px;background:#f5f5f5"></div><div style="height:16px;width:54%;border-radius:4px;background:#f5f5f5"></div><div style="height:16px;width:66%;border-radius:4px;background:#f5f5f5"></div></div>
+
+<sc-if value="{{ dlgOpen }}" hint-placeholder-val="{{ false }}"><div onClick="{{ closeDlg }}" style="position:absolute;inset:0;background:rgba(10,10,10,.4)"></div>
+<div style="position:absolute;left:50%;top:28px;transform:translateX(-50%);width:720px;max-height:584px;background:#fff;border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1),0 24px 48px rgba(0,0,0,.2);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 20px 14px;display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #e5e5e5">
+<div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px;font-weight:600;color:{{ cur.envColor }}">{{ cur.env }}</span><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;box-shadow:inset 0 0 0 1px #e5e5e5">{{ cur.tier }}</span><span style="font-size:12px;color:#737373;font-variant-numeric:tabular-nums">{{ queueText }}</span><span onClick="{{ closeDlg }}" style="margin-left:auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;color:#525252" style-hover="background:#f5f5f5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span></div>
+<div style="color:#525252;display:flex;flex-wrap:wrap;gap:4px 8px;font-size:13.5px"><span>{{ cur.profile }}</span><span>·</span><span style="font-family:'Geist Mono',monospace;font-size:12.5px">{{ cur.server }} / {{ cur.db }}</span><span>·</span><span>{{ cur.engine }}</span><span>·</span><span>requested by {{ cur.agent }} in <a href="Activity.dc.html#1c">{{ cur.session }}</a></span></div>
+</div>
+<div style="padding:14px 20px;display:flex;flex-direction:column;gap:10px;overflow:auto">
+<sc-for list="{{ cur.warnings }}" as="w" hint-placeholder-count="0"><div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:#fef2f2;box-shadow:inset 0 0 0 1px #fecaca;color:#7f1d1d;font-size:13.5px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>{{ w }}</div></sc-for>
+<div style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="font-weight:500">SQL</span><div style="display:flex;padding:2px;background:#f5f5f5;border-radius:8px;font-size:12px;font-weight:500"><span onClick="{{ setInline }}" style="height:22px;padding:0 8px;display:flex;align-items:center;border-radius:6px;cursor:pointer;background:{{ inlBg }};box-shadow:{{ inlSh }}">Values inline</span><span onClick="{{ setRaw }}" style="height:22px;padding:0 8px;display:flex;align-items:center;border-radius:6px;cursor:pointer;background:{{ rawBg }};box-shadow:{{ rawSh }}">As sent</span></div><span style="margin-left:auto;color:#737373;font-variant-numeric:tabular-nums">{{ cur.lines }} lines · {{ cur.stmtCount }}</span></div>
+<div style="height:{{ sqlHeight }};border:1px solid #e5e5e5;border-radius:6px;overflow:hidden;position:relative"><div ref="{{ sqlRef }}" style="position:absolute;inset:0"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#737373;font-size:13px;pointer-events:none;opacity:{{ loadingOpacity }}">Loading SQL viewer…</div></div>
+<sc-if value="{{ showParams }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px"><sc-for list="{{ cur.params }}" as="p" hint-placeholder-count="1"><span style="font-family:'Geist Mono',monospace;padding:2px 8px;border-radius:6px;box-shadow:inset 0 0 0 1px #e5e5e5">{{ p.name }} <span style="color:#737373">{{ p.type }}</span> = {{ p.value }}</span></sc-for></div></sc-if>
+<sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 12px;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:13.5px">{{ msg }}</div></sc-if>
+</div>
+<div style="padding:12px 20px;border-top:1px solid #e5e5e5;display:flex;align-items:center;gap:12px;background:#fafafa">
+<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0"><span data-tick="{{ tick }}" style="font-size:12.5px;color:{{ cur.timeColor }};font-variant-numeric:tabular-nums">{{ cur.timeText }} · digest <span style="font-family:'Geist Mono',monospace">{{ cur.digest }}</span></span><div style="height:3px;border-radius:999px;background:#e5e5e5;overflow:hidden;max-width:280px"><div style="height:100%;width:{{ cur.timePct }};background:{{ cur.timeColor }}"></div></div></div>
+<span onClick="{{ deny }}" style="height:34px;padding:0 14px;display:flex;align-items:center;border-radius:8px;box-shadow:inset 0 0 0 1px #e5e5e5;background:#fff;font-weight:500;cursor:pointer" style-hover="background:#f5f5f5">Deny</span>
+<span onClick="{{ approve }}" style="height:34px;padding:0 16px;display:flex;align-items:center;gap:6px;border-radius:8px;background:{{ apBg }};color:#fff;font-weight:500;cursor:{{ apCursor }};opacity:{{ apOp }}">{{ apLabel }}</span>
+</div></div></sc-if>
+
+<div aria-live="polite" style="position:absolute;right:16px;bottom:16px;width:360px;display:flex;flex-direction:column;gap:8px">
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ true }}"><div style="position:relative">
+<sc-if value="{{ hasMore }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:8px;right:8px;top:-6px;height:20px;border-radius:12px 12px 0 0;background:#fff;box-shadow:0 0 0 1px #e5e5e5"></div></sc-if>
+<div style="position:relative;background:#fff;border-radius:12px;box-shadow:0 0 0 1px #e5e5e5,0 10px 28px rgba(0,0,0,.14);overflow:hidden">
+<div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:500">Approve change on <span style="color:{{ top.envColor }}">{{ top.env }}</span>?</span><sc-if value="{{ hasMore }}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;font-size:12px;padding:0 7px;border-radius:999px;background:#f5f5f5;color:#525252">+{{ moreCount }}</span></sc-if></div>
+<div style="font-family:'Geist Mono',monospace;font-size:12px;color:#404040;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ top.firstLine }}</div>
+<div style="font-size:12.5px;color:#737373;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ top.tier }} · {{ top.db }} · {{ top.agent }} in {{ top.session }}</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:2px"><span onClick="{{ review }}" style="height:28px;padding:0 12px;display:flex;align-items:center;border-radius:8px;background:#171717;color:#fff;font-size:12.8px;font-weight:500;cursor:pointer">Review</span><span onClick="{{ denyTop }}" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;font-size:12.8px;font-weight:500;cursor:pointer" style-hover="background:#f5f5f5">Deny</span><span data-tick="{{ tick }}" style="margin-left:auto;font-size:12px;color:{{ top.timeColor }};font-variant-numeric:tabular-nums">{{ top.timeShort }}</span></div>
+</div>
+<div style="height:3px;background:#f0f0f0"><div style="height:100%;width:{{ top.timePct }};background:{{ top.timeColor }}"></div></div>
+</div></div></sc-if>
+<sc-if value="{{ hasTerminal }}" hint-placeholder-val="{{ false }}"><div role="status" style="background:#fff;border-radius:12px;box-shadow:0 0 0 1px #e5e5e5,0 10px 28px rgba(0,0,0,.14);padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:13.5px"><span style="width:8px;height:8px;border-radius:999px;background:{{ term.dot }}"></span><span style="font-weight:500">{{ term.title }}</span><span style="color:#737373">{{ term.sub }}</span><a href="Operation.dc.html" style="margin-left:auto;font-size:12.5px">Open</a></div></sc-if>
+<sc-if value="{{ noneLeft }}" hint-placeholder-val="{{ false }}"><span onClick="{{ resetDemo }}" style="align-self:flex-end;font-size:12.5px;color:#525252;cursor:pointer;text-decoration:underline">Reset demo</span></sc-if>
+</div>
+</div></div>
+
+</div>
+<p style="margin:22px 0 0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.5);max-width:960px">Do rozważenia: Deny w toaście bez otwierania okna (szybkie odrzucenie, bez ryzyka). Approve zostaje tylko w oknie, bo wymaga przeczytania SQL. Safety notice może trafić do tej samej kolejki z innym kolorem kropki.</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const REQS = [
+  { id: "r1", env: "staging", tier: "data change", profile: "billing-stg", server: "sql-stg-02", db: "billing", engine: "SqlServer", agent: "Codex", session: "Fix invoice backfill", digest: "7a91c04e2b33", ttl: 300, left: 241,
+    sql: "UPDATE i\nSET i.DueDate = DATEADD(day, c.PaymentTermsDays, i.IssuedAt)\nFROM dbo.Invoices i\nJOIN dbo.Customers c ON c.CustomerId = i.CustomerId\nWHERE i.BatchId = @b\n  AND i.DueDate IS NULL;", params: [{ name: "@b", type: "varchar(32)", value: "'B-2026-10-24'" }], warnings: [] },
+  { id: "r2", env: "prod", tier: "schema change", profile: "shop-prod", server: "sql-prod-01", db: "shop", engine: "SqlServer", agent: "Claude Code", session: "Optimize orders report", digest: "c41e88a09d17", ttl: 300, left: 292,
+    sql: "CREATE INDEX IX_OrderLines_OrderId_Amount\n  ON dbo.OrderLines (OrderId) INCLUDE (Amount);\nUPDATE STATISTICS dbo.OrderLines;", params: [], warnings: ["This request contains multiple statements.", "The writer uses the same account as the reader."] },
+];
+const KW = ["and","as","by","create","cross","dateadd","declare","delete","from","group","in","include","index","inner","insert","into","is","join","left","not","null","on","or","order","select","set","statistics","table","update","values","where","with"];
+const risky = e => /^(prod|production|staging)$/i.test(e);
+class Component extends DCLogic {
+  state = { queue: REQS.map(r => ({ ...r, exp: Date.now() + r.left * 1000 })), open: null, openedAt: 0, inline: true, terminal: null, msg: "", tick: 0 };
+  ensureTicker() {}
+  sqlRef = React.createRef();
+  bootMonaco() {
+    const base = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/";
+    window.MonacoEnvironment = { getWorkerUrl: () => URL.createObjectURL(new Blob(["self.MonacoEnvironment={baseUrl:'" + base + "'};importScripts('" + base + "vs/base/worker/workerMain.js');"], { type: "text/javascript" })) };
+    const ready = () => { try { this._ready(); } catch (e) { console.warn("monaco init:", e && e.message); this.m = window.monaco; } if (!this.state.loaded) this.setState({ loaded: true }); };
+    this._ready = () => {
+      const m = window.monaco; this.m = m;
+      if (!m.languages.getLanguages().some(l => l.id === "sqlharness-tsql")) {
+        m.languages.register({ id: "sqlharness-tsql" });
+        m.languages.setMonarchTokensProvider("sqlharness-tsql", { ignoreCase: true, keywords: KW, tokenizer: { root: [[/--.*$/, "comment"], [/'([^']|'')*'/, "string"], [/\b\d+(\.\d+)?\b/, "number"], [/[a-zA-Z_@][\w$]*/, { cases: { "@keywords": "keyword", "@default": "identifier" } }], [/[()]/, "delimiter.parenthesis"], [/[;,.]/, "delimiter"], [/[=<>!+*/%-]+/, "operator"]] } });
+        m.editor.defineTheme("sqlharness-light", { base: "vs", inherit: true, rules: [{ token: "keyword", foreground: "2F4BBF", fontStyle: "bold" }, { token: "string", foreground: "1D6B38" }, { token: "number", foreground: "A8461A" }, { token: "comment", foreground: "737373", fontStyle: "italic" }], colors: { "editor.background": "#FFFFFF", "editor.foreground": "#0A0A0A", "editorLineNumber.foreground": "#737373" } });
+      }
+      m.editor.setTheme("sqlharness-light");
+    };
+    if (window.monaco) return ready();
+    const boot = () => { window.require.config({ paths: { vs: base + "vs" } }); window.require(["vs/editor/editor.main"], ready); };
+    if (window.require && window.require.config) return boot();
+    const s = document.createElement("script"); s.src = base + "vs/loader.js"; s.onload = boot; document.head.appendChild(s);
+  }
+  sqlText(r, inline) {
+    const ranges = []; let out = "", last = 0; const re = /@\w+/g; let m;
+    while ((m = re.exec(r.sql))) { out += r.sql.slice(last, m.index); const p = r.params.find(x => x.name === m[0]); const t = inline && p ? p.value : m[0]; if (inline && p) ranges.push([out.length, out.length + t.length]); out += t; last = m.index + m[0].length; }
+    return { text: out + r.sql.slice(last), ranges };
+  }
+  syncEditor() { try { this._sync(); } catch (e) { console.warn("monaco sync:", e && e.message); } }
+  _sync() {
+    if (!this.m && window.monaco) this.m = window.monaco;
+    const m = this.m, el = this.sqlRef.current, S = this.state, cur = S.queue.find(r => r.id === S.open);
+    if (!m) return;
+    if (this.ed && (!el || this.ed.el !== el)) { this.ed.ed.dispose(); this.ed.model.dispose(); this.ed = null; }
+    if (!el || !cur) return;
+    if (!this.ed) {
+      const model = m.editor.createModel("", "sqlharness-tsql");
+      const ed = m.editor.create(el, { model, readOnly: true, domReadOnly: true, minimap: { enabled: false }, folding: false, glyphMargin: false, lineNumbersMinChars: 3, overviewRulerLanes: 0, renderLineHighlight: "none", contextmenu: false, scrollBeyondLastLine: false, automaticLayout: false, padding: { top: 8, bottom: 8 }, fontSize: 12, lineHeight: 19, theme: "sqlharness-light" });
+      this.ed = { ed, model, el, dec: [], key: "" };
+      if (!this.state.loaded) this.setState({ loaded: true });
+    }
+    const key = cur.id + "|" + S.inline;
+    if (this.ed.key !== key) {
+      const { text, ranges } = this.sqlText(cur, S.inline);
+      this.ed.model.setValue(text);
+      const pos = o => this.ed.model.getPositionAt(o);
+      this.ed.dec = this.ed.ed.deltaDecorations(this.ed.dec, ranges.map(([a, b]) => { const p1 = pos(a), p2 = pos(b); return { range: new m.Range(p1.lineNumber, p1.column, p2.lineNumber, p2.column), options: { inlineClassName: "param-hl", hoverMessage: { value: ((cur.params.find(p => text.slice(a, b) === p.value) || {}).name) || "" } } }; }));
+      this.ed.key = key; this.ed.ed.layout();
+    }
+  }
+  componentDidUpdate() {
+    const cur = { open: this.state.open, inline: this.state.inline, loaded: this.state.loaded };
+    const p = this._prev || {};
+    this._prev = cur;
+    if (p.open !== cur.open || p.inline !== cur.inline || p.loaded !== cur.loaded) setTimeout(() => this.syncEditor(), 0);
+  }
+  componentDidMount() {
+    this.bootMonaco();
+    clearInterval(this.iv);
+    this.iv = setInterval(() => {
+      this.setState(s => ({ tick: s.tick + 1 }));
+      if (this.state.open && (!this.ed || this.ed.el !== this.sqlRef.current || this.ed.key !== this.state.open + "|" + this.state.inline)) this.syncEditor();
+      if (!this.state.open && this.ed) this.syncEditor();
+    }, 250);
+  }
+  componentWillUnmount() { clearInterval(this.iv); this.iv = null; clearTimeout(this.tt); clearTimeout(this.rt); if (this.ed) { this.ed.ed.dispose(); this.ed.model.dispose(); } }
+  leftOf(r) { return Math.max(0, Math.ceil((r.exp - Date.now()) / 1000)); }
+  view(r) {
+    const left = this.leftOf(r), pct = (left * 100 / r.ttl) + "%", low = left <= 30;
+    const firstLine = r.sql.split("\n")[0] + (r.sql.includes("\n") ? " …" : "");
+    const stmts = (r.sql.match(/;/g) || []).length;
+    return { ...r, envColor: risky(r.env) ? "#b91c1c" : "#0a0a0a", envLine: risky(r.env) ? "#dc2626" : "#d4d4d4", firstLine,
+      timeText: left ? "Expires in " + Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0") : "Expired", timeShort: left ? Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0") : "expired", timePct: pct, timeColor: !left ? "#b91c1c" : low ? "#d97706" : "#737373",
+      lines: String(r.sql.split("\n").length), stmtCount: stmts + (stmts === 1 ? " statement" : " statements") };
+  }
+  finish(id, kind) {
+    const r = this.state.queue.find(x => x.id === id);
+    const term = kind === "approve" ? { dot: "#10AC61", title: "Approved · executed", sub: "312 rows · " + r.db } : { dot: "#a3a3a3", title: "Denied", sub: r.env + " · " + r.db };
+    this.setState(s => ({ queue: s.queue.filter(x => x.id !== id), open: null, terminal: term, msg: "" }));
+    clearTimeout(this.tt); this.tt = setTimeout(() => this.setState({ terminal: null }), 3000);
+  }
+  renderVals() {
+    const S = this.state, q = S.queue, top = q[0], cur = q.find(r => r.id === S.open);
+    this.ensureTicker();
+    const now = Date.now(), curLeft = cur ? this.leftOf(cur) : 0;
+    const ready = !!cur && now - S.openedAt >= 1000 && curLeft > 0;
+    const segs = [];
+    if (cur) {
+      const re = /@\w+/g; let last = 0, m;
+      while ((m = re.exec(cur.sql))) {
+        segs.push({ text: cur.sql.slice(last, m.index), bg: "transparent", fg: "#0a0a0a", pad: "0", tip: "" });
+        const p = cur.params.find(x => x.name === m[0]);
+        segs.push(S.inline && p ? { text: p.value, bg: "#eef2ff", fg: "#3730a3", pad: "0 3px", tip: p.name + " " + p.type } : { text: m[0], bg: "transparent", fg: "#7c2d12", pad: "0", tip: p ? p.type + " = " + p.value : "" });
+        last = m.index + m[0].length;
+      }
+      segs.push({ text: cur.sql.slice(last), bg: "transparent", fg: "#0a0a0a", pad: "0", tip: "" });
+    }
+    const on = "#fff", sh = "0 1px 2px rgba(0,0,0,.08)";
+    const idx = cur ? q.indexOf(cur) : 0;
+    return {
+      hasToast: !!top && !S.open, hasMore: q.length > 1, moreCount: String(q.length - 1), top: top ? this.view(top) : this.view(REQS[0]),
+      review: () => { this.setState({ open: top.id, openedAt: Date.now(), msg: "" }); clearTimeout(this.rt); this.rt = setTimeout(() => { this.setState(s => ({ tick: s.tick + 1 })); this.forceUpdate(); }, 1050); },
+      tick: String(S.tick),
+      denyTop: () => this.finish(top.id, "deny"),
+      dlgOpen: !!cur, cur: cur ? this.view(cur) : this.view(REQS[0]), queueText: q.length > 1 ? (idx + 1) + " of " + q.length + " pending" : "",
+      closeDlg: () => this.setState({ open: null }),
+      sqlRef: this.sqlRef, loadingOpacity: S.loaded ? 0 : 1, sqlHeight: cur ? Math.min(220, cur.sql.split("\n").length * 19 + 18) + "px" : "120px", showParams: !S.inline && !!cur && cur.params.length > 0,
+      inlBg: S.inline ? on : "transparent", inlSh: S.inline ? sh : "none", rawBg: S.inline ? "transparent" : on, rawSh: S.inline ? "none" : sh,
+      setInline: () => this.setState({ inline: true }), setRaw: () => this.setState({ inline: false }),
+      apBg: cur && curLeft === 0 ? "#a3a3a3" : risky(cur ? cur.env : "") ? "#b91c1c" : "#171717", apOp: ready ? 1 : 0.5, apCursor: ready ? "pointer" : "not-allowed",
+      apLabel: cur && curLeft === 0 ? "Expired" : ready ? "Approve on " + (cur ? cur.env : "") : "Approve…",
+      approve: () => { if (ready) this.finish(cur.id, "approve"); },
+      deny: () => cur && this.finish(cur.id, "deny"),
+      hasMsg: !!S.msg, msg: S.msg,
+      hasTerminal: !!S.terminal, term: S.terminal || { dot: "", title: "", sub: "" },
+      noneLeft: q.length === 0 && !S.terminal, resetDemo: () => this.setState({ queue: REQS.map(r => ({ ...r, exp: Date.now() + r.left * 1000 })), terminal: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#fff;font-family:'Geist',system-ui,sans-serif;color:#0a0a0a}a{color:#0a0a0a}a:hover{color:#525252}</style></helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;font-size:14px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><a href="Activity.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Activity</a><a href="Usage.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a;background:#f5f5f5">Usage</a><a href="Profiles.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Profiles</a><a href="Settings.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Settings</a></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="width:100%;max-width:1040px;margin:0 auto;box-sizing:border-box;padding:24px 24px 64px;display:flex;flex-direction:column;gap:16px">
+
+<div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+<div style="display:grid;gap:6px"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">Usage</h1><div style="color:#737373">{{ scopeText }}</div></div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+<select value="{{ profile }}" onChange="{{ onProfile }}" style="height:32px;padding:0 8px;border:1px solid #e5e5e5;border-radius:8px;font:500 12.8px 'Geist',sans-serif;background:#fff"><option value="all">All profiles</option><sc-for list="{{ profiles }}" as="p" hint-placeholder-count="4"><option value="{{ p }}">{{ p }}</option></sc-for><option value="none">No profile</option></select>
+<div style="display:flex;padding:2px;background:#f5f5f5;border-radius:9px;font-size:12.8px;font-weight:500"><sc-for list="{{ ranges }}" as="r" hint-placeholder-count="4"><span onClick="{{ r.pick }}" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ r.bg }};box-shadow:{{ r.sh }};color:{{ r.fg }}">{{ r.label }}</span></sc-for></div>
+</div></div>
+
+<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1)">
+<sc-for list="{{ kpis }}" as="k" hint-placeholder-count="5"><a href="{{ k.href }}" style="padding:12px 16px;border-left:{{ k.border }};display:grid;gap:2px;text-decoration:none;color:#0a0a0a" style-hover="background:#fafafa"><span style="font-size:12px;color:#737373">{{ k.label }}</span><span style="font-size:18px;font-weight:500;font-variant-numeric:tabular-nums">{{ k.value }}</span><span style="font-size:12.5px;color:{{ k.subColor }}">{{ k.sub }}</span></a></sc-for>
+</div>
+
+<section style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:14px 20px 8px"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><h2 style="margin:0;font-size:16px;font-weight:500">Agents</h2><span style="color:#737373;font-size:13px">Output tokens are estimated from bytes returned to the agent (UTF-8 ÷ 4). Input and chat are not measured.</span></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 180px 90px 90px 120px 100px 90px;gap:8px;padding:8px 0;font-weight:500;border-bottom:1px solid #e5e5e5;font-size:13.5px"><span>Agent</span><span>Model</span><span style="text-align:right">Sessions</span><span style="text-align:right">Operations</span><span style="text-align:right">Output tokens</span><span style="text-align:right">Est. cost</span><span style="text-align:right">Failed</span></div>
+<sc-for list="{{ agents }}" as="a" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:minmax(0,1fr) 180px 90px 90px 120px 100px 90px;gap:8px;padding:9px 0;border-bottom:1px solid #f0f0f0;font-variant-numeric:tabular-nums"><span>{{ a.agent }}</span><span style="color:#525252;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.model }}</span><span style="text-align:right">{{ a.sessions }}</span><span style="text-align:right">{{ a.ops }}</span><span style="text-align:right">{{ a.tokens }}</span><span style="text-align:right">{{ a.cost }}</span><span style="text-align:right;color:{{ a.failColor }}">{{ a.failed }}</span></div></sc-for>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 180px 90px 90px 120px 100px 90px;gap:8px;padding:9px 0;font-weight:600;font-variant-numeric:tabular-nums"><span>Total</span><span></span><span style="text-align:right">{{ tot.sessions }}</span><span style="text-align:right">{{ tot.ops }}</span><span style="text-align:right">{{ tot.tokens }}</span><span style="text-align:right">{{ tot.cost }}</span><span style="text-align:right">{{ tot.failed }}</span></div>
+<div style="padding:2px 0 8px;font-size:12.5px;color:#737373">Cost uses output-token prices from <a href="Settings.dc.html#s-prices">Model prices</a>. Model comes from agent transcripts.</div>
+</section>
+
+<section style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:14px 20px 8px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><h2 style="margin:0;font-size:16px;font-weight:500">Top SQL</h2>
+<div style="display:flex;padding:2px;background:#f5f5f5;border-radius:8px;font-size:12.5px;font-weight:500"><sc-for list="{{ sqlSorts }}" as="o" hint-placeholder-count="3"><span onClick="{{ o.pick }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:6px;cursor:pointer;background:{{ o.bg }};box-shadow:{{ o.sh }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+<span style="margin-left:auto;color:#737373;font-size:13px">Grouped by SQL hash</span></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 70px 100px 90px 120px 90px;gap:8px;padding:8px 0;font-weight:500;border-bottom:1px solid #e5e5e5;font-size:13.5px"><span>SQL</span><span style="text-align:right">Runs</span><span style="text-align:right">Total time</span><span style="text-align:right">Slowest</span><span style="text-align:right">Logical reads</span><span style="text-align:right">Last run</span></div>
+<sc-for list="{{ sql }}" as="s" hint-placeholder-count="5"><a href="Activity.dc.html" style="display:grid;grid-template-columns:minmax(0,1fr) 70px 100px 90px 120px 90px;gap:8px;padding:9px 0;border-bottom:1px solid #f0f0f0;font-variant-numeric:tabular-nums;text-decoration:none;color:#0a0a0a;align-items:baseline" style-hover="background:#fafafa"><div style="min-width:0;display:grid;gap:1px"><span style="font-family:'Geist Mono',monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.text }}</span><span style="font-size:12px;color:#737373">{{ s.hash }} · {{ s.target }}</span></div><span style="text-align:right;font-weight:{{ s.w1 }}">{{ s.runs }}</span><span style="text-align:right;font-weight:{{ s.w2 }}">{{ s.total }}</span><span style="text-align:right">{{ s.max }}</span><span style="text-align:right;font-weight:{{ s.w3 }}">{{ s.reads }}</span><span style="text-align:right;color:#737373">{{ s.last }}</span></a></sc-for>
+</section>
+
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px">
+<section style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:14px 20px 8px"><h2 style="margin:0 0 6px;font-size:16px;font-weight:500">Tables by logical reads</h2>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 80px;gap:8px;padding:8px 0;font-weight:500;border-bottom:1px solid #e5e5e5;font-size:13.5px"><span>Table</span><span style="text-align:right">Logical reads</span><span style="text-align:right">Ops</span></div>
+<sc-for list="{{ tables }}" as="t" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:minmax(0,1fr) 110px 80px;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0;font-variant-numeric:tabular-nums"><span style="font-family:'Geist Mono',monospace;font-size:13px">{{ t.name }}</span><span style="text-align:right">{{ t.reads }}</span><span style="text-align:right">{{ t.ops }}</span></div></sc-for>
+</section>
+<section style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:14px 20px 8px"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><h2 style="margin:0;font-size:16px;font-weight:500">Top waits</h2><span style="color:#737373;font-size:13px">SQL Server</span></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 100px 80px;gap:8px;padding:8px 0;font-weight:500;border-bottom:1px solid #e5e5e5;font-size:13.5px"><span>Wait type</span><span style="text-align:right">Total</span><span style="text-align:right">Ops</span></div>
+<sc-for list="{{ waits }}" as="w" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:minmax(0,1fr) 100px 80px;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0;font-variant-numeric:tabular-nums"><div style="display:grid;gap:1px;min-width:0"><span style="font-family:'Geist Mono',monospace;font-size:13px">{{ w.type }}</span><span style="font-size:12px;color:#737373">{{ w.hint }}</span></div><span style="text-align:right">{{ w.total }}</span><span style="text-align:right">{{ w.ops }}</span></div></sc-for>
+</section>
+</div>
+
+<section style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:14px 20px 12px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="margin:0;font-size:16px;font-weight:500">Dimensions</h2>
+<sc-if value="{{ hasDims }}" hint-placeholder-val="{{ true }}"><span style="color:#737373;font-size:13px">{{ dimProfile }} · database template <span style="font-family:'Geist Mono',monospace;font-size:12.5px">{{ dimTemplate }}</span></span>
+<div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12.8px"><span style="color:#737373">Rows</span><select value="{{ rowDim }}" onChange="{{ onRow }}" style="height:28px;padding:0 6px;border:1px solid #e5e5e5;border-radius:8px;font:500 12.8px 'Geist',sans-serif;background:#fff"><sc-for list="{{ dimNames }}" as="d" hint-placeholder-count="2"><option value="{{ d }}">{{ d }}</option></sc-for></select><span style="color:#737373;margin-left:6px">Metric</span><select value="{{ metric }}" onChange="{{ onMetric }}" style="height:28px;padding:0 6px;border:1px solid #e5e5e5;border-radius:8px;font:500 12.8px 'Geist',sans-serif;background:#fff"><option value="ops">Operations</option><option value="dur">Total duration</option><option value="fail">Failed</option></select></div></sc-if></div>
+<sc-if value="{{ hasDims }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:{{ mCols }};font-variant-numeric:tabular-nums;border-top:1px solid #e5e5e5">
+<span style="padding:8px 0;font-weight:500;font-size:13.5px">{{ rowDim }} / {{ colDim }}</span><sc-for list="{{ mHead }}" as="h" hint-placeholder-count="2"><span style="padding:8px 0;text-align:right;font-weight:500;font-size:13.5px">{{ h }}</span></sc-for>
+<sc-for list="{{ mRows }}" as="r" hint-placeholder-count="3"><span style="padding:8px 0;border-top:1px solid #f0f0f0;font-family:'Geist Mono',monospace;font-size:13px">{{ r.label }}</span><sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3"><a href="Activity.dc.html" style="padding:8px 0;border-top:1px solid #f0f0f0;text-align:right;text-decoration:none;color:{{ c.color }};font-weight:{{ c.weight }}" style-hover="text-decoration:underline">{{ c.v }}</a></sc-for></sc-for>
+</div>
+<div style="font-size:12.5px;color:#737373">Kliknięcie komórki otwiera Activity z tymi filtrami. Pełna lista baz w tym zakresie jest na <a href="Profiles.dc.html">stronie profilu</a>.</div>
+</sc-if>
+<sc-if value="{{ noDims }}" hint-placeholder-val="{{ false }}"><div style="color:#737373">{{ noDimsText }}</div></sc-if>
+</section>
+</main></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const RANGES = [["24h", "24 hours", 0.18], ["7d", "7 days", 1], ["30d", "30 days", 3.6], ["all", "All time", 7.9]];
+const PROFILES = ["shop-dev", "billing-stg", "shop-prod", "analytics", "local-pg"];
+const PSHARE = { all: 1, "shop-dev": 0.62, "billing-stg": 0.14, "shop-prod": 0.02, analytics: 0.2, "local-pg": 0, none: 0.02 };
+const AGENTS = [
+  { agent: "Claude Code", model: "claude-sonnet-4.5", sessions: 9, ops: 268, tokens: 412000, price: 15, failed: 4 },
+  { agent: "Codex", model: "gpt-5-codex", sessions: 4, ops: 84, tokens: 96000, price: 10, failed: 1 },
+  { agent: "Cursor", model: "mixed (3 models)", sessions: 2, ops: 41, tokens: 38000, price: 12, failed: 2 },
+];
+const SQL = [
+  { text: "SELECT o.OrderId, o.CustomerId, … FROM dbo.Orders o …", hash: "9f2c41ab", target: "shop-dev", runs: 38, total: 41200, max: 2410, reads: 1240000, last: "13:55" },
+  { text: "SELECT COUNT(*) FROM dbo.Invoices WHERE DueDate IS NULL …", hash: "51d0e7c2", target: "billing-stg", runs: 61, total: 5400, max: 220, reads: 73400, last: "13:52" },
+  { text: "SELECT s.CustomerId, … FROM dbo.Subscriptions s …", hash: "a3b9f011", target: "analytics", runs: 12, total: 96000, max: 30000, reads: 2210000, last: "Yesterday" },
+  { text: "SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE …", hash: "0c77ad90", target: "shop-dev", runs: 44, total: 970, max: 41, reads: 13600, last: "Oct 18" },
+  { text: "SELECT r.* FROM rpt.MonthlyRevenue r WHERE r.Year = …", hash: "e8f21b4d", target: "reports-prod", runs: 6, total: 64000, max: 30000, reads: 880000, last: "13:22" },
+  { text: "UPDATE i SET i.DueDate = DATEADD(…) FROM dbo.Invoices i …", hash: "7a91c04e", target: "billing-stg", runs: 2, total: 68, max: 34, reads: 2400, last: "14:01" },
+];
+const TABLES = [["dbo.Subscriptions", 2210000, 14], ["dbo.Orders", 1180000, 52], ["rpt.MonthlyRevenue", 880000, 6], ["dbo.OrderLines", 640000, 41], ["dbo.Invoices", 75800, 63]];
+const WAITS = [["PAGEIOLATCH_SH", "reading pages from disk (cold cache)", 18400, 9], ["CXPACKET", "parallel query coordination", 7200, 6], ["ASYNC_NETWORK_IO", "client reading results slowly", 3100, 22], ["LCK_M_S", "blocked by another session", 840, 2], ["SOS_SCHEDULER_YIELD", "CPU pressure", 410, 11]];
+const DIMS = { "shop-dev": { template: "{tenant}_shop", names: ["tenant", "region"], vals: { tenant: ["acme", "globex", "initech"], region: ["eu", "us", "Unknown"] } },
+  analytics: { template: "dw", names: ["schema"], vals: { schema: ["public", "mart"] } } };
+const f = n => n.toLocaleString("en-US");
+const ms = v => v >= 60000 ? (v / 60000).toFixed(1) + " min" : v >= 1000 ? (v / 1000).toFixed(1) + " s" : Math.round(v) + " ms";
+const tok = v => v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : v >= 1000 ? Math.round(v / 1000) + "k" : String(Math.round(v));
+const usd = v => "$" + v.toFixed(2);
+
+class Component extends DCLogic {
+  state = { range: "7d", profile: "all", sort: "total", row: null, metric: "ops" };
+  renderVals() {
+    const S = this.state, k = RANGES.find(r => r[0] === S.range)[2] * PSHARE[S.profile];
+    const sc = v => Math.round(v * k);
+    const on = "#fff", sh = "0 1px 2px rgba(0,0,0,.08)";
+    const ag = AGENTS.map(a => ({ ...a, ops: sc(a.ops), tokens: sc(a.tokens), sessions: Math.max(a.ops * k >= 1 ? 1 : 0, Math.round(a.sessions * Math.min(1, k + .2))), failed: sc(a.failed) }));
+    const T = ag.reduce((t, a) => ({ ops: t.ops + a.ops, tokens: t.tokens + a.tokens, sessions: t.sessions + a.sessions, failed: t.failed + a.failed, cost: t.cost + a.tokens * a.price / 1e6 }), { ops: 0, tokens: 0, sessions: 0, failed: 0, cost: 0 });
+    const rejected = sc(3), spills = sc(5), cold = sc(9);
+    const sorted = SQL.slice().sort((a, b) => S.sort === "runs" ? b.runs - a.runs : S.sort === "reads" ? b.reads - a.reads : b.total - a.total);
+    const dimDef = DIMS[S.profile];
+    const rowDim = dimDef ? (S.row && dimDef.names.includes(S.row) ? S.row : dimDef.names[0]) : "";
+    const colDim = dimDef ? (dimDef.names.find(n => n !== rowDim) || "") : "";
+    const rowsV = dimDef ? dimDef.vals[rowDim] : [], colsV = dimDef && colDim ? dimDef.vals[colDim] : ["Operations"];
+    const seed = (i, j) => ((i + 2) * 37 + (j + 3) * 17) % 41 + 3;
+    const raw = (i, j) => { const n = Math.round(seed(i, j) * k / 1.4); return S.metric === "ops" ? n : S.metric === "dur" ? n * 410 : Math.round(n / 14); };
+    const fmtM = v => S.metric === "dur" ? ms(v) : f(v);
+    const grid = rowsV.map((_, i) => colsV.map((_, j) => raw(i, j)));
+    const colTot = colsV.map((_, j) => grid.reduce((t, r) => t + r[j], 0));
+    const allTot = colTot.reduce((a, b) => a + b, 0);
+    const single = !colDim;
+    return {
+      scopeText: (S.profile === "all" ? "All profiles" : S.profile === "none" ? "Operations without a profile" : S.profile) + " · " + RANGES.find(r => r[0] === S.range)[1].toLowerCase() + " · UTC",
+      profile: S.profile, profiles: PROFILES, onProfile: e => this.setState({ profile: e.target.value, row: null }),
+      ranges: RANGES.map(([v, label]) => ({ label, bg: S.range === v ? on : "transparent", sh: S.range === v ? sh : "none", fg: S.range === v ? "#0a0a0a" : "#525252", pick: () => this.setState({ range: v }) })),
+      kpis: [
+        ["Operations", f(T.ops), T.sessions + " sessions", "#737373", "Activity.dc.html"],
+        ["Failed / rejected", f(T.failed) + " / " + f(rejected), T.ops ? Math.round((T.failed + rejected) * 1000 / T.ops) / 10 + "% of operations" : "—", T.failed + rejected ? "#b91c1c" : "#737373", "Activity.dc.html"],
+        ["Agent output", tok(T.tokens) + " tokens", "≈ " + usd(T.cost), "#737373", "#"],
+        ["Spills", f(spills), "operations with tempdb spill", "#737373", "Activity.dc.html"],
+        ["Cold cache", f(cold), "operations with physical reads", "#737373", "Activity.dc.html"],
+      ].map(([label, value, sub, subColor, href], i) => ({ label, value, sub, subColor, href, border: i ? "1px solid #e5e5e5" : "0" })),
+      agents: ag.map(a => ({ agent: a.agent, model: a.model, sessions: f(a.sessions), ops: f(a.ops), tokens: tok(a.tokens), cost: usd(a.tokens * a.price / 1e6), failed: f(a.failed), failColor: a.failed ? "#b91c1c" : "#737373" })),
+      tot: { sessions: f(T.sessions), ops: f(T.ops), tokens: tok(T.tokens), cost: usd(T.cost), failed: f(T.failed) },
+      sqlSorts: [["total", "Total time"], ["runs", "Runs"], ["reads", "Logical reads"]].map(([v, label]) => ({ label, bg: S.sort === v ? on : "transparent", sh: S.sort === v ? sh : "none", fg: S.sort === v ? "#0a0a0a" : "#525252", pick: () => this.setState({ sort: v }) })),
+      sql: sorted.map(s => ({ text: s.text, hash: s.hash, target: s.target, runs: f(sc(s.runs) || 1), total: ms(s.total * k), max: ms(s.max), reads: f(sc(s.reads)), last: s.last, w1: S.sort === "runs" ? 600 : 400, w2: S.sort === "total" ? 600 : 400, w3: S.sort === "reads" ? 600 : 400 })),
+      tables: TABLES.map(([name, reads, ops]) => ({ name, reads: f(sc(reads)), ops: f(sc(ops)) })),
+      waits: WAITS.map(([type, hint, total, ops]) => ({ type, hint, total: ms(total * k), ops: f(sc(ops)) })),
+      hasDims: !!dimDef, noDims: !dimDef,
+      noDimsText: S.profile === "all" || S.profile === "none" ? "Wybierz profil, żeby zobaczyć rozbicie po jego zmiennych (np. tenant, region)." : "Ten profil nie ma zmiennych.",
+      dimProfile: S.profile, dimTemplate: dimDef ? dimDef.template : "", dimNames: dimDef ? dimDef.names : [],
+      rowDim, colDim: colDim || "total", onRow: e => this.setState({ row: e.target.value }), metric: S.metric, onMetric: e => this.setState({ metric: e.target.value }),
+      mCols: "minmax(0,1fr) " + colsV.map(() => "110px").join(" ") + (single ? "" : " 110px"),
+      mHead: single ? [S.metric === "ops" ? "Operations" : S.metric === "dur" ? "Total duration" : "Failed"] : colsV.concat(["Total"]),
+      mRows: rowsV.map((rv, i) => ({ label: rv, cells: colsV.map((cv, j) => ({ v: fmtM(grid[i][j]), color: rv === "Unknown" || cv === "Unknown" ? "#737373" : "#0a0a0a", weight: 400 })).concat(single ? [] : [{ v: fmtM(grid[i].reduce((a, b) => a + b, 0)), color: "#0a0a0a", weight: 600 }]) }))
+        .concat([{ label: "Total", cells: colTot.map(v => ({ v: fmtM(v), color: "#0a0a0a", weight: 600 })).concat(single ? [] : [{ v: fmtM(allTot), color: "#0a0a0a", weight: 600 }]) }]),
+    };
+  }
+}
+</script>
+</body>
+</html>

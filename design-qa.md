@@ -6,6 +6,11 @@ This is visual acceptance of the selected layouts within the operator-approved e
 
 ## Visual truth and rendered implementation
 
+The reference paths below describe the historical acceptance set, available in Git
+at `95eb43b7a705146df261673470f037c62b872612`. Current mocks are in
+[docs/design/dashboard-2026-10-27](docs/design/dashboard-2026-10-27/README.md);
+this report does not certify alignment with that updated set.
+
 - Activity: `docs/design/dashboard-2026-10-25/Activity.dc.html`, frame **3a**.
 - Operation: `docs/design/dashboard-2026-10-25/Operation v2.dc.html`, Measure / Query / Mutate / Compare.
 - Session: `docs/design/dashboard-2026-10-25/Session Optimization.dc.html`, turn **4**, frame **4a**, SQL diff / IO / Plan. Its IO tab takes precedence over the earlier separate IO file.

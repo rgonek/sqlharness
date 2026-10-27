@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#fff;font-family:'Geist',system-ui,sans-serif;color:#0a0a0a}a{color:#0a0a0a}a:hover{color:#525252}table{border-collapse:collapse}@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(37,99,235,.45)}70%{box-shadow:0 0 0 6px rgba(37,99,235,0)}100%{box-shadow:0 0 0 0 rgba(37,99,235,0)}}</style></helmet>
+<div style="min-height:100vh;background:#fff">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><a href="Activity.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a;background:#f5f5f5">Activity</a><a href="Usage.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Usage</a><a href="Profiles.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Profiles</a><a href="Settings.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Settings</a></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="width:100%;max-width:1280px;margin:0 auto;box-sizing:border-box;padding:16px 24px;display:flex;flex-direction:column;gap:14px;font-size:14px">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<h1 style="margin:0 8px 0 0;font-size:20px;font-weight:600;letter-spacing:-.01em">Activity</h1>
+<div style="display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid #e5e5e5;border-radius:8px;width:280px;color:#737373"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg><span>Search</span></div>
+<sc-for list="{{ c.chips }}" as="ch" hint-placeholder-count="5"><span onClick="{{ ch.toggle }}" style="height:28px;padding:0 10px;display:flex;align-items:center;gap:6px;border-radius:999px;font-size:12.8px;font-weight:500;cursor:pointer;background:{{ ch.bg }};color:{{ ch.fg }};box-shadow:inset 0 0 0 1px {{ ch.ring }}">{{ ch.label }}<span style="font-weight:400;opacity:.7">{{ ch.count }}</span></span></sc-for>
+<span onClick="{{ c.toggleAll }}" style="margin-left:auto;font-size:13px;color:#525252;cursor:pointer;text-decoration:underline;text-decoration-color:#d4d4d4">{{ c.toggleAllLabel }}</span></div>
+<div style="display:flex;flex-direction:column;border-top:1px solid #e5e5e5">
+<sc-for list="{{ c.groups }}" as="g" hint-placeholder-count="4"><div style="border-bottom:1px solid #e5e5e5">
+<div onClick="{{ g.toggle }}" style="display:grid;grid-template-columns:24px 28px minmax(220px,1fr) minmax(0,150px) 90px minmax(0,170px) auto;align-items:center;gap:8px;padding:10px 8px;cursor:pointer" style-hover="background:#fafafa">
+<span style="display:flex;color:#737373;transform:rotate({{ g.rot }});transition:transform .15s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg></span>
+<span onClick="{{ g.toggleStar }}" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px;color:{{ g.starColor }}" style-hover="background:#f0f0f0"><svg width="15" height="15" viewBox="0 0 24 24" fill="{{ g.starFill }}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span>
+<div style="min-width:0"><div style="display:flex;align-items:center;gap:8px"><a href="Session.dc.html" onClick="{{ g.stop }}" style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:{{ g.font }}">{{ g.name }}</a><sc-if value="{{ g.archivedFlag }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;padding:0 6px;border-radius:999px;border:1px solid #e5e5e5;color:#737373">Archived</span></sc-if></div><div style="font-size:12px;color:#737373;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.agent }} · {{ g.transport }}</div></div>
+<span style="font-family:'Geist Mono',monospace;font-size:13px;color:#525252;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.cwd }}</span>
+<span style="color:#525252">{{ g.lastSeen }}</span>
+<span><sc-if value="{{ g.hasOpt }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid #e5e5e5;white-space:nowrap">{{ g.opt }}</span></sc-if></span>
+<div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap"><sc-for list="{{ g.badges }}" as="b" hint-placeholder-count="1"><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;background:{{ b.bg }};color:{{ b.fg }};white-space:nowrap">{{ b.text }}</span></sc-for><span style="font-size:12px;color:#737373;align-self:center;white-space:nowrap">{{ g.countText }}</span></div>
+</div>
+<sc-if value="{{ g.open }}" hint-placeholder-val="{{ false }}"><div style="padding:0 8px 10px 68px;display:flex;flex-direction:column">
+<sc-for list="{{ g.ops }}" as="o" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:52px 64px minmax(0,1fr) 140px 72px 90px;align-items:center;gap:8px;padding:6px 8px;border-top:1px solid #f0f0f0;border-radius:6px;background:{{ o.rowBg }}" style-hover="background:#fafafa">
+<a href="Operation.dc.html?kind={{ o.kindKey }}" style="font-variant-numeric:tabular-nums">{{ o.id }}</a><span style="color:#737373;font-size:13px;font-variant-numeric:tabular-nums">{{ o.time }}</span>
+<div style="min-width:0;overflow:hidden;display:flex;align-items:baseline;gap:8px"><span style="font-weight:500;flex:none">{{ o.kind }}</span><sc-if value="{{ o.keep }}" hint-placeholder-val="{{ false }}"><span title="Kept by agent" style="display:flex;color:#7c3aed;align-self:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path></svg></span></sc-if><sc-if value="{{ o.hasLabel }}" hint-placeholder-val="{{ false }}"><span style="color:#525252;flex:0 1 auto;min-width:0;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ o.label }}</span></sc-if><span style="font-family:'Geist Mono',monospace;font-size:12px;color:#737373;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ o.summary }}</span></div>
+<span><span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;background:{{ o.sBg }};color:{{ o.sFg }};white-space:nowrap"><sc-if value="{{ o.live }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:999px;background:currentColor;animation:pulse 1.6s infinite"></span></sc-if>{{ o.status }}</span></span>
+<span style="text-align:right;font-variant-numeric:tabular-nums">{{ o.dur }}</span><span style="text-align:right;font-variant-numeric:tabular-nums">{{ o.reads }}</span></div></sc-for>
+</div></sc-if>
+</div></sc-for>
+</div>
+</main></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const SESS = [
+  { id: "S1", name: "Optimize orders report", key: "mcp:7f3c2a91-orders", agent: "Claude Code", transport: "stdio (mcp)", cwd: "ORD-412", lastSeen: "now", star: true, archived: false, opt: "orders-report −84%" },
+  { id: "S2", name: "Fix invoice backfill", key: "mcp:c04e19b2-invoices", agent: "Codex", transport: "stdio (mcp)", cwd: "billing-svc", lastSeen: "2 min ago", star: false, archived: false, opt: "" },
+  { id: "S3", name: "", key: "mcp:a91f03d7-reports", agent: "Claude Code", transport: "cli", cwd: "reports", lastSeen: "41 min ago", star: false, archived: false, opt: "" },
+  { id: "S4", name: "Customer churn query", key: "mcp:5be2aa10-churn", agent: "Cursor", transport: "stdio (mcp)", cwd: "analytics", lastSeen: "Yesterday", star: true, archived: false, opt: "churn-90d −61%" },
+  { id: "S5", name: "Schema exploration", key: "mcp:0d77e4c1-schema", agent: "Claude Code", transport: "cli", cwd: "shop", lastSeen: "Oct 18", star: false, archived: true, opt: "" },
+];
+const OPS = [
+  { id: 216, sid: "S1", started: "Today 14:02", time: "14:02", kind: "Compare", summary: "orders-report v2 → v3", status: "running", dur: "0:14", reads: "—", label: "", keep: false, star: false, target: "shop-dev / shop" },
+  { id: 215, sid: "S2", started: "Today 14:01", time: "14:01", kind: "Mutation", summary: "UPDATE dbo.Invoices SET DueDate = … WHERE BatchId = @b", status: "awaiting approval", dur: "0:41", reads: "—", label: "Backfill due dates", keep: false, star: false, target: "billing-stg / billing", mut: true },
+  { id: 214, sid: "S1", started: "Today 13:55", time: "13:55", kind: "Compare", summary: "orders-report v0 → v2 · 48,212 → 7,630", status: "ok", dur: "2.4 s", reads: "7,630", label: "Pre-aggregate lines via CROSS APPLY", keep: true, star: false, target: "shop-dev / shop" },
+  { id: 212, sid: "S2", started: "Today 13:52", time: "13:52", kind: "Query", summary: "SELECT COUNT(*) FROM dbo.Invoices WHERE DueDate IS NULL", status: "ok", dur: "88 ms", reads: "1,204", label: "", keep: false, star: false, target: "billing-stg / billing" },
+  { id: 211, sid: "S2", started: "Today 13:49", time: "13:49", kind: "Mutation", summary: "INSERT INTO dbo.BackfillLog (BatchId, …) VALUES (…)", status: "ok · verified", dur: "34 ms", reads: "12", label: "", keep: false, star: false, target: "billing-stg / billing", mut: true },
+  { id: 207, sid: "S1", started: "Today 13:40", time: "13:40", kind: "Query", summary: "SELECT o.OrderId, … FROM dbo.Orders o JOIN dbo.OrderLines l …", status: "ok", dur: "188 ms", reads: "12,904", label: "", keep: false, star: false, target: "shop-dev / shop" },
+  { id: 209, sid: "S3", started: "Today 13:22", time: "13:22", kind: "Explain", summary: "SELECT r.* FROM rpt.MonthlyRevenue r WHERE r.Year = 2026", status: "ok", dur: "41 ms", reads: "—", label: "", keep: false, star: false, target: "reports-prod / rpt" },
+  { id: 208, sid: "S3", started: "Today 13:20", time: "13:20", kind: "Query", summary: "SELECT r.* FROM rpt.MonthlyRevenue r", status: "failed", dur: "30 s", reads: "—", label: "", keep: false, star: false, target: "reports-prod / rpt" },
+  { id: 201, sid: "S1", started: "Today 13:31", time: "13:31", kind: "Query", summary: "SELECT o.OrderId, … CONVERT(date, o.CreatedAt) >= @from", status: "ok", dur: "412 ms", reads: "48,212", label: "Baseline as submitted", keep: false, star: false, target: "shop-dev / shop" },
+  { id: 190, sid: "S4", started: "Yesterday 16:20", time: "16:20", kind: "Compare", summary: "churn-90d v0 → v1 · 22,410 → 8,733", status: "ok", dur: "3.1 s", reads: "8,733", label: "Covering index on Subscriptions", keep: true, star: true, target: "analytics / dw" },
+  { id: 186, sid: "S4", started: "Yesterday 16:02", time: "16:02", kind: "Query", summary: "SELECT s.CustomerId, … FROM dbo.Subscriptions s", status: "rejected", dur: "—", reads: "—", label: "", keep: false, star: false, target: "analytics / dw" },
+  { id: 150, sid: "S5", started: "Oct 18 10:12", time: "10:12", kind: "Query", summary: "SELECT * FROM INFORMATION_SCHEMA.COLUMNS", status: "ok", dur: "22 ms", reads: "310", label: "", keep: false, star: false, target: "shop-dev / shop" },
+];
+const isRun = o => o.status === "running" || o.status === "awaiting approval";
+const FILTERS = [
+  { k: "running", label: "Running", test: isRun },
+  { k: "named", label: "Named", test: o => !!(o.label || o.keep || o.star) },
+  { k: "mut", label: "Mutations", test: o => !!o.mut },
+  { k: "opt", label: "Optimization", test: o => o.kind === "Compare" },
+  { k: "fail", label: "Failed / rejected", test: o => o.status === "failed" || o.status === "rejected" },
+];
+const STATUS = { running: ["#dbeafe", "#1d4ed8"], "awaiting approval": ["#fef3c7", "#92400e"], ok: ["#f5f5f5", "#404040"], "ok · verified": ["#dcfce7", "#166534"], failed: ["#fee2e2", "#b91c1c"], rejected: ["#fee2e2", "#b91c1c"] };
+const starOn = on => ({ starColor: on ? "#ca8a04" : "#a3a3a3", starFill: on ? "#facc15" : "none" });
+
+const VIA = { 201: "cli", 207: "cli", 209: "cli", 186: "cli" };
+const AGENTS = [
+  { id: "A1", title: "Optimize orders report", agent: "Claude Code", cwd: "C:\\work\\tickets\\ORD-412", started: "13:28", lastSeen: "now", sids: ["S1"], subs: [{ transport: "mcp", key: "7f3c2a91" }, { transport: "cli", key: "7f3c2a91" }], opt: { subject: "orders-report", best: "v2", delta: "−84% reads", versions: "3 versions" } },
+  { id: "A2", title: "Fix invoice backfill", agent: "Codex", cwd: "billing-svc", started: "13:45", lastSeen: "2 min ago", sids: ["S2"], subs: [{ transport: "mcp", key: "c04e19b2" }] },
+  { id: "A3", title: "mcp:a91f03d7-reports", untitled: true, agent: "Claude Code", cwd: "reports", started: "13:18", lastSeen: "41 min ago", sids: ["S3"], subs: [{ transport: "cli", key: "a91f03d7" }] },
+  { id: "A4", title: "Customer churn query", agent: "Cursor", cwd: "analytics", started: "Yesterday", lastSeen: "Yesterday", sids: ["S4"], subs: [{ transport: "mcp", key: "5be2aa10" }, { transport: "cli", key: "5be2aa10" }], opt: { subject: "churn-90d", best: "v1", delta: "−61% reads", versions: "2 versions" } },
+];
+
+const DAY = o => o.started.startsWith("Today") ? 0 : o.started.startsWith("Yesterday") ? 1 : 6;
+const statusOf = o => isRun(o) ? "running" : o.status === "failed" ? "failed" : o.status === "rejected" ? "rejected" : "ok";
+const uniq = a => [...new Set(a)];
+const slug = s => s.toLowerCase().replace(/\s*\/\s*/g, "/").replace(/\s+/g, "-");
+const DIM = {
+  status: { label: "Status", level: "operation", multi: true, values: [["running", "Running"], ["failed", "Failed"], ["rejected", "Rejected"], ["ok", "Succeeded"]] },
+  kind: { label: "Type", level: "operation", multi: true, values: [["query", "Query"], ["compare", "Compare"], ["mutation", "Mutation"], ["explain", "Explain"]] },
+  agent: { label: "Agent", level: "session", multi: true, values: uniq(SESS.map(s => s.agent)).map(a => [a, a]) },
+  dir: { label: "Directory", level: "session", multi: true, values: uniq(SESS.map(s => s.cwd)).map(d => [d, d]) },
+  target: { label: "Target", level: "operation", multi: true, values: uniq(OPS.map(o => o.target)).map(t => [t, t]) },
+  time: { label: "Time", level: "operation", multi: false, values: [["today", "Today"], ["7d", "Last 7 days"], ["all", "All time"]] },
+};
+const emptyF = () => ({ status: [], kind: [], agent: [], dir: [], target: [], time: "7d", named: false, starred: false, archived: false, q: "" });
+const tgl = (a, v) => a.includes(v) ? a.filter(x => x !== v) : [...a, v];
+const PRESETS = [
+  { k: "active", label: "Active now", F: { status: ["running"], time: "today" } },
+  { k: "today", label: "Today", F: { time: "today" } },
+  { k: "attn", label: "Needs attention", F: { status: ["running", "failed", "rejected"], time: "7d" } },
+  { k: "named", label: "Named", F: { named: true, time: "all" } },
+  { k: "mut", label: "Mutations", F: { kind: ["mutation"], time: "7d" } },
+  { k: "all", label: "All", F: { time: "all" } },
+];
+const KEYS = [["status", "running, failed, rejected, ok"], ["type", "query, compare, mutation, explain"], ["agent", "kto wykonał"], ["dir", "katalog roboczy"], ["target", "serwer / baza"], ["time", "today, 7d, all"], ["is", "named, starred, archived"]];
+const KEYDIM = { status: "status", type: "kind", agent: "agent", dir: "dir", target: "target", time: "time" };
+const SAVED = [
+  { label: "Needs attention", tokens: [["status", "running"], ["status", "failed"], ["status", "rejected"]] },
+  { label: "My named", tokens: [["is", "named"], ["time", "all"]] },
+  { label: "Mutations today", tokens: [["type", "mutation"], ["time", "today"]] },
+  { label: "Claude Code · 7d", tokens: [["agent", "Claude Code"], ["time", "7d"]] },
+];
+
+class Component extends DCLogic {
+  componentDidMount() { this.iv = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 1000); }
+  componentWillUnmount() { clearInterval(this.iv); }
+  agentOps(ag) { return OPS.filter(o => ag.sids.includes(o.sid)).sort((x, y) => (isRun(y) - isRun(x)) || (y.id - x.id)); }
+  agentOp(o) {
+    const base = this.op(o);
+    let dur = base.dur;
+    if (o.status === "running") { const t = 14 + this.state.tick; dur = Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); }
+    return { ...base, dur, via: VIA[o.id] || "mcp" };
+  }
+  agentView(ag, extra) {
+    const ops = this.agentOps(ag);
+    const sid = ag.sids[0];
+    return {
+      title: ag.title, font: ag.untitled ? "'Geist Mono',monospace" : "inherit", agent: ag.agent, cwd: ag.cwd, started: ag.started, lastSeen: ag.lastSeen, subs: ag.subs,
+      opCount: String(ops.length), live: ops.some(isRun), badges: this.badges(ops),
+      hasOpt: !!ag.opt, optSubject: ag.opt ? ag.opt.subject : "", optBest: ag.opt ? ag.opt.best : "", optDelta: ag.opt ? ag.opt.delta : "", optVersions: ag.opt ? ag.opt.versions : "",
+      ...starOn(!!this.state.stars[sid]),
+      ...extra,
+      ops: (extra && extra.viaFilter ? ops.filter(o => (VIA[o.id] || "mcp") === extra.viaFilter) : ops).map(o => this.agentOp(o)),
+    };
+  }
+  inputRef3 = React.createRef();
+  matchF(F, o) {
+    const s = this.sess(o.sid);
+    if (!F.archived && s.archived) return false;
+    if (F.agent.length && !F.agent.includes(s.agent)) return false;
+    if (F.dir.length && !F.dir.includes(s.cwd)) return false;
+    if (F.starred && !this.state.stars[s.id]) return false;
+    if (F.status.length && !F.status.includes(statusOf(o))) return false;
+    if (F.kind.length && !F.kind.includes(o.kind.toLowerCase())) return false;
+    if (F.target.length && !F.target.includes(o.target)) return false;
+    if (F.named && !(o.label || o.keep || this.state.opStars[o.id])) return false;
+    if (F.time === "today" && DAY(o) > 0) return false;
+    if (F.time === "7d" && DAY(o) > 6) return false;
+    const q = F.q.trim().toLowerCase();
+    if (q && !(o.summary + " " + o.label + " " + o.target + " " + (s.name || "") + " " + s.key + " " + s.cwd).toLowerCase().includes(q)) return false;
+    return true;
+  }
+  countF(F) { let n = 0; for (const o of OPS) if (this.matchF(F, o)) n++; return n; }
+  isDirty(F, base) { return JSON.stringify(F) !== JSON.stringify(base || emptyF()); }
+  optsFor(F, key, onToggle) {
+    const d = DIM[key];
+    return d.values.map(([v, label]) => {
+      const on = d.multi ? F[key].includes(v) : F[key] === v;
+      const n = this.countF(d.multi ? { ...F, [key]: [v] } : { ...F, [key]: v });
+      return { label, count: String(n), dim: n || on ? 1 : 0.45, check: on ? 1 : 0, boxBg: on ? "#171717" : "#fff", boxRing: on ? "#171717" : "#d4d4d4", toggle: () => onToggle(v) };
+    });
+  }
+  boolOpt(F, key, label, onToggle) {
+    const on = F[key], n = this.countF({ ...F, [key]: true });
+    return { label, count: String(n), dim: 1, check: on ? 1 : 0, boxBg: on ? "#171717" : "#fff", boxRing: on ? "#171717" : "#d4d4d4", toggle: onToggle };
+  }
+  listView(k, F, base, clear) {
+    const ops = OPS.filter(o => this.matchF(F, o));
+    const opLevel = !!(F.status.length || F.kind.length || F.target.length || F.named || F.q.trim());
+    const open = this.state.open3[k] || {};
+    const gs = SESS.map(s => ({ s, ops: ops.filter(o => o.sid === s.id), all: OPS.filter(o => o.sid === s.id) })).filter(g => g.ops.length)
+      .sort((x, y) => (y.ops.some(isRun) - x.ops.some(isRun)) || (Math.max(...y.ops.map(o => o.id)) - Math.max(...x.ops.map(o => o.id))));
+    const isOpen = g => open[g.s.id] ?? (opLevel || g.ops.some(isRun));
+    const allOpen = gs.length > 0 && gs.every(isOpen);
+    const tl = DIM.time.values.find(v => v[0] === F.time)[1].toLowerCase();
+    return {
+      summary: gs.length + (gs.length === 1 ? " session · " : " sessions · ") + ops.length + (ops.length === 1 ? " operation" : " operations") + " · " + tl,
+      dirty: this.isDirty(F, base), clear, empty: gs.length === 0,
+      toggleAllLabel: allOpen ? "Collapse all" : "Expand all",
+      toggleAll: () => this.setState(st => ({ open3: { ...st.open3, [k]: Object.fromEntries(gs.map(g => [g.s.id, !allOpen])) } })),
+      groups: gs.map(g => {
+        const o2 = isOpen(g);
+        return { ...this.sessView(g.s), ...starOn(this.state.stars[g.s.id]), archivedFlag: g.s.archived, hasOpt: !!g.s.opt, opt: g.s.opt, badges: this.badges(g.all),
+          countText: g.ops.length === g.all.length ? g.all.length + " ops" : g.ops.length + " of " + g.all.length + " ops",
+          open: o2, rot: o2 ? "90deg" : "0deg",
+          toggle: () => this.setState(st => ({ open3: { ...st.open3, [k]: { ...(st.open3[k] || {}), [g.s.id]: !o2 } } })),
+          toggleStar: e => { e.stopPropagation(); this.setState(x => ({ stars: { ...x.stars, [g.s.id]: !x.stars[g.s.id] } })); },
+          ops: g.ops.map(o => this.op(o)) };
+      }),
+    };
+  }
+  tokensToF(tokens, text) {
+    const F = { ...emptyF(), time: "all", q: text.includes(":") ? "" : text };
+    for (const t of tokens) {
+      if (t.k === "is") F[t.v] = true;
+      else if (t.k === "time") F.time = t.v;
+      else F[KEYDIM[t.k]] = [...F[KEYDIM[t.k]], t.v];
+    }
+    return F;
+  }
+  addToken(k, v) {
+    this.setState(s => ({ b3: { ...s.b3, text: "", tokens: [...s.b3.tokens.filter(t => !(t.k === k && t.v === v) && !(k === "time" && t.k === "time")), { k, v }] } }));
+  }
+  state = {
+    tick: 0,
+    f3: { a: emptyF() }, menu3: null, open3: {},
+    b3: { tokens: [{ k: "time", v: "7d" }], text: "", focus: false },
+    c3: { preset: "today", F: { ...emptyF(), ...PRESETS[1].F }, open: false },
+    f: { follow: true, pinned: "A1", open: {} },
+    w: { cur: "A1", open: false, tab: "session", q: "", via: "all" },
+    stars: Object.fromEntries(SESS.map(s => [s.id, s.star])),
+    opStars: Object.fromEntries(OPS.map(o => [o.id, o.star])),
+    a: { lens: "ops", f: {}, archived: false, q: "" },
+    b: { sel: "live" },
+    c: { f: {}, open: { S1: true, S2: true } },
+  };
+  setK(k, patch) { this.setState(s => ({ [k]: { ...s[k], ...patch(s[k]) } })); }
+
+  sess(id) { return SESS.find(s => s.id === id); }
+  sessView(s) {
+    return { name: s.name || s.key, font: s.name ? "inherit" : "'Geist Mono',monospace", key: s.key, agent: s.agent, transport: s.transport, cwd: s.cwd, lastSeen: s.lastSeen };
+  }
+  op(o, extra) {
+    const s = this.sess(o.sid), st = STATUS[o.status] || STATUS.ok;
+    return {
+      kindKey: ({ Compare: "compare", Query: "query", Mutation: "mutate", Explain: "query" })[o.kind] || "measure", id: o.id, started: o.started, time: o.time, kind: o.kind, summary: o.summary, status: o.status, dur: o.dur, reads: o.reads, target: o.target,
+      label: o.label, hasLabel: !!o.label, keep: o.keep, ownerStar: !!this.state.opStars[o.id], live: isRun(o), sBg: st[0], sFg: st[1],
+      rowBg: isRun(o) ? "#f8faff" : "transparent",
+      sessName: s.name || s.key, sessFont: s.name ? "inherit" : "'Geist Mono',monospace", agent: s.agent,
+      ...starOn(!!this.state.opStars[o.id]),
+      toggleStar: () => this.setState(st2 => ({ opStars: { ...st2.opStars, [o.id]: !st2.opStars[o.id] } })),
+      ...extra,
+    };
+  }
+  badges(ops) {
+    const out = [];
+    const r = ops.filter(isRun).length, f = ops.filter(o => o.status === "failed").length, rj = ops.filter(o => o.status === "rejected").length;
+    if (r) out.push({ text: r + " running", bg: "#dbeafe", fg: "#1d4ed8" });
+    if (f) out.push({ text: f + " failed", bg: "#fee2e2", fg: "#b91c1c" });
+    if (rj) out.push({ text: rj + " rejected", bg: "#fee2e2", fg: "#b91c1c" });
+    return out;
+  }
+  chips(k, pool) {
+    const f = this.state[k].f;
+    return FILTERS.map(x => ({
+      label: x.label, count: String(pool.filter(x.test).length),
+      bg: f[x.k] ? "#171717" : "#fff", fg: f[x.k] ? "#fff" : "#0a0a0a", ring: f[x.k] ? "#171717" : "#e5e5e5",
+      toggle: () => this.setK(k, s => ({ f: { ...s.f, [x.k]: !s.f[x.k] } })),
+    }));
+  }
+  apply(f, ops) {
+    const act = FILTERS.filter(x => f[x.k]);
+    return act.length ? ops.filter(o => act.some(x => x.test(o))) : ops;
+  }
+
+  renderVals() {
+    const st = this.state, A = st.a;
+    const on = "#fff", sh = "0 1px 2px rgba(0,0,0,.08)";
+    // ---- 1a
+    const q = A.q.trim().toLowerCase();
+    const poolA = OPS.filter(o => A.archived || !this.sess(o.sid).archived).filter(o => !q || (o.summary + o.label + o.target + (this.sess(o.sid).name || this.sess(o.sid).key) + this.sess(o.sid).cwd).toLowerCase().includes(q));
+    const fa = this.apply(A.f, poolA);
+    const runA = fa.filter(isRun), earA = fa.filter(o => !isRun(o));
+    const sessA = SESS.filter(s => A.archived || !s.archived).map(s => ({ s, ops: fa.filter(o => o.sid === s.id) })).filter(x => x.ops.length || !Object.values(A.f).some(Boolean))
+      .sort((x, y) => (st.stars[y.s.id] - st.stars[x.s.id]) || (this.badges(y.ops).length - this.badges(x.ops).length));
+    // ---- 1b
+    const B = st.b, isS = B.sel.startsWith("S");
+    const views = [
+      { k: "live", label: "Live", dot: "#2563eb", anim: "pulse 1.6s infinite", ops: OPS.filter(o => isRun(o) || o.started.startsWith("Today")), count: String(OPS.filter(isRun).length) + " running" },
+      { k: "all", label: "All operations", dot: "#d4d4d4", ops: OPS.filter(o => !this.sess(o.sid).archived) },
+      { k: "named", label: "Named", dot: "#7c3aed", ops: OPS.filter(FILTERS[1].test) },
+      { k: "mut", label: "Mutations", dot: "#d97706", ops: OPS.filter(FILTERS[2].test) },
+    ];
+    const cur = views.find(v => v.k === B.sel);
+    const bSess = isS ? this.sess(B.sel) : null;
+    const bOps = isS ? OPS.filter(o => o.sid === B.sel) : cur.ops;
+    const sideSess = s => ({ ...this.sessView(s), live: OPS.some(o => o.sid === s.id && isRun(o)), bg: B.sel === s.id ? "#efefef" : "transparent", pick: () => this.setK("b", () => ({ sel: s.id })) });
+    // ---- 1c
+    const C = st.c, anyC = Object.values(C.f).some(Boolean);
+    const groups = SESS.map(s => ({ s, all: OPS.filter(o => o.sid === s.id), ops: this.apply(C.f, OPS.filter(o => o.sid === s.id)) }))
+      .filter(g => (anyC ? g.ops.length : !g.s.archived))
+      .sort((x, y) => (this.badges(y.all).some(b => b.text.includes("running")) - this.badges(x.all).some(b => b.text.includes("running"))));
+    const allOpen = groups.every(g => C.open[g.s.id]);
+    // ---- 2a
+    const F = st.f;
+    const latest = AGENTS.slice().sort((x, y) => Math.max(...this.agentOps(y).map(o => o.id)) - Math.max(...this.agentOps(x).map(o => o.id)))[0];
+    const pinnedAg = F.follow ? latest : AGENTS.find(a => a.id === F.pinned);
+    const f = {
+      toggleFollow: () => this.setK("f", s => ({ follow: !s.follow })),
+      swBg: F.follow ? "#10AC61" : "#d4d4d4", swX: F.follow ? "16px" : "2px",
+      pinReason: F.follow ? "Your latest session · following" : "Pinned", pinColor: F.follow ? "#1d4ed8" : "#737373", pinAnim: F.follow ? "pulse 1.6s infinite" : "none",
+      p: this.agentView(pinnedAg),
+      others: AGENTS.filter(a => a.id !== pinnedAg.id).map(a => ({
+        ...this.agentView(a), open: !!F.open[a.id], rot: F.open[a.id] ? "90deg" : "0deg",
+        toggle: () => this.setK("f", s => ({ open: { ...s.open, [a.id]: !s.open[a.id] } })),
+        pin: e => { e.stopPropagation(); this.setK("f", () => ({ follow: false, pinned: a.id })); },
+      })),
+    };
+    // ---- 2b
+    const W = st.w, curAg = AGENTS.find(a => a.id === W.cur);
+    const wq = W.q.trim().toLowerCase();
+    const item = a => { const live = this.agentOps(a).some(isRun); return { title: a.title, agent: a.agent, cwd: a.cwd, lastSeen: a.lastSeen, dot: live ? "#2563eb" : "#d4d4d4", anim: live ? "pulse 1.6s infinite" : "none", bg: a.id === W.cur ? "#f5f5f5" : "transparent", pick: () => this.setK("w", () => ({ cur: a.id, open: false, tab: "session" })) }; };
+    const match = AGENTS.filter(a => !wq || (a.title + a.cwd + a.agent).toLowerCase().includes(wq));
+    const liveIds = match.filter(a => this.agentOps(a).some(isRun));
+    const restIds = match.filter(a => !liveIds.includes(a));
+    const curLive = this.agentOps(curAg).some(isRun);
+    const w = {
+      cur: this.agentView(curAg, { viaFilter: W.via === "all" ? null : W.via }),
+      curDot: curLive ? "#2563eb" : "#d4d4d4", curAnim: curLive ? "pulse 1.6s infinite" : "none",
+      switchOpen: W.open, swBtnBg: W.open ? "#f5f5f5" : "transparent",
+      toggleSwitch: () => this.setK("w", s => ({ open: !s.open })),
+      q: W.q, onQ: e => this.setK("w", () => ({ q: e.target.value })),
+      groups: [{ label: "Active now", items: liveIds.map(item) }, { label: "Recent", items: restIds.map(item) }].filter(g => g.items.length),
+      goAll: () => this.setK("w", () => ({ tab: "all", open: false })), goSession: () => this.setK("w", () => ({ tab: "session" })),
+      isSession: W.tab === "session", isAll: W.tab === "all",
+      tabSessBg: W.tab === "session" ? "#f5f5f5" : "transparent", tabAllBg: W.tab === "all" ? "#f5f5f5" : "transparent",
+      viaTabs: ["all", "mcp", "cli"].map(v => ({ label: v === "all" ? "All" : v.toUpperCase(), bg: W.via === v ? "#fff" : "transparent", sh: W.via === v ? "0 1px 2px rgba(0,0,0,.08)" : "none", pick: () => this.setK("w", () => ({ via: v })) })),
+    };
+    // ---- turn 3
+    const Fa = st.f3.a;
+    const setA = fn => this.setState(s => ({ f3: { ...s.f3, a: fn(s.f3.a) } }));
+    const x = {
+      q: Fa.q, onQ: e => { const v = e.target.value; setA(F => ({ ...F, q: v })); },
+      anyOpen: !!st.menu3, closeAll: () => this.setState({ menu3: null }),
+      facets: ["time", "agent", "dir", "target"].map(key => {
+        const d = DIM[key], sel = d.multi ? Fa[key] : [Fa[key]];
+        const selText = d.multi ? (sel.length === 0 ? "Any" : sel.length === 1 ? d.values.find(v => v[0] === sel[0])[1] : sel.length + " selected") : d.values.find(v => v[0] === Fa[key])[1];
+        const active = d.multi ? sel.length > 0 : Fa[key] !== "7d";
+        const isOpen = st.menu3 === "a:" + key;
+        return { label: d.label, selText, multi: d.multi, open: isOpen, z: isOpen ? 9 : 1,
+          ring: active ? "#171717" : "#e5e5e5", bg: active ? "#fafafa" : "#fff",
+          toggle: () => this.setState(s => ({ menu3: s.menu3 === "a:" + key ? null : "a:" + key })),
+          clear: () => setA(F => ({ ...F, [key]: [] })),
+          options: isOpen ? this.optsFor(Fa, key, v => { setA(F => ({ ...F, [key]: d.multi ? tgl(F[key], v) : v })); if (!d.multi) this.setState({ menu3: null }); }) : [] };
+      }),
+      sessToggles: [["starred", "Starred"], ["archived", "Include archived"]].map(([key, label]) => { const on = Fa[key]; return { label, count: key === "starred" ? String(this.countF({ ...Fa, starred: true })) : "", bg: on ? "#171717" : "#fff", fg: on ? "#fff" : "#0a0a0a", ring: on ? "#171717" : "#e5e5e5", dim: 1, toggle: () => setA(F => ({ ...F, [key]: !F[key] })) }; }),
+      chipGroups: [
+        { label: "Status", chips: DIM.status.values.slice(0, 3).map(([v, label]) => ({ v, label, key: "status" })) },
+        { label: "Type", chips: DIM.kind.values.map(([v, label]) => ({ v, label, key: "kind" })) },
+        { label: "Marked", chips: [{ v: true, label: "Named", key: "named" }] },
+      ].map(g => ({ label: g.label, chips: g.chips.map(c => {
+        const on = c.key === "named" ? Fa.named : Fa[c.key].includes(c.v);
+        const n = this.countF(c.key === "named" ? { ...Fa, named: true } : { ...Fa, [c.key]: [c.v] });
+        return { label: c.label, count: String(n), dim: n || on ? 1 : 0.45, bg: on ? "#171717" : "#fff", fg: on ? "#fff" : "#0a0a0a", ring: on ? "#171717" : "#e5e5e5",
+          toggle: () => setA(F => c.key === "named" ? { ...F, named: !F.named } : { ...F, [c.key]: tgl(F[c.key], c.v) }) };
+      }) })),
+      ...this.listView("a", Fa, emptyF(), () => setA(() => emptyF())),
+    };
+    const B3 = st.b3, Fb = this.tokensToF(B3.tokens, B3.text);
+    const t = B3.text, ci = t.indexOf(":");
+    let sug = [], sugTitle = "Filter by";
+    if (B3.focus) {
+      if (ci > 0) {
+        const key = t.slice(0, ci).toLowerCase(), part = t.slice(ci + 1).toLowerCase();
+        sugTitle = "Values for " + key;
+        const vals = key === "is" ? [["named", "named"], ["starred", "starred"], ["archived", "archived"]] : KEYDIM[key] ? DIM[KEYDIM[key]].values : [];
+        sug = vals.filter(([v, label]) => slug(label).includes(part) || v.toLowerCase().includes(part)).map(([v, label]) => {
+          const tk = this.tokensToF([...B3.tokens.filter(z2 => !(key === "time" && z2.k === "time")), { k: key, v }], "");
+          return { label: key + ":" + (["is", "time", "status", "type"].includes(key) ? v : slug(label)), hint: this.countF(tk) + " ops", pick: e => { e.preventDefault(); this.addToken(key, v); } };
+        });
+      } else {
+        sug = KEYS.filter(([k]) => k.startsWith(t.toLowerCase())).map(([k, hint]) => ({ label: k + ":", hint, pick: e => { e.preventDefault(); this.setState(s => ({ b3: { ...s.b3, text: k + ":" } })); } }));
+        if (t.trim()) sug.unshift({ label: '"' + t + '"', hint: "search text · " + this.countF(Fb) + " ops", pick: e => { e.preventDefault(); } });
+      }
+      sug = sug.map((s, i) => ({ ...s, bg: i === 0 ? "#f5f5f5" : "transparent" }));
+    }
+    const tokLabel = tk => tk.k === "agent" || tk.k === "dir" || tk.k === "target" ? slug(tk.v) : tk.v;
+    const sameTokens = (a, b) => JSON.stringify(a.map(z2 => z2.k + "=" + z2.v).sort()) === JSON.stringify(b.map(z2 => z2.k + "=" + z2.v).sort());
+    const y = {
+      inputRef: this.inputRef3,
+      tokens: B3.tokens.map((tk, i) => ({ k: tk.k, v: tokLabel(tk), bg: tk.k === "time" ? "#f5f5f5" : "#eef2ff", remove: e => { e.stopPropagation(); this.setState(s => ({ b3: { ...s.b3, tokens: s.b3.tokens.filter((_, j) => j !== i) } })); } })),
+      text: B3.text, placeholder: B3.tokens.length ? "" : "status:failed agent:codex orders…",
+      ring: B3.focus ? "#a3a3a3" : "#e5e5e5", glow: B3.focus ? "3px" : "0px",
+      focusInput: () => this.inputRef3.current && this.inputRef3.current.focus(),
+      onText: e => { const v = e.target.value; this.setState(s => ({ b3: { ...s.b3, text: v } })); },
+      onFocus: () => this.setState(s => ({ b3: { ...s.b3, focus: true } })),
+      onBlur: () => this.setState(s => ({ b3: { ...s.b3, focus: false } })),
+      onKey: e => {
+        if (e.key === "Enter" && sug[0] && (ci > 0 || (t && sug[0].label.endsWith(":")))) sug[0].pick(e);
+        else if (e.key === "Backspace" && !t && B3.tokens.length) this.setState(s => ({ b3: { ...s.b3, tokens: s.b3.tokens.slice(0, -1) } }));
+        else if (e.key === "Escape") e.target.blur();
+      },
+      showSug: B3.focus && sug.length > 0, sug, sugTitle,
+      saved: SAVED.map(sv => { const tks = sv.tokens.map(([k, v]) => ({ k, v })); const on = sameTokens(tks, B3.tokens); return { label: sv.label, query: tks.map(z2 => z2.k + ":" + tokLabel(z2)).join(" "), bg: on ? "#171717" : "#fff", fg: on ? "#fff" : "#0a0a0a", ring: on ? "#171717" : "#e5e5e5", pick: () => this.setState(s => ({ b3: { ...s.b3, tokens: tks, text: "" } })) }; }),
+      ...this.listView("b", Fb, this.tokensToF([{ k: "time", v: "7d" }], ""), () => this.setState(s => ({ b3: { ...s.b3, tokens: [{ k: "time", v: "7d" }], text: "" } }))),
+    };
+    const C3 = st.c3, Fc = C3.F;
+    const setC = fn => this.setState(s => ({ c3: { ...s.c3, preset: "custom", F: fn(s.c3.F) } }));
+    const nActive = Fc.status.length + Fc.kind.length + Fc.agent.length + Fc.dir.length + Fc.target.length + (Fc.time !== "all" ? 1 : 0) + (Fc.named ? 1 : 0) + (Fc.starred ? 1 : 0) + (Fc.archived ? 1 : 0);
+    const pillsC = [];
+    for (const key of ["status", "kind", "agent", "dir", "target"]) for (const v of Fc[key]) pillsC.push({ k: DIM[key].label, v: DIM[key].values.find(z2 => z2[0] === v)[1], remove: () => setC(F => ({ ...F, [key]: F[key].filter(z2 => z2 !== v) })) });
+    if (Fc.time !== "all") pillsC.push({ k: "Time", v: DIM.time.values.find(z2 => z2[0] === Fc.time)[1], remove: () => setC(F => ({ ...F, time: "all" })) });
+    for (const [key, label] of [["named", "Named"], ["starred", "Starred"], ["archived", "Incl. archived"]]) if (Fc[key]) pillsC.push({ k: "", v: label, remove: () => setC(F => ({ ...F, [key]: false })) });
+    const z = {
+      presets: PRESETS.map(p => { const on = C3.preset === p.k; const PF = { ...emptyF(), ...p.F }; return { label: p.label, count: String(this.countF(PF)), bg: on ? "#fff" : "transparent", sh: on ? "0 1px 2px rgba(0,0,0,.08)" : "none", fg: on ? "#0a0a0a" : "#525252", pick: () => this.setState(s => ({ c3: { ...s.c3, preset: p.k, F: { ...PF, q: s.c3.F.q } } })) }; }),
+      isCustom: C3.preset === "custom",
+      q: Fc.q, onQ: e => { const v = e.target.value; this.setState(s => ({ c3: { ...s.c3, F: { ...s.c3.F, q: v } } })); },
+      open: C3.open, toggleOpen: () => this.setState(s => ({ c3: { ...s.c3, open: !s.c3.open } })), close: () => this.setState(s => ({ c3: { ...s.c3, open: false } })),
+      btnBg: C3.open ? "#f5f5f5" : "#fff", hasCount: nActive > 0, count: String(nActive),
+      sections: C3.open ? [
+        ...["status", "kind", "time", "agent", "dir", "target"].map(key => ({ title: DIM[key].label, level: DIM[key].level, options: this.optsFor(Fc, key, v => setC(F => ({ ...F, [key]: DIM[key].multi ? tgl(F[key], v) : v }))) })),
+        { title: "Marked", level: "", options: [this.boolOpt(Fc, "named", "Named (label / keep / star)", () => setC(F => ({ ...F, named: !F.named }))), this.boolOpt(Fc, "starred", "Starred sessions", () => setC(F => ({ ...F, starred: !F.starred }))), this.boolOpt(Fc, "archived", "Include archived", () => setC(F => ({ ...F, archived: !F.archived })))] },
+      ] : [],
+      clear: () => this.setState(s => ({ c3: { ...s.c3, preset: "all", F: { ...emptyF(), time: "all" } } })),
+      hasPills: pillsC.length > 0, pills: pillsC,
+      ...this.listView("c", Fc, { ...emptyF(), ...PRESETS[1].F }, () => this.setState(s => ({ c3: { ...s.c3, preset: "today", F: { ...emptyF(), ...PRESETS[1].F } } }))),
+    };
+    return {
+      x, y, z,
+      f, w,
+      a: {
+        lensOps: A.lens === "ops", lensSess: A.lens === "sess",
+        opsBg: A.lens === "ops" ? on : "transparent", opsSh: A.lens === "ops" ? sh : "none", sessBg: A.lens === "sess" ? on : "transparent", sessSh: A.lens === "sess" ? sh : "none",
+        setOps: () => this.setK("a", () => ({ lens: "ops" })), setSess: () => this.setK("a", () => ({ lens: "sess" })),
+        q: A.q, onQ: e => this.setK("a", () => ({ q: e.target.value })),
+        archived: A.archived, toggleArch: () => this.setK("a", s => ({ archived: !s.archived })),
+        chips: this.chips("a", poolA),
+        hasRunning: runA.length > 0, runningCount: String(runA.length), running: runA.map(o => this.op(o)), earlier: earA.map(o => this.op(o)), empty: fa.length === 0,
+        sessions: sessA.map(({ s, ops }) => ({ ...this.sessView(s), ...starOn(st.stars[s.id]), opacity: s.archived ? 0.6 : 1,
+          toggleStar: () => this.setState(x => ({ stars: { ...x.stars, [s.id]: !x.stars[s.id] } })),
+          opCount: String(ops.length), hasOpt: !!s.opt, opt: s.opt, badges: this.badges(ops) })),
+      },
+      b: {
+        views: views.map(v => ({ label: v.label, dot: v.dot, anim: v.anim || "none", count: v.count || String(v.ops.length), bg: B.sel === v.k ? "#efefef" : "transparent", weight: B.sel === v.k ? 500 : 400, pick: () => this.setK("b", () => ({ sel: v.k })) })),
+        starred: SESS.filter(s => st.stars[s.id] && !s.archived).map(sideSess),
+        recent: SESS.filter(s => !st.stars[s.id] && !s.archived).map(sideSess),
+        isSession: isS, showSessCol: !isS, cols: isS ? "56px 112px minmax(0,1fr) 150px 80px 104px" : "56px 112px minmax(0,1fr) 190px 150px 80px 104px",
+        title: isS ? (bSess.name || bSess.key) : cur.label, titleFont: isS && !bSess.name ? "'Geist Mono',monospace" : "inherit",
+        sub: isS ? bSess.agent + " via " + bSess.transport + " · " + bSess.key + " · " + bSess.cwd : B.sel === "live" ? "Running first, then today's operations. Updates live." : B.sel === "named" ? "Operations with an agent label, agent keep marker, or owner star." : B.sel === "mut" ? "Mutation requests from the dashboard journal." : "Every operation, newest first.",
+        ...starOn(isS && st.stars[B.sel]),
+        ops: [...bOps.filter(isRun), ...bOps.filter(o => !isRun(o))].map(o => this.op(o, { openSess: () => this.setK("b", () => ({ sel: o.sid })) })),
+      },
+      c: {
+        chips: this.chips("c", OPS),
+        toggleAllLabel: allOpen ? "Collapse all" : "Expand all",
+        toggleAll: () => this.setK("c", () => ({ open: Object.fromEntries(groups.map(g => [g.s.id, !allOpen])) })),
+        groups: groups.map(g => {
+          const open = anyC || !!C.open[g.s.id];
+          return { ...this.sessView(g.s), ...starOn(st.stars[g.s.id]), archivedFlag: g.s.archived, hasOpt: !!g.s.opt, opt: g.s.opt, badges: this.badges(g.all),
+            countText: anyC ? g.ops.length + " of " + g.all.length + " ops" : g.all.length + " ops",
+            open, rot: open ? "90deg" : "0deg",
+            toggle: () => this.setK("c", s => ({ open: { ...s.open, [g.s.id]: !s.open[g.s.id] } })),
+            toggleStar: e => { e.stopPropagation(); this.setState(x => ({ stars: { ...x.stars, [g.s.id]: !x.stars[g.s.id] } })); },
+            stop: e => e.stopPropagation(),
+            ops: g.ops.map(o => this.op(o)) };
+        }),
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>
