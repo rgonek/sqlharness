@@ -77,6 +77,11 @@ public sealed record StatementMetrics(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int? StatementCompId { get; init; }
 
+    [JsonIgnore] internal long? GrantRequestedKb { get; init; }
+    [JsonIgnore] internal long? GrantGrantedKb { get; init; }
+    [JsonIgnore] internal long? GrantMaxUsedKb { get; init; }
+    [JsonIgnore] internal bool? HasSpillWarning { get; init; }
+
     [JsonIgnore]
     internal IReadOnlyList<StatementMetricSource> Sources { get; init; } = [];
 }
@@ -284,6 +289,7 @@ internal static class JournalStatementMetricsExtractor
     private static ParsedStatement Parse(XElement statement, int documentOrdinal, int statementIndex)
     {
         var queryPlan = statement.Element(Showplan + "QueryPlan");
+        var uniqueQueryPlan = statement.Elements(Showplan + "QueryPlan").Skip(1).Any() ? null : queryPlan;
         var text = Attribute(statement, "StatementText") ?? string.Empty;
         var normalizedText = StatementKey.Normalize(text);
         var root = queryPlan?.Element(Showplan + "RelOp");
@@ -293,6 +299,9 @@ internal static class JournalStatementMetricsExtractor
         var countersComplete = root is not null;
         var objectValues = new Dictionary<string, MutableObjectCounters>(StringComparer.Ordinal);
         var tvfValues = new Dictionary<string, long?>(StringComparer.Ordinal);
+        var allOperatorsHaveRuntime = true;
+        var spill = queryPlan?.Elements(Showplan + "Warnings").SelectMany(warnings => warnings.Elements())
+            .Any(IsSpillWarning) == true;
         foreach (var relOp in queryPlan?.Descendants(Showplan + "RelOp") ?? [])
         {
             var own = relOp.DescendantsAndSelf().Where(element => element == relOp
@@ -300,6 +309,8 @@ internal static class JournalStatementMetricsExtractor
             var objectElement = own.FirstOrDefault(element => element.Name == Showplan + "Object");
             var table = Attribute(objectElement, "Table");
             var runtime = own.Where(element => element.Name == Showplan + "RunTimeCountersPerThread").ToArray();
+            allOperatorsHaveRuntime &= runtime.Length > 0;
+            spill |= own.Any(element => element.Ancestors(Showplan + "QueryPlan").FirstOrDefault() == queryPlan && IsSpillWarning(element));
             var reads = SumCounters(runtime, "ActualLogicalReads");
             var lobReads = SumCounters(runtime, "ActualLobLogicalReads");
             var scans = SumCounters(runtime, "ActualScans");
@@ -379,7 +390,17 @@ internal static class JournalStatementMetricsExtractor
             cpu,
             udfElapsed,
             elapsed,
-            hidden);
+            hidden)
+        {
+            GrantRequestedKb = LongValue(Attribute(uniqueQueryPlan?.Element(Showplan + "MemoryGrantInfo"), "RequestedMemory")),
+            GrantGrantedKb = LongValue(Attribute(uniqueQueryPlan?.Element(Showplan + "MemoryGrantInfo"), "GrantedMemory")),
+            GrantMaxUsedKb = LongValue(Attribute(uniqueQueryPlan?.Element(Showplan + "MemoryGrantInfo"), "MaxUsedMemory")),
+            HasSpillWarning = uniqueQueryPlan is null ? null : spill ? true
+                : root is not null && rootCounters.Length > 0 && allOperatorsHaveRuntime && hidden.Count == 0
+                    && !text.TrimStart().StartsWith("EXEC", StringComparison.OrdinalIgnoreCase)
+                    && !uniqueQueryPlan.Descendants(Showplan + "StmtSimple").Any()
+                    && udfValues.Length == 0 ? false : null,
+        };
     }
 
     private static StatementMetrics ToMetrics(IReadOnlyList<ParsedStatement> group, int ordinal, string key, int occurrence)
@@ -433,6 +454,10 @@ internal static class JournalStatementMetricsExtractor
             first.DegreeOfParallelism,
             [])
         {
+            GrantRequestedKb = group.Count == 1 ? first.GrantRequestedKb : null,
+            GrantGrantedKb = group.Count == 1 ? first.GrantGrantedKb : null,
+            GrantMaxUsedKb = group.Count == 1 ? first.GrantMaxUsedKb : null,
+            HasSpillWarning = group.Count == 1 ? first.HasSpillWarning : null,
             Key = key,
             Occurrence = occurrence,
             Executions = executions,
@@ -452,6 +477,10 @@ internal static class JournalStatementMetricsExtractor
             StatementCompId = first.StatementCompId,
         };
     }
+
+    private static bool IsSpillWarning(XElement element) =>
+        element.Name.Namespace == Showplan && element.Parent?.Name == Showplan + "Warnings"
+        && element.Name.LocalName is "SpillToTempDb" or "SortSpillDetails" or "HashSpillDetails";
 
     private static (long? Value, bool Complete) SumCounters(IReadOnlyList<XElement> elements, string name)
     {
@@ -502,6 +531,10 @@ internal static class JournalStatementMetricsExtractor
         long? Elapsed,
         IReadOnlyList<HiddenWork> Hidden)
     {
+        public long? GrantRequestedKb { get; init; }
+        public long? GrantGrantedKb { get; init; }
+        public long? GrantMaxUsedKb { get; init; }
+        public bool? HasSpillWarning { get; init; }
         public int PlanOrdinal { get; init; }
         public bool IdentityConflicted { get; init; }
     }

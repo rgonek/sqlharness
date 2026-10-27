@@ -111,6 +111,10 @@ public sealed record CompareStatementEvidence(
     public double? UdfElapsedMilliseconds { get; init; }
     public long? CpuMs { get; init; }
     public long? ElapsedMs { get; init; }
+    public long? GrantRequestedKb { get; init; }
+    public long? GrantGrantedKb { get; init; }
+    public long? GrantMaxUsedKb { get; init; }
+    public bool? HasSpillWarning { get; init; }
     public int? PlanRepetition { get; init; }
     public string? PlanLink { get; init; }
 }
@@ -158,6 +162,14 @@ public sealed record StatementRow(string Key, string Text, string Status, long? 
     public long? CpuAfterMs { get; init; }
     public long? ElapsedBeforeMs { get; init; }
     public long? ElapsedAfterMs { get; init; }
+    public long? GrantRequestedKbBefore { get; init; }
+    public long? GrantRequestedKbAfter { get; init; }
+    public long? GrantGrantedKbBefore { get; init; }
+    public long? GrantGrantedKbAfter { get; init; }
+    public long? GrantMaxUsedKbBefore { get; init; }
+    public long? GrantMaxUsedKbAfter { get; init; }
+    public bool? HasSpillWarningBefore { get; init; }
+    public bool? HasSpillWarningAfter { get; init; }
     public int? PlanRepetitionBefore { get; init; }
     public int? PlanRepetitionAfter { get; init; }
     public int Occurrence { get; init; }

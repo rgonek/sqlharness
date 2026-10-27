@@ -615,11 +615,15 @@ public sealed class ActivityJournal : IActivityJournal
                     INSERT INTO operation_statements (operation_id, ordinal, variant, parameter_set, matrix_cell,
                         case_id, case_label, statement_ordinal, statement_hash, statement_key, occurrence, statement_text,
                         executions, plan_hash, plan_repetition, plan_document_ordinal, plan_statement_index,
-                        status, cpu_ms, elapsed_ms, dop, operators_json, udf_elapsed_ms, hidden_work_json)
+                        status, cpu_ms, elapsed_ms, dop, operators_json, udf_elapsed_ms, hidden_work_json, grant_requested_kb, grant_granted_kb, grant_max_used_kb, has_spill_warning)
                     VALUES ($operation, $ordinal, $variant, $set, $cell, $caseId, $caseLabel,
                         $statementOrdinal, $hash, $statementKey, $occurrence, $text,
                         $executions, $planHash, $planRepetition, $planDocumentOrdinal, $planStatementIndex,
-                        $status, $cpu, $elapsed, $dop, $operators, $udfElapsed, $hiddenWork)
+                        $status, $cpu, $elapsed, $dop, $operators, $udfElapsed, $hiddenWork,
+                        CASE WHEN EXISTS (SELECT 1 FROM operations op JOIN sessions sess ON sess.id = op.session_id WHERE op.id = $operation AND sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver') THEN $requested END,
+                        CASE WHEN EXISTS (SELECT 1 FROM operations op JOIN sessions sess ON sess.id = op.session_id WHERE op.id = $operation AND sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver') THEN $granted END,
+                        CASE WHEN EXISTS (SELECT 1 FROM operations op JOIN sessions sess ON sess.id = op.session_id WHERE op.id = $operation AND sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver') THEN $used END,
+                        CASE WHEN EXISTS (SELECT 1 FROM operations op JOIN sessions sess ON sess.id = op.session_id WHERE op.id = $operation AND sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver') THEN $spill END)
                     RETURNING id;
                     """);
                 insert.Parameters.AddWithValue("$operation", handle.OperationId);
@@ -647,6 +651,10 @@ public sealed class ActivityJournal : IActivityJournal
                 insert.Parameters.AddWithValue("$operators", JsonSerializer.Serialize(statement.TopOperators, WaitJson));
                 insert.Parameters.AddWithValue("$udfElapsed", (object?)statement.UdfElapsedMilliseconds ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$hiddenWork", JsonSerializer.Serialize(statement.HiddenWork, WaitJson));
+                insert.Parameters.AddWithValue("$requested", (object?)statement.GrantRequestedKb ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$granted", (object?)statement.GrantGrantedKb ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$used", (object?)statement.GrantMaxUsedKb ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$spill", statement.HasSpillWarning is bool spill ? (object)(spill ? 1 : 0) : DBNull.Value);
                 var statementId = (long)insert.ExecuteScalar()!;
                 foreach (var counters in statement.Objects)
                 {

@@ -31,7 +31,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         double? UdfElapsedMs, string HiddenWorkJson, string? ObjectName, string? ObjectKind,
         long? ObjectReads, long? ObjectLobReads, long? ObjectScans, int OmittedStatements,
         int? PlanRepetition, int? PlanDocumentOrdinal, int? PlanStatementIndex,
-        long? CpuMs, long? ElapsedMs, int? EvidenceRepetition, bool EvidenceEligible);
+        long? CpuMs, long? ElapsedMs, int? EvidenceRepetition, bool EvidenceEligible,
+        long? GrantRequestedKb, long? GrantGrantedKb, long? GrantMaxUsedKb, bool? HasSpillWarning);
 
     private static readonly JsonSerializerOptions ConditionsJsonOptions = new(JsonSerializerDefaults.Web);
     public const int DefaultLimit = 50;
@@ -626,7 +627,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                         return new CompareStatementEvidence(row.Key, row.Occurrence, text, row.PlanHash,
                             row.Status, reads, scansForStatement,
                             row.Executions, hiddenWork, objectRows)
-                        { UdfElapsedMilliseconds = row.UdfElapsedMs, PlanLink = PlanLink(row), CpuMs = row.CpuMs, ElapsedMs = row.ElapsedMs, PlanRepetition = row.EvidenceRepetition };
+                        { UdfElapsedMilliseconds = row.UdfElapsedMs, PlanLink = PlanLink(row), CpuMs = row.CpuMs, ElapsedMs = row.ElapsedMs, PlanRepetition = row.EvidenceRepetition, GrantRequestedKb = row.GrantRequestedKb, GrantGrantedKb = row.GrantGrantedKb, GrantMaxUsedKb = row.GrantMaxUsedKb, HasSpillWarning = row.HasSpillWarning };
                     }).ToArray();
                     var omittedStatements = samples.Select(row => row.OmittedStatements).DefaultIfEmpty(0).Max();
                     var attribution = statements.Length > 0 && omittedStatements == 0 && statements.All(row => row.Status == "confirmed")
@@ -671,6 +672,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var result = new List<StoredStatement>();
         var evidenceEligible = schemaVersion >= 22
             ? "sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver'" : "0";
+        var grantColumns = schemaVersion >= 25 ? $"CASE WHEN {evidenceEligible} THEN s.grant_requested_kb END, CASE WHEN {evidenceEligible} THEN s.grant_granted_kb END, CASE WHEN {evidenceEligible} THEN s.grant_max_used_kb END, CASE WHEN {evidenceEligible} THEN s.has_spill_warning END" : "NULL, NULL, NULL, NULL";
         foreach (var batch in ids.Chunk(200))
         {
             var parameters = batch.Select((id, index) => ($"$id{index}", (object?)id)).ToArray();
@@ -687,7 +689,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                        CASE WHEN {evidenceEligible} THEN s.cpu_ms END,
                        CASE WHEN {evidenceEligible} THEN s.elapsed_ms END,
                        CASE WHEN {evidenceEligible} THEN s.plan_repetition END,
-                       CASE WHEN {evidenceEligible} THEN 1 ELSE 0 END
+                       CASE WHEN {evidenceEligible} THEN 1 ELSE 0 END, {grantColumns}
                 FROM operation_statements s
                 JOIN operations op ON op.id = s.operation_id
                 JOIN sessions sess ON sess.id = op.session_id
@@ -708,7 +710,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 r.GetString(12), NullableDouble(r, 13), r.GetString(14),
                 NullableString(r, 15), NullableString(r, 16), NullableLong(r, 17), NullableLong(r, 18),
                 NullableLong(r, 19), r.GetInt32(20), NullableInt(r, 21), NullableInt(r, 22), NullableInt(r, 23),
-                NullableLong(r, 24), NullableLong(r, 25), NullableInt(r, 26), r.GetInt32(27) == 1)));
+                NullableLong(r, 24), NullableLong(r, 25), NullableInt(r, 26), r.GetInt32(27) == 1,
+                NullableLong(r, 28), NullableLong(r, 29), NullableLong(r, 30), r.IsDBNull(31) ? null : r.GetInt32(31) == 1)));
         }
         return result;
     }
@@ -754,6 +757,10 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             {
                 CpuAfterMs = completeSingleCase ? row.CpuMs : null,
                 ElapsedAfterMs = completeSingleCase ? row.ElapsedMs : null,
+                GrantRequestedKbAfter = completeSingleCase ? row.GrantRequestedKb : null,
+                GrantGrantedKbAfter = completeSingleCase ? row.GrantGrantedKb : null,
+                GrantMaxUsedKbAfter = completeSingleCase ? row.GrantMaxUsedKb : null,
+                HasSpillWarningAfter = completeSingleCase ? row.HasSpillWarning : null,
                 PlanRepetitionAfter = completeSingleCase ? row.EvidenceRepetition : null,
                 Occurrence = row.Occurrence,
                 PlanHashAfter = row.PlanHash,

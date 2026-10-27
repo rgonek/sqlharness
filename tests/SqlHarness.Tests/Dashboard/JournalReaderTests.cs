@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core;
 using SqlHarness.Dashboard;
+using SqlHarness.Tests.Journal;
 
 namespace SqlHarness.Tests.Dashboard;
 
@@ -544,6 +545,45 @@ public sealed class JournalReaderTests
         Assert.Equal(new[] { "index", "table" }, detail.Objects.Select(row => row.ObjectKind).Order().ToArray());
         Assert.All(detail.Objects, row => Assert.Null(row.LobLogicalReadsAfter));
         Assert.DoesNotContain("ObjectKind", JsonSerializer.Serialize(detail));
+    }
+
+
+    [Fact]
+    public void Statement_grants_are_stored_only_for_eligible_sqlserver_sessions()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var record = JournalSeed.Benchmark() with
+        {
+            Statements = [StoredStatement("measure", "SELECT secret", "p") with
+            { GrantRequestedKb = 32, GrantGrantedKb = 16, GrantMaxUsedKb = 8, HasSpillWarning = false }],
+        };
+        var oldSession = JournalSeed.Session("grant-old");
+        var futureSession = JournalSeed.Session("grant-future");
+        seed.Operation(oldSession);
+        seed.Operation(futureSession);
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE sessions SET dashboard_evidence_version = CASE session_key WHEN 'grant-old' THEN NULL ELSE 2 END WHERE session_key IN ('grant-old', 'grant-future')";
+            command.ExecuteNonQuery();
+        }
+        var fresh = seed.Operation(JournalSeed.Session("grant-new"), operation: "measure", benchmark: record);
+        var old = seed.Operation(oldSession, operation: "measure", benchmark: record);
+        var future = seed.Operation(futureSession, operation: "measure", benchmark: record);
+        var pg = seed.Operation(JournalSeed.Session("grant-pg"), operation: "measure", benchmark: record, engine: "postgresql");
+        var rows = JournalDb.Rows(home.DatabasePath, "SELECT operation_id, grant_requested_kb, grant_granted_kb, grant_max_used_kb, has_spill_warning FROM operation_statements");
+        var current = Assert.Single(rows, row => (long)row["operation_id"]! == fresh.OperationId);
+        Assert.Equal(32L, current["grant_requested_kb"]);
+        Assert.Equal(16L, current["grant_granted_kb"]);
+        Assert.Equal(8L, current["grant_max_used_kb"]);
+        Assert.Equal(0L, current["has_spill_warning"]);
+        foreach (var handle in new[] { old, future, pg })
+            Assert.Null(Assert.Single(rows, row => (long)row["operation_id"]! == handle.OperationId)["grant_requested_kb"]);
+        var detail = Assert.Single(Reader(home).Operation(fresh.OperationId)!.Statements!);
+        Assert.Equal(32, detail.GrantRequestedKbAfter);
+        Assert.False(detail.HasSpillWarningAfter);
+        Assert.Empty(JournalDb.Rows(home.DatabasePath, "SELECT * FROM plan_documents"));
     }
 
     private static JournalStatementMetrics StoredStatement(string variant, string text, string planHash) =>

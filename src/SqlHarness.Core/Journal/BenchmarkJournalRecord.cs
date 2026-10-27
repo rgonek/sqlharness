@@ -80,6 +80,10 @@ public sealed record JournalStatementMetrics(
     public int Occurrence { get; init; }
     public long? Executions { get; init; }
     public string? PlanHash { get; init; }
+    public long? GrantRequestedKb { get; init; }
+    public long? GrantGrantedKb { get; init; }
+    public long? GrantMaxUsedKb { get; init; }
+    public bool? HasSpillWarning { get; init; }
     public int? PlanRepetition { get; init; }
     public int? PlanDocumentOrdinal { get; init; }
     public int? PlanStatementIndex { get; init; }

@@ -22,7 +22,7 @@ public sealed class OptimizationComparerTests
     {
         var before = Statement("work", "SELECT work", 45, "old") with
         {
-            CpuMs = 0, ElapsedMs = 17, PlanRepetition = 2,
+            CpuMs = 0, ElapsedMs = 17, PlanRepetition = 2, GrantRequestedKb = 30, GrantGrantedKb = 20, GrantMaxUsedKb = 10, HasSpillWarning = false,
             Objects = [new TableRow("Orders", 1, 1, 45, 45, "0%") { LobLogicalReadsBefore = 5, LobLogicalReadsAfter = 5 }],
         };
         var after = Statement("work", "SELECT work", 20, "new") with
@@ -38,6 +38,10 @@ public sealed class OptimizationComparerTests
         Assert.Equal(0, row.CpuBeforeMs);
         Assert.Equal(17, row.ElapsedBeforeMs);
         Assert.Equal(2, row.PlanRepetitionBefore);
+        Assert.Equal(30, row.GrantRequestedKbBefore);
+        Assert.Equal(20, row.GrantGrantedKbBefore);
+        Assert.Equal(10, row.GrantMaxUsedKbBefore);
+        Assert.False(row.HasSpillWarningBefore);
         Assert.Null(row.CpuAfterMs);
         Assert.Equal(5, Assert.Single(row.Objects).LobLogicalReadsBefore);
         Assert.Null(Assert.Single(row.Objects).LobLogicalReadsAfter);
@@ -46,10 +50,13 @@ public sealed class OptimizationComparerTests
         Assert.NotNull(allResult.StatementMetricsUnavailableReason);
         var all = Assert.Single(allResult.Statements);
         Assert.Null(all.CpuBeforeMs);
+        Assert.Null(all.GrantRequestedKbBefore);
+        Assert.Null(all.HasSpillWarningBefore);
         Assert.Null(all.PlanRepetitionBefore);
         Assert.Null(Assert.Single(all.Objects).LobLogicalReadsBefore);
         evidence = evidence with { Metrics = [evidence.Metrics[0] with { StatementAttribution = "partial" }, evidence.Metrics[1]] };
         Assert.Null(Assert.Single(Run("0").Statements).CpuBeforeMs);
+        Assert.Null(Assert.Single(Run("0").Statements).GrantRequestedKbBefore);
     }
 
     [Fact]
