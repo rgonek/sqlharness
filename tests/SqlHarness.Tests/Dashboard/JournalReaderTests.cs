@@ -87,6 +87,18 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Activity_preview_is_unavailable_for_sql_with_embedded_nul()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
+        var operation = seed.Operation(JournalSeed.Session("preview-nul"));
+        SetSqlText(home.DatabasePath, operation.OperationId, "SELECT 1\0SELECT 2", null);
+        var json = JsonSerializer.SerializeToElement(Reader(home).Operations(new OperationQuery()).Items.Single(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("sqlPreview").ValueKind);
+        Assert.False(json.GetProperty("sqlPreviewTruncated").GetBoolean());
+    }
+
+    [Fact]
     public void Activity_preview_respects_disabled_sensitive_storage()
     {
         using var home = new TempHome();

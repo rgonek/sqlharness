@@ -79,8 +79,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         COALESCE((SELECT owner_starred FROM operation_annotations a WHERE a.operation_id = o.id), 0) AS owner_starred,
         (SELECT owner_note FROM operation_annotations a WHERE a.operation_id = o.id) AS owner_note,
         s.dashboard_evidence_version,
-        CASE WHEN s.dashboard_evidence_version = 1 THEN substr(o.sql_text, 1, 240) END AS sql_preview,
-        CASE WHEN s.dashboard_evidence_version = 1 AND length(substr(o.sql_text, 241, 1)) > 0 THEN 1 ELSE 0 END AS sql_preview_truncated
+        CASE WHEN s.dashboard_evidence_version = 1 AND instr(o.sql_text, char(0)) = 0 THEN substr(o.sql_text, 1, 240) END AS sql_preview,
+        CASE WHEN s.dashboard_evidence_version = 1 AND instr(o.sql_text, char(0)) = 0 AND length(substr(o.sql_text, 241, 1)) > 0 THEN 1 ELSE 0 END AS sql_preview_truncated
         """;
 
     private const string SessionColumns = """
@@ -953,7 +953,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 """,
                 parameters,
                 reader => (Operation: ReadOperation(reader, liveness),
-                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 43))));
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, reader.GetOrdinal("vars_json")))));
             var filteredRows = rows.Where(row => !variableFiltered
                 || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
             matches.AddRange(liveFiltered
