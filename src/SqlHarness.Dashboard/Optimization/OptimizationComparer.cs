@@ -115,7 +115,7 @@ public static class OptimizationComparer
         var buffersBefore = AggregateBuffers(before.Metrics, selectedIds, normalizedAggregate);
         var buffersAfter = AggregateBuffers(after.Metrics, selectedIds, normalizedAggregate);
         var mixed = Mixed(caseOptions, before.Metrics, after.Metrics, caseComparisons);
-        var allStatementRows = BuildStatementRows(before.Metrics, after.Metrics, selectedIds, caseComparisons, normalizedAggregate);
+        var allStatementRows = BuildStatementRows(before.Metrics, after.Metrics, selectedIds, caseComparisons, normalizedAggregate, resolvedSelection != "all");
         var statementRows = effectiveView == "changed"
             ? allStatementRows.Where(row => row.Status != "shared").ToArray()
             : allStatementRows;
@@ -152,6 +152,7 @@ public static class OptimizationComparer
             WholeBatch = wholeBatch,
             Statements = statementRows,
             FallbackNote = allCasesConfirmed ? null : "per-statement attribution incomplete",
+            StatementMetricsUnavailableReason = resolvedSelection == "all" ? "Select a single case for statement CPU, elapsed and LOB logical reads." : null,
             OmittedStatementsBefore = selectedIds.Where(before.Metrics.ContainsKey).Sum(id => before.Metrics[id].OmittedStatements),
             OmittedStatementsAfter = selectedIds.Where(after.Metrics.ContainsKey).Sum(id => after.Metrics[id].OmittedStatements),
         };
@@ -218,7 +219,7 @@ public static class OptimizationComparer
         IReadOnlyDictionary<string, CompareMetricEvidence> before, IReadOnlyDictionary<string, CompareMetricEvidence> after,
         IReadOnlyList<string> cases,
         IReadOnlyDictionary<string, (string VerdictBasis, long? ChangedBefore, long? ChangedAfter, long? SharedBefore, long? SharedAfter)> caseComparisons,
-        string aggregate)
+        string aggregate, bool singleCase)
     {
         var keys = cases.SelectMany(id => (before.GetValueOrDefault(id)?.Statements ?? []).Select(row => (row.Key, row.Occurrence)))
             .Concat(cases.SelectMany(id => (after.GetValueOrDefault(id)?.Statements ?? []).Select(row => (row.Key, row.Occurrence))))
@@ -257,7 +258,13 @@ public static class OptimizationComparer
                 var objectScansAfter = ReduceNullable(cases.Select((id, index) => StatementCounter(after.GetValueOrDefault(id), right[index], name,
                     static _ => null, static row => row.ScansAfter ?? row.ScansBefore)), aggregate);
                 return new TableRow(name, objectScansBefore, objectScansAfter, objectReadsBefore, objectReadsAfter,
-                    Change(objectReadsBefore, objectReadsAfter));
+                    Change(objectReadsBefore, objectReadsAfter))
+                {
+                    LobLogicalReadsBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed"
+                        ? LobForObject(left[0]!, name, beforeSide: true) : null,
+                    LobLogicalReadsAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed"
+                        ? LobForObject(right[0]!, name, beforeSide: false) : null,
+                };
             }).ToArray();
             var attribution = cases.All(id => caseComparisons.GetValueOrDefault(id).VerdictBasis == "changed statements") ? "confirmed" : "partial";
             var text = l.Concat(r).Select(row => row.Text).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
@@ -268,6 +275,12 @@ public static class OptimizationComparer
                 l.Concat(r).SelectMany(row => row.HiddenWork).Distinct().ToArray(),
                 objects)
             {
+                CpuBeforeMs = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.CpuMs : null,
+                CpuAfterMs = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.CpuMs : null,
+                ElapsedBeforeMs = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.ElapsedMs : null,
+                ElapsedAfterMs = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.ElapsedMs : null,
+                PlanRepetitionBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.PlanRepetition : null,
+                PlanRepetitionAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.PlanRepetition : null,
                 Occurrence = key.Occurrence,
                 PlanHashBefore = l.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
                 PlanHashAfter = r.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
@@ -277,6 +290,13 @@ public static class OptimizationComparer
             };
         }).OrderBy(row => row.Status == "shared" ? 1 : 0)
             .ThenByDescending(row => AbsoluteChange(row.ReadsBefore, row.ReadsAfter)).ToArray();
+    }
+
+    private static long? LobForObject(CompareStatementEvidence statement, string name, bool beforeSide)
+    {
+        var rows = statement.Objects.Where(row => row.Table.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (rows.Length == 0) return null;
+        return SumNullable(rows.Select(row => beforeSide ? row.LobLogicalReadsBefore : row.LobLogicalReadsAfter));
     }
 
     private static long? StatementCounter(CompareMetricEvidence? metric, CompareStatementEvidence? statement,

@@ -30,7 +30,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         int Occurrence, string Hash, string? Text, long? Executions, string? PlanHash, string Status,
         double? UdfElapsedMs, string HiddenWorkJson, string? ObjectName, string? ObjectKind,
         long? ObjectReads, long? ObjectLobReads, long? ObjectScans, int OmittedStatements,
-        int? PlanRepetition, int? PlanDocumentOrdinal, int? PlanStatementIndex);
+        int? PlanRepetition, int? PlanDocumentOrdinal, int? PlanStatementIndex,
+        long? CpuMs, long? ElapsedMs, int? EvidenceRepetition, bool EvidenceEligible);
 
     private static readonly JsonSerializerOptions ConditionsJsonOptions = new(JsonSerializerDefaults.Web);
     public const int DefaultLimit = 50;
@@ -606,7 +607,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                         var objectRows = statement.Where(item => item.ObjectName is not null).Select(item =>
                             new TableRow(item.ObjectName!, item.ObjectScans, item.ObjectScans,
                                 item.ObjectReads is { } reads ? SaturatingAdd(reads, item.ObjectLobReads ?? 0) : null,
-                                item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null, "0%")).ToArray();
+                                item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null, "0%")
+                            { LobLogicalReadsBefore = item.EvidenceEligible ? item.ObjectLobReads : null,
+                              LobLogicalReadsAfter = item.EvidenceEligible ? item.ObjectLobReads : null }).ToArray();
                         var reads = objectRows.All(item => item.ReadsBefore.HasValue)
                             ? objectRows.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsBefore!.Value)) : (long?)null;
                         var scansForStatement = objectRows.All(item => item.ScansBefore.HasValue)
@@ -619,7 +622,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                         return new CompareStatementEvidence(row.Key, row.Occurrence, text, row.PlanHash,
                             row.Status, reads, scansForStatement,
                             row.Executions, hiddenWork, objectRows)
-                        { UdfElapsedMilliseconds = row.UdfElapsedMs, PlanLink = PlanLink(row) };
+                        { UdfElapsedMilliseconds = row.UdfElapsedMs, PlanLink = PlanLink(row), CpuMs = row.CpuMs, ElapsedMs = row.ElapsedMs, PlanRepetition = row.EvidenceRepetition };
                     }).ToArray();
                     var omittedStatements = samples.Select(row => row.OmittedStatements).DefaultIfEmpty(0).Max();
                     var attribution = statements.Length > 0 && omittedStatements == 0 && statements.All(row => row.Status == "confirmed")
@@ -656,9 +659,14 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         IEnumerable<long> operationIds, bool storeSensitive)
     {
         var ids = operationIds.Distinct().ToArray();
-        if (ids.Length == 0 || Scalar<long>(connection, "PRAGMA user_version;", []) < 19)
+        if (ids.Length == 0)
+            return [];
+        var schemaVersion = Scalar<long>(connection, "PRAGMA user_version;", []);
+        if (schemaVersion < 19)
             return [];
         var result = new List<StoredStatement>();
+        var evidenceEligible = schemaVersion >= 22
+            ? "sess.dashboard_evidence_version = 1 AND lower(op.engine) = 'sqlserver'" : "0";
         foreach (var batch in ids.Chunk(200))
         {
             var parameters = batch.Select((id, index) => ($"$id{index}", (object?)id)).ToArray();
@@ -671,8 +679,14 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                        o.scans, COALESCE(m.omitted_statements, 0),
                        CASE WHEN $storeSensitive = 1 AND p.document_sha IS NOT NULL THEN p.repetition END,
                        CASE WHEN $storeSensitive = 1 AND p.document_sha IS NOT NULL THEN p.document_ordinal END,
-                       CASE WHEN $storeSensitive = 1 AND p.document_sha IS NOT NULL THEN p.statement_index END
+                       CASE WHEN $storeSensitive = 1 AND p.document_sha IS NOT NULL THEN p.statement_index END,
+                       CASE WHEN {evidenceEligible} THEN s.cpu_ms END,
+                       CASE WHEN {evidenceEligible} THEN s.elapsed_ms END,
+                       CASE WHEN {evidenceEligible} THEN s.plan_repetition END,
+                       CASE WHEN {evidenceEligible} THEN 1 ELSE 0 END
                 FROM operation_statements s
+                JOIN operations op ON op.id = s.operation_id
+                JOIN sessions sess ON sess.id = op.session_id
                 LEFT JOIN operation_statement_objects o ON o.statement_id = s.id
                 LEFT JOIN operation_metrics m ON m.operation_id = s.operation_id AND m.variant = s.variant
                     AND m.parameter_set IS s.parameter_set AND m.case_id = s.case_id
@@ -689,7 +703,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 storeSensitive ? NullableString(r, 9) : null, NullableLong(r, 10), NullableString(r, 11),
                 r.GetString(12), NullableDouble(r, 13), r.GetString(14),
                 NullableString(r, 15), NullableString(r, 16), NullableLong(r, 17), NullableLong(r, 18),
-                NullableLong(r, 19), r.GetInt32(20), NullableInt(r, 21), NullableInt(r, 22), NullableInt(r, 23))));
+                NullableLong(r, 19), r.GetInt32(20), NullableInt(r, 21), NullableInt(r, 22), NullableInt(r, 23),
+                NullableLong(r, 24), NullableLong(r, 25), NullableInt(r, 26), r.GetInt32(27) == 1)));
         }
         return result;
     }
@@ -713,7 +728,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             var objects = group.Where(item => item.ObjectName is not null).Select(item => new TableRow(
                 item.ObjectName!, null, item.ObjectScans, null,
                 item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null,
-                string.Empty)).ToArray();
+                string.Empty) { LobLogicalReadsAfter = item.EvidenceEligible && row.Status == "confirmed" ? item.ObjectLobReads : null }).ToArray();
             var reads = objects.Length > 0 && objects.All(item => item.ReadsAfter.HasValue)
                 ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsAfter!.Value)) : (long?)null;
             var scans = objects.Length > 0 && objects.All(item => item.ScansAfter.HasValue)
@@ -725,6 +740,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             return new StatementRow(row.Key, text, "measured", null, reads, null, scans, row.Executions,
                 string.Empty, row.Status, hidden, objects)
             {
+                CpuAfterMs = row.Status == "confirmed" ? row.CpuMs : null,
+                ElapsedAfterMs = row.Status == "confirmed" ? row.ElapsedMs : null,
+                PlanRepetitionAfter = row.Status == "confirmed" ? row.EvidenceRepetition : null,
                 Occurrence = row.Occurrence,
                 PlanHashAfter = row.PlanHash,
                 PlanLinkAfter = PlanLink(row),

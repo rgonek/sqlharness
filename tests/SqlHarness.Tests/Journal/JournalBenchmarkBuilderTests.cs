@@ -38,7 +38,7 @@ public sealed class JournalBenchmarkBuilderTests
     {
         static string Plan(long reads) => $"""
             <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements>
-            <StmtSimple StatementText="SELECT Value FROM dbo.Orders" StatementCompId="1" QueryPlanHash="0x01"><QueryPlan><RelOp NodeId="0" PhysicalOp="Table Scan"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualExecutions="2" ActualLogicalReads="{reads}" ActualLobLogicalReads="0" ActualScans="3"/></RunTimeInformation><TableScan><Object Table="[dbo].[Orders]"/></TableScan></RelOp></QueryPlan></StmtSimple>
+            <StmtSimple StatementText="SELECT Value FROM dbo.Orders" StatementCompId="1" QueryPlanHash="0x01"><QueryPlan><QueryTimeStats CpuTime="{100 - reads}" ElapsedTime="{200 - reads}"/><RelOp NodeId="0" PhysicalOp="Table Scan"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualExecutions="2" ActualLogicalReads="{reads}" ActualLobLogicalReads="0" ActualScans="3"/></RunTimeInformation><TableScan><Object Table="[dbo].[Orders]"/></TableScan></RelOp></QueryPlan></StmtSimple>
             </Statements></Batch></BatchSequence></ShowPlanXML>
             """;
 
@@ -54,6 +54,8 @@ public sealed class JournalBenchmarkBuilderTests
         Assert.Equal(20, Assert.Single(statement.Objects!).LogicalReads);
         Assert.Equal(2, statement.Executions);
         Assert.Equal(StatementStatus.Confirmed, statement.Status);
+        Assert.Equal(80, statement.CpuMilliseconds);
+        Assert.Equal(180, statement.ElapsedMilliseconds);
         Assert.Equal(2, statement.PlanRepetition);
         Assert.Equal(0, statement.PlanDocumentOrdinal);
         Assert.Equal(0, statement.PlanStatementIndex);

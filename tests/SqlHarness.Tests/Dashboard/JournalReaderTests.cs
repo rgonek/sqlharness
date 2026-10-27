@@ -295,6 +295,46 @@ public sealed class JournalReaderTests
         Assert.Equal("changed statements", badge.VerdictBasis);
     }
 
+    [Fact]
+    public void Statement_metrics_require_supported_session_version_and_preserve_zero()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var metrics = JournalSeed.Benchmark() with
+        {
+            Statements = [StoredStatement("measure", "SELECT work", "p") with
+            {
+                CpuMilliseconds = 0, ElapsedMilliseconds = 17, PlanRepetition = 2,
+            }],
+        };
+        var handle = seed.Operation(JournalSeed.Session("cli:evidence-v1"), operation: "measure", benchmark: metrics);
+        var postgres = seed.Operation(JournalSeed.Session("cli:evidence-pg"), operation: "measure", benchmark: metrics, engine: "postgres");
+        var reader = Reader(home);
+        var pgStatement = JsonSerializer.SerializeToElement(Assert.Single(reader.Operation(postgres.OperationId, storeSensitive: false)!.Statements!));
+        Assert.Equal(JsonValueKind.Null, pgStatement.GetProperty("CpuAfterMs").ValueKind);
+        Assert.Equal(JsonValueKind.Null, pgStatement.GetProperty("Objects")[0].GetProperty("LobLogicalReadsAfter").ValueKind);
+        JsonElement Statement() => JsonSerializer.SerializeToElement(Assert.Single(reader.Operation(handle.OperationId, storeSensitive: false)!.Statements!));
+        var current = Statement();
+        Assert.Equal(0, current.GetProperty("CpuAfterMs").GetInt64());
+        Assert.Equal(17, current.GetProperty("ElapsedAfterMs").GetInt64());
+        Assert.Equal(2, current.GetProperty("PlanRepetitionAfter").GetInt32());
+        Assert.Equal(5, current.GetProperty("Objects")[0].GetProperty("LobLogicalReadsAfter").GetInt64());
+        Assert.Equal(45, current.GetProperty("ReadsAfter").GetInt64());
+        using var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        foreach (var version in new[] { "NULL", "2" })
+        {
+            command.CommandText = $"UPDATE sessions SET dashboard_evidence_version = {version};";
+            command.ExecuteNonQuery();
+            var old = Statement();
+            Assert.Equal(JsonValueKind.Null, old.GetProperty("CpuAfterMs").ValueKind);
+            Assert.Equal(JsonValueKind.Null, old.GetProperty("ElapsedAfterMs").ValueKind);
+            Assert.Equal(JsonValueKind.Null, old.GetProperty("PlanRepetitionAfter").ValueKind);
+            Assert.Equal(JsonValueKind.Null, old.GetProperty("Objects")[0].GetProperty("LobLogicalReadsAfter").ValueKind);
+        }
+    }
+
     private static JournalStatementMetrics StoredStatement(string variant, string text, string planHash) =>
         new(variant, null, null, 0, "0123456789abcdef", null, null, null, [])
         {

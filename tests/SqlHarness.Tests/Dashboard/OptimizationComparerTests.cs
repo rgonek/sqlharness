@@ -18,6 +18,39 @@ public sealed class OptimizationComparerTests
     }
 
     [Fact]
+    public void Statement_projections_preserve_side_availability_and_are_unavailable_for_all_cases()
+    {
+        var before = Statement("work", "SELECT work", 45, "old") with
+        {
+            CpuMs = 0, ElapsedMs = 17, PlanRepetition = 2,
+            Objects = [new TableRow("Orders", 1, 1, 45, 45, "0%") { LobLogicalReadsBefore = 5, LobLogicalReadsAfter = 5 }],
+        };
+        var after = Statement("work", "SELECT work", 20, "new") with
+        {
+            Objects = [new TableRow("Orders", 1, 1, 20, 20, "0%")],
+        };
+        var evidence = Evidence(203, "h1", "h2", (45, 20)) with
+        {
+            Metrics = [StatementMetric("baseline", 0, 45, before), StatementMetric("candidate", 0, 20, after)],
+        };
+        OptimizationComparison Run(string selected) => OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", selected, "sum", "statements");
+        var row = Assert.Single(Run("0").Statements);
+        Assert.Equal(0, row.CpuBeforeMs);
+        Assert.Equal(17, row.ElapsedBeforeMs);
+        Assert.Equal(2, row.PlanRepetitionBefore);
+        Assert.Null(row.CpuAfterMs);
+        Assert.Equal(5, Assert.Single(row.Objects).LobLogicalReadsBefore);
+        Assert.Null(Assert.Single(row.Objects).LobLogicalReadsAfter);
+        Assert.Equal(45, row.ReadsBefore);
+        var all = Assert.Single(Run("all").Statements);
+        Assert.Null(all.CpuBeforeMs);
+        Assert.Null(all.PlanRepetitionBefore);
+        Assert.Null(Assert.Single(all.Objects).LobLogicalReadsBefore);
+        evidence = evidence with { Metrics = [evidence.Metrics[0] with { StatementAttribution = "partial" }, evidence.Metrics[1]] };
+        Assert.Null(Assert.Single(Run("0").Statements).CpuBeforeMs);
+    }
+
+    [Fact]
     public void Op203_shape_focuses_on_changed_statement()
     {
         var evidence = Evidence(203, "h1", "h2", (12010, 11960)) with

@@ -109,6 +109,9 @@ public sealed record CompareStatementEvidence(
     IReadOnlyList<TableRow> Objects)
 {
     public double? UdfElapsedMilliseconds { get; init; }
+    public long? CpuMs { get; init; }
+    public long? ElapsedMs { get; init; }
+    public int? PlanRepetition { get; init; }
     public string? PlanLink { get; init; }
 }
 
@@ -127,6 +130,7 @@ public sealed record OptimizationComparison(
     public WholeBatchLine WholeBatch { get; init; } = new(null, null, null, "");
     public IReadOnlyList<StatementRow> Statements { get; init; } = [];
     public string? FallbackNote { get; init; }
+    public string? StatementMetricsUnavailableReason { get; init; }
     public int OmittedStatementsBefore { get; init; }
     public int OmittedStatementsAfter { get; init; }
     public OptimizationActionReference? BeforeAction { get; init; }
@@ -150,6 +154,12 @@ public sealed record StatementRow(string Key, string Text, string Status, long? 
     long? ScansBefore, long? ScansAfter, long? Executions, string Change, string Attribution,
     IReadOnlyList<HiddenWork> HiddenWork, IReadOnlyList<TableRow> Objects)
 {
+    public long? CpuBeforeMs { get; init; }
+    public long? CpuAfterMs { get; init; }
+    public long? ElapsedBeforeMs { get; init; }
+    public long? ElapsedAfterMs { get; init; }
+    public int? PlanRepetitionBefore { get; init; }
+    public int? PlanRepetitionAfter { get; init; }
     public int Occurrence { get; init; }
     public string? PlanHashBefore { get; init; }
     public string? PlanHashAfter { get; init; }
@@ -166,6 +176,10 @@ public sealed record OptimizationActionReference(long OperationId, string Side, 
 
 public sealed record CaseOption(string Id, string Label, string Outcome);
 public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);
-public sealed record TableRow(string Table, long? ScansBefore, long? ScansAfter, long? ReadsBefore, long? ReadsAfter, string Change);
+public sealed record TableRow(string Table, long? ScansBefore, long? ScansAfter, long? ReadsBefore, long? ReadsAfter, string Change)
+{
+    public long? LobLogicalReadsBefore { get; init; }
+    public long? LobLogicalReadsAfter { get; init; }
+}
 public sealed record CollapsedRow(int Count, string Label);
 public sealed record ElapsedInfo(double? BeforeMs, double? AfterMs, string? PolicyVerdict, bool DifferentRun);
