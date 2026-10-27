@@ -14,7 +14,7 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 ## Pending
 
-Plan [122](122-dashboard-data-value-new-sessions.md): **DONE on `plan-122-backend`; final product `50a4ffb9` verified** — all six tasks including UI, rebased onto main `b7a820f5`; Terra high and Sol low reviews approved; Windows gate PASS (Core 4771, MCP 535, UI 406), branch format and 14 browser states PASS. New-session evidence only, no backfill; no merge/push. [Evidence](122-evidence/verification.md). Requires Plan 121 product and mock-alignment corrections; see [spec](../docs/superpowers/specs/2026-10-26-dashboard-data-value.md).
+Plan [122](122-dashboard-data-value-new-sessions.md): **DONE on `plan-122-backend`; final product `50a4ffb9` verified** — all six tasks including UI, rebased onto main `b7a820f5`; Terra high and Sol low reviews approved; Windows gate PASS (Core 4771, MCP 535, UI 406), branch format and 14 browser states PASS. New-session evidence only, no backfill; locally integrated into `main` at `4baefd17`, merge Windows gate PASS (Core 4771, MCP 535, UI 406); no push. [Integration](122-evidence/integration.md). [Evidence](122-evidence/verification.md). Requires Plan 121 product and mock-alignment corrections; see [spec](../docs/superpowers/specs/2026-10-26-dashboard-data-value.md).
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|

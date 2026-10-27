@@ -1,5 +1,7 @@
 # Plan 122 implementation evidence
 
+Locally integrated into main at `4baefd17` on 2026-10-27; exact merge Windows gate PASS. See [integration evidence](integration.md). Statements below describe the earlier feature-branch verification boundary.
+
 All six tasks, including UI, are implemented on `plan-122-backend`. The branch was rebased cleanly onto main `b7a820f5` after the operator expanded the initial backend-only scope. Final verified product revision: `50a4ffb9`. Sol low whole-branch and scoped reviews are approved; Terra high approved the final verification correction. All 14 offline browser states passed. Full Windows `just verify` passed (exit 0, 14m40s).
 
 Terra medium implemented each task and its fixes; separate Terra high task reviews approved the backend and UI scopes. The [execution ledger](execution-ledger.md) preserves task ranges, review loops, scope changes and rulings. Pre-rebase hashes in older reports are historical; the final review range starts at `b7a820f5`.

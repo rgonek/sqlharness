@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Execution authorized by the operator using `superpowers:subagent-driven-development`; all six tasks including UI. Live DB execution, installation and publication remain outside scope.
 
-**Status:** DONE — wszystkie sześć zadań zweryfikowane na `50a4ffb9`; Terra high task/correction reviews i Sol low whole-branch/scoped reviews zatwierdzone; Windows gate oraz 14 stanów przeglądarkowych PASS. Bez merge/push. [Dowody](122-evidence/verification.md).
+**Status:** DONE — wszystkie sześć zadań zweryfikowane na `50a4ffb9`; Terra high task/correction reviews i Sol low whole-branch/scoped reviews zatwierdzone; Windows gate oraz 14 stanów przeglądarkowych PASS. Lokalnie scalony do `main` jako `4baefd17`; merge Windows gate PASS; bez push. [Integracja](122-evidence/integration.md). [Dowody](122-evidence/verification.md).
 
 **Goal:** Użyteczne dane wyłącznie nowych sesji oraz usunięcie placeholderów bez planowanego źródła.
 
