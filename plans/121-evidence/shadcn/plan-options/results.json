@@ -1,0 +1,17 @@
+{
+  "screens": [
+    "standard-radio-default",
+    "advanced",
+    "documents-1280",
+    "documents-390"
+  ],
+  "radioStyle": {
+    "opacity": "1",
+    "width": 16,
+    "height": 16
+  },
+  "documentChoices": 16,
+  "repetitions": 4,
+  "unmatched": 4,
+  "errors": []
+}

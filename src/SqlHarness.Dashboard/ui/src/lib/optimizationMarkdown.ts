@@ -2,12 +2,13 @@ import type { OptimizationComparison } from "@/api/types"
 
 export const conditionsDifferMessage = "conditions differ; SQL diff is the available comparison."
 
-function basisLabel(comparison: OptimizationComparison): string {
+export function optimizationBasisLabel(comparison: OptimizationComparison): string {
   switch (comparison.basis) {
-    case "MeasuredTogether": return `measured together in #${comparison.operationId}`
+    case "MeasuredTogether": return comparison.operationId === null ? "measured together" : `measured together in #${comparison.operationId}`
     case "DifferentRunsSameConditions": return "different runs, same conditions"
     case "ConditionsDiffer": return "conditions differ"
     case "SameSql": return "same SQL"
+    default: return "comparison basis unavailable"
   }
 }
 
@@ -54,7 +55,7 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
   const lines = [
     `# ${subject} — ${scope} — ${comparison.a} → ${comparison.b}`,
     `Case: ${caseLabel} (${aggregateLabel})${comparison.coverageLabel ? ` — ${comparison.coverageLabel}` : ""}`,
-    `Basis: ${basisLabel(comparison)}`,
+    `Basis: ${optimizationBasisLabel(comparison)}`,
     `View: ${viewLabel(comparison.view)}`,
     `basis: ${comparison.verdictBasis ?? "whole batch"}`,
     `Equivalence: ${comparison.equivalenceLabel}`,

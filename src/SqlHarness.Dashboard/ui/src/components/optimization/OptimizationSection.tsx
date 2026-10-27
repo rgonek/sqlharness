@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router"
-import { useId, useState } from "react"
+import { Fragment, useId, useState } from "react"
 import type { OperationSummary, OptimizationSubject, ScopeVersions } from "@/api/types"
 import type { AgentSessionKey } from "@/api/types"
 import { useAgentSessionOptimization, useAgentSessionOptimizationComparison, useSessionOptimization, useSessionOptimizationComparison } from "@/api/queries"
@@ -8,7 +8,7 @@ import { VersionTable } from "@/components/optimization/VersionTable"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SessionSearch } from "@/router"
 
@@ -45,6 +45,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
   const navigate = useNavigate({ from: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id" } as never)
   const controlId = useId()
   const [comparisonTab, setComparisonTab] = useState("diff")
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(null)
   const matchesSubject = search.subject === subject.subject && (search.db ?? "") === subject.database
   const groups = subject.groups
   const group = (matchesSubject && groups.find(item => item.fingerprint === search.group)) || groups[0]
@@ -69,12 +70,14 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
 
   function update(patch: Record<string, string | undefined>, reset = false) {
     void navigate({ to: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id", params: agentSessionKey ? { kind: agentSessionKey.agentKind, id: agentSessionKey.conversationId } : { id: String(sessionId) }, search: (current: Record<string, unknown>) => ({ ...current, subject: subject.subject, db: subject.database, group: group?.fingerprint,
-      scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined } : {}), ...patch }), replace: false })
+      scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined } : {}), ...patch }), replace: false, resetScroll: false })
   }
 
   return <article aria-current={matchesCard ? "true" : undefined} className="optimization-card">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-base font-semibold">Optimization</div><p className="mt-1 text-sm text-muted-foreground"><span role="heading" aria-level={3}>{subject.subject}</span> · {subject.database || "(no database)"} · {subject.engine} · <span>{scope?.scope}</span></p></div>
-      {!!search.subject && !matchesCard && <Button type="button" variant="outline" size="sm" onClick={() => update({ a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })}>Select comparison</Button>}
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-base font-semibold">Optimization</div><p className="mt-1 text-sm text-muted-foreground">{[subject.subject, subject.database, subject.engine, scope?.scope].map(value => value?.trim()).filter((value): value is string => !!value).map((value, index) => <Fragment key={index}>{index > 0 && " · "}{index === 0 && subject.subject.trim() ? <span role="heading" aria-level={3}>{value}</span> : <span>{value}</span>}</Fragment>)}</p></div>
+      <div className="flex max-w-full flex-wrap items-center gap-2">
+        <div ref={setToolbarTarget} />
+      </div>
     </div>
     {groups.length > 1 && group && <div className="grid max-w-xl gap-1 text-sm">
       <Label htmlFor={`${controlId}-group`}>Conditions group</Label>
@@ -85,7 +88,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
         <SelectTrigger id={`${controlId}-group`} aria-label={`${subject.subject} conditions group`} className="w-full">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>{groups.map(item => <SelectItem key={item.fingerprint} value={item.fingerprint}>{item.label}</SelectItem>)}</SelectContent>
+        <SelectContent><SelectGroup>{groups.map(item => <SelectItem key={item.fingerprint} value={item.fingerprint}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
       </Select>
     </div>}
     {scopes.length > 1 && group && scope && <div className="grid max-w-md gap-1 text-sm">
@@ -97,7 +100,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
         <SelectTrigger id={`${controlId}-scope`} aria-label={`${subject.subject} scope`} className="w-full">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>{scopes.map(item => <SelectItem key={item.scope} value={item.scope}>{item.scope}</SelectItem>)}</SelectContent>
+        <SelectContent><SelectGroup>{scopes.map(item => <SelectItem key={item.scope} value={item.scope}>{item.scope}</SelectItem>)}</SelectGroup></SelectContent>
       </Select>
     </div>}
     {group && scope ? <>
@@ -108,7 +111,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
       {!selectedB && <p className="text-sm text-muted-foreground">Select a version for B to compare it with {selectedA}.</p>}
       {activeCompareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
       {activeCompareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {activeCompareQuery.error.message}</p>}
-      {activeCompareQuery.data && <div className="optimization-comparison"><ComparisonPanel activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
+      {activeCompareQuery.data && <div className="optimization-comparison"><ComparisonPanel toolbarTarget={toolbarTarget} pending={activeCompareQuery.isPlaceholderData} activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
         sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={patch => update(patch)} /></div>}
     </> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
   </article>

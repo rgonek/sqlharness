@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState, type ReactNode } from "react"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { InformationCircleIcon } from "@hugeicons/core-free-icons"
 import { useStats, type StatsRange, type StatsWindow } from "@/api/queries"
 import type { DimensionAggregate, DimensionMatrixCell, DimensionStat, DimensionValueSummary, TargetStat } from "@/api/types"
 import { Button } from "@/components/ui/button"
@@ -6,9 +8,15 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDuration, formatNumber, formatPercent } from "@/lib/format"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+
+function InformationHint({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId()
+  return <Tooltip><TooltipTrigger aria-describedby={id} render={<Button variant="ghost" size="icon-sm" aria-label={label} />}><HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} /></TooltipTrigger><TooltipContent id={id} role="tooltip">{children}</TooltipContent></Tooltip>
+}
 
 export type DimensionCellScope = {
   profile: string | null
@@ -90,12 +98,12 @@ function DimensionFilter({
           onSelect(value === "all:" ? undefined : parseValueOption(value))
         }}>
         <SelectTrigger id={`dimension-filter-${dimension.name}`} aria-label={dimension.name} className="w-full min-w-0"><SelectValue /></SelectTrigger>
-        <SelectContent>
+        <SelectContent><SelectGroup>
           <SelectItem value="all:">All values</SelectItem>
           {dimension.values.map(value => (
             <SelectItem key={identityKey(value)} value={valueOption(value)}>{value.isUnknown ? "Unknown (missing)" : value.value === "" ? "(empty)" : dimensionLabel(value)}</SelectItem>
           ))}
-        </SelectContent>
+        </SelectGroup></SelectContent>
       </Select>
     </div>
   )
@@ -231,13 +239,13 @@ export function Matrix({
           <Select items={[10, 25, 50, 100].map(value => ({ value: String(value), label: String(value) }))}
             value={String(limit)} onValueChange={value => { if (value !== null) setLimit(Number(value)) }}>
             <SelectTrigger id="matrix-limit" aria-label="Display limit per axis" className="w-full"><SelectValue /></SelectTrigger>
-            <SelectContent>{[10, 25, 50, 100].map(value => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectContent>
+            <SelectContent><SelectGroup>{[10, 25, 50, 100].map(value => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectGroup></SelectContent>
           </Select>
         </div>
       </div>
-      <p className="text-sm text-muted-foreground" aria-live="polite">
-        Showing {formatNumber(visibleRows.length)} of {formatNumber(rows.length)} row values and {formatNumber(visibleColumns.length)} of {formatNumber(columns.length)} column values. Visible total: {matrixMetric(visibleMetrics, metric)} ({formatNumber(visibleMetrics.operations)} operations). Full-scope total: {matrixMetric(totals, metric)} ({formatNumber(totals.operations)} operations).
-      </p>
+      <div className="flex items-center gap-2"><p className="text-sm text-muted-foreground" aria-live="polite">
+        Showing {formatNumber(visibleRows.length)} of {formatNumber(rows.length)} row values · {formatNumber(visibleColumns.length)} of {formatNumber(columns.length)} column values · Visible total: {matrixMetric(visibleMetrics, metric)} ({formatNumber(visibleMetrics.operations)} operations) · Full-scope total: {matrixMetric(totals, metric)} ({formatNumber(totals.operations)} operations)
+      </p><InformationHint label="About dimension totals">Visible total covers the displayed rows and columns. Full-scope total includes every value matching the current filters, including values outside the display limit.</InformationHint></div>
       <div className="max-w-full overflow-auto rounded-md border" tabIndex={0} role="region" aria-label={`${rowName} by ${columnName} matrix`}>
         <table className="min-w-full border-separate border-spacing-0 text-sm">
           <thead>
@@ -387,7 +395,7 @@ export function ProfileDimensionsPanel({
                   chooseAxes({ row, column: axes.column === row ? names.find(name => name !== row) ?? "" : axes.column })
                 }}>
                   <SelectTrigger id="matrix-row" aria-label="Rows" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{names.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectGroup>{names.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
               </div>
               <div className="grid min-w-40 flex-1 gap-1.5">
@@ -398,7 +406,7 @@ export function ProfileDimensionsPanel({
                   chooseAxes({ row: axes.row === column ? names.find(name => name !== column) ?? "" : axes.row, column })
                 }}>
                   <SelectTrigger id="matrix-column" aria-label="Columns" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{names.map(name => <SelectItem key={name} value={name} disabled={name === axes.row}>{name}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectGroup>{names.map(name => <SelectItem key={name} value={name} disabled={name === axes.row}>{name}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
               </div>
               <div className="grid min-w-48 flex-1 gap-1.5">
@@ -406,7 +414,7 @@ export function ProfileDimensionsPanel({
                 <Select items={(Object.entries(metricLabels) as [Metric, string][]).map(([value, label]) => ({ value, label }))}
                   value={metric} onValueChange={value => { if (value !== null) setMetric(value as Metric) }}>
                   <SelectTrigger id="matrix-metric" aria-label="Metric" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{(Object.entries(metricLabels) as [Metric, string][]).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectGroup>{(Object.entries(metricLabels) as [Metric, string][]).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
               </div>
             </div>
@@ -425,7 +433,7 @@ export function ProfileDimensionsPanel({
         {dimensionNames.length === 0 && <p className="text-sm text-muted-foreground">{profileDefinitionAvailable ? "This profile has no configured or recorded dimensions." : "No dimension definitions or recorded values are available for this profile."}</p>}
 
         <section className="grid gap-2" aria-label="Filtered databases">
-          <h2 className="text-base font-semibold">Databases in this scope</h2>
+          <div className="flex items-center gap-2"><h2 className="text-base font-semibold">Databases in this scope</h2><InformationHint label="How databases are identified">Database names are shown with their engine and server because names alone do not identify a target.</InformationHint></div>
           <p className="text-xs text-muted-foreground">Showing {formatNumber(displayedTargets.length)} of {formatNumber(targetCount)} matching physical targets (top 20 limit).</p>
           <div className="overflow-x-auto">
             <Table>
@@ -438,7 +446,6 @@ export function ProfileDimensionsPanel({
               </TableBody>
             </Table>
           </div>
-          <p className="text-xs text-muted-foreground">Database names are shown with their engine and server because names alone do not identify a target.</p>
         </section>
         {query.isFetching && <p className="text-xs text-muted-foreground" aria-live="polite">Updating dimension statistics…</p>}
       </CardContent>

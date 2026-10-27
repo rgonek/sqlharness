@@ -1,0 +1,15 @@
+{
+  "revision": "3f87a261d61bb6f24d92cf50b1536aa633c89713",
+  "sourceTree": "d28470cf673eceba23001c54b1b469f2cec09b89",
+  "review": "Independent read-only review: no remaining findings; Accordion call-site keyboard focus fixed",
+  "preset": "bdvw9WhU",
+  "style": "base-mira",
+  "baseColor": "zinc",
+  "theme": "zinc",
+  "font": "inter",
+  "iconLibrary": "hugeicons",
+  "migration": "merge",
+  "primitives": 26,
+  "localPrimitiveExtension": "Accordion headingLevel",
+  "gate": "passed: just verify, exit 0, 5 stages, 15m09s"
+}

@@ -1,15 +1,16 @@
-import { Fragment, useMemo, useState } from "react"
+import { Fragment, useId, useMemo, useState } from "react"
 import type { PlanGraph, PlanGraphNode, PlanOccurrenceManifest } from "@/api/types"
 import { useOperationPlans, usePlanGraph, usePlanSourceMap, type PlanSourceMapParams } from "@/api/queries"
 import type { DistilledPlan, PlanNode } from "@/api/types"
 import { PlanErrorState } from "@/components/plan/PlanErrorState"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { ComparePair } from "@/lib/compare"
 import { planChanges, type TopOperator } from "@/lib/planChanges"
 import { formatNumber } from "@/lib/format"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 type Side = "baseline" | "candidate"
 type Choice = PlanOccurrenceManifest
@@ -99,16 +100,18 @@ function ExactOccurrenceSelect({
   onChange: (key: string) => void
 }) {
   const sideName = side === "baseline" ? "Baseline" : "Candidate"
+  const hashId = useId()
+  const selected = selectedChoice(options, selectedKey)
   const items = options.map(option => ({
     value: choiceKey(option),
     label: `Repetition ${option.repetition} · document ${option.documentOrdinal + 1} · statement ${option.statementIndex + 1} · ${(option.documentSha256 ?? "").slice(0, 8)}`,
   }))
   return <label className="grid gap-1 text-sm">{sideName} occurrence
     <Select items={items} value={selectedKey || null} onValueChange={value => onChange(typeof value === "string" ? value : "")}>
-      <SelectTrigger aria-label={`${sideName} occurrence`} className="min-w-64 max-w-[min(32rem,80vw)]">
+      <Tooltip disabled={!selected?.documentSha256}><TooltipTrigger aria-describedby={selected?.documentSha256 ? hashId : undefined} render={<SelectTrigger aria-label={`${sideName} occurrence`} className="min-w-64 max-w-[min(32rem,80vw)]" />}>
         <SelectValue placeholder="Choose exact occurrence" />
-      </SelectTrigger>
-      <SelectContent>{items.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+      </TooltipTrigger><TooltipContent id={hashId} role="tooltip" className="break-all">{selected?.documentSha256}</TooltipContent></Tooltip>
+      <SelectContent><SelectGroup>{items.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
     </Select>
   </label>
 }

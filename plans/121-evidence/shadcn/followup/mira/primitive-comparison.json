@@ -1,0 +1,132 @@
+[
+  {
+    "file": "accordion.tsx",
+    "matchesGenerated": false,
+    "sha256": "595c9a4ae7423fb168c3b0d8ea028bd45f475231e4cb18479e9e2b52f5caaeb5"
+  },
+  {
+    "file": "alert.tsx",
+    "matchesGenerated": true,
+    "sha256": "3ea80af4920b570fcd7592e12ceccd1803566e453777fe69ec38299625fc3cb5"
+  },
+  {
+    "file": "badge.tsx",
+    "matchesGenerated": true,
+    "sha256": "64334d935c33ab5ef7b6987936a8a43354d8b5683a87648a940a990ac0f630b7"
+  },
+  {
+    "file": "button.tsx",
+    "matchesGenerated": true,
+    "sha256": "d6ee890088e8a678f1f7daad150201d67dbee3d26cd4fbf43daef0740e89fa8b"
+  },
+  {
+    "file": "card.tsx",
+    "matchesGenerated": true,
+    "sha256": "5e7040289fff160d6ef96afcb52a7ef9d4bd01e44a144adf80b0c1957fb5fa47"
+  },
+  {
+    "file": "chart.tsx",
+    "matchesGenerated": true,
+    "sha256": "2941c66a620651d525fe5733fbbd5147503141a6af9da03432d1c36250b3bd34"
+  },
+  {
+    "file": "checkbox.tsx",
+    "matchesGenerated": true,
+    "sha256": "7f0de7586a571da30439936f70c67d677fe60cfbd73c3a5eda3bf719db7f00ee"
+  },
+  {
+    "file": "collapsible.tsx",
+    "matchesGenerated": true,
+    "sha256": "ead4349ff7b01d696ef89294a81d18ee1d3f732321398896462c834ab9b9e065"
+  },
+  {
+    "file": "dialog.tsx",
+    "matchesGenerated": true,
+    "sha256": "f667b11ebe32f0d28f8b91f0825b34772eb7af47bdd543ebaab19d8723378f16"
+  },
+  {
+    "file": "dropdown-menu.tsx",
+    "matchesGenerated": true,
+    "sha256": "c1343a44a80e7ebc7f4b92603702bcf7999dfe45300984258688e54df661223f"
+  },
+  {
+    "file": "field.tsx",
+    "matchesGenerated": true,
+    "sha256": "d3a6d0efee5efbb758c45e393c9c8103ef013b26d9c1878453e64aee57a70ee2"
+  },
+  {
+    "file": "input-group.tsx",
+    "matchesGenerated": true,
+    "sha256": "38b8e42d59ddac268921530eef6f86a58d2629453c7cac2c479b357214bd1e38"
+  },
+  {
+    "file": "input.tsx",
+    "matchesGenerated": true,
+    "sha256": "710a10d2c4a97aaeaa5c3361545a313ce6eea65bf4695c8b242cbe0ac50866d2"
+  },
+  {
+    "file": "label.tsx",
+    "matchesGenerated": true,
+    "sha256": "66f9f9438fa1654787d736799af96b63c1d90cd0ff84a8b7c9b51e8f37d77da3"
+  },
+  {
+    "file": "popover.tsx",
+    "matchesGenerated": true,
+    "sha256": "fc30a89bc75b80cb46f4b5e8b750d63b57ea3f2a2681ee29a0bb0ec5def0dc1b"
+  },
+  {
+    "file": "radio-group.tsx",
+    "matchesGenerated": true,
+    "sha256": "9dcd71134f67b2a91b642c2551b5b4c638ca32f1e985b8b031430728d09b277d"
+  },
+  {
+    "file": "select.tsx",
+    "matchesGenerated": true,
+    "sha256": "9aea008f140c10b6784370c8120bb6f193b1f2fac29be29b8f0f84f4465597a9"
+  },
+  {
+    "file": "separator.tsx",
+    "matchesGenerated": true,
+    "sha256": "9a80ff8c110e0c55489509f4f82ebcc929c0174b59544047147b7134f86a54e7"
+  },
+  {
+    "file": "skeleton.tsx",
+    "matchesGenerated": true,
+    "sha256": "4c2af7fa9c645358a0fb188779deab6f0b981733b62befc25e18aaebea1350dc"
+  },
+  {
+    "file": "switch.tsx",
+    "matchesGenerated": true,
+    "sha256": "e56285a022f35586828ff6b33a0cef9c2162204bece41afdf12d09271fcee523"
+  },
+  {
+    "file": "table.tsx",
+    "matchesGenerated": true,
+    "sha256": "e87f4888357e1c8d024b9e4ed7ecd800890c0ddc2fe2a08c6096e00c9193b58a"
+  },
+  {
+    "file": "tabs.tsx",
+    "matchesGenerated": true,
+    "sha256": "10f93036149d3e7c28ccd7574a2bd3334e40a5cac9095cf8c449b2e346dfab34"
+  },
+  {
+    "file": "textarea.tsx",
+    "matchesGenerated": true,
+    "sha256": "a1615b32d672032b01f4b64c8cd0563eb0306250ce81f1bc8d12ae9a8a092d6c"
+  },
+  {
+    "file": "toggle-group.tsx",
+    "matchesGenerated": true,
+    "sha256": "b95bd125f6c5398c121e1cbbf6018e27df2e770c8daa70fa6d82c4bca7ff54a0"
+  },
+  {
+    "file": "toggle.tsx",
+    "matchesGenerated": true,
+    "sha256": "4b85771fa7ac91d08d483455d1f2daff6d75772dafe4216a86af3ec486e7d056"
+  },
+  {
+    "file": "tooltip.tsx",
+    "matchesGenerated": true,
+    "sha256": "100101631756e1bebc1f1831e1642b26cd11a6a6c4affb6c638c42001dc14e83"
+  }
+]

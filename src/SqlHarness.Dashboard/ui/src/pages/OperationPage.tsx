@@ -1,5 +1,5 @@
+import { ComparisonPending } from "@/components/optimization/ComparisonPending"
 import { CopyButton } from "@/components/CopyButton"
-import { MoreHorizontal, Sparkles, Star } from "lucide-react"
 import { useState, type ReactNode } from "react"
 import type { OperationDetail } from "@/api/types"
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { variantLabel } from "@/lib/compare"
-import { formatDuration, formatNumber, formatTimestamp, shortHash } from "@/lib/format"
+import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
 import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
 import { sessionSearchFromOperation } from "@/lib/sessionSearch"
@@ -33,6 +33,8 @@ import type { OperationDetailSearch } from "@/router"
 import { ComparisonPanel } from "@/components/optimization/ComparisonPanel"
 import { StatementRows } from "@/components/optimization/StatementRows"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { HugeiconsIcon } from "@hugeicons/react";
+import { MoreHorizontalCircle01Icon, SparklesIcon, StarIcon } from "@hugeicons/core-free-icons";
 
 function OperationHeading({ detail, returnSearch, metadata }: { detail: OperationDetail; returnSearch: OperationDetailSearch; metadata?: ReactNode }) {
   const op = detail.operation
@@ -41,7 +43,7 @@ function OperationHeading({ detail, returnSearch, metadata }: { detail: Operatio
   const title = op.operation === "compare" ? `${detail.compareSubject ?? "Unassigned compare"} · ${detail.baselineVersion ?? "?"} → ${detail.candidateVersion ?? "?"}` : op.agentLabel ?? op.subject ?? `Operation #${op.id}`
   return <div className="operation-heading">
     <div className="operation-breadcrumb"><Link to="/">Activity</Link><span>/</span>{returnAgent ? <Link to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)}>Back to agent session</Link> : <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSearch.returnSession === op.sessionId ? sessionSearchFromOperation(returnSearch) : undefined}>{detail.session.title ?? detail.session.sessionKey}</Link>}<span>/</span><span>#{op.id}</span></div>
-    <div className="flex items-center gap-2"><h1 aria-label={title} className="min-w-0 flex-1">{op.operation === "compare" ? <>{detail.compareSubject ?? "Unassigned compare"} · <span className="heading-version-pair">{detail.baselineVersion ?? "?"} → {detail.candidateVersion ?? "?"}</span></> : title}{op.agentKeep && <Sparkles className="ml-2 inline size-4 text-violet-600" aria-label="Kept by agent" />}</h1><Button variant="ghost" size="icon-sm" aria-label={op.ownerStarred ? "★ Owner starred" : "☆ Star operation"} aria-pressed={op.ownerStarred} disabled={update.isPending} onClick={() => update.mutate({ starred: !op.ownerStarred })}><Star className={op.ownerStarred ? "fill-amber-400 text-amber-500" : ""} /></Button>{detail.sqlText && <CopyButton label="Copy stored SQL" getText={() => detail.sqlText!} />}<details className="operation-owner-menu"><summary aria-label="Operation actions"><MoreHorizontal className="size-4" /></summary><div><OperationOwnerAnnotations key={op.id} operation={op} /></div></details></div>
+    <div className="flex items-center gap-2"><h1 aria-label={title} className="min-w-0 flex-1">{op.operation === "compare" ? <>{detail.compareSubject ?? "Unassigned compare"} · <span className="heading-version-pair">{detail.baselineVersion ?? "?"} → {detail.candidateVersion ?? "?"}</span></> : title}{op.agentKeep && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="ml-2 inline size-4 text-violet-600" aria-label="Kept by agent" />}</h1><Button variant="ghost" size="icon-sm" aria-label={op.ownerStarred ? "★ Owner starred" : "☆ Star operation"} aria-pressed={op.ownerStarred} disabled={update.isPending} onClick={() => update.mutate({ starred: !op.ownerStarred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={op.ownerStarred ? "fill-amber-400 text-amber-500" : ""} /></Button>{detail.sqlText && <CopyButton label="Copy stored SQL" getText={() => detail.sqlText!} />}<details className="operation-owner-menu"><summary aria-label="Operation actions"><HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} className="size-4" /></summary><div><OperationOwnerAnnotations key={op.id} operation={op} /></div></details></div>
     <div className="operation-subtitle"><StatusBadge operation={op} /><span className="capitalize">{op.operation} #{op.id}</span>{op.operation === "compare" && <><span>·</span><span>{detail.compareScope === "whole" ? "whole query" : detail.compareScope ?? "Unassigned scope"}</span></>}<span>·</span><span>{agentLabel(op.agentKind)}</span><code>{detail.session.transport}</code><span>·</span><time title={op.startedAt}>{formatTimestamp(op.startedAt)}</time><span>·</span><span>{formatDuration(op.durationMs)}</span><span>·</span><span>{op.profile && <>{op.profile} / </>}<span>{op.database ?? "—"}</span></span><FlagBadges operation={op} />{metadata && <><span>·</span>{metadata}</>}</div>
     {update.error && <p role="alert" className="text-sm text-destructive">Could not save operation annotations: {update.error.message}</p>}
   </div>
@@ -196,7 +198,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
             <Fact label="Engine">{op.engine ?? "—"}</Fact>
             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
             <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>
-            <Fact label="SQL hash"><span className="font-mono">{shortHash(op.sqlHash)}</span></Fact>
+            <Fact label="SQL hash"><span className="break-all font-mono">{op.sqlHash ?? "—"}</span></Fact>
             {op.dryRun && <Fact label="Execution mode">Dry run; output counted, no database execution</Fact>}
             {op.operationRef && <Fact label="Operation reference"><span className="font-mono">{op.operationRef}</span></Fact>}
             {op.parentOperationRef && <Fact label="Producer reference"><span className="font-mono">{op.parentOperationRef}</span></Fact>}
@@ -226,7 +228,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
           {detail.summary && <SummaryFacts summary={detail.summary} />}</CollapsibleContent></Collapsible>} />
 
       <div className={`operation-metrics ${op.operation === "measure" ? "measure-metrics" : ""}`} aria-label="Operation metrics">
-        {op.operation === "query" ? <><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact><Fact label="Columns">—</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Output">{formatNumber(detail.emittedBytes)} B</Fact></> : op.operation === "mutation" ? <><Fact label="Rows affected">—</Fact><Fact label="Estimated">—</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Waited for approval">{formatDuration(detail.phases.find(phase => /approval/i.test(phase.phase))?.totalMs ?? null)}</Fact></> : <><Fact label="Logical reads">{formatNumber(op.logicalReadsMedian)}</Fact><Fact label="Elapsed median">{formatDuration(tabVariant?.elapsedMs?.median ?? null)}</Fact><Fact label="CPU">{formatDuration(tabVariant?.cpuMs?.median ?? null)}</Fact><Fact label="Scans">{tabVariant?.tableIo.length && tabVariant.tableIo.every(row => row.scanCount !== null) ? formatNumber(tabVariant.tableIo.reduce((sum, row) => sum + row.scanCount!, 0)) : "—"}</Fact><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact></>}
+        {op.operation === "query" ? <><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Output">{formatNumber(detail.emittedBytes)} B</Fact></> : op.operation === "mutation" ? <><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Waited for approval">{formatDuration(detail.phases.find(phase => /approval/i.test(phase.phase))?.totalMs ?? null)}</Fact></> : <><Fact label="Logical reads">{formatNumber(op.logicalReadsMedian)}</Fact><Fact label="Elapsed median">{formatDuration(tabVariant?.elapsedMs?.median ?? null)}</Fact><Fact label="CPU">{formatDuration(tabVariant?.cpuMs?.median ?? null)}</Fact><Fact label="Scans">{tabVariant?.tableIo.length && tabVariant.tableIo.every(row => row.scanCount !== null) ? formatNumber(tabVariant.tableIo.reduce((sum, row) => sum + row.scanCount!, 0)) : "—"}</Fact><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact></>}
 
       </div>
       <Tabs defaultValue="sql" className="operation-tabs">
@@ -334,15 +336,15 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
   return <div className="operation-page space-y-4">
     <OperationHeading detail={detail} returnSearch={returnSearch} />
 
-    <div className="operation-metrics" aria-label="Operation metrics">
+    <ComparisonPending pending={comparison.isPlaceholderData}><div className="operation-metrics" aria-label="Operation metrics">
       <Fact label="Logical reads">{formatNumber(comparison.data?.wholeBatch?.after ?? op.logicalReadsMedian)}</Fact>
       <Fact label="Elapsed median">{formatDuration(comparison.data?.elapsed.afterMs ?? null)}</Fact>
       <Fact label="CPU">{formatDuration(comparison.data?.cpuAfterMs ?? null)}</Fact>
       <Fact label="Results">{comparison.data?.equivalenceLabel ?? "—"}</Fact>
-    </div>
+    </div></ComparisonPending>
 
     {comparison.isPending ? <Skeleton className="h-64 w-full" /> : comparison.data ? <>
-      <ComparisonPanel navigation={returnLink} headerContent={detail.vars && <div className="operation-parameters"><span>Parameters</span><div aria-label="Variables" className="flex flex-wrap gap-2">{Object.entries(detail.vars).map(([key,value]) => <code key={key}>@{key} = {value}</code>)}</div></div>} comparison={comparison.data} sessionId={op.sessionId} agentSessionKey={returnAgent} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector activeTab={comparisonTab} onTabChange={setComparisonTab} details={<><CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data?.selectedCase ?? "all" : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }) }) }} />    <Collapsible className="rounded-lg border p-4"><CollapsibleTrigger className="cursor-pointer font-medium">Run diagnostics</CollapsibleTrigger><CollapsibleContent keepMounted><div className="mt-4 space-y-4">
+      <ComparisonPanel pending={comparison.isPlaceholderData} navigation={returnLink} headerContent={detail.vars && <div className="operation-parameters"><span>Parameters</span><div aria-label="Variables" className="flex flex-wrap gap-2">{Object.entries(detail.vars).map(([key,value]) => <code key={key}>@{key} = {value}</code>)}</div></div>} comparison={comparison.data} sessionId={op.sessionId} agentSessionKey={returnAgent} subject={detail.compareSubject ?? "Unassigned"} scope={detail.compareScope ?? "whole query"} engine={op.engine} hideCaseSelector activeTab={comparisonTab} onTabChange={setComparisonTab} details={<><CompareDetail detail={detail} selectedCase={selectedCase === "all" ? comparison.data?.selectedCase ?? "all" : selectedCase} onCaseChange={value => { void navigate({ search: previous => ({ ...previous, case: value }), resetScroll: false }) }} />    <Collapsible className="rounded-lg border p-4"><CollapsibleTrigger className="cursor-pointer font-medium">Run diagnostics</CollapsibleTrigger><CollapsibleContent keepMounted><div className="mt-4 space-y-4">
       <Card><CardHeader><CardTitle>Output size</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Fact label="Output bytes (raw / emitted)">{formatNumber(detail.rawBytes)} / {formatNumber(detail.emittedBytes)}</Fact>
         <Fact label="Estimated output tokens (raw / emitted)">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
@@ -355,7 +357,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
       </CardContent></Card>}
     </div></CollapsibleContent></Collapsible></>} diff={<SqlDiff embedded baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={op.engine} />} timing={<OperationTimings detail={detail} />}
         searchState={{ case: selectedCase, agg: aggregate, view }} sessionSearch={sessionSearchFromOperation(returnSearch)}
-        onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }) }) }} />
+        onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }), resetScroll: false }) }} />
 
     </> : null}
     <StoredSqlReuse detail={detail} />

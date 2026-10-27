@@ -1,0 +1,51 @@
+  SqlHarness.Core -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.77] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.RegressionPolicyTests.Result_equivalence_gate_is_inconclusive_never_a_performance_fail'; falling back to single test case.
+[xUnit.net 00:00:01.03] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.Cli.CommandTests.Compare_text_renders_nullability_diagnostic'; falling back to single test case.
+[xUnit.net 00:00:03.14]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: DifferentRunsSameConditions, expected: "DifferentRunsSameConditions") [FAIL]
+[xUnit.net 00:00:03.18]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: SameSql, expected: "SameSql") [FAIL]
+[xUnit.net 00:00:03.18]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: ConditionsDiffer, expected: "ConditionsDiffer") [FAIL]
+[xUnit.net 00:00:03.19]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: MeasuredTogether, expected: "MeasuredTogether") [FAIL]
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: DifferentRunsSameConditions, expected: "DifferentRunsSameConditions") [109 ms]
+  Error Message:
+   System.InvalidOperationException : The requested operation requires an element of type 'String', but the target element has type 'Number'.
+  Stack Trace:
+     at System.Text.Json.ThrowHelper.ThrowJsonElementWrongTypeException(JsonTokenType expectedType, JsonTokenType actualType)
+   at System.Text.Json.JsonDocument.GetString(Int32 index, JsonTokenType expectedType)
+   at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(PairBasis basis, String expected) in D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 16
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: SameSql, expected: "SameSql") [2 ms]
+  Error Message:
+   System.InvalidOperationException : The requested operation requires an element of type 'String', but the target element has type 'Number'.
+  Stack Trace:
+     at System.Text.Json.ThrowHelper.ThrowJsonElementWrongTypeException(JsonTokenType expectedType, JsonTokenType actualType)
+   at System.Text.Json.JsonDocument.GetString(Int32 index, JsonTokenType expectedType)
+   at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(PairBasis basis, String expected) in D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 16
+   at InvokeStub_OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: ConditionsDiffer, expected: "ConditionsDiffer") [< 1 ms]
+  Error Message:
+   System.InvalidOperationException : The requested operation requires an element of type 'String', but the target element has type 'Number'.
+  Stack Trace:
+     at System.Text.Json.ThrowHelper.ThrowJsonElementWrongTypeException(JsonTokenType expectedType, JsonTokenType actualType)
+   at System.Text.Json.JsonDocument.GetString(Int32 index, JsonTokenType expectedType)
+   at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(PairBasis basis, String expected) in D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 16
+   at InvokeStub_OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: MeasuredTogether, expected: "MeasuredTogether") [< 1 ms]
+  Error Message:
+   System.InvalidOperationException : The requested operation requires an element of type 'String', but the target element has type 'Number'.
+  Stack Trace:
+     at System.Text.Json.ThrowHelper.ThrowJsonElementWrongTypeException(JsonTokenType expectedType, JsonTokenType actualType)
+   at System.Text.Json.JsonDocument.GetString(Int32 index, JsonTokenType expectedType)
+   at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(PairBasis basis, String expected) in D:\Dev\sqlharness\.worktrees\dashboard-shadcn-fixes\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 16
+   at InvokeStub_OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+
+Failed!  - Failed:     4, Passed:     0, Skipped:     0, Total:     4, Duration: 218 ms - SqlHarness.Tests.dll (net10.0)

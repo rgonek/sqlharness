@@ -192,7 +192,8 @@ test("session detail has a heading", async () => {
   stubFetch(sessionRoutes({ "/api/sessions/7": sessionDetail({ session: session({ id: 7 }) }) }))
   renderApp("/sessions/7")
   expect(await screen.findByRole("heading", { level: 1, name: "cli:abc" })).toBeInTheDocument()
-  expect(screen.getAllByText("cli:abc")).toHaveLength(1)
+  expect(screen.getByRole("heading", { level: 1, name: "cli:abc" })).toBeVisible()
+  expect(screen.getByText("cli:abc", { selector: "code" })).not.toBeVisible()
 })
 
 test("a titled session shows its key under the title", async () => {
@@ -217,6 +218,9 @@ test("shows the agent title and conversation list, and clears back to that title
   renderApp("/sessions/1")
   expect(await screen.findByRole("heading", { level: 1, name: "Optimize orders" })).toBeInTheDocument()
   expect(screen.getByText("from Claude")).toBeInTheDocument()
+  expect(screen.getByText("Conversations")).not.toBeVisible()
+  await userEvent.click(screen.getByRole("button", { name: "Session metadata" }))
+  expect(screen.getByText("Conversations")).toBeVisible()
   await userEvent.click(screen.getByRole("button", { name: "Edit title" }))
   expect(screen.getByRole("textbox", { name: "Session title" })).toHaveAttribute("placeholder", "Optimize orders")
   expect(screen.getByText("Conversations")).toBeInTheDocument()

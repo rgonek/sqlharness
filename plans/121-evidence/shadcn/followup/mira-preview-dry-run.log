@@ -1,0 +1,19 @@
+- Resolving items.
+┌ shadcn add @shadcn/button, @shadcn/switch, @shadcn/tabs, @shadcn/tooltip (dry run)
+│
+├ Files (4) ~3 overwrite, =1 skip
+│ ~ src\components\ui\button.tsx   overwrite
+│ ~ src\components\ui\switch.tsx   overwrite
+│ ~ src\components\ui\tabs.tsx     overwrite
+│ = src\components\ui\tooltip.tsx  skip (identical)
+│
+├ Dependencies (1)
+│ + cn
+│
+⚠ 3 files will be overwritten.
+│
+│ 4 files, 1 dep
+│
+│ Run with --diff to view changes.
+│ Run with --view to view file contents.
+└ Run without --dry-run to apply.

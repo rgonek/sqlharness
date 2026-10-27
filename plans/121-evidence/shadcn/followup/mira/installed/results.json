@@ -1,0 +1,12 @@
+{
+  "origin": "http://127.0.0.1:47800",
+  "pid": 12596,
+  "screens": [
+    "session",
+    "settings",
+    "activity"
+  ],
+  "errors": [],
+  "api": "browser fixtures only",
+  "tokenRecorded": false
+}

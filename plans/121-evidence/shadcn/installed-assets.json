@@ -1,0 +1,16 @@
+{
+  "origin": "http://127.0.0.1:47800",
+  "pid": 35048,
+  "startedAt": "2026-10-25T21:54:35.5985741+01:00",
+  "assets": [
+    {
+      "path": "/assets/index-DTRSVpLz.js",
+      "sha256": "b3f3993eb3eb5d56fcea3d3fa743ef6ebf36f61c462cc7fa7b82772b0e8b69e2"
+    },
+    {
+      "path": "/assets/index-Dp96nfNu.css",
+      "sha256": "54f81b805d82eca5a6269d8e09b2b9e2a80dcd067a124774b50ef24b757d73e9"
+    }
+  ],
+  "tokenRecorded": false
+}

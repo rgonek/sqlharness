@@ -3,7 +3,7 @@ import { NotFoundError } from "@/api/client"
 import { useSessionSqlText } from "@/api/queries"
 import type { AgentSessionKey } from "@/api/types"
 import { CopyButton } from "@/components/CopyButton"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DiffControls } from "@/components/SqlDiff"
 import { LazySqlMergeView, loadUnifiedDiffText } from "@/components/SqlEditors"
 import type { SqlVersionOption } from "@/lib/compare"
@@ -92,13 +92,13 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
       <label className="grid min-w-0 gap-1 text-sm">From version
         <Select items={selectItems} value={keyOf(fromOption)} onValueChange={value => setFromSelection(value)}>
           <SelectTrigger aria-label="From version" className="w-full min-w-0"><SelectValue placeholder="No versions available" /></SelectTrigger>
-          <SelectContent>{options.map(option => <SelectItem key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectGroup>{options.map(option => <SelectItem key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</SelectItem>)}</SelectGroup></SelectContent>
         </Select>
       </label>
       <label className="grid min-w-0 gap-1 text-sm">To version
         <Select items={selectItems} value={keyOf(toOption)} onValueChange={value => setToSelection(value)}>
           <SelectTrigger aria-label="To version" className="w-full min-w-0"><SelectValue placeholder="No versions available" /></SelectTrigger>
-          <SelectContent>{options.map(option => <SelectItem key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectGroup>{options.map(option => <SelectItem key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</SelectItem>)}</SelectGroup></SelectContent>
         </Select>
       </label>
     </div> : null}
@@ -120,6 +120,5 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
         </>
       )}
     </div>
-    <p className="text-sm text-muted-foreground">SQL only. Metrics live on each compare; different compares are not compared with each other.</p>
   </div>
 }

@@ -1,0 +1,13 @@
+{
+  "runtime": "previous installed production UI",
+  "widths": [
+    1280,
+    768,
+    390,
+    1120
+  ],
+  "windowErrors": [
+    "ResizeObserver loop completed with undelivered notifications.",
+    "ResizeObserver loop completed with undelivered notifications."
+  ]
+}

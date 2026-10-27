@@ -1,0 +1,7 @@
+just verify -LogDirectory D:/temp/sqlharness-mock-alignment-final-verified
+ui-install skipped (lockfile unchanged)
+build OK 54.9s
+ui-check OK 12m01s
+test OK 7m16s
+format skipped (0 working-tree C# files; the 2 branch C# files passed just fix before commit)
+verify: OK stages=5 19m18s exit=0

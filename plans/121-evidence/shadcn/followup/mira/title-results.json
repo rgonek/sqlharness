@@ -1,0 +1,53 @@
+{
+  "titleCharacters": 950,
+  "results": [
+    {
+      "width": 1280,
+      "before": {
+        "x": 1196,
+        "y": 87,
+        "width": 32,
+        "height": 28
+      },
+      "after": {
+        "x": 1196,
+        "y": 87,
+        "width": 32,
+        "height": 28
+      },
+      "font": "\"Inter Variable\", sans-serif"
+    },
+    {
+      "width": 768,
+      "before": {
+        "x": 684,
+        "y": 87,
+        "width": 32,
+        "height": 28
+      },
+      "after": {
+        "x": 684,
+        "y": 87,
+        "width": 32,
+        "height": 28
+      },
+      "font": "\"Inter Variable\", sans-serif"
+    },
+    {
+      "width": 390,
+      "before": {
+        "x": 306,
+        "y": 87,
+        "width": 32,
+        "height": 28
+      },
+      "after": {
+        "x": 306,
+        "y": 87,
+        "width": 32,
+        "height": 28
+      },
+      "font": "\"Inter Variable\", sans-serif"
+    }
+  ]
+}

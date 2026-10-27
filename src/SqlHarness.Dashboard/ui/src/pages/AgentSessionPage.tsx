@@ -1,4 +1,3 @@
-import { Archive, ArchiveRestore, Pencil, Star } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "@tanstack/react-router"
 import { useAgentSession, useAgentSessionOperations, useAgentSessionOptimization, useSettings, useUpdateAgentSessionAnnotation } from "@/api/queries"
@@ -13,6 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { useShowInternalOperations } from "@/lib/internalOperations"
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Archive02Icon, EditIcon, StarIcon, ArchiveRestoreIcon } from "@hugeicons/core-free-icons";
 
 export function AgentSessionPage() {
   const { kind, id } = useParams({ from: "/agent-sessions/$kind/$id" })
@@ -50,13 +51,13 @@ export function AgentSessionPage() {
   return <div className="session-page space-y-4">
     <Card className="session-heading">
       <CardHeader className="px-0">
-        <CardTitle><div className="session-title-row flex flex-wrap items-center gap-2">
-          {titleDraft === null ? <><h1 className="min-w-0 flex-1">{displayTitle}</h1><Button className="session-edit-title" size="icon" variant="ghost" aria-label="Edit title" onClick={() => setTitleDraft(agentSession.ownerTitle ?? "")}><Pencil /></Button></>
+        <CardTitle className="min-w-0"><div className="session-title-row flex flex-wrap items-center gap-2">
+          {titleDraft === null ? <><h1 className="min-w-0 flex-1">{displayTitle}</h1><Button className="session-edit-title" size="icon" variant="ghost" aria-label="Edit title" onClick={() => setTitleDraft(agentSession.ownerTitle ?? "")}><HugeiconsIcon icon={EditIcon} strokeWidth={2} /></Button></>
             : <><Input aria-label="Agent session title" maxLength={200} value={titleDraft} onChange={event => setTitleDraft(event.target.value)} />
               <Button size="sm" disabled={update.isPending} onClick={() => update.mutate({ title: titleDraft.trim() || null }, { onSuccess: () => setTitleDraft(null) })}>Save title</Button>
               <Button size="sm" variant="ghost" onClick={() => setTitleDraft(null)}>Cancel</Button></>}
-          <Button size="icon" variant="ghost" aria-label={agentSession.starred ? "Unstar" : "Star"} aria-pressed={agentSession.starred} onClick={() => update.mutate({ starred: !agentSession.starred })}><Star className={agentSession.starred ? "fill-amber-400 text-amber-500" : ""} /></Button>
-          <Button size="icon" variant="ghost" aria-label={agentSession.archived ? "Unarchive" : "Archive"} onClick={() => update.mutate({ archived: !agentSession.archived })}>{agentSession.archived ? <ArchiveRestore /> : <Archive />}</Button>
+          <Button size="icon" variant="ghost" aria-label={agentSession.starred ? "Unstar" : "Star"} aria-pressed={agentSession.starred} onClick={() => update.mutate({ starred: !agentSession.starred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={agentSession.starred ? "fill-amber-400 text-amber-500" : ""} /></Button>
+          <Button size="icon" variant="ghost" aria-label={agentSession.archived ? "Unarchive" : "Archive"} onClick={() => update.mutate({ archived: !agentSession.archived })}>{agentSession.archived ? <HugeiconsIcon icon={ArchiveRestoreIcon} strokeWidth={2} /> : <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />}</Button>
         </div></CardTitle>
         <CardDescription>{kind} agent session · {id}</CardDescription>
         <p>{agentSession.exact} exact · {agentSession.inferred} inferred · {agentSession.unassigned} unassigned</p>
@@ -64,9 +65,8 @@ export function AgentSessionPage() {
       </CardHeader>
 
     </Card>
-    {<OptimizationSection sessionId={optimizationSessionId ?? 0} agentSessionKey={key} operations={operations.map(item => item.operation)} />}
     <Card>      <CardContent className="space-y-3">
-        {noteDraft === null ? <><p className="whitespace-pre-wrap">{detail.data.note ?? "No note"}</p>
+        {noteDraft === null ? <>{detail.data.note && <p className="whitespace-pre-wrap">{detail.data.note}</p>}
           <Button size="sm" variant="outline" onClick={() => setNoteDraft(detail.data.note ?? "")}>{detail.data.note ? "Edit note" : "Add note"}</Button></>
           : <><Textarea aria-label="Agent session note" maxLength={10_000} rows={5} className="w-full rounded border p-2" value={noteDraft} onChange={event => setNoteDraft(event.target.value)} />
             <Button size="sm" disabled={update.isPending} onClick={() => update.mutate({ note: noteDraft.trim() || null }, { onSuccess: () => setNoteDraft(null) })}>Save note</Button>
@@ -78,6 +78,7 @@ export function AgentSessionPage() {
           {child.session.hasCompare && <> · <Link className="underline" to="/sessions/$id" params={{ id: String(child.session.id) }}>Optimization history</Link></>}
         </li>)}</ul></div>}
       </CardContent></Card>
+    <OptimizationSection sessionId={optimizationSessionId ?? 0} agentSessionKey={key} operations={operations.map(item => item.operation)} />
     {optimization.data?.versionLabelsProvisional && optimization.data.versionLabelNote && <p role="note" className="text-sm text-muted-foreground">{optimization.data.versionLabelNote}</p>}
     {agentSession.children.some(child => child.session.hasCompare) && <Card><CardHeader><CardTitle>Child Optimization histories</CardTitle><CardDescription>Each child session keeps its own history, including inferred and CLI compares.</CardDescription></CardHeader>
       <CardContent><ul className="list-disc pl-5">{agentSession.children.filter(child => child.session.hasCompare).map(child => <li key={child.session.id}><Link className="underline" to="/sessions/$id" params={{ id: String(child.session.id) }}>{child.session.title ?? child.session.sessionKey}</Link> · Optimization history</li>)}</ul></CardContent></Card>}

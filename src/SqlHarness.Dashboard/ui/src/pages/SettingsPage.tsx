@@ -1,3 +1,4 @@
+import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { FieldErrorsError } from "@/api/client"
 import { useClearTranscripts, usePrices, useRefreshPrices, useSaveSettings, useSettings, useTranscriptStatus } from "@/api/queries"
@@ -11,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createSaveQueue } from "@/lib/saveQueue"
 import { isDestructive } from "@/lib/settingsRules"
 import { BUILT_IN_SOUNDS, getSoundPreferences, MAX_CUSTOM_SOUND_BYTES, previewApprovalSound, saveSoundPreferences, validateCustomSound, type SoundPreferences } from "@/mutations/sound"
@@ -119,7 +120,7 @@ function BrowserSoundSettings() {
       <SettingRow title="Approval sound" tag="This browser only" description="Played when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.">
         {preferences ? <div className="flex flex-wrap items-center justify-end gap-2"><Select<SoundPreferences["selection"] | "upload"> items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : []), { value: "upload", label: "Custom audio…" }]} value={preferences.selection} onValueChange={value => { if (value === "upload") document.getElementById("custom-audio")?.click(); else if (value !== null) store({ ...preferences, selection: value }) }}>
           <SelectTrigger id="approval-sound" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
-          <SelectContent>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectContent>
+          <SelectContent><SelectGroup>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectGroup></SelectContent>
         </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}>Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
       </SettingRow>
       {preferences && <><div className="sr-only"><Label htmlFor="custom-audio">Custom audio file</Label><Input id="custom-audio" tabIndex={-1} type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg" onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} /><p>Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p></div>
@@ -249,9 +250,9 @@ export function SettingsPage() {
   <SettingRow title="Connection diagnostics" description="Record safe metadata about database connection attempts. Credentials and target names are excluded."><Toggle id="diagnostics-enabled" label="Connection diagnostics" checked={draft.diagnostics.enabled} onChange={value => setDiagnostics({ enabled: value })} /></SettingRow><StatusLine status={status.diagnostics} />
 </section>
 <section id="settings-mutations" aria-label="Mutations" className="settings-card"><h2>Mutations</h2><p>Default approval behavior for write operations.</p>
-  <SettingRow title="Default mode" description="Applies when a profile does not set its own mode."><div><div role="group" aria-label="Default mutation mode" className="setting-segment">{([{value:"never",label:"Never"},{value:"operator",label:"Operator approval"},{value:"yolo",label:"YOLO"}] as const).map(mode => <button key={mode.value} type="button" aria-pressed={draft.mutations.defaultMode === mode.value} onClick={() => setMutations({ defaultMode: mode.value })}>{mode.label}</button>)}</div><p className="setting-mode-hint">{draft.mutations.defaultMode === "operator" ? "Each mutation waits for approval here." : draft.mutations.defaultMode === "never" ? "Write operations are rejected by default." : "Write operations do not wait for operator approval."}</p></div></SettingRow>
+  <SettingRow title="Default mode" description="Applies when a profile does not set its own mode."><div><SegmentedRadioGroup label="Default mutation mode" value={draft.mutations.defaultMode} options={[{ value: "never", label: "Never" }, { value: "operator", label: "Operator approval" }, { value: "yolo", label: "YOLO" }]} onValueChange={value => { if (value === "never" || value === "operator" || value === "yolo") setMutations({ defaultMode: value }) }} /><p className="setting-mode-hint max-w-72">{draft.mutations.defaultMode === "operator" ? "Each mutation waits for approval here." : draft.mutations.defaultMode === "never" ? "Write operations are rejected by default." : "Write operations do not wait for operator approval."}</p></div></SettingRow>
   <NumberField id="mutation-approval-timeout" label="Approval timeout (seconds)" unit="sec" description="How long an approval request stays open before it is rejected." value={draft.mutations.approvalTimeoutSeconds} min={1} max={3600} error={fieldErrors["mutations.approvalTimeoutSeconds"]} onCommit={value => setMutations({ approvalTimeoutSeconds: value })} />
-  <SettingRow title="Verification" description="Approval decisions use a deliberate click. WebAuthn is not available in this plan."><code className="rounded bg-muted px-2 py-1">{draft.mutations.verification}</code></SettingRow>
+  <SettingRow title="Verification" description="Approve or reject each request with a deliberate click."><code className="rounded bg-muted px-2 py-1">{draft.mutations.verification}</code></SettingRow>
   {draft.mutations.verification !== "click" && <p role="alert" className="text-sm text-destructive">Verification value “{draft.mutations.verification}” is unsupported. This plan supports click verification only; the value was retained without changing it.</p>}
   <StatusLine status={status.mutations} /><BrowserSoundSettings />
 </section>

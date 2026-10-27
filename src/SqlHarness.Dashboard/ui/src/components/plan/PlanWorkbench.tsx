@@ -1,16 +1,22 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from "react"
+import { lazy, Suspense, useCallback, useId, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import { useQueries } from "@tanstack/react-query"
 import type { PlanGraph, PlanOccurrenceManifest, PlanSourceMapLink } from "@/api/types"
 import { fetchPlanGraph, queryKeys, useOperationPlans, usePlanSourceMap, type PlanSourceMapParams } from "@/api/queries"
 import type { VariantDetail } from "@/api/types"
 import type { SqlSourceSelection, SqlSourceSpan } from "@/lib/sqlDiff"
 import { PlanErrorState } from "./PlanErrorState"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { PlanGraphDocument, PlanGraphLink, PlanGraphSelection } from "./PlanGraphView"
 import { planNodeKey, resolvePlanSourceLinks, type PlanGraphDocumentData, type ResolvedPlanSourceLink } from "./planSourceLinks"
 import { PlanPropertiesPanel } from "./PlanPropertiesPanel"
 import { PlanSourceView } from "./PlanSourceView"
 import { PlanStatementSwitcher } from "./PlanStatementSwitcher"
+import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Field, FieldLabel } from "@/components/ui/field"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 const LazyPlanGraphView = lazy(() => import("./PlanGraphView").then(module => ({ default: module.PlanGraphView })))
 
@@ -65,7 +71,9 @@ function matchingOccurrences(occurrences: PlanOccurrenceManifest[], variant: Var
   return occurrences.filter(occurrence => occurrence.variant === variant.variant && occurrence.parameterSet === variant.parameterSet)
 }
 
-export function PlanWorkbench({ operationId, variant, engine, initialTarget, sourceHeight }: { operationId: number; variant: VariantDetail; engine: string | null; sourceHeight?: number; initialTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
+export function PlanWorkbench({ operationId, variant, engine, initialTarget, sourceHeight, toolbarTarget }: { operationId: number; variant: VariantDetail; engine: string | null; sourceHeight?: number; toolbarTarget?: HTMLElement | null; initialTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
+  const repetitionId = useId()
+  const documentHashId = useId()
   const manifest = useOperationPlans(operationId)
   const [selectedCase, setSelectedCase] = useState(initialTarget?.caseId ?? variant.caseId)
   const [selectedRepetition, setSelectedRepetition] = useState<number | null>(initialTarget?.repetition ?? null)
@@ -218,6 +226,15 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
     occurrence.documentOrdinal === omission.documentOrdinal
     && occurrence.statementIndex === omission.statementIndex
     && (omission.documentSha256 === null || occurrence.documentSha256 === omission.documentSha256)))
+  const missingEvidence = new Map<string, { documentOrdinal: number; statementIndex: number; plan: boolean; links: boolean }>()
+  for (const occurrence of omittedOccurrences) {
+    missingEvidence.set(`${occurrence.documentOrdinal}:${occurrence.statementIndex}`, { ...occurrence, plan: true, links: false })
+  }
+  for (const omission of sourceMapOmissions.filter(item => item.omitted || !item.stored)) {
+    const key = `${omission.documentOrdinal}:${omission.statementIndex}`
+    const existing = missingEvidence.get(key)
+    missingEvidence.set(key, { ...omission, plan: existing?.plan ?? false, links: true })
+  }
   const graphLinkItems: PlanGraphLink[] = links.map(item => ({
     documentSha256: item.documentSha256,
     documentOrdinal: item.documentOrdinal,
@@ -225,8 +242,7 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
     link: item.link,
   }))
 
-  return <section aria-label="Plans" className="plan-workbench space-y-3">
-    <div className="flex flex-wrap items-end gap-3">
+  const toolbar = <div className="plan-workbench-toolbar flex flex-wrap items-end gap-3">
       <label className="grid gap-1 text-sm">Case
         <Select items={caseOptions.map(([id, label]) => ({ value: id, label }))} value={caseId} onValueChange={value => {
           if (typeof value !== "string") return
@@ -237,24 +253,11 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
           setSelectedNodeKey(null)
         }}>
           <SelectTrigger aria-label="Case" className="min-w-48 max-w-[min(32rem,80vw)]"><SelectValue /></SelectTrigger>
-          <SelectContent className="!w-max !max-w-[calc(100vw-2rem)] [&_*]:whitespace-normal">
+          <SelectContent className="!w-max !max-w-[calc(100vw-2rem)] [&_*]:whitespace-normal"><SelectGroup>
             {caseOptions.map(([id, label]) => <SelectItem key={id} value={id}>{label}</SelectItem>)}
-          </SelectContent>
+          </SelectGroup></SelectContent>
         </Select>
       </label>
-      {repetitions.length > 1 && <label className="grid gap-1 text-sm">Repetition
-        <Select items={repetitions.map(value => ({ value, label: `Repetition ${value}` }))} value={repetition} onValueChange={value => {
-          if (typeof value !== "number") return
-          setSelectedRepetition(value)
-          setSelectedDocumentKey("all")
-          setSelectedStatementIndex(null)
-          setSelectedNodeKey(null)
-          setSqlSelection(null)
-        }}>
-          <SelectTrigger aria-label="Repetition"><SelectValue /></SelectTrigger>
-          <SelectContent>{repetitions.map(value => <SelectItem key={value} value={value}>Repetition {value}</SelectItem>)}</SelectContent>
-        </Select>
-      </label>}
       {documentOptions.length > 0 && <label className="grid gap-1 text-sm">Plan document
         <Select items={[{ value: "all", label: "All plan documents" }, ...documentOptions.map(document => ({
           value: documentKey(document), label: `Document ${document.documentOrdinal + 1} · ${document.documentSha256.slice(0, 8)}`,
@@ -264,13 +267,13 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
           setSelectedNodeKey(null)
           setSqlSelection(null)
         }}>
-          <SelectTrigger aria-label="Plan document"><SelectValue /></SelectTrigger>
-          <SelectContent>
+          <Tooltip disabled={!selectedDocument}><TooltipTrigger aria-describedby={selectedDocument ? documentHashId : undefined} render={<SelectTrigger aria-label="Plan document" />}><SelectValue /></TooltipTrigger><TooltipContent id={documentHashId} role="tooltip" className="break-all">{selectedDocument && <>Document {selectedDocument.documentOrdinal + 1}: {selectedDocument.documentSha256}</>}</TooltipContent></Tooltip>
+          <SelectContent className="w-max min-w-[var(--anchor-width)] max-w-[calc(100vw-2rem)] [&_[data-slot=select-item]]:pr-8"><SelectGroup>
             <SelectItem value="all">All plan documents</SelectItem>
             {documentOptions.map(document => <SelectItem key={documentKey(document)} value={documentKey(document)}>
               Document {document.documentOrdinal + 1} · {document.documentSha256.slice(0, 8)}
             </SelectItem>)}
-          </SelectContent>
+          </SelectGroup></SelectContent>
         </Select>
       </label>}
       <PlanStatementSwitcher occurrences={occurrences} selectedIndex={statementIndex} onChange={value => {
@@ -279,18 +282,40 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
         setSqlSelection(null)
         setRevealSpan(null)
       }} />
+      {(repetitions.length > 1 || isUnmatched) && <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>Advanced</CollapsibleTrigger>}
       {selectedDocument && <a className="rounded border px-2 py-1 text-sm underline" href={`/api/plan-documents/${selectedDocument.documentSha256}`} download>Download selected plan</a>}
     </div>
-
+  return <Collapsible render={<section aria-label="Plans" />} className="plan-workbench flex flex-col gap-3">
+    {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
+    {(repetitions.length > 1 || isUnmatched) && <CollapsibleContent>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border p-3">
+        {repetitions.length > 1 && <Field className="w-fit">
+          <FieldLabel htmlFor={repetitionId}>Repetition</FieldLabel>
+          <Select items={repetitions.map(value => ({ value, label: `Repetition ${value}` }))} value={repetition} onValueChange={value => {
+            if (typeof value !== "number") return
+            setSelectedRepetition(value)
+            setSelectedDocumentKey("all")
+            setSelectedStatementIndex(null)
+            setSelectedNodeKey(null)
+            setSqlSelection(null)
+          }}>
+            <SelectTrigger id={repetitionId} aria-label="Repetition"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectGroup>{repetitions.map(value => <SelectItem key={value} value={value}>Repetition {value}</SelectItem>)}</SelectGroup></SelectContent>
+          </Select>
+        </Field>}
+        {isUnmatched && <p className="text-xs text-muted-foreground">SQL linking unavailable for {unmatchedOccurrences.length} plan {unmatchedOccurrences.length === 1 ? "fragment" : "fragments"}.</p>}
+      </div>
+    </CollapsibleContent>}
     {sourceMap.isPending && <p role="status" className="text-sm text-muted-foreground">Loading source links for repetition {repetition}…</p>}
-    {omittedOccurrences.map(occurrence => <p key={`omitted:${occurrence.documentOrdinal}:${occurrence.statementIndex}`} className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">Document {occurrence.documentOrdinal + 1}, statement {occurrence.statementIndex + 1}: this plan occurrence was omitted or not stored.</p>)}
-    {sourceMapOmissions.filter(omission => omission.omitted || !omission.stored).map(omission => <p key={`source-omitted:${omission.documentOrdinal}:${omission.statementIndex}`} className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">Document {omission.documentOrdinal + 1}, statement {omission.statementIndex + 1}: source links are unavailable because the plan was omitted or not stored.</p>)}
+    {missingEvidence.size > 0 && <Alert role="status"><AlertTitle>Incomplete plan evidence: {missingEvidence.size} {missingEvidence.size === 1 ? "fragment" : "fragments"}</AlertTitle><AlertDescription><Collapsible>
+      <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>Missing evidence details</CollapsibleTrigger>
+      <CollapsibleContent><ul className="mt-2 flex list-disc flex-col gap-1 pl-5">{[...missingEvidence.entries()].map(([key, item]) => <li key={key}>Document {item.documentOrdinal + 1}, statement {item.statementIndex + 1}: {item.plan && "this plan occurrence was omitted or not stored."}{item.plan && item.links && " "}{item.links && "Source links are unavailable because the plan was omitted or not stored."}</li>)}</ul></CollapsibleContent>
+    </Collapsible></AlertDescription></Alert>}
     {sourceMapErrors.map(error => <div key={`${error.documentOrdinal}:${error.code}`} className="rounded border border-amber-600/50 p-2 text-sm" role="status">Document {error.documentOrdinal + 1}: {error.code} — {error.message}</div>)}
-    {isUnmatched && unmatchedOccurrences.map(occurrence => <p key={`unmatched:${occurrence.documentOrdinal}:${occurrence.statementIndex}`} className="rounded border border-border bg-muted/50 p-2 text-sm">Document {occurrence.documentOrdinal + 1}, statement {occurrence.statementIndex + 1}: unmatched SQL statement.</p>)}
     {sqlSelection && documentSelection !== "all" && sqlMatchedLinks.length === 0 && <p role="status" className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source link matches this SQL selection in the selected plan document.</p>}
     {!isUnmatched && !isOmitted && source && visibleStatementLinks.length === 0 && <p className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source links were produced for the selected statement and document.</p>}
 
-    {source && <div className="grid min-w-0 gap-3">
+    {source && <div className="grid min-w-0 grid-cols-1 gap-3">
       <PlanSourceView height={sourceHeight} executedText={source.executedText} engine={source.engine ?? engine} highlightedSpans={highlightedSpans} revealSpan={revealSpan} onSelectionChange={handleSqlSelection} />
       <div className="space-y-3">
         {graphError ? <PlanErrorState error={graphError} onRetry={() => { for (const query of graphQueries) void query.refetch() }} />
@@ -303,5 +328,5 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
         <PlanPropertiesPanel selected={selectedNode} candidates={ambiguousCandidates} selectedRules={selectedRules} onSelect={handleSelectNode} />
       </div>
     </div>}
-  </section>
+  </Collapsible>
 }

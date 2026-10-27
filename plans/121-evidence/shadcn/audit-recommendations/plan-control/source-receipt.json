@@ -1,0 +1,8 @@
+{
+  "revision": "ecd3f0aee4ecd2fd519bad0f20dba63cd47f3c85",
+  "sourceTree": "9b34a1579cafd47a219abf39e3debbca787990c2",
+  "testsTree": "d5d136251e094c5131c8f534f248de593574d1c1",
+  "review": "No findings: plan-only spacing, equal badge geometry, same radio accessibility/focus and mobile wrapping",
+  "gate": "PASS: Windows just verify, 5 stages, 13m46s; UI 388, Core 4722 (11 skipped), MCP 535 (4 skipped)",
+  "generatedPrimitivesChanged": false
+}

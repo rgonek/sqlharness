@@ -23,7 +23,7 @@ test("IO expands statements, switches scope and toggles optional counters", asyn
   await userEvent.click(screen.getByRole("button", { name: "Scans" }))
   expect(screen.queryByRole("columnheader", { name: "Scans" })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Scans" }))
-  await userEvent.click(screen.getByRole("button", { name: "Whole batch" }))
+  await userEvent.click(screen.getByRole("radio", { name: "Whole batch" }))
   expect(onViewChange).toHaveBeenCalledWith("whole")
   rerender(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={{ before: { Orders: { physicalReads: 8 } }, after: { Orders: { physicalReads: 0 } } }} />)
   await userEvent.click(screen.getByText("More columns"))

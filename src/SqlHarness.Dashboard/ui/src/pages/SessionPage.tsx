@@ -17,6 +17,8 @@ import { parseRouteId } from "@/lib/routeId"
 import { useShowInternalOperations } from "@/lib/internalOperations"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Button } from "@/components/ui/button"
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
 const unknownRootsHint =
   "Unknown: the client did not declare roots, has not answered yet, or uses MCP 2026-07-28, where SQLHarness does not request roots."
@@ -51,14 +53,14 @@ function SessionView({ id }: { id: number }) {
     <div className="session-page space-y-4">
       <Card className="session-heading border-0 shadow-none">
         <CardHeader className="px-0">
-          <CardTitle>
+          <CardTitle className="min-w-0">
             <SessionAnnotationHeader key={session.id} session={session} />
           </CardTitle>
 
         </CardHeader>
         <CardContent className="px-0">
           <Collapsible>
-<div className="session-subtitle"><span>{agentLabel(session.agentKind)} via {session.transport}</span><span>·</span>{session.title && <><code>{session.sessionKey}</code><span>·</span></>}<span>{session.operations} operations</span><span>·</span><CollapsibleTrigger aria-label="Session metadata" className="cursor-pointer text-sm font-medium">Details</CollapsibleTrigger></div>
+<div className="session-subtitle"><span>{agentLabel(session.agentKind)} via {session.transport}</span><span>·</span><span>{session.operations} operations</span><span>·</span><CollapsibleTrigger aria-label="Session metadata" render={<Button variant="ghost" size="sm" />}>Details<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" /></CollapsibleTrigger></div>
             <CollapsibleContent keepMounted><div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
               <Fact label="Client" value={clientLabel(session)} />
               <Fact label="MCP mode" value={session.mcpMode} />
@@ -86,13 +88,13 @@ function SessionView({ id }: { id: number }) {
               <Fact label="Last seen" value={formatTimestamp(session.lastSeen)} />
               <Fact label="Failed / rejected" value={`${session.failed} / ${session.rejected}`} />
               <Fact label="Running / abandoned" value={`${session.running} / ${session.abandoned}`} />
-            </div></CollapsibleContent>
+              <div className="min-w-0 md:col-span-2"><div className="text-sm text-muted-foreground">Session ID</div><code className="break-all text-sm">{session.sessionKey}</code></div>
+            </div>{conversations.length > 0 && <div className="mt-4"><SessionConversations conversations={conversations} /></div>}</CollapsibleContent>
           </Collapsible>
         </CardContent>
       </Card>
-      {session.hasCompare && <OptimizationSection sessionId={id} operations={loadedOperations} />}
       <SessionNoteCard key={session.id} sessionId={session.id} note={note} />
-      {conversations.length > 0 && <SessionConversations conversations={conversations} />}
+      {session.hasCompare && <OptimizationSection sessionId={id} operations={loadedOperations} />}
       <Card>
         <CardHeader>
           <CardTitle>All operations</CardTitle>

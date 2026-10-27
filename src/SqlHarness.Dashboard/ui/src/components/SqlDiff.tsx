@@ -3,7 +3,7 @@ import { CopyButton } from "@/components/CopyButton"
 import { LazySqlMergeView, LazySqlViewer, loadUnifiedDiffText } from "@/components/SqlEditors"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { boundedPreview, diffTooLarge, dialectOf, MAX_DIFF_BYTES, normalizeForDiff, readPreference, utf8BytesWithin, writePreference, type DiffMode, type SqlTab } from "@/lib/sqlDiff"
 
@@ -18,22 +18,11 @@ export function DiffControls({ mode, onModeChange, ignoreFormatting, onIgnoreFor
   onIgnoreFormattingChange: (value: boolean) => void
 }) {
   const id = useId()
-  const sideBySideId = `${id}-side-by-side`
-  const unifiedId = `${id}-unified`
   const ignoreFormattingId = `${id}-ignore-formatting`
   return <div className="diff-controls flex flex-wrap items-center gap-3">
-    <RadioGroup aria-label="Diff mode" className="flex gap-2" value={mode} onValueChange={value => {
+    <SegmentedRadioGroup label="Diff mode" value={mode} options={[{ value: "side-by-side", label: "Side by side" }, { value: "unified", label: "Unified" }]} onValueChange={value => {
       if (value === "side-by-side" || value === "unified") onModeChange(value)
-    }}>
-      <div className="flex items-center gap-1">
-        <RadioGroupItem id={sideBySideId} value="side-by-side" />
-        <Label htmlFor={sideBySideId}>Side by side</Label>
-      </div>
-      <div className="flex items-center gap-1">
-        <RadioGroupItem id={unifiedId} value="unified" />
-        <Label htmlFor={unifiedId}>Unified</Label>
-      </div>
-    </RadioGroup>
+    }} />
     <div className="flex items-center gap-2">
       <Checkbox id={ignoreFormattingId} checked={ignoreFormatting} onCheckedChange={onIgnoreFormattingChange} />
       <Label htmlFor={ignoreFormattingId}>Ignore formatting</Label>

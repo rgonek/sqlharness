@@ -1,0 +1,12 @@
+{
+  "revision": "58a299974b6a01fbd9f07ac703a0fb983dbd39e4",
+  "branch": "dashboard-shadcn-fixes",
+  "oldPid": null,
+  "pid": 11820,
+  "origin": "http://127.0.0.1:47800",
+  "installedExecutable": "C:\\Users\\rgone\\.local\\bin\\sqlharness.exe",
+  "publishedSha256": "1D956003186FBD1DEBCAC395BD19B61B97E3FAFB1D7C76EB61B9AAE962750F9B",
+  "installedSha256": "1D956003186FBD1DEBCAC395BD19B61B97E3FAFB1D7C76EB61B9AAE962750F9B",
+  "restartExitCode": 0,
+  "tokenRecorded": false
+}

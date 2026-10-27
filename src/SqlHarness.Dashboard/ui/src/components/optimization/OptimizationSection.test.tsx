@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react"
+import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import { operation, session, sessionDetail } from "@/test/fixtures"
@@ -64,8 +64,8 @@ test("puts the optimization section first, preserves scope defaults and lists un
   expect(await screen.findByRole("heading", { name: "Optimization" })).toBeInTheDocument()
   const allOperations = screen.getByText("All operations")
   expect(screen.getByRole("heading", { name: "Optimization" }).compareDocumentPosition(allOperations) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(await screen.findByRole("radio", { name: "A v0" })).toBeChecked()
-  expect(await screen.findByRole("radio", { name: "B v39" })).toBeChecked()
+  expect(await screen.findByRole("button", { name: "A v0" })).toHaveAttribute("aria-pressed", "true")
+  expect(await screen.findByRole("button", { name: "B v39" })).toHaveAttribute("aria-pressed", "true")
   expect(screen.getAllByText("basis: whole batch").length).toBeGreaterThan(0)
   expect(screen.getByText("Unassigned compares (1)")).toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "Compare #999" })).not.toBeInTheDocument()
@@ -73,6 +73,16 @@ test("puts the optimization section first, preserves scope defaults and lists un
   const unassignedLink = screen.getByRole("link", { name: "Compare #999" })
   expect(unassignedLink).toHaveAttribute("href", expect.stringContaining("/operations/999"))
   expect(Object.fromEntries(new URL(unassignedLink.getAttribute("href")!, "http://dashboard").searchParams)).toMatchObject({ returnSession: "7", returnUnassigned: "true" })
+})
+
+test.each(["", "Orders"])("omits blank metadata and adjacent separators for subject %s", async subject => {
+  stubSession({
+    "/api/sessions/7": sessionWithCompare(true),
+    "/api/sessions/7/optimization": { ...section, subjects: [{ ...section.subjects[0]!, subject, database: " ", engine: "" }] },
+    "/api/sessions/7/optimization/compare": comparison,
+  })
+  renderApp("/sessions/7")
+  await waitFor(() => expect(document.querySelector(".optimization-card > div p")?.textContent).toBe(subject ? "Orders · whole query" : "whole query"))
 })
 
 test("renders forty versions and updates the URL when a version picker changes", async () => {
@@ -86,18 +96,18 @@ test("renders forty versions and updates the URL when a version picker changes",
   const table = await screen.findByRole("table", { name: "Orders-shop versions" })
   expect(within(table).getAllByRole("row")).toHaveLength(41)
   expect(screen.getByText("whole query")).toBeInTheDocument()
-  await userEvent.click(within(table).getByRole("radio", { name: "A v1" }))
-  await screen.findByRole("radio", { name: "A v1", checked: true })
+  await userEvent.click(within(table).getByRole("button", { name: "A v1" }))
+  await screen.findByRole("button", { name: "A v1", pressed: true })
   expect(router.state.location.search).toMatchObject({ a: "v1", b: "v39", subject: "Orders", db: "shop", group: "fp-1" })
-  await userEvent.click(within(table).getByRole("radio", { name: "B v2" }))
-  expect(within(table).getByRole("radio", { name: "A v1" })).toBeChecked()
-  expect(within(table).getByRole("radio", { name: "B v2" })).toBeChecked()
-  await userEvent.click(within(table).getByRole("radio", { name: "A v1" }))
-  await userEvent.keyboard("{ArrowDown}")
-  expect(within(table).getByRole("radio", { name: "A v2" })).toBeChecked()
-  expect(within(table).getByRole("radio", { name: "B v2" })).toBeChecked()
+  await userEvent.click(within(table).getByRole("button", { name: "B v2" }))
+  expect(within(table).getByRole("button", { name: "A v1" })).toHaveAttribute("aria-pressed", "true")
+  expect(within(table).getByRole("button", { name: "B v2" })).toHaveAttribute("aria-pressed", "true")
+  within(table).getByRole("button", { name: "A v2" }).focus()
+  await userEvent.keyboard(" ")
+  expect(within(table).getByRole("button", { name: "A v2" })).toHaveAttribute("aria-pressed", "true")
+  expect(within(table).getByRole("button", { name: "B v2" })).toHaveAttribute("aria-pressed", "true")
   expect(within(table).getByRole("rowheader", { name: "v1" })).toBeInTheDocument()
-  expect(within(table).getByRole("radio", { name: "B v1" })).not.toBeChecked()
+  expect(within(table).getByRole("button", { name: "B v1" })).toHaveAttribute("aria-pressed", "false")
 })
 
 test("version table shows measure-only outcomes and unverified comparison label", async () => {
@@ -136,8 +146,8 @@ test("shows group and scope selectors only when the selected group has choices",
   for (const key of ["a", "b", "case", "agg", "view"]) {
     expect(router.state.location.search).not.toHaveProperty(key)
   }
-  expect(await screen.findByRole("radio", { name: "A v0" })).toBeChecked()
-  expect(screen.getByRole("radio", { name: "B v39" })).toBeChecked()
+  expect(await screen.findByRole("button", { name: "A v0" })).toHaveAttribute("aria-pressed", "true")
+  expect(screen.getByRole("button", { name: "B v39" })).toHaveAttribute("aria-pressed", "true")
 })
 
 test("changing conditions group selects its first scope and clears all dependent selections", async () => {
@@ -159,9 +169,10 @@ test("changing conditions group selects its first scope and clears all dependent
   for (const key of ["a", "b", "case", "agg", "view"]) {
     expect(router.state.location.search).not.toHaveProperty(key)
   }
-  expect(await screen.findByRole("radio", { name: "A v0" })).toBeChecked()
-  expect(screen.getByRole("radio", { name: "B v39" })).toBeChecked()
-  expect(screen.getByRole("button", { name: "All cases" })).toHaveAttribute("aria-pressed", "true")
+  expect(await screen.findByRole("button", { name: "A v0" })).toHaveAttribute("aria-pressed", "true")
+  expect(screen.getByRole("button", { name: "B v39" })).toHaveAttribute("aria-pressed", "true")
+  await userEvent.click(screen.getByRole("button", { name: "All cases · Sum" }))
+  expect(screen.getByRole("radio", { name: /^All cases$/ })).toBeChecked()
 })
 
 test("hides one-option controls and gives each subject its own accessible selector names", async () => {
@@ -198,9 +209,9 @@ test("keeps B unset when the selected scope has no qualified default", async () 
   }] }] }
   const calls = stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false }, "/api/sessions/7/optimization": scoped })
   renderApp("/sessions/7?subject=Orders&db=shop&group=fp-2&scope=fragment%20A")
-  expect(await screen.findByRole("radio", { name: "A v4" })).toBeChecked()
+  expect(await screen.findByRole("button", { name: "A v4" })).toHaveAttribute("aria-pressed", "true")
   expect(screen.getByText("Select a version for B to compare it with v4.")).toBeInTheDocument()
-  expect(screen.getByRole("radio", { name: "B v9" })).not.toBeChecked()
+  expect(screen.getByRole("button", { name: "B v9" })).toHaveAttribute("aria-pressed", "false")
   expect(calls.some(call => call.includes("/optimization/compare"))).toBe(false)
 })
 
@@ -218,7 +229,7 @@ test("renders a separate card for every subject and database", async () => {
   expect(screen.getByRole("heading", { name: "Customers" })).toBeInTheDocument()
   expect(screen.getByRole("table", { name: "Orders-shop versions" })).toBeInTheDocument()
   expect(screen.getByRole("table", { name: "Customers-crm versions" })).toBeInTheDocument()
-  await userEvent.click(within(screen.getByRole("heading", { name: "Orders" }).closest("article")!).getByRole("button", { name: "Select comparison" }))
+  await userEvent.click(within(screen.getByRole("table", { name: "Orders-shop versions" })).getByRole("button", { name: "A v0" }))
   expect(router.state.location.search).toMatchObject({ subject: "Orders", db: "shop", group: "fp-1", scope: "whole query" })
   expect(router.state.location.search).not.toMatchObject({ subject: "Customers", db: "crm" })
 })
@@ -232,12 +243,17 @@ test("links every retained measurement operation with the current session return
   }] }] }] }
   stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false }, "/api/sessions/7/optimization": measured, "/api/sessions/7/optimization/compare": comparison })
   renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query")
+  await userEvent.click(await screen.findByRole("button", { name: "Details for v0" }))
   const one = await screen.findByRole("link", { name: "Operation #201" })
-  const two = screen.getByRole("link", { name: "Operation #214" })
+  const two = within(screen.getByRole("dialog")).getByRole("link", { name: "Operation #214" })
+  const targets = [one.getAttribute("href")!, two.getAttribute("href")!]
+  await userEvent.keyboard("{Escape}")
+  await userEvent.click(screen.getByRole("button", { name: "Details for v1" }))
   const three = screen.getByRole("link", { name: "Operation #219" })
-  for (const link of [one, two, three]) {
-    const url = new URL(link.getAttribute("href")!, "http://dashboard")
-    expect(url.pathname).toBe("/operations/" + link.textContent?.replace("Operation #", ""))
+  targets.push(three.getAttribute("href")!)
+  for (const href of targets) {
+    const url = new URL(href, "http://dashboard")
+    expect(url.pathname).toMatch(/^\/operations\/(201|214|219)$/)
     expect(Object.fromEntries(url.searchParams)).toMatchObject({ returnSession: "7", returnSubject: "Orders", returnDb: "shop", returnGroup: "fp-1", returnScope: "whole query" })
   }
 })
