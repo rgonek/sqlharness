@@ -27,3 +27,5 @@ An intermediate focused run tested the briefly considered Tabs implementation an
 ## Final gate / delivery
 
 Full Windows `just verify` passed on aaa346e0: 5 stages / 16m08s; UI 386, Core 4722 (11 skipped), MCP 535 (4 skipped). The existing ignored output-only xUnit configuration keeps collections sequential within each project; no source timeout changes or test filters. Publication follows the expanded [UI information and resize scope](../ui-information/verification.md) at 58a29997. Main remains untouched; no merge/push.
+
+Latest operator screenshot correction supersedes only the visible-radio presentation: Plan uses the same joined segment appearance as Side by side / Unified. Repetition/Advanced and document width fixes remain. See [current follow-up](../audit-recommendations/verification.md).

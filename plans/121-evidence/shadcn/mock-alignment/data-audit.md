@@ -1,6 +1,6 @@
 # Mocki a dane dashboardu — 2026-10-26
 
-Aktualizacja decyzji UI: użytkownik wybrał standardowe widoczne radio A/B, repetition w Advanced, krótką diagnostykę linkowania wyłącznie w Advanced oraz usunięcie wskazówki Batch SQL. Stan opisany w sekcji 3 poniżej jest historią poprzedniej iteracji; [nowsza implementacja](../plan-options/verification.md) go zastępuje. Macierz danych pozostaje aktualna.
+Aktualizacja decyzji UI: po iteracji z widocznym radio użytkownik wybrał wygląd segmentowy Plan A/B jak Side by side / Unified. Repetition i krótka diagnostyka linkowania pozostają w Advanced; wskazówka Batch SQL usunięta. Sekcja 3 poniżej jest historyczna; [bieżące wdrożenie rekomendacji UI](../audit-recommendations/verification.md) ją zastępuje. Macierz danych pozostaje aktualna.
 
 Zakres: zatwierdzone Activity 3a, Operation v2, Session Optimization 4a i Settings, uruchomione z oryginalnym support.js. Mira/Zinc, Inter i Hugeicons pozostają aktualnym systemem wizualnym. Ten dokument rozdziela brak danych od braku projekcji API i od różnic prezentacji. Nie dodano nowego zbierania metryk ani tabel journala.
 

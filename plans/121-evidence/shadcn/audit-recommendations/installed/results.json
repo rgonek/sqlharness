@@ -1,0 +1,32 @@
+{
+  "origin": "http://127.0.0.1:47800",
+  "installed": true,
+  "pid": 40684,
+  "screens": [
+    "segmented-plan-and-summary",
+    "missing-evidence-expanded",
+    "full-document-hash",
+    "narrow-plan",
+    "mutation-metrics",
+    "query-results",
+    "usage-full-hash",
+    "target-help",
+    "totals-help",
+    "narrow-usage"
+  ],
+  "missingFragments": 2,
+  "checks": [
+    "blank metadata",
+    "joined Plan radios and keyboard/focus",
+    "deduplicated missing evidence summary/details",
+    "full hash tooltip and selection focus",
+    "390px overflow",
+    "query/mutation placeholders",
+    "Results-only copy",
+    "Settings copy",
+    "target and totals tooltips"
+  ],
+  "errors": [],
+  "api": "browser fixtures only",
+  "tokenRecorded": false
+}

@@ -36,13 +36,15 @@ W poprzednim zatwierdzonym zakresie repetition i krótka diagnostyka niedopasowa
 | Ceny szacunkowe, źródło cen, niepełne pokrycie kosztu/czasu | Koszt i czas nie powinny wyglądać jak kompletne, dokładne pomiary, jeśli nimi nie są. |
 | Limit diffu / bounded preview | Wyjaśnia, dlaczego pełnego diffu nie ma; zachować informację o ograniczeniu. |
 
-## Kolejne uproszczenia do rozważenia
+## Uproszczenia zaakceptowane i wdrożone
 
-- **Operation / Results:** tekst o niezachowanych komórkach wyników zostawić tylko w pustym Results. Nie dodawać nowej karty z tym samym wyjaśnieniem.
-- **Operation / mutation:** pola Rows affected i Estimated z samym „—” są kandydatami do usunięcia, dopóki projekcja ich nie dostarcza. Osobny plan danych 122 obejmuje takie placeholdery; ta poprawka nie zmienia kontraktu backendu.
-- **Plan:** wiele ostrzeżeń o omitted/not stored można docelowo zgrupować w licznik i rozwijane szczegóły. Nie ukrywać samego faktu brakującego materiału, jak zrobiliśmy z czysto technicznym unmatched linking.
-- **Settings:** tekst „WebAuthn is not available in this plan” to język implementacji. Można zastąpić samym opisem obecnego deliberate click; nie zmieniamy tu polityki zatwierdzania ani zakresu planu 078.
-- **Profiles / dimensions:** brak definicji lub brak zmierzonych operacji to przydatny stan pusty; długie objaśnienia modelu agregacji lepiej utrzymywać w jednym opisie lub tooltipie.
-- **Identyfikatory i hashe:** pełna wartość w Details, pickerze lub tooltipie, krótka w głównym układzie. Nie skracać informacji potrzebnej do odróżnienia dwóch dokumentów bez dostępu do pełnej wartości.
+Operator zaakceptował poniższe rekomendacje. Ich [wdrożenie i weryfikacja](../audit-recommendations/verification.md) zastępują wcześniejszy status propozycji. Wygląd Plan A/B ma obecnie ponownie być segmentowy, jak Side by side / Unified, zgodnie z najnowszymi screenshotami.
+
+- **Operation / Results:** potwierdzone w przeglądarce: tekst o niezachowanych komórkach wyników występuje tylko w pustym Results. Bez nowej karty z tym samym wyjaśnieniem.
+- **Operation / mutation:** usunięte puste Rows affected i Estimated; również Columns zapytania, które nie miało źródła wartości. Rzeczywiste metryki pozostają. Bez zmiany kontraktu backendu i zbierania nowych danych.
+- **Plan:** omitted/not stored zgrupowane w widoczny licznik fragmentów oraz rozwijane szczegóły z dokumentem, statementem i pełnymi powodami. Duplikaty manifest/source-map nie zawyżają licznika. Fakt brakującego materiału pozostaje widoczny.
+- **Settings:** usunięte „WebAuthn is not available in this plan”; opis wyjaśnia obecne świadome kliknięcie approve/reject. Polityka zatwierdzania bez zmian.
+- **Profiles / dimensions:** zachowane stany puste, pokrycie, sumy i ostrzeżenia o brakujących czasach. Objaśnienia agregacji i tożsamości targetu w dostępnych z klawiatury tooltipach shadcn.
+- **Identyfikatory i hashe:** kompletne ID sesji/rozmowy oraz hash SQL operacji w Details; krótkie hashe w tabelach Usage i selektorach planu mają tooltip z pełną wartością i powiązaniem dla czytnika ekranu.
 
 Zbieranie nowych danych jest osobną decyzją. [Inwentaryzacja danych](../mock-alignment/data-audit.md) rozróżnia dane już zapisane, luki projekcji API i rzeczywiste braki w przechowywaniu. Handoff oceny wartości i trudności pozostaje w `D:/temp/handoff-dashboard-data-value-20261026-223615.md`; nowy plan 122 został przygotowany osobno i nie jest częścią wdrożenia tej poprawki.

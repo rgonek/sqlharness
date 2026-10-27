@@ -1,0 +1,34 @@
+{
+  "width": 136.6875,
+  "height": 28,
+  "labels": [
+    {
+      "text": "v69A",
+      "height": 26,
+      "gap": "8px",
+      "badge": [
+        {
+          "height": 14,
+          "width": 17.453125,
+          "font": "10.5px",
+          "lineHeight": "10.5px",
+          "overflow": "hidden"
+        }
+      ]
+    },
+    {
+      "text": "v70B",
+      "height": 26,
+      "gap": "8px",
+      "badge": [
+        {
+          "height": 14,
+          "width": 16.90625,
+          "font": "10.5px",
+          "lineHeight": "10.5px",
+          "overflow": "hidden"
+        }
+      ]
+    }
+  ]
+}
