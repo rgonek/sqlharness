@@ -13,9 +13,9 @@ export function VersionPlan({ a, b, before, after, engine, selectedCase }: { a: 
   const plan = action ? <ActionPlan key={`${action.operationId}:${action.side}:${selectedCase}`} toolbarTarget={toolbarTarget} action={action} engine={engine} selectedCase={selectedCase} /> : <p className="text-sm text-muted-foreground">No retained plan operation for this version.</p>
   return <section className="version-plan flex flex-col gap-3" aria-label="Version plan">
     <div className="plan-version-toolbar flex flex-wrap items-center gap-3">
-      <SegmentedRadioGroup label="Plan version" value={side} onValueChange={value => { if (value === "a" || value === "b") setSide(value) }} options={[
-        { value: "a", ariaLabel: `${a} A`, label: <>{a}<Badge variant="secondary" className="h-3.5 rounded-sm bg-border px-1 py-0 text-[10.5px]">A</Badge></> },
-        { value: "b", ariaLabel: `${b} B`, label: <>{b}<Badge className="h-3.5 rounded-sm px-1 py-0 text-[10.5px]">B</Badge></> },
+      <SegmentedRadioGroup className="[&_[data-slot=label]]:min-w-20 [&_[data-slot=label]]:justify-between [&_[data-slot=label]]:px-3" label="Plan version" value={side} onValueChange={value => { if (value === "a" || value === "b") setSide(value) }} options={[
+        { value: "a", ariaLabel: `${a} A`, label: <>{a}<Badge variant="secondary" className="size-4 rounded-full bg-border p-0 text-[11px] leading-none">A</Badge></> },
+        { value: "b", ariaLabel: `${b} B`, label: <>{b}<Badge className="size-4 rounded-full p-0 text-[11px] leading-none">B</Badge></> },
       ]} />
       <div ref={setToolbarTarget} className="min-w-0 flex-1 basis-full sm:basis-auto" />
     </div>
