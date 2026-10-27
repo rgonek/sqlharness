@@ -67,6 +67,7 @@ public sealed record OperationSummary(
     public bool AgentKeep { get; init; }
     public bool OwnerStarred { get; init; }
     public string? OwnerNote { get; init; }
+    public int? DashboardEvidenceVersion { get; init; }
 }
 
 public sealed record OperationAnnotation(string? AgentLabel, bool AgentKeep, bool OwnerStarred, string? OwnerNote);

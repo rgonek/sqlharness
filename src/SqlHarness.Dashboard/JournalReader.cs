@@ -76,7 +76,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         (SELECT agent_label FROM operation_annotations a WHERE a.operation_id = o.id) AS agent_label,
         COALESCE((SELECT agent_keep FROM operation_annotations a WHERE a.operation_id = o.id), 0) AS agent_keep,
         COALESCE((SELECT owner_starred FROM operation_annotations a WHERE a.operation_id = o.id), 0) AS owner_starred,
-        (SELECT owner_note FROM operation_annotations a WHERE a.operation_id = o.id) AS owner_note
+        (SELECT owner_note FROM operation_annotations a WHERE a.operation_id = o.id) AS owner_note,
+        s.dashboard_evidence_version
         """;
 
     private const string SessionColumns = """
@@ -923,7 +924,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 """,
                 parameters,
                 reader => (Operation: ReadOperation(reader, liveness),
-                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 42))));
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 43))));
             var filteredRows = rows.Where(row => !variableFiltered
                 || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
             matches.AddRange(liveFiltered
@@ -1774,6 +1775,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         AgentKeep = r.GetInt64(39) != 0,
         OwnerStarred = r.GetInt64(40) != 0,
         OwnerNote = NullableString(r, 41),
+        DashboardEvidenceVersion = NullableInt(r, 42),
     };
 
     private static IReadOnlyList<string> StringArray(string? text)

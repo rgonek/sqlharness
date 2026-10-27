@@ -15,6 +15,33 @@ public sealed class JournalReaderTests
         new(home.DatabasePath, processes ?? new FakeProcesses());
 
     [Fact]
+    public void Operation_json_exposes_session_evidence_version_without_writing()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var old = seed.Operation(JournalSeed.Session("old"));
+        var fresh = seed.Operation(JournalSeed.Session("fresh"));
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE sessions SET dashboard_evidence_version = NULL WHERE session_key = 'old'";
+            command.ExecuteNonQuery();
+        }
+        var reader = Reader(home);
+        using var observer = OpenSeedDatabase(home.DatabasePath);
+        using var version = observer.CreateCommand();
+        version.CommandText = "PRAGMA data_version";
+        var before = version.ExecuteScalar();
+        var rows = reader.Operations(new OperationQuery()).Items;
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var oldJson = JsonSerializer.SerializeToElement(rows.Single(row => row.Id == old.OperationId), options);
+        var newJson = JsonSerializer.SerializeToElement(rows.Single(row => row.Id == fresh.OperationId), options);
+        Assert.Equal(JsonValueKind.Null, oldJson.GetProperty("dashboardEvidenceVersion").ValueKind);
+        Assert.Equal(1, newJson.GetProperty("dashboardEvidenceVersion").GetInt32());
+        Assert.Equal(before, version.ExecuteScalar());
+    }
+
+    [Fact]
     public void Session_sql_text_reads_only_the_requested_hash_and_prefers_available_text_within_a_session()
     {
         using var home = new TempHome();

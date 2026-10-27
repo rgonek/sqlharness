@@ -1125,9 +1125,9 @@ public sealed class ActivityJournal : IActivityJournal
         upsert.Transaction = transaction;
         upsert.CommandText = """
             INSERT INTO sessions (session_key, agent_kind, transport, source, client_name, client_version, client_title, mcp_mode,
-                agent_pid, agent_started_at, host_pid, host_started_at, cwd, roots_json, protocol_version, first_seen, last_seen)
+                agent_pid, agent_started_at, host_pid, host_started_at, cwd, roots_json, protocol_version, first_seen, last_seen, dashboard_evidence_version)
             VALUES ($key, $kind, $transport, $source, $clientName, $clientVersion, $clientTitle, $mcpMode,
-                $agentPid, $agentStarted, $hostPid, $hostStarted, $cwd, $roots, $protocol, $now, $now)
+                $agentPid, $agentStarted, $hostPid, $hostStarted, $cwd, $roots, $protocol, $now, $now, 1)
             ON CONFLICT(session_key) DO UPDATE SET
                 last_seen = excluded.last_seen,
                 client_name = COALESCE(sessions.client_name, excluded.client_name),
