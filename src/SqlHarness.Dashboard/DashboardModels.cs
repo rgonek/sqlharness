@@ -68,6 +68,8 @@ public sealed record OperationSummary(
     public bool OwnerStarred { get; init; }
     public string? OwnerNote { get; init; }
     public int? DashboardEvidenceVersion { get; init; }
+    public string? SqlPreview { get; init; }
+    public bool SqlPreviewTruncated { get; init; }
 }
 
 public sealed record OperationAnnotation(string? AgentLabel, bool AgentKeep, bool OwnerStarred, string? OwnerNote);

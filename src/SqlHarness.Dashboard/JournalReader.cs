@@ -78,7 +78,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         COALESCE((SELECT agent_keep FROM operation_annotations a WHERE a.operation_id = o.id), 0) AS agent_keep,
         COALESCE((SELECT owner_starred FROM operation_annotations a WHERE a.operation_id = o.id), 0) AS owner_starred,
         (SELECT owner_note FROM operation_annotations a WHERE a.operation_id = o.id) AS owner_note,
-        s.dashboard_evidence_version
+        s.dashboard_evidence_version,
+        CASE WHEN s.dashboard_evidence_version = 1 THEN substr(o.sql_text, 1, 240) END AS sql_preview,
+        CASE WHEN s.dashboard_evidence_version = 1 AND length(substr(o.sql_text, 241, 1)) > 0 THEN 1 ELSE 0 END AS sql_preview_truncated
         """;
 
     private const string SessionColumns = """
@@ -1803,6 +1805,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         OwnerStarred = r.GetInt64(40) != 0,
         OwnerNote = NullableString(r, 41),
         DashboardEvidenceVersion = NullableInt(r, 42),
+        SqlPreview = NullableString(r, 43),
+        SqlPreviewTruncated = r.GetInt64(44) != 0,
     };
 
     private static IReadOnlyList<string> StringArray(string? text)

@@ -42,6 +42,62 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Activity_preview_bounds_unicode_and_respects_version_and_pagination()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
+        var session = JournalSeed.Session("preview-new");
+        var exact = seed.Operation(session);
+        var longer = seed.Operation(session);
+        var empty = seed.Operation(session);
+        var missing = seed.Operation(session);
+        var compare = seed.Compare(session, "orders", "whole", "a", "b");
+        var old = seed.Operation(JournalSeed.Session("preview-old"));
+        var future = seed.Operation(JournalSeed.Session("preview-future"));
+        SetSqlText(home.DatabasePath, exact.OperationId, new string('x', 240), null);
+        SetSqlText(home.DatabasePath, longer.OperationId, string.Concat(Enumerable.Repeat("\U0001F600", 241)), null);
+        SetSqlText(home.DatabasePath, empty.OperationId, "", null);
+        SetSqlText(home.DatabasePath, missing.OperationId, null, null);
+        SetSqlText(home.DatabasePath, compare.OperationId, "baseline", "candidate");
+        SetSqlText(home.DatabasePath, old.OperationId, "old secret", null);
+        SetSqlText(home.DatabasePath, future.OperationId, "future secret", null);
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE sessions SET dashboard_evidence_version = CASE session_key WHEN 'preview-old' THEN NULL ELSE 2 END WHERE session_key IN ('preview-old', 'preview-future')";
+            command.ExecuteNonQuery();
+        }
+        var reader = Reader(home);
+        var first = reader.Operations(new OperationQuery(Limit: 3));
+        var second = reader.Operations(new OperationQuery(Limit: 3, Cursor: first.NextCursor));
+        var third = reader.Operations(new OperationQuery(Limit: 3, Cursor: second.NextCursor));
+        var rows = first.Items.Concat(second.Items).Concat(third.Items).ToArray();
+        Assert.Equal(7, rows.Length);
+        Assert.Equal(7, rows.Select(row => row.Id).Distinct().Count());
+        JsonElement Json(long id) => JsonSerializer.SerializeToElement(rows.Single(row => row.Id == id), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(new string('x', 240), Json(exact.OperationId).GetProperty("sqlPreview").GetString());
+        Assert.False(Json(exact.OperationId).GetProperty("sqlPreviewTruncated").GetBoolean());
+        Assert.Equal(string.Concat(Enumerable.Repeat("\U0001F600", 240)), Json(longer.OperationId).GetProperty("sqlPreview").GetString());
+        Assert.True(Json(longer.OperationId).GetProperty("sqlPreviewTruncated").GetBoolean());
+        Assert.Equal("", Json(empty.OperationId).GetProperty("sqlPreview").GetString());
+        Assert.Equal(JsonValueKind.Null, Json(missing.OperationId).GetProperty("sqlPreview").ValueKind);
+        Assert.Equal("baseline", Json(compare.OperationId).GetProperty("sqlPreview").GetString());
+        Assert.Equal(JsonValueKind.Null, Json(old.OperationId).GetProperty("sqlPreview").ValueKind);
+        Assert.Equal(JsonValueKind.Null, Json(future.OperationId).GetProperty("sqlPreview").ValueKind);
+    }
+
+    [Fact]
+    public void Activity_preview_respects_disabled_sensitive_storage()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: false);
+        var operation = seed.Operation(JournalSeed.Session("preview-private"), sql: "SELECT secret");
+        var json = JsonSerializer.SerializeToElement(Reader(home).Operations(new OperationQuery()).Items.Single(row => row.Id == operation.OperationId), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("sqlPreview").ValueKind);
+        Assert.False(json.GetProperty("sqlPreviewTruncated").GetBoolean());
+    }
+
+    [Fact]
     public void Session_sql_text_reads_only_the_requested_hash_and_prefers_available_text_within_a_session()
     {
         using var home = new TempHome();
