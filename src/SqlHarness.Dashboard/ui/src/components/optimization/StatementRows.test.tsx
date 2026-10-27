@@ -71,4 +71,8 @@ test("shows selected-run metrics and LOB values in statement details", async () 
   expect(screen.getByText(/repetition 2/)).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Objects (1)" }))
   expect(screen.getByRole("columnheader", { name: "LOB logical before" })).toBeInTheDocument()
+  const objectRow = screen.getByRole("rowheader", { name: "dbo.Orders" }).closest("tr")!
+  const cells = within(objectRow).getAllByRole("cell")
+  expect(cells.at(-2)).toHaveTextContent("0")
+  expect(cells.at(-1)).toHaveTextContent("—")
 })

@@ -50,3 +50,17 @@ test("explains unavailable statement metrics for all cases", () => {
   render(<IoComparison comparison={{ ...comparison, statementMetricsUnavailableReason: "Select a single case for statement metrics." }} byStatement onViewChange={vi.fn()} />)
   expect(screen.getByText("Select a single case for statement metrics.")).toBeInTheDocument()
 })
+
+test.each([
+  { statements: [], tableIoUnavailable: false },
+  { statements: [], tableIoUnavailable: true },
+])("shows the all-cases explanation even when statement rows are absent", ({ statements, tableIoUnavailable }) => {
+  render(<IoComparison comparison={{ ...comparison, statements, tableIoUnavailable, statementMetricsUnavailableReason: "Select a single case for statement metrics." }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText("Select a single case for statement metrics.")).toBeInTheDocument()
+})
+
+test("keeps the all-cases explanation visible when a statement is collapsed", async () => {
+  render(<IoComparison comparison={{ ...comparison, statementMetricsUnavailableReason: "Select a single case for statement metrics." }} byStatement onViewChange={vi.fn()} />)
+  await userEvent.click(screen.getByRole("button", { name: "SELECT * FROM Orders" }))
+  expect(screen.getByText("Select a single case for statement metrics.")).toBeInTheDocument()
+})
