@@ -62,6 +62,8 @@ export type OperationSummary = {
   server: string | null
   database: string | null
   mutationRequested: boolean
+  sqlPreview?: string | null
+  sqlPreviewTruncated?: boolean
   sqlHash: string | null
   rowsReturned: number | null
   logicalReadsMedian: number | null
