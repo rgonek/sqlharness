@@ -64,3 +64,11 @@ test("sorts comparison rows by absolute read change", () => {
   expect(largerIndex).toBeGreaterThan(0)
   expect(smallerIndex).toBeGreaterThan(largerIndex)
 })
+
+test("shows selected-run metrics and LOB values in statement details", async () => {
+  render(<StatementRows rows={[{ ...row, cpuBeforeMs: 0, cpuAfterMs: null, elapsedBeforeMs: 12, elapsedAfterMs: 25, planRepetitionBefore: 2, planRepetitionAfter: null, objects: [{ ...row.objects[0], lobLogicalReadsBefore: 0, lobLogicalReadsAfter: null }] }]} />)
+  expect(screen.getByText(/CPU \(ms\).*0.*—/)).toBeInTheDocument()
+  expect(screen.getByText(/repetition 2/)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Objects (1)" }))
+  expect(screen.getByRole("columnheader", { name: "LOB logical before" })).toBeInTheDocument()
+})

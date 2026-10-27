@@ -33,3 +33,20 @@ test("IO expands statements, switches scope and toggles optional counters", asyn
   expect(within(row).getByText("0")).toBeInTheDocument()
   expect(screen.getByRole("rowheader", { name: "Total (whole batch)" })).toBeInTheDocument()
 })
+
+test("shows selected-run metrics and object LOB without replacing missing values", async () => {
+  const statement = { ...comparison.statements![0], cpuBeforeMs: null, cpuAfterMs: 0, elapsedBeforeMs: null, elapsedAfterMs: 42, planRepetitionBefore: null, planRepetitionAfter: 3, planLinkAfter: "/plan?occurrence=2", objects: [{ ...comparison.statements![0].objects[0], lobLogicalReadsBefore: null, lobLogicalReadsAfter: 7 }] }
+  render(<IoComparison comparison={{ ...comparison, selectedCase: "case1", statements: [statement] }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText(/CPU \(ms\).*—.*0/)).toBeInTheDocument()
+  expect(screen.getByText(/Elapsed \(ms\).*—.*42/)).toBeInTheDocument()
+  expect(screen.getByText(/repetition 3/)).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan?occurrence=2")
+  await userEvent.click(screen.getByText("More columns"))
+  await userEvent.click(screen.getByRole("checkbox", { name: "LOB logical" }))
+  expect(within(screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!).getByText("7")).toBeInTheDocument()
+})
+
+test("explains unavailable statement metrics for all cases", () => {
+  render(<IoComparison comparison={{ ...comparison, statementMetricsUnavailableReason: "Select a single case for statement metrics." }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText("Select a single case for statement metrics.")).toBeInTheDocument()
+})

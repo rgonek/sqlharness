@@ -21,19 +21,27 @@ function changeMagnitude(row: StatementRow, measured: boolean): number {
   return measured ? Math.abs(row.readsAfter ?? 0) : -1
 }
 
+export function StatementMetrics({ row, measured = false }: { row: StatementRow; measured?: boolean }) {
+  const values = [row.cpuBeforeMs, row.cpuAfterMs, row.elapsedBeforeMs, row.elapsedAfterMs]
+  if (values.every(value => value == null)) return <span>Additional statement metrics unavailable</span>
+  const pair = (before: number | null | undefined, after: number | null | undefined) => measured ? number(after ?? null) : `${number(before ?? null)} → ${number(after ?? null)}`
+  return <div className="statement-metrics"><span>CPU (ms): {pair(row.cpuBeforeMs, row.cpuAfterMs)}</span><span>Elapsed (ms): {pair(row.elapsedBeforeMs, row.elapsedAfterMs)}</span><span>Showplan; run selected by median total logical reads{row.planRepetitionBefore != null && !measured ? `; before repetition ${row.planRepetitionBefore}` : ""}{row.planRepetitionAfter != null ? `; after repetition ${row.planRepetitionAfter}` : ""}</span></div>
+}
+
 function Objects({ row, measured }: { row: StatementRow; measured: boolean }) {
   if (row.objects.length === 0) return null
+  const hasLob = row.objects.some(item => item.lobLogicalReadsBefore != null || item.lobLogicalReadsAfter != null)
   return <Collapsible className="mt-2">
     <CollapsibleTrigger className="cursor-pointer text-sm">Objects ({row.objects.length})</CollapsibleTrigger>
     <CollapsibleContent keepMounted><div className="mt-2">
       <Table aria-label={`${row.text} object IO`}>
         <TableHeader><TableRow><TableHead>Object</TableHead>{measured
           ? <><TableHead>Scans</TableHead><TableHead>Logical reads</TableHead></>
-          : <><TableHead>Scans before</TableHead><TableHead>Scans after</TableHead><TableHead>Logical reads before</TableHead><TableHead>Logical reads after</TableHead><TableHead>Change</TableHead></>}</TableRow></TableHeader>
+          : <><TableHead>Scans before</TableHead><TableHead>Scans after</TableHead><TableHead>Logical reads before</TableHead><TableHead>Logical reads after</TableHead><TableHead>Change</TableHead></>}{hasLob && (measured ? <TableHead>LOB logical</TableHead> : <><TableHead>LOB logical before</TableHead><TableHead>LOB logical after</TableHead></>)}</TableRow></TableHeader>
         <TableBody>{row.objects.map(item => <TableRow key={item.table}>
           <TableHead scope="row" className="whitespace-normal">{item.table}</TableHead>{measured
             ? <><TableCell>{number(item.scansAfter)}</TableCell><TableCell>{number(item.readsAfter)}</TableCell></>
-            : <><TableCell>{number(item.scansBefore)}</TableCell><TableCell>{number(item.scansAfter)}</TableCell><TableCell>{number(item.readsBefore)}</TableCell><TableCell>{number(item.readsAfter)}</TableCell><TableCell className="whitespace-normal">{item.change}</TableCell></>}
+            : <><TableCell>{number(item.scansBefore)}</TableCell><TableCell>{number(item.scansAfter)}</TableCell><TableCell>{number(item.readsBefore)}</TableCell><TableCell>{number(item.readsAfter)}</TableCell><TableCell className="whitespace-normal">{item.change}</TableCell></>}{hasLob && (measured ? <TableCell>{number(item.lobLogicalReadsAfter ?? null)}</TableCell> : <><TableCell>{number(item.lobLogicalReadsBefore ?? null)}</TableCell><TableCell>{number(item.lobLogicalReadsAfter ?? null)}</TableCell></>)}
         </TableRow>)}</TableBody>
       </Table>
     </div></CollapsibleContent>
@@ -61,6 +69,7 @@ export function StatementRows({ rows, measured = false, postgres = false }: { ro
           {row.hiddenWork.length > 0 && <div className="mt-2 flex flex-wrap gap-1" aria-label={`Hidden work for statement ${index + 1}`}>
             {row.hiddenWork.map((item, itemIndex) => <HiddenWorkFlag key={`${item.kind}:${item.name}:${itemIndex}`} item={item} />)}
           </div>}
+          <StatementMetrics row={row} measured={measured} />
           <Objects row={row} measured={measured} />
         </TableCell>
         <TableCell className="whitespace-normal">{statusLabels[row.status] ?? row.status}</TableCell>
