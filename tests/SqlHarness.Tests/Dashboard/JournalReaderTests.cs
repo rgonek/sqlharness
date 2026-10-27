@@ -418,7 +418,8 @@ public sealed class JournalReaderTests
         });
         var partial = seed.Operation(JournalSeed.Session("cli:partial"), operation: "measure", benchmark: baseline with
         {
-            Variants = [baseline.Variants[0] with { OmittedStatements = 1 }], Statements = [statement],
+            Variants = [baseline.Variants[0] with { OmittedStatements = 1 }],
+            Statements = [statement],
         });
         var unconfirmed = seed.Operation(JournalSeed.Session("cli:unconfirmed"), operation: "measure", benchmark: baseline with
         {
@@ -426,13 +427,13 @@ public sealed class JournalReaderTests
         });
         var reader = Reader(home);
         foreach (var id in new[] { multiple.OperationId, partial.OperationId, unconfirmed.OperationId })
-        foreach (var row in reader.Operation(id, storeSensitive: false)!.Statements!)
-        {
-            Assert.Null(row.CpuAfterMs);
-            Assert.Null(row.ElapsedAfterMs);
-            Assert.Null(row.PlanRepetitionAfter);
-            Assert.Null(Assert.Single(row.Objects).LobLogicalReadsAfter);
-        }
+            foreach (var row in reader.Operation(id, storeSensitive: false)!.Statements!)
+            {
+                Assert.Null(row.CpuAfterMs);
+                Assert.Null(row.ElapsedAfterMs);
+                Assert.Null(row.PlanRepetitionAfter);
+                Assert.Null(Assert.Single(row.Objects).LobLogicalReadsAfter);
+            }
     }
 
     [Fact]

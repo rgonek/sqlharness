@@ -1,6 +1,6 @@
+using System.IO;
 using System.Net;
 using System.Net.Http.Json;
-using System.IO;
 using System.Net.Sockets;
 using System.Text.Json;
 
@@ -61,7 +61,8 @@ public sealed class MutationEndpointsTests
         var session = new SessionIdentity("prepare-evidence", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
         var module = new JournalingModule(new SqlHarnessModule(() => ProfileStore.Load(Path.Combine(home.Path, "targets.json"))), () => journal, () => session);
         var operation = new SqlHarnessMutationOperation(new SqlTargetRequest("app", new Dictionary<string, string>()),
-            "UPDATE dbo.T SET x = 1", [], 30, 10, "db") { SessionKey = "session" };
+            "UPDATE dbo.T SET x = 1", [], 30, 10, "db")
+        { SessionKey = "session" };
         var preparedOutcome = await module.ExecuteAsync(operation);
         var prepared = Assert.IsType<SqlHarnessMutationPrepared>(preparedOutcome.Report);
         Assert.NotNull(prepared.Request.PreparationToken);
@@ -115,7 +116,8 @@ public sealed class MutationEndpointsTests
         var session = new SessionIdentity("dry-evidence", "test", "test", JournalTransport.Cli, null, null, null, null, null, Environment.ProcessId, null, null);
         var module = new JournalingModule(new SqlHarnessModule(() => ProfileStore.Load(Path.Combine(home.Path, "targets.json"))), () => journal, () => session);
         var outcome = await module.ExecuteAsync(new SqlHarnessMutationOperation(new SqlTargetRequest("app", new Dictionary<string, string>()),
-            "UPDATE dbo.T SET x = 1", [], 30, 10, "db") { SessionKey = "session", DryRun = true });
+            "UPDATE dbo.T SET x = 1", [], 30, 10, "db")
+        { SessionKey = "session", DryRun = true });
         using var response = await client.PostAsJsonAsync("/api/mutations", Wire(Request() with { OperationRef = outcome.OperationRef, PreparationToken = PreparationToken }));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var reader = new JournalReader(home.DatabasePath, ProcessInfo.Current);

@@ -1,9 +1,8 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 
-using SqlHarness.Core.Mutations;
-
 using SqlHarness.Core.Journal;
+using SqlHarness.Core.Mutations;
 
 namespace SqlHarness.Core;
 

@@ -71,7 +71,7 @@ public sealed class JournalBenchmarkBuilderTests
         var clean = StatementMetricsTests.JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1);
         var unknown = StatementMetricsTests.JournalPlan("SELECT dbo.f()", 1, 1, "0x01", 0, 1);
         var warning = unknown.Replace("<RelOp", "<Warnings><SpillToTempDb /></Warnings><RelOp", StringComparison.Ordinal);
-        JournalStatementMetrics Build(string plan) => Assert.Single(JournalBenchmarkBuilder.Build(
+        static JournalStatementMetrics Build(string plan) => Assert.Single(JournalBenchmarkBuilder.Build(
         [Run("measure", 1, 1, 1, 0, plans: [plan], io: [new TableIoCounters("@P", 0, 0, 0, 0, 0, 0, 0, 0)])]).Statements);
         Assert.False(Build(clean).HasSpillWarning);
         Assert.Null(Build(unknown).HasSpillWarning);

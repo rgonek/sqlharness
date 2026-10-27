@@ -612,9 +612,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                             new TableRow(item.ObjectName!, item.ObjectScans, item.ObjectScans,
                                 item.ObjectReads is { } reads ? SaturatingAdd(reads, item.ObjectLobReads ?? 0) : null,
                                 item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null, "0%")
-                            { ObjectKind = item.ObjectKind,
-                              LobLogicalReadsBefore = item.EvidenceEligible ? item.ObjectLobReads : null,
-                              LobLogicalReadsAfter = item.EvidenceEligible ? item.ObjectLobReads : null }).ToArray();
+                            {
+                                ObjectKind = item.ObjectKind,
+                                LobLogicalReadsBefore = item.EvidenceEligible ? item.ObjectLobReads : null,
+                                LobLogicalReadsAfter = item.EvidenceEligible ? item.ObjectLobReads : null
+                            }).ToArray();
                         var reads = objectRows.All(item => item.ReadsBefore.HasValue)
                             ? objectRows.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsBefore!.Value)) : (long?)null;
                         var scansForStatement = objectRows.All(item => item.ScansBefore.HasValue)
@@ -743,7 +745,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             var objects = group.Where(item => item.ObjectName is not null).Select(item => new TableRow(
                 item.ObjectName!, null, item.ObjectScans, null,
                 item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null,
-                string.Empty) { ObjectKind = item.ObjectKind, LobLogicalReadsAfter = completeSingleCase && item.EvidenceEligible && !ambiguousNames.Contains(item.ObjectName!) ? item.ObjectLobReads : null }).ToArray();
+                string.Empty)
+            { ObjectKind = item.ObjectKind, LobLogicalReadsAfter = completeSingleCase && item.EvidenceEligible && !ambiguousNames.Contains(item.ObjectName!) ? item.ObjectLobReads : null }).ToArray();
             var reads = objects.Length > 0 && objects.All(item => item.ReadsAfter.HasValue)
                 ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsAfter!.Value)) : (long?)null;
             var scans = objects.Length > 0 && objects.All(item => item.ScansAfter.HasValue)

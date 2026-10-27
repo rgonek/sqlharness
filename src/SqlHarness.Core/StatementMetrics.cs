@@ -4,7 +4,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml;
 using System.Xml.Linq;
+
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+
 using SqlHarness.Core.Dialect;
 
 namespace SqlHarness.Core;

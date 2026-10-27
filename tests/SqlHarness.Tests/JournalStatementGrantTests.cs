@@ -1,5 +1,6 @@
 using SqlHarness.Core;
 namespace SqlHarness.Tests;
+
 public sealed class JournalStatementGrantTests
 {
     [Fact]

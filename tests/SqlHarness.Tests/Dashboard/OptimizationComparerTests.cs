@@ -22,7 +22,13 @@ public sealed class OptimizationComparerTests
     {
         var before = Statement("work", "SELECT work", 45, "old") with
         {
-            CpuMs = 0, ElapsedMs = 17, PlanRepetition = 2, GrantRequestedKb = 30, GrantGrantedKb = 20, GrantMaxUsedKb = 10, HasSpillWarning = false,
+            CpuMs = 0,
+            ElapsedMs = 17,
+            PlanRepetition = 2,
+            GrantRequestedKb = 30,
+            GrantGrantedKb = 20,
+            GrantMaxUsedKb = 10,
+            HasSpillWarning = false,
             Objects = [new TableRow("Orders", 1, 1, 45, 45, "0%") { LobLogicalReadsBefore = 5, LobLogicalReadsAfter = 5 }],
         };
         var after = Statement("work", "SELECT work", 20, "new") with
@@ -98,7 +104,8 @@ public sealed class OptimizationComparerTests
         var second = Statement("work", "SELECT same", 20, "b") with { Occurrence = 1, CpuMs = 22, PlanRepetition = 2 };
         var unmatched = Statement("other", "SELECT other", 5, "c") with
         {
-            CpuMs = 33, HiddenWork = [new SqlHarness.Core.HiddenWork("udf", "fn", 1, null)],
+            CpuMs = 33,
+            HiddenWork = [new SqlHarness.Core.HiddenWork("udf", "fn", 1, null)],
         };
         var evidence = Evidence(203, "h1", "h2", (35, 10)) with
         {
