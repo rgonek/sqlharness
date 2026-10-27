@@ -87,7 +87,7 @@ public sealed class MutationEvidenceTests
         {
             connection.Open();
             using var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE operations DROP COLUMN mutation_preparation_digest; ALTER TABLE operations DROP COLUMN mutation_preparation_token_hash; ALTER TABLE operations DROP COLUMN records_affected; DROP INDEX ix_mutation_requests_operation; ALTER TABLE mutation_requests DROP COLUMN operation_id; PRAGMA user_version = 22";
+            command.CommandText = "ALTER TABLE operation_statements DROP COLUMN grant_requested_kb; ALTER TABLE operation_statements DROP COLUMN grant_granted_kb; ALTER TABLE operation_statements DROP COLUMN grant_max_used_kb; ALTER TABLE operation_statements DROP COLUMN has_spill_warning; ALTER TABLE operations DROP COLUMN mutation_preparation_digest; ALTER TABLE operations DROP COLUMN mutation_preparation_token_hash; ALTER TABLE operations DROP COLUMN records_affected; DROP INDEX ix_mutation_requests_operation; ALTER TABLE mutation_requests DROP COLUMN operation_id; PRAGMA user_version = 22";
             command.ExecuteNonQuery();
         }
         var before = JournalDb.Rows(temp.DatabasePath, "SELECT id, operation, operation_ref, status FROM operations").Single();
@@ -107,7 +107,7 @@ public sealed class MutationEvidenceTests
         {
             connection.Open();
             using var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE operations DROP COLUMN mutation_preparation_digest; ALTER TABLE operations DROP COLUMN mutation_preparation_token_hash; PRAGMA user_version = 23";
+            command.CommandText = "ALTER TABLE operation_statements DROP COLUMN grant_requested_kb; ALTER TABLE operation_statements DROP COLUMN grant_granted_kb; ALTER TABLE operation_statements DROP COLUMN grant_max_used_kb; ALTER TABLE operation_statements DROP COLUMN has_spill_warning; ALTER TABLE operations DROP COLUMN mutation_preparation_digest; ALTER TABLE operations DROP COLUMN mutation_preparation_token_hash; PRAGMA user_version = 23";
             command.ExecuteNonQuery();
         }
         var before = JournalDb.Rows(temp.DatabasePath, "SELECT id, operation, operation_ref, status, records_affected FROM operations").Single();

@@ -67,6 +67,7 @@ export type OperationSummary = {
   sqlHash: string | null
   rowsReturned: number | null
   recordsAffected?: number | null
+  dashboardEvidenceVersion?: number | null
   logicalReadsMedian: number | null
   hasSpill: boolean
   coldCache: boolean

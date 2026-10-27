@@ -28,7 +28,8 @@ public sealed class DashboardContractTests
              "finishedAt", "durationMs", "profile", "engine", "server", "database", "mutationRequested", "sqlHash",
              "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage", "cancelReason", "agentModel", "agentReasoningEffort",
              "operationRef", "parentOperationRef", "dryRun", "agentModelSource", "subject", "versionPair", "readsBefore", "readsAfter", "safetyNotices",
-             "agentLabelInitial", "agentLabel", "agentKeep", "ownerStarred", "ownerNote"],
+             "agentLabelInitial", "agentLabel", "agentKeep", "ownerStarred", "ownerNote",
+             "dashboardEvidenceVersion", "recordsAffected", "sqlPreview", "sqlPreviewTruncated"],
             Names(summary));
         AssertTypescriptFieldsMatch("OperationSummary", summary);
     }
@@ -145,7 +146,7 @@ public sealed class DashboardContractTests
         Assert.Equal(["operation", "session", "vars", "candidateSqlHash", "sqlText", "candidateSqlText", "rawTokens",
                 "emittedTokens", "artifactDirectory", "summary", "variants", "dimensions", "agent", "rawBytes", "emittedBytes",
                 "tokenEstimationMethod", "compareSubject", "compareScope", "baselineVersion", "candidateVersion",
-                "compareRegression", "compareCases", "compareConditions", "phases", "setupSqlText", "conditions", "statements", "omittedStatements", "statementAttribution"],
+                "compareRegression", "compareCases", "compareConditions", "phases", "setupSqlText", "conditions", "statements", "mutationRequest", "mutationRequestId", "omittedStatements", "statementAttribution"],
             Names(new OperationDetail(default!, default!, null, null, null, null, null, null, null, null, [], default!, null)));
     }
 
