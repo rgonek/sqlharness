@@ -335,6 +335,104 @@ public sealed class JournalReaderTests
         }
     }
 
+    [Fact]
+    public void Detail_hides_new_metrics_for_multiple_cases_and_incomplete_attribution()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var statement = StoredStatement("measure", "SELECT work", "p") with { CpuMilliseconds = 7, ElapsedMilliseconds = 9, PlanRepetition = 2 };
+        var baseline = JournalSeed.Benchmark();
+        var multiple = seed.Operation(JournalSeed.Session("cli:multi"), operation: "measure", benchmark: baseline with
+        {
+            Variants = [baseline.Variants[0], baseline.Variants[0] with { CaseId = "1" }],
+            Statements = [statement, statement with { CaseId = "1" }],
+        });
+        var partial = seed.Operation(JournalSeed.Session("cli:partial"), operation: "measure", benchmark: baseline with
+        {
+            Variants = [baseline.Variants[0] with { OmittedStatements = 1 }], Statements = [statement],
+        });
+        var unconfirmed = seed.Operation(JournalSeed.Session("cli:unconfirmed"), operation: "measure", benchmark: baseline with
+        {
+            Statements = [statement, statement with { StatementKey = "other", StatementOrdinal = 1, Status = StatementStatus.Partial }],
+        });
+        var reader = Reader(home);
+        foreach (var id in new[] { multiple.OperationId, partial.OperationId, unconfirmed.OperationId })
+        foreach (var row in reader.Operation(id, storeSensitive: false)!.Statements!)
+        {
+            Assert.Null(row.CpuAfterMs);
+            Assert.Null(row.ElapsedAfterMs);
+            Assert.Null(row.PlanRepetitionAfter);
+            Assert.Null(Assert.Single(row.Objects).LobLogicalReadsAfter);
+        }
+    }
+
+    [Fact]
+    public void Mixed_session_comparison_keeps_versioned_evidence_on_the_new_side()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var conditions = JournalSeed.ReproConditions();
+        BenchmarkJournalRecord Record(long cpu) => JournalSeed.Benchmark() with
+        {
+            Statements = [StoredStatement("measure", "SELECT work", "p") with
+            {
+                CpuMilliseconds = cpu, ElapsedMilliseconds = cpu + 1, PlanRepetition = 2,
+            }],
+        };
+        var old = seed.Measure(JournalSeed.Session("cli:old-evidence"), "orders", "whole", "h1", conditions, Record(31));
+        var current = seed.Measure(JournalSeed.Session("cli:new-evidence"), "orders", "whole", "h2", conditions, Record(12));
+        using (var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE sessions SET dashboard_evidence_version = NULL WHERE id = (SELECT session_id FROM operations WHERE id = $id);";
+            command.Parameters.AddWithValue("$id", old.OperationId);
+            command.ExecuteNonQuery();
+        }
+        var reader = Reader(home);
+        CompareEvidence EvidenceFor(long operationId) => Assert.Single(reader.OptimizationEvidence(reader.Operation(operationId)!.Operation.SessionId));
+        var evidence = new[] { EvidenceFor(old.OperationId), EvidenceFor(current.OperationId) };
+        var versions = new[] {
+            new VersionRow("v1", "h1", null, null, null, null, "incomplete", [], 0),
+            new VersionRow("v2", "h2", null, null, null, null, "incomplete", [], 0),
+        };
+        var group = new ConditionsGroup(evidence[0].Fingerprint!, "case", [new ScopeVersions("whole query", versions)], "v1", "v2");
+        var caseKey = evidence[0].Cases[0].MeasurementFingerprint ?? evidence[0].Cases[0].CaseId;
+        var result = OptimizationComparer.Compare(group, evidence, "v1", "v2", caseKey, "sum", "statements");
+        var row = Assert.Single(result.Statements);
+        Assert.Null(row.CpuBeforeMs);
+        Assert.Null(row.ElapsedBeforeMs);
+        Assert.Null(row.PlanRepetitionBefore);
+        Assert.Null(Assert.Single(row.Objects).LobLogicalReadsBefore);
+        Assert.Equal(12, row.CpuAfterMs);
+        Assert.Equal(13, row.ElapsedAfterMs);
+        Assert.Equal(2, row.PlanRepetitionAfter);
+        Assert.Equal(5, Assert.Single(row.Objects).LobLogicalReadsAfter);
+    }
+
+    [Fact]
+    public void Journal_object_kind_is_preserved_for_identically_named_objects()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var record = JournalSeed.Benchmark() with
+        {
+            Statements = [StoredStatement("measure", "SELECT work", "p") with
+            {
+                Objects = [new StatementObjectCounters("Orders", "table", 10, 2, 1), new StatementObjectCounters("Orders", "index", 20, 3, 1)],
+            }],
+        };
+        var handle = seed.Measure(JournalSeed.Session("cli:object-kinds"), "orders", "whole", "h1", JournalSeed.ReproConditions(), record);
+        var reader = Reader(home);
+        var evidence = Assert.Single(reader.OptimizationEvidence(reader.Operation(handle.OperationId)!.Operation.SessionId));
+        var objects = Assert.Single(Assert.Single(evidence.Metrics).Statements).Objects;
+        Assert.Equal(new[] { "index", "table" }, objects.Select(row => row.ObjectKind).Order().ToArray());
+        var detail = Assert.Single(reader.Operation(handle.OperationId)!.Statements!);
+        Assert.Equal(new[] { "index", "table" }, detail.Objects.Select(row => row.ObjectKind).Order().ToArray());
+        Assert.All(detail.Objects, row => Assert.Null(row.LobLogicalReadsAfter));
+        Assert.DoesNotContain("ObjectKind", JsonSerializer.Serialize(detail));
+    }
+
     private static JournalStatementMetrics StoredStatement(string variant, string text, string planHash) =>
         new(variant, null, null, 0, "0123456789abcdef", null, null, null, [])
         {

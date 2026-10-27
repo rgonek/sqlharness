@@ -261,9 +261,9 @@ public static class OptimizationComparer
                     Change(objectReadsBefore, objectReadsAfter))
                 {
                     LobLogicalReadsBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed"
-                        ? LobForObject(left[0]!, name, beforeSide: true) : null,
+                        ? LobForObject(left[0]!, right[0], name, beforeSide: true) : null,
                     LobLogicalReadsAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed"
-                        ? LobForObject(right[0]!, name, beforeSide: false) : null,
+                        ? LobForObject(right[0]!, left[0], name, beforeSide: false) : null,
                 };
             }).ToArray();
             var attribution = cases.All(id => caseComparisons.GetValueOrDefault(id).VerdictBasis == "changed statements") ? "confirmed" : "partial";
@@ -292,11 +292,14 @@ public static class OptimizationComparer
             .ThenByDescending(row => AbsoluteChange(row.ReadsBefore, row.ReadsAfter)).ToArray();
     }
 
-    private static long? LobForObject(CompareStatementEvidence statement, string name, bool beforeSide)
+    private static long? LobForObject(CompareStatementEvidence statement, CompareStatementEvidence? other, string name, bool beforeSide)
     {
         var rows = statement.Objects.Where(row => row.Table.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (rows.Length == 0) return null;
-        return SumNullable(rows.Select(row => beforeSide ? row.LobLogicalReadsBefore : row.LobLogicalReadsAfter));
+        var otherRows = other?.Objects.Where(row => row.Table.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
+        if (rows.Length != 1 || otherRows.Length > 1
+            || (otherRows.Length == 1 && !string.Equals(rows[0].ObjectKind, otherRows[0].ObjectKind, StringComparison.Ordinal)))
+            return null;
+        return beforeSide ? rows[0].LobLogicalReadsBefore : rows[0].LobLogicalReadsAfter;
     }
 
     private static long? StatementCounter(CompareMetricEvidence? metric, CompareStatementEvidence? statement,

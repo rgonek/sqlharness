@@ -608,7 +608,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                             new TableRow(item.ObjectName!, item.ObjectScans, item.ObjectScans,
                                 item.ObjectReads is { } reads ? SaturatingAdd(reads, item.ObjectLobReads ?? 0) : null,
                                 item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null, "0%")
-                            { LobLogicalReadsBefore = item.EvidenceEligible ? item.ObjectLobReads : null,
+                            { ObjectKind = item.ObjectKind,
+                              LobLogicalReadsBefore = item.EvidenceEligible ? item.ObjectLobReads : null,
                               LobLogicalReadsAfter = item.EvidenceEligible ? item.ObjectLobReads : null }).ToArray();
                         var reads = objectRows.All(item => item.ReadsBefore.HasValue)
                             ? objectRows.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsBefore!.Value)) : (long?)null;
@@ -717,18 +718,24 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var statements = LoadStoredStatements(connection, [operationId], storeSensitive);
         var coverage = Query(connection, """
             SELECT COALESCE(MAX(m.omitted_statements), 0), COUNT(DISTINCT s.id),
-                   COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND s.status <> 'confirmed' THEN 1 ELSE 0 END), 0)
+                   COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND s.status <> 'confirmed' THEN 1 ELSE 0 END), 0),
+                   (SELECT COUNT(*) FROM (SELECT DISTINCT case_id, parameter_set FROM operation_metrics WHERE operation_id = $id))
             FROM operation_metrics m LEFT JOIN operation_statements s ON s.operation_id = m.operation_id
             WHERE m.operation_id = $id;
-            """, [("$id", (object?)operationId)], row => (Omitted: row.GetInt32(0), Count: row.GetInt32(1), Unconfirmed: row.GetInt32(2))).FirstOrDefault();
+            """, [("$id", (object?)operationId)], row => (Omitted: row.GetInt32(0), Count: row.GetInt32(1), Unconfirmed: row.GetInt32(2), Cases: row.GetInt32(3))).FirstOrDefault();
         var omitted = coverage.Omitted;
+        var completeSingleCase = coverage.Cases == 1 && coverage.Count > 0 && omitted == 0 && coverage.Unconfirmed == 0
+            && statements.Select(row => (row.CaseId, row.ParameterSet)).Distinct().Count() == 1;
         var rows = statements.GroupBy(row => row.Id).Select(group =>
         {
             var row = group.First();
+            var ambiguousNames = group.Where(item => item.ObjectName is not null)
+                .GroupBy(item => item.ObjectName!, StringComparer.OrdinalIgnoreCase)
+                .Where(items => items.Count() > 1).Select(items => items.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var objects = group.Where(item => item.ObjectName is not null).Select(item => new TableRow(
                 item.ObjectName!, null, item.ObjectScans, null,
                 item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null,
-                string.Empty) { LobLogicalReadsAfter = item.EvidenceEligible && row.Status == "confirmed" ? item.ObjectLobReads : null }).ToArray();
+                string.Empty) { ObjectKind = item.ObjectKind, LobLogicalReadsAfter = completeSingleCase && item.EvidenceEligible && !ambiguousNames.Contains(item.ObjectName!) ? item.ObjectLobReads : null }).ToArray();
             var reads = objects.Length > 0 && objects.All(item => item.ReadsAfter.HasValue)
                 ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsAfter!.Value)) : (long?)null;
             var scans = objects.Length > 0 && objects.All(item => item.ScansAfter.HasValue)
@@ -740,9 +747,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             return new StatementRow(row.Key, text, "measured", null, reads, null, scans, row.Executions,
                 string.Empty, row.Status, hidden, objects)
             {
-                CpuAfterMs = row.Status == "confirmed" ? row.CpuMs : null,
-                ElapsedAfterMs = row.Status == "confirmed" ? row.ElapsedMs : null,
-                PlanRepetitionAfter = row.Status == "confirmed" ? row.EvidenceRepetition : null,
+                CpuAfterMs = completeSingleCase ? row.CpuMs : null,
+                ElapsedAfterMs = completeSingleCase ? row.ElapsedMs : null,
+                PlanRepetitionAfter = completeSingleCase ? row.EvidenceRepetition : null,
                 Occurrence = row.Occurrence,
                 PlanHashAfter = row.PlanHash,
                 PlanLinkAfter = PlanLink(row),

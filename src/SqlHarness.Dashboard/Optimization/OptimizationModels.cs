@@ -178,6 +178,8 @@ public sealed record CaseOption(string Id, string Label, string Outcome);
 public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);
 public sealed record TableRow(string Table, long? ScansBefore, long? ScansAfter, long? ReadsBefore, long? ReadsAfter, string Change)
 {
+    [JsonIgnore]
+    public string? ObjectKind { get; init; }
     public long? LobLogicalReadsBefore { get; init; }
     public long? LobLogicalReadsAfter { get; init; }
 }
