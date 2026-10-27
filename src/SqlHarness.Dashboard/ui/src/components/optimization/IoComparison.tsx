@@ -3,7 +3,7 @@ import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Field, FieldLabel, FieldSet, FieldLegend, FieldGroup } from "@/components/ui/field"
-import { Fragment, useEffect, useState } from "react"
+import { Fragment, useState } from "react"
 import type { OptimizationComparison } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -26,7 +26,11 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
   const availableColumns: { key: IoExtraMetric; label: string }[] = [{ key: "physicalReads", label: "Physical" }, { key: "readAheadReads", label: "Read-ahead" }, { key: "lobLogicalReads", label: "LOB logical" }, { key: "lobPhysicalReads", label: "LOB physical" }, { key: "lobReadAheadReads", label: "LOB read-ahead" }]
   const visibleColumns = byStatement ? columns.filter(key => key === "lobLogicalReads") : columns
   const visibleOptions = byStatement ? availableColumns.filter(column => column.key === "lobLogicalReads") : availableColumns
-  useEffect(() => { if (byStatement) setColumns(current => current.filter(key => key === "lobLogicalReads")) }, [byStatement])
+  const [previousView, setPreviousView] = useState(byStatement)
+  if (previousView !== byStatement) {
+    setPreviousView(byStatement)
+    if (byStatement) setColumns(current => current.filter(key => key === "lobLogicalReads"))
+  }
   const extraCells = (table?: string, object?: IoRow) => visibleColumns.map(key => <TableCell key={key}><Pair before={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsBefore ?? null : !byStatement && table ? extras?.before[table]?.[key] ?? null : null} after={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsAfter ?? null : !byStatement && table ? extras?.after[table]?.[key] ?? null : null} /></TableCell>)
   const [closed, setClosed] = useState<string[]>([])
   const rows = comparison.statements ?? []

@@ -3,6 +3,10 @@ import userEvent from "@testing-library/user-event"
 import { expect, test, vi } from "vitest"
 import type { OptimizationComparison } from "@/api/types"
 import { IoComparison } from "./IoComparison"
+import { StatementMetrics } from "./StatementRows"
+import { IoDetails } from "./IoDetails"
+
+vi.mock("@tanstack/react-query", () => ({ useQueries: () => [] }))
 
 const comparison: OptimizationComparison = {
   a: "v0", b: "v1", basis: "MeasuredTogether", operationId: 10, equivalenceLabel: "equivalent",
@@ -102,4 +106,22 @@ test("only exposes supported counters when switching IO views", async () => {
   rerender(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={extras} />)
   expect(screen.queryByRole("columnheader", { name: "Physical" })).not.toBeInTheDocument()
   expect(screen.getByRole("columnheader", { name: "LOB logical" })).toBeInTheDocument()
+})
+
+
+test("measured statement grants and spill show only after values", () => {
+  const row = { ...comparison.statements![0], grantRequestedKbBefore: 111, grantRequestedKbAfter: 222, grantGrantedKbBefore: 333, grantGrantedKbAfter: 444, grantMaxUsedKbBefore: 555, grantMaxUsedKbAfter: 666, hasSpillWarningBefore: false, hasSpillWarningAfter: true }
+  const { container } = render(<StatementMetrics row={row} measured />)
+  expect(screen.getByText("Requested grant (KB): 222")).toBeInTheDocument()
+  expect(screen.getByText("Granted grant (KB): 444")).toBeInTheDocument()
+  expect(screen.getByText("Max used grant (KB): 666")).toBeInTheDocument()
+  expect(screen.getByText("Spill warning: Yes")).toBeInTheDocument()
+  expect(container).not.toHaveTextContent(/111|333|555|→|Spill warning: No/)
+})
+
+
+test("batch memory does not claim statement memory is never retained", () => {
+  render(<IoDetails comparison={comparison} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByLabelText("Batch memory")).toHaveTextContent("Memory (sum of selected case medians)")
+  expect(screen.queryByText("Statement memory is not retained in the journal.")).not.toBeInTheDocument()
 })

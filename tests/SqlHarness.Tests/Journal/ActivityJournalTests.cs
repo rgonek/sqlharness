@@ -43,7 +43,7 @@ public sealed class ActivityJournalTests
                 command.CommandText = "ALTER TABLE sessions DROP COLUMN dashboard_evidence_version";
                 command.ExecuteNonQuery();
             }
-            command.CommandText = "ALTER TABLE operations DROP COLUMN mutation_preparation_digest; ALTER TABLE operations DROP COLUMN mutation_preparation_token_hash; ALTER TABLE operations DROP COLUMN records_affected; DROP INDEX ix_mutation_requests_operation; ALTER TABLE mutation_requests DROP COLUMN operation_id; PRAGMA user_version = 21";
+            command.CommandText = "ALTER TABLE operation_statements DROP COLUMN grant_requested_kb; ALTER TABLE operation_statements DROP COLUMN grant_granted_kb; ALTER TABLE operation_statements DROP COLUMN grant_max_used_kb; ALTER TABLE operation_statements DROP COLUMN has_spill_warning; ALTER TABLE operations DROP COLUMN mutation_preparation_digest; ALTER TABLE operations DROP COLUMN mutation_preparation_token_hash; ALTER TABLE operations DROP COLUMN records_affected; DROP INDEX ix_mutation_requests_operation; ALTER TABLE mutation_requests DROP COLUMN operation_id; PRAGMA user_version = 21";
             command.ExecuteNonQuery();
         }
         var before = JournalDb.Rows(temp.DatabasePath, "SELECT id, session_key, agent_kind, source, first_seen, last_seen FROM sessions").Single();
@@ -52,12 +52,15 @@ public sealed class ActivityJournalTests
         Assert.Equal(before, JournalDb.Rows(temp.DatabasePath, "SELECT id, session_key, agent_kind, source, first_seen, last_seen FROM sessions").Single());
         Assert.Equal(oldOperation, JournalDb.Rows(temp.DatabasePath, "SELECT id, session_id, operation, started_at, status FROM operations").Single());
         Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT dashboard_evidence_version FROM sessions WHERE session_key = 'old'").Single()["dashboard_evidence_version"]);
-        Assert.NotNull(journal.Begin(JournalTestData.Session("old"), JournalTestData.Start()));
+        var resumed = Enumerable.Range(0, 8).AsParallel().Select(_ =>
+            journal.Begin(JournalTestData.Session("old"), JournalTestData.Start())).ToArray();
+        Assert.All(resumed, Assert.NotNull);
+        Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT dashboard_evidence_version FROM sessions WHERE session_key = 'old'").Single()["dashboard_evidence_version"]);
         Assert.NotNull(journal.Begin(JournalTestData.Session("new"), JournalTestData.Start()));
         var rows = JournalDb.Rows(temp.DatabasePath, "SELECT s.session_key, s.dashboard_evidence_version FROM operations o JOIN sessions s ON s.id = o.session_id ORDER BY o.id");
-        Assert.Null(rows[0]["dashboard_evidence_version"]);
-        Assert.Null(rows[1]["dashboard_evidence_version"]);
-        Assert.Equal(1L, rows[2]["dashboard_evidence_version"]);
+        Assert.Equal(10, rows.Count);
+        Assert.All(rows.Take(9), row => Assert.Null(row["dashboard_evidence_version"]));
+        Assert.Equal(1L, rows[9]["dashboard_evidence_version"]);
     }
 
     [Fact]

@@ -26,6 +26,7 @@ test("handles old, null and empty previews while preserving row order", () => {
   const rows = screen.getByLabelText("Session operations").children
   expect(Array.from(rows).map(row => within(row as HTMLElement).getByRole("link").textContent)).toEqual(["4", "3", "2", "1"])
   expect(screen.getByText("SELECT 0")).toBeInTheDocument()
+  expect(screen.queryByLabelText("SQL preview truncated")).not.toBeInTheDocument()
   expect(screen.getByText("old subject")).toBeInTheDocument()
   expect(screen.getByText("null subject")).toBeInTheDocument()
   expect(screen.getByText("empty subject")).toBeInTheDocument()
