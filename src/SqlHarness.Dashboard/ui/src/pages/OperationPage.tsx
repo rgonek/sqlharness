@@ -197,7 +197,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
             <Fact label="Profile">{op.profile ?? "—"}</Fact>
             <Fact label="Engine">{op.engine ?? "—"}</Fact>
             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
-            <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>
+            {op.operation === "query" && <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>}
             <Fact label="SQL hash"><span className="break-all font-mono">{op.sqlHash ?? "—"}</span></Fact>
             {op.dryRun && <Fact label="Execution mode">Dry run; output counted, no database execution</Fact>}
             {op.operationRef && <Fact label="Operation reference"><span className="font-mono">{op.operationRef}</span></Fact>}
