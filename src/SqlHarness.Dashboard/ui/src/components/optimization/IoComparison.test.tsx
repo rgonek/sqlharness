@@ -85,3 +85,21 @@ test("does not turn unknown spill into no warning or sum metrics across cases", 
   expect(screen.queryByText(/Spill warning:/)).not.toBeInTheDocument()
   expect(screen.getByText("Select a single case for statement metrics.")).toBeInTheDocument()
 })
+
+test("only exposes supported counters when switching IO views", async () => {
+  const onViewChange = vi.fn()
+  const extras = { before: { Orders: { physicalReads: 8, readAheadReads: 9, lobPhysicalReads: 10, lobReadAheadReads: 11 } }, after: { Orders: { physicalReads: 0, readAheadReads: 1, lobPhysicalReads: 2, lobReadAheadReads: 3 } } }
+  const { rerender } = render(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={extras} />)
+  await userEvent.click(screen.getByText("More columns"))
+  for (const name of ["Physical", "Read-ahead", "LOB physical", "LOB read-ahead", "LOB logical"]) await userEvent.click(screen.getByRole("checkbox", { name }))
+  expect(within(screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!).getByText("8 →")).toBeInTheDocument()
+  rerender(<IoComparison comparison={comparison} byStatement onViewChange={onViewChange} extras={extras} />)
+  for (const name of ["Physical", "Read-ahead", "LOB physical", "LOB read-ahead"]) {
+    expect(screen.queryByRole("columnheader", { name })).not.toBeInTheDocument()
+    expect(screen.queryByRole("checkbox", { name })).not.toBeInTheDocument()
+  }
+  expect(screen.getByRole("columnheader", { name: "LOB logical" })).toBeInTheDocument()
+  rerender(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={extras} />)
+  expect(screen.queryByRole("columnheader", { name: "Physical" })).not.toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: "LOB logical" })).toBeInTheDocument()
+})

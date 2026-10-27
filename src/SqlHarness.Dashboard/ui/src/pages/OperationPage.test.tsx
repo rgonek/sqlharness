@@ -107,6 +107,7 @@ test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", a
   renderApp("/operations/10")
 
   expect(await screen.findByRole("heading", { level: 1, name: "Operation #10" })).toBeInTheDocument()
+  expect(within(screen.getByLabelText("Operation metrics")).queryByText("Rows")).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Details" }))
   expect(screen.getByText("acme")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("tab", { name: "Details" }))
@@ -496,4 +497,13 @@ test("denied request and unknown outcome show only recorded lifecycle", async ()
   expect(screen.getByText("created")).toBeInTheDocument()
   expect(screen.getByText("decided")).toBeInTheDocument()
   expect(within(screen.getByRole("tabpanel")).queryByText("succeeded")).not.toBeInTheDocument()
+})
+
+
+test("query retains its recorded row count without a columns placeholder", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ operation: "query", rowsReturned: 42 }) }) })
+  renderApp("/operations/10")
+  const metrics = await screen.findByLabelText("Operation metrics")
+  expect(within(metrics).getByText("Rows").parentElement).toHaveTextContent("42")
+  expect(within(metrics).queryByText("Columns")).not.toBeInTheDocument()
 })

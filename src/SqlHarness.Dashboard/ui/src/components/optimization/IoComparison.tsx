@@ -3,7 +3,7 @@ import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Field, FieldLabel, FieldSet, FieldLegend, FieldGroup } from "@/components/ui/field"
-import { Fragment, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import type { OptimizationComparison } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -24,7 +24,10 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
   const [scans, setScans] = useState(true)
   const [columns, setColumns] = useState<IoExtraMetric[]>([])
   const availableColumns: { key: IoExtraMetric; label: string }[] = [{ key: "physicalReads", label: "Physical" }, { key: "readAheadReads", label: "Read-ahead" }, { key: "lobLogicalReads", label: "LOB logical" }, { key: "lobPhysicalReads", label: "LOB physical" }, { key: "lobReadAheadReads", label: "LOB read-ahead" }]
-  const extraCells = (table?: string, object?: IoRow) => columns.map(key => <TableCell key={key}><Pair before={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsBefore ?? null : !byStatement && table ? extras?.before[table]?.[key] ?? null : null} after={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsAfter ?? null : !byStatement && table ? extras?.after[table]?.[key] ?? null : null} /></TableCell>)
+  const visibleColumns = byStatement ? columns.filter(key => key === "lobLogicalReads") : columns
+  const visibleOptions = byStatement ? availableColumns.filter(column => column.key === "lobLogicalReads") : availableColumns
+  useEffect(() => { if (byStatement) setColumns(current => current.filter(key => key === "lobLogicalReads")) }, [byStatement])
+  const extraCells = (table?: string, object?: IoRow) => visibleColumns.map(key => <TableCell key={key}><Pair before={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsBefore ?? null : !byStatement && table ? extras?.before[table]?.[key] ?? null : null} after={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsAfter ?? null : !byStatement && table ? extras?.after[table]?.[key] ?? null : null} /></TableCell>)
   const [closed, setClosed] = useState<string[]>([])
   const rows = comparison.statements ?? []
   const renderRow = (row: IoRow, key: string) => <TableRow key={key}><TableHead scope="row" className="whitespace-normal pl-8 font-mono text-[13px]">{row.table}</TableHead>{scans && <TableCell><Pair before={row.scansBefore} after={row.scansAfter} /></TableCell>}<TableCell><Pair before={row.readsBefore} after={row.readsAfter} change={row.change} /></TableCell>{extraCells(row.table, row)}</TableRow>
@@ -32,10 +35,10 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
     <div className="flex flex-wrap items-center gap-2">
       <SegmentedRadioGroup label="IO view" value={byStatement ? "statements" : "whole"} options={[{ value: "statements", label: "By statement" }, { value: "whole", label: "Whole batch" }]} onValueChange={value => { if (value === "statements" || value === "whole") onViewChange(value) }} />
       <span className="ml-2 text-xs text-muted-foreground">Columns</span><Button size="sm" variant={scans ? "secondary" : "outline"} aria-pressed={scans} onClick={() => setScans(!scans)}>Scans</Button>
-      <Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}>More columns</PopoverTrigger><PopoverContent align="start"><FieldSet><FieldLegend>Columns</FieldLegend><FieldGroup>{availableColumns.map(column => <Field key={column.key} orientation="horizontal"><FieldLabel><Checkbox checked={columns.includes(column.key)} onCheckedChange={() => setColumns(current => current.includes(column.key) ? current.filter(item => item !== column.key) : [...current, column.key])} />{column.label}</FieldLabel></Field>)}</FieldGroup></FieldSet></PopoverContent></Popover>
+      <Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}>More columns</PopoverTrigger><PopoverContent align="start"><FieldSet><FieldLegend>Columns</FieldLegend><FieldGroup>{visibleOptions.map(column => <Field key={column.key} orientation="horizontal"><FieldLabel><Checkbox checked={columns.includes(column.key)} onCheckedChange={() => setColumns(current => current.includes(column.key) ? current.filter(item => item !== column.key) : [...current, column.key])} />{column.label}</FieldLabel></Field>)}</FieldGroup></FieldSet></PopoverContent></Popover>
     </div>
     <ComparisonPending pending={pending} announce>{comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <Table className="io-table" aria-label="IO before and after">
-      <TableHeader><TableRow><TableHead>{byStatement ? "Statement / table" : "Table"}</TableHead>{scans && <TableHead className="text-right">Scans</TableHead>}<TableHead className="text-right">Logical reads</TableHead>{columns.map(key => <TableHead key={key} className="text-right">{availableColumns.find(column => column.key === key)?.label}</TableHead>)}</TableRow></TableHeader>
+      <TableHeader><TableRow><TableHead>{byStatement ? "Statement / table" : "Table"}</TableHead>{scans && <TableHead className="text-right">Scans</TableHead>}<TableHead className="text-right">Logical reads</TableHead>{visibleColumns.map(key => <TableHead key={key} className="text-right">{availableColumns.find(column => column.key === key)?.label}</TableHead>)}</TableRow></TableHeader>
       <TableBody>{byStatement ? rows.map(row => {
         const key = `${row.key}:${row.occurrence}`
         const open = !closed.includes(key)
@@ -49,7 +52,6 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
       </TableBody>
     </Table>}
     {byStatement && comparison.statementMetricsUnavailableReason && <p className="text-xs text-muted-foreground">{comparison.statementMetricsUnavailableReason}</p>}
-    {byStatement && columns.length > 0 && <p className="text-xs text-muted-foreground">Other additional counters are retained for the whole batch; per-statement LOB logical reads are shown when available.</p>}
     {comparison.collapsed && <p className="text-xs text-muted-foreground">{comparison.collapsed.label}</p>}
     <p className="text-xs text-muted-foreground">IO from recorded STATISTICS IO / BUFFERS. Unavailable measurements are shown as —.</p></ComparisonPending>
   </section>
