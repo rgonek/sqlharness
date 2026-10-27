@@ -1,0 +1,33 @@
+{
+  "origin": "http://127.0.0.1:48126",
+  "installed": false,
+  "results": [
+    {
+      "label": "side-by-side diff",
+      "before": 320,
+      "after": 460,
+      "editor": 458
+    },
+    {
+      "label": "unified diff",
+      "before": 460,
+      "after": 600,
+      "editor": 598
+    },
+    {
+      "label": "plan SQL",
+      "before": 250,
+      "after": 390,
+      "editor": 388
+    },
+    {
+      "label": "single-side SQL",
+      "before": 320,
+      "after": 460,
+      "editor": 458
+    }
+  ],
+  "errors": [],
+  "api": "browser fixtures only",
+  "tokenRecorded": false
+}

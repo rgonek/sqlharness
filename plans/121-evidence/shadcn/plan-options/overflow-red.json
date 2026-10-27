@@ -1,0 +1,51 @@
+{
+  "width": 390,
+  "scroll": 1247,
+  "elements": [
+    {
+      "tag": "SECTION",
+      "cls": "version-plan flex flex-col gap-3",
+      "right": 357,
+      "width": 324,
+      "parentWidth": 324,
+      "minWidth": "0px",
+      "display": "flex"
+    },
+    {
+      "tag": "DIV",
+      "cls": "plan-version-toolbar flex flex-wrap items-center gap-3",
+      "right": 357,
+      "width": 324,
+      "parentWidth": 324,
+      "minWidth": "auto",
+      "display": "flex"
+    },
+    {
+      "tag": "SECTION",
+      "cls": "plan-workbench flex flex-col gap-3",
+      "right": 357,
+      "width": 324,
+      "parentWidth": 324,
+      "minWidth": "auto",
+      "display": "flex"
+    },
+    {
+      "tag": "DIV",
+      "cls": "grid min-w-0 gap-3",
+      "right": 357,
+      "width": 324,
+      "parentWidth": 324,
+      "minWidth": "0px",
+      "display": "grid"
+    },
+    {
+      "tag": "DIV",
+      "cls": "monaco-editor no-user-select  showUnused showDeprecated vs",
+      "right": 1246,
+      "width": 1212,
+      "parentWidth": 1212,
+      "minWidth": "0px",
+      "display": "block"
+    }
+  ]
+}

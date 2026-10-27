@@ -1,0 +1,8 @@
+{
+  "revision": "aaa346e0287b131c21d1e2fd5cffae865cab73ef",
+  "sourceTree": "b5b28859489fe57b2c900034717bbbb18095324c",
+  "testsTree": "d5d136251e094c5131c8f534f248de593574d1c1",
+  "review": "No findings; visible radio/Collapsible portal context/pending subtree/reset behavior",
+  "gate": "PASS: Windows just verify, UI 386, Core 4722 (11 skipped), MCP 535 (4 skipped), 16m08s; superseded delivery candidate 58a29997",
+  "generatedPrimitivesChanged": false
+}
