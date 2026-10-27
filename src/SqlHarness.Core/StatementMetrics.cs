@@ -355,8 +355,11 @@ internal static class JournalStatementMetricsExtractor
             }
         }
 
-        var udfValues = statement.DescendantsAndSelf()
-            .Select(element => LongValue(Attribute(element, "UdfElapsedTime")))
+        var udfAttributes = statement.DescendantsAndSelf()
+            .Select(element => Attribute(element, "UdfElapsedTime"))
+            .Where(value => value is not null).ToArray();
+        var udfValues = udfAttributes
+            .Select(LongValue)
             .Where(value => value.HasValue)
             .Select(value => value!.Value)
             .ToArray();
@@ -399,7 +402,7 @@ internal static class JournalStatementMetricsExtractor
                 : root is not null && rootCounters.Length > 0 && allOperatorsHaveRuntime && hidden.Count == 0
                     && !text.TrimStart().StartsWith("EXEC", StringComparison.OrdinalIgnoreCase)
                     && !uniqueQueryPlan.Descendants(Showplan + "StmtSimple").Any()
-                    && udfValues.Length == 0 ? false : null,
+                    && udfAttributes.Length == 0 ? false : null,
         };
     }
 

@@ -586,6 +586,90 @@ public sealed class JournalReaderTests
         Assert.Empty(JournalDb.Rows(home.DatabasePath, "SELECT * FROM plan_documents"));
     }
 
+
+    [Fact]
+    public void Retained_raw_plans_do_not_populate_or_rewrite_missing_statement_scalars()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
+        var record = JournalSeed.Benchmark() with
+        {
+            Statements = [StoredStatement("measure", "SELECT work", "p") with
+            { PlanRepetition = 1, PlanDocumentOrdinal = 0, PlanStatementIndex = 0 }],
+        };
+        var old = seed.Measure(JournalSeed.Session("raw-old"), "orders", "whole", "h1", JournalSeed.ReproConditions(), record);
+        var current = seed.Measure(JournalSeed.Session("raw-current"), "orders", "whole", "h2", JournalSeed.ReproConditions(), record);
+        using var connection = OpenSeedDatabase(home.DatabasePath);
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE sessions SET dashboard_evidence_version = NULL WHERE session_key = 'raw-old'";
+        command.ExecuteNonQuery();
+        command.CommandText = "SELECT gz FROM plan_documents";
+        var original = Assert.IsType<byte[]>(command.ExecuteScalar());
+        Assert.Contains("RequestedMemory=\"4096\"", PlanMetricsExtractorTests.ActualPlan);
+        Assert.Contains("SpillToTempDb", PlanMetricsExtractorTests.ActualPlan);
+        command.CommandText = "PRAGMA data_version";
+        var before = command.ExecuteScalar();
+        var reader = Reader(home);
+        foreach (var handle in new[] { old, current })
+        {
+            var detail = Assert.Single(reader.Operation(handle.OperationId, storeSensitive: true)!.Statements!);
+            Assert.NotNull(detail.PlanLinkAfter);
+            Assert.Null(detail.GrantRequestedKbAfter);
+            Assert.Null(detail.GrantGrantedKbAfter);
+            Assert.Null(detail.GrantMaxUsedKbAfter);
+            Assert.Null(detail.HasSpillWarningAfter);
+            var evidence = Assert.Single(reader.OptimizationEvidence(reader.Operation(handle.OperationId)!.Operation.SessionId));
+            var statement = Assert.Single(Assert.Single(evidence.Metrics).Statements);
+            Assert.Null(statement.GrantRequestedKb);
+            Assert.Null(statement.HasSpillWarning);
+        }
+        command.CommandText = "PRAGMA data_version";
+        Assert.Equal(before, command.ExecuteScalar());
+        command.CommandText = "SELECT gz FROM plan_documents";
+        Assert.Equal(original, Assert.IsType<byte[]>(command.ExecuteScalar()));
+        command.CommandText = "SELECT COUNT(*) FROM operation_statements WHERE grant_requested_kb IS NOT NULL OR grant_granted_kb IS NOT NULL OR grant_max_used_kb IS NOT NULL OR has_spill_warning IS NOT NULL";
+        Assert.Equal(0L, command.ExecuteScalar());
+    }
+
+    [Fact]
+    public void Extraction_cap_suppresses_retained_statement_grants_and_spill_in_dashboard()
+    {
+        using var home = new TempHome();
+        var small = StatementMetricsTests.JournalPlan("SELECT small", 1, 1, "0x01", 0, 1)
+            .Replace("<RelOp", "<MemoryGrantInfo RequestedMemory=\"10\" GrantedMemory=\"8\" MaxUsedMemory=\"4\" /><RelOp", StringComparison.Ordinal);
+        var large = StatementMetricsTests.JournalPlan("SELECT " + new string('x', JournalStatementMetricsExtractor.MaximumBytes), 2, 2, "0x02", 0, 1);
+        var run = new CompareRunArtifact("measure", 1, 1, 1, 0, new Dictionary<string, long>(), "h", [small, large], 1)
+        { TableIo = [new TableIoCounters("@P", 0, 0, 0, 0, 0, 0, 0, 0)] };
+        var record = JournalBenchmarkBuilder.Build([run]);
+        Assert.Equal(1, Assert.Single(record.Variants).OmittedStatements);
+        Assert.Equal(10, Assert.Single(record.Statements).GrantRequestedKb);
+        Assert.Equal(StatementStatus.Partial, Assert.Single(record.Statements).Status);
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("capped");
+        var handle = seed.Measure(session, "orders", "whole", "h1", JournalSeed.ReproConditions(), record);
+        seed.Measure(session, "orders", "whole", "h2", JournalSeed.ReproConditions(), record);
+        var reader = Reader(home);
+        var detail = Assert.Single(reader.Operation(handle.OperationId)!.Statements!);
+        Assert.Null(detail.GrantRequestedKbAfter);
+        Assert.Null(detail.GrantGrantedKbAfter);
+        Assert.Null(detail.GrantMaxUsedKbAfter);
+        Assert.Null(detail.HasSpillWarningAfter);
+        var evidenceSet = reader.OptimizationEvidence(reader.Operation(handle.OperationId)!.Operation.SessionId);
+        var evidence = Assert.Single(evidenceSet, item => item.OperationId == handle.OperationId);
+        var metric = Assert.Single(evidence.Metrics);
+        Assert.Equal(1, metric.OmittedStatements);
+        Assert.Equal("partial", metric.StatementAttribution);
+        var versions = new[] { new VersionRow("v1", "h1", null, null, null, null, "incomplete", [], 0), new VersionRow("v2", "h2", null, null, null, null, "incomplete", [], 0) };
+        var group = new ConditionsGroup(evidence.Fingerprint!, "case", [new ScopeVersions("whole query", versions)], "v1", "v2");
+        var caseKey = evidence.Cases[0].MeasurementFingerprint ?? evidence.Cases[0].CaseId;
+        var comparison = OptimizationComparer.Compare(group, evidenceSet, "v1", "v2", caseKey, "sum", "statements");
+        var row = Assert.Single(comparison.Statements);
+        Assert.Null(row.GrantRequestedKbBefore);
+        Assert.Null(row.GrantGrantedKbBefore);
+        Assert.Null(row.GrantMaxUsedKbBefore);
+        Assert.Null(row.HasSpillWarningBefore);
+    }
+
     private static JournalStatementMetrics StoredStatement(string variant, string text, string planHash) =>
         new(variant, null, null, 0, "0123456789abcdef", null, null, null, [])
         {

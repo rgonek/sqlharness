@@ -31,6 +31,14 @@ public sealed class JournalStatementGrantTests
     }
 
     [Fact]
+    public void Malformed_udf_timing_is_not_evidence_of_no_hidden_work()
+    {
+        var plan = StatementMetricsTests.JournalPlan("SELECT dbo.f()", 1, 1, "0x01", 0, 1)
+            .Replace("<QueryPlan ", "<QueryPlan UdfElapsedTime=\"unknown\" ", StringComparison.Ordinal);
+        Assert.Null(Assert.Single(JournalStatementMetricsExtractor.Extract([plan], out _)).HasSpillWarning);
+    }
+
+    [Fact]
     public void Each_statement_owns_its_grant()
     {
         var first = StatementMetricsTests.JournalPlan("SELECT 1", 1, 1, "0x01", 0, 1).Replace("<RelOp", "<MemoryGrantInfo RequestedMemory=\"10\" /><RelOp", StringComparison.Ordinal);
