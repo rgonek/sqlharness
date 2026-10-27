@@ -1,0 +1,15 @@
+Test run for D:\Dev\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.14)
+[xUnit.net 00:00:00.38]   Discovering: SqlHarness.Tests (app domain = off, method display = ClassAndMethod, method display options = None)
+[xUnit.net 00:00:00.52] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.RegressionPolicyTests.Result_equivalence_gate_is_inconclusive_never_a_performance_fail'; falling back to single test case.
+[xUnit.net 00:00:00.72] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.Cli.CommandTests.Compare_text_renders_nullability_diagnostic'; falling back to single test case.
+[xUnit.net 00:00:01.90]   Discovered:  SqlHarness.Tests (4750 test cases to be run)
+[xUnit.net 00:00:01.95]   Starting:    SqlHarness.Tests (parallel test collections = off, stop on fail = off, explicit = off)
+[xUnit.net 00:00:05.04]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Journal.ActivityJournalTests.Begin_returns_null_quickly_when_the_database_write_lock_is_held [2 s]
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 6,4089 Seconds

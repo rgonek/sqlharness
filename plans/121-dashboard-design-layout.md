@@ -84,3 +84,7 @@ Implemented at bafcd2a5 on dashboard-shadcn-fixes. Latest screenshots select joi
 ## Plan A/B visual close-up correction (2026-10-27)
 
 Verified and locally published at ecd3f0ae: Plan-only balanced segment widths/spacing and equal 16px circular A/B labels. Actual 2x closeups shown before publication; ten browser states pass, final review clean. Final Windows gate passed (UI 388, Core 4722, MCP 535), dashboard restarted (PID 17804, port 47800); EXE/20 assets and ten installed states verified. No merge/push. [Before/after](121-evidence/shadcn/audit-recommendations/plan-control/index.html), [verification](121-evidence/shadcn/audit-recommendations/plan-control/verification.md).
+
+## Local main integration (2026-10-27)
+
+All dashboard-shadcn-fixes follow-ups are locally integrated into main at 3a0f0549, retaining Plan 122 documentation from main. Exact merged Windows gate passed: UI 388, Core 4722 (11 skipped), MCP 535 (4 skipped), 14m30s. Initial unchanged Journal lock timing failure was retained, isolated three times successfully and followed by a full unchanged-tree green retry; no timeout/test/product workaround. Whole-branch source review and two-file C# branch format passed. README bytes and original local documentation deltas preserved; backup outside repo. No push. Dirty feature worktree retained. [Integration evidence](121-evidence/shadcn/integration/verification.md).

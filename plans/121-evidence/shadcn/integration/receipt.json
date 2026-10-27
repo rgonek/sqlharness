@@ -1,0 +1,14 @@
+{
+  "mainBefore": "43720796b4ebaa2ee97b0d13127ac3feeb00d428",
+  "feature": "1463f501408b94572f0ee7adbd35ca24b35a74dd",
+  "merge": "3a0f05499fce5f9dc754a4664b2a44e11db9cffa",
+  "sourceTree": "9b34a1579cafd47a219abf39e3debbca787990c2",
+  "testsTree": "d5d136251e094c5131c8f534f248de593574d1c1",
+  "backup": "D:\\temp\\sqlharness-shadcn-main-backup-20261027-145132",
+  "readmeByteIdentical": true,
+  "localDocumentationDeltaIdentical": true,
+  "branchFormat": "PASS: 2 changed C# files",
+  "review": "Whole-branch review: no findings",
+  "gate": "PASS: just verify on merged main 3a0f0549, 5 stages, 14m30s; UI 388, Core 4722 (11 skipped), MCP 535 (4 skipped)",
+  "firstAttempt": "UI388/MCP535 passed; Core4721 passed and 1 unchanged 5-second lock timing test failed at5.3485702s; three isolated runs and complete unchanged retry passed"
+}
