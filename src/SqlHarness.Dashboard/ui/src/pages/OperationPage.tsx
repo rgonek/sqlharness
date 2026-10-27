@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { variantLabel } from "@/lib/compare"
-import { formatDuration, formatNumber, formatTimestamp, shortHash } from "@/lib/format"
+import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
 import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
 import { sessionSearchFromOperation } from "@/lib/sessionSearch"
@@ -198,7 +198,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
             <Fact label="Engine">{op.engine ?? "—"}</Fact>
             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
             <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>
-            <Fact label="SQL hash"><span className="font-mono">{shortHash(op.sqlHash)}</span></Fact>
+            <Fact label="SQL hash"><span className="break-all font-mono">{op.sqlHash ?? "—"}</span></Fact>
             {op.dryRun && <Fact label="Execution mode">Dry run; output counted, no database execution</Fact>}
             {op.operationRef && <Fact label="Operation reference"><span className="font-mono">{op.operationRef}</span></Fact>}
             {op.parentOperationRef && <Fact label="Producer reference"><span className="font-mono">{op.parentOperationRef}</span></Fact>}
@@ -228,7 +228,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
           {detail.summary && <SummaryFacts summary={detail.summary} />}</CollapsibleContent></Collapsible>} />
 
       <div className={`operation-metrics ${op.operation === "measure" ? "measure-metrics" : ""}`} aria-label="Operation metrics">
-        {op.operation === "query" ? <><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact><Fact label="Columns">—</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Output">{formatNumber(detail.emittedBytes)} B</Fact></> : op.operation === "mutation" ? <><Fact label="Rows affected">—</Fact><Fact label="Estimated">—</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Waited for approval">{formatDuration(detail.phases.find(phase => /approval/i.test(phase.phase))?.totalMs ?? null)}</Fact></> : <><Fact label="Logical reads">{formatNumber(op.logicalReadsMedian)}</Fact><Fact label="Elapsed median">{formatDuration(tabVariant?.elapsedMs?.median ?? null)}</Fact><Fact label="CPU">{formatDuration(tabVariant?.cpuMs?.median ?? null)}</Fact><Fact label="Scans">{tabVariant?.tableIo.length && tabVariant.tableIo.every(row => row.scanCount !== null) ? formatNumber(tabVariant.tableIo.reduce((sum, row) => sum + row.scanCount!, 0)) : "—"}</Fact><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact></>}
+        {op.operation === "query" ? <><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Output">{formatNumber(detail.emittedBytes)} B</Fact></> : op.operation === "mutation" ? <><Fact label="Duration">{formatDuration(op.durationMs)}</Fact><Fact label="Waited for approval">{formatDuration(detail.phases.find(phase => /approval/i.test(phase.phase))?.totalMs ?? null)}</Fact></> : <><Fact label="Logical reads">{formatNumber(op.logicalReadsMedian)}</Fact><Fact label="Elapsed median">{formatDuration(tabVariant?.elapsedMs?.median ?? null)}</Fact><Fact label="CPU">{formatDuration(tabVariant?.cpuMs?.median ?? null)}</Fact><Fact label="Scans">{tabVariant?.tableIo.length && tabVariant.tableIo.every(row => row.scanCount !== null) ? formatNumber(tabVariant.tableIo.reduce((sum, row) => sum + row.scanCount!, 0)) : "—"}</Fact><Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact></>}
 
       </div>
       <Tabs defaultValue="sql" className="operation-tabs">

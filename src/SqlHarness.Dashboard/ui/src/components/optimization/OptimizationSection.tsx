@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router"
-import { useId, useState } from "react"
+import { Fragment, useId, useState } from "react"
 import type { OperationSummary, OptimizationSubject, ScopeVersions } from "@/api/types"
 import type { AgentSessionKey } from "@/api/types"
 import { useAgentSessionOptimization, useAgentSessionOptimizationComparison, useSessionOptimization, useSessionOptimizationComparison } from "@/api/queries"
@@ -74,7 +74,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
   }
 
   return <article aria-current={matchesCard ? "true" : undefined} className="optimization-card">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-base font-semibold">Optimization</div><p className="mt-1 text-sm text-muted-foreground"><span role="heading" aria-level={3}>{subject.subject}</span> · {subject.database || "(no database)"} · {subject.engine} · <span>{scope?.scope}</span></p></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-base font-semibold">Optimization</div><p className="mt-1 text-sm text-muted-foreground">{[subject.subject, subject.database, subject.engine, scope?.scope].map(value => value?.trim()).filter((value): value is string => !!value).map((value, index) => <Fragment key={index}>{index > 0 && " · "}{index === 0 && subject.subject.trim() ? <span role="heading" aria-level={3}>{value}</span> : <span>{value}</span>}</Fragment>)}</p></div>
       <div className="flex max-w-full flex-wrap items-center gap-2">
         <div ref={setToolbarTarget} />
       </div>

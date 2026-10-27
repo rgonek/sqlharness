@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatDuration, formatNumber, shortHash } from "@/lib/format"
 import { pivotPerDay } from "@/lib/stats"
 import { ProfileDimensionsPanel, type DimensionAxes, type DimensionCellScope } from "./ProfileDimensionsPanel"
@@ -74,6 +75,11 @@ function WorkflowCostCard({ costs }: { costs: WorkflowCost[] }) {
   )
 }
 
+function SqlHash({ value }: { value: string }) {
+  const id = useId()
+  return <Tooltip><TooltipTrigger aria-describedby={id} render={<span tabIndex={0} className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />}>{shortHash(value)}</TooltipTrigger><TooltipContent id={id} role="tooltip" className="break-all">{value}</TooltipContent></Tooltip>
+}
+
 function SqlTable({ rows }: { rows: SqlHashStat[] }) {
   return (
     <Table>
@@ -88,7 +94,7 @@ function SqlTable({ rows }: { rows: SqlHashStat[] }) {
       <TableBody>
         {rows.map(row => (
           <TableRow key={row.sqlHash}>
-            <TableCell className="font-mono">{shortHash(row.sqlHash)}</TableCell>
+            <TableCell className="font-mono"><SqlHash value={row.sqlHash} /></TableCell>
             <TableCell className="text-right">{formatNumber(row.count)}</TableCell>
             <TableCell className="text-right">{formatDuration(row.totalDurationMs)}</TableCell>
             <TableCell className="text-right">{formatDuration(row.maxDurationMs)}</TableCell>

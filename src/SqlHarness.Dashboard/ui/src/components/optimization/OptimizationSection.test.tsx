@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react"
+import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import { operation, session, sessionDetail } from "@/test/fixtures"
@@ -73,6 +73,16 @@ test("puts the optimization section first, preserves scope defaults and lists un
   const unassignedLink = screen.getByRole("link", { name: "Compare #999" })
   expect(unassignedLink).toHaveAttribute("href", expect.stringContaining("/operations/999"))
   expect(Object.fromEntries(new URL(unassignedLink.getAttribute("href")!, "http://dashboard").searchParams)).toMatchObject({ returnSession: "7", returnUnassigned: "true" })
+})
+
+test.each(["", "Orders"])("omits blank metadata and adjacent separators for subject %s", async subject => {
+  stubSession({
+    "/api/sessions/7": sessionWithCompare(true),
+    "/api/sessions/7/optimization": { ...section, subjects: [{ ...section.subjects[0]!, subject, database: " ", engine: "" }] },
+    "/api/sessions/7/optimization/compare": comparison,
+  })
+  renderApp("/sessions/7")
+  await waitFor(() => expect(document.querySelector(".optimization-card > div p")?.textContent).toBe(subject ? "Orders · whole query" : "whole query"))
 })
 
 test("renders forty versions and updates the URL when a version picker changes", async () => {

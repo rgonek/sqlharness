@@ -15,6 +15,8 @@ import { PlanStatementSwitcher } from "./PlanStatementSwitcher"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Field, FieldLabel } from "@/components/ui/field"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 const LazyPlanGraphView = lazy(() => import("./PlanGraphView").then(module => ({ default: module.PlanGraphView })))
 
@@ -71,6 +73,7 @@ function matchingOccurrences(occurrences: PlanOccurrenceManifest[], variant: Var
 
 export function PlanWorkbench({ operationId, variant, engine, initialTarget, sourceHeight, toolbarTarget }: { operationId: number; variant: VariantDetail; engine: string | null; sourceHeight?: number; toolbarTarget?: HTMLElement | null; initialTarget?: { caseId: string; parameterSet: string | null; repetition: number; documentOrdinal: number; statementIndex: number } }) {
   const repetitionId = useId()
+  const documentHashId = useId()
   const manifest = useOperationPlans(operationId)
   const [selectedCase, setSelectedCase] = useState(initialTarget?.caseId ?? variant.caseId)
   const [selectedRepetition, setSelectedRepetition] = useState<number | null>(initialTarget?.repetition ?? null)
@@ -223,6 +226,15 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
     occurrence.documentOrdinal === omission.documentOrdinal
     && occurrence.statementIndex === omission.statementIndex
     && (omission.documentSha256 === null || occurrence.documentSha256 === omission.documentSha256)))
+  const missingEvidence = new Map<string, { documentOrdinal: number; statementIndex: number; plan: boolean; links: boolean }>()
+  for (const occurrence of omittedOccurrences) {
+    missingEvidence.set(`${occurrence.documentOrdinal}:${occurrence.statementIndex}`, { ...occurrence, plan: true, links: false })
+  }
+  for (const omission of sourceMapOmissions.filter(item => item.omitted || !item.stored)) {
+    const key = `${omission.documentOrdinal}:${omission.statementIndex}`
+    const existing = missingEvidence.get(key)
+    missingEvidence.set(key, { ...omission, plan: existing?.plan ?? false, links: true })
+  }
   const graphLinkItems: PlanGraphLink[] = links.map(item => ({
     documentSha256: item.documentSha256,
     documentOrdinal: item.documentOrdinal,
@@ -255,7 +267,7 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
           setSelectedNodeKey(null)
           setSqlSelection(null)
         }}>
-          <SelectTrigger aria-label="Plan document"><SelectValue /></SelectTrigger>
+          <Tooltip disabled={!selectedDocument}><TooltipTrigger aria-describedby={selectedDocument ? documentHashId : undefined} render={<SelectTrigger aria-label="Plan document" />}><SelectValue /></TooltipTrigger><TooltipContent id={documentHashId} role="tooltip" className="break-all">{selectedDocument && <>Document {selectedDocument.documentOrdinal + 1}: {selectedDocument.documentSha256}</>}</TooltipContent></Tooltip>
           <SelectContent className="w-max min-w-[var(--anchor-width)] max-w-[calc(100vw-2rem)] [&_[data-slot=select-item]]:pr-8"><SelectGroup>
             <SelectItem value="all">All plan documents</SelectItem>
             {documentOptions.map(document => <SelectItem key={documentKey(document)} value={documentKey(document)}>
@@ -295,8 +307,10 @@ export function PlanWorkbench({ operationId, variant, engine, initialTarget, sou
       </div>
     </CollapsibleContent>}
     {sourceMap.isPending && <p role="status" className="text-sm text-muted-foreground">Loading source links for repetition {repetition}…</p>}
-    {omittedOccurrences.map(occurrence => <p key={`omitted:${occurrence.documentOrdinal}:${occurrence.statementIndex}`} className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">Document {occurrence.documentOrdinal + 1}, statement {occurrence.statementIndex + 1}: this plan occurrence was omitted or not stored.</p>)}
-    {sourceMapOmissions.filter(omission => omission.omitted || !omission.stored).map(omission => <p key={`source-omitted:${omission.documentOrdinal}:${omission.statementIndex}`} className="rounded border border-amber-600/50 bg-amber-500/5 p-2 text-sm">Document {omission.documentOrdinal + 1}, statement {omission.statementIndex + 1}: source links are unavailable because the plan was omitted or not stored.</p>)}
+    {missingEvidence.size > 0 && <Alert role="status"><AlertTitle>Incomplete plan evidence: {missingEvidence.size} {missingEvidence.size === 1 ? "fragment" : "fragments"}</AlertTitle><AlertDescription><Collapsible>
+      <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>Missing evidence details</CollapsibleTrigger>
+      <CollapsibleContent><ul className="mt-2 flex list-disc flex-col gap-1 pl-5">{[...missingEvidence.entries()].map(([key, item]) => <li key={key}>Document {item.documentOrdinal + 1}, statement {item.statementIndex + 1}: {item.plan && "this plan occurrence was omitted or not stored."}{item.plan && item.links && " "}{item.links && "Source links are unavailable because the plan was omitted or not stored."}</li>)}</ul></CollapsibleContent>
+    </Collapsible></AlertDescription></Alert>}
     {sourceMapErrors.map(error => <div key={`${error.documentOrdinal}:${error.code}`} className="rounded border border-amber-600/50 p-2 text-sm" role="status">Document {error.documentOrdinal + 1}: {error.code} — {error.message}</div>)}
     {sqlSelection && documentSelection !== "all" && sqlMatchedLinks.length === 0 && <p role="status" className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source link matches this SQL selection in the selected plan document.</p>}
     {!isUnmatched && !isOmitted && source && visibleStatementLinks.length === 0 && <p className="rounded border border-border bg-muted/50 p-2 text-sm">No operator source links were produced for the selected statement and document.</p>}

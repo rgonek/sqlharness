@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event"
 
 vi.mock("@/components/plan/PlanWorkbench", () => ({ PlanWorkbench: ({ variant }: { variant: { caseId: string } }) => <div>Selected plan case: {variant.caseId}</div> }))
 
-test("plan versions use standard radios with keyboard navigation", async () => {
+test("plan versions use segmented radios with keyboard navigation", async () => {
   render(<VersionPlan a="v0" b="v1" before={null} after={null} engine="SqlServer" selectedCase="selected" />)
   const candidate = screen.getByRole("radio", { name: "v1 B" })
   expect(candidate).toBeChecked()
