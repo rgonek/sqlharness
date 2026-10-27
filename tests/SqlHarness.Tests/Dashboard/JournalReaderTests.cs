@@ -367,6 +367,51 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Compare_detail_hides_unidentified_variant_metrics_but_comparison_retains_both_sides()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:variant-detail"), "orders", "whole", "h1", "h2");
+        var metrics = new BenchmarkJournalRecord(
+            [OptimizationMetric("baseline", 45, 10, 2), OptimizationMetric("candidate", 45, 9, 1)], [])
+        {
+            Statements = [
+                StoredStatement("baseline", "SELECT same", "old") with { CpuMilliseconds = 11, ElapsedMilliseconds = 12, PlanRepetition = 1 },
+                StoredStatement("candidate", "SELECT same", "new") with { CpuMilliseconds = 21, ElapsedMilliseconds = 22, PlanRepetition = 2 },
+            ],
+        };
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
+            """{"kind":"compare","cases":[{"caseId":"0","caseLabel":"case 0"}]}""", metrics);
+        var reader = Reader(home);
+        var detail = reader.Operation(handle.OperationId)!;
+        Assert.Equal(2, detail.Statements!.Count);
+        Assert.All(detail.Statements, row =>
+        {
+            Assert.Null(row.CpuAfterMs);
+            Assert.Null(row.ElapsedAfterMs);
+            Assert.Null(row.PlanRepetitionAfter);
+            Assert.Null(Assert.Single(row.Objects).LobLogicalReadsAfter);
+        });
+        var evidence = Assert.Single(reader.OptimizationEvidence(detail.Operation.SessionId));
+        var versions = new[] {
+            new VersionRow("v1", "h1", null, null, null, null, "incomplete", [], 0),
+            new VersionRow("v2", "h2", null, null, null, null, "incomplete", [], 0),
+        };
+        var group = new ConditionsGroup(evidence.Fingerprint!, "case", [new ScopeVersions("whole query", versions)], "v1", "v2");
+        var caseKey = evidence.Cases[0].MeasurementFingerprint ?? evidence.Cases[0].CaseId;
+        var comparison = OptimizationComparer.Compare(group, [evidence], "v1", "v2", caseKey, "sum", "statements");
+        var statement = Assert.Single(comparison.Statements);
+        Assert.Equal(11, statement.CpuBeforeMs);
+        Assert.Equal(21, statement.CpuAfterMs);
+        Assert.Equal(12, statement.ElapsedBeforeMs);
+        Assert.Equal(22, statement.ElapsedAfterMs);
+        Assert.Equal(1, statement.PlanRepetitionBefore);
+        Assert.Equal(2, statement.PlanRepetitionAfter);
+        Assert.Equal(5, Assert.Single(statement.Objects).LobLogicalReadsBefore);
+        Assert.Equal(5, Assert.Single(statement.Objects).LobLogicalReadsAfter);
+    }
+
+    [Fact]
     public void Mixed_session_comparison_keeps_versioned_evidence_on_the_new_side()
     {
         using var home = new TempHome();

@@ -719,13 +719,15 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var coverage = Query(connection, """
             SELECT COALESCE(MAX(m.omitted_statements), 0), COUNT(DISTINCT s.id),
                    COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND s.status <> 'confirmed' THEN 1 ELSE 0 END), 0),
-                   (SELECT COUNT(*) FROM (SELECT DISTINCT case_id, parameter_set FROM operation_metrics WHERE operation_id = $id))
+                   (SELECT COUNT(*) FROM (SELECT DISTINCT case_id, parameter_set FROM operation_metrics WHERE operation_id = $id)),
+                   COUNT(DISTINCT lower(m.variant))
             FROM operation_metrics m LEFT JOIN operation_statements s ON s.operation_id = m.operation_id
             WHERE m.operation_id = $id;
-            """, [("$id", (object?)operationId)], row => (Omitted: row.GetInt32(0), Count: row.GetInt32(1), Unconfirmed: row.GetInt32(2), Cases: row.GetInt32(3))).FirstOrDefault();
+            """, [("$id", (object?)operationId)], row => (Omitted: row.GetInt32(0), Count: row.GetInt32(1), Unconfirmed: row.GetInt32(2), Cases: row.GetInt32(3), Variants: row.GetInt32(4))).FirstOrDefault();
         var omitted = coverage.Omitted;
-        var completeSingleCase = coverage.Cases == 1 && coverage.Count > 0 && omitted == 0 && coverage.Unconfirmed == 0
-            && statements.Select(row => (row.CaseId, row.ParameterSet)).Distinct().Count() == 1;
+        var completeSingleCase = coverage.Cases == 1 && coverage.Variants == 1 && coverage.Count > 0 && omitted == 0 && coverage.Unconfirmed == 0
+            && statements.Select(row => (row.CaseId, row.ParameterSet)).Distinct().Count() == 1
+            && statements.Select(row => row.Variant).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
         var rows = statements.GroupBy(row => row.Id).Select(group =>
         {
             var row = group.First();
