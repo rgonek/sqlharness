@@ -463,3 +463,37 @@ test("compare panel returns to the originating typed agent optimization", async 
   expect(target.pathname).toBe("/agent-sessions/claude/conversation-1")
   expect(Object.fromEntries(target.searchParams)).toMatchObject({ subject: "orders", scope: "whole", a: "v0", b: "v1" })
 })
+
+test.each([0, 12])("mutation displays recorded affected rows %s and lifecycle", async (rows) => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ operation: "mutation", mutationRequested: true, recordsAffected: rows }), mutationRequestId: "req-1", mutationRequest: { requestId: "req-1", state: "finished", status: "succeeded", verification: "operator", createdAt: "2026-10-01T10:00:00Z", decidedAt: "2026-10-01T10:01:00Z", finishedAt: "2026-10-01T10:02:00Z" } }) })
+  renderApp("/operations/10")
+  const metrics = await screen.findByLabelText("Operation metrics")
+  expect(within(metrics).getByText("Rows affected").parentElement).toHaveTextContent(String(rows))
+  await userEvent.click(screen.getByRole("tab", { name: "Approval" }))
+  expect(screen.getByText("req-1")).toBeInTheDocument()
+  expect(within(screen.getByRole("tabpanel")).getByText("succeeded")).toBeInTheDocument()
+  expect(screen.getByText("operator")).toBeInTheDocument()
+  expect(screen.getByText("2026-10-01T10:01:00Z")).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Mutations" })).toHaveAttribute("href", "/mutations")
+})
+
+test("unavailable old mutation evidence is not presented as zero or a decision", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ operation: "mutation", mutationRequested: true }) }) })
+  renderApp("/operations/10")
+  const metrics = await screen.findByLabelText("Operation metrics")
+  expect(within(metrics).getByText("Rows affected").parentElement).toHaveTextContent("Unavailable")
+  await userEvent.click(screen.getByRole("tab", { name: "Approval" }))
+  expect(screen.getByText("No linked approval lifecycle was recorded for this operation.")).toBeInTheDocument()
+})
+
+test("denied request and unknown outcome show only recorded lifecycle", async () => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ operation: "mutation", mutationRequested: true, recordsAffected: null }), mutationRequestId: "req-denied", mutationRequest: { requestId: "req-denied", state: "denied", status: null, verification: null, createdAt: "created", decidedAt: "decided", finishedAt: null } }) })
+  renderApp("/operations/10")
+  const metrics = await screen.findByLabelText("Operation metrics")
+  expect(within(metrics).getByText("Rows affected").parentElement).toHaveTextContent("Unavailable")
+  await userEvent.click(screen.getByRole("tab", { name: "Approval" }))
+  expect(screen.getByText("denied")).toBeInTheDocument()
+  expect(screen.getByText("created")).toBeInTheDocument()
+  expect(screen.getByText("decided")).toBeInTheDocument()
+  expect(within(screen.getByRole("tabpanel")).queryByText("succeeded")).not.toBeInTheDocument()
+})

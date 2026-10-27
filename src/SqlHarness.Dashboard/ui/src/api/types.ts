@@ -66,6 +66,7 @@ export type OperationSummary = {
   sqlPreviewTruncated?: boolean
   sqlHash: string | null
   rowsReturned: number | null
+  recordsAffected?: number | null
   logicalReadsMedian: number | null
   hasSpill: boolean
   coldCache: boolean
@@ -378,7 +379,11 @@ export type VariantDetail = {
   caseLabel: string
 }
 
+export type MutationLifecycle = { requestId: string; state: string; status: string | null; verification: string | null; createdAt: string; decidedAt: string | null; finishedAt: string | null }
+
 export type OperationDetail = {
+  mutationRequestId?: string | null
+  mutationRequest?: MutationLifecycle | null
   operation: OperationSummary
   session: SessionSummary
   vars: Record<string, string> | null
