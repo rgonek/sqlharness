@@ -1,0 +1,26 @@
+# Task 2 implementer report
+
+Commit: f1511f78 (parent bc56c0c0). Backend only; no UI changes.
+
+- JournalReader selects statement CPU, elapsed and selected repetition from existing journal columns, gated by exact session evidence version 1 and SQL Server engine. Older schema/NULL/unsupported version and PostgreSQL yield null. Existing plan links and selected run remain unchanged. Object LOB logical is projected separately and existing total reads remain unchanged.
+- OptimizationModels adds nullable per-side timing, repetition and object LOB; OptimizationComparer propagates values per selected single case, retains null for missing or partial evidence and reports why new statement metrics are unavailable in All cases. It sums same-name LOB only if all contributing values are available. Existing batch and reads logic unchanged.
+- Additional test file JournalBenchmarkBuilderTests verifies that CPU 80 and elapsed 180 follow repetition 2 selected by reads, not time median or last run. No builder implementation changed.
+- Self-review: examined diff, gate exactness, preserved old links/read sums and absence of UI edits; git diff --check passed. Per-side missing objects remain null. The statement object model already keys displayed objects by name; this change respects that established identity behavior.
+
+TDD: added Statement_metrics_require_supported_session_version_and_preserve_zero first. `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:SkipDashboardUi=true --filter FullyQualifiedName~Statement_metrics_require_supported_session_version_and_preserve_zero --no-restore` failed as intended with KeyNotFoundException for missing CpuAfterMs; after implementation passed 1/1. Earlier compile error in initial test used positional false; corrected to named storeSensitive before observing RED. Added focused compare, PostgreSQL and selected-run assertions subsequently.
+
+Final focused verification: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:SkipDashboardUi=true --filter 'FullyQualifiedName~Dashboard.JournalReaderTests|FullyQualifiedName~Dashboard.OptimizationComparerTests|FullyQualifiedName~Journal.JournalBenchmarkBuilderTests' --no-restore` passed 136/136, 0 failed. `git diff --check` passed. No full `just verify` (controller-owned), Linux or live DB. Existing tests cover partial, missing statements, repeated texts and hidden work; new assertions do not independently exercise every combination listed in the brief. UI consumption is explicitly outside delegated scope. Full branch review and integration remain controller responsibilities.
+
+## Review fix round 1
+
+Commit fcb78dc6, parent f1511f78. Detail new evidence requires exactly one distinct case/parameter-set in both operation metrics and statements and complete operation-level attribution (no omission or unconfirmed statement). Object kind travels internally, excluded from JSON; LOB becomes null when name identity is ambiguous within either side or source kinds differ. Detail likewise nulls ambiguous names. Existing reads and statement links remain unchanged.
+
+RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:SkipDashboardUi=true --filter 'FullyQualifiedName~Detail_hides_new_metrics_for_multiple_cases_and_incomplete_attribution|FullyQualifiedName~Ambiguous_or_incomplete_object_contributions_have_no_lob_value' --no-restore` failed 2/2 as expected: detail CPU 7 and ambiguous LOB 12 were exposed. Same command after fix passed 2/2.
+
+Final focused command: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:SkipDashboardUi=true --filter 'FullyQualifiedName~Dashboard.JournalReaderTests|FullyQualifiedName~Dashboard.OptimizationComparerTests' --no-restore` passed 117/117, 0 failed. `git diff --check` passed. Added assertions for multi-case, omitted and unconfirmed detail, journal-backed mixed old/new comparison, same-name/different-kind objects, incomplete object LOB, repeated occurrences, unmatched statement/hidden work, and All cases explanation. No full gate or UI changes. Object ambiguity deliberately suppresses LOB instead of altering existing name-based display and total reads.
+
+## Review fix round 2
+
+Commit b7045c33, parent fcb78dc6. Operation detail suppresses new statement and object metrics unless there is exactly one variant in operation metrics and statements, in addition to the previous single-case/completeness checks. The actual comparison still returns separate before/after metrics, repetition and LOB; no changes to comparison code or UI.
+
+RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:SkipDashboardUi=true --filter FullyQualifiedName~Compare_detail_hides_unidentified_variant_metrics_but_comparison_retains_both_sides --no-restore` failed as expected, both variant rows exposed CPU 11/21 in detail. Same command passed 1/1 after fix, including the journal-backed comparison assertions. Final focused test `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj -p:SkipDashboardUi=true --filter 'FullyQualifiedName~Dashboard.JournalReaderTests|FullyQualifiedName~Dashboard.OptimizationComparerTests' --no-restore` passed 118/118, zero failures. `git diff --check` passed. No full gate or UI changes.

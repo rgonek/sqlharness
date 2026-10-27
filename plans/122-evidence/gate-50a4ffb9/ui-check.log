@@ -1,0 +1,30 @@
+
+> ui@0.0.0 check
+> node scripts/check.mjs
+
+
+> ui@0.0.0 typecheck
+> tsc -b
+
+
+> ui@0.0.0 test
+> vitest run
+
+
+> ui@0.0.0 lint
+> oxlint
+
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/9056/sqlharness/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  69 passed (69)
+      Tests  406 passed (406)
+   Start at  19:28:36
+   Duration  607.64s (import 53%, tests 25%, environment 14%, setup 5%, transform 2%)
+
+     Import  342 modules were evaluated 3508 times · 313.04s total, 53% of tracked time
+             ~282.52s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+(node:42316) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)

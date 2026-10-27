@@ -1,8 +1,8 @@
 # Plan 122: Dashboard data value — new sessions only
 
-> **For agentic workers:** Use `superpowers:executing-plans` task-by-task. This plan does not authorize implementation, live DB execution or publication.
+> **For agentic workers:** Execution authorized by the operator using `superpowers:subagent-driven-development`; all six tasks including UI. Live DB execution, installation and publication remain outside scope.
 
-**Status:** PLANNED — dokumentacja, bez zmian produktu.
+**Status:** DONE — wszystkie sześć zadań zweryfikowane na `50a4ffb9`; Terra high task/correction reviews i Sol low whole-branch/scoped reviews zatwierdzone; Windows gate oraz 14 stanów przeglądarkowych PASS. Bez merge/push. [Dowody](122-evidence/verification.md).
 
 **Goal:** Użyteczne dane wyłącznie nowych sesji oraz usunięcie placeholderów bez planowanego źródła.
 
@@ -51,9 +51,9 @@ Około 12–24 osobodni, plus końcowa bramka/poprawki. Niepewności: kompletno�
 
 **Interface:** nullable SQLite `sessions.dashboard_evidence_version`; nowy INSERT zapisuje 1. Nullable `DashboardEvidenceVersion` w modelu operacji, JSON `dashboardEvidenceVersion`. Marker oznacza wersję kontraktu, nie obecność każdego licznika.
 
-- [ ] RED: migracja starej bazy pozostawia NULL i nie zmienia dawnych danych; nowy klucz dostaje 1; wznowiony klucz i jego nowe operacje pozostają NULL. Pokryć fresh DB i konkurencyjny INSERT/upsert.
-- [ ] Uruchomić testy zadania i potwierdzić RED; dodać nullable kolumnę bez historycznej wartości domyślnej, marker wyłącznie przy INSERT i kontrolę eligibility readera. GET bez zapisów, bez cutoff po dacie.
-- [ ] GREEN: te same testy, niezmienione stare dane, brak historycznych UPDATE. Review diffu i commit tylko zakresu zadania.
+- [x] RED: migracja starej bazy pozostawia NULL i nie zmienia dawnych danych; nowy klucz dostaje 1; wznowiony klucz i jego nowe operacje pozostają NULL. Pokryć fresh DB i konkurencyjny INSERT/upsert.
+- [x] Uruchomić testy zadania i potwierdzić RED; dodać nullable kolumnę bez historycznej wartości domyślnej, marker wyłącznie przy INSERT i kontrolę eligibility readera. GET bez zapisów, bez cutoff po dacie.
+- [x] GREEN: te same testy, niezmienione stare dane, brak historycznych UPDATE. Review diffu i commit tylko zakresu zadania.
 
 ## Task 2: CPU/elapsed i LOB logical
 
@@ -61,10 +61,10 @@ Około 12–24 osobodni, plus końcowa bramka/poprawki. Niepewności: kompletno�
 
 **Interface:** nullable CPU/elapsed before/after i `PlanRepetition`, istniejące exact plan links; LOB logical before/after na obiekcie. Zachować dotychczasowy total reads. Pola dostępne tylko dla eligible operacji i pojedynczego case.
 
-- [ ] RED: zachowane CPU/elapsed pochodzą z runu wybranego według reads, nie mediany czasu ani ostatniego planu; LOB nie zwiększa drugi raz total.
-- [ ] RED: zero/NULL, mixed old/new A/B, All cases, partial/unmatched/hidden work, powtarzający się tekst i PostgreSQL. Brak częściowych agregatów lub zastępowania braku zerem.
-- [ ] Potwierdzić RED; rozszerzyć SELECT, modele i istniejące szczegóły metryk o jednostki/provenance. Bez zmiany buildera wyboru runu i domyślnego planu. W All cases nowe metryki niedostępne z wyjaśnieniem.
-- [ ] GREEN, review diffu i commit. Odczyt starej operacji nie dostaje nowych wartości nawet z istniejących kolumn.
+- [x] RED: zachowane CPU/elapsed pochodzą z runu wybranego według reads, nie mediany czasu ani ostatniego planu; LOB nie zwiększa drugi raz total.
+- [x] RED: zero/NULL, mixed old/new A/B, All cases, partial/unmatched/hidden work, powtarzający się tekst i PostgreSQL. Brak częściowych agregatów lub zastępowania braku zerem.
+- [x] Potwierdzić RED; rozszerzyć SELECT, modele i istniejące szczegóły metryk o jednostki/provenance. Bez zmiany buildera wyboru runu i domyślnego planu. W All cases nowe metryki niedostępne z wyjaśnieniem.
+- [x] GREEN, review diffu i commit. Odczyt starej operacji nie dostaje nowych wartości nawet z istniejących kolumn.
 
 ## Task 3: SQL preview w Activity
 
@@ -72,9 +72,9 @@ Około 12–24 osobodni, plus końcowa bramka/poprawki. Niepewności: kompletno�
 
 **Interface:** nullable `sqlPreview`, boolean `sqlPreviewTruncated`; maks. 240 znaków Unicode przed oznaczeniem ucięcia, baseline dla compare. Bez pełnego SQL w odpowiedzi listy, bez nowego zapisu i search.
 
-- [ ] RED: 240/241 znaków, znaki spoza BMP, pusty/NULL SQL, storeSensitive off, stara sesja, compare baseline i niezmieniona paginacja.
-- [ ] Potwierdzić RED; dodać bounded projekcję i preview obok istniejącego label/subject, bez fetch per row.
-- [ ] GREEN, sprawdzić limity odpowiedzi, review diffu i commit.
+- [x] RED: 240/241 znaków, znaki spoza BMP, pusty/NULL SQL, storeSensitive off, stara sesja, compare baseline i niezmieniona paginacja.
+- [x] Potwierdzić RED; dodać bounded projekcję i preview obok istniejącego label/subject, bez fetch per row.
+- [x] GREEN, sprawdzić limity odpowiedzi, review diffu i commit.
 
 ## Task 4: Affected rows i approval lifecycle
 
@@ -82,10 +82,10 @@ Około 12–24 osobodni, plus końcowa bramka/poprawki. Niepewności: kompletno�
 
 **Interface:** nullable `RecordsAffected` w zakończeniu/historii, JSON `recordsAffected`. Dokładne nullable `mutationRequestId` tylko jeśli brak istniejącej równoważnej relacji. Zapis dla eligible sesji; lifecycle z istniejącego journala, bez snapshotu policy.
 
-- [ ] RED: sukces 0/>0, provider -1, wiele instrukcji, odmowa, timeout/unknown outcome, operator/automatic, brak request link, stara sesja. Nie dopasowywać po SQL/czasie, nie wyświetlać bieżących settings jako dawnych.
-- [ ] Potwierdzić RED; przekazać istniejący wynik do journala/detailu. Addytywna retencja scalar/relacji tylko jeśli konieczna, bez historycznej rekonstrukcji.
-- [ ] Pokazać zapisany lifecycle i link do Mutations w istniejącym obszarze Approval; bez nowych mechanizmów zatwierdzania i bez Estimated.
-- [ ] GREEN, review policy/classification i diffu; commit.
+- [x] RED: sukces 0/>0, provider -1, wiele instrukcji, odmowa, timeout/unknown outcome, operator/automatic, brak request link, stara sesja. Nie dopasowywać po SQL/czasie, nie wyświetlać bieżących settings jako dawnych.
+- [x] Potwierdzić RED; przekazać istniejący wynik do journala/detailu. Addytywna retencja scalar/relacji tylko jeśli konieczna, bez historycznej rekonstrukcji.
+- [x] Pokazać zapisany lifecycle i link do Mutations w istniejącym obszarze Approval; bez nowych mechanizmów zatwierdzania i bez Estimated.
+- [x] GREEN, review policy/classification i diffu; commit.
 
 ## Task 5: Granty i spill warning z nowego wykonania
 
@@ -93,27 +93,27 @@ Około 12–24 osobodni, plus końcowa bramka/poprawki. Niepewności: kompletno�
 
 **Interface:** nullable `GrantRequestedKb`, `GrantGrantedKb`, `GrantMaxUsedKb`, `HasSpillWarning`, provenance z Task 2. Normalizacja podczas zapisu eligible operacji, bez parsera starych planów przy GET.
 
-- [ ] RED: dwa statementy z różnymi grantami, wiele dokumentów/runów, brak QueryPlan, omitted/partial, dynamic SQL/UDF i niepewna atrybucja; żadnego kopiowania batch value. True/false/NULL spill zgodnie ze spec.
-- [ ] RED: stare raw plany nigdy nie są czytane dla nowych pól; PostgreSQL NULL; storeSensitive off nie zapisuje nowego XML/SQL; All cases nie sumuje grantów.
-- [ ] Potwierdzić RED; rozszerzyć istniejący przebieg ekstrakcji i zapis scalarów dla wybranego runu. Bez zmiany formatów artefaktów/MCP, jeśli wystarczy osobny kontrakt journala.
-- [ ] GREEN; offline porównać narzut parsera/rozmiar rekordu na małym i wielostatementowym fixture. Opisać wyniki bez live performance claim; review diffu i commit.
+- [x] RED: dwa statementy z różnymi grantami, wiele dokumentów/runów, brak QueryPlan, omitted/partial, dynamic SQL/UDF i niepewna atrybucja; żadnego kopiowania batch value. True/false/NULL spill zgodnie ze spec.
+- [x] RED: stare raw plany nigdy nie są czytane dla nowych pól; PostgreSQL NULL; storeSensitive off nie zapisuje nowego XML/SQL; All cases nie sumuje grantów.
+- [x] Potwierdzić RED; rozszerzyć istniejący przebieg ekstrakcji i zapis scalarów dla wybranego runu. Bez zmiany formatów artefaktów/MCP, jeśli wystarczy osobny kontrakt journala.
+- [x] GREEN; offline porównać narzut parsera/rozmiar rekordu na małym i wielostatementowym fixture. Opisać wyniki bez live performance claim; review diffu i commit.
 
 ## Task 6: Usuń pola bez planowanego źródła
 
 **Files:** UI `components/optimization/IoComparison.tsx`, `lib/ioComparison.ts`, `pages/OperationPage.tsx` i ich istniejące testy.
 
-- [ ] By statement: usunąć opcje/kolumny Physical, Read-ahead, LOB physical i LOB read-ahead, w tym zaznaczenia pozostawione po zmianie widoku. Zachować je i realne dane w Whole batch. Zachować nowe LOB logical w By statement.
-- [ ] Usunąć query Columns, mutation Estimated oraz benchmark Rows bez właściwego źródła. Zachować query Rows, nowe Rows affected i rzeczywiste wartości z poprawnym kontraktem.
-- [ ] Nie dodawać Best/pustych tabel wyników; zachować Results unavailable i evidence warnings. Pozostałe propozycje UX nietknięte.
-- [ ] Focused testy przełączania widoków i OperationPage, desktop/mobile; review diffu i commit. Bez nowej infrastruktury testowej dla prostego usuwania etykiet.
+- [x] By statement: usunąć opcje/kolumny Physical, Read-ahead, LOB physical i LOB read-ahead, w tym zaznaczenia pozostawione po zmianie widoku. Zachować je i realne dane w Whole batch. Zachować nowe LOB logical w By statement.
+- [x] Usunąć query Columns, mutation Estimated oraz benchmark Rows bez właściwego źródła. Zachować query Rows, nowe Rows affected i rzeczywiste wartości z poprawnym kontraktem.
+- [x] Nie dodawać Best/pustych tabel wyników; zachować Results unavailable i evidence warnings. Pozostałe propozycje UX nietknięte.
+- [x] Focused testy przełączania widoków i OperationPage, desktop/mobile; review diffu i commit. Bez nowej infrastruktury testowej dla prostego usuwania etykiet.
 
-## Końcowa weryfikacja przyszłej implementacji
+## Końcowa weryfikacja implementacji
 
-- [ ] Focused Core: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~Journal|FullyQualifiedName~OptimizationComparer|FullyQualifiedName~MutationExecutor"`.
-- [ ] Focused UI w `src/SqlHarness.Dashboard/ui`: `npm.cmd test -- src/components/optimization/IoComparison.test.tsx src/components/optimization/StatementRows.test.tsx src/pages/OperationPage.test.tsx src/components/ActivityOperations.test.tsx`.
-- [ ] Offline mixed-history fixture: stare, wznowione i nowe sesje; stare wartości niezmienione; zero target connections i zapisów przy GET. Nowe operacje starej sesji nadal bez nowego kontraktu.
-- [ ] Review całości względem spec, no-backfill i provenance; poprawić blokujące uwagi. Screenshoty nowych danych/usuniętych pól bez live targetu.
-- [ ] Windows `just verify` na końcowym produkcie według `docs/agents/verification.md`; wyniki i revision pod `plans/122-evidence/`. Linux poza zakresem. Aktualizować plan/index zgodnie z faktycznym statusem, bez deklaracji instalacji, merge, push lub live acceptance.
+- [x] Covered by focused task checks and final full Core suite (4771 passed); planned focused command: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~Journal|FullyQualifiedName~OptimizationComparer|FullyQualifiedName~MutationExecutor"`.
+- [x] Covered by focused task checks and final full UI suite (406 passed); planned focused command w `src/SqlHarness.Dashboard/ui`: `npm.cmd test -- src/components/optimization/IoComparison.test.tsx src/components/optimization/StatementRows.test.tsx src/pages/OperationPage.test.tsx src/components/ActivityOperations.test.tsx`.
+- [x] Offline mixed-history fixture: stare, wznowione i nowe sesje; stare wartości niezmienione; zero target connections i zapisów przy GET. Nowe operacje starej sesji nadal bez nowego kontraktu.
+- [x] Review całości względem spec, no-backfill i provenance; poprawić blokujące uwagi. Screenshoty nowych danych/usuniętych pól bez live targetu.
+- [x] Windows `just verify` na końcowym produkcie według `docs/agents/verification.md`; wyniki i revision pod `plans/122-evidence/`. Linux poza zakresem. Aktualizować plan/index zgodnie z faktycznym statusem, bez deklaracji instalacji, merge, push lub live acceptance.
 
 ## Odłożone
 

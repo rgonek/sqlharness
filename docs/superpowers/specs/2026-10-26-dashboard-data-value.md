@@ -1,6 +1,6 @@
 # Dashboard: użyteczne dane nowych sesji
 
-Status: zakres wybrany przez operatora 2026-10-26; bez implementacji.
+Status: zakres wybrany przez operatora 2026-10-26; implementacja wszystkich sześciu zadań autoryzowana 2026-10-27. Końcowe dowody w `plans/122-evidence/verification.md`.
 
 ## Cel i źródła
 
