@@ -15,41 +15,33 @@ test("shows KPIs, charts and top lists, and switches range", async () => {
   renderApp("/stats")
 
   expect(await screen.findByRole("heading", { name: "Usage" })).toBeInTheDocument()
-  expect(await screen.findByText("Workflow output cost")).toBeInTheDocument()
-  expect(screen.getByText("single-measured-execution-output")).toBeInTheDocument()
-  expect(screen.getByText(/Input, discovery and chat are unmeasured/)).toBeInTheDocument()
-  expect(screen.getByText("Estimated output-token delta")).toBeInTheDocument()
-  expect(screen.getByText("Dry runs")).toBeInTheDocument()
-  expect(screen.getByText("Database executions")).toBeInTheDocument()
-  expect(screen.getByText(/Token estimation method: UTF-8 bytes divided by four, rounded up/)).toBeInTheDocument()
-  expect(screen.getByText("Operations per day (UTC)")).toBeInTheDocument()
-  expect(screen.getByText("aaaaaaaaaaaa")).toBeInTheDocument()
+  expect(await screen.findByText("Estimated workflow output tokens")).toBeInTheDocument()
+  expect(screen.queryByText("Detailed usage and workflow accounting")).not.toBeInTheDocument()
+  expect(screen.queryByText("Workflow output cost")).not.toBeInTheDocument()
+  expect(screen.queryByText("Operations per day (UTC)")).not.toBeInTheDocument()
+  expect(screen.getByText("bbbbbbbbbbbb")).toBeInTheDocument()
   expect(screen.getByRole("cell", { name: "Orders" })).toBeInTheDocument()
   expect(screen.getByRole("cell", { name: "PAGEIOLATCH_SH" })).toBeInTheDocument()
 
   await userEvent.click(screen.getByRole("tab", { name: "All time" }))
-  await screen.findByText("Workflow output cost")
+  await screen.findByText("Estimated workflow output tokens")
   expect(calls.some(call => call.startsWith("/api/stats?") && !call.includes("from="))).toBe(true)
   expect(calls.some(call => call.startsWith("/api/stats?from="))).toBe(true)
 })
 
-test("per-day chart keys series by index so agent kinds never reach CSS variable names", async () => {
-  const hostile = "my agent; } body { display:none"
-  stubFetch({
-    "/api/stats": stats({ operationsPerDay: [
-      { day: "2026-10-07", agentKind: "my agent", count: 2 },
-      { day: "2026-10-07", agentKind: hostile, count: 1 },
-    ] }),
-    "/api/profiles": profilesResponse(),
-  })
-  const { container } = renderApp("/stats")
-
-  await screen.findByText("Operations per day (UTC)")
-  const css = Array.from(container.querySelectorAll("style")).map(style => style.textContent ?? "").join("\n")
-  expect(css).toContain("--color-a0:")
-  expect(css).toContain("--color-a1:")
-  expect(css).not.toContain("my agent")
-  expect(css).not.toContain("display:none")
+test("reads ordering uses server-ranked groups and preserves missing versus zero", async () => {
+  stubFetch({ "/api/stats": stats({ topSqlByLogicalReads: [
+    { sqlHash: "readsonly", count: 2, totalDurationMs: 3, maxDurationMs: 2, logicalReadsMedianSum: 0, logicalReadsAvailableOperations: 1, logicalReadsAvailableMetrics: 1, logicalReadsUnavailableMetrics: 1 },
+    { sqlHash: "missing", count: 1, totalDurationMs: 1, maxDurationMs: 1 },
+  ] }), "/api/profiles": profilesResponse() })
+  renderApp("/stats")
+  await screen.findByRole("region", { name: "Top SQL" })
+  await userEvent.click(screen.getByRole("radio", { name: "Logical reads" }))
+  const region = screen.getByRole("region", { name: "Top SQL" })
+  expect(within(region).getByText("readsonly")).toBeInTheDocument()
+  expect(within(region).getByText("1/2 ops · 1 recorded metrics · 1 missing metrics")).toBeInTheDocument()
+  expect(within(region).getByText("Unavailable")).toBeInTheDocument()
+  expect(within(region).queryByText("aaaaaaaaaaaa")).not.toBeInTheDocument()
 })
 
 test("no-profile activity has a distinct scope and drills down without a profile filter", async () => {
@@ -100,7 +92,7 @@ test("distinguishes empty activity from incomplete estimate coverage", async () 
   stubFetch({ "/api/stats": stats({ operations: [], statuses: [], profileOperations: [], workflowCosts: [] }),
     "/api/profiles": profilesResponse() })
   renderApp("/stats")
-  expect(await screen.findByText("No measured workflow output in this time range.")).toBeInTheDocument()
+  expect(await screen.findByText("No retained workflow-output accounting")).toBeInTheDocument()
 })
 
 test("selects a profile and shows filtered, searchable dimension matrix totals", async () => {
@@ -517,3 +509,15 @@ function dimensionValue(name: string, value: string, operations: number, totalDu
 function matrixMetrics(operations: number, totalDurationMs: number) {
   return { operations, totalDurationMs, durationAvailableOperations: operations, durationUnavailableOperations: 0, failed: 0, rejected: 0 }
 }
+
+test("KPI counts lead the failure rate and legacy volumes are excluded from output", async () => {
+  const response = stats({ operations: [{ key: "query", count: 4 }], statuses: [{ key: "failed", count: 1 }, { key: "rejected", count: 2 }], sessionCount: 2 })
+  response.workflowCosts = [{ ...response.workflowCosts[0], accountingKind: "legacy-artifact-volume", outputBytes: 999999, estimatedOutputTokens: 999999 }]
+  stubFetch({ "/api/stats": response, "/api/profiles": profilesResponse() })
+  renderApp("/stats")
+  expect(await screen.findByText("1 / 2")).toBeInTheDocument()
+  expect(screen.getByText("75% of 4 operations")).toBeInTheDocument()
+  expect(screen.getByText("2 sessions")).toBeInTheDocument()
+  expect(screen.getByText("No retained workflow-output accounting")).toBeInTheDocument()
+  expect(screen.queryByText(/999,999/)).not.toBeInTheDocument()
+})

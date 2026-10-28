@@ -12,3 +12,7 @@ export function pivotPerDay(rows: DayAgentCount[]): { rows: Record<string, strin
     }),
   }
 }
+
+export function failureRate(statuses: { key: string; count: number }[], operations: number): number | null {
+  return operations === 0 ? null : statuses.filter(row => row.key === "failed" || row.key === "rejected").reduce((sum, row) => sum + row.count, 0) / operations * 100
+}

@@ -429,7 +429,7 @@ export type OperationEventSummary = {
 
 export type KeyCount = { key: string; count: number }
 export type DayAgentCount = { day: string; agentKind: string; count: number }
-export type SqlHashStat = { sqlHash: string; count: number; totalDurationMs: number; maxDurationMs: number }
+export type SqlHashStat = { sqlHash: string; count: number; totalDurationMs: number; maxDurationMs: number; logicalReadsMedianSum?: number | null; logicalReadsAvailableOperations?: number; logicalReadsUnavailableOperations?: number; logicalReadsAvailableMetrics?: number; logicalReadsUnavailableMetrics?: number }
 export type TableReadStat = { table: string; logicalReads: number; operations: number }
 export type WaitStat = { waitType: string; totalWaitMs: number }
 export type TargetStat = { profile: string | null; database: string | null; count: number; engine?: string | null; server?: string | null }
@@ -480,6 +480,8 @@ export type DashboardStats = {
   operations: KeyCount[]
   topSqlByCount: SqlHashStat[]
   topSqlByDuration: SqlHashStat[]
+  topSqlByLogicalReads?: SqlHashStat[]
+  sessionCount?: number
   topTablesByLogicalReads: TableReadStat[]
   topWaits: WaitStat[]
   targets: TargetStat[]

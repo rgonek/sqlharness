@@ -1362,9 +1362,14 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         if (connection is null)
             return new DashboardStats([], [], [], [], [], [], [], [], [], 0, 0, [],
                 new ProfileDimensionStats(query.Profile,
-                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0), []);
+                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0), [], []);
         (string, object?)[] window = [("$from", Iso(query.From)), ("$to", Iso(query.To))];
-        const string inWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
+        connection.CreateFunction<string?, string?, bool>("stats_scope", (profile, variables) =>
+            (query.UnprofiledOnly ? profile is null : query.Profile is null || profile == query.Profile)
+            && (query.Dimensions is not { Count: > 0 }
+                || OperationDimensionResolver.Matches(query.Dimensions, OperationDimensionResolver.ReadRecordedValues(variables))));
+        const string timeWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
+        const string inWindow = timeWindow + " AND stats_scope(o.profile, o.vars_json)";
 
         var perDay = Query(connection, $"""
             SELECT substr(o.started_at, 1, 10) AS day, s.agent_kind, COUNT(*) FROM operations o JOIN sessions s ON s.id = o.session_id
@@ -1389,13 +1394,30 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             SELECT o.operation, COUNT(*) FROM operations o WHERE {inWindow} GROUP BY o.operation ORDER BY COUNT(*) DESC, o.operation;
             """, window, r => new KeyCount(r.GetString(0), r.GetInt32(1)));
 
-        const string sqlStats = "SELECT o.sql_hash, COUNT(*) AS n, COALESCE(SUM(o.duration_ms), 0) AS total, COALESCE(MAX(o.duration_ms), 0) FROM operations o";
+        // Collapse metrics before the join so operation counts and durations cannot fan out.
+        const string sqlStats = """
+            WITH metric_reads AS (
+                SELECT operation_id, SUM(logical_reads_median) AS reads,
+                    COUNT(logical_reads_median) AS available, COUNT(*) - COUNT(logical_reads_median) AS unavailable
+                FROM operation_metrics GROUP BY operation_id
+            )
+            SELECT o.sql_hash, COUNT(*) AS n, COALESCE(SUM(o.duration_ms), 0) AS total,
+                COALESCE(MAX(o.duration_ms), 0), SUM(m.reads) AS reads,
+                SUM(CASE WHEN m.available > 0 THEN 1 ELSE 0 END),
+                SUM(CASE WHEN COALESCE(m.available, 0) = 0 THEN 1 ELSE 0 END),
+                COALESCE(SUM(m.available), 0), COALESCE(SUM(m.unavailable), 0)
+            FROM operations o LEFT JOIN metric_reads m ON m.operation_id = o.id
+            """;
         var byCount = Query(connection, $"""
             {sqlStats} WHERE {inWindow} AND o.sql_hash IS NOT NULL GROUP BY o.sql_hash ORDER BY n DESC, total DESC, o.sql_hash LIMIT {TopLimit};
             """, window, ReadSqlStat);
         var byDuration = Query(connection, $"""
             {sqlStats} WHERE {inWindow} AND o.sql_hash IS NOT NULL GROUP BY o.sql_hash ORDER BY total DESC, n DESC, o.sql_hash LIMIT {TopLimit};
             """, window, ReadSqlStat);
+        var byReads = Query(connection, $"""
+            {sqlStats} WHERE {inWindow} AND o.sql_hash IS NOT NULL GROUP BY o.sql_hash ORDER BY reads DESC, n DESC, o.sql_hash LIMIT {TopLimit};
+            """, window, ReadSqlStat);
+        var sessionCount = Scalar<long>(connection, $"SELECT COUNT(DISTINCT o.session_id) FROM operations o WHERE {inWindow};", window);
 
         var tables = Query(connection, $"""
             SELECT t.table_name, SUM(t.logical_reads * m.runs), COUNT(DISTINCT o.id)
@@ -1433,7 +1455,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         // These aggregates intentionally read every operation in the requested window.
         // The bounded Targets list above is presentation data and cannot back dimension totals.
         var profileOperations = Query(connection, $"""
-            SELECT o.profile, COUNT(*) FROM operations o WHERE {inWindow}
+            SELECT o.profile, COUNT(*) FROM operations o WHERE {timeWindow}
             GROUP BY o.profile ORDER BY COUNT(*) DESC, o.profile;
             """, window, r => new ProfileOperationCount(NullableString(r, 0), r.GetInt32(1)));
         (string, object?)[] dimensionWindow = [.. window, ("$profile", query.Profile), ("$unprofiled", query.UnprofiledOnly ? 1 : 0)];
@@ -1470,7 +1492,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             (int)cold,
             profileOperations,
             dimensionStats,
-            WorkflowCosts(connection, window));
+            WorkflowCosts(connection, window), byReads, (int)sessionCount);
     }
 
     private static IReadOnlyList<WorkflowCost> WorkflowCosts(SqliteConnection connection, (string, object?)[] window)
@@ -1480,7 +1502,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                    root.raw_bytes, root.status, root.dry_run, root.operation
             FROM operations o
             LEFT JOIN operations root ON root.operation_ref = COALESCE(o.parent_operation_ref, o.operation_ref)
-            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to);
+            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to) AND stats_scope(o.profile, o.vars_json);
             """, window, r => new WorkflowOutputRow(
                 NullableString(r, 0), NullableString(r, 1), r.GetString(2), r.GetString(3), NullableLong(r, 4), r.GetInt64(5) != 0,
                 NullableLong(r, 6), NullableString(r, 7), !r.IsDBNull(8) && r.GetInt64(8) != 0, NullableString(r, 9)));
@@ -1882,7 +1904,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     };
 
     private static SqlHashStat ReadSqlStat(SqliteDataReader r) =>
-        new(r.GetString(0), r.GetInt32(1), r.GetInt64(2), r.GetInt64(3));
+        new(r.GetString(0), r.GetInt32(1), r.GetInt64(2), r.GetInt64(3), NullableLong(r, 4), r.GetInt32(5), r.GetInt32(6), r.GetInt32(7), r.GetInt32(8));
 
     private static Spread? SpreadAt(SqliteDataReader r, int index) =>
         r.IsDBNull(index) ? null : new Spread(r.GetInt64(index), r.GetInt64(index + 1), r.GetInt64(index + 2));

@@ -1521,6 +1521,78 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Stats_reads_cover_all_groups_and_share_scope()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:reads");
+        for (var i = 0; i < 25; i++)
+            for (var run = 0; run < 3; run++)
+                seed.Operation(session, sql: $"SELECT {i}", durationMs: 1000);
+        var benchmark = JournalSeed.Benchmark(readsMedian: 70);
+        benchmark = benchmark with { Variants = [benchmark.Variants[0], benchmark.Variants[0] with { Variant = "candidate", LogicalReads = null }] };
+        seed.Operation(session, sql: "SELECT reads", durationMs: 1, benchmark: benchmark);
+        seed.Operation(session, sql: "SELECT reads", durationMs: 2);
+        seed.Operation(session, sql: "SELECT zero", benchmark: JournalSeed.Benchmark(readsMedian: 0));
+        var reader = Reader(home);
+        var stats = reader.Stats(new StatsQuery(Profile: "local", Dimensions: new Dictionary<string, string?> { ["tenant"] = "acme" }));
+        Assert.Equal(1, stats.SessionCount);
+        var top = stats.TopSqlByLogicalReads![0];
+        Assert.Equal(OperationJournalDescriber.SqlHash("SELECT reads"), top.SqlHash);
+        Assert.Equal(70, top.LogicalReadsMedianSum);
+        Assert.Equal(2, top.Count);
+        Assert.Equal(3, top.TotalDurationMs);
+        Assert.Equal(1, top.LogicalReadsAvailableOperations);
+        Assert.Equal(1, top.LogicalReadsUnavailableOperations);
+        Assert.Equal(1, top.LogicalReadsUnavailableMetrics);
+        Assert.DoesNotContain(stats.TopSqlByCount, x => x.SqlHash == top.SqlHash);
+        Assert.DoesNotContain(stats.TopSqlByDuration, x => x.SqlHash == top.SqlHash);
+        Assert.Equal(0, stats.TopSqlByLogicalReads.Single(x => x.SqlHash == OperationJournalDescriber.SqlHash("SELECT zero")).LogicalReadsMedianSum);
+        Assert.Null(stats.TopSqlByDuration[0].LogicalReadsMedianSum);
+        var empty = reader.Stats(new StatsQuery(Profile: "other"));
+        Assert.Empty(empty.Operations);
+        Assert.Empty(empty.TopSqlByLogicalReads!);
+        Assert.Empty(empty.WorkflowCosts);
+        Assert.Equal(0, empty.SessionCount);
+    }
+
+    [Fact]
+    public void Stats_all_metrics_use_identical_profile_dimension_and_window_cohort()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var first = JournalSeed.Session("cli:first");
+        var second = JournalSeed.Session("cli:second");
+        seed.Operation(first, profile: "local", status: "failed", benchmark: JournalSeed.Benchmark(physical: 1));
+        seed.Operation(second, profile: "local", benchmark: JournalSeed.Benchmark(physical: 1));
+        seed.Operation(second, profile: "other", benchmark: JournalSeed.Benchmark(1000, physical: 1));
+        seed.Operation(second, profile: null, benchmark: JournalSeed.Benchmark(1000, physical: 1));
+        seed.Operation(second, variables: new Dictionary<string, string> { ["tenant"] = "other" }, benchmark: JournalSeed.Benchmark(1000, physical: 1));
+        var reader = Reader(home);
+        var scoped = reader.Stats(new StatsQuery(Profile: "local", Dimensions: new Dictionary<string, string?> { ["tenant"] = "acme" }));
+        Assert.Equal(2, scoped.SessionCount);
+        Assert.Equal(2, scoped.Operations.Sum(x => x.Count));
+        Assert.Equal(2, scoped.OperationsPerDay.Sum(x => x.Count));
+        Assert.Equal(2, scoped.Statuses.Sum(x => x.Count));
+        Assert.Equal(1, scoped.Statuses.Single(x => x.Key == "failed").Count);
+        Assert.Equal(2, scoped.ExitCodes.Sum(x => x.Count));
+        Assert.Equal(2, scoped.Targets.Sum(x => x.Count));
+        Assert.Equal(2, scoped.SpillOperations);
+        Assert.Equal(2, scoped.ColdCacheOperations);
+        Assert.Equal(30, Assert.Single(scoped.TopTablesByLogicalReads).LogicalReads);
+        Assert.Equal(240, Assert.Single(scoped.TopWaits).TotalWaitMs);
+        Assert.Equal(2, Assert.Single(scoped.WorkflowCosts).CallCount);
+        Assert.Equal(2, Assert.Single(scoped.TopSqlByLogicalReads!).Count);
+        Assert.Single(reader.Stats(new StatsQuery(UnprofiledOnly: true)).OperationsPerDay);
+        Assert.Equal(1, reader.Stats(new StatsQuery(UnprofiledOnly: true)).Operations.Sum(x => x.Count));
+        var empty = reader.Stats(new StatsQuery(From: new DateTimeOffset(2026, 10, 8, 0, 0, 0, TimeSpan.Zero), Profile: "local"));
+        Assert.Empty(empty.Operations);
+        Assert.Empty(empty.TopSqlByLogicalReads!);
+        Assert.Empty(empty.WorkflowCosts);
+        Assert.Equal(0, empty.SessionCount);
+    }
+
+    [Fact]
     public void Stats_aggregate_days_statuses_sql_tables_waits_tokens_and_targets()
     {
         using var home = new TempHome();
