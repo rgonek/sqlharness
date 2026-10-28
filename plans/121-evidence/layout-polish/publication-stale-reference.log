@@ -1,0 +1,27 @@
+pwsh ./scripts/publish-local.ps1 -SkipTests
+[6 q==> SDK 10.0.303
+==> publish win-x64
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Core\bin\Release\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Mcp\bin\Release\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Dashboard\bin\Release\net10.0\SqlHarness.Dashboard.dll
+CSC : error CS0009: Metadata file 'C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Dashboard\obj\Release\net10.0\ref\SqlHarness.Dashboard.dll' could not be opened -- Invalid metadata section span. [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\Commands\CapabilitiesCommand.cs(8,18): error CS0234: The type or namespace name 'Dashboard' does not exist in the namespace 'SqlHarness' (are you missing an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\Commands\DashboardCommand.cs(8,18): error CS0234: The type or namespace name 'Dashboard' does not exist in the namespace 'SqlHarness' (are you missing an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\Commands\McpServeCommand.cs(8,18): error CS0234: The type or namespace name 'Dashboard' does not exist in the namespace 'SqlHarness' (are you missing an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarnessCli.cs(9,18): error CS0234: The type or namespace name 'Dashboard' does not exist in the namespace 'SqlHarness' (are you missing an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarnessCli.cs(27,215): error CS0234: The type or namespace name 'Dashboard' does not exist in the namespace 'SqlHarness' (are you missing an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarnessCli.cs(27,319): error CS0234: The type or namespace name 'Dashboard' does not exist in the namespace 'SqlHarness' (are you missing an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\Commands\DashboardCommand.cs(13,38): error CS0246: The type or namespace name 'IDashboardLauncher' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\Commands\DashboardCommand.cs(13,67): error CS0246: The type or namespace name 'IDashboardLifecycle' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\Commands\McpServeCommand.cs(31,5): error CS0246: The type or namespace name 'IDashboardLauncher' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\Commands\McpServeCommand.cs(138,54): error CS0246: The type or namespace name 'IDashboardLauncher' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\Commands\McpServeCommand.cs(150,76): error CS0246: The type or namespace name 'IDashboardLauncher' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\Commands\McpServeCommand.cs(150,20): error CS0246: The type or namespace name 'AutostartResult' could not be found (are you missing a using directive or an assembly reference?) [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj]
+Exception: C:\Users\rgone\.codex\worktrees\f735\sqlharness\scripts\publish-local.ps1:94
+Line |
+  94 |  … EXITCODE -ne 0) { throw "Publish failed (exit code $LASTEXITCODE)." }
+     |                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Publish failed (exit code 1).
+error: recipe `publish` failed on line 24 with exit code 1

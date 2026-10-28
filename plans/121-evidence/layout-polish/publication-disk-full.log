@@ -1,0 +1,14 @@
+pwsh ./scripts/publish-local.ps1 -SkipTests
+[6 q==> SDK 10.0.303
+==> publish win-x64
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Core\bin\Release\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Mcp\bin\Release\net10.0\SqlHarness.Mcp.dll
+CSC : error CS8104: An error occurred while writing the output file: System.IO.IOException: There is not enough space on the disk. : 'C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Dashboard\obj\Release\net10.0\refint\SqlHarness.Dashboard.dll'. [C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj]
+Exception: C:\Users\rgone\.codex\worktrees\f735\sqlharness\scripts\publish-local.ps1:94
+Line |
+  94 |  … EXITCODE -ne 0) { throw "Publish failed (exit code $LASTEXITCODE)." }
+     |                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Publish failed (exit code 1).
+error: recipe `publish` failed on line 24 with exit code 1

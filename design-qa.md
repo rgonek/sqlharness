@@ -46,3 +46,5 @@ The final pairs and focused captures were opened and visually compared after cor
 The browser matrix passes 28 checks with zero console/page errors, including selected-star transparency, whole-row interactions, independent disclosure behavior, Details arrow, note save/cancel/re-edit/accessibility, profile search/selection, Usage sorting/range, switch geometry, and 390px overflow checks. Mutation capture verifies open/close without submitting a decision. Unit and complete repository gates are recorded separately with their actual outcomes.
 
 Final repository gate: PASS, UI 408; Core/Dashboard/CLI 4771 passed/11 existing skips; MCP 535 passed/4 existing skips. Core collections were serialized using the ignored Debug runner settings documented in the evidence README; no timeout or test selection changed.
+
+Local publication: product `1f732184` installed and dashboard restarted successfully. Installed binary matches the published artifact; authenticated HTTP 200 and served JS/CSS match the current built assets. Receipt: `plans/121-evidence/layout-polish/publication.json`.

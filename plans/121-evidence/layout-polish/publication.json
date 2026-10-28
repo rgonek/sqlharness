@@ -1,0 +1,30 @@
+{
+  "installed": "C:\\Users\\rgone\\.local\\bin\\sqlharness.exe",
+  "artifact": "C:\\Users\\rgone\\.codex\\worktrees\\f735\\sqlharness\\artifacts\\publish-single\\sqlharness.exe",
+  "installedSha256": "C68C139903402815F700E45B977532F290480AE9D22F904087C4ED1AC304FCD2",
+  "artifactSha256": "C68C139903402815F700E45B977532F290480AE9D22F904087C4ED1AC304FCD2",
+  "version": "0.0.0",
+  "restartCommand": "sqlharness dashboard --restart",
+  "restartExitCode": 0,
+  "verificationReusedSuccessfulRestart": true,
+  "previousPid": null,
+  "dashboardPid": 34948,
+  "executablePath": "C:\\Users\\rgone\\.local\\bin\\sqlharness.exe",
+  "url": "http://127.0.0.1:47800/",
+  "httpStatus": 200,
+  "servedAssets": [
+    {
+      "asset": "/assets/index-DQOIm9dN.js",
+      "sha256": "A79AA279663A1E93AAE22EFEAA95595B9298D258179E89AB8ADD7459C8A36D55",
+      "matchesBuiltAsset": true
+    },
+    {
+      "asset": "/assets/index-DYhJMur3.css",
+      "sha256": "048A0E3C4D33853D8044BD411251F081338E122050DF99072C07E7B96F205BFB",
+      "matchesBuiltAsset": true
+    }
+  ],
+  "productCommit": "1f732184",
+  "testedUiSourceDigest": "c99599f41ff0420014729439df3d258c69f4186b92b74a451d049f97dff31f93",
+  "testedUiSourceUnchangedAfterPublication": true
+}
