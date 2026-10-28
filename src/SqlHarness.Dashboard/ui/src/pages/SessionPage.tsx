@@ -89,7 +89,7 @@ function SessionView({ id }: { id: number }) {
             </div>{conversations.length > 0 && <div className="mt-4"><SessionConversations conversations={conversations} /></div>}</CollapsibleContent>
           </Collapsible>
       </header>
-      <SessionNoteCard key={session.id} sessionId={session.id} note={note} />
+      <div><SessionNoteCard key={session.id} sessionId={session.id} note={note} /></div>
       {session.hasCompare && <OptimizationSection sessionId={id} operations={loadedOperations} />}
       <Card>
         <CardHeader className="flex flex-wrap items-start justify-between gap-3">
