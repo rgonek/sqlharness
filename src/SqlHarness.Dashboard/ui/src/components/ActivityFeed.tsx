@@ -50,7 +50,7 @@ function SessionGroup({ session, operations, now, expanded, onExpand }: { sessio
   const open = expanded
   const update = useUpdateSessionAnnotation(session.id)
   return <section className="border-b last:border-b-0" aria-label={sessionDisplayName(session)}>
-    <div className="activity-session-row cursor-pointer" onClick={event => {
+    <div className="activity-session-row cursor-pointer transition-colors hover:bg-muted/50" onClick={event => {
       if ((event.target as HTMLElement).closest("a,button,input,[role=button]")) return
       onExpand()
     }}>

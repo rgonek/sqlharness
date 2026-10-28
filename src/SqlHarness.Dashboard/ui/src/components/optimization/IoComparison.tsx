@@ -46,7 +46,7 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
       <TableBody>{byStatement ? rows.map(row => {
         const key = `${row.key}:${row.occurrence}`
         const open = !closed.includes(key)
-        return <Fragment key={key}><TableRow className="cursor-pointer bg-muted/40" onClick={event => {
+        return <Fragment key={key}><TableRow className="cursor-pointer bg-muted/40 hover:bg-muted has-aria-expanded:bg-muted/40 has-aria-expanded:hover:bg-muted" onClick={event => {
           if ((event.target as HTMLElement).closest("a,button,input,[role=button]")) return
           setClosed(current => open ? [...current, key] : current.filter(item => item !== key))
         }}><TableHead scope="row" className="whitespace-normal">
