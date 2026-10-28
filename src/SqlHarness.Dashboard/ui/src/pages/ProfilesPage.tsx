@@ -10,6 +10,33 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
+const tlsLabels: Record<string, [string, string]> = {
+  optional: ["Optional", "Encryption is optional; the connection may be unencrypted."],
+  disable: ["Disabled", "TLS is disabled."],
+  "disable (legacy)": ["Disabled (legacy)", "TLS is disabled by the legacy trustServerCertificate setting."],
+  allow: ["Allow TLS", "An unencrypted connection is tried first; TLS is allowed."],
+  prefer: ["Prefer TLS", "TLS is preferred, with an unencrypted fallback."],
+  require: ["Require TLS", "TLS encryption is required."],
+  "require (legacy)": ["Require TLS (legacy)", "TLS is required by the legacy trustServerCertificate setting."],
+  "verify-ca": ["Verify certificate authority", "TLS verifies the server certificate authority."],
+  "verify-full": ["Verify full identity", "TLS verifies the certificate authority and server hostname."],
+  verify: ["Verify certificate", "The server certificate is verified."],
+  "trust server certificate": ["Trust server certificate", "The server certificate is trusted without verification."],
+}
+const modeLabels: Record<string, [string, string]> = {
+  never: ["Never", "Persistent mutations are disabled."],
+  operator: ["Operator approval", "Persistent mutations require the operator's dashboard approval."],
+  yolo: ["YOLO", "Persistent mutations run without operator approval."],
+}
+const writerLabels: Record<string, [string, string]> = {
+  sameAsReader: ["Same as reader", "Uses the reader connection identity for mutations."],
+  separate: ["Separate writer", "Uses the separately configured writer identity for mutations."],
+}
+function ExplainedValue({ value, labels }: { value: string; labels: Record<string, [string, string]> }) {
+  const known = labels[value]
+  return <><span>{known?.[0] ?? value}</span>{known && <p className="text-sm text-muted-foreground">{known[1]}</p>}</>
+}
+
 export function ProfilesPage() {
   const query = useProfiles()
   const [selected, setSelected] = useState<string | null>(null)
@@ -41,8 +68,8 @@ export function ProfilesPage() {
       {status === "invalid" && <Alert variant="destructive"><AlertTitle>targets.json is invalid</AlertTitle><AlertDescription>{message}</AlertDescription></Alert>}
       {status === "valid" && profile && <>
         <header className="flex flex-col gap-2"><div className="flex flex-wrap items-center gap-3"><h2 className="text-xl font-semibold">{profile.name}</h2><Badge variant="outline">{profile.environment ?? "no environment"}</Badge><Link to="/stats" className="ml-auto text-sm underline">Usage overview →</Link></div><p className="break-all text-sm text-muted-foreground">{profile.engine} · {profile.server} / {profile.database}</p></header>
-        <Card className="profile-section" role="region" aria-label="Connection"><CardHeader><CardTitle><h3>Connection</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody>{connection.map(([label,value]) => <TableRow key={label}><TableHead scope="row" className="w-40">{label}</TableHead><TableCell className="whitespace-normal break-all">{value}</TableCell></TableRow>)}</TableBody></Table>{profile.database.includes("{") && <p className="text-xs text-muted-foreground">Database template · resolved per operation from variables</p>}</CardContent></Card>
-        <Card className="profile-section" role="region" aria-label="Mutations"><CardHeader><CardTitle><h3>Mutations</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody><TableRow><TableHead scope="row" className="w-40">Mode</TableHead><TableCell>{profile.mutationMode || "never"}</TableCell></TableRow><TableRow><TableHead scope="row">Writer</TableHead><TableCell>{profile.mutationWriterKind ?? "—"}</TableCell></TableRow></TableBody></Table>{profile.mutationMode === "yolo" && <p className="text-sm text-destructive">Mutations run without approval{profile.environment ? ` on ${profile.environment}` : ""}.</p>}</CardContent></Card>
+        <Card className="profile-section" role="region" aria-label="Connection"><CardHeader><CardTitle><h3>Connection</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody>{connection.map(([label,value]) => <TableRow key={label}><TableHead scope="row" className="w-40">{label}</TableHead><TableCell className="whitespace-normal break-all">{label === "TLS" ? <ExplainedValue value={value} labels={tlsLabels} /> : <>{value}{label === "Password variable" && profile.passwordEnvVar && <p className="text-sm text-muted-foreground">Environment variable name only; its value is not read.</p>}</>}</TableCell></TableRow>)}</TableBody></Table>{profile.database.includes("{") && <p className="text-xs text-muted-foreground">Database template · resolved per operation from variables</p>}</CardContent></Card>
+        <Card className="profile-section" role="region" aria-label="Mutations"><CardHeader><CardTitle><h3>Mutations</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody><TableRow><TableHead scope="row" className="w-40">Mode</TableHead><TableCell><ExplainedValue value={profile.mutationMode || "never"} labels={modeLabels} /></TableCell></TableRow><TableRow><TableHead scope="row">Writer</TableHead><TableCell><ExplainedValue value={profile.mutationWriterKind ?? "—"} labels={writerLabels} /></TableCell></TableRow></TableBody></Table>{profile.mutationMode === "yolo" && <Alert variant="destructive"><AlertTitle>Mutations run without approval{profile.environment ? ` on ${profile.environment}` : ""}.</AlertTitle><AlertDescription>YOLO mode does not ask the operator to approve persistent changes.</AlertDescription></Alert>}</CardContent></Card>
         <Card className="profile-section" role="region" aria-label="Variables"><CardHeader><CardTitle><h3>Variables</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3">{profile.vars.length ? <Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Rule</TableHead></TableRow></TableHeader><TableBody>{profile.vars.map(variable => <TableRow key={variable.name}><TableCell className="font-mono">{variable.name}</TableCell><TableCell>{variable.rule}</TableCell></TableRow>)}</TableBody></Table> : <p className="text-sm text-muted-foreground">No variables. Operations on this profile have no dimensions.</p>}</CardContent></Card>
       </>}
     </div>

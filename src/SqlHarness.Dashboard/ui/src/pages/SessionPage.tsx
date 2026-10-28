@@ -1,10 +1,12 @@
-import { useParams } from "@tanstack/react-router"
+import { Link, useParams } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
 import { useSession, useSessionOperations } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
-import { OperationTable } from "@/components/OperationTable"
+import { SessionOperationsTable } from "@/components/SessionOperationsTable"
+import { sessionDisplayName } from "@/lib/sessionName"
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { InternalOperationsToggle } from "@/components/InternalOperationsToggle"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SessionAnnotationHeader } from "@/components/SessionAnnotationHeader"
 import { SessionNoteCard } from "@/components/SessionNoteCard"
@@ -50,15 +52,10 @@ function SessionView({ id }: { id: number }) {
   const { session, note = null, conversations = [] } = detail.data
   const loadedOperations = [...new Map((operationPages.data?.pages.flatMap(page => page.items) ?? []).map(operation => [operation.id, operation])).values()]
   return (
-    <div className="session-page space-y-4">
-      <Card className="session-heading border-0 shadow-none">
-        <CardHeader className="px-0">
-          <CardTitle className="min-w-0">
-            <SessionAnnotationHeader key={session.id} session={session} />
-          </CardTitle>
-
-        </CardHeader>
-        <CardContent className="px-0">
+    <div className="session-page flex min-w-0 flex-col gap-4">
+      <Breadcrumb><BreadcrumbList><BreadcrumbItem><BreadcrumbLink render={<Link to="/" />}>Activity</BreadcrumbLink></BreadcrumbItem><BreadcrumbSeparator /><BreadcrumbItem className="min-w-0"><BreadcrumbPage className="break-all">{sessionDisplayName(session)}</BreadcrumbPage></BreadcrumbItem></BreadcrumbList></Breadcrumb>
+      <header className="flex min-w-0 flex-col gap-2">
+        <SessionAnnotationHeader key={session.id} session={session} />
           <Collapsible>
 <div className="session-subtitle text-muted-foreground"><span>{agentLabel(session.agentKind)} via {session.transport}</span><span>·</span><span>{session.operations} operations</span><span>·</span><CollapsibleTrigger className="group" aria-label="Session metadata" render={<Button variant="ghost" size="sm" />}>Details<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" className="transition-transform group-aria-expanded:rotate-180" /></CollapsibleTrigger></div>
             <CollapsibleContent keepMounted><div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -91,23 +88,22 @@ function SessionView({ id }: { id: number }) {
               <div className="min-w-0 md:col-span-2"><div className="text-sm text-muted-foreground">Session ID</div><code className="break-all text-sm">{session.sessionKey}</code></div>
             </div>{conversations.length > 0 && <div className="mt-4"><SessionConversations conversations={conversations} /></div>}</CollapsibleContent>
           </Collapsible>
-        </CardContent>
-      </Card>
+      </header>
       <SessionNoteCard key={session.id} sessionId={session.id} note={note} />
       {session.hasCompare && <OptimizationSection sessionId={id} operations={loadedOperations} />}
       <Card>
-        <CardHeader>
-          <CardTitle>All operations</CardTitle>
-          <CardDescription>Newest first. Loaded {loadedOperations.length} of {session.operations} operations.</CardDescription>
+        <CardHeader className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1"><CardTitle>Operations ({loadedOperations.length})</CardTitle>
+          <CardDescription>Newest first. Loaded {loadedOperations.length} of {session.operations} operations.</CardDescription></div>
+          <CardAction><InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} /></CardAction>
         </CardHeader>
         <CardContent>
-          <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />
           {operationPages.isError && <div role="alert" className="mb-3 flex items-center gap-3 text-sm text-destructive">
             <span>{operationPages.error instanceof Error ? operationPages.error.message : "Could not load session operations."}</span>
             <Button size="sm" variant="outline" onClick={() => void (operationPages.isFetchNextPageError ? operationPages.fetchNextPage() : operationPages.refetch())}>Retry</Button>
           </div>}
           {operationPages.isPending && <div className="mb-3 text-sm text-muted-foreground">Loading operations…</div>}
-          <OperationTable operations={loadedOperations} showInternal={showInternal} />
+          <SessionOperationsTable operations={loadedOperations} showInternal={showInternal} />
           {operationPages.hasNextPage && <Button className="mt-3" variant="outline" disabled={operationPages.isFetchingNextPage}
             onClick={() => void operationPages.fetchNextPage()}>{operationPages.isFetchingNextPage ? "Loading…" : "Load more"}</Button>}
         </CardContent>

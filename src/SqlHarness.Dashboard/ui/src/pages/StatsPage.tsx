@@ -254,7 +254,7 @@ function StatsContent({
 
   return (
     <div className="usage-content flex flex-col gap-4">
-      <div className="usage-kpis">
+      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 [&>*]:min-w-0 [&>*]:break-words">
         <Kpi label="Operations" value={formatNumber(total)} />
         <Kpi label="Failed / rejected" value={`${formatNumber(stats.statuses.find(row => row.key === "failed")?.count ?? 0)} / ${formatNumber(stats.statuses.find(row => row.key === "rejected")?.count ?? 0)}`} />
         <Kpi label="Measured workflow output" value={`${formatNumber(stats.workflowCosts.reduce((sum, cost) => sum + cost.outputBytes, 0))} bytes`} />

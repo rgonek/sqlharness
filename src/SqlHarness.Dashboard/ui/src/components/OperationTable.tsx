@@ -9,7 +9,7 @@ import { isInternalOperation } from "@/lib/internalOperations"
 import { useUpdateOperationAnnotation } from "@/api/queries"
 import { Button } from "@/components/ui/button"
 
-function OwnerStarButton({ operation }: { operation: OperationSummary }) {
+export function OwnerStarButton({ operation }: { operation: OperationSummary }) {
   const update = useUpdateOperationAnnotation(operation.id)
   return <Button variant="ghost" size="sm" aria-label={operation.ownerStarred ? "Unstar operation" : "Star operation"}
     aria-pressed={operation.ownerStarred} disabled={update.isPending}
