@@ -89,7 +89,13 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
   const selectedUnprofiled = manualProfile ? manualProfile.value === null
     : overview.data?.profileOperations[0]?.profile === null && overview.data.profileOperations.length > 0
   const dimensionOptions = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
-  const query = useStats(range, window, selectedProfile, dimensionFilters, undefined, undefined, selectedUnprofiled)
+  // Only current, loaded dimension options may remove retained selections. While
+  // the new range is loading, keep selections intact and hide its pending metrics.
+  const dimensionNames = dimensionOptions.data?.profileDimensions.dimensions.map(dimension => dimension.name)
+  const effectiveFilters = dimensionNames
+    ? Object.fromEntries(Object.entries(dimensionFilters).filter(([name]) => dimensionNames.includes(name)))
+    : dimensionFilters
+  const query = useStats(range, window, selectedProfile, effectiveFilters, undefined, undefined, selectedUnprofiled, dimensionOptions.data !== undefined)
   const profileOptions = [...new Set([
     ...profiles.map(profile => profile.name),
     ...(overview.data?.profileOperations ?? []).flatMap(item => item.profile === null ? [] : [item.profile]),
@@ -140,7 +146,7 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
         <Skeleton className="h-64 w-full" />
       ) : (
         <StatsContent metricsPending={query.isPending} stats={{ ...(query.data ?? dimensionOptions.data!), profileDimensions: dimensionOptions.data!.profileDimensions }} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
-          dimensionFilters={dimensionFilters} onDimensionFiltersChange={setDimensionFilters}
+          dimensionFilters={effectiveFilters} onDimensionFiltersChange={setDimensionFilters}
           axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
       )}
     </div>

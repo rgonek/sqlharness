@@ -521,3 +521,40 @@ test("KPI counts lead the failure rate and legacy volumes are excluded from outp
   expect(screen.getByText("No retained workflow-output accounting")).toBeInTheDocument()
   expect(screen.queryByText(/999,999/)).not.toBeInTheDocument()
 })
+
+test("a recorded dimension absent in the new range cannot leave an invisible aggregate filter", async () => {
+  const requests: URL[] = []
+  stubFetch({ "/api/stats": (url: URL) => {
+    requests.push(url)
+    const from = url.searchParams.get("from")
+    const to = url.searchParams.get("to")
+    const recent = from !== null && to !== null && Date.parse(to) - Date.parse(from) <= 24 * 60 * 60 * 1000
+    const response = profileStats("app")
+    if (!recent) response.profileDimensions.dimensions.push({ name: "legacy", values: [dimensionValue("legacy", "older", 3, 30)] })
+    const hiddenFilter = recent && JSON.parse(url.searchParams.get("dimensions") ?? "{}").legacy !== undefined
+    const count = hiddenFilter ? 0 : recent ? 2 : 3
+    response.operations = count ? [{ key: "query", count }] : []
+    response.statuses = count ? [{ key: "succeeded", count }] : []
+    response.topSqlByDuration = count ? [{ sqlHash: recent ? "newcohort" : "oldcohort", count, totalDurationMs: 20, maxDurationMs: 10 }] : []
+    if (recent && response.profileDimensions.matrix) {
+      response.profileDimensions.matrix.cells = hiddenFilter ? [] : response.profileDimensions.matrix.cells.slice(0, 1)
+      response.profileDimensions.matrix.totals = matrixMetrics(count, count * 10)
+      response.profileDimensions.operations = count
+    }
+    return jsonResponse(response)
+  }, "/api/profiles": profilesResponse() })
+  renderApp("/stats")
+  await screen.findByRole("combobox", { name: "legacy" })
+  await userEvent.click(screen.getByRole("tab", { name: "All time" }))
+  await userEvent.click(await screen.findByRole("combobox", { name: "legacy" }))
+  await userEvent.click(await screen.findByRole("option", { name: "older" }))
+  await waitFor(() => expect(requests.some(url => url.searchParams.get("dimensions")?.includes("legacy"))).toBe(true))
+  await userEvent.click(screen.getByRole("tab", { name: "24 hours" }))
+  expect(await screen.findByText(/Full-scope total: 2 \(2 operations\)/)).toBeInTheDocument()
+  expect(await screen.findByText("newcohort")).toBeInTheDocument()
+  expect(screen.queryByRole("combobox", { name: "legacy" })).not.toBeInTheDocument()
+  const summary = screen.getByLabelText("Usage summary")
+  expect(within(summary).getByText("2")).toBeInTheDocument()
+  const currentAggregate = requests.filter(url => url.searchParams.has("from") && !url.searchParams.has("rowDimension")).at(-1)!
+  expect(JSON.parse(currentAggregate.searchParams.get("dimensions") ?? "{}")).not.toHaveProperty("legacy")
+})
