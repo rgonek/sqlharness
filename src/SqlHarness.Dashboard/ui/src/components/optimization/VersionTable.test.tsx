@@ -2,6 +2,7 @@ import { useState } from "react"
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
+import { operation } from "@/test/fixtures"
 import { VersionTable } from "./VersionTable"
 
 const versions = ["v0", "v1", "v2"].map(version => ({ version, hash: version, logicalReadsSum: 10, logicalReadsMean: 10, scansSum: 1, elapsedMedianMs: 1, caseOutcome: "ok", measuredIn: [], latestOperationId: 1, verdictBasis: "whole batch" }))
@@ -27,4 +28,14 @@ test("A and B are independent exclusive native groups, isolated per table instan
   expect(second.getByRole("radio", { name: "A v0" })).toBeChecked()
   expect(first.getByRole("radio", { name: "A v0" }).getAttribute("name")).not.toBe(second.getByRole("radio", { name: "A v0" }).getAttribute("name"))
   expect(first.getAllByRole("radio").filter(radio => (radio as HTMLInputElement).checked)).toHaveLength(2)
+})
+
+
+test("version labels share the version line and retain their full title", () => {
+  render(<VersionTable subject="Orders" sessionId={1} sessionSearch={{}} versions={[{ ...versions[0], measuredIn: [10] }]} operations={[operation({ id: 10, agentLabel: "Candidate with a complete label" })]} selectedA="v0" selectedB={null} onSelect={() => {}} />)
+  const label = screen.getByText("Candidate with a complete label")
+  expect(label).toHaveAttribute("title", "Candidate with a complete label")
+  expect(label.parentElement).toHaveTextContent("v0")
+  expect(screen.getByRole("radio", { name: "A v0" }).nextElementSibling).toHaveTextContent("A")
+  expect(screen.getByRole("radio", { name: "B v0" }).nextElementSibling).toHaveTextContent("B")
 })

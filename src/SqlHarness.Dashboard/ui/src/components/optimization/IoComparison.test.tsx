@@ -45,8 +45,9 @@ test("shows selected-run metrics and object LOB without replacing missing values
   expect(screen.getByText(/Elapsed \(ms\).*—.*42/)).toBeInTheDocument()
   expect(screen.getByText(/repetition 3/)).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan?occurrence=2")
-  await userEvent.click(screen.getByText("More columns"))
-  await userEvent.click(screen.getByRole("checkbox", { name: "LOB logical" }))
+  expect(screen.queryByRole("button", { name: "More columns" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "LOB logical" }))
+  expect(screen.getByRole("button", { name: "LOB logical" })).toHaveAttribute("aria-pressed", "true")
   expect(within(screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!).getByText("7")).toBeInTheDocument()
 })
 

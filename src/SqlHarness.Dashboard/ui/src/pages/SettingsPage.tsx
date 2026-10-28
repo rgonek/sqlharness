@@ -1,3 +1,5 @@
+import { HugeiconsIcon } from "@hugeicons/react"
+import { PlayIcon, RefreshIcon } from "@hugeicons/core-free-icons"
 import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { FieldErrorsError } from "@/api/client"
@@ -82,7 +84,7 @@ function ModelPricesCard() {
   const refresh = useRefreshPrices()
   return (
     <SettingRow title="Price table" description={prices.data ? `models.dev · fetched ${prices.data.fetchedAt.slice(0, 10)} · ${prices.data.origin === "embedded" ? "built in" : "refreshed"}` : "Stored pricing reference data from models.dev."}>
-      <Button variant="outline" aria-label="Refresh model prices" onClick={() => refresh.mutate()} disabled={refresh.isPending}>Refresh</Button>
+      <Button variant="outline" aria-label="Refresh model prices" onClick={() => refresh.mutate()} disabled={refresh.isPending}><HugeiconsIcon icon={RefreshIcon} data-icon="inline-start" />Refresh</Button>
       {refresh.error && <p className="text-sm text-destructive">{refresh.error.message}</p>}
     </SettingRow>
   )
@@ -132,7 +134,7 @@ function BrowserSoundSettings() {
         {preferences ? <div className="flex flex-wrap items-center justify-end gap-2"><Select<SoundPreferences["selection"] | "upload"> items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : []), { value: "upload", label: "Custom audio…" }]} value={preferences.selection} onValueChange={value => { if (value === "upload") document.getElementById("custom-audio")?.click(); else if (value !== null) store({ ...preferences, selection: value }) }}>
           <SelectTrigger id="approval-sound" aria-describedby="approval-sound-description" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
           <SelectContent><SelectGroup>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectGroup></SelectContent>
-        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}>Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
+        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}><HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
       </SettingRow>
       {preferences && <><div className="sr-only"><Label htmlFor="custom-audio">Custom audio file</Label><Input id="custom-audio" tabIndex={-1} type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg" onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} /><p>Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p></div>
       <SettingRow controlId="approval-sound-muted" title="Mute approval sound" tag="This browser only" description="Keep notifications, silence the sound."><Toggle id="approval-sound-muted" label="Mute approval sound" checked={preferences.muted} onChange={muted => store({ ...preferences, muted })} /></SettingRow></>}
@@ -157,7 +159,7 @@ function AgentTranscriptsStatus() {
         <TableBody>{status.data.coverage.map(row => <TableRow key={`${row.agentKind}:${row.transport}`}><TableHead scope="row" className="whitespace-normal">{row.agentKind}</TableHead><TableCell>{row.transport}</TableCell><TableCell>{row.exact}</TableCell><TableCell>{row.inferred}</TableCell><TableCell>{row.unassigned}</TableCell></TableRow>)}</TableBody>
       </Table>}
       {status.error && <p role="alert" className="text-sm text-destructive">{status.error.message}</p>}
-      <div>
+      <div className="flex w-full justify-end">
         <Button variant="outline" disabled={clear.isPending} onClick={() => setConfirming(true)}>Clear matched data</Button>
       </div>
       {clear.error && <p role="alert" className="text-sm text-destructive">{clear.error.message}</p>}
@@ -272,7 +274,7 @@ export function SettingsPage() {
   <SettingRow controlId="journal-sensitive" title="Store sensitive data" description="Store SQL text, full plans (may include parameter values) and error messages for new operations. Existing rows are not changed."><Toggle id="journal-sensitive" label="Store sensitive data" checked={journal.storeSensitive} onChange={value => value ? setConfirmingSensitive(true) : setJournal({ storeSensitive: false })} /></SettingRow>
   <SettingRow controlId="journal-operation-annotations" title="Agent annotations" restart description="Allows agents to label operations and mark them for keeping. Enabling agent annotations also enables the activity journal automatically. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention."><Toggle id="journal-operation-annotations" label="Agent operation annotations" checked={journal.operationAnnotations} onChange={value => setJournal(value ? { enabled: true, operationAnnotations: true } : { operationAnnotations: false })} /></SettingRow>
   <SettingRow controlId="retention-enabled" title="Retention" description="Delete old journal data on dashboard start, hourly, and on the next mcp serve."><Toggle id="retention-enabled" label="Retention enabled" checked={journal.retention.enabled} onChange={value => setRetention({ enabled: value })} /></SettingRow>
-  <div className="settings-retention"><NumberField id="retention-age" label="Maximum age (days)" unit="days" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} /><NumberField id="retention-size" label="Maximum size (MB)" unit="MB" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} /></div><StatusLine status={status.journal} />
+  <FieldGroup className="settings-retention"><NumberField id="retention-age" label="Maximum age (days)" unit="days" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} /><NumberField id="retention-size" label="Maximum size (MB)" unit="MB" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} /></FieldGroup><StatusLine status={status.journal} />
 </section>
 <section id="settings-agents" aria-label="Agents" className="settings-card"><h2>Agents</h2><p>Reading agent transcripts and compare rules for agents.</p>
   <SettingRow controlId="dashboard-agent-transcripts" title="Read agent transcripts" description="Reads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored."><Toggle id="dashboard-agent-transcripts" label="Read agent transcripts" checked={draft.dashboard.agentTranscripts.enabled} onChange={value => setDashboard({ agentTranscripts: { enabled: value } })} /></SettingRow>

@@ -1,3 +1,5 @@
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Add01Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 import { useUpdateSessionAnnotation } from "@/api/queries"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -11,7 +13,7 @@ export function SessionNoteCard({ sessionId, note }: { sessionId: number; note: 
   const [draft, setDraft] = useState<string | null>(null)
 
   if (note === null && draft === null)
-    return <Button variant="outline" onClick={() => { update.reset(); setDraft("") }}>Add note</Button>
+    return <Button variant="outline" onClick={() => { update.reset(); setDraft("") }}><HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />Add note</Button>
 
   return (
     <section aria-label="Session note" className="flex flex-col gap-2">

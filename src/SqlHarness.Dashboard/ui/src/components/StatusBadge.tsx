@@ -8,7 +8,7 @@ import { badgeTier, statusVariant } from "@/lib/flags"
 type StatusFields = Pick<OperationSummary, "status" | "exitCode" | "errorKind" | "errorMessage" | "cancelReason">
 
 export function StatusBadge({ operation }: { operation: StatusFields }) {
-  if (badgeTier(operation.status) === "info") return <span className="text-sm text-muted-foreground">{operation.status}</span>
+  if (badgeTier(operation.status) === "info" && operation.status !== "running") return <span className="text-sm text-muted-foreground">{operation.status}</span>
   const badge = <Badge data-tier={badgeTier(operation.status)} variant={statusVariant(operation.status)}>{operation.status}</Badge>
   if (operation.status !== "failed" && operation.status !== "rejected") return badge
 
