@@ -1,0 +1,169 @@
+{
+  "checks": [
+    {
+      "name": "No application page or console errors in main captures",
+      "passed": true
+    },
+    {
+      "name": "Activity metadata click toggles",
+      "passed": true
+    },
+    {
+      "name": "Activity disclosure Enter toggles",
+      "passed": true
+    },
+    {
+      "name": "Activity hover changes background",
+      "passed": true
+    },
+    {
+      "name": "Activity title link navigates independently",
+      "passed": true
+    },
+    {
+      "name": "Saved note Enter reopens editor",
+      "passed": true
+    },
+    {
+      "name": "IO disclosure Enter toggles",
+      "passed": true
+    },
+    {
+      "name": "IO metric cell toggles once",
+      "passed": true
+    },
+    {
+      "name": "IO expanded row hover changes background",
+      "passed": true
+    },
+    {
+      "name": "Profile selection updates detail",
+      "passed": true
+    },
+    {
+      "name": "Profile empty search state",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: activity-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: session-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: operation-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: operation-compare-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: profiles-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: usage-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: settings-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: activity-mobile-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: session-mobile-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: operation-mobile-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: profiles-mobile-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: usage-mobile-app",
+      "passed": true
+    },
+    {
+      "name": "No document overflow: settings-mobile-app",
+      "passed": true
+    },
+    {
+      "name": "Settings visible label toggles switch",
+      "passed": true
+    },
+    {
+      "name": "Switch has description",
+      "passed": true
+    },
+    {
+      "name": "All captured switches have descriptions",
+      "passed": true
+    },
+    {
+      "name": "Invalid number exposes invalid state",
+      "passed": true
+    },
+    {
+      "name": "Input references visible error",
+      "passed": true
+    },
+    {
+      "name": "Input error-message relation matches",
+      "passed": true
+    },
+    {
+      "name": "Error is announced",
+      "passed": true
+    },
+    {
+      "name": "Native ArrowDown selects next A version",
+      "passed": true
+    },
+    {
+      "name": "A/B renders native radio choices",
+      "passed": true
+    },
+    {
+      "name": "Settings switch Space toggles",
+      "passed": true
+    },
+    {
+      "name": "Review Enter opens dialog",
+      "passed": true
+    },
+    {
+      "name": "Approve initially disabled",
+      "passed": true
+    },
+    {
+      "name": "Approve enabled after delay",
+      "passed": true
+    },
+    {
+      "name": "Escape closes dialog",
+      "passed": true
+    },
+    {
+      "name": "Mutation dialog accessible name",
+      "passed": true
+    },
+    {
+      "name": "No mutation decisions submitted",
+      "passed": true
+    },
+    {
+      "name": "No mutation document overflow",
+      "passed": true
+    }
+  ],
+  "passed": 41
+}

@@ -1,0 +1,97 @@
+{
+  "checks": [
+    {
+      "name": "Profiles operator explanations fit mobile table",
+      "passed": true,
+      "measurement": {
+        "viewport": 326,
+        "content": 326
+      }
+    },
+    {
+      "name": "Profiles operator document fits mobile",
+      "passed": true
+    },
+    {
+      "name": "Profiles yolo explanations fit mobile table",
+      "passed": true,
+      "measurement": {
+        "viewport": 326,
+        "content": 326
+      }
+    },
+    {
+      "name": "Profiles yolo document fits mobile",
+      "passed": true
+    },
+    {
+      "name": "Long profile name fits 390",
+      "passed": true,
+      "measurement": {
+        "viewport": 390,
+        "document": 390
+      }
+    },
+    {
+      "name": "Long profile identifier preserved 390",
+      "passed": true
+    },
+    {
+      "name": "Long profile name fits 1280",
+      "passed": true,
+      "measurement": {
+        "viewport": 1280,
+        "document": 1280
+      }
+    },
+    {
+      "name": "Long profile identifier preserved 1280",
+      "passed": true
+    },
+    {
+      "name": "Empty Add note retains intrinsic width",
+      "passed": true,
+      "measurement": {
+        "x": 64,
+        "y": 192.5,
+        "width": 69.9375,
+        "height": 28
+      }
+    },
+    {
+      "name": "Note editor retains full width",
+      "passed": true
+    },
+    {
+      "name": "Saved note retains full width",
+      "passed": true
+    },
+    {
+      "name": "Saved note still reopens",
+      "passed": true
+    },
+    {
+      "name": "No edge-case app page or console errors",
+      "passed": true,
+      "measurement": []
+    },
+    {
+      "name": "No mutation decision in edge cases",
+      "passed": true,
+      "measurement": [
+        {
+          "method": "PATCH",
+          "url": "http://127.0.0.1:48138/api/sessions/1/annotation"
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "method": "PATCH",
+      "url": "http://127.0.0.1:48138/api/sessions/1/annotation"
+    }
+  ],
+  "passed": 14
+}

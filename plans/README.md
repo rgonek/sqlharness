@@ -95,3 +95,7 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 Evidence from completed plans, former queues, rejected proposals and audit decisions are in the [history](history.md). Read it when investigating earlier decisions or evidence, not before every task.
 
 When a plan is completed, update its status, move the entry from the queue to the history and keep the link to the evidence.
+
+Plan 121 hover follow-up (2026-10-28): Activity session and IO statement row background feedback; six browser states passed, Windows gate FAILED on one unchanged shutdown lifecycle test; isolated rerun passed. [Evidence](121-evidence/layout-polish/hover/README.md).
+
+Plan [121 default-shadcn follow-up](121-default-shadcn-followup.md): **DONE / VERIFIED on c2c3dcfd** — all six audit findings addressed with default component composition; independent reviews accepted, Windows gate PASS (UI 414, Core 4771/11 skips, MCP 535/4 skips), 55 browser checks, source/dist unchanged. Initial failed gate retained. Local branch only, no merge/push/publication/restart. [Mock tradeoffs](121-evidence/layout-polish/default-alignment/report.md), [gallery](121-evidence/layout-polish/default-alignment/index.html).

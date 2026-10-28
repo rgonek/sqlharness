@@ -88,3 +88,11 @@ Verified and locally published at ecd3f0ae: Plan-only balanced segment widths/sp
 ## Local main integration (2026-10-27)
 
 All dashboard-shadcn-fixes follow-ups are locally integrated into main at 3a0f0549, retaining Plan 122 documentation from main. Exact merged Windows gate passed: UI 388, Core 4722 (11 skipped), MCP 535 (4 skipped), 14m30s. Initial unchanged Journal lock timing failure was retained, isolated three times successfully and followed by a full unchanged-tree green retry; no timeout/test/product workaround. Whole-branch source review and two-file C# branch format passed. README bytes and original local documentation deltas preserved; backup outside repo. No push. Dirty feature worktree retained. [Integration evidence](121-evidence/shadcn/integration/verification.md).
+
+## Session and statement hover follow-up (2026-10-28)
+
+Operator requested background feedback across Activity session headers and IO statement rows. The two style changes use semantic theme tokens and preserve disclosure/link behavior. Six synthetic browser states pass, including expanded/collapsed IO rows in light/dark themes. Full Windows gate FAILED on one unchanged shutdown lifecycle test; isolated rerun passed; see [hover evidence](121-evidence/layout-polish/hover/README.md). No local publication, restart, merge or push in this follow-up.
+
+## Default shadcn alignment (2026-10-28)
+
+All six mock-audit findings addressed, preferring default Base UI/Mira composition: accessible Settings fields, exclusive A/B radios, compact Session operations, readable profile policy/TLS/writer values, breadcrumb/container, and audited CSS/KPI simplification. Independent reviews and final scoped fixes accepted. Windows gate PASS on c2c3dcfd (UI 414, Core 4771 passed/11 skips, MCP 535 passed/4 skips; 11m00s); 55 browser checks, source/dist identity unchanged. Initial stale-selector failure retained. No merge/push/publication/restart. [Follow-up plan](121-default-shadcn-followup.md), [remaining mock differences and recommendations](121-evidence/layout-polish/default-alignment/report.md), [gallery](121-evidence/layout-polish/default-alignment/index.html).

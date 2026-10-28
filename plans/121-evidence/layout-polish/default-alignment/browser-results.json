@@ -1,0 +1,446 @@
+{
+  "checks": [
+    {
+      "name": "Activity metadata click toggles",
+      "passed": true
+    },
+    {
+      "name": "Activity disclosure Enter toggles",
+      "passed": true
+    },
+    {
+      "name": "Activity hover changes background",
+      "passed": true
+    },
+    {
+      "name": "Activity title link navigates independently",
+      "passed": true
+    },
+    {
+      "name": "Saved note Enter reopens editor",
+      "passed": true
+    },
+    {
+      "name": "IO disclosure Enter toggles",
+      "passed": true
+    },
+    {
+      "name": "IO metric cell toggles once",
+      "passed": true
+    },
+    {
+      "name": "IO expanded row hover changes background",
+      "passed": true
+    },
+    {
+      "name": "Profile selection updates detail",
+      "passed": true
+    },
+    {
+      "name": "Profile empty search state",
+      "passed": true
+    }
+  ],
+  "errors": [
+    {
+      "url": "http://127.0.0.1:48137/Operation%20v2.dc.html",
+      "error": "Error: <svg> attribute width: Expected length, \"{{ ed.W }}\"."
+    },
+    {
+      "url": "http://127.0.0.1:48137/Operation%20v2.dc.html",
+      "error": "Error: <svg> attribute height: Expected length, \"{{ ed.H }}\"."
+    },
+    {
+      "url": "http://127.0.0.1:48137/Operation%20v2.dc.html",
+      "error": "Error: <path> attribute d: Expected moveto path command ('M' or 'm'), \"{{ ed.d }}\"."
+    }
+  ],
+  "pages": [
+    {
+      "name": "activity-app",
+      "url": "http://127.0.0.1:48138/",
+      "title": "SQLHarness dashboard",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nActivity\nTime\nLast 7 days\nAgent\nAny\nDirectory\nAny\nTarget\nAny\nStarred\n5\nInclude archived\nStatus\nRunning\n1\nFailed\n0\nRejected\n1\nSucceeded\n5\nAbandoned\n0\nType\nCompare\n1\nMeasure\n4\nMutation\n1\nQuery\n1\nMarked\nNamed\n5\nExpand all\nOptimizing the orders query\n\nClaude Code · cli\n\nD:\\Dev\\shop\nnow\n1 running\n5 shown / 8 ops\n10\n15:36\nMeasure\nClaude Code\nBaseline query\nrunning\n1.6 s\n18,420\n32\n15:36\nMeasure\nClaude Code\nCovering index\nsucceeded\n1.2 s\n—\n31\n15:36\nMeasure\nClaude Code\nSARGable date filter\nsucceeded\n1.2 s\n—\n30\n15:36\nMeasure\nClaude Code\nBaseline as submitted\nsucceeded\n1.2 s\n—\n11\n15:36\nCompare\nClaude Code\nCovering index\nsucceeded\n1.2 s\n—\nTesting the inventory update\n\nClaude Code · cli\n\nD:\\Dev\\shop\nnow\n1 shown / 2 ops\nInspecting customer records\n\nCodex · cli\n\nD:\\Dev\\crm\nnow\n1 shown / 3 ops",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": [
+        "",
+        "AgentAny",
+        "DirectoryAny",
+        "TargetAny",
+        "Starred5",
+        "Include archived",
+        "Running1",
+        "Failed0",
+        "Rejected1",
+        "Succeeded5",
+        "Abandoned0",
+        "Compare1",
+        "Measure4",
+        "Mutation1",
+        "Query1",
+        "Named5",
+        "Expand all",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "name": "session-app",
+      "url": "http://127.0.0.1:48138/sessions/1",
+      "title": "SQLHarness dashboard",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nActivity\nOptimizing the orders query\nOptimizing the orders query\nClaude Code via cli\n·\n8 operations\n·\nDetails\nAdd note\nOptimization\nOptimization\n\norders · ShopDb · SqlServer · whole query\n\nAll cases · Sum\nVersion\tLogical reads\tvs A\tElapsed median\tvs A\tOutcome\tA\nBaseline A\n\tB\nCandidate B\n\t\nObserved in\n\n\nv0\nBaseline as submitted\n\t48,212\t—\t412 ms\t—\t1/1 ok\t\t\t\n\n\nv1\nSARGable date filter\n\t12,904\t-73%\t188 ms\t-54%\t1/1 ok\t\t\t\n\n\nv2\nCovering index\n\t7,630\t-84%\t151 ms\t-63%\t1/1 ok\t\t\t\nSQL diff\nIO\nPlan\nv0 → v2 · measured together in #23 · results equivalent (multiset)\nSide by side\nUnified\nIgnore formatting\n1\n2\n3\n4\nSELECT o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nFROM dbo.Orders AS o\nWHERE o.CustomerId = @CustomerId\nORDER BY o.OrderDate DESC;\n1\n2\n3\n4\nSELECT TOP (100) o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nFROM dbo.Orders AS o\nWHERE o.CustomerId = @CustomerId\nORDER BY o.OrderDate DESC;\nComparison evidence and scripts\nOperations (8)\nNewest first. Loaded 8 of 8 operations.\nShow internal operations\nID\tTime\tType\tDescription\tStatus\tDuration\tReads\n10\t2026-10-28 15:36:29\tmeasure\t\n☆\nBaseline query\ndev / sqlserver / localhost / ShopDb\n\trunning\t—\t18,420\n11\t2026-10-28 15:36:29\tcompare\t\n☆\nCovering index\nAgent keep\norders\ndev / sqlserver / localhost / ShopDb\n\tsucceeded\t1.2 s\t—\n12\t2026-10-28 15:36:29\tquery\t\n☆\ndev / sqlserver / srv / CrmDb\n\tsucceeded\t1.2 s\t—\n13\t2026-10-28 15:36:29\tmutation\t\n☆\ndev / sqlserver / srv / ShopDb\n\trejected\t1.2 s\t—\n14\t2026-10-28 15:36:29\tquery\t\n☆\nlocal / sqlserver / srv / db\n\tsucceeded\t1.2 s\t—\n30\t2026-10-28 15:36:29\tmeasure\t\n☆\nBaseline as submitted\nlocal / sqlserver / srv / db\n\tsucceeded\t1.2 s\t—\n31\t2026-10-28 15:36:29\tmeasure\t\n☆\nSARGable date filter\nlocal / sqlserver / srv / db\n\tsucceeded\t1.2 s\t—\n32\t2026-10-28 15:36:29\tmeasure\t\n☆\nCovering index\nAgent keep\nlocal / sqlserver / srv / db\n\tsucceeded\t1.2 s\t—",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": [
+        "",
+        "",
+        "",
+        "",
+        "Details",
+        "Add note",
+        "All cases · Sum",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "☆",
+        "☆",
+        "☆",
+        "☆",
+        "rejected",
+        "☆",
+        "☆",
+        "☆",
+        "☆"
+      ]
+    },
+    {
+      "name": "operation-app",
+      "url": "http://127.0.0.1:48138/operations/20",
+      "title": "SQLHarness dashboard",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nActivity\n/\nOptimizing the orders query\n/\n#20\nOrders by customer\nsucceeded\nMeasure #20\n·\nClaude Code\ncli\n·\n2026-10-28 15:36:29\n·\n1.2 s\n·\ndev / ShopDb\n·\nDetails\nLogical reads\n18,420\nElapsed median\n12 ms\nCPU\n9 ms\nScans\n1\nSQL & plan\nIO\nTiming\nDetails\nParameters\n@CustomerId = 42\nCase\n@CustomerId = 42\nPlan document\nAll plan documents\nExecuted SQL batch\n1\n2\n3\n4\nSELECT o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nFROM dbo.Orders AS o\nWHERE o.CustomerId = @CustomerId\nORDER BY o.OrderDate DESC;\nGraphical execution plan\n118\n118\nSELECT\nEst. 124\nAct. 118\nCost 0%\nExact\nCollapse\nSort\nEst. 124\nAct. 118\nCost 10%\nExact\nCollapse\nIndex Seek\ndbo.Orders · IX_Orders_CustomerId (o)\nEst. 124\nAct. 118\nCost 90%\nExact\nReact Flow\nSelect SQL or an operator to highlight its match.\nSolid = exact link · dashed = inferred or ambiguous\nFit selection\nStored SQL\nCopy stored SQL to reuse",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": [
+        "",
+        "",
+        "",
+        "Details",
+        "SELECTEst. 124Act. 118Cost 0%exact",
+        "Collapse",
+        "SortEst. 124Act. 118Cost 10%exact",
+        "Collapse",
+        "Index Seekdbo.Orders · IX_Orders_CustomerId (o)Est. 124Act. 118Cost 90%exact",
+        "",
+        "",
+        "",
+        "Fit selection",
+        "Stored SQL",
+        "Copy stored SQL to reuse"
+      ]
+    },
+    {
+      "name": "operation-compare-app",
+      "url": "http://127.0.0.1:48138/operations/23",
+      "title": "SQLHarness dashboard",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nActivity\n/\nOptimizing the orders query\n/\n#23\norders · v0 → v2\nsucceeded\nCompare #23\n·\nwhole query\n·\nClaude Code\ncli\n·\n2026-10-28 15:36:29\n·\n1.2 s\n·\ndev / ShopDb\nLogical reads\n7,630\nElapsed median\n151 ms\nCPU\n—\nResults\nresults equivalent (multiset)\nSQL diff\nIO\nPlan\nTiming\nDetails\nOpen in session Optimization →\nParameters\n@CustomerId = 42\nv0 → v2 · measured together in #23 · results equivalent (multiset)\nAll cases · Sum\nSide by side\nUnified\nIgnore formatting\n1\n2\n3\n4\nSELECT o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nFROM dbo.Orders AS o\nWHERE o.CustomerId = @CustomerId\nORDER BY o.OrderDate DESC;\n1\n2\n3\n4\nSELECT TOP (100) o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nFROM dbo.Orders AS o\nWHERE o.CustomerId = @CustomerId\nORDER BY o.OrderDate DESC;\nComparison evidence and scripts\nCopy stored SQL to reuse",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": [
+        "",
+        "",
+        "",
+        "All cases · Sum",
+        "",
+        "",
+        "",
+        "",
+        "Copy stored SQL to reuse"
+      ]
+    },
+    {
+      "name": "profiles-app",
+      "url": "http://127.0.0.1:48138/profiles",
+      "title": "SQLHarness dashboard",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nProfiles\nshop-dev\ndev\nSqlServer · localhost,14330\nbilling-stg\nstaging\nSqlServer · sql-stg-02.corp.local\nProfiles\n\nRead-only view of targets.json. Passwords stay in their environment variables and are never read.\n\nshop-dev\ndev\nUsage overview →\n\nSqlServer · localhost,14330 / {tenant}_shop\n\nConnection\nEngine\tSqlServer\nServer\tlocalhost,14330\nDatabase\t{tenant}_shop\nAuthentication\tsql (harness_reader)\nPassword variable\tSQLH_SHOP_DEV_PW\n\nEnvironment variable name only; its value is not read.\n\n\nTLS\tOptional\n\nEncryption is optional; the connection may be unencrypted.\n\nDatabase template · resolved per operation from variables\n\nMutations\nMode\tYOLO\n\nPersistent mutations run without operator approval.\n\n\nWriter\tSame as reader\n\nUses the reader connection identity for mutations.\n\nMutations run without approval on dev.\nYOLO mode does not ask the operator to approve persistent changes.\nVariables\nName\tRule\ntenant\trequired · enum: acme | globex | initech\nregion\teu | us",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": [
+        "",
+        "shop-devdevSqlServer · localhost,14330",
+        "billing-stgstagingSqlServer · sql-stg-02.corp.local"
+      ]
+    },
+    {
+      "name": "usage-app",
+      "url": "http://127.0.0.1:48138/stats",
+      "title": "SQLHarness dashboard",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nUsage\n\nlocal · 7 days · UTC\n\nStatistics profile\nlocal\n24 hours\n7 days\n30 days\nAll time\nOperations\n6\nFailed / rejected\n0 / 1\nMeasured workflow output\n4,000 bytes\nOperations with spills\n1\nOperations on a cold cache\n1\nAgents\nOutput tokens are estimated from returned UTF-8 bytes ÷ 4. Per-agent model, sessions, tokens and costs are unavailable in the recorded statistics.\nAgent\tModel\tSessions\tOperations\tOutput tokens\tEst. cost\nClaude Code\t—\t—\t5\t—\t—\nCodex\t—\t—\t1\t—\t—\nTop SQL\nTotal time\nRuns\nGrouped by SQL hash · text, logical reads and last run are unavailable in these statistics.\nSQL hash\tRuns\tTotal\tSlowest\nbbbbbbbbbbbb\t1\t9.0 s\t9.0 s\naaaaaaaaaaaa\t4\t400 ms\t150 ms\nTables by logical reads\nTable\tLogical reads\tOps\nOrders\t210\t1\nTop waits\nWait type\tTotal\nPAGEIOLATCH_SH\t120 ms\nStatistics targets\n\nlocal · database template: (not specified)\n\ntenant\nAll values\nBreakdown\ntenant\tOperations\tShare\tTotal duration\tFailed\tRejected\n\nacme\n\t6\t100%\t7.2 s\t0\t0\nDatabases in this scope\n\nShowing 1 of 1 matching physical targets (top 20 limit).\n\nEngine\tServer\tDatabase\tOperations\nsqlserver\tsrv\tdb\t6\nDetailed usage and workflow accounting",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": [
+        "",
+        "acme",
+        "",
+        "Detailed usage and workflow accounting"
+      ]
+    },
+    {
+      "name": "settings-app",
+      "url": "http://127.0.0.1:48138/settings",
+      "title": "SQLHarness dashboard",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nSettings\nDatabase\nMutations\nJournal & privacy\nAgents\nDashboard\nModel prices\nSettings\n\nisolated-visual-fixture/config.json\n\nChanges save as you make them. New processes use these settings; restart running mcp serve sessions to apply them.\n\nDatabase\n\nHow SQLHarness connects and how long statements may run.\n\nConnection timeout\n\nTime to open a SQL Server or PostgreSQL connection, including driver-managed authentication. Azure CLI token acquisition has its own budget.\n\nsec\nDefault execution timeout\n\nUsed by queries, mutations, benchmarks and watches when no explicit timeout is passed.\n\nsec\nConnection diagnostics\n\nRecord safe metadata about database connection attempts. Credentials and target names are excluded.\n\nMutations\n\nDefault approval behavior for write operations.\n\nDefault mode\n\nApplies when a profile does not set its own mode.\n\nNever\nOperator approval\nYOLO\n\nWrite operations are rejected by default.\n\nApproval timeout\n\nHow long an approval request stays open before it is rejected.\n\nsec\nVerification\n\nApprove or reject each request with a deliberate click.\n\nclick\nApproval sound\nThis browser only\n\nPlayed when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.\n\nWarm chime\nPreview\nCustom audio file\n\nChoose an MP3, WAV, or OGG file no larger than 2 MiB.\n\nMute approval sound\nThis browser only\n\nKeep notifications, silence the sound.\n\nBrowser notifications\nThis browser only\n\nShow a system notification when approval is needed. The browser asks only after you press Enable.\n\nEnable\nPermission: denied. The browser asks only after you press the button.\nJournal & privacy\n\nWhat SQLHarness records about each operation, and for how long.\n\nActivity journal\n\nRecord operations so they appear in Activity and sessions. Disabling the journal also disables agent annotations.\n\nStore sensitive data\n\nStore SQL text, full plans (may include parameter values) and error messages for new operations. Existing rows are not changed.\n\nAgent annotations\nRestart mcp serve\n\nAllows agents to label operations and mark them for keeping. Enabling agent annotations also enables the activity journal automatically. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention.\n\nRetention\n\nDelete old journal data on dashboard start, hourly, and on the next mcp serve.\n\nMaximum age\ndays\nMaximum size\nMB\nAgents\n\nReading agent transcripts and compare rules for agents.\n\nRead agent transcripts\n\nReads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored.\n\nMatched 12 · Unmatched 0 · Read errors 0\n\nLast cycle: 2026-10-28T14:36:29.069Z\n\nClear matched data\nRequire compare subject and scope\nRestart mcp serve\n\nWhen enabled, CLI compare needs both --subject and --scope, and MCP compare needs both fields. This setting is on by default.\nCLI applies changes on the next invocation. Restart running MCP servers and reconnect their clients to apply changes; saving here does not restart them.\n\nDashboard\n\nThis dashboard process.\n\nStart with mcp serve\n\nLaunch the dashboard when an MCP server starts.\n\nSafety notifications\n\nShow safety warnings raised by running sessions.\n\nIdle shutdown\n\nStop the dashboard after this long without activity.\n\nhours\nPort\n\nChange the port in config.json; the running dashboard keeps its port.\n\n47800\nModel prices\n\nReference data used for Usage costs.\n\nPrice table\n\nmodels.dev · fetched 2026-10-28 · built in\n\nRefresh",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": [
+        "",
+        "Preview",
+        "",
+        "Enable",
+        "Clear matched data",
+        "Refresh"
+      ]
+    },
+    {
+      "name": "activity-mobile-app",
+      "url": "http://127.0.0.1:48138/",
+      "title": "SQLHarness dashboard",
+      "text": "Activity\nUsage\nProfiles\nSettings\nActivity\nTime\nLast 7 days\nAgent\nAny\nDirectory\nAny\nTarget\nAny\nStarred\n5\nInclude archived\nStatus\nRunning\n1\nFailed\n0\nRejected\n1\nSucceeded\n5\nAbandoned\n0\nType\nCompare\n1\nMeasure\n4\nMutation\n1\nQuery\n1\nMarked\nNamed\n5\nExpand all\nOptimizing the orders query\n\nClaude Code · cli\n\n1 running\n5 shown / 8 ops\n10\n15:36\nMeasure\nClaude Code\nBaseline query\nrunning\n21.2 s\n18,420\n32\n15:36\nMeasure\nClaude Code\nCovering index\nsucceeded\n1.2 s\n—\n31\n15:36\nMeasure\nClaude Code\nSARGable date filter\nsucceeded\n1.2 s\n—\n30\n15:36\nMeasure\nClaude Code\nBaseline as submitted\nsucceeded\n1.2 s\n—\n11\n15:36\nCompare\nClaude Code\nCovering index\nsucceeded\n1.2 s\n—\nTesting the inventory update\n\nClaude Code · cli\n\n1 shown / 2 ops\nInspecting customer records\n\nCodex · cli\n\n1 shown / 3 ops",
+      "overflow": {
+        "width": 390,
+        "scroll": 390
+      },
+      "buttons": [
+        "",
+        "AgentAny",
+        "DirectoryAny",
+        "TargetAny",
+        "Starred5",
+        "Include archived",
+        "Running1",
+        "Failed0",
+        "Rejected1",
+        "Succeeded5",
+        "Abandoned0",
+        "Compare1",
+        "Measure4",
+        "Mutation1",
+        "Query1",
+        "Named5",
+        "Expand all",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "name": "session-mobile-app",
+      "url": "http://127.0.0.1:48138/sessions/1",
+      "title": "SQLHarness dashboard",
+      "text": "Activity\nUsage\nProfiles\nSettings\nActivity\nOptimizing the orders query\nOptimizing the orders query\nClaude Code via cli\n·\n8 operations\n·\nDetails\nAudit note\nOptimization\nOptimization\n\norders · ShopDb · SqlServer · whole query\n\nAll cases · Sum\nVersion\tLogical reads\tvs A\tElapsed median\tvs A\tOutcome\tA\nBaseline A\n\tB\nCandidate B\n\t\nObserved in\n\n\nv0\nBaseline as submitted\n\t48,212\t—\t412 ms\t—\t1/1 ok\t\t\t\n\n\nv1\nSARGable date filter\n\t12,904\t-73%\t188 ms\t-54%\t1/1 ok\t\t\t\n\n\nv2\nCovering index\n\t7,630\t-84%\t151 ms\t-63%\t1/1 ok\t\t\t\nSQL diff\nIO\nPlan\nv0 → v2 · measured together in #23 · results equivalent (multiset)\nSide by side\nUnified\nIgnore formatting\n1\n2\n3\n4\nSELECT o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nFROM dbo.Orders AS o\nWHERE o.CustomerId = @CustomerId\nORDER BY o.OrderDate DESC;\n1\n2\n3\n4\nSELECT o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nSELECT TOP (100) o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nFROM dbo.Orders AS o\nWHERE o.CustomerId = @CustomerId\nORDER BY o.OrderDate DESC;\nComparison evidence and scripts\nOperations (8)\nNewest first. Loaded 8 of 8 operations.\nShow internal operations\nID\tTime\tType\tDescription\tStatus\tDuration\tReads\n10\t2026-10-28 15:36:29\tmeasure\t\n☆\nBaseline query\ndev / sqlserver / localhost / ShopDb\n\trunning\t—\t18,420\n11\t2026-10-28 15:36:29\tcompare\t\n☆\nCovering index\nAgent keep\norders\ndev / sqlserver / localhost / ShopDb\n\tsucceeded\t1.2 s\t—\n12\t2026-10-28 15:36:29\tquery\t\n☆\ndev / sqlserver / srv / CrmDb\n\tsucceeded\t1.2 s\t—\n13\t2026-10-28 15:36:29\tmutation\t\n☆\ndev / sqlserver / srv / ShopDb\n\trejected\t1.2 s\t—\n14\t2026-10-28 15:36:29\tquery\t\n☆\nlocal / sqlserver / srv / db\n\tsucceeded\t1.2 s\t—\n30\t2026-10-28 15:36:29\tmeasure\t\n☆\nBaseline as submitted\nlocal / sqlserver / srv / db\n\tsucceeded\t1.2 s\t—\n31\t2026-10-28 15:36:29\tmeasure\t\n☆\nSARGable date filter\nlocal / sqlserver / srv / db\n\tsucceeded\t1.2 s\t—\n32\t2026-10-28 15:36:29\tmeasure\t\n☆\nCovering index\nAgent keep\nlocal / sqlserver / srv / db\n\tsucceeded\t1.2 s\t—",
+      "overflow": {
+        "width": 390,
+        "scroll": 390
+      },
+      "buttons": [
+        "",
+        "",
+        "",
+        "",
+        "Details",
+        "Audit note",
+        "All cases · Sum",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "☆",
+        "☆",
+        "☆",
+        "☆",
+        "rejected",
+        "☆",
+        "☆",
+        "☆",
+        "☆"
+      ]
+    },
+    {
+      "name": "operation-mobile-app",
+      "url": "http://127.0.0.1:48138/operations/20",
+      "title": "SQLHarness dashboard",
+      "text": "Activity\nUsage\nProfiles\nSettings\nActivity\n/\nOptimizing the orders query\n/\n#20\nOrders by customer\nsucceeded\nMeasure #20\n·\nClaude Code\ncli\n·\n2026-10-28 15:36:29\n·\n1.2 s\n·\ndev / ShopDb\n·\nDetails\nLogical reads\n18,420\nElapsed median\n12 ms\nCPU\n9 ms\nScans\n1\nSQL & plan\nIO\nTiming\nDetails\nParameters\n@CustomerId = 42\nCase\n@CustomerId = 42\nPlan document\nAll plan documents\nExecuted SQL batch\n1\n2\n3\n4\nSELECT o.OrderId, o.CustomerId, o.OrderDate, o.TotalAmount\nFROM dbo.Orders AS o\nWHERE o.CustomerId = @CustomerId\nORDER BY o.OrderDate DESC;\nGraphical execution plan\n118\n118\nSELECT\nEst. 124\nAct. 118\nCost 0%\nExact\nCollapse\nSort\nEst. 124\nAct. 118\nCost 10%\nExact\nCollapse\nIndex Seek\ndbo.Orders · IX_Orders_CustomerId (o)\nEst. 124\nAct. 118\nCost 90%\nExact\nReact Flow\nSelect SQL or an operator to highlight its match.\nSolid = exact link · dashed = inferred or ambiguous\nFit selection\nStored SQL\nCopy stored SQL to reuse",
+      "overflow": {
+        "width": 390,
+        "scroll": 390
+      },
+      "buttons": [
+        "",
+        "",
+        "",
+        "Details",
+        "SELECTEst. 124Act. 118Cost 0%exact",
+        "Collapse",
+        "SortEst. 124Act. 118Cost 10%exact",
+        "Collapse",
+        "Index Seekdbo.Orders · IX_Orders_CustomerId (o)Est. 124Act. 118Cost 90%exact",
+        "",
+        "",
+        "",
+        "Fit selection",
+        "Stored SQL",
+        "Copy stored SQL to reuse"
+      ]
+    },
+    {
+      "name": "profiles-mobile-app",
+      "url": "http://127.0.0.1:48138/profiles",
+      "title": "SQLHarness dashboard",
+      "text": "Activity\nUsage\nProfiles\nSettings\nProfiles\nshop-dev\ndev\nSqlServer · localhost,14330\nbilling-stg\nstaging\nSqlServer · sql-stg-02.corp.local\nProfiles\n\nRead-only view of targets.json. Passwords stay in their environment variables and are never read.\n\nshop-dev\ndev\nUsage overview →\n\nSqlServer · localhost,14330 / {tenant}_shop\n\nConnection\nEngine\tSqlServer\nServer\tlocalhost,14330\nDatabase\t{tenant}_shop\nAuthentication\tsql (harness_reader)\nPassword variable\tSQLH_SHOP_DEV_PW\n\nEnvironment variable name only; its value is not read.\n\n\nTLS\tOptional\n\nEncryption is optional; the connection may be unencrypted.\n\nDatabase template · resolved per operation from variables\n\nMutations\nMode\tYOLO\n\nPersistent mutations run without operator approval.\n\n\nWriter\tSame as reader\n\nUses the reader connection identity for mutations.\n\nMutations run without approval on dev.\nYOLO mode does not ask the operator to approve persistent changes.\nVariables\nName\tRule\ntenant\trequired · enum: acme | globex | initech\nregion\teu | us",
+      "overflow": {
+        "width": 390,
+        "scroll": 390
+      },
+      "buttons": [
+        "",
+        "shop-devdevSqlServer · localhost,14330",
+        "billing-stgstagingSqlServer · sql-stg-02.corp.local"
+      ]
+    },
+    {
+      "name": "usage-mobile-app",
+      "url": "http://127.0.0.1:48138/stats",
+      "title": "SQLHarness dashboard",
+      "text": "Activity\nUsage\nProfiles\nSettings\nUsage\n\nlocal · 7 days · UTC\n\nStatistics profile\nlocal\n24 hours\n7 days\n30 days\nAll time\nOperations\n6\nFailed / rejected\n0 / 1\nMeasured workflow output\n4,000 bytes\nOperations with spills\n1\nOperations on a cold cache\n1\nAgents\nOutput tokens are estimated from returned UTF-8 bytes ÷ 4. Per-agent model, sessions, tokens and costs are unavailable in the recorded statistics.\nAgent\tModel\tSessions\tOperations\tOutput tokens\tEst. cost\nClaude Code\t—\t—\t5\t—\t—\nCodex\t—\t—\t1\t—\t—\nTop SQL\nTotal time\nRuns\nGrouped by SQL hash · text, logical reads and last run are unavailable in these statistics.\nSQL hash\tRuns\tTotal\tSlowest\nbbbbbbbbbbbb\t1\t9.0 s\t9.0 s\naaaaaaaaaaaa\t4\t400 ms\t150 ms\nTables by logical reads\nTable\tLogical reads\tOps\nOrders\t210\t1\nTop waits\nWait type\tTotal\nPAGEIOLATCH_SH\t120 ms\nStatistics targets\n\nlocal · database template: (not specified)\n\ntenant\nAll values\nBreakdown\ntenant\tOperations\tShare\tTotal duration\tFailed\tRejected\n\nacme\n\t6\t100%\t7.2 s\t0\t0\nDatabases in this scope\n\nShowing 1 of 1 matching physical targets (top 20 limit).\n\nEngine\tServer\tDatabase\tOperations\nsqlserver\tsrv\tdb\t6\nDetailed usage and workflow accounting",
+      "overflow": {
+        "width": 390,
+        "scroll": 390
+      },
+      "buttons": [
+        "",
+        "acme",
+        "",
+        "Detailed usage and workflow accounting"
+      ]
+    },
+    {
+      "name": "settings-mobile-app",
+      "url": "http://127.0.0.1:48138/settings",
+      "title": "SQLHarness dashboard",
+      "text": "Activity\nUsage\nProfiles\nSettings\nSettings\nDatabase\nMutations\nJournal & privacy\nAgents\nDashboard\nModel prices\nSettings\n\nisolated-visual-fixture/config.json\n\nChanges save as you make them. New processes use these settings; restart running mcp serve sessions to apply them.\n\nDatabase\n\nHow SQLHarness connects and how long statements may run.\n\nConnection timeout\n\nTime to open a SQL Server or PostgreSQL connection, including driver-managed authentication. Azure CLI token acquisition has its own budget.\n\nsec\nDefault execution timeout\n\nUsed by queries, mutations, benchmarks and watches when no explicit timeout is passed.\n\nsec\nConnection diagnostics\n\nRecord safe metadata about database connection attempts. Credentials and target names are excluded.\n\nMutations\n\nDefault approval behavior for write operations.\n\nDefault mode\n\nApplies when a profile does not set its own mode.\n\nNever\nOperator approval\nYOLO\n\nWrite operations are rejected by default.\n\nApproval timeout\n\nHow long an approval request stays open before it is rejected.\n\nsec\nVerification\n\nApprove or reject each request with a deliberate click.\n\nclick\nApproval sound\nThis browser only\n\nPlayed when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.\n\nWarm chime\nPreview\nCustom audio file\n\nChoose an MP3, WAV, or OGG file no larger than 2 MiB.\n\nMute approval sound\nThis browser only\n\nKeep notifications, silence the sound.\n\nBrowser notifications\nThis browser only\n\nShow a system notification when approval is needed. The browser asks only after you press Enable.\n\nEnable\nPermission: denied. The browser asks only after you press the button.\nJournal & privacy\n\nWhat SQLHarness records about each operation, and for how long.\n\nActivity journal\n\nRecord operations so they appear in Activity and sessions. Disabling the journal also disables agent annotations.\n\nStore sensitive data\n\nStore SQL text, full plans (may include parameter values) and error messages for new operations. Existing rows are not changed.\n\nAgent annotations\nRestart mcp serve\n\nAllows agents to label operations and mark them for keeping. Enabling agent annotations also enables the activity journal automatically. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention.\n\nRetention\n\nDelete old journal data on dashboard start, hourly, and on the next mcp serve.\n\nMaximum age\ndays\nMaximum size\nMB\nAgents\n\nReading agent transcripts and compare rules for agents.\n\nRead agent transcripts\n\nReads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored.\n\nMatched 12 · Unmatched 0 · Read errors 0\n\nLast cycle: 2026-10-28T14:36:29.069Z\n\nClear matched data\nRequire compare subject and scope\nRestart mcp serve\n\nWhen enabled, CLI compare needs both --subject and --scope, and MCP compare needs both fields. This setting is on by default.\nCLI applies changes on the next invocation. Restart running MCP servers and reconnect their clients to apply changes; saving here does not restart them.\n\nDashboard\n\nThis dashboard process.\n\nStart with mcp serve\n\nLaunch the dashboard when an MCP server starts.\n\nSafety notifications\n\nShow safety warnings raised by running sessions.\n\nIdle shutdown\n\nStop the dashboard after this long without activity.\n\nhours\nPort\n\nChange the port in config.json; the running dashboard keeps its port.\n\n47800\nModel prices\n\nReference data used for Usage costs.\n\nPrice table\n\nmodels.dev · fetched 2026-10-28 · built in\n\nRefresh",
+      "overflow": {
+        "width": 390,
+        "scroll": 390
+      },
+      "buttons": [
+        "",
+        "Preview",
+        "",
+        "Enable",
+        "Clear matched data",
+        "Refresh"
+      ]
+    },
+    {
+      "name": "activity-mock",
+      "url": "http://127.0.0.1:48137/Activity.dc.html",
+      "title": "",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nActivity\nSearch\nRunning\n2\nNamed\n4\nMutations\n2\nOptimization\n3\nFailed / rejected\n2\nExpand all\nOptimize orders report\nClaude Code · stdio (mcp)\nORD-412\nnow\norders-report −84%\n1 running\n4 ops\n216\n14:02\nCompare\norders-report v2 → v3\nrunning\n0:14\n—\n214\n13:55\nCompare\nPre-aggregate lines via CROSS APPLY\norders-report v0 → v2 · 48,212 → 7,630\nok\n2.4 s\n7,630\n207\n13:40\nQuery\nSELECT o.OrderId, … FROM dbo.Orders o JOIN dbo.OrderLines l …\nok\n188 ms\n12,904\n201\n13:31\nQuery\nBaseline as submitted\nSELECT o.OrderId, … CONVERT(date, o.CreatedAt) >= @from\nok\n412 ms\n48,212\nFix invoice backfill\nCodex · stdio (mcp)\nbilling-svc\n2 min ago\n1 running\n3 ops\n215\n14:01\nMutation\nBackfill due dates\nUPDATE dbo.Invoices SET DueDate = … WHERE BatchId = @b\nawaiting approval\n0:41\n—\n212\n13:52\nQuery\nSELECT COUNT(*) FROM dbo.Invoices WHERE DueDate IS NULL\nok\n88 ms\n1,204\n211\n13:49\nMutation\nINSERT INTO dbo.BackfillLog (BatchId, …) VALUES (…)\nok · verified\n34 ms\n12\nmcp:a91f03d7-reports\nClaude Code · cli\nreports\n41 min ago\n1 failed\n2 ops\nCustomer churn query\nCursor · stdio (mcp)\nanalytics\nYesterday\nchurn-90d −61%\n1 rejected\n2 ops",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": []
+    },
+    {
+      "name": "session-mock",
+      "url": "http://127.0.0.1:48137/Session%20Optimization.dc.html",
+      "title": "",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nActivity\n/\nOptimize orders report\nOptimize orders report\nClaude Code via stdio\n·\nmcp:7f3c2a91-orders\n·\n3 operations\n·\nDetails\nAdd note\nOptimization\norders-report · shop · SqlServer · whole query\nAll cases · Sum\nVersion\tLogical reads\tvs A\tElapsed median\tvs A\tOutcome\tA\tB\t\n\nv0\nBaseline as submitted\n\t48,212\t—\t412 ms\t—\t1/1 ok\t\nA\n\t\nB\n\t\n\n\nv1\nSARGable CreatedAt filter\n\t12,904\t−73%\t188 ms\t−54%\t1/1 ok\t\nA\n\t\nB\n\t\n\n\nv2\nBest\nPre-aggregate lines via CROSS APPLY\n\t7,630\t−84%\t151 ms\t−63%\t1/1 ok\t\nA\n\t\nB\n\t\nSQL diff\nIO\nPlan\nv0 → v2 · measured together in #214 · results equivalent (multiset)\nv0\nA\nv1\nv2\nB\nStatement 1 · SELECT … FROM dbo.Orders\nStatement 2 · SELECT … FROM dbo.Customers\nOpen in operation\n#214\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\nDECLARE @from datetime2 = DATEADD(day, -90, @AsOf);\n\nSELECT o.OrderId, o.CustomerId, t.Total\nFROM dbo.Orders o\nCROSS APPLY (\n  SELECT SUM(l.Amount) AS Total\n  FROM dbo.OrderLines l\n  WHERE l.OrderId = o.OrderId\n) t\nWHERE o.CustomerId = @CustomerId\n  AND o.CreatedAt >= @from\nORDER BY t.Total DESC;\n\nSELECT c.Name\nFROM dbo.Customers c\nWHERE c.CustomerId = @CustomerId;\n\n17\n118\n1\n118\n118\nIndex Seek\ndbo.Orders · IX_Orders_Customer_Created (o)\nEst. 124 · Act. 118\nCost 22%\nExact\nIndex Seek\ndbo.OrderLines · IX_OrderLines_OrderId_Amount (l)\nEst. 17 · Act. 17\nCost 65%\nExact\nStream Aggregate\nSUM(l.Amount)\nEst. 1 · Act. 1\nCost 3%\nExact\nNested Loops\nInner Join · APPLY\nEst. 120 · Act. 118\nCost 4%\nExact\nSort\nt.Total DESC\nEst. 120 · Act. 118\nCost 6%\nExact\nSELECT\nstatement root\nEst. 120 · Act. 118\nCost 0%\nExact\nClick an operator to highlight its SQL, or click in the SQL to find its operator.\nSolid border = exact source match · dashed = inferred\nOperations\n5 of 7 operations, newest first\nShow internal operations\n216\n14:02\nmcp\nCompare\norders-report v2 → v3\nrunning\n0:14\n—\n214\n13:55\nmcp\nCompare\nPre-aggregate lines via CROSS APPLY\norders-report v0 → v2\nok\n2.4 s\n7,630\n213\n13:54\nmcp\nMeasure\nSELECT o.OrderId, … CROSS APPLY (…) t\nok\n2.1 s\n7,630\n207\n13:40\ncli\nQuery\nSELECT o.OrderId, … JOIN dbo.OrderLines l …\nok\n188 ms\n12,904\n201\n13:31\ncli\nQuery\nBaseline as submitted\nSELECT o.OrderId, … CONVERT(date, o.CreatedAt) >= @from\nok\n412 ms\n48,212",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": []
+    },
+    {
+      "name": "operation-mock",
+      "url": "http://127.0.0.1:48137/Operation%20v2.dc.html",
+      "title": "",
+      "text": "Podgląd typu operacji\nMeasure\nQuery\nMutate\nCompare\nSQLHarness\nActivity\nUsage\nProfiles\nSettings\nActivity\n/\nOptimize orders report\n/\n#213\nPre-aggregate lines via CROSS APPLY\nok · exit 0\nMeasure #213\n·\nClaude Code\nmcp\n·\nToday 13:54\n·\n2.1 s\n·\nshop-dev / shop\n·\nDetails\nLogical reads\n7,630\nElapsed median\n151 ms\nCPU\n122 ms\nScans\n3\nRows\n118\nSQL & plan\nIO\nTiming\nParameters\n@CustomerId = 9001\n@AsOf = 2026-10-24\nStatement 1 · SELECT … FROM dbo.Orders\nStatement 2 · SELECT … FROM dbo.Customers\nActual plan · repetition 3 of 5\nSolid = exact match · dashed = inferred\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\nDECLARE @from datetime2 = DATEADD(day, -90, @AsOf);\nSELECT o.OrderId, o.CustomerId, t.Total\nFROM dbo.Orders o\nCROSS APPLY (\n  SELECT SUM(l.Amount) AS Total\n  FROM dbo.OrderLines l\n  WHERE l.OrderId = o.OrderId\n) t\nWHERE o.CustomerId = @CustomerId\n  AND o.CreatedAt >= @from\nORDER BY t.Total DESC;\nSELECT c.Name\nFROM dbo.Customers c\nWHERE c.CustomerId = @CustomerId;\nLoading SQL viewer…\n17\n118\n1\n118\n118\nIndex Seek\ndbo.Orders · IX_Orders_Customer_Created (o)\nEst. 124 · Act. 118\nCost 22%\nIndex Seek\ndbo.OrderLines · IX_OrderLines_OrderId_Amount (l)\nEst. 17 · Act. 17\nCost 65%\nStream Aggregate\nSUM(l.Amount)\nEst. 1 · Act. 1\nCost 3%\nNested Loops\nInner Join · APPLY\nEst. 120 · Act. 118\nCost 4%\nSort\nt.Total DESC\nEst. 120 · Act. 118\nCost 6%\nSELECT\nstatement root\nEst. 120 · Act. 118\nCost 0%\nKliknij operator albo miejsce w SQL.",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": []
+    },
+    {
+      "name": "profiles-mock",
+      "url": "http://127.0.0.1:48137/Profiles.dc.html",
+      "title": "",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nProfiles\nshop-dev\ndev\nSqlServer · localhost,14330\nbilling-stg\nstaging\nSqlServer · sql-stg-02.corp.local\nshop-prod\nprod\nSqlServer · sql-prod-01.corp.local\nanalytics\n—\nPostgreSQL · pg-dw.internal:5432\nlocal-pg\ndev\nPostgreSQL · localhost:5432\nProfiles\nC:\\Users\\rg\\.sqlharness\\targets.json\n·\nRead-only. Passwords stay in their environment variables and are never read.\nshop-dev\ndev\nUsage for this profile →\nSqlServer\n·\nlocalhost,14330 / {tenant}_shop\n·\n214 operations · last today\nConnection\nEngine\nSqlServer\nServer\nlocalhost,14330\nDatabase\n{tenant}_shop\nTemplate · resolved per operation from variables\nAuthentication\nsql · harness_reader\nPassword variable\nSQLH_SHOP_DEV_PW\nValue is never read by the dashboard\nTLS\noptional\nTraffic may be unencrypted\nMutations\nMode\nYOLO\nMutations run without approval\nWriter\nsame as reader\nApproval dialog will warn that writer = reader\nVariables\nRecorded as dimensions on every operation\nName\nRule\nAllowed values / default\ntenant\nrequired · enum\nacme\nglobex\ninitech\nregion\ninferred\neu\nus",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": []
+    },
+    {
+      "name": "usage-mock",
+      "url": "http://127.0.0.1:48137/Usage.dc.html",
+      "title": "",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nUsage\nAll profiles · 7 days · UTC\nAll profiles\nshop-dev\nbilling-stg\nshop-prod\nanalytics\nlocal-pg\nNo profile\n24 hours\n7 days\n30 days\nAll time\nOperations\n393\n15 sessions\nFailed / rejected\n7 / 3\n2.5% of operations\nAgent output\n546k tokens\n≈ $7.60\nSpills\n5\noperations with tempdb spill\nCold cache\n9\noperations with physical reads\nAgents\nOutput tokens are estimated from bytes returned to the agent (UTF-8 ÷ 4). Input and chat are not measured.\nAgent\nModel\nSessions\nOperations\nOutput tokens\nEst. cost\nFailed\nClaude Code\nclaude-sonnet-4.5\n9\n268\n412k\n$6.18\n4\nCodex\ngpt-5-codex\n4\n84\n96k\n$0.96\n1\nCursor\nmixed (3 models)\n2\n41\n38k\n$0.46\n2\nTotal\n15\n393\n546k\n$7.60\n7\nCost uses output-token prices from Model prices. Model comes from agent transcripts.\nTop SQL\nTotal time\nRuns\nLogical reads\nGrouped by SQL hash\nSQL\nRuns\nTotal time\nSlowest\nLogical reads\nLast run\nSELECT s.CustomerId, … FROM dbo.Subscriptions s …\na3b9f011 · analytics\n12\n1.6 min\n30.0 s\n2,210,000\nYesterday\nSELECT r.* FROM rpt.MonthlyRevenue r WHERE r.Year = …\ne8f21b4d · reports-prod\n6\n1.1 min\n30.0 s\n880,000\n13:22\nSELECT o.OrderId, o.CustomerId, … FROM dbo.Orders o …\n9f2c41ab · shop-dev\n38\n41.2 s\n2.4 s\n1,240,000\n13:55\nSELECT COUNT(*) FROM dbo.Invoices WHERE DueDate IS NULL …\n51d0e7c2 · billing-stg\n61\n5.4 s\n220 ms\n73,400\n13:52\nSELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE …\n0c77ad90 · shop-dev\n44\n970 ms\n41 ms\n13,600\nOct 18\nUPDATE i SET i.DueDate = DATEADD(…) FROM dbo.Invoices i …\n7a91c04e · billing-stg\n2\n68 ms\n34 ms\n2,400\n14:01\nTables by logical reads\nTable\nLogical reads\nOps\ndbo.Subscriptions\n2,210,000\n14\ndbo.Orders\n1,180,000\n52\nrpt.MonthlyRevenue\n880,000\n6\ndbo.OrderLines\n640,000\n41\ndbo.Invoices\n75,800\n63\nTop waits\nSQL Server\nWait type\nTotal\nOps\nPAGEIOLATCH_SH\nreading pages from disk (cold cache)\n18.4 s\n9\nCXPACKET\nparallel query coordination\n7.2 s\n6\nASYNC_NETWORK_IO\nclient reading results slowly\n3.1 s\n22\nLCK_M_S\nblocked by another session\n840 ms\n2\nSOS_SCHEDULER_YIELD\nCPU pressure\n410 ms\n11\nDimensions\nWybierz profil, żeby zobaczyć rozbicie po jego zmiennych (np. tenant, region).",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": []
+    },
+    {
+      "name": "settings-mock",
+      "url": "http://127.0.0.1:48137/Settings.dc.html",
+      "title": "",
+      "text": "SQLHarness\nActivity\nUsage\nProfiles\nSettings\nSettings\nDatabase\nMutations\nJournal & privacy\nAgents\nDashboard\nModel prices\nSettings\nC:\\Users\\rg\\.sqlharness\\config.json\n·\nSaves as you change. New processes pick it up; rows tagged \nRestart mcp serve need a restart.\nDatabase\nHow SQLHarness connects and how long statements may run.\nConnection timeout\nTime to open a SQL Server or PostgreSQL connection, including driver-managed authentication. Azure CLI token acquisition has its own budget.\nsec\nDefault execution timeout\nUsed by queries, mutations, benchmarks and watches when no explicit timeout is passed.\nsec\nConnection diagnostics\nRecord safe metadata about connection attempts. Credentials and target names are excluded.\nMutations\nDefault approval behavior for write operations.\nDefault mode\nApplies when a profile does not set its own mode.\nNever\nOperator approval\nYOLO\nEach mutation waits for approval here.\nApproval timeout\nHow long an approval request stays open before it is rejected.\nsec\nVerification\nApprovals use a deliberate click. WebAuthn is not available yet.\nclick\nApproval sound\nThis browser only\nPlayed when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.\nWarm chime\nSoft bell\nDouble tap\nCustom audio…\nPreview\nMute approval sound\nThis browser only\nKeep notifications, silence the sound.\nBrowser notifications\nThis browser only\nShow a system notification when approval is needed. The browser asks only after you press Enable.\nEnable\nJournal & privacy\nWhat SQLHarness records about each operation, and for how long.\nActivity journal\nRecord operations so they appear in Activity and sessions. Turning it off also turns off agent annotations.\nStore sensitive data\nStore SQL text, full plans (may include parameter values) and error messages for new operations. Existing rows are not changed.\nAgent annotations\nRestart mcp serve\nLet agents label operations and mark them to keep. Turning it on also turns on the journal. Keep markers do not prevent retention.\nRetention\nDelete old journal data on dashboard start, hourly, and on the next mcp serve.\nKeep at most\ndays\nand at most\nMB\nCurrently 184 MB · oldest 26 days\nAgents\nReading agent transcripts and compare rules for agents.\nRead agent transcripts\nReads local Claude Code and Codex transcripts to show conversation titles, model and effort. Only titles, ids, model and effort are stored.\n214 matched\n9 unmatched\n0 read errors\nlast cycle 15:31\nCoverage\nClear matched data\nRequire compare subject and scope\nRestart mcp serve\nCLI compare needs --subject and --scope; MCP compare needs both fields. On by default.\nDashboard\nThis dashboard process.\nStart with mcp serve\nLaunch the dashboard when an MCP server starts.\nSafety notifications\nShow safety warnings raised by running sessions.\nIdle shutdown\nStop the dashboard after this long without activity.\nhours\nPort\nChange it in config.json. The running dashboard keeps its port.\n5178\nModel prices\nReference data used for Usage costs.\nPrice table\nmodels.dev · fetched 2026-10-20 · built in\nRefresh",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": []
+    },
+    {
+      "name": "mutation-mock",
+      "url": "http://127.0.0.1:48137/Mutation%20Approval.dc.html",
+      "title": "",
+      "text": "1\nApproval mutacji: toast + okno decyzji\n\nZasady z kodu bez zmian: Approve aktywny dopiero po 1 s od otwarcia, odliczanie do wygaśnięcia, środowisko prod/staging na czerwono, ostrzeżenia o wielu statementach i o writerze = reader, digest. W 1b wszystko jest klikalne, a odliczanie działa.\n\n1a\nDziś (ApprovalToast + ApprovalDialog). Toast nie mówi, gdzie ani co: „A change needs your decision” + Review. Dopiero okno pokazuje środowisko, a parametry są w osobnej tabeli pod SQL.\nstaging\ndata change\nReview the requested database change before deciding.\nProfile\nbilling-stg\nServer\nsql-stg-02\nDatabase\nbilling\nSQL\nUPDATE i SET i.DueDate = DATEADD(day, c.PaymentTermsDays, i.IssuedAt) FROM dbo.Invoices i JOIN dbo.Customers c ON c.CustomerId = i.CustomerId WHERE i.BatchId = @b AND i.DueDate IS NULL;\nParameters\nName\nType\nValue\n@b\nvarchar\nB-2026-10-24\nDigest 7a91c04e2b33 · Expires in 241s\nDeny\nApprove\nA change needs your decision\nReview\n1b\nPropozycja. Toast od razu mówi gdzie, co i ile: środowisko, tier, pierwsza linia SQL, sesja, odliczanie jako pasek. Kilka próśb tworzy kolejkę (+1). Okno ma nagłówek z kontekstem, SQL z parametrami wstawionymi inline, ostrzeżenia nad SQL i stopkę z odliczaniem.\nApprove change on staging?\n+1\nUPDATE i …\ndata change · billing · Codex in Fix invoice backfill\nReview\nDeny\n4:00\n\nDo rozważenia: Deny w toaście bez otwierania okna (szybkie odrzucenie, bez ryzyka). Approve zostaje tylko w oknie, bo wymaga przeczytania SQL. Safety notice może trafić do tej samej kolejki z innym kolorem kropki.",
+      "overflow": {
+        "width": 1280,
+        "scroll": 1280
+      },
+      "buttons": []
+    }
+  ]
+}

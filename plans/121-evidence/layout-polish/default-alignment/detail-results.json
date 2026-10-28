@@ -1,0 +1,70 @@
+{
+  "checks": [
+    {
+      "name": "Version A ArrowDown selected values",
+      "value": "A v1"
+    },
+    {
+      "name": "Version table radio count",
+      "value": 6
+    },
+    {
+      "name": "Settings switch Space toggles",
+      "value": true
+    },
+    {
+      "name": "Review Enter opens dialog",
+      "value": true
+    },
+    {
+      "name": "Approve initially disabled",
+      "value": true
+    },
+    {
+      "name": "Approve enabled after delay",
+      "value": true
+    },
+    {
+      "name": "Dialog has accessible name",
+      "value": "base-ui-_r_19_"
+    },
+    {
+      "name": "Escape closes dialog",
+      "value": true
+    },
+    {
+      "name": "Mutation mobile overflow",
+      "value": {
+        "viewport": 390,
+        "scroll": 390
+      }
+    },
+    {
+      "name": "Session Optimization mock mobile overflow",
+      "value": {
+        "viewport": 390,
+        "scroll": 691
+      }
+    },
+    {
+      "name": "Profiles mock mobile overflow",
+      "value": {
+        "viewport": 390,
+        "scroll": 780
+      }
+    },
+    {
+      "name": "Settings mock mobile overflow",
+      "value": {
+        "viewport": 390,
+        "scroll": 588
+      }
+    }
+  ],
+  "requests": [
+    {
+      "method": "PUT",
+      "url": "http://127.0.0.1:48138/api/settings"
+    }
+  ]
+}
