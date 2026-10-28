@@ -62,7 +62,7 @@ test("puts the optimization section first, preserves scope defaults and lists un
   })
   renderApp("/sessions/7")
   expect(await screen.findByRole("heading", { name: "Optimization" })).toBeInTheDocument()
-  const allOperations = screen.getByText("All operations")
+  const allOperations = screen.getByText(/^Operations \(\d+\)$/)
   expect(screen.getByRole("heading", { name: "Optimization" }).compareDocumentPosition(allOperations) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(await screen.findByRole("radio", { name: "A v0" })).toBeChecked()
   expect(await screen.findByRole("radio", { name: "B v39" })).toBeChecked()
