@@ -1,0 +1,5 @@
+just verify -LogDirectory D:/temp/sqlharness-layout-polish-gate-serialized
+Exit code: 0
+verify: OK stages=5 17m53s
+Build PASS; UI typecheck/lint and 408/408 tests PASS; Core 4771 passed/11 existing skips; MCP 535 passed/4 existing skips; format skipped (0 changed C# files).
+Core runner settings: ../core-runner-settings.json (ignored Debug output only).

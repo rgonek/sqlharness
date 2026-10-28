@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#fff;font-family:'Geist',system-ui,sans-serif;color:#0a0a0a}a{color:#0a0a0a}a:hover{color:#525252}</style></helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;font-size:14px">
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><a href="Activity.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Activity</a><a href="Usage.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Usage</a><a href="Profiles.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a;background:#f5f5f5">Profiles</a><a href="Settings.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Settings</a></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+
+<div style="display:grid;grid-template-columns:240px minmax(0,760px);gap:40px;padding:24px 24px 64px;justify-content:center">
+<nav style="position:sticky;top:24px;align-self:start;display:flex;flex-direction:column;gap:2px;font-size:14px">
+<div style="padding:0 10px 8px;font-size:12px;font-weight:500;color:#737373">Profiles</div>
+<div style="display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;margin-bottom:6px;border:1px solid #e5e5e5;border-radius:8px;color:#737373"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg><input value="{{ q }}" onChange="{{ onQ }}" placeholder="Find profile" style="border:0;outline:none;font:14px 'Geist',sans-serif;flex:1;min-width:0;background:transparent"></div>
+<sc-if value="{{ hasList }}" hint-placeholder-val="{{ true }}">
+<sc-for list="{{ list }}" as="p" hint-placeholder-count="5"><div onClick="{{ p.pick }}" style="padding:6px 10px;border-radius:7px;cursor:pointer;background:{{ p.bg }};display:flex;flex-direction:column;gap:1px" style-hover="background:#f5f5f5">
+<div style="display:flex;align-items:center;gap:8px;min-height:20px"><span style="font-weight:{{ p.weight }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span><span style="margin-left:auto;font-size:12px;font-weight:500;color:{{ p.envColor }}">{{ p.env }}</span></div>
+<div style="font-size:12.5px;color:#737373;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.engine }} · <span style="font-family:'Geist Mono',monospace;font-size:12px">{{ p.server }}</span></div>
+</div></sc-for>
+<sc-if value="{{ noMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:6px 10px;color:#737373;font-size:13px">No profile matches.</div></sc-if>
+</sc-if>
+</nav>
+<div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+<div style="display:grid;gap:6px;padding:4px 0 4px"><h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">Profiles</h1>
+<div style="color:#737373;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center"><span style="font-family:'Geist Mono',monospace;font-size:13px;color:#404040">C:\Users\rg\.sqlharness\targets.json</span><span>·</span><span>Read-only. Passwords stay in their environment variables and are never read.</span></div></div>
+<sc-if value="{{ isMissing }}" hint-placeholder-val="{{ false }}"><div style="padding:32px 0;display:grid;gap:6px;color:#525252"><span style="font-weight:500;color:#0a0a0a;font-size:16px">No targets.json yet</span><span>SQLHarness looks for it in the home directory above. Create it with <span style="font-family:'Geist Mono',monospace;font-size:13px;padding:1px 6px;border-radius:4px;background:#f5f5f5">sqlharness profile add</span>.</span></div></sc-if>
+<sc-if value="{{ isInvalid }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:10px;padding:12px 14px;border-radius:10px;background:#fef2f2;box-shadow:inset 0 0 0 1px #fecaca;color:#7f1d1d"><div style="display:grid;gap:2px"><span style="font-weight:500">targets.json is invalid</span><span style="font-family:'Geist Mono',monospace;font-size:12.5px">Line 14, column 9: expected "," after property "database".</span></div></div></sc-if>
+
+<sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:4px;padding-top:4px;border-top:1px solid #e5e5e5;padding-top:16px">
+<div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0;font-size:16px;font-weight:600">{{ s.name }}</h2><span style="font-size:12px;font-weight:500;padding:1px 8px;border-radius:999px;box-shadow:inset 0 0 0 1px #e5e5e5;color:{{ s.envColor }}">{{ s.env }}</span>
+<a href="Usage.dc.html" style="margin-left:auto;font-size:13px;color:#525252">Usage for this profile →</a></div>
+<div style="color:#737373;display:flex;flex-wrap:wrap;gap:4px 8px"><span>{{ s.engine }}</span><span>·</span><span style="font-family:'Geist Mono',monospace;font-size:13px">{{ s.server }} / {{ s.database }}</span><span>·</span><span>{{ s.usage }}</span></div>
+</div>
+
+<section style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:14px 20px 4px"><h3 style="margin:0 0 6px;font-size:16px;font-weight:500">Connection</h3>
+<sc-for list="{{ s.conn }}" as="r" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;padding:10px 0;border-top:1px solid #f0f0f0;align-items:baseline"><span style="color:#737373">{{ r.k }}</span><div style="display:grid;gap:2px;min-width:0"><span style="font-family:{{ r.font }};font-size:{{ r.size }};word-break:break-all">{{ r.v }}</span><sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}"><span style="font-size:12.5px;color:{{ r.noteColor }}">{{ r.note }}</span></sc-if></div></div></sc-for>
+</section>
+
+<section style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:14px 20px 4px"><h3 style="margin:0 0 6px;font-size:16px;font-weight:500">Mutations</h3>
+<sc-for list="{{ s.mut }}" as="r" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;padding:10px 0;border-top:1px solid #f0f0f0;align-items:baseline"><span style="color:#737373">{{ r.k }}</span><div style="display:grid;gap:2px;min-width:0"><span style="font-family:{{ r.font }};font-size:{{ r.size }}">{{ r.v }}</span><sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}"><span style="font-size:12.5px;color:{{ r.noteColor }}">{{ r.note }}</span></sc-if></div></div></sc-for>
+</section>
+
+<section style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);padding:14px 20px 8px"><div style="display:flex;align-items:baseline;gap:8px;margin:0 0 6px"><h3 style="margin:0;font-size:16px;font-weight:500">Variables</h3><span style="color:#737373;font-size:13px">{{ s.varHint }}</span></div>
+<sc-if value="{{ s.hasVars }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:200px 160px minmax(0,1fr);gap:16px;padding:8px 0;font-weight:500;color:#737373;font-size:13px;border-top:1px solid #f0f0f0"><span>Name</span><span>Rule</span><span>Allowed values / default</span></div>
+<sc-for list="{{ s.vars }}" as="v" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:200px 160px minmax(0,1fr);gap:16px;padding:10px 0;border-top:1px solid #f0f0f0;align-items:baseline"><span style="font-family:'Geist Mono',monospace;font-size:13px">{{ v.name }}</span><span>{{ v.rule }}</span><div style="display:flex;flex-wrap:wrap;gap:4px"><sc-for list="{{ v.values }}" as="x" hint-placeholder-count="2"><span style="font-family:'Geist Mono',monospace;font-size:12px;padding:1px 7px;border-radius:5px;box-shadow:inset 0 0 0 1px #e5e5e5;color:#404040">{{ x }}</span></sc-for></div></div></sc-for>
+</sc-if>
+<sc-if value="{{ s.noVars }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 0;border-top:1px solid #f0f0f0;color:#737373">No variables. Operations on this profile have no dimensions.</div></sc-if>
+</section>
+</sc-if>
+</div>
+</div></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;status&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;ok&quot;, &quot;missing&quot;, &quot;invalid&quot;], &quot;default&quot;: &quot;ok&quot;, &quot;tsType&quot;: &quot;\&quot;ok\&quot; | \&quot;missing\&quot; | \&quot;invalid\&quot;&quot;, &quot;section&quot;: &quot;States&quot;}}">
+const P = [
+  { name: "shop-dev", env: "dev", engine: "SqlServer", server: "localhost,14330", database: "{tenant}_shop", auth: "sql", sqlUser: "harness_reader", pw: "SQLH_SHOP_DEV_PW", tls: "optional", root: "", mode: "yolo", writer: "same as reader", ops: 214, last: "today",
+    vars: [{ name: "tenant", rule: "required · enum", values: ["acme", "globex", "initech"] }, { name: "region", rule: "inferred", values: ["eu", "us"] }] },
+  { name: "billing-stg", env: "staging", engine: "SqlServer", server: "sql-stg-02.corp.local", database: "billing", auth: "sql", sqlUser: "billing_ro", pw: "SQLH_BILLING_STG_PW", tls: "strict", root: "corp-root-ca.pem", mode: "operator", writer: "separate account (billing_rw)", ops: 41, last: "today",
+    vars: [{ name: "tenant", rule: "required · enum", values: ["acme"] }] },
+  { name: "shop-prod", env: "prod", engine: "SqlServer", server: "sql-prod-01.corp.local", database: "shop", auth: "azure-cli", sqlUser: "", pw: "", tls: "strict", root: "", mode: "operator", writer: "same as reader", ops: 3, last: "Oct 22",
+    vars: [] },
+  { name: "analytics", env: "", engine: "PostgreSQL", server: "pg-dw.internal:5432", database: "dw", auth: "password", sqlUser: "analyst", pw: "SQLH_DW_PW", tls: "require", root: "", mode: "never", writer: "", ops: 88, last: "yesterday",
+    vars: [{ name: "schema", rule: "optional · default", values: ["public (default)", "mart"] }] },
+  { name: "local-pg", env: "dev", engine: "PostgreSQL", server: "localhost:5432", database: "scratch", auth: "password", sqlUser: "postgres", pw: "PGPASSWORD", tls: "disable", root: "", mode: "yolo", writer: "same as reader", ops: 0, last: "never",
+    vars: [] },
+];
+const risky = e => /^(prod|production|staging)$/i.test(e || "");
+const MODE = { never: "Never", operator: "Operator approval", yolo: "YOLO" };
+class Component extends DCLogic {
+  state = { sel: "shop-dev", q: "" };
+  renderVals() {
+    const st = this.props.status || "ok", S = this.state;
+    const q = S.q.trim().toLowerCase();
+    const list = st === "missing" ? [] : P.filter(p => !q || (p.name + p.server + p.database).toLowerCase().includes(q));
+    const p = P.find(x => x.name === S.sel) || P[0];
+    const mono = (k, v, note, warn) => ({ k, v, font: "'Geist Mono',monospace", size: "13px", hasNote: !!note, note: note || "", noteColor: warn ? "#b91c1c" : "#737373" });
+    const txt = (k, v, note, warn) => ({ k, v, font: "inherit", size: "14px", hasNote: !!note, note: note || "", noteColor: warn ? "#b91c1c" : "#737373" });
+    const conn = [txt("Engine", p.engine), mono("Server", p.server), mono("Database", p.database, p.database.includes("{") ? "Template · resolved per operation from variables" : "")];
+    conn.push(txt("Authentication", p.sqlUser ? p.auth + " · " + p.sqlUser : p.auth));
+    if (p.pw) conn.push(mono("Password variable", p.pw, "Value is never read by the dashboard"));
+    conn.push(txt("TLS", p.tls + (p.root ? " · root " + p.root : ""), p.tls === "disable" || p.tls === "optional" ? "Traffic may be unencrypted" : ""));
+    const sameWriter = p.writer === "same as reader";
+    const mut = [txt("Mode", MODE[p.mode] || "Never", p.mode === "yolo" && risky(p.env) ? "YOLO on " + p.env + ": mutations run without approval" : p.mode === "yolo" ? "Mutations run without approval" : "", p.mode === "yolo" && risky(p.env))];
+    if (p.mode !== "never") mut.push(txt("Writer", p.writer || "—", sameWriter ? "Approval dialog will warn that writer = reader" : "", sameWriter && risky(p.env)));
+    return {
+      q: S.q, onQ: e => this.setState({ q: e.target.value }),
+      hasList: st !== "missing", noMatch: st !== "missing" && list.length === 0,
+      list: list.map(x => ({ name: x.name, env: x.env || "—", envColor: risky(x.env) ? "#b91c1c" : "#737373", engine: x.engine, server: x.server, bg: x.name === p.name ? "#f5f5f5" : "transparent", weight: x.name === p.name ? 500 : 400, pick: () => this.setState({ sel: x.name }) })),
+      isMissing: st === "missing", isInvalid: st === "invalid", hasSel: st === "ok",
+      s: { name: p.name, env: p.env || "no environment", envColor: risky(p.env) ? "#b91c1c" : "#525252", engine: p.engine, server: p.server, database: p.database,
+        usage: p.ops ? p.ops + " operations · last " + p.last : "not used yet",
+        conn, mut,
+        hasVars: p.vars.length > 0, noVars: p.vars.length === 0, varHint: p.vars.length ? "Recorded as dimensions on every operation" : "",
+        vars: p.vars },
+    };
+  }
+}
+</script>
+</body>
+</html>

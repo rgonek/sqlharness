@@ -1,0 +1,85 @@
+{
+  "checks": [
+    "Activity controls share 28px height",
+    "Removed Activity summary and footer",
+    "Removed Activity internal toggle",
+    "Expand all sits in chip row",
+    "Fixture session starts collapsed",
+    "Session row metadata expands operations",
+    "Disclosure toggles once",
+    "Selected session star has transparent background",
+    "Session title link still navigates",
+    "Details opens",
+    "Details chevron points up",
+    "Session note placeholder",
+    "Note editor has no heading",
+    "Cancel discards draft",
+    "Saved note content remains accessible",
+    "Click saved note to edit",
+    "Statement counter cell collapses row",
+    "Statement counter cell reopens row",
+    "Profile list selects details",
+    "Profile search empty state",
+    "Top SQL sort works",
+    "Usage range works",
+    "Switch has even 1px vertical inset",
+    "No document overflow at 390px /",
+    "No document overflow at 390px /sessions/1",
+    "No document overflow at 390px /profiles",
+    "No document overflow at 390px /stats",
+    "No browser console or page errors"
+  ],
+  "gaps": [
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "height": 16,
+      "top": 1,
+      "bottom": 1
+    }
+  ],
+  "errors": []
+}

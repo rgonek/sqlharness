@@ -1,0 +1,5 @@
+import {setup,launch,sessions} from './layout-polish-fixtures.mjs';
+const root=process.env.SQLHARNESS_VISUAL_ROOT??process.cwd(),out=root+'/plans/121-evidence/layout-polish',b=await launch(),p=await b.newPage({viewport:{width:1280,height:900}});await setup(p);
+await p.route('**/api/sessions/1',r=>r.fulfill({json:{session:sessions[0],operations:[],note:'Saved session note',conversations:[{agentKind:'codex',conversationId:'01a1672f-afbc-7180-993f-70a149e84628',title:'Optimize orders report',operations:114}],compareSubjects:[],unassignedCompareCount:0}}));
+await p.goto('http://127.0.0.1:48138/sessions/1');await p.getByRole('button',{name:'Session metadata'}).click();await p.getByRole('region',{name:'Conversations',exact:true}).screenshot({path:out+'/conversations-app-close.png'});await p.getByRole('button',{name:'Saved session note',exact:true}).screenshot({path:out+'/note-strip-app.png'});
+await p.goto('http://127.0.0.1:48137/Session%20Optimization.dc.html');await p.getByText('Details',{exact:true}).click();await p.getByText('Conversations',{exact:true}).locator('..').screenshot({path:out+'/conversations-mock-close.png'});await b.close();

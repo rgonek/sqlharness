@@ -5,8 +5,11 @@ import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow }
 import type { DashboardStats, KeyCount, ProfileView, SqlHashStat, WorkflowCost } from "@/api/types"
 import { agentLabel } from "@/lib/agents"
 import { ErrorState } from "@/components/ErrorState"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Button } from "@/components/ui/button"
+import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { Kpi } from "@/components/Kpi"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -161,11 +164,11 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
   const selectedProfileView = profiles.find(profile => profile.name === selectedProfile)
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
-        <h1>Usage</h1>
-        <div className="grid w-full min-w-0 gap-1.5 sm:w-auto sm:min-w-52">
-          <Label htmlFor="stats-profile">Statistics profile</Label>
+    <div className="usage-page flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div><h1>Usage</h1><p className="text-xs text-muted-foreground">{selectedProfile ?? "No profile"} · {ranges.find(item => item.value === range)?.label.toLowerCase()} · UTC</p></div>
+        <div className="ml-auto grid w-full min-w-0 gap-1.5 sm:w-auto sm:min-w-40">
+          <Label className="sr-only" htmlFor="stats-profile">Statistics profile</Label>
           <Select items={[...profileOptions.map(name => ({ value: `profile:${name}`, label: name })), { value: "unprofiled", label: "No profile" }]}
             value={selectedProfile === null ? "unprofiled" : `profile:${selectedProfile}`}
             onValueChange={value => {
@@ -235,6 +238,8 @@ function StatsContent({
   onAxisChoiceChange: (axes: DimensionAxes | null) => void
   onDimensionCellSelect?: (scope: DimensionCellScope) => void
 }) {
+  const [sqlSort, setSqlSort] = useState("duration")
+  const topSql = [...new Map([...stats.topSqlByCount, ...stats.topSqlByDuration].map(row => [row.sqlHash, row])).values()].sort((a,b) => sqlSort === "runs" ? b.count - a.count : b.totalDurationMs - a.totalDurationMs)
   const perDay = pivotPerDay(stats.operationsPerDay)
   // Series are keyed by index: an agent kind is client-supplied text and must never become a CSS variable name.
   const seriesKeys = perDay.agents.map((_, index) => `a${index}`)
@@ -248,13 +253,41 @@ function StatsContent({
   const total = stats.operations.reduce((sum, row) => sum + row.count, 0)
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+    <div className="usage-content flex flex-col gap-4">
+      <div className="usage-kpis">
         <Kpi label="Operations" value={formatNumber(total)} />
+        <Kpi label="Failed / rejected" value={`${formatNumber(stats.statuses.find(row => row.key === "failed")?.count ?? 0)} / ${formatNumber(stats.statuses.find(row => row.key === "rejected")?.count ?? 0)}`} />
         <Kpi label="Measured workflow output" value={`${formatNumber(stats.workflowCosts.reduce((sum, cost) => sum + cost.outputBytes, 0))} bytes`} />
         <Kpi label="Operations with spills" value={formatNumber(stats.spillOperations)} />
         <Kpi label="Operations on a cold cache" value={formatNumber(stats.coldCacheOperations)} />
       </div>
+      <Card role="region" aria-label="Agents"><CardHeader><CardTitle><h2>Agents</h2></CardTitle><CardDescription>Output tokens are estimated from returned UTF-8 bytes ÷ 4. Per-agent model, sessions, tokens and costs are unavailable in the recorded statistics.</CardDescription></CardHeader><CardContent>
+        <Table><TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Model</TableHead><TableHead className="text-right">Sessions</TableHead><TableHead className="text-right">Operations</TableHead><TableHead className="text-right">Output tokens</TableHead><TableHead className="text-right">Est. cost</TableHead></TableRow></TableHeader><TableBody>{perDay.agents.map(agent => <TableRow key={agent}><TableCell>{agentLabel(agent)}</TableCell><TableCell>—</TableCell><TableCell className="text-right">—</TableCell><TableCell className="text-right">{formatNumber(stats.operationsPerDay.filter(row => row.agentKind === agent).reduce((sum,row) => sum + row.count,0))}</TableCell><TableCell className="text-right">—</TableCell><TableCell className="text-right">—</TableCell></TableRow>)}</TableBody></Table>
+      </CardContent></Card>
+      <Card role="region" aria-label="Top SQL"><CardHeader><div className="flex flex-wrap items-center gap-3"><CardTitle><h2>Top SQL</h2></CardTitle><SegmentedRadioGroup label="Top SQL order" value={sqlSort} options={[{ value: "duration", label: "Total time" }, { value: "runs", label: "Runs" }]} onValueChange={setSqlSort} /></div><CardDescription>Grouped by SQL hash · text, logical reads and last run are unavailable in these statistics.</CardDescription></CardHeader><CardContent><SqlTable rows={topSql} /></CardContent></Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card role="region" aria-label="Tables by logical reads"><CardHeader><CardTitle><h2>Tables by logical reads</h2></CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Table</TableHead><TableHead className="text-right">Logical reads</TableHead><TableHead className="text-right">Ops</TableHead></TableRow></TableHeader><TableBody>{stats.topTablesByLogicalReads.map(row => <TableRow key={row.table}><TableCell className="font-mono">{row.table}</TableCell><TableCell className="text-right">{formatNumber(row.logicalReads)}</TableCell><TableCell className="text-right">{formatNumber(row.operations)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+        <Card role="region" aria-label="Top waits"><CardHeader><CardTitle><h2>Top waits</h2></CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Wait type</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{stats.topWaits.map(row => <TableRow key={row.waitType}><TableCell className="font-mono">{row.waitType}</TableCell><TableCell className="text-right">{formatDuration(row.totalWaitMs)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+      </div>
+      <ProfileDimensionsPanel
+        key={profile === null ? `scope:${unprofiled ? "unprofiled" : "all"}` : `profile:${profile}`}
+        range={range}
+        window={window}
+        profile={profile}
+        unprofiled={unprofiled}
+        profileName={profile ?? "No profile"}
+        databaseTemplate={profileView?.database}
+        profileDefinitionAvailable={stats.profileDimensions.profileDefinitionAvailable}
+        dimensions={stats.profileDimensions.dimensions}
+        filterOptions={stats.profileDimensions.dimensions}
+        targets={stats.profileDimensions.targets}
+        dimensionFilters={dimensionFilters}
+        onDimensionFiltersChange={onDimensionFiltersChange}
+        axisChoice={axisChoice}
+        onAxisChoiceChange={onAxisChoiceChange}
+        onCellSelect={onDimensionCellSelect}
+      />
+      <Collapsible className="flex flex-col gap-3"><CollapsibleTrigger render={<Button variant="outline" className="self-start" />}>Detailed usage and workflow accounting</CollapsibleTrigger><CollapsibleContent keepMounted className="flex flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle>Operations per day (UTC)</CardTitle>
@@ -294,70 +327,6 @@ function StatsContent({
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Most frequent SQL</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <SqlTable rows={stats.topSqlByCount} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Slowest SQL (total time)</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <SqlTable rows={stats.topSqlByDuration} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Tables by logical reads</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Table</TableHead>
-                  <TableHead className="text-right">Logical reads</TableHead>
-                  <TableHead className="text-right">Operations</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.topTablesByLogicalReads.map(row => (
-                  <TableRow key={row.table}>
-                    <TableCell className="font-mono">{row.table}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.logicalReads)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.operations)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Top waits</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Wait type</TableHead>
-                  <TableHead className="text-right">Total time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.topWaits.map(row => (
-                  <TableRow key={row.waitType}>
-                    <TableCell className="font-mono">{row.waitType}</TableCell>
-                    <TableCell className="text-right">{formatDuration(row.totalWaitMs)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
             <CardTitle>Operations by kind</CardTitle>
           </CardHeader>
           <CardContent>
@@ -365,24 +334,7 @@ function StatsContent({
           </CardContent>
         </Card>
       </div>
-      <ProfileDimensionsPanel
-        key={profile === null ? `scope:${unprofiled ? "unprofiled" : "all"}` : `profile:${profile}`}
-        range={range}
-        window={window}
-        profile={profile}
-        unprofiled={unprofiled}
-        profileName={profile ?? "No profile"}
-        databaseTemplate={profileView?.database}
-        profileDefinitionAvailable={stats.profileDimensions.profileDefinitionAvailable}
-        dimensions={stats.profileDimensions.dimensions}
-        filterOptions={stats.profileDimensions.dimensions}
-        targets={stats.profileDimensions.targets}
-        dimensionFilters={dimensionFilters}
-        onDimensionFiltersChange={onDimensionFiltersChange}
-        axisChoice={axisChoice}
-        onAxisChoiceChange={onAxisChoiceChange}
-        onCellSelect={onDimensionCellSelect}
-      />
+      </CollapsibleContent></Collapsible>
     </div>
   )
 }

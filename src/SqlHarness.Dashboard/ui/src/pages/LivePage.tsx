@@ -3,19 +3,15 @@ import { getJson } from "@/api/client"
 import { queryKeys } from "@/api/queries"
 import type { OperationSummary, Page, SessionSummary } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
-import { InternalOperationsToggle } from "@/components/InternalOperationsToggle"
 import { ActivityFeed } from "@/components/ActivityFeed"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { mergeOperations, mergeSessions, reconcileRunning, runningOnly } from "@/live/liveStore"
-import { useLiveFeedState } from "@/live/useLiveFeed"
 import { useNow } from "@/lib/useNow"
 import { isInternalOperation, useShowInternalOperations } from "@/lib/internalOperations"
 
 export function LivePage() {
-  const [showInternal, setShowInternal] = useShowInternalOperations()
+  const [showInternal] = useShowInternalOperations()
   const client = useQueryClient()
-  const state = useLiveFeedState()
   const now = useNow(1000)
   // Fetched on load and on every live-feed (re)connect; in between, pushed events keep these
   // caches current through setQueryData. A fetch merges into the cache instead of replacing it.
@@ -66,10 +62,7 @@ export function LivePage() {
   return (
     <div className="space-y-3">
       {operations.isPending || sessions.isPending || runningOperations.isPending ? <><h1>Activity</h1><Skeleton className="h-48 w-full" /></> : <ActivityFeed sessions={sessions.data ?? []} operations={uniqueOperations.filter(operation => showInternal || !isInternalOperation(operation))} now={now} />}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <InternalOperationsToggle showInternal={showInternal} onChange={setShowInternal} />
-        <Badge variant={state === "connected" ? "secondary" : "outline"}>{state}</Badge>
-      </div>
+
 
     </div>
   )

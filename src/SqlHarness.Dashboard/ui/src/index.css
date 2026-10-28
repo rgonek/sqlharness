@@ -189,7 +189,7 @@
 .activity-chipbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px }
 .activity-chipgroup { display:flex; align-items:center; flex-wrap:wrap; gap:6px; border-right:1px solid var(--border); padding-right:10px }
 .activity-chipgroup > span:first-child { color:var(--muted-foreground); font-size:12px; margin-right:2px }
-.activity-session-row { display:grid; grid-template-columns:24px 28px minmax(0,1fr) 180px 120px 200px 160px; align-items:center; gap:8px; padding:10px 8px }
+.activity-session-row { display:grid; grid-template-columns:24px 28px minmax(220px,1fr) minmax(150px,1fr) 100px 160px 140px; align-items:center; gap:8px; padding:10px 8px }
 .activity-session-counts { display:flex; align-items:center; justify-content:flex-end; gap:4px; white-space:nowrap }
 .activity-running { border-radius:999px; background:#dbeafe; color:#1d4ed8; font-size:12px; padding:2px 8px }
 .activity-session-operations { padding:0 8px 10px 68px; overflow-x:auto }
@@ -197,7 +197,7 @@
 .activity-operation[data-status="running"] { background:#f7f9fe }
 .activity-operation-status [data-slot="badge"] { border:0; font-size:12px; font-weight:400 }
 .activity-operation[data-status="running"] .activity-operation-status > span { background:#dbeafe; color:#1d4ed8; border-radius:999px; padding:2px 8px; font-size:12px }
-@media(max-width:1199px) { .activity-session-row { grid-template-columns:24px 28px minmax(0,1fr) 150px 100px 120px } .activity-optimization { display:none } }
+@media(max-width:1199px) { .activity-session-row { grid-template-columns:24px 28px minmax(200px,1fr) minmax(150px,1fr) 100px 120px } .activity-optimization { display:none } }
 @media(max-width:760px) { .activity-session-row { grid-template-columns:24px 28px minmax(0,1fr) auto } .activity-directory,.activity-last-seen { display:none } .activity-session-operations { padding-left:16px } .activity-operation { min-width:680px } .activity-search { flex:1; min-width:180px } }
 .dark .activity-operation[data-status="running"] { background:var(--muted) }
 .settings-layout { padding-top:8px }
@@ -261,7 +261,7 @@
 .session-title-row { flex-wrap:nowrap }
 .session-edit-title { opacity:0 }
 .session-title-row:hover .session-edit-title,.session-edit-title:focus-visible { opacity:1 }
-.session-subtitle { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:14px }
+.session-subtitle { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:14px; color:var(--muted-foreground) }
 .session-subtitle code { font-size:12px }
 .optimization-card { position:relative; min-width:0; border:1px solid var(--border); border-radius:16px; padding:16px }
 .optimization-card > div:first-child { padding-bottom:16px }
@@ -364,3 +364,23 @@
 .session-title-row > [data-slot="toggle"] { flex-shrink:0 }
 
 .comparison-tabs > .comparison-context { margin:0 16px; white-space:normal; overflow-wrap:anywhere }
+
+/* A selected session star is indicated by its icon, with no selected surface. */
+.session-star[aria-pressed=true] { background:transparent }
+
+.profiles-layout { display:grid; grid-template-columns:240px minmax(0,760px); gap:40px; justify-content:center }
+.profile-section tr:last-child { border-bottom:0 }
+.usage-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border:1px solid var(--border); border-radius:var(--radius-xl); overflow:hidden }
+.usage-kpis > [data-slot=card] { border:0; border-radius:0; box-shadow:none; --tw-ring-shadow:0 0 #0000; gap:4px; padding-block:16px; background:transparent }
+.usage-kpis > [data-slot=card] + [data-slot=card] { border-left:1px solid var(--border) }
+.usage-kpis [data-slot=card-header] { padding-inline:16px }
+.usage-kpis [data-slot=card-title] { font-size:20px; line-height:28px }
+.mutation-dialog .sql-block { max-height:280px; overflow:auto }
+@media(max-width:760px) { .profiles-layout { grid-template-columns:minmax(0,1fr); gap:24px } .usage-kpis { grid-template-columns:repeat(2,minmax(0,1fr)) } .usage-kpis > [data-slot=card] { border-bottom:1px solid var(--border) } }
+
+
+.app-main[data-page=stats] { max-width:1040px; padding:24px }
+.app-main[data-page=profiles] { padding-top:24px }
+.profile-section th[scope=row] { font-weight:400; color:var(--muted-foreground); width:30% }
+
+.session-note-display { width:100%; height:auto; justify-content:flex-start; padding:12px 16px; border-radius:var(--radius-xl); text-align:left; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; font-weight:400 }

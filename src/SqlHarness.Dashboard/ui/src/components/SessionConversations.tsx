@@ -8,11 +8,9 @@ export function SessionConversations({ conversations }: { conversations: AgentCo
       <div className="grid gap-3">
         {conversations.map(conversation => (
           <div key={`${conversation.agentKind}:${conversation.conversationId}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <div className="min-w-0">
-              <div className="break-words">{conversation.title ?? "Untitled"}</div>
-              <div className="break-all font-mono text-sm text-muted-foreground">{conversation.conversationId}</div>
-            </div>
-            <div className="text-sm text-muted-foreground">{agentLabel(conversation.agentKind)} · {conversation.operations} operations</div>
+            <div className="min-w-0 break-words">{conversation.title ?? "Untitled"}</div>
+            <div className="min-w-0 break-all font-mono text-xs text-muted-foreground">{conversation.conversationId}</div>
+            <div className="ml-auto text-sm text-muted-foreground">{agentLabel(conversation.agentKind)} · {conversation.operations} operations</div>
           </div>
         ))}
       </div>

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -44,23 +46,22 @@ export function ApprovalDialog({ requestId }: { requestId: string | null }) {
   const open = requestId !== null && (item !== undefined || Boolean(message))
   return (
     <Dialog open={open} onOpenChange={value => { if (!value) close() }}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto" onKeyDownCapture={event => { if (event.key === "Enter") event.preventDefault() }}>
+      <DialogContent className="mutation-dialog max-h-[90vh] overflow-y-auto sm:max-w-[720px]" onKeyDownCapture={event => { if (event.key === "Enter") event.preventDefault() }}>
         {item ? <>
-          <DialogHeader>
+          <DialogHeader className="pr-6">
             <DialogTitle className="flex flex-wrap items-center gap-3">
-              <span className={`text-3xl font-bold ${riskyEnvironment ? "text-destructive" : "text-foreground"}`}>{environment}</span>
-              <Badge variant="outline">{item.request.tier}</Badge>
+              <span className={`text-xl font-semibold ${riskyEnvironment ? "text-destructive" : "text-foreground"}`}>{environment}</span>
+              <Badge variant="outline">{item.request.tier}</Badge><span className="text-xs font-normal text-muted-foreground">{pending.indexOf(item) + 1} of {pending.length} pending</span>
             </DialogTitle>
             <DialogDescription>Review the requested database change before deciding.</DialogDescription>
           </DialogHeader>
-          <dl className="grid gap-2 text-sm sm:grid-cols-3">
-            <div><dt className="text-muted-foreground">Profile</dt><dd>{item.request.profile}</dd></div>
-            <div><dt className="text-muted-foreground">Server</dt><dd>{item.request.server}</dd></div>
-            <div><dt className="text-muted-foreground">Database</dt><dd>{item.request.database}</dd></div>
-          </dl>
-          {item.writerSameAsReader && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3">The writer uses the same account as the reader.</p>}
-          {hasMultipleStatements(item.request.sql) && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3">This request contains multiple statements.</p>}
-          <SqlBlock sql={item.request.sql} engine={item.request.engine} label="SQL" initiallyFormatted={false} />
+          <Separator />
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground" aria-label="Mutation target">
+            <span>{item.request.profile}</span><span>·</span><span className="break-all font-mono text-xs">{item.request.server} / {item.request.database}</span><span>·</span><span>{item.request.engine}</span>
+          </div>
+          {item.writerSameAsReader && <Alert variant="destructive"><AlertDescription>The writer uses the same account as the reader.</AlertDescription></Alert>}
+          {hasMultipleStatements(item.request.sql) && <Alert variant="destructive"><AlertDescription>This request contains multiple statements.</AlertDescription></Alert>}
+          <div className="rounded-md border p-3"><SqlBlock sql={item.request.sql} engine={item.request.engine} label="SQL" initiallyFormatted={false} /></div>
           <div className="space-y-2">
             <h3 className="font-medium">Parameters</h3>
             <Table>
@@ -68,9 +69,11 @@ export function ApprovalDialog({ requestId }: { requestId: string | null }) {
               <TableBody>{item.request.parameters.map((parameter, index) => <TableRow key={`${parameter.name}-${index}`}><TableHead scope="row" className="whitespace-normal break-all">{parameter.name}</TableHead><TableCell className="whitespace-normal break-all">{parameter.type ?? "—"}</TableCell><TableCell className="whitespace-pre-wrap break-all">{parameter.value ?? "NULL"}</TableCell></TableRow>)}</TableBody>
             </Table>
           </div>
-          <p className="text-sm text-muted-foreground">Digest {item.request.digest.slice(0, 12)} · Expires in {remaining}s</p>
+
           {message && <p role="alert" className="text-destructive">{message}</p>}
+          <Separator />
           <DialogFooter>
+            <p className="mr-auto self-center text-xs text-muted-foreground">Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")} · Digest {item.request.digest.slice(0, 12)}</p>
             <Button variant="outline" onClick={() => void decide("deny")}>Deny</Button>
             <Button onClick={() => void decide("approve")} disabled={openedAt === null || now - openedAt < 1_000 || remaining === 0}>Approve</Button>
           </DialogFooter>

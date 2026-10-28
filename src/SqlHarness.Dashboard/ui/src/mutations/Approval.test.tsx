@@ -115,7 +115,7 @@ test("a 409 approve shows the pending-state message and removed closes the dialo
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   expect(screen.getByText("This request is no longer pending")).toBeInTheDocument()
   act(() => source().emit("removed", { requestId: "r-1", state: "denied" }))
-  expect(screen.getByRole("dialog")).toHaveAttribute("data-closed", "")
+  expect(screen.getByRole("dialog", { name: "Request no longer pending" })).toHaveAttribute("data-closed", "")
   vi.useRealTimers()
   vi.restoreAllMocks()
 })

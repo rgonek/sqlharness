@@ -46,7 +46,10 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
       <TableBody>{byStatement ? rows.map(row => {
         const key = `${row.key}:${row.occurrence}`
         const open = !closed.includes(key)
-        return <Fragment key={key}><TableRow className="bg-muted/40"><TableHead scope="row" className="whitespace-normal">
+        return <Fragment key={key}><TableRow className="cursor-pointer bg-muted/40" onClick={event => {
+          if ((event.target as HTMLElement).closest("a,button,input,[role=button]")) return
+          setClosed(current => open ? [...current, key] : current.filter(item => item !== key))
+        }}><TableHead scope="row" className="whitespace-normal">
           <Button variant="ghost" className="w-full justify-start" aria-expanded={open} onClick={() => setClosed(current => open ? [...current, key] : current.filter(item => item !== key))}><HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} /><span className="truncate" title={row.text}>{row.text}</span></Button>
           <div className="mt-1 flex flex-wrap gap-2 pl-6 text-xs font-normal text-muted-foreground"><span>{row.status}</span><span>attribution: {row.attribution}</span>{row.planLinkBefore && <a href={row.planLinkBefore} className="underline hover:text-foreground focus-visible:outline-ring">Plan before</a>}{row.planLinkAfter && <a href={row.planLinkAfter} className="underline hover:text-foreground focus-visible:outline-ring">Plan after</a>}{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}</div>
           {open && <div className="statement-metrics">{row.executions !== null && <span>Executions <strong>{number(row.executions)}</strong></span>}{!comparison.statementMetricsUnavailableReason && <StatementMetrics row={row} />}</div>}

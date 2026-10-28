@@ -81,7 +81,7 @@ test("live page shows running, recent and pushed operations", async () => {
 
   const recent = screen.getByRole("region", { name: "Activity feed" })
   expect(await within(recent).findByText("measure")).toBeInTheDocument()
-  expect(screen.getByText("connected")).toBeInTheDocument()
+  expect(screen.queryByText("connected")).not.toBeInTheDocument()
 })
 
 test("an enabled safety notice from the live feed links to its operation", async () => {
@@ -140,17 +140,18 @@ test("starring a live session updates its row", async () => {
   expect(await within(active).findByRole("button", { name: "Unstar session cli:live" })).toHaveAttribute("aria-pressed", "true")
 })
 
-test("the feed shows connecting until it first opens", async () => {
+test("the feed keeps connection state out of the Activity content", async () => {
   useFakeEventSource()
   stubFetch({ [RECENT]: page([]), [RUNNING]: page([]), [STARRED]: page([]), [SESSIONS]: page([]) })
 
   renderApp("/")
 
-  expect(await screen.findByText("connecting")).toBeInTheDocument()
+  await screen.findByRole("region", { name: "Activity feed" })
+  expect(screen.queryByText("connecting")).not.toBeInTheDocument()
   act(() => liveFeed().open())
-  expect(screen.getByText("connected")).toBeInTheDocument()
+  expect(screen.queryByText("connected")).not.toBeInTheDocument()
   act(() => liveFeed().fail(FakeEventSource.CONNECTING))
-  expect(screen.getByText("disconnected")).toBeInTheDocument()
+  expect(screen.queryByText("disconnected")).not.toBeInTheDocument()
 })
 
 test("empty running and active sections share one compact status line", async () => {
@@ -160,7 +161,7 @@ test("empty running and active sections share one compact status line", async ()
   expect(await screen.findByText("Nothing matches these filters.")).toBeInTheDocument()
 })
 
-test("artifact-only running rows share the empty state and remain revealable", async () => {
+test("artifact-only running rows stay hidden without an internal toggle on Activity", async () => {
   useFakeEventSource()
   localStorage.removeItem("sqlharness.showInternalOperations")
   stubFetch({
@@ -173,9 +174,7 @@ test("artifact-only running rows share the empty state and remain revealable", a
   const running = await screen.findByRole("region", { name: "Activity feed" })
   expect(await screen.findByText("Nothing matches these filters.")).toBeInTheDocument()
   expect(within(running).queryByText("sqlharness_artifact")).not.toBeInTheDocument()
-  await userEvent.click(screen.getByText("Show internal operations"))
-  expect(await within(running).findByText("sqlharness_artifact")).toBeInTheDocument()
-  expect(screen.queryByText("Nothing matches these filters.")).not.toBeInTheDocument()
+  expect(screen.queryByRole("checkbox", { name: "Show internal operations" })).not.toBeInTheDocument()
 })
 
 test("live lists are refetched on every (re)connect so changes made during a gap show", async () => {
@@ -201,7 +200,7 @@ test("live lists are refetched on every (re)connect so changes made during a gap
   expect(count(calls, SESSIONS)).toBe(2)
 
   act(() => liveFeed().fail(FakeEventSource.CONNECTING))
-  expect(screen.getByText("disconnected")).toBeInTheDocument()
+  expect(screen.queryByText("disconnected")).not.toBeInTheDocument()
   finished = true
   act(() => liveFeed().open())
 
@@ -389,4 +388,18 @@ test("Activity filters hide empty session groups and can be reset", async () => 
   expect(screen.getByRole("link", { name: "Billing session" })).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Named 1" }))
   expect(screen.queryByRole("link", { name: "Billing session" })).not.toBeInTheDocument()
+})
+
+test("clicking session metadata toggles its operations and the disclosure toggles only once", async () => {
+  useFakeEventSource()
+  stubFetch({ [RECENT]: page([operation({ id: 17, sessionId: 1 })]), [RUNNING]: page([]), [STARRED]: page([]),
+    [SESSIONS]: page([session({ id: 1, sessionKey: "cli:row", cwd: "D:\\Dev\\shop", running: 0 })]) })
+  renderApp("/")
+  const group = await screen.findByRole("region", { name: "cli:row" })
+  expect(within(group).queryByRole("link", { name: "17" })).not.toBeInTheDocument()
+  await userEvent.click(within(group).getByTitle("D:\\Dev\\shop"))
+  expect(within(group).getByRole("link", { name: "17" })).toBeInTheDocument()
+  await userEvent.click(within(group).getByRole("button", { name: "Collapse cli:row" }))
+  expect(within(group).queryByRole("link", { name: "17" })).not.toBeInTheDocument()
+  expect(within(group).getByRole("button", { name: "Expand cli:row" })).toHaveAttribute("aria-expanded", "false")
 })

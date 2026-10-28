@@ -125,3 +125,15 @@ test("batch memory does not claim statement memory is never retained", () => {
   expect(screen.getByLabelText("Batch memory")).toHaveTextContent("Memory (sum of selected case medians)")
   expect(screen.queryByText("Statement memory is not retained in the journal.")).not.toBeInTheDocument()
 })
+
+test("the statement's counter cells toggle expansion without swallowing its plan links", async () => {
+  const linked = { ...comparison, statements: comparison.statements!.map(row => ({ ...row, planLinkBefore: "#before" })) }
+  render(<IoComparison comparison={linked} byStatement onViewChange={vi.fn()} />)
+  const row = screen.getByRole("button", { name: "SELECT * FROM Orders" }).closest("tr")!
+  await userEvent.click(within(row).getAllByRole("cell")[0])
+  expect(screen.queryByRole("rowheader", { name: "Orders" })).not.toBeInTheDocument()
+  await userEvent.click(within(row).getAllByRole("cell")[0])
+  expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
+  await userEvent.click(within(row).getByRole("link", { name: "Plan before" }))
+  expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
+})

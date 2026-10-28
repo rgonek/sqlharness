@@ -60,7 +60,7 @@ function SessionView({ id }: { id: number }) {
         </CardHeader>
         <CardContent className="px-0">
           <Collapsible>
-<div className="session-subtitle"><span>{agentLabel(session.agentKind)} via {session.transport}</span><span>·</span><span>{session.operations} operations</span><span>·</span><CollapsibleTrigger aria-label="Session metadata" render={<Button variant="ghost" size="sm" />}>Details<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" /></CollapsibleTrigger></div>
+<div className="session-subtitle text-muted-foreground"><span>{agentLabel(session.agentKind)} via {session.transport}</span><span>·</span><span>{session.operations} operations</span><span>·</span><CollapsibleTrigger className="group" aria-label="Session metadata" render={<Button variant="ghost" size="sm" />}>Details<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" className="transition-transform group-aria-expanded:rotate-180" /></CollapsibleTrigger></div>
             <CollapsibleContent keepMounted><div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
               <Fact label="Client" value={clientLabel(session)} />
               <Fact label="MCP mode" value={session.mcpMode} />
