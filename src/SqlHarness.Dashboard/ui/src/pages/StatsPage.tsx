@@ -140,12 +140,14 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
       </div>
       {overview.error ? (
         <ErrorState error={overview.error} />
+      ) : dimensionOptions.error ? (
+        <ErrorState error={dimensionOptions.error} />
       ) : query.error ? (
         <ErrorState error={query.error} />
-      ) : overview.isPending || dimensionOptions.isPending ? (
+      ) : overview.isPending || dimensionOptions.isPending || !dimensionOptions.data ? (
         <Skeleton className="h-64 w-full" />
       ) : (
-        <StatsContent metricsPending={query.isPending} stats={{ ...(query.data ?? dimensionOptions.data!), profileDimensions: dimensionOptions.data!.profileDimensions }} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
+        <StatsContent metricsPending={query.isPending} stats={{ ...(query.data ?? dimensionOptions.data), profileDimensions: dimensionOptions.data.profileDimensions }} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
           dimensionFilters={effectiveFilters} onDimensionFiltersChange={setDimensionFilters}
           axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
       )}

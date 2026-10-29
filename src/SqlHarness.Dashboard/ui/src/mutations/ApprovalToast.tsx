@@ -33,7 +33,7 @@ function ApprovalNotifications({ pending, hidden }: { pending: PendingMutation[]
   useEffect(() => {
     const ids = new Set(pending.map(item => item.requestId))
     for (const id of previous.current) if (!ids.has(id)) close(id)
-    for (const request of pending) add({ id: request.requestId, title: request.environment || "unknown", timeout: 0, data: { request } })
+    for (const request of pending) add({ id: request.requestId, title: `Approve change on ${request.environment || "unknown"}?`, timeout: 0, data: { request } })
     previous.current = ids
   }, [pending, add, close])
   if (hidden) return null
@@ -44,7 +44,7 @@ function ApprovalNotifications({ pending, hidden }: { pending: PendingMutation[]
       const remaining = Math.max(0, Math.ceil((Date.parse(item.expiresAt) - now) / 1000))
       return <Toast key={notification.id} toast={notification} swipeDirection={[]}>
         <ToastContent><section className="flex min-w-0 flex-1 flex-col gap-2" aria-label="Pending change approval">
-          <ToastTitle className="text-base font-semibold" />
+          <ToastTitle className="text-base font-semibold">Approve change on <span className={/^(prod|production|staging)$/i.test(item.environment || "unknown") ? "text-destructive" : undefined}>{item.environment || "unknown"}</span>?</ToastTitle>
           <ToastDescription>{item.request.profile} | {item.request.database} | {item.request.tier}</ToastDescription>
           <pre className="line-clamp-2 whitespace-pre-wrap break-all font-mono text-xs">{item.request.sql.slice(0, 240)}{item.request.sql.length > 240 ? "..." : ""}</pre>
           <div className="flex items-center justify-between gap-3"><span className="text-xs text-muted-foreground">Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}{pending.length > 1 ? ` | ${pending.length} pending` : ""}</span></div><ToastDecision item={item} expired={remaining === 0} />

@@ -558,3 +558,31 @@ test("a recorded dimension absent in the new range cannot leave an invisible agg
   const currentAggregate = requests.filter(url => url.searchParams.has("from") && !url.searchParams.has("rowDimension")).at(-1)!
   expect(JSON.parse(currentAggregate.searchParams.get("dimensions") ?? "{}")).not.toHaveProperty("legacy")
 })
+
+test("retained dimensions survive an options failure on range change and recover without stale aggregate requests", async () => {
+  const requests: URL[] = []
+  let failOptions = true
+  stubFetch({ "/api/stats": (url: URL) => {
+    requests.push(url)
+    if (url.searchParams.has("from") && Date.parse(url.searchParams.get("to")!) - Date.parse(url.searchParams.get("from")!) <= 24 * 60 * 60 * 1000 && url.searchParams.get("profile") === "app" && failOptions) {
+      return new Response("dimension lookup unavailable", { status: 500 })
+    }
+    return jsonResponse(filteredProfileStats(url))
+  }, "/api/profiles": profilesResponse() })
+  const { client } = renderApp("/stats")
+  await screen.findByRole("combobox", { name: "project" })
+  await userEvent.click(screen.getByRole("tab", { name: "All time" }))
+  await userEvent.click(await screen.findByRole("combobox", { name: "project" }))
+  await userEvent.click(await screen.findByRole("option", { name: "alpha" }))
+  await waitFor(() => expect(requests.some(url => url.searchParams.get("dimensions")?.includes("alpha"))).toBe(true))
+  requests.length = 0
+  await userEvent.click(screen.getByRole("tab", { name: "24 hours" }))
+  expect(await screen.findByText("Request failed")).toBeInTheDocument()
+  expect(screen.queryByLabelText("Usage summary")).not.toBeInTheDocument()
+  expect(requests.some(url => url.searchParams.has("dimensions"))).toBe(false)
+  failOptions = false
+  await client.invalidateQueries({ queryKey: ["stats"] })
+  expect(await screen.findByRole("combobox", { name: "project" })).toHaveTextContent("alpha")
+  await waitFor(() => expect(requests.some(url => url.searchParams.get("dimensions")?.includes("alpha"))).toBe(true))
+  expect(await screen.findByLabelText("Usage summary")).toBeInTheDocument()
+})

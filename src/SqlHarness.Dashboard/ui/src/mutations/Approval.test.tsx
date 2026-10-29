@@ -248,3 +248,15 @@ test("expanded-preview fallback keeps original request and decision controls usa
   expect(JSON.stringify(original)).toBe(before)
   vi.useRealTimers()
 })
+
+test.each(["prod", "production", "staging", "STAGING", "development", ""])("toast presents the approval headline for environment %s", async environment => {
+  const { source } = await setup()
+  act(() => source().emit("snapshot", [{ ...request, environment }]))
+  const notification = await screen.findByLabelText("Pending change approval")
+  const title = notification.querySelector('[data-slot="toast-title"]')!
+  expect(title).toHaveTextContent(`Approve change on ${environment || "unknown"}?`)
+  expect(within(notification).getByText(environment || "unknown").classList.contains("text-destructive")).toBe(/^(prod|production|staging)$/i.test(environment))
+  expect(notification.querySelector('[data-slot="badge"]')).toBeNull()
+  expect(within(notification).getByRole("button", { name: "Review" })).toBeEnabled()
+  expect(within(notification).getByRole("button", { name: "Deny" })).toBeEnabled()
+})

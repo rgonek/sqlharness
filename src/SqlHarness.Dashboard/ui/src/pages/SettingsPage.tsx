@@ -159,7 +159,7 @@ function AgentTranscriptsStatus() {
         <TableBody>{status.data.coverage.map(row => <TableRow key={`${row.agentKind}:${row.transport}`}><TableHead scope="row" className="whitespace-normal">{row.agentKind}</TableHead><TableCell>{row.transport}</TableCell><TableCell>{row.exact}</TableCell><TableCell>{row.inferred}</TableCell><TableCell>{row.unassigned}</TableCell></TableRow>)}</TableBody>
       </Table>}
       {status.error && <p role="alert" className="text-sm text-destructive">{status.error.message}</p>}
-      <div className="flex w-full justify-end">
+      <div className="ml-auto flex w-auto justify-end">
         <Button variant="outline" disabled={clear.isPending} onClick={() => setConfirming(true)}>Clear matched data</Button>
       </div>
       {clear.error && <p role="alert" className="text-sm text-destructive">{clear.error.message}</p>}
