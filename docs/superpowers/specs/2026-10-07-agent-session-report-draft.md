@@ -61,6 +61,7 @@ the tool. Keep workload values out.
 | 2026-10-20 static-list aggregation (unmapped) | optimization | adopt (proposed, not applied) | 1 | source context, variant x metric table, equality, plans, limits, evidence links | ~7 / ~10 | yes (source applicability, callers, rewrite rationale, deferral) | 1 clarification; 1 interim metadata revision | external context and review coverage; no API decision |
 | 2026-10-23 multi-scope read-batch candidate (unmapped) | optimization | partial | 5 | scope x outcome table, exception list, metric trade-offs, equivalence, limits, evidence links | not recorded (derived metrics; exact statement audit not recorded) | yes (source applicability, sampling limits, adoption decision) | not recorded; parameter correction and coverage-driven outcome revisions identified | preserve outcome history and evidence scope; no API decision |
 | 2026-10-29 current-source ranking candidate (unmapped) | optimization | partial | 1 | source context, case x variant table, equivalence, IO-memory trade-off, rejected alternative, limits, evidence links | not recorded (approximate source counts below) | yes (source applicability, trade-off interpretation, deferred implementation) | 1 retro clarification | external context and explicit review coverage; no API decision |
+| 2026-10-29 multi-statement count candidate (unmapped) | optimization | partial | 1 | source context, case x variant table, equivalence, plan explanation, limits, evidence link, later recommendation correction | not recorded (approximate source counts below) | yes (source applicability, duplicate-call finding, acceptance judgment) | 1 delivered recommendation correction; 1 internal case-label correction | external context and policy/decision separation; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -965,3 +966,61 @@ Kind: optimization · Outcome: partial · Scopes: 1 · System label: unmapped.
   can test which follow-up reads change a decision without losing required evidence.
 - **Operator decision:** Record all three proposed observations. No plan, code, skill change,
   installation, commit, push or publication was authorized.
+
+## 2026-10-29 - multi-statement count candidate with a latency-IO compromise
+
+Kind: optimization · Outcome: partial · Scopes: 1 · System label: unmapped.
+
+- **Inspected state:** Repository HEAD `8d8d959f`; initial retrospective inspection `455adea0`.
+  Status: collecting observations, not approved for implementation. Actual investigation messages,
+  final chat report and the user's follow-up were available; this is observed reporting.
+- **Actual report:** A current-source read batch was tested with a candidate that selected a modern
+  predicate branch. The final report identified source/caller/parameter construction, tabulated
+  per-case baseline/candidate reads and elapsed time, stated result equivalence, explained the plan
+  change and listed missing coverage. It recommended against adoption, then revised that judgment
+  after the user highlighted the modest absolute latency penalty. No implementation followed.
+- **Report blocks:** Source context; case x variant metric table; equivalence; plan interpretation;
+  IO-latency compromise; implementation decision; unmeasured source-code finding; limits; evidence
+  link; subsequent recommendation correction. No question or follow-up offer in the final report.
+- **Evidence and interpretation:** Compare supplied repetitions, metrics, multiset equivalence,
+  nullability equivalence and stability. Query rows established the resolved target and schema/case
+  context. Artifacts supplied repeated-lookup versus scan evidence. Application source supplied
+  the calling path, SQL/parameter construction and a duplicated batch invocation; endpoint savings
+  from removing that invocation were not measured. Adoption judgment was agent-authored.
+- **Content provenance:** Approximate overlapping statement/clause counts in the final report:
+  6 compare-backed, 1 query-backed, 1 artifact-backed, 5 application-code-backed and 3 agent
+  interpretations. The exact journal-backed/total numeric-statement ratio is not recorded.
+  Table metrics were transcribed manually. Calling conditions, branch applicability, duplicate-call
+  finding and adoption reasoning have no journal operation proving them. A journal-only rendering
+  would omit this decision context.
+- **Corrections:** One delivered correction: the agent treated a latency-policy failure too strongly
+  as a reason to reject adoption, then described a workload-dependent trade-off. Cause: agent
+  interpretation, not an incorrect metric or demonstrated tool defect. Separately, an internal
+  parameter-set label suggested an empty case although the case was nonempty; the saved note and
+  final user report described it correctly. This was a labeling slip, not a delivered metric correction.
+- **Dashboard usefulness:** Retain per-case trade-offs, comparison semantics, plan-review coverage,
+  source-code findings, missing domain cases and the original/revised recommendation. Actual
+  dashboard use and reconstruction benefit: not recorded. Evidence references alone do not prove
+  completed review or an acceptable adoption decision.
+- **Observed workflow cost:** 12 MCP calls: capabilities, query, compare and nine artifact reads
+  (eight plans, one metrics). All returned success. No comparison cases were omitted; selected
+  plan reads had no unconsumed continuations. The necessary/avoidable split is not recorded.
+- **Cost coverage:** Output bytes, actual tokens, input/discovery overhead, source reads,
+  orchestration and final prose cost were not measured. Retro source reads are separate from the
+  investigation; their cost is not recorded. No diagnostic journal reads, live rerun, modeled
+  replacement workflow or token-saving claim occurred.
+- **Diagnostic qualification:** Full baseline/candidate plan hierarchies for all batch statements
+  were reviewed for one large case; count plans were also reviewed for the regressing case.
+  Historical branch, truly empty non-null case, error-bearing/cancelled rows, ordering ties,
+  cross-case order sensitivity and endpoint-level duplicate-call savings remained unverified.
+  No phase records were inspected; routine successful operation is not evidence of zero overhead.
+- **Optional API implications:** Preserve authored decisions and their corrections alongside
+  journal-backed numbers and external source context. A report API remains a synthesis question;
+  this entry selects no API or policy change and establishes no readiness or savings.
+- **Related coverage and cheapest next check:** See the
+  [regression-judgment observation](../../observations/regression-verdict-and-adoption-judgment.md).
+  Compare an offline synthetic mixed-signal report with earlier entries, preserving both metrics
+  and non-journal source findings before evaluating a shared reporting interface.
+- **Operator decision:** Record the two accepted observations, then commit and push only those
+  documentation changes. No plan, implementation, skill change or private-evidence publication
+  is authorized.
