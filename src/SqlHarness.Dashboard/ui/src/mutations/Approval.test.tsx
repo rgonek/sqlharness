@@ -230,3 +230,21 @@ test("toast Deny disables while submitting and retains busy and expired requests
   expect(screen.getByRole("button", { name: "Deny" })).toBeDisabled()
   fetch.mockRestore()
 })
+
+test("expanded-preview fallback keeps original request and decision controls usable", async () => {
+  const { source } = await setup()
+  const original = { ...request, request: { ...request.request, sql: "UPDATE t SET x=@a WHERE " + Array(100).fill("@a IS NOT NULL").join(" AND "), parameters: [{ name: "a", type: "nvarchar(max)", value: "a".repeat(10000) }] } }
+  const before = JSON.stringify(original)
+  act(() => source().emit("added", original))
+  vi.useFakeTimers()
+  fireEvent.click(screen.getByRole("button", { name: "Review" }))
+  expect(screen.getByRole("radio", { name: "Values inline" })).toHaveAttribute("aria-disabled", "true")
+  expect(screen.getByRole("radio", { name: "As sent" })).toBeChecked()
+  expect(screen.getByTestId("sql-code").textContent).toBe(original.request.sql)
+  expect(screen.getByText(/Values inline is unavailable/)).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
+  act(() => vi.advanceTimersByTime(1000))
+  expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled()
+  expect(JSON.stringify(original)).toBe(before)
+  vi.useRealTimers()
+})

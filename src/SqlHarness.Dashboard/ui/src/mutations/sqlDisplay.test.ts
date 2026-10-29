@@ -31,3 +31,14 @@ test("normalizes contract engine and parameter prefix without changing tokens", 
   expect(result.reason).toBeUndefined()
   expect(result.sql).not.toContain("@a")
 })
+
+test("bounds repeated escaped literal expansion and preserves small repeated parameters", () => {
+  const sql = "UPDATE t SET x=@a WHERE " + Array(100).fill("@a IS NOT NULL").join(" AND ")
+  const result = inlineMutationSql(sql, "sqlserver", [p("a", "a'".repeat(5000), "nvarchar(max)")])
+  expect(result.reason).toBeTruthy()
+  expect(result.sql === sql).toBe(true)
+  const small = inlineMutationSql("SELECT @a, @a, @n, @n", "sqlserver", [p("a", "O'Brien"), p("n", "9007199254740993", "bigint")])
+  expect(small.reason).toBeUndefined()
+  expect(small.sql.match(/N'O''Brien'/g)).toHaveLength(2)
+  expect(small.sql.match(/9007199254740993/g)).toHaveLength(2)
+})
