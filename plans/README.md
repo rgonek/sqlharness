@@ -2,6 +2,8 @@
 
 Read the selected plan and its spec before executing. A queue entry is not approval for implementation, publication or a live DB. We execute each assigned plan in full; general work and SQL Server take priority over PostgreSQL-only work.
 
+Plan [123](123-shared-version-table-across-conditions.md): **DONE on `plan-123`** — shared version table and approximate cross-group comparison; Terra high task and Sol low whole-branch/final scoped reviews approved. Final Windows gate PASS on `6aa51e26` (UI 448, Core 4792/11 skips, MCP 535/4 skips), branch format 29 files and synthetic browser PASS. No merge, push, installation or live acceptance. [Evidence](123-evidence/verification.md), [history](history.md#plan-123-feature-branch--2026-10-29).
+
 Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrated into `main` at `56f3dae4` (2026-10-24)** — Luna xhigh and Sol low integration reviews approved; combined Windows gate passed on `d2f2b060` (Core 4717, MCP 524, UI 372 passed), branch format 21 files passed. Earlier timeout and retry logs retained. No push/install; Linux/live UAT unverified. See [integration evidence](104-evidence/integration/verification.md).
 
 ## In progress
@@ -19,7 +21,6 @@ Plan [122](122-dashboard-data-value-new-sessions.md): **DONE on `plan-122-backen
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
-| [123](123-shared-version-table-across-conditions.md) | One optimization version table across conditions groups; approximate cross-group A/B paired by varying-only case key; journaled per-case result row counts (new evidence only) | 118 decision (explicit `groupB`), 122 DONE | IMPLEMENTED; Tasks 1–4 reviewed; Windows gate and synthetic browser passed; Task 5 review and whole-branch Sol review pending ([evidence](123-evidence/verification.md)) |
 | [036](036-live-database-ci-lane.md) | Direction: opt-in CI lane against throwaway PG/SQL Server containers | 016 (028 for pins) | TODO |
 | [077](077-agent-sql-optimization-evidence.md) | Lean MCP JSON and actionable SQL optimization evidence; portable real-MCP fixture requests and paired agent trials verify the complete workflow | 055–061/065–067/076 DONE; coordinate 063/073 | IN PROGRESS — implementation merged locally into main (`4bd57e4`); actual-agent acceptance unverified (nine provider HTTP 402 errors) |
 | [078](078-mutation-approval-webauthn.md) | Deferred Windows Hello/WebAuthn verification, enrollment, credential lifecycle and recovery for mutation approvals | 073 DONE | TODO |

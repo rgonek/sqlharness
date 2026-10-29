@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. A queue entry is not execution approval; live DB, installation and publication stay out of scope.
 
-**Status:** IMPLEMENTED; Tasks 1–4 reviewed; Task 5 review and whole-branch Sol review pending; see [verification evidence](123-evidence/verification.md).
+**Status:** DONE on `plan-123`; Terra high task reviews and Sol low whole-branch/final scoped review approved; final product `6aa51e26` Windows-verified; see [verification evidence](123-evidence/verification.md).
 
 **Goal:** One version table per subject and scope across all conditions groups, with an explicitly labelled *approximate* A/B comparison when A and B come from different groups, supported by per-case result row counts.
 

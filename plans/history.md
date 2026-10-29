@@ -6,7 +6,7 @@ Compare list classification repair is locally integrated via `1742bd3b`, with th
 
 ## Plan 123 feature branch — 2026-10-29
 
-Plan [123](123-shared-version-table-across-conditions.md) is implemented on `plan-123`; Tasks 1–4 were reviewed. Windows gate and synthetic browser passed; Task 5 review and whole-branch review remain pending and are tracked in [evidence](123-evidence/verification.md); integration and publication remain pending.
+Plan [123](123-shared-version-table-across-conditions.md) is DONE on `plan-123`. Terra medium implemented; Terra high approved all task reviews; Sol low approved the whole-branch fix scoped review. Final product `6aa51e26` passed Windows `just verify` (UI 448, Core 4792 / 11 skipped, MCP 535 / 4 skipped), branch C# format passed for 29 files, and synthetic browser checks passed. The sole Important final finding (missing A/B conditions context in display/export) was fixed and re-reviewed. Accepted minor coverage/diagnostic issues and initial failed checks remain in the [evidence](123-evidence/verification.md). No merge, push, installation, Linux or live-journal acceptance.
 
 ## Plan 104 locally integrated — 2026-10-24
 
