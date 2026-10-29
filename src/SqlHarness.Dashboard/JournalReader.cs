@@ -853,6 +853,22 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         return new Page<CompareAttemptSummary>(page, start + page.Length < ordered.Length ? page[^1].OperationId : null);
     }
 
+    /// <summary>Requester context only through the journal's verified prepared-operation link.</summary>
+    internal MutationRequester? MutationRequesterByRequestId(string requestId)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return null;
+        return Query(connection, """
+            SELECT s.id, s.agent_kind
+            FROM mutation_requests m
+            JOIN operations o ON o.id = m.operation_id
+            JOIN sessions s ON s.id = o.session_id
+            WHERE m.request_id = $requestId;
+            """, [("$requestId", requestId)], reader => new MutationRequester(reader.GetInt64(0), NullableString(reader, 1)))
+            .FirstOrDefault();
+    }
+
     /// <summary>Reads bounded mutation history newest first; SQL and values are present only when sensitive journaling was enabled.</summary>
     public Page<MutationRequestSummary> MutationRequests(long? cursor = null, int limit = MutationHistoryPageLimit)
     {

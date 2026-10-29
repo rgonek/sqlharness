@@ -298,3 +298,4 @@ public sealed record DashboardStats(
     IReadOnlyList<SqlHashStat>? TopSqlByLogicalReads = null, int SessionCount = 0);
 
 public sealed record SessionAnnotation(string? Title, string? Note, bool Starred, bool Archived);
+internal sealed record MutationRequester(long SessionId, string? AgentLabel);

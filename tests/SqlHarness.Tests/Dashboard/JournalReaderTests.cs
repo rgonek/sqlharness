@@ -16,6 +16,31 @@ public sealed class JournalReaderTests
         new(home.DatabasePath, processes ?? new FakeProcesses());
 
     [Fact]
+    public void Mutation_requester_uses_only_the_retained_operation_link()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var actual = seed.Operation(JournalSeed.Session("actual", "codex"));
+        seed.Operation(JournalSeed.Session("latest", "claude"));
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        journal.RecordMutation(new MutationJournalRecord("request", "latest", "local", "sqlserver", "srv", "db",
+            "dml", "operator", "digest", "UPDATE t SET x=1", "[]", DateTimeOffset.UtcNow));
+        var reader = Reader(home);
+        Assert.Null(reader.MutationRequesterByRequestId("request"));
+        Assert.Null(reader.MutationRequesterByRequestId("missing"));
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE mutation_requests SET operation_id = $id WHERE request_id = 'request'";
+            command.Parameters.AddWithValue("$id", actual.OperationId);
+            command.ExecuteNonQuery();
+        }
+        var requester = Assert.IsType<MutationRequester>(reader.MutationRequesterByRequestId("request"));
+        Assert.Equal(reader.Sessions(new SessionQuery()).Items.Single(session => session.SessionKey == "actual").Id, requester.SessionId);
+        Assert.Equal("codex", requester.AgentLabel);
+    }
+
+    [Fact]
     public void Operation_json_exposes_session_evidence_version_without_writing()
     {
         using var home = new TempHome();
