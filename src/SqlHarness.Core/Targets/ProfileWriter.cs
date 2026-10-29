@@ -13,21 +13,24 @@ public sealed record ProfileWriteResult(ProfileWriteStatus Status, string? Revis
 
 public static class ProfileWriter
 {
+    public static bool EditingSupported => OperatingSystem.IsWindows();
+    public const string EditingUnavailableReason = "Profile editing is available only on Windows.";
     private static readonly object Gate = new();
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
     public static string Revision(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
     public static ProfileWriteResult Update(string path, string name, string expectedRevision, TargetProfile profile)
-        => UpdateCore(path, name, expectedRevision, profile, CancellationToken.None, null);
+        => UpdateCore(path, name, expectedRevision, profile, CancellationToken.None, null, EditingSupported);
 
     public static ProfileWriteResult Update(string path, string name, string expectedRevision, TargetProfile profile, CancellationToken cancellationToken)
-        => UpdateCore(path, name, expectedRevision, profile, cancellationToken, null);
+        => UpdateCore(path, name, expectedRevision, profile, cancellationToken, null, EditingSupported);
 
-    internal static ProfileWriteResult UpdateWithTestHook(string path, string name, string expectedRevision, TargetProfile profile, Action onTempCreated, CancellationToken cancellationToken = default)
-        => UpdateCore(path, name, expectedRevision, profile, cancellationToken, onTempCreated);
+    internal static ProfileWriteResult UpdateWithTestHook(string path, string name, string expectedRevision, TargetProfile profile, Action onTempCreated, CancellationToken cancellationToken = default, bool? editingSupported = null)
+        => UpdateCore(path, name, expectedRevision, profile, cancellationToken, onTempCreated, editingSupported ?? EditingSupported);
 
-    private static ProfileWriteResult UpdateCore(string path, string name, string expectedRevision, TargetProfile profile, CancellationToken cancellationToken, Action? onTempCreated)
+    private static ProfileWriteResult UpdateCore(string path, string name, string expectedRevision, TargetProfile profile, CancellationToken cancellationToken, Action? onTempCreated, bool editingSupported)
     {
+        if (!editingSupported) return new(ProfileWriteStatus.SecurityMetadata);
         lock (Gate)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -64,18 +67,8 @@ public static class ProfileWriter
                 IReadOnlyDictionary<string, TargetProfile> savedProfiles;
                 try { savedProfiles = ProfileStore.ParseForEditing(candidate); }
                 catch (Exception e) when (e is JsonException or NotSupportedException or SqlHarnessSafetyException) { return new(ProfileWriteStatus.Invalid); }
-                LinuxProfileMetadata.Metadata originalMetadata = default;
-                if (!OperatingSystem.IsWindows() && !LinuxProfileMetadata.TryRead(path, out originalMetadata))
-                    return new(ProfileWriteStatus.SecurityMetadata);
                 temp = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, $".sqlharness-{Guid.NewGuid():N}.tmp");
                 using (var stream = CreateProtectedTemp(path, temp)) { onTempCreated?.Invoke(); stream.Write(candidate); stream.Flush(true); }
-                if (!OperatingSystem.IsWindows())
-                    File.SetUnixFileMode(temp, File.GetUnixFileMode(path));
-                if (!OperatingSystem.IsWindows() &&
-                    (!LinuxProfileMetadata.TryRead(path, out var latestMetadata) ||
-                     !LinuxProfileMetadata.TryRead(temp, out var tempMetadata) ||
-                     !LinuxProfileMetadata.CanReplace(originalMetadata, latestMetadata, tempMetadata)))
-                    return new(ProfileWriteStatus.SecurityMetadata);
                 if (Revision(File.ReadAllBytes(path)) != expectedRevision) return new(ProfileWriteStatus.Conflict);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Replace(temp, path, null);
@@ -89,18 +82,9 @@ public static class ProfileWriter
 
     private static FileStream CreateProtectedTemp(string path, string temp)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            var security = new FileInfo(path).GetAccessControl(AccessControlSections.Access);
-            return new FileInfo(temp).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None, 4096, FileOptions.None, security);
-        }
-        return new FileStream(temp, new FileStreamOptions
-        {
-            Mode = FileMode.CreateNew,
-            Access = FileAccess.Write,
-            Share = FileShare.None,
-            UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
-        });
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+        var security = new FileInfo(path).GetAccessControl(AccessControlSections.Access);
+        return new FileInfo(temp).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None, 4096, FileOptions.None, security);
     }
 
     internal static ProfileFieldError? ValidateProfile(TargetProfile profile)

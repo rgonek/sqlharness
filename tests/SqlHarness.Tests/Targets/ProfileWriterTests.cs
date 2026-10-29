@@ -7,7 +7,7 @@ namespace SqlHarness.Tests.Targets;
 
 public sealed class ProfileWriterTests
 {
-    [Fact]
+    [WindowsFact]
     public void Update_preserves_sibling_and_rejects_stale_revision()
     {
         var path = Path.GetTempFileName();
@@ -29,7 +29,7 @@ public sealed class ProfileWriterTests
         finally { File.Delete(path); }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Invalid_original_and_invalid_auth_do_not_write()
     {
         var path = Path.GetTempFileName();
@@ -47,7 +47,7 @@ public sealed class ProfileWriterTests
         finally { File.Delete(path); }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Missing_document_and_missing_profile_leave_document_untouched()
     {
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -63,7 +63,7 @@ public sealed class ProfileWriterTests
         finally { File.Delete(path); }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Cancelled_save_does_not_change_original()
     {
         var path = Path.GetTempFileName();
@@ -79,7 +79,7 @@ public sealed class ProfileWriterTests
         finally { File.Delete(path); }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Locked_destination_preserves_original_and_cleans_temp_file()
     {
         var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -98,7 +98,7 @@ public sealed class ProfileWriterTests
         finally { Directory.Delete(directory, true); }
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("sql", "d", "[", "integrated", null, "vars")]
     [InlineData("sql", "d_{missing}", "x", "integrated", null, "database")]
     [InlineData("postgres", "d", "x", "integrated", null, "auth")]
@@ -119,7 +119,7 @@ public sealed class ProfileWriterTests
         finally { File.Delete(path); }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Failure_after_temp_creation_keeps_original_and_cleans_up()
     {
         var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -138,7 +138,7 @@ public sealed class ProfileWriterTests
         finally { Directory.Delete(directory, true); }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Cancellation_after_temp_creation_cleans_up()
     {
         var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -156,7 +156,7 @@ public sealed class ProfileWriterTests
         finally { Directory.Delete(directory, true); }
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("{\"a\":{\"server\":\"s\",\"server\":\"t\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}")]
     [InlineData("{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\",\"unknown\":1}}")]
     public void Invalid_source_document_cannot_be_repaired_by_save(string source)
@@ -173,7 +173,7 @@ public sealed class ProfileWriterTests
         finally { File.Delete(path); }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Invalid_mutation_configuration_reports_mutations_and_never_writes()
     {
         var path = Path.GetTempFileName();
@@ -190,7 +190,7 @@ public sealed class ProfileWriterTests
         finally { File.Delete(path); }
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("\"auth\":\"bogus\",\"database\":\"d\",\"vars\":{}")]
     [InlineData("\"auth\":\"integrated\",\"database\":\"d\",\"vars\":{},\"sslMode\":\"require\"")]
     [InlineData("\"auth\":\"integrated\",\"database\":\"d\",\"vars\":{\"v\":\"[\"}")]
@@ -233,7 +233,7 @@ public sealed class ProfileWriterTests
             {
                 File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(File.ReadAllBytes(path)), new("new", "d", new Dictionary<string, string>(), "integrated"));
-                Assert.Equal(OperatingSystem.IsLinux() ? ProfileWriteStatus.Success : ProfileWriteStatus.SecurityMetadata, result.Status);
+                Assert.Equal(ProfileWriteStatus.SecurityMetadata, result.Status);
                 Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
             }
         }
@@ -241,32 +241,22 @@ public sealed class ProfileWriterTests
     }
 
     [Fact]
-    public void Linux_extended_metadata_blocks_replacement()
+    public void Unsupported_platform_refuses_before_access_or_temp_creation()
     {
-        if (!OperatingSystem.IsLinux()) return;
-        var path = Path.GetTempFileName();
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "targets.json");
         try
         {
             File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
-            var bytes = File.ReadAllBytes(path);
-            Assert.Equal(0, SetXattr(path, "user.sqlharness-test", [1], 1, 0));
-            var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(bytes), new("new", "d", new Dictionary<string, string>(), "integrated"));
+            var before = File.ReadAllBytes(path);
+            var called = false;
+            var result = ProfileWriter.UpdateWithTestHook(path, "a", ProfileWriter.Revision(before), new("new", "d", new Dictionary<string, string>(), "integrated"), () => called = true, editingSupported: false);
             Assert.Equal(ProfileWriteStatus.SecurityMetadata, result.Status);
-            Assert.Equal(bytes, File.ReadAllBytes(path));
+            Assert.False(called);
+            Assert.Equal(before, File.ReadAllBytes(path));
+            Assert.Single(Directory.GetFiles(directory));
         }
-        finally { File.Delete(path); }
+        finally { Directory.Delete(directory, true); }
     }
-
-    [Fact]
-    public void Metadata_mismatch_is_rejected_for_owner_group_and_mode()
-    {
-        var original = new LinuxProfileMetadata.Metadata(12, 34, 0x8180);
-        Assert.True(LinuxProfileMetadata.CanReplace(original, original, original));
-        Assert.False(LinuxProfileMetadata.CanReplace(original, original with { User = 13 }, original));
-        Assert.False(LinuxProfileMetadata.CanReplace(original, original, original with { Group = 35 }));
-        Assert.False(LinuxProfileMetadata.CanReplace(original, original, original with { Mode = 0x81a0 }));
-    }
-
-    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "setxattr", SetLastError = true)]
-    private static extern int SetXattr(string path, string name, byte[] value, nuint size, int flags);
 }

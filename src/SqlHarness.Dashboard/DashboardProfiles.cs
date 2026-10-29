@@ -18,7 +18,11 @@ public sealed record ProfileView(
     string? ConfiguredMode, string EffectiveMode, string ModeSource, bool WriterConfigured, bool ProductionAcknowledgementRequired,
     TargetProfile? EditableProfile = null);
 
-public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message, string? Revision = null);
+public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message, string? Revision = null)
+{
+    public bool EditingSupported { get; init; } = ProfileWriter.EditingSupported;
+    public string? EditingUnavailableReason { get; init; } = ProfileWriter.EditingSupported ? null : ProfileWriter.EditingUnavailableReason;
+}
 
 /// <summary>
 /// Read-only view of targets.json. It never reads environment variables: a profile's
@@ -96,7 +100,7 @@ internal static class DashboardProfiles
             ProfileWriteStatus.Conflict => Results.Json(new { error = "Profiles changed; reload before saving." }, json, statusCode: 409),
             ProfileWriteStatus.NotFound => Results.Json(new { error = "Profile not found." }, json, statusCode: 404),
             ProfileWriteStatus.Invalid => Results.Json(new { errors = new[] { result.Error ?? new ProfileFieldError("$", "Invalid profile or profiles document.") } }, json, statusCode: 400),
-            ProfileWriteStatus.SecurityMetadata => Results.Json(new { error = "Could not preserve file security settings; profile was not saved." }, json, statusCode: 500),
+            ProfileWriteStatus.SecurityMetadata => Results.Json(new { error = ProfileWriter.EditingUnavailableReason }, json, statusCode: 500),
             _ => Results.Json(new { error = "Could not save profiles." }, json, statusCode: 500),
         };
     }

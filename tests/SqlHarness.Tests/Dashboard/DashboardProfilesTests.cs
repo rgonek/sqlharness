@@ -8,7 +8,7 @@ public sealed class DashboardProfilesTests
 {
     private static string TargetsPath(TempHome home) => Path.Combine(home.Path, "targets.json");
 
-    [Fact]
+    [WindowsFact]
     public async Task Put_requires_guard_and_rejects_duplicate_members_and_stale_revision()
     {
         using var home = new TempHome();
@@ -117,6 +117,8 @@ public sealed class DashboardProfilesTests
         var body = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement;
 
         Assert.Equal("valid", body.GetProperty("status").GetString());
+        Assert.Equal(OperatingSystem.IsWindows(), body.GetProperty("editingSupported").GetBoolean());
+        Assert.Equal(OperatingSystem.IsWindows() ? JsonValueKind.Null : JsonValueKind.String, body.GetProperty("editingUnavailableReason").ValueKind);
         var profiles = body.GetProperty("profiles").EnumerateArray().ToArray();
         Assert.Equal(["pg", "zeta"], profiles.Select(p => p.GetProperty("name").GetString()));
         Assert.Equal("postgres", profiles[0].GetProperty("engine").GetString());

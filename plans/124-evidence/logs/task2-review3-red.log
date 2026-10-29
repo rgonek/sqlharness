@@ -1,0 +1,20 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:02.68]     SqlHarness.Tests.Dashboard.DashboardProfilesTests.Profiles_list_names_templates_and_auth_metadata [FAIL]
+  Failed SqlHarness.Tests.Dashboard.DashboardProfilesTests.Profiles_list_names_templates_and_auth_metadata [598 ms]
+  Error Message:
+   System.Collections.Generic.KeyNotFoundException : The given key was not present in the dictionary.
+  Stack Trace:
+     at System.Text.Json.JsonElement.GetProperty(String propertyName)
+   at SqlHarness.Tests.Dashboard.DashboardProfilesTests.Profiles_list_names_templates_and_auth_metadata() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\tests\SqlHarness.Tests\Dashboard\DashboardProfilesTests.cs:line 120
+   at SqlHarness.Tests.Dashboard.DashboardProfilesTests.Profiles_list_names_templates_and_auth_metadata() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\tests\SqlHarness.Tests\Dashboard\DashboardProfilesTests.cs:line 129
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 598 ms - SqlHarness.Tests.dll (net10.0)
