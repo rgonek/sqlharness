@@ -84,7 +84,7 @@ public static class ProfileStore
         return profiles;
     }
 
-    private static void ValidateMutations(TargetProfile profile)
+    internal static void ValidateMutations(TargetProfile profile)
     {
         if (profile.Mutations is not { } mutations)
             return;

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
 using Microsoft.AspNetCore.Http;
 
 using SqlHarness.Core;
@@ -44,10 +45,15 @@ internal static class DashboardProfiles
             return new ProfilesResponse("invalid", [], InvalidMessage);
         }
 
+        return FromSnapshot(profiles, ProfileWriter.Revision(bytes), config);
+    }
+
+    private static ProfilesResponse FromSnapshot(IReadOnlyDictionary<string, TargetProfile> profiles, string revision, MutationsConfig? config)
+    {
         return new ProfilesResponse("valid", profiles
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => View(pair.Key, pair.Value, config ?? new MutationsConfig()))
-            .ToArray(), null, ProfileWriter.Revision(bytes));
+            .ToArray(), null, revision);
     }
 
 
@@ -86,10 +92,10 @@ internal static class DashboardProfiles
         var result = ProfileWriter.Update(path, request.Name, request.ExpectedRevision, request.Profile, context.RequestAborted);
         return result.Status switch
         {
-            ProfileWriteStatus.Success => Results.Json(Read(path, config), json),
+            ProfileWriteStatus.Success => Results.Json(FromSnapshot(result.Profiles!, result.Revision!, config), json),
             ProfileWriteStatus.Conflict => Results.Json(new { error = "Profiles changed; reload before saving." }, json, statusCode: 409),
             ProfileWriteStatus.NotFound => Results.Json(new { error = "Profile not found." }, json, statusCode: 404),
-            ProfileWriteStatus.Invalid => Results.Json(new { errors = new[] { new { field = "$", message = "Invalid profile or profiles document." } } }, json, statusCode: 400),
+            ProfileWriteStatus.Invalid => Results.Json(new { errors = new[] { result.Error ?? new ProfileFieldError("$", "Invalid profile or profiles document.") } }, json, statusCode: 400),
             _ => Results.Json(new { error = "Could not save profiles." }, json, statusCode: 500),
         };
     }

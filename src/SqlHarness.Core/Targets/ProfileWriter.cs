@@ -1,12 +1,14 @@
 using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.RegularExpressions;
+
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Core.Targets;
 
 public enum ProfileWriteStatus { Success, Invalid, Conflict, NotFound, IoError }
-public sealed record ProfileWriteResult(ProfileWriteStatus Status, string? Revision = null);
+public sealed record ProfileFieldError(string Field, string Message);
+public sealed record ProfileWriteResult(ProfileWriteStatus Status, string? Revision = null, IReadOnlyDictionary<string, TargetProfile>? Profiles = null, ProfileFieldError? Error = null);
 
 public static class ProfileWriter
 {
@@ -14,7 +16,16 @@ public static class ProfileWriter
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
     public static string Revision(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
-    public static ProfileWriteResult Update(string path, string name, string expectedRevision, TargetProfile profile, CancellationToken cancellationToken = default)
+    public static ProfileWriteResult Update(string path, string name, string expectedRevision, TargetProfile profile)
+        => UpdateCore(path, name, expectedRevision, profile, CancellationToken.None, null);
+
+    public static ProfileWriteResult Update(string path, string name, string expectedRevision, TargetProfile profile, CancellationToken cancellationToken)
+        => UpdateCore(path, name, expectedRevision, profile, cancellationToken, null);
+
+    internal static ProfileWriteResult UpdateWithTestHook(string path, string name, string expectedRevision, TargetProfile profile, Action onTempCreated, CancellationToken cancellationToken = default)
+        => UpdateCore(path, name, expectedRevision, profile, cancellationToken, onTempCreated);
+
+    private static ProfileWriteResult UpdateCore(string path, string name, string expectedRevision, TargetProfile profile, CancellationToken cancellationToken, Action? onTempCreated)
     {
         lock (Gate)
         {
@@ -22,14 +33,16 @@ public static class ProfileWriter
             string? temp = null;
             try
             {
-                if (!File.Exists(path)) return new(ProfileWriteStatus.Invalid);
-                var original = File.ReadAllBytes(path);
+                byte[] original;
+                try { original = File.ReadAllBytes(path); }
+                catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { return new(ProfileWriteStatus.Invalid); }
                 IReadOnlyDictionary<string, TargetProfile> current;
                 try { current = ProfileStore.Parse(original); }
                 catch (Exception e) when (e is JsonException or NotSupportedException or SqlHarnessSafetyException) { return new(ProfileWriteStatus.Invalid); }
                 if (Revision(original) != expectedRevision) return new(ProfileWriteStatus.Conflict);
                 if (!current.ContainsKey(name)) return new(ProfileWriteStatus.NotFound);
-                if (!ValidProfile(profile)) return new(ProfileWriteStatus.Invalid);
+                var validationError = ValidateProfile(profile);
+                if (validationError is not null) return new(ProfileWriteStatus.Invalid, Error: validationError);
                 var reader = new Utf8JsonReader(original);
                 reader.Read();
                 long start = 0, end = 0;
@@ -47,37 +60,48 @@ public static class ProfileWriter
                 original.AsSpan(0, (int)start).CopyTo(candidate);
                 replacement.CopyTo(candidate.AsSpan((int)start));
                 original.AsSpan((int)end).CopyTo(candidate.AsSpan((int)start + replacement.Length));
-                try { ProfileStore.Parse(candidate); }
+                IReadOnlyDictionary<string, TargetProfile> savedProfiles;
+                try { savedProfiles = ProfileStore.Parse(candidate); }
                 catch (Exception e) when (e is JsonException or NotSupportedException or SqlHarnessSafetyException) { return new(ProfileWriteStatus.Invalid); }
                 temp = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, $".sqlharness-{Guid.NewGuid():N}.tmp");
-                using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { stream.Write(candidate); stream.Flush(true); }
+                using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { onTempCreated?.Invoke(); stream.Write(candidate); stream.Flush(true); }
                 if (Revision(File.ReadAllBytes(path)) != expectedRevision) return new(ProfileWriteStatus.Conflict);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Move(temp, path, true);
                 temp = null;
-                return new(ProfileWriteStatus.Success, Revision(candidate));
+                return new(ProfileWriteStatus.Success, Revision(candidate), savedProfiles);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { return new(ProfileWriteStatus.IoError); }
             finally { if (temp is not null) { try { File.Delete(temp); } catch (IOException) { } catch (UnauthorizedAccessException) { } } }
         }
     }
 
-    private static bool ValidProfile(TargetProfile profile)
+    private static ProfileFieldError? ValidateProfile(TargetProfile profile)
     {
-        try
+        if (profile is null) return new("profile", "Profile is required.");
+        if (string.IsNullOrWhiteSpace(profile.Server)) return new("server", "Server is required.");
+        if (string.IsNullOrWhiteSpace(profile.Database)) return new("database", "Database is required.");
+        SqlEngine engine;
+        try { engine = SqlEngineNames.Parse(profile.Engine); }
+        catch (SqlHarnessSafetyException) { return new("engine", "Invalid engine."); }
+        AuthSpec auth;
+        try { auth = AuthSpec.Parse(profile.Auth, profile.SqlUser, profile.PasswordEnvVar, profile.TrustServerCertificate); }
+        catch (SqlHarnessSafetyException) { return new("auth", "Invalid authentication settings."); }
+        if (engine == SqlEngine.Postgres && auth.Strategy != AuthStrategy.Sql) return new("auth", "Postgres requires SQL authentication.");
+        try { PostgresTransportPolicy.Resolve(engine, profile.TrustServerCertificate, profile.SslMode, profile.RootCertificate); }
+        catch (SqlHarnessSafetyException) { return new("sslMode", "Invalid TLS settings."); }
+        try { ProfileStore.ValidateMutations(profile); }
+        catch (JsonException) { return new("mutations", "Invalid mutation settings."); }
+        if (profile.Vars is null) return new("vars", "Variable rules are required.");
+        var template = profile.Database;
+        foreach (var (key, pattern) in profile.Vars)
         {
-            if (profile is null || profile.Vars is null) return false;
-            var auth = AuthSpec.Parse(profile.Auth, profile.SqlUser, profile.PasswordEnvVar, profile.TrustServerCertificate);
-            if (SqlEngineNames.Parse(profile.Engine) == SqlEngine.Postgres && auth.Strategy != AuthStrategy.Sql) return false;
-            foreach (var (key, pattern) in profile.Vars)
-            {
-                if (string.IsNullOrWhiteSpace(key) || pattern is null ) return false;
-                _ = new Regex(pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
-            }
-            var template = profile.Database;
-            foreach (var key in profile.Vars.Keys) template = template.Replace($"{{{key}}}", "", StringComparison.Ordinal);
-            return !template.Contains('{') && !template.Contains('}');
+            if (string.IsNullOrWhiteSpace(key) || pattern is null) return new("vars", "Invalid variable rule.");
+            try { _ = TargetResolver.CompileVariableRule(pattern); }
+            catch (ArgumentException) { return new("vars", "Invalid variable rule."); }
+            template = template.Replace($"{{{key}}}", "", StringComparison.Ordinal);
         }
-        catch (Exception e) when (e is ArgumentException or SqlHarnessSafetyException or NullReferenceException) { return false; }
+        if (TargetResolver.HasUnresolvedPlaceholder(template)) return new("database", "Database contains an unresolved placeholder.");
+        return null;
     }
 }
