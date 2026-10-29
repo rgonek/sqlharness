@@ -62,5 +62,6 @@ public sealed record ConditionsCase(string Id, int Index, string Label, string? 
 {
     internal IReadOnlyList<ConditionsParameter> VaryingForFingerprint { get; init; } = [];
     public string? MeasurementFingerprint { get; init; }
+    public string? VaryingFingerprint { get; init; }
     internal string EffectiveMeasurementFingerprint => MeasurementFingerprint ?? Fingerprint;
 }

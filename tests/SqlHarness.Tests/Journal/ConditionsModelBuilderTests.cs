@@ -9,6 +9,23 @@ namespace SqlHarness.Tests.Journal;
 public sealed class ConditionsModelBuilderTests
 {
     [Fact]
+    public void Varying_fingerprint_ignores_fixed_parameters_and_tracks_values()
+    {
+        var target = new ResolvedTarget("server", "database", null!, "integrated");
+        var salt = new byte[32];
+        ConditionsModel Build(string fixedName, int value) => ActivityJournal.SealConditions(
+            ConditionsModelBuilder.Build(Measure(), target, new SqlServerDialect(),
+                [Parameter(fixedName, SqlDbType.Int, 1, null)],
+                [new ConditionsCaseInput("0", null, [Parameter("clientId", SqlDbType.Int, value, null)])], true), salt);
+        var first = Build("Now", 6795);
+        var second = Build("Today", 6795);
+        var changed = Build("Now", 18);
+        Assert.Equal(first.Cases[0].VaryingFingerprint, second.Cases[0].VaryingFingerprint);
+        Assert.NotEqual(first.Cases[0].Fingerprint, second.Cases[0].Fingerprint);
+        Assert.NotEqual(first.Cases[0].VaryingFingerprint, changed.Cases[0].VaryingFingerprint);
+    }
+
+    [Fact]
     public void Effective_types_are_bound_types()
     {
         Assert.Equal("nvarchar(4000)", SqlTypes.Effective(Parameter("S", SqlDbType.NVarChar, "abcdefghij", null)));

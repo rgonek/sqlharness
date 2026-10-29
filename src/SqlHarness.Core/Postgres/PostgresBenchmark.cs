@@ -192,7 +192,7 @@ internal static class PostgresBenchmark
             canonical.Hash,
             [planJson],
             messages.Length,
-            Metrics: metrics);
+            Metrics: metrics) { ResultRowCounts = hashRows ? canonical.RowCounts : null };
         return new CollectedCompareRun(artifact, plans, comparison);
     }
 

@@ -552,6 +552,7 @@ public sealed class ActivityJournal : IActivityJournal
             var caseIdentities = ReadCaseIdentities(connection, transaction, handle.OperationId);
             var caseCount = Math.Max(1, record.Variants.Select(item => item.MatrixCell)
                 .Concat(record.Statements.Select(item => item.MatrixCell)).OfType<int>().DefaultIfEmpty(0).Max() + 1);
+            RecordRowCountVariation(connection, transaction, handle.OperationId, record.Variants);
             var admittedPlanDocuments = new Dictionary<string, JournalPlanDocument>(StringComparer.Ordinal);
             var admittedPlanShas = new HashSet<string>(StringComparer.Ordinal);
             var admittedPlanBytes = 0;
@@ -703,6 +704,43 @@ public sealed class ActivityJournal : IActivityJournal
         }
     }
 
+    private static void RecordRowCountVariation(SqliteConnection connection, SqliteTransaction transaction,
+        long operationId, IReadOnlyList<JournalVariantMetrics> variants)
+    {
+        var varying = variants.Where(variant => variant.RowsReturnedVaries)
+            .GroupBy(variant => variant.MatrixCell ?? 0)
+            .ToDictionary(group => group.Key, group => group.Select(variant => variant.Variant)
+                .Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal).ToArray());
+        if (varying.Count == 0)
+            return;
+        using var query = Command(connection, transaction, "SELECT conditions_json FROM operations WHERE id = $id;");
+        query.Parameters.AddWithValue("$id", operationId);
+        if (query.ExecuteScalar() is not string json)
+            return;
+        try
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json);
+            if (root?["cases"] is not System.Text.Json.Nodes.JsonArray cases)
+                return;
+            foreach (var item in cases)
+            {
+                if (item?["index"]?.GetValue<int>() is int index && varying.TryGetValue(index, out var names))
+                    item["rowsReturnedVariesVariants"] = JsonSerializer.SerializeToNode(names, WaitJson);
+            }
+            var updated = root.ToJsonString(WaitJson);
+            if (Encoding.UTF8.GetByteCount(updated) > MaximumConditionsBytes)
+                return;
+            using var update = Command(connection, transaction, "UPDATE operations SET conditions_json = $json WHERE id = $id;");
+            update.Parameters.AddWithValue("$json", updated);
+            update.Parameters.AddWithValue("$id", operationId);
+            update.ExecuteNonQuery();
+        }
+        catch (JsonException)
+        {
+            // Malformed retained conditions do not suppress metric recording.
+        }
+    }
+
     private sealed record JournalCaseIdentity(string Id, string Label);
 
     private static Dictionary<int, JournalCaseIdentity> ReadCaseIdentities(
@@ -814,6 +852,7 @@ public sealed class ActivityJournal : IActivityJournal
         {
             Fingerprint = Hmac(salt, ConditionsModelBuilder.CaseFingerprintPayload(fingerprintModel, setupHash, item)),
             MeasurementFingerprint = Hmac(salt, ConditionsModelBuilder.CaseMeasurementFingerprintPayload(fingerprintModel, setupHash, item)),
+            VaryingFingerprint = Hmac(salt, ConditionsModelBuilder.CaseVaryingFingerprintPayload(fingerprintModel, setupHash, item)),
         }).ToArray();
         return fingerprintModel with
         {
@@ -1234,13 +1273,13 @@ public sealed class ActivityJournal : IActivityJournal
                 grant_requested_kb, grant_granted_kb, grant_max_used_kb, dop, compile_time_ms, compile_cpu_ms,
                 spill_count, has_warnings, has_implicit_conversion, missing_index_count, waits_json,
                 pg_shared_hit, pg_shared_read, pg_shared_dirtied, pg_shared_written, pg_temp_read, pg_temp_written,
-                omitted_statements)
+                omitted_statements, result_sets, rows_returned)
             VALUES ($operation, $ordinal, $variant, $set, $cell, $caseId, $caseLabel, $runs,
                 $eMin, $eMed, $eMax, $cMin, $cMed, $cMax, $rMin, $rMed, $rMax,
                 $gReq, $gGrant, $gUsed, $dop, $compileTime, $compileCpu,
                 $spills, $warnings, $implicit, $missing, $waits,
                 $pgHit, $pgRead, $pgDirtied, $pgWritten, $pgTempRead, $pgTempWritten,
-                $omittedStatements)
+                $omittedStatements, $resultSets, $rowsReturned)
             RETURNING id;
             """);
         insert.Parameters.AddWithValue("$operation", operationId);
@@ -1272,6 +1311,8 @@ public sealed class ActivityJournal : IActivityJournal
         insert.Parameters.AddWithValue("$pgTempRead", (object?)v.Postgres?.TempRead ?? DBNull.Value);
         insert.Parameters.AddWithValue("$pgTempWritten", (object?)v.Postgres?.TempWritten ?? DBNull.Value);
         insert.Parameters.AddWithValue("$omittedStatements", v.OmittedStatements);
+        insert.Parameters.AddWithValue("$resultSets", (object?)v.ResultSets ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$rowsReturned", (object?)v.RowsReturned ?? DBNull.Value);
         return (long)insert.ExecuteScalar()!;
     }
 

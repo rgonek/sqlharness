@@ -43,6 +43,9 @@ public sealed record JournalVariantMetrics(
     public string CaseId { get; init; } = "0";
     public string CaseLabel { get; init; } = "Case 1 of 1";
     public int OmittedStatements { get; init; }
+    public int? ResultSets { get; init; }
+    public long? RowsReturned { get; init; }
+    public bool RowsReturnedVaries { get; init; }
     public IReadOnlyList<JournalPlanOccurrence> PlanOccurrences { get; init; } = [];
 }
 

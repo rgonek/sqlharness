@@ -173,6 +173,21 @@ internal static class ConditionsModelBuilder
             },
         }, JsonOptions);
 
+    internal static byte[] CaseVaryingFingerprintPayload(ConditionsModel model, string setupHash, ConditionsCase conditionsCase) =>
+        JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            model.Engine,
+            model.Server,
+            model.Database,
+            setup = new { hash = setupHash },
+            varying = conditionsCase.VaryingForFingerprint,
+            execution = new
+            {
+                model.Execution.SessionPolicy,
+                model.Execution.SetupBinding,
+            },
+        }, JsonOptions);
+
     private static byte[] FingerprintPayload(ConditionsModel model, string setupHash, IReadOnlyList<ConditionsParameter> varying) =>
         JsonSerializer.SerializeToUtf8Bytes(new
         {

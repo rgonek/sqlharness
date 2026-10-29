@@ -30,7 +30,13 @@ public sealed record OutputFootprint(long Bytes, long Lines)
 
 internal sealed record CanonicalColumn(int Ordinal, string Name, string DataType, bool AllowNull);
 
-internal sealed record CanonicalResult(string Hash, OutputFootprint Footprint);
+internal sealed record CanonicalResult(string Hash, OutputFootprint Footprint)
+{
+    public IReadOnlyList<long> RowCounts { get; init; } = [];
+
+    public bool Equals(CanonicalResult? other) => other is not null && Hash == other.Hash && Footprint == other.Footprint;
+    public override int GetHashCode() => HashCode.Combine(Hash, Footprint);
+}
 
 internal static class CanonicalScalarCodec
 {
@@ -407,6 +413,7 @@ internal sealed class CanonicalResultAccumulator : IDisposable
     private bool _inResultSet;
     private bool _completed;
     private long _currentRowCount;
+    private readonly List<long> _rowCounts = [];
 
     public CanonicalResultAccumulator()
     {
@@ -476,6 +483,7 @@ internal sealed class CanonicalResultAccumulator : IDisposable
         _writer.WriteNumber("rowCount", _currentRowCount);
         _writer.WriteEndObject();
         _writer.Flush();
+        _rowCounts.Add(_currentRowCount);
         _inResultSet = false;
     }
 
@@ -509,7 +517,7 @@ internal sealed class CanonicalResultAccumulator : IDisposable
         _completed = true;
 
         var hash = Convert.ToHexString(_stream.GetHashAndReset());
-        return new CanonicalResult(hash, _stream.GetFootprint());
+        return new CanonicalResult(hash, _stream.GetFootprint()) { RowCounts = _rowCounts.ToArray() };
     }
 
     public OutputFootprint SnapshotFootprint()

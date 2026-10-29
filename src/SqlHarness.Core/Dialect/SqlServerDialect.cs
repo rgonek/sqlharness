@@ -200,6 +200,7 @@ internal sealed class SqlServerDialect : ISqlDialect
                 messages.Length,
                 Metrics: UnavailableMetricsOrNull(consumed.OmittedMessageCount, time, consumed.TableIoComplete))
             {
+                ResultRowCounts = result.Canonical.RowCounts,
                 TableIo = consumed.TableIo,
                 TableIoComplete = consumed.TableIoComplete,
                 LogicalReadsByTableIdentity = consumed.TableIoComplete ? io.TypedTables : null,

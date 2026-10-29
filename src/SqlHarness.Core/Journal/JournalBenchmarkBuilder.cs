@@ -189,6 +189,11 @@ internal static class JournalBenchmarkBuilder
             .ToArray();
         var postgres = planMetrics.Select(metrics => metrics.Postgres).OfType<PostgresBufferCounters>().ToArray();
 
+        var counts = runs.Select(run => run.ResultRowCounts).ToArray();
+        var captured = counts.All(count => count is not null);
+        var sameLength = captured && counts.All(count => count!.Count == counts[0]!.Count);
+        var sameCounts = captured && counts.All(count => count!.SequenceEqual(counts[0]!));
+
         return new JournalVariantMetrics(
             variant,
             parameterSet,
@@ -215,6 +220,9 @@ internal static class JournalBenchmarkBuilder
             tableIoAvailable ? TableIo(runs, tableLabels) : [],
             links)
         {
+            ResultSets = sameLength ? counts[0]!.Count : null,
+            RowsReturned = sameCounts ? counts[0]!.Sum() : null,
+            RowsReturnedVaries = captured && !sameCounts,
             PlanOccurrences = occurrences,
             OmittedStatements = GetOmittedStatements(SelectMedianTotalRun(runs)),
         };

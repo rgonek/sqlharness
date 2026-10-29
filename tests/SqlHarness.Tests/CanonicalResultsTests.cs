@@ -15,6 +15,19 @@ namespace SqlHarness.Tests;
 public class CanonicalResultsTests
 {
     [Fact]
+    public void Accumulator_records_each_result_set_row_count()
+    {
+        using var accumulator = new CanonicalResultAccumulator();
+        accumulator.BeginResultSet([]);
+        accumulator.AddRow([]);
+        accumulator.AddRow([]);
+        accumulator.EndResultSet();
+        accumulator.BeginResultSet([]);
+        accumulator.EndResultSet();
+        Assert.Equal(new long[] { 2, 0 }, accumulator.Complete().RowCounts);
+    }
+
+    [Fact]
     public void Same_values_in_different_row_order_are_not_equivalent()
     {
         var a = CanonicalFixture.ResultSet([1, 2]);

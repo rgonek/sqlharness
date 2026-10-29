@@ -23,6 +23,41 @@ public sealed class ActivityJournalBenchmarkTests
         ]);
 
     [Fact]
+    public void Variation_is_persisted_per_case_and_variant_without_changing_fingerprints()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, false);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        var conditions = new ConditionsModel(1, "sqlserver", "server", "db",
+            new ConditionsExecution("compare", "per-case", "per-case", 0, 2, 30, null, null), null,
+            [], [new ConditionsCase("0", 0, "Case 1", null, [], "")], "", []);
+        journal.RecordConditions(handle!, conditions);
+        var before = JournalDb.Rows(temp.DatabasePath, "SELECT conditions_fingerprint, measurement_fingerprint FROM operations").Single();
+        var run = new CompareRunArtifact("baseline", 1, 1, 1, 0, new Dictionary<string, long>(), "h", [], 0);
+        journal.RecordBenchmark(handle, JournalBenchmarkBuilder.Build([
+            run with { ResultRowCounts = [5] }, run with { Repetition = 2, ResultRowCounts = [6] }]));
+        var after = JournalDb.Rows(temp.DatabasePath, "SELECT conditions_json, conditions_fingerprint, measurement_fingerprint FROM operations").Single();
+        using var json = System.Text.Json.JsonDocument.Parse((string)after["conditions_json"]!);
+        Assert.Equal("baseline", json.RootElement.GetProperty("cases")[0].GetProperty("rowsReturnedVariesVariants")[0].GetString());
+        Assert.Equal(before["conditions_fingerprint"], after["conditions_fingerprint"]);
+        Assert.Equal(before["measurement_fingerprint"], after["measurement_fingerprint"]);
+    }
+
+    [Fact]
+    public void Metrics_round_trip_result_sets_and_rows_returned()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, false);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        var run = new CompareRunArtifact("measure", 1, 1, 1, 0, new Dictionary<string, long>(), "h", [], 0)
+        { ResultRowCounts = [4, 1] };
+        journal.RecordBenchmark(handle, JournalBenchmarkBuilder.Build([run]));
+        var metric = JournalDb.Rows(temp.DatabasePath, "SELECT result_sets, rows_returned FROM operation_metrics").Single();
+        Assert.Equal(2L, metric["result_sets"]);
+        Assert.Equal(5L, metric["rows_returned"]);
+    }
+
+    [Fact]
     public void Older_database_is_backed_up_before_current_schema_is_created()
     {
         using var temp = new JournalTempDirectory();

@@ -16,6 +16,37 @@ public sealed class JournalBenchmarkBuilderTests
             MatrixCell = cell,
         };
 
+    [Theory]
+    [InlineData(5L, 5L, 5L, 5L, false)]
+    [InlineData(5L, 5L, 6L, null, true)]
+    public void Variant_rows_returned_tracks_repetition_agreement(long a, long b, long c, long? expected, bool varies)
+    {
+        var result = JournalBenchmarkBuilder.Build([
+            Run("measure", 1, 1, 1, 1) with { ResultRowCounts = [a] },
+            Run("measure", 2, 1, 1, 1) with { ResultRowCounts = [b] },
+            Run("measure", 3, 1, 1, 1) with { ResultRowCounts = [c] },
+        ]).Variants[0];
+        Assert.Equal(1, result.ResultSets);
+        Assert.Equal(expected, result.RowsReturned);
+        Assert.Equal(varies, result.RowsReturnedVaries);
+    }
+
+    [Fact]
+    public void Variant_rows_returned_sums_sets_and_missing_capture_is_unknown()
+    {
+        var run = Run("measure", 1, 1, 1, 1);
+        var captured = JournalBenchmarkBuilder.Build([
+            run with { ResultRowCounts = [4, 1] },
+            run with { Repetition = 2, ResultRowCounts = [4, 1] },
+            run with { Repetition = 3, ResultRowCounts = [4, 1] }]).Variants[0];
+        Assert.Equal(2, captured.ResultSets);
+        Assert.Equal(5, captured.RowsReturned);
+        var missing = JournalBenchmarkBuilder.Build([run]).Variants[0];
+        Assert.Null(missing.ResultSets);
+        Assert.Null(missing.RowsReturned);
+        Assert.False(missing.RowsReturnedVaries);
+    }
+
     [Fact]
     public void Runs_are_grouped_by_variant_set_and_cell_in_first_appearance_order()
     {
