@@ -29,3 +29,19 @@ Earlier local check attempts exposed route parameter naming, seed-test API misma
 Spec: both screenshot behaviors implemented, no fabricated requester, no automatic decisions, original execution contract untouched. Quality: small pure renderer, reuse existing shadcn/Base UI controls and API path, additive dashboard-only projection, strict fallback and bounded work, focused behavioral tests. Shared SegmentedRadioGroup change only adds optional disabled per option; existing callers are compatible. Shared Stats reader/model fields are preserved. Parent retains plan/index updates, independent review, visual captures and final Windows gate.
 
 Commit: see task completion message (report committed with owned source files).
+
+## Review fix round 1 (2026-10-29)
+
+P2 cumulative preview expansion finding fixed in `a44b2661` (base `3010a1e7`). The strict formatter parameter Proxy now starts its budget at the original SQL length and charges every fully escaped literal occurrence before returning that literal. At more than 100,000 cumulative characters it throws into the existing exact-original As sent fallback, so repeated long parameters cannot first materialize a large expanded result. Counting the SQL placeholders as well as their replacement literals is intentionally conservative. A secondary final-length check rejects formatting-whitespace overhead beyond the same budget; this is additional protection rather than the expansion limiter.
+
+The new long-text repetition regression first failed against the previous implementation, reproducing expansion. After the fix, the helper returns original SQL plus its explanation; small repeated text and precision-preserving bigint still inline. The dialog regression checks disabled inline mode, selected As sent, exact original SQL, usable Deny/Approve after the original delay and immutable request data. Its first run used the native-disabled matcher against Base UI's aria-disabled radio; the assertion was corrected to the component's actual accessibility contract.
+
+Fresh checks on the fix:
+
+- `npx vitest run src/mutations/Approval.test.tsx src/mutations/sqlDisplay.test.ts src/mutations/mutationStore.test.ts`: PASS, 3 files / 18 tests.
+- `npm run typecheck`: PASS.
+- `npm run lint`: PASS.
+- `npm run build`: PASS (existing chunk-size and plugin timing advisories only); final dist ready for parent fake-browser verification.
+- `git diff --check`: PASS for owned changes; parent plan CRLF advisory unchanged.
+
+Self-review: only the preview budget and requested regression coverage changed. Original SQL/parameters/digest and lifecycle/decision paths remain unchanged. No C# tests repeated, no full gate, live decision, dependency install, source-target expansion, publication or cosmetic follow-up performed. Exact source fix commit is recorded above; this report-only commit follows it.
