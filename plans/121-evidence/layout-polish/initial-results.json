@@ -1,0 +1,207 @@
+{
+  "geometry": [
+    {
+      "text": "TimeLast 7 days",
+      "h": 28,
+      "font": "12px"
+    },
+    {
+      "text": "AgentAny",
+      "h": 28,
+      "font": "12px"
+    },
+    {
+      "text": "DirectoryAny",
+      "h": 28,
+      "font": "12px"
+    },
+    {
+      "text": "TargetAny",
+      "h": 28,
+      "font": "12px"
+    },
+    {
+      "text": "Starred5",
+      "h": 28,
+      "font": "12px"
+    },
+    {
+      "text": "Include archived",
+      "h": 28,
+      "font": "12px"
+    }
+  ],
+  "switches": [
+    {
+      "label": "Connection diagnostics",
+      "track": {
+        "x": 1091,
+        "y": 491.359375,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1092,
+        "y": 492.359375,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "label": "Mute approval sound",
+      "track": {
+        "x": 1091,
+        "y": 988.296875,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1092,
+        "y": 989.296875,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "label": "Journal enabled",
+      "track": {
+        "x": 1091,
+        "y": 1242.546875,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1104,
+        "y": 1243.546875,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "label": "Store sensitive data",
+      "track": {
+        "x": 1091,
+        "y": 1333.671875,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1104,
+        "y": 1334.671875,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "label": "Agent operation annotations",
+      "track": {
+        "x": 1091,
+        "y": 1424.796875,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1104,
+        "y": 1425.796875,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "label": "Retention enabled",
+      "track": {
+        "x": 1091,
+        "y": 1535.484375,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1104,
+        "y": 1536.484375,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "label": "Read agent transcripts",
+      "track": {
+        "x": 1091,
+        "y": 1769.609375,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1104,
+        "y": 1770.609375,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "label": "Require compare subject and scope",
+      "track": {
+        "x": 1091,
+        "y": 1922.734375,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1104,
+        "y": 1923.734375,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "label": "Start with mcp serve",
+      "track": {
+        "x": 1091,
+        "y": 2148.546875,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1104,
+        "y": 2149.546875,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    },
+    {
+      "label": "Safety notifications",
+      "track": {
+        "x": 1091,
+        "y": 2220.109375,
+        "w": 28,
+        "h": 16
+      },
+      "thumb": {
+        "x": 1104,
+        "y": 2221.109375,
+        "w": 14,
+        "h": 14
+      },
+      "top": 1,
+      "bottom": 1
+    }
+  ],
+  "errors": []
+}

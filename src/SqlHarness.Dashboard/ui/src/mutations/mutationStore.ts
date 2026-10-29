@@ -6,7 +6,7 @@ export type MutationRequest = {
   parameters: MutationParameter[]; digest: string; grantees: string[]
 }
 export type PendingMutation = {
-  requestId: string; request: MutationRequest; environment: string; writerSameAsReader: boolean; expiresAt: string
+  requester?: { sessionId: number; agentLabel: string | null } | null; requestId: string; request: MutationRequest; environment: string; writerSameAsReader: boolean; expiresAt: string
 }
 export type MutationTerminal = { requestId: string; state: string }
 

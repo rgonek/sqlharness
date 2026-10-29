@@ -1,3 +1,4 @@
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
 import { ComparisonPending } from "@/components/optimization/ComparisonPending"
 import { CopyButton } from "@/components/CopyButton"
 import { useState, type ReactNode } from "react"
@@ -188,7 +189,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
   const tabVariant = targetVariant ?? detail.variants[0]
   return (
     <div className="operation-page space-y-4">
-      <OperationHeading detail={detail} returnSearch={returnSearch} metadata={<Collapsible className="operation-heading-metadata"><CollapsibleTrigger className="text-sm text-muted-foreground underline">Details</CollapsibleTrigger><CollapsibleContent keepMounted>
+      <OperationHeading detail={detail} returnSearch={returnSearch} metadata={<Collapsible className="operation-heading-metadata"><CollapsibleTrigger className="group" render={<Button variant="ghost" size="sm" />}>Details<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" className="transition-transform group-aria-expanded:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
           <div className="mt-3 grid grid-cols-2 gap-4 md:grid-cols-4">
             <Fact label="Started">{formatTimestamp(op.startedAt)}</Fact>
             <Fact label="Finished">{formatTimestamp(op.finishedAt)}</Fact>

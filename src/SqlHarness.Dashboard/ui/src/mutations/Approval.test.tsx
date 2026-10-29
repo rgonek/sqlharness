@@ -64,8 +64,8 @@ test("live added event shows a safe toast and the default sound; snapshots and d
   act(() => source().emit("snapshot", [{ ...request, requestId: "r-reconnect", request: { ...request.request, digest: "c".repeat(64) } }]))
   expect(play).not.toHaveBeenCalled()
   expect(await screen.findByText("YOLO is on for production profile prod-db")).toBeInTheDocument()
-  expect(screen.getByText("A change needs your decision")).toBeInTheDocument()
-  expect(screen.queryByText(request.request.sql)).not.toBeInTheDocument()
+  expect(screen.getByText("production")).toBeInTheDocument()
+  expect(screen.getByText(request.request.sql)).toBeInTheDocument()
   act(() => source().emit("added", request))
   expect(play).not.toHaveBeenCalled()
   act(() => source().emit("added", { ...request, requestId: "r-2" }))
@@ -82,6 +82,8 @@ test("approval dialog renders SQL and parameter values as literal text and waits
   act(() => source().emit("snapshot", [request]))
   fireEvent.click(screen.getByRole("button", { name: "Review" }))
   expect(screen.getByText("production")).toBeInTheDocument()
+  expect(screen.getByText("Requested by unknown requester")).toBeInTheDocument()
+  expect(screen.getByText(/Digest 0123456789ab/)).toBeInTheDocument()
   expect(screen.getByTestId("sql-code").textContent).toBe("<script>alert(1)</script>")
   expect(screen.getByText("<img src=x onerror=1>")).toBeInTheDocument()
   const parameters = screen.getByRole("table")
@@ -115,7 +117,7 @@ test("a 409 approve shows the pending-state message and removed closes the dialo
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   expect(screen.getByText("This request is no longer pending")).toBeInTheDocument()
   act(() => source().emit("removed", { requestId: "r-1", state: "denied" }))
-  expect(screen.getByRole("dialog")).toHaveAttribute("data-closed", "")
+  expect(screen.getByRole("dialog", { name: "Request no longer pending" })).toHaveAttribute("data-closed", "")
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -184,4 +186,77 @@ test("a hidden tab receives only a safe notification whose click opens the appro
   else delete (window as Window & { Notification?: typeof Notification }).Notification
   if (previousVisibility) Object.defineProperty(document, "visibilityState", previousVisibility)
   vi.restoreAllMocks()
+})
+
+
+test("toast Deny keeps failed requests visible and uses the decision endpoint", async () => {
+  const { source } = await setup()
+  const fetch = stubApprovalPageFetch({ "POST /api/mutations/r-1/deny": () => new Response("", { status: 500 }) })
+  act(() => source().emit("added", request))
+  fireEvent.click(await screen.findByRole("button", { name: "Deny" }))
+  expect(await screen.findByText("The decision could not be submitted. Try again.")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Review" })).toBeEnabled()
+  expect(fetch).toContain("/api/mutations/r-1/deny")
+})
+
+test("requester context and display modes retain the original request", async () => {
+  const { source } = await setup()
+  const original = { ...request, requester: { sessionId: 42, agentLabel: "codex" }, request: { ...request.request, sql: "UPDATE t SET x=@a", parameters: [{ name: "a", type: null, value: "123" }] } }
+  const before = JSON.stringify(original)
+  act(() => source().emit("added", original))
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }))
+  expect(screen.getByText(/Requested by/)).toHaveTextContent("Codex")
+  expect(screen.getByRole("link", { name: "session 42" })).toHaveAttribute("href", "/sessions/42")
+  expect(screen.queryByText("Review the requested database change before deciding.")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("radio", { name: "Values inline" }))
+  expect(screen.getByTestId("sql-code").textContent).toContain("'123'")
+  fireEvent.click(screen.getByRole("radio", { name: "As sent" }))
+  expect(screen.getByTestId("sql-code").textContent).toBe(original.request.sql)
+  expect(JSON.stringify(original)).toBe(before)
+})
+
+
+test("toast Deny disables while submitting and retains busy and expired requests", async () => {
+  const { source } = await setup()
+  let finish!: (response: Response) => void
+  const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(input => String(input).endsWith("/deny") ? new Promise<Response>(resolve => { finish = resolve }) : Promise.resolve(new Response("{}")))
+  act(() => source().emit("added", request))
+  fireEvent.click(await screen.findByRole("button", { name: "Deny" }))
+  expect(screen.getByRole("button", { name: "Denying..." })).toBeDisabled()
+  await act(async () => { finish(new Response(JSON.stringify({ status: "busy", error: "profile_execution_busy" }), { status: 409 })) })
+  expect(await screen.findByText("Another change is already running for this profile. Try again.")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
+  act(() => source().emit("snapshot", [{ ...request, expiresAt: new Date(Date.now() - 1000).toISOString() }]))
+  expect(screen.getByRole("button", { name: "Deny" })).toBeDisabled()
+  fetch.mockRestore()
+})
+
+test("expanded-preview fallback keeps original request and decision controls usable", async () => {
+  const { source } = await setup()
+  const original = { ...request, request: { ...request.request, sql: "UPDATE t SET x=@a WHERE " + Array(100).fill("@a IS NOT NULL").join(" AND "), parameters: [{ name: "a", type: "nvarchar(max)", value: "a".repeat(10000) }] } }
+  const before = JSON.stringify(original)
+  act(() => source().emit("added", original))
+  vi.useFakeTimers()
+  fireEvent.click(screen.getByRole("button", { name: "Review" }))
+  expect(screen.getByRole("radio", { name: "Values inline" })).toHaveAttribute("aria-disabled", "true")
+  expect(screen.getByRole("radio", { name: "As sent" })).toBeChecked()
+  expect(screen.getByTestId("sql-code").textContent).toBe(original.request.sql)
+  expect(screen.getByText(/Values inline is unavailable/)).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
+  act(() => vi.advanceTimersByTime(1000))
+  expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled()
+  expect(JSON.stringify(original)).toBe(before)
+  vi.useRealTimers()
+})
+
+test.each(["prod", "production", "staging", "STAGING", "development", ""])("toast presents the approval headline for environment %s", async environment => {
+  const { source } = await setup()
+  act(() => source().emit("snapshot", [{ ...request, environment }]))
+  const notification = await screen.findByLabelText("Pending change approval")
+  const title = notification.querySelector('[data-slot="toast-title"]')!
+  expect(title).toHaveTextContent(`Approve change on ${environment || "unknown"}?`)
+  expect(within(notification).getByText(environment || "unknown").classList.contains("text-destructive")).toBe(/^(prod|production|staging)$/i.test(environment))
+  expect(notification.querySelector('[data-slot="badge"]')).toBeNull()
+  expect(within(notification).getByRole("button", { name: "Review" })).toBeEnabled()
+  expect(within(notification).getByRole("button", { name: "Deny" })).toBeEnabled()
 })

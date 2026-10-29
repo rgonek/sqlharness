@@ -44,7 +44,7 @@ export function SessionAnnotationHeader({ session }: { session: SessionSummary }
           />
         )}
         {draft !== null && <Button variant="ghost" size="icon" className="invisible shrink-0" tabIndex={-1} disabled aria-hidden="true" />}
-        <Toggle aria-label={session.starred ? "Unstar session" : "Star session"}
+        <Toggle className="session-star" aria-label={session.starred ? "Unstar session" : "Star session"}
           pressed={session.starred} disabled={update.isPending}
           onPressedChange={starred => update.mutate({ starred })}>
           <HugeiconsIcon icon={StarIcon} strokeWidth={2} className={session.starred ? "fill-amber-400 text-amber-500" : undefined} />

@@ -1,0 +1,22 @@
+# Dashboard screenshot follow-up
+
+Operator approved the fifteen screenshot-specific corrections and circular A/B controls after the default-shadcn alignment. Keep the existing isolated dashboard-layout-polish worktree and current Base UI/Mira/Hugeicons preset. Prefer standard variants/composition, with explicit operator-requested exceptions for A/B circles and the joined Usage KPI layout. No merge/push/publication/restart/live DB decisions. No schema migration, collection expansion or historical backfill: additive read-only projections of existing journal data are authorized for requested statistics/requester context.
+
+1. Session operations: compact single-line description (agent label, otherwise real SQL preview/subject/fallback), no repeated full target line. Preserve access to original full values through title/detail; star uses a larger Hugeicons star and agent keep a spark icon, running is Badge. Time matches mock HH:mm:ss, full timestamp remains accessible. Preserve pagination/internal filtering/star PATCH/return context/flags and SSE refresh. Answer auto-refresh question grounded in AppLayout/useLiveFeed and test its behavior.
+2. Version labels go inline beside v0/v1/v2, truncating only as needed with complete values available.
+3. A single extra IO column is a visible toggle alongside Scans; no one-item More columns. Preserve useful multi-option whole-batch choices.
+4. Statement disclosure button has the same surface as its row, including hover; preserve focus, row toggle and independent links.
+5. Repair Operation tab/header/parameters geometry shown in screenshot, retaining selected-state semantics and mobile layout.
+6. Operation Details matches Session ghost button/chevron behavior.
+7. Usage KPI band is closer to mock (joined layout, useful secondary information), derives failed/rejected percentage with an explicit denominator/empty case, real session count if projected from filtered journal rows, measured output only from real retained accounting. No fabricated chat tokens/cost or unsupported metrics.
+8. Top SQL gets real logical reads and corresponding ordering from retained metrics; no N+1 fetching or multiplication by joins. Explicitly name aggregation semantics and distinguish missing data from zero. Ranking must consider all filtered SQL groups rather than only the union of pre-truncated count/time lists.
+9. Remove the Detailed usage and workflow accounting disclosure and its detailed UI contents from Usage, per explicit operator request. Do not delete underlying journal/accounting contracts or expand unrelated APIs.
+10. Preview gets play icon.
+11. Replace awkward grey retention inset with coherent default Field/layout composition preserving validation/destructive confirmations and enabled/disabled behavior.
+12. Transcript clear button aligns right; keep summary readable/wrapping on mobile.
+13. Refresh gets refresh icon; Session Add note gets plus icon.
+14. Approval Toast remains shadcn Base Toast, aligns with mock: environment is prominent plain text, compact SQL preview, Review and Deny. Deny uses the existing broker decision path, with pending/error/expiry behavior and no auto-decisions.
+15. Approval Dialog removes generic Review description; target moves below title and shows requester/actual session link when authoritative context is available. Values inline / As sent is a standard single-choice control. Original SQL/parameters/digest and approval lifecycle remain authoritative. Inline is a DISPLAY preview only: safe dialect/type-aware rendering that does not rewrite quoted text/comments/identifiers/parameter prefixes or SQL Server system variables. Unsupported ambiguous types remain As sent with an honest explanation; no lossy fabricated preview. Preserve 1s approve delay, expiry, Enter guard, busy/error and writer/tier alerts. Unknown requester must not be invented.
+16. Circular A/B controls restore prior visible letters/selection appearance while native radio groups remain interactive, keyboard-accessible, uniquely scoped and valid within table cells.
+
+Verification: meaningful focused regression tests, independent task/final review, fresh fixture-only desktop/mobile captures covering all requested changes and safety controls, final Windows just verify on unchanged source tree. Do not call scoped checks a full pass or repeat unchanged gates unnecessarily. Linux/live DB acceptance stays unverified. Record remaining data/visual limitations in a final report with per-screenshot disposition.

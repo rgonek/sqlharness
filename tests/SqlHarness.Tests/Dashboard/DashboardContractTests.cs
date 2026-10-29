@@ -105,8 +105,9 @@ public sealed class DashboardContractTests
         Assert.Equal(
             ["operationsPerDay", "statuses", "exitCodes", "operations", "topSqlByCount", "topSqlByDuration",
              "topTablesByLogicalReads", "topWaits", "targets", "spillOperations", "coldCacheOperations",
-             "profileOperations", "profileDimensions", "workflowCosts"],
+             "profileOperations", "profileDimensions", "workflowCosts", "topSqlByLogicalReads", "sessionCount"],
             Names(stats));
+        AssertTypescriptFieldsMatch("DashboardStats", stats);
     }
 
     [Fact]

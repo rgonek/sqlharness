@@ -48,7 +48,7 @@ test("shows session facts and its operations", async () => {
   expect(screen.getByRole("button", { name: "Session metadata" })).toHaveAttribute("aria-expanded", "false")
   await userEvent.click(await screen.findByRole("button", { name: "Session metadata" }))
   expect(screen.getByText("claude-code 2.1.0")).toBeInTheDocument()
-  expect(screen.getByText("compare")).toBeInTheDocument()
+  expect((await screen.findByRole("link", { name: "70" })).closest("tr")?.children[2]).toHaveTextContent("compare")
 })
 
 test("loads older operation pages, keeps rows through a retry, and disables Load more while pending", async () => {
@@ -96,6 +96,10 @@ test("continues past pages containing only hidden internal operations", async ()
   expect(await screen.findByText(/Newest first/)).toHaveTextContent("Loaded 2 of 3 operations.")
   expect(screen.queryByRole("link", { name: "3" })).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("checkbox", { name: "Show internal operations" }))
+  expect(screen.getByRole("link", { name: "3" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("checkbox", { name: "Show internal operations" }))
+  expect(screen.queryByRole("link", { name: "3" })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Load more" }))
   expect(await screen.findByRole("link", { name: "1" })).toBeInTheDocument()
   expect(calls.filter(url => url.includes("/operations?")).map(url => new URL(url, "http://dashboard").searchParams.get("cursor"))).toEqual([null, "2"])
@@ -387,4 +391,42 @@ test("adds, counts and saves a note", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Save note" }))
   expect(await screen.findByText("Saved")).toBeInTheDocument()
   expect(bodies).toEqual([{ note: "reads -40%" }])
+})
+
+test("compact operations preserve detail return context, flags, target and owner keep workflow", async () => {
+  const bodies: unknown[] = []
+  stubFetch(sessionRoutes({
+    "/api/sessions/7": sessionDetail({ session: session({ id: 7 }), operations: [operation({ id: 70, sessionId: 7, agentKeep: true, hasSpill: true, profile: "pg", sqlPreview: "select 1" })] }),
+    "PATCH /api/operations/70/annotation": (_url: URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)))
+      return Response.json({ agentLabel: null, agentKeep: true, ownerStarred: true, ownerNote: null })
+    },
+  }))
+  renderApp("/sessions/7")
+  const link = await screen.findByRole("link", { name: "70" })
+  expect(link).toHaveAttribute("href", "/operations/70?returnSession=7")
+  const row = link.closest("tr")!
+  expect(within(row).getByLabelText("Kept by agent")).toBeInTheDocument()
+  expect(within(row).getByText("select 1")).toBeInTheDocument()
+  expect(within(row).getByText("select 1")).toHaveAttribute("title", expect.stringContaining("pg"))
+  expect(screen.queryByRole("columnheader", { name: "Owner" })).not.toBeInTheDocument()
+  await userEvent.click(within(row).getByRole("button", { name: "Star operation" }))
+  await waitFor(() => expect(bodies).toEqual([{ starred: true }]))
+})
+
+
+test("compact rows prefer labels while exposing SQL, subject, target and complete timestamp", async () => {
+  const startedAt = "2026-10-28T12:34:56Z"
+  stubFetch(sessionRoutes({ "/api/sessions/7": sessionDetail({ session: session({ id: 7 }), operations: [operation({ id: 71, sessionId: 7, startedAt, agentLabel: "Fast candidate", subject: "Orders", sqlPreview: "select * from Orders", profile: "production", status: "running", agentKeep: true })] }) }))
+  renderApp("/sessions/7")
+  const row = (await screen.findByRole("link", { name: "71" })).closest("tr")!
+  const label = within(row).getByText("Fast candidate")
+  expect(label).toHaveAttribute("title", expect.stringContaining("select * from Orders"))
+  expect(label).toHaveAttribute("title", expect.stringContaining("production"))
+  expect(within(row).queryByText("production")).not.toBeInTheDocument()
+  expect(within(row).getByText("running")).toHaveAttribute("data-slot", "badge")
+  const time = row.querySelector("time")!
+  expect(time).toHaveAttribute("datetime", startedAt)
+  expect(time.textContent).toMatch(/^\d{2}:\d{2}:\d{2}$/)
+  expect(time).toHaveAttribute("title", expect.stringContaining("2026"))
 })

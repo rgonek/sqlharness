@@ -1,0 +1,96 @@
+{
+  "project": {
+    "framework": "Vite",
+    "frameworkName": "vite",
+    "frameworkVersion": null,
+    "srcDirectory": true,
+    "rsc": false,
+    "typescript": true,
+    "tailwindVersion": "v4",
+    "tailwindConfig": null,
+    "tailwindCss": "src/index.css",
+    "importAlias": "@"
+  },
+  "config": {
+    "style": "base-mira",
+    "base": "base",
+    "rsc": false,
+    "typescript": true,
+    "iconLibrary": "hugeicons",
+    "rtl": false,
+    "menuColor": "default",
+    "menuAccent": "subtle",
+    "aliases": {
+      "components": "@/components",
+      "utils": "@/lib/utils",
+      "ui": "@/components/ui",
+      "lib": "@/lib",
+      "hooks": "@/hooks"
+    },
+    "resolvedPaths": {
+      "cwd": "C:\\Users\\rgone\\.codex\\worktrees\\f735\\sqlharness\\src\\SqlHarness.Dashboard\\ui",
+      "tailwindConfig": null,
+      "tailwindCss": "C:\\Users\\rgone\\.codex\\worktrees\\f735\\sqlharness\\src\\SqlHarness.Dashboard\\ui\\src\\index.css",
+      "utils": "C:\\Users\\rgone\\.codex\\worktrees\\f735\\sqlharness\\src\\SqlHarness.Dashboard\\ui\\src\\lib/utils",
+      "components": "C:\\Users\\rgone\\.codex\\worktrees\\f735\\sqlharness\\src\\SqlHarness.Dashboard\\ui\\src\\components",
+      "lib": "C:\\Users\\rgone\\.codex\\worktrees\\f735\\sqlharness\\src\\SqlHarness.Dashboard\\ui\\src\\lib",
+      "hooks": "C:\\Users\\rgone\\.codex\\worktrees\\f735\\sqlharness\\src\\SqlHarness.Dashboard\\ui\\src\\hooks",
+      "ui": "C:\\Users\\rgone\\.codex\\worktrees\\f735\\sqlharness\\src\\SqlHarness.Dashboard\\ui\\src\\components/ui"
+    },
+    "registries": {
+      "@shadcn": "https://ui.shadcn.com/r/styles/{style}/{name}.json"
+    }
+  },
+  "preset": {
+    "code": "bdvw9WhU",
+    "fallbacks": [],
+    "values": {
+      "style": "mira",
+      "baseColor": "zinc",
+      "theme": "zinc",
+      "chartColor": "zinc",
+      "iconLibrary": "hugeicons",
+      "font": "inter",
+      "fontHeading": "inherit",
+      "radius": "default",
+      "menuAccent": "subtle",
+      "menuColor": "default"
+    }
+  },
+  "components": [
+    "accordion",
+    "alert",
+    "badge",
+    "button",
+    "card",
+    "chart",
+    "checkbox",
+    "collapsible",
+    "dialog",
+    "dropdown-menu",
+    "field",
+    "input-group",
+    "input",
+    "label",
+    "popover",
+    "radio-group",
+    "select",
+    "separator",
+    "skeleton",
+    "switch",
+    "table",
+    "tabs",
+    "textarea",
+    "toast",
+    "toggle-group",
+    "toggle",
+    "tooltip"
+  ],
+  "links": {
+    "docs": "https://ui.shadcn.com/docs",
+    "components": "https://ui.shadcn.com/docs/components/base/[component].md",
+    "ui": "https://ui.shadcn.com/code/apps/v4/registry/bases/base/ui/[component].tsx",
+    "examples": "https://ui.shadcn.com/code/apps/v4/registry/bases/base/examples/[component]-example.tsx",
+    "schema": "https://ui.shadcn.com/schema.json"
+  }
+}

@@ -1,5 +1,7 @@
+import { HugeiconsIcon } from "@hugeicons/react"
+import { PlayIcon, RefreshIcon } from "@hugeicons/core-free-icons"
 import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { FieldErrorsError } from "@/api/client"
 import { useClearTranscripts, usePrices, useRefreshPrices, useSaveSettings, useSettings, useTranscriptStatus } from "@/api/queries"
 import type { Settings } from "@/api/types"
@@ -9,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
@@ -17,11 +20,18 @@ import { createSaveQueue } from "@/lib/saveQueue"
 import { isDestructive } from "@/lib/settingsRules"
 import { BUILT_IN_SOUNDS, getSoundPreferences, MAX_CUSTOM_SOUND_BYTES, previewApprovalSound, saveSoundPreferences, validateCustomSound, type SoundPreferences } from "@/mutations/sound"
 
-function SettingRow({ title, description, children, restart = false, tag }: { tag?: string; title: string; description: ReactNode; children: ReactNode; restart?: boolean }) {
-  return <div className="setting-row"><div className="setting-copy"><div className="flex flex-wrap items-center gap-2 font-medium">{title}{tag && <span className="setting-tag">{tag}</span>}{restart && <span className="setting-tag">Restart mcp serve</span>}</div><div className="setting-description">{description}</div></div><div className="setting-control">{children}</div></div>
+function SettingRow({ title, description, children, restart = false, tag, controlId, invalid = false }: { controlId?: string; invalid?: boolean; tag?: string; title: string; description: ReactNode; children: ReactNode; restart?: boolean }) {
+  const rowId = useId()
+  return <Field aria-labelledby={`${rowId}-label`} aria-describedby={description ? `${controlId ?? rowId}-description` : undefined} orientation="responsive" data-invalid={invalid || undefined} className="border-t py-3.5">
+    <FieldContent className="min-w-0">
+      <div id={`${rowId}-label`} className="flex flex-wrap items-center gap-2">{controlId ? <FieldLabel htmlFor={controlId}>{title}</FieldLabel> : <FieldTitle>{title}</FieldTitle>}{tag && <span className="setting-tag">{tag}</span>}{restart && <span className="setting-tag">Restart mcp serve</span>}</div>
+      {description && <FieldDescription id={`${controlId ?? rowId}-description`}>{description}</FieldDescription>}
+    </FieldContent>
+    <div className="flex flex-col items-end gap-2">{children}</div>
+  </Field>
 }
 function Toggle({ id, label, checked, onChange }: { id: string; label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <Switch id={id} checked={checked} onCheckedChange={onChange} aria-label={label} />
+  return <Switch id={id} checked={checked} onCheckedChange={onChange} aria-label={label} aria-describedby={`${id}-description`} />
 }
 
 /** Typing stays local; a valid integer in range is committed on blur or Enter, anything else shows an error and is not sent. */
@@ -41,9 +51,12 @@ function NumberField({ id, label, value, min, max, error, onCommit, description,
   }
   const shownError = localError ?? error
   return (
-    <SettingRow title={label.replace(/ \(.*\)$/, "")} description={description}><div className="setting-number"><Label htmlFor={id} className="sr-only">{label}</Label>
+    <SettingRow controlId={id} invalid={!!shownError} title={label.replace(/ \(.*\)$/, "")} description={description}><div className="setting-number">
       <Input
         id={id}
+        aria-label={label}
+        aria-describedby={[description && `${id}-description`, shownError && `${id}-error`].filter(Boolean).join(" ") || undefined}
+        aria-errormessage={shownError ? `${id}-error` : undefined}
         type="number" min={min} max={max} step={1}
         value={text ?? String(value)}
         aria-invalid={shownError ? true : undefined}
@@ -52,7 +65,7 @@ function NumberField({ id, label, value, min, max, error, onCommit, description,
         onKeyDown={event => { if (event.key === "Enter") commit() }}
         className="w-[84px] text-right"
       />{unit && <span className="text-[13px] text-muted-foreground">{unit}</span>}</div>
-      {shownError && <p className="text-sm text-destructive">{shownError}</p>}
+      {shownError && <FieldError id={`${id}-error`}>{shownError}</FieldError>}
     </SettingRow>
   )
 }
@@ -71,7 +84,7 @@ function ModelPricesCard() {
   const refresh = useRefreshPrices()
   return (
     <SettingRow title="Price table" description={prices.data ? `models.dev · fetched ${prices.data.fetchedAt.slice(0, 10)} · ${prices.data.origin === "embedded" ? "built in" : "refreshed"}` : "Stored pricing reference data from models.dev."}>
-      <Button variant="outline" aria-label="Refresh model prices" onClick={() => refresh.mutate()} disabled={refresh.isPending}>Refresh</Button>
+      <Button variant="outline" aria-label="Refresh model prices" onClick={() => refresh.mutate()} disabled={refresh.isPending}><HugeiconsIcon icon={RefreshIcon} data-icon="inline-start" />Refresh</Button>
       {refresh.error && <p className="text-sm text-destructive">{refresh.error.message}</p>}
     </SettingRow>
   )
@@ -117,14 +130,14 @@ function BrowserSoundSettings() {
 
   return (
     <div>
-      <SettingRow title="Approval sound" tag="This browser only" description="Played when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.">
+      <SettingRow controlId="approval-sound" title="Approval sound" tag="This browser only" description="Played when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.">
         {preferences ? <div className="flex flex-wrap items-center justify-end gap-2"><Select<SoundPreferences["selection"] | "upload"> items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : []), { value: "upload", label: "Custom audio…" }]} value={preferences.selection} onValueChange={value => { if (value === "upload") document.getElementById("custom-audio")?.click(); else if (value !== null) store({ ...preferences, selection: value }) }}>
-          <SelectTrigger id="approval-sound" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
+          <SelectTrigger id="approval-sound" aria-describedby="approval-sound-description" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
           <SelectContent><SelectGroup>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectGroup></SelectContent>
-        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}>Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
+        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}><HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
       </SettingRow>
       {preferences && <><div className="sr-only"><Label htmlFor="custom-audio">Custom audio file</Label><Input id="custom-audio" tabIndex={-1} type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg" onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} /><p>Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p></div>
-      <SettingRow title="Mute approval sound" tag="This browser only" description="Keep notifications, silence the sound."><Toggle id="approval-sound-muted" label="Mute approval sound" checked={preferences.muted} onChange={muted => store({ ...preferences, muted })} /></SettingRow></>}
+      <SettingRow controlId="approval-sound-muted" title="Mute approval sound" tag="This browser only" description="Keep notifications, silence the sound."><Toggle id="approval-sound-muted" label="Mute approval sound" checked={preferences.muted} onChange={muted => store({ ...preferences, muted })} /></SettingRow></>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
       <SettingRow title="Browser notifications" tag="This browser only" description="Show a system notification when approval is needed. The browser asks only after you press Enable.">
         <Button type="button" variant="outline" aria-label={permission === "granted" ? "Browser notifications enabled" : "Enable browser notifications"} onClick={() => { void requestNotifications() }}>{permission === "granted" ? "Enabled" : "Enable"}</Button><span className="sr-only">Permission: {permission}. The browser asks only after you press the button.</span>
@@ -146,7 +159,7 @@ function AgentTranscriptsStatus() {
         <TableBody>{status.data.coverage.map(row => <TableRow key={`${row.agentKind}:${row.transport}`}><TableHead scope="row" className="whitespace-normal">{row.agentKind}</TableHead><TableCell>{row.transport}</TableCell><TableCell>{row.exact}</TableCell><TableCell>{row.inferred}</TableCell><TableCell>{row.unassigned}</TableCell></TableRow>)}</TableBody>
       </Table>}
       {status.error && <p role="alert" className="text-sm text-destructive">{status.error.message}</p>}
-      <div>
+      <div className="ml-auto flex w-auto justify-end">
         <Button variant="outline" disabled={clear.isPending} onClick={() => setConfirming(true)}>Clear matched data</Button>
       </div>
       {clear.error && <p role="alert" className="text-sm text-destructive">{clear.error.message}</p>}
@@ -232,7 +245,7 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-4">
-<div className="grid gap-6 settings-layout lg:grid-cols-[200px_minmax(0,760px)] lg:gap-10 lg:justify-center"><nav aria-label="Settings sections" className="flex flex-wrap gap-1 text-sm lg:sticky lg:top-6 lg:flex-col lg:self-start"><span className="px-3 py-2 font-semibold">Settings</span><a href="#settings-database" aria-current={activeSection === "database" ? "location" : undefined} onClick={() => setActiveSection("database")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Database</a><a href="#settings-mutations" aria-current={activeSection === "mutations" ? "location" : undefined} onClick={() => setActiveSection("mutations")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Mutations</a><a href="#settings-journal" aria-current={activeSection === "journal" ? "location" : undefined} onClick={() => setActiveSection("journal")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Journal & privacy</a><a href="#settings-agents" aria-current={activeSection === "agents" ? "location" : undefined} onClick={() => setActiveSection("agents")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Agents</a><a href="#settings-dashboard" aria-current={activeSection === "dashboard" ? "location" : undefined} onClick={() => setActiveSection("dashboard")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Dashboard</a><a href="#settings-prices" aria-current={activeSection === "prices" ? "location" : undefined} onClick={() => setActiveSection("prices")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Model prices</a></nav><div className="settings-content space-y-4">      <h1>Settings</h1>
+<div className="grid gap-6 settings-layout lg:grid-cols-[200px_minmax(0,760px)] lg:gap-10 lg:justify-center"><nav aria-label="Settings sections" className="flex flex-wrap gap-1 text-sm lg:sticky lg:top-6 lg:flex-col lg:self-start"><span className="px-3 py-2 font-semibold">Settings</span><a href="#settings-database" aria-current={activeSection === "database" ? "location" : undefined} onClick={() => setActiveSection("database")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Database</a><a href="#settings-mutations" aria-current={activeSection === "mutations" ? "location" : undefined} onClick={() => setActiveSection("mutations")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Mutations</a><a href="#settings-journal" aria-current={activeSection === "journal" ? "location" : undefined} onClick={() => setActiveSection("journal")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Journal & privacy</a><a href="#settings-agents" aria-current={activeSection === "agents" ? "location" : undefined} onClick={() => setActiveSection("agents")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Agents</a><a href="#settings-dashboard" aria-current={activeSection === "dashboard" ? "location" : undefined} onClick={() => setActiveSection("dashboard")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Dashboard</a><a href="#settings-prices" aria-current={activeSection === "prices" ? "location" : undefined} onClick={() => setActiveSection("prices")} className="rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground">Model prices</a></nav><FieldGroup className="settings-content">      <h1>Settings</h1>
       <p className="settings-path text-xs text-muted-foreground">{query.data.path}</p>
       {query.data.status === "invalid" && (
         <Alert variant="destructive">
@@ -247,7 +260,7 @@ export function SettingsPage() {
 <section id="settings-database" aria-label="Database" className="settings-card"><h2>Database</h2><p>How SQLHarness connects and how long statements may run.</p>
   <NumberField id="connection-timeout" label="Connection timeout (seconds)" unit="sec" description="Time to open a SQL Server or PostgreSQL connection, including driver-managed authentication. Azure CLI token acquisition has its own budget." value={draft.connection.timeoutSeconds} min={1} max={300} error={fieldErrors["connection.timeoutSeconds"]} onCommit={value => setConnection({ timeoutSeconds: value })} /><StatusLine status={status.connection} />
   <NumberField id="execution-default-timeout" label="Default execution timeout (seconds)" unit="sec" description="Used by queries, mutations, benchmarks and watches when no explicit timeout is passed." value={draft.execution.defaultTimeoutSeconds} min={1} max={300} error={fieldErrors["execution.defaultTimeoutSeconds"]} onCommit={value => setExecution({ defaultTimeoutSeconds: value })} /><StatusLine status={status.execution} />
-  <SettingRow title="Connection diagnostics" description="Record safe metadata about database connection attempts. Credentials and target names are excluded."><Toggle id="diagnostics-enabled" label="Connection diagnostics" checked={draft.diagnostics.enabled} onChange={value => setDiagnostics({ enabled: value })} /></SettingRow><StatusLine status={status.diagnostics} />
+  <SettingRow controlId="diagnostics-enabled" title="Connection diagnostics" description="Record safe metadata about database connection attempts. Credentials and target names are excluded."><Toggle id="diagnostics-enabled" label="Connection diagnostics" checked={draft.diagnostics.enabled} onChange={value => setDiagnostics({ enabled: value })} /></SettingRow><StatusLine status={status.diagnostics} />
 </section>
 <section id="settings-mutations" aria-label="Mutations" className="settings-card"><h2>Mutations</h2><p>Default approval behavior for write operations.</p>
   <SettingRow title="Default mode" description="Applies when a profile does not set its own mode."><div><SegmentedRadioGroup label="Default mutation mode" value={draft.mutations.defaultMode} options={[{ value: "never", label: "Never" }, { value: "operator", label: "Operator approval" }, { value: "yolo", label: "YOLO" }]} onValueChange={value => { if (value === "never" || value === "operator" || value === "yolo") setMutations({ defaultMode: value }) }} /><p className="setting-mode-hint max-w-72">{draft.mutations.defaultMode === "operator" ? "Each mutation waits for approval here." : draft.mutations.defaultMode === "never" ? "Write operations are rejected by default." : "Write operations do not wait for operator approval."}</p></div></SettingRow>
@@ -257,24 +270,24 @@ export function SettingsPage() {
   <StatusLine status={status.mutations} /><BrowserSoundSettings />
 </section>
 <section id="settings-journal" aria-label="Journal & privacy" className="settings-card"><h2>Journal & privacy</h2><p>What SQLHarness records about each operation, and for how long.</p>
-  <SettingRow title="Activity journal" description="Record operations so they appear in Activity and sessions. Disabling the journal also disables agent annotations."><Toggle id="journal-enabled" label="Journal enabled" checked={journal.enabled} onChange={value => setJournal(value ? { enabled: true } : { enabled: false, operationAnnotations: false })} /></SettingRow>
-  <SettingRow title="Store sensitive data" description="Store SQL text, full plans (may include parameter values) and error messages for new operations. Existing rows are not changed."><Toggle id="journal-sensitive" label="Store sensitive data" checked={journal.storeSensitive} onChange={value => value ? setConfirmingSensitive(true) : setJournal({ storeSensitive: false })} /></SettingRow>
-  <SettingRow title="Agent annotations" restart description="Allows agents to label operations and mark them for keeping. Enabling agent annotations also enables the activity journal automatically. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention."><Toggle id="journal-operation-annotations" label="Agent operation annotations" checked={journal.operationAnnotations} onChange={value => setJournal(value ? { enabled: true, operationAnnotations: true } : { operationAnnotations: false })} /></SettingRow>
-  <SettingRow title="Retention" description="Delete old journal data on dashboard start, hourly, and on the next mcp serve."><Toggle id="retention-enabled" label="Retention enabled" checked={journal.retention.enabled} onChange={value => setRetention({ enabled: value })} /></SettingRow>
-  <div className="settings-retention"><NumberField id="retention-age" label="Maximum age (days)" unit="days" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} /><NumberField id="retention-size" label="Maximum size (MB)" unit="MB" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} /></div><StatusLine status={status.journal} />
+  <SettingRow controlId="journal-enabled" title="Activity journal" description="Record operations so they appear in Activity and sessions. Disabling the journal also disables agent annotations."><Toggle id="journal-enabled" label="Journal enabled" checked={journal.enabled} onChange={value => setJournal(value ? { enabled: true } : { enabled: false, operationAnnotations: false })} /></SettingRow>
+  <SettingRow controlId="journal-sensitive" title="Store sensitive data" description="Store SQL text, full plans (may include parameter values) and error messages for new operations. Existing rows are not changed."><Toggle id="journal-sensitive" label="Store sensitive data" checked={journal.storeSensitive} onChange={value => value ? setConfirmingSensitive(true) : setJournal({ storeSensitive: false })} /></SettingRow>
+  <SettingRow controlId="journal-operation-annotations" title="Agent annotations" restart description="Allows agents to label operations and mark them for keeping. Enabling agent annotations also enables the activity journal automatically. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention."><Toggle id="journal-operation-annotations" label="Agent operation annotations" checked={journal.operationAnnotations} onChange={value => setJournal(value ? { enabled: true, operationAnnotations: true } : { operationAnnotations: false })} /></SettingRow>
+  <SettingRow controlId="retention-enabled" title="Retention" description="Delete old journal data on dashboard start, hourly, and on the next mcp serve."><Toggle id="retention-enabled" label="Retention enabled" checked={journal.retention.enabled} onChange={value => setRetention({ enabled: value })} /></SettingRow>
+  <FieldGroup className="settings-retention"><NumberField id="retention-age" label="Maximum age (days)" unit="days" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} /><NumberField id="retention-size" label="Maximum size (MB)" unit="MB" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} /></FieldGroup><StatusLine status={status.journal} />
 </section>
 <section id="settings-agents" aria-label="Agents" className="settings-card"><h2>Agents</h2><p>Reading agent transcripts and compare rules for agents.</p>
-  <SettingRow title="Read agent transcripts" description="Reads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored."><Toggle id="dashboard-agent-transcripts" label="Read agent transcripts" checked={draft.dashboard.agentTranscripts.enabled} onChange={value => setDashboard({ agentTranscripts: { enabled: value } })} /></SettingRow>
+  <SettingRow controlId="dashboard-agent-transcripts" title="Read agent transcripts" description="Reads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored."><Toggle id="dashboard-agent-transcripts" label="Read agent transcripts" checked={draft.dashboard.agentTranscripts.enabled} onChange={value => setDashboard({ agentTranscripts: { enabled: value } })} /></SettingRow>
   <div className="settings-transcript-status"><AgentTranscriptsStatus /></div>
-  <SettingRow title="Require compare subject and scope" restart description={<><p>When enabled, CLI compare needs both <code>--subject</code> and <code>--scope</code>, and MCP compare needs both fields. This setting is on by default.</p><p>CLI applies changes on the next invocation. Restart running MCP servers and reconnect their clients to apply changes; saving here does not restart them.</p></>}><Toggle id="compare-require-context" label="Require compare subject and scope" checked={draft.compare.requireContext} onChange={value => setCompare({ requireContext: value })} /></SettingRow><StatusLine status={status.compare} />
+  <SettingRow controlId="compare-require-context" title="Require compare subject and scope" restart description={<><span className="block">When enabled, CLI compare needs both <code>--subject</code> and <code>--scope</code>, and MCP compare needs both fields. This setting is on by default.</span><span className="mt-1 block">CLI applies changes on the next invocation. Restart running MCP servers and reconnect their clients to apply changes; saving here does not restart them.</span></>}><Toggle id="compare-require-context" label="Require compare subject and scope" checked={draft.compare.requireContext} onChange={value => setCompare({ requireContext: value })} /></SettingRow><StatusLine status={status.compare} />
 </section>
 <section id="settings-dashboard" aria-label="Dashboard" className="settings-card"><h2>Dashboard</h2><p>This dashboard process.</p>
-  <SettingRow title="Start with mcp serve" description="Launch the dashboard when an MCP server starts."><Toggle id="dashboard-autostart" label="Start with mcp serve" checked={draft.dashboard.autoStart} onChange={value => setDashboard({ autoStart: value })} /></SettingRow>
-  <SettingRow title="Safety notifications" description="Show safety warnings raised by running sessions."><Toggle id="dashboard-safety-notifications" label="Safety notifications" checked={draft.dashboard.safetyNotifications} onChange={value => setDashboard({ safetyNotifications: value })} /></SettingRow>
+  <SettingRow controlId="dashboard-autostart" title="Start with mcp serve" description="Launch the dashboard when an MCP server starts."><Toggle id="dashboard-autostart" label="Start with mcp serve" checked={draft.dashboard.autoStart} onChange={value => setDashboard({ autoStart: value })} /></SettingRow>
+  <SettingRow controlId="dashboard-safety-notifications" title="Safety notifications" description="Show safety warnings raised by running sessions."><Toggle id="dashboard-safety-notifications" label="Safety notifications" checked={draft.dashboard.safetyNotifications} onChange={value => setDashboard({ safetyNotifications: value })} /></SettingRow>
   <NumberField id="dashboard-idle" label="Idle shutdown (hours)" unit="hours" description="Stop the dashboard after this long without activity." value={draft.dashboard.idleShutdownHours} min={1} max={168} error={fieldErrors["dashboard.idleShutdownHours"]} onCommit={value => setDashboard({ idleShutdownHours: value })} />
   <SettingRow title="Port" description="Change the port in config.json; the running dashboard keeps its port."><code className="rounded bg-muted px-2 py-1">{draft.dashboard.port}</code></SettingRow><StatusLine status={status.dashboard} />
 </section>
-<section id="settings-prices" aria-label="Model prices" className="settings-card"><h2>Model prices</h2><p>Reference data used for Usage costs.</p><ModelPricesCard /></section></div></div>
+<section id="settings-prices" aria-label="Model prices" className="settings-card"><h2>Model prices</h2><p>Reference data used for Usage costs.</p><ModelPricesCard /></section></FieldGroup></div>
       {replaceError && <ErrorState error={replaceError} />}
 
       <Dialog open={confirmingSensitive} onOpenChange={setConfirmingSensitive}>

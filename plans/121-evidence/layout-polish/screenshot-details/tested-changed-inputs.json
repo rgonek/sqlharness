@@ -1,0 +1,130 @@
+[
+  {
+    "path": "src/SqlHarness.Dashboard/DashboardModels.cs",
+    "sha256": "B227EB7595C0A1F8BDCE080730DACC757772DDFEC594B573683A333C4403EAEF"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/JournalReader.cs",
+    "sha256": "9BB62A7AFC5C7239D2A922BACCA6CE6E57BB0520170D3528F6F8A69D9851D987"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs",
+    "sha256": "2488851AE1F17F6219857D6E3A4F4E977DF6E8C17712A9E0F67924F6241AF92D"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/api/queries.ts",
+    "sha256": "95EDA484F7090738F56C04573405B19D645B850BD7DE22F6EB3B8913248B9C55"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/api/types.ts",
+    "sha256": "4E25A3EC4293125461CFA0447180E8CBB6339B5D885D0CA1CF2F10715FF66BAC"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/OperationTable.tsx",
+    "sha256": "78EF9E3FE75B4430BFB7D0D043E60B30D743F8790A1F96A7B713FB833E8D7D92"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/SegmentedRadioGroup.tsx",
+    "sha256": "D51C3794D95EFA02A50ED6D4232523168418443138D0356F276DAAC31C9A58BC"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/SessionNoteCard.tsx",
+    "sha256": "F3CA65C83737D8DAF20D84489D909044C67CCFF903D5D4A6D00AC7DA14DA0429"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/SessionOperationsTable.tsx",
+    "sha256": "BB62EF36B6D6C63D1C3F64A32563FA091523246CEB9889DD8941EC6B0648430F"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/StatusBadge.test.tsx",
+    "sha256": "77111A7008CE94E26ACEE5B7105A20C110DDFCE28504384E6EF02DEEC1C79CAA"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/StatusBadge.tsx",
+    "sha256": "2243EFA500316F0309BFD1D4F001B9F0066E31BEF7B441E97B8EDC05CB63E14C"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx",
+    "sha256": "1BB1391D2C540E6C45B5321F80985960C2BC1279A87960D4BFF379D34EBB7C7D"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx",
+    "sha256": "5480299C449AC9AAC5800A76BDDC7FEE12035600FBA03ED37F288B049D677CA4"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx",
+    "sha256": "0862C8759066F80F976BCD494307DE55EFB3388954C94CFE5917FE641297B331"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx",
+    "sha256": "FA6D812FFFA18B0534243D1D381D7136C99B13FF47603EAA1DA3B6553F9A144D"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/index.css",
+    "sha256": "0380B915CAFCC4C3761634B7A12AD7AB65E49E319C5B83811ADB81C1E76368F1"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts",
+    "sha256": "E50853B4732D6697BA349FD3413FEDFDE54C676BEE53FC18F95D753A70451FBD"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/lib/stats.ts",
+    "sha256": "D6F700765B4BAC102C2BB1A2998F87546F147B145B858F796F2717A2D7DF2AF0"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx",
+    "sha256": "178A8891AD5A4207CFB83F17F22A400E79D42532EF21754DCBCBDEDD80103A42"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/mutations/ApprovalDialog.tsx",
+    "sha256": "853CD4469C7DDB997A40A1A3AC0E0C10F8991BD2C82073195B928B873EE2A6AF"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx",
+    "sha256": "3CCA1F7303ABE481EAF67EB54DC5E8D79BFDA3AEC427EBE592593F9032C759AB"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/mutations/mutationStore.ts",
+    "sha256": "D44D0849D132CB4DE9DEE5C4C806EDFB705E7F719126FC4AC192EDE38116ECDB"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts",
+    "sha256": "32AE694D8A6894E85A5DDB66CAAB33FE371F10A76825D9A4CBA8F0295A037885"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts",
+    "sha256": "B805063684C755278D526EFEB21E8F88A53FC44EB6206C05ED4445B8C5ADB2A7"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx",
+    "sha256": "D25DE463B54DCED4D80C1A930F8F43739B98F1BB841CF6B24EFC31509B4ABBE9"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/pages/SessionPage.test.tsx",
+    "sha256": "3D3938E24B89F7FAB1A6E772F2D49D9D9EB7B52983C684C4D1AB0036A9B0D9BF"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx",
+    "sha256": "65525B5EB897A6AD9165A03796D6D1D4FEE5AF0BDD493BA3997027DB3042C287"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx",
+    "sha256": "155714276626361B9C519F087303A583A5638D090CA47D29343C0C8547EE21A7"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx",
+    "sha256": "34A901878386788BBAAD927F691F048F05EC923EAA7F0FDFECB7757620428139"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/test/fixtures.ts",
+    "sha256": "D3D931D2BF343959EDC6731F76D1DEC9DA28B081D86BFDE9F55B9827CE3B7913"
+  },
+  {
+    "path": "tests/SqlHarness.Tests/Dashboard/DashboardContractTests.cs",
+    "sha256": "A15460ACF222379270EEA1567B11E62D3AC3DE5D23ADA3FF56268953031E6E65"
+  },
+  {
+    "path": "tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs",
+    "sha256": "4B61B39FC51952AAD2427A8DAC50001CACDE3A7AA0EF650BB2BE761D3E01AA7A"
+  }
+]

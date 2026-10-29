@@ -1,0 +1,110 @@
+{
+  "checks": [
+    {
+      "name": "Dimension-options error has no render crash",
+      "passed": true
+    },
+    {
+      "name": "Failed metadata does not display stale KPI",
+      "passed": true
+    },
+    {
+      "name": "Selected-profile options request exercised",
+      "passed": true
+    },
+    {
+      "name": "No stale filtered aggregate before options available",
+      "passed": true
+    },
+    {
+      "name": "Valid dimension selection retained after recovery",
+      "passed": true
+    },
+    {
+      "name": "Failed range recovers successfully",
+      "passed": true
+    },
+    {
+      "name": "Recovery has no app page/console errors",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "expectedDiagnostics": [
+    {
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://127.0.0.1:48138/api/stats?from=2026-10-28T07%3A29%3A00.000Z&to=2026-10-29T07%3A29%3A00.000Z&profile=local"
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://127.0.0.1:48138/api/stats?from=2026-10-28T07%3A29%3A00.000Z&to=2026-10-29T07%3A29%3A00.000Z&profile=local"
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://127.0.0.1:48138/api/stats?from=2026-10-28T07%3A29%3A00.000Z&to=2026-10-29T07%3A29%3A00.000Z&profile=local"
+    }
+  ],
+  "requests": [
+    {
+      "recent": false,
+      "dims": null,
+      "optionRequest": false
+    },
+    {
+      "recent": false,
+      "dims": null,
+      "optionRequest": false
+    },
+    {
+      "recent": false,
+      "dims": null,
+      "optionRequest": false
+    },
+    {
+      "recent": false,
+      "dims": "{\"tenant\":\"acme\"}",
+      "optionRequest": false
+    },
+    {
+      "recent": false,
+      "dims": "{\"tenant\":\"acme\"}",
+      "optionRequest": false
+    },
+    {
+      "recent": true,
+      "dims": null,
+      "optionRequest": false
+    },
+    {
+      "recent": true,
+      "dims": null,
+      "optionRequest": true
+    },
+    {
+      "recent": true,
+      "dims": null,
+      "optionRequest": true
+    },
+    {
+      "recent": true,
+      "dims": null,
+      "optionRequest": true
+    },
+    {
+      "recent": true,
+      "dims": null,
+      "optionRequest": true
+    },
+    {
+      "recent": true,
+      "dims": "{\"tenant\":\"acme\"}",
+      "optionRequest": false
+    },
+    {
+      "recent": true,
+      "dims": "{\"tenant\":\"acme\"}",
+      "optionRequest": false
+    }
+  ],
+  "fixtureOnly": true
+}

@@ -95,3 +95,11 @@ Plan 084 is DONE and locally integrated into main at `67bdd6b` with the owner-ac
 Evidence from completed plans, former queues, rejected proposals and audit decisions are in the [history](history.md). Read it when investigating earlier decisions or evidence, not before every task.
 
 When a plan is completed, update its status, move the entry from the queue to the history and keep the link to the evidence.
+
+Plan 121 hover follow-up (2026-10-28): Activity session and IO statement row background feedback; six browser states passed, Windows gate FAILED on one unchanged shutdown lifecycle test; isolated rerun passed. [Evidence](121-evidence/layout-polish/hover/README.md).
+
+Plan [121 default-shadcn follow-up](121-default-shadcn-followup.md): **DONE / VERIFIED on c2c3dcfd** — all six audit findings addressed with default component composition; independent reviews accepted, Windows gate PASS (UI 414, Core 4771/11 skips, MCP 535/4 skips), 55 browser checks, source/dist unchanged. Initial failed gate retained. Local branch only, no merge/push/publication/restart. [Mock tradeoffs](121-evidence/layout-polish/default-alignment/report.md), [gallery](121-evidence/layout-polish/default-alignment/index.html).
+
+Plan [121 screenshot details](121-screenshot-detail-followup.md): **DONE / VERIFIED on b3e921cd (2026-10-29)** — fifteen screenshot requests and circular A/B, default shadcn preferred; task/final reviews accepted. Windows gate PASS (UI436, Core4774/11 skips, MCP535/4 skips), branch format5 and browser104 PASS. Two stale test-contract failures retained. Local dashboard-layout-polish only, no merge/push/publication/restart. [Report](121-evidence/layout-polish/screenshot-details/report.md), [gallery](121-evidence/layout-polish/screenshot-details/index.html).
+
+Plan 121 dashboard-layout-polish: **LOCALLY INTEGRATED into main (2026-10-29), source268cc96c**. Product identical to verified b3e921cd (UI436,Core4774,MCP535; browser104); merge changes relative to that branch are documentation/reference files only. Both dated mock sets retained. [Integration](121-evidence/layout-polish/screenshot-details/integration.md). No push/publication/restart.

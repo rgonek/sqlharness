@@ -1,0 +1,65 @@
+{
+  "labelClick": {
+    "before": "false",
+    "after": "false",
+    "changed": false
+  },
+  "switchInfo": {
+    "before": null,
+    "ariaDescribedBy": null,
+    "ariaLabelledBy": null,
+    "labels": []
+  },
+  "invalid": {
+    "invalid": "true",
+    "describedBy": null,
+    "errorMessage": null
+  },
+  "errorInfo": {
+    "text": "Enter a whole number from 1 to 300.",
+    "id": "",
+    "role": null
+  },
+  "switchDescriptions": [
+    {
+      "label": "Connection diagnostics",
+      "description": null
+    },
+    {
+      "label": "Mute approval sound",
+      "description": null
+    },
+    {
+      "label": "Journal enabled",
+      "description": null
+    },
+    {
+      "label": "Store sensitive data",
+      "description": null
+    },
+    {
+      "label": "Agent operation annotations",
+      "description": null
+    },
+    {
+      "label": "Retention enabled",
+      "description": null
+    },
+    {
+      "label": "Read agent transcripts",
+      "description": null
+    },
+    {
+      "label": "Require compare subject and scope",
+      "description": null
+    },
+    {
+      "label": "Start with mcp serve",
+      "description": null
+    },
+    {
+      "label": "Safety notifications",
+      "description": null
+    }
+  ]
+}

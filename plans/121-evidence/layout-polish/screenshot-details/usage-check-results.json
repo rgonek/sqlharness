@@ -1,0 +1,54 @@
+{
+  "checks": [
+    {
+      "name": "Failed/rejected main count retained",
+      "passed": true
+    },
+    {
+      "name": "Failure percentage derives from six-operation cohort",
+      "passed": true
+    },
+    {
+      "name": "Actual fixture session count displayed",
+      "passed": true
+    },
+    {
+      "name": "Measured output token estimate displayed",
+      "passed": true
+    },
+    {
+      "name": "Detailed accounting disclosure removed",
+      "passed": true
+    },
+    {
+      "name": "Removed disclosure contents not exposed elsewhere",
+      "passed": true
+    },
+    {
+      "name": "Top SQL logical reads column present",
+      "passed": true
+    },
+    {
+      "name": "Logical reads order selected",
+      "passed": true
+    },
+    {
+      "name": "Reads-ranked leader displayed first",
+      "passed": true
+    },
+    {
+      "name": "Recorded logical-read sum rendered",
+      "passed": true
+    },
+    {
+      "name": "Usage mobile has no document overflow",
+      "passed": true
+    },
+    {
+      "name": "No Usage check app page/console errors",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "fixtureOnly": true
+}

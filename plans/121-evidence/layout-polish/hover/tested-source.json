@@ -1,0 +1,10 @@
+[
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/ActivityFeed.tsx",
+    "sha256": "939A45E86BAF5E3A74AE426489F41C806C0812D59B06A0F10B6B619E5FA853B4"
+  },
+  {
+    "path": "src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx",
+    "sha256": "5494007F12FCD5C1BCDAAD80AA0D86D1B169970CDC96795B01DD44F2DE7B370D"
+  }
+]

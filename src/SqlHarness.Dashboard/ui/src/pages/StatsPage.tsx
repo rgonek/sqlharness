@@ -1,21 +1,20 @@
 import { useId, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
-import type { DashboardStats, KeyCount, ProfileView, SqlHashStat, WorkflowCost } from "@/api/types"
+import type { DashboardStats, ProfileView, SqlHashStat } from "@/api/types"
 import { agentLabel } from "@/lib/agents"
 import { ErrorState } from "@/components/ErrorState"
-import { Kpi } from "@/components/Kpi"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatDuration, formatNumber, shortHash } from "@/lib/format"
-import { pivotPerDay } from "@/lib/stats"
+import { failureRate, pivotPerDay } from "@/lib/stats"
 import { ProfileDimensionsPanel, type DimensionAxes, type DimensionCellScope } from "./ProfileDimensionsPanel"
 
 const ranges: { value: StatsRange; label: string }[] = [
@@ -24,56 +23,6 @@ const ranges: { value: StatsRange; label: string }[] = [
   { value: "30d", label: "30 days" },
   { value: "all", label: "All time" },
 ]
-
-function WorkflowCostCard({ costs }: { costs: WorkflowCost[] }) {
-  const outputBytes = costs.reduce((sum, cost) => sum + cost.outputBytes, 0)
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Workflow output cost</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 overflow-x-auto">
-        {costs.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Workflow</TableHead>
-                <TableHead className="text-right">Output bytes</TableHead>
-                <TableHead className="text-right">Estimated output tokens</TableHead>
-                <TableHead className="text-right">Calls</TableHead>
-                <TableHead className="text-right">Dry runs</TableHead>
-                <TableHead className="text-right">Database executions</TableHead>
-                <TableHead>Comparison</TableHead>
-                <TableHead className="text-right">Baseline bytes</TableHead>
-                <TableHead className="text-right">Output overhead bytes</TableHead>
-                <TableHead className="text-right">Estimated output-token delta</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {costs.map((cost, index) => (
-                <TableRow key={cost.rootOperationRef ?? `legacy-${index}`}>
-                  <TableCell>{cost.rootOperationRef ?? "Legacy output"}</TableCell>
-                  <TableCell className="text-right">{formatNumber(cost.outputBytes)}</TableCell>
-                  <TableCell className="text-right">{formatNumber(cost.estimatedOutputTokens)}</TableCell>
-                  <TableCell className="text-right">{formatNumber(cost.callCount)}</TableCell>
-                  <TableCell className="text-right">{formatNumber(cost.dryRunCalls)}</TableCell>
-                  <TableCell className="text-right">{formatNumber(cost.databaseExecutionCalls)}</TableCell>
-                  <TableCell>{cost.comparison?.baselineKind ?? "Unavailable"}</TableCell>
-                  <TableCell className="text-right">{cost.comparison ? formatNumber(cost.comparison.baselineBytes) : "—"}</TableCell>
-                  <TableCell className="text-right">{cost.comparison ? formatNumber(cost.comparison.outputOverheadBytes) : "—"}</TableCell>
-                  <TableCell className="text-right">{cost.comparison?.estimatedOutputTokenDelta == null ? "—" : formatNumber(cost.comparison.estimatedOutputTokenDelta)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : <p className="text-sm text-muted-foreground">No measured workflow output in this time range.</p>}
-        {costs.length > 0 && <p className="text-sm text-muted-foreground">Measured output: {formatNumber(outputBytes)} bytes. Input, discovery and chat are unmeasured. Token estimation method: UTF-8 bytes divided by four, rounded up.</p>}
-        {costs.some(cost => cost.accountingKind === "legacy-artifact-volume") &&
-          <p className="text-xs text-muted-foreground">Legacy artifact-volume estimates are reported separately without a comparison.</p>}
-      </CardContent>
-    </Card>
-  )
-}
 
 function SqlHash({ value }: { value: string }) {
   const id = useId()
@@ -89,6 +38,7 @@ function SqlTable({ rows }: { rows: SqlHashStat[] }) {
           <TableHead className="text-right">Runs</TableHead>
           <TableHead className="text-right">Total</TableHead>
           <TableHead className="text-right">Slowest</TableHead>
+          <TableHead className="text-right">Logical reads</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -98,25 +48,11 @@ function SqlTable({ rows }: { rows: SqlHashStat[] }) {
             <TableCell className="text-right">{formatNumber(row.count)}</TableCell>
             <TableCell className="text-right">{formatDuration(row.totalDurationMs)}</TableCell>
             <TableCell className="text-right">{formatDuration(row.maxDurationMs)}</TableCell>
+            <TableCell className="text-right"><div>{row.logicalReadsMedianSum == null ? "Unavailable" : formatNumber(row.logicalReadsMedianSum)}</div><div className="text-xs text-muted-foreground">{row.logicalReadsAvailableOperations ?? 0}/{row.count} ops · {row.logicalReadsAvailableMetrics ?? 0} recorded metrics{(row.logicalReadsUnavailableMetrics ?? 0) > 0 ? ` · ${row.logicalReadsUnavailableMetrics} missing metrics` : ""}</div></TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
-  )
-}
-
-function CountChart({ rows, label }: { rows: KeyCount[]; label: string }) {
-  const config = { count: { label, color: "var(--chart-1)" } } satisfies ChartConfig
-  return (
-    <ChartContainer config={config} className="h-56 w-full">
-      <BarChart data={rows}>
-        <CartesianGrid vertical={false} />
-        <XAxis dataKey="key" tickLine={false} axisLine={false} />
-        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
-        <ChartTooltip content={<ChartTooltipContent />} />
-        <Bar dataKey="count" fill="var(--color-count)" radius={4} />
-      </BarChart>
-    </ChartContainer>
   )
 }
 
@@ -152,7 +88,14 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
       : profiles[0]?.name ?? null
   const selectedUnprofiled = manualProfile ? manualProfile.value === null
     : overview.data?.profileOperations[0]?.profile === null && overview.data.profileOperations.length > 0
-  const query = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
+  const dimensionOptions = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
+  // Only current, loaded dimension options may remove retained selections. While
+  // the new range is loading, keep selections intact and hide its pending metrics.
+  const dimensionNames = dimensionOptions.data?.profileDimensions.dimensions.map(dimension => dimension.name)
+  const effectiveFilters = dimensionNames
+    ? Object.fromEntries(Object.entries(dimensionFilters).filter(([name]) => dimensionNames.includes(name)))
+    : dimensionFilters
+  const query = useStats(range, window, selectedProfile, effectiveFilters, undefined, undefined, selectedUnprofiled, dimensionOptions.data !== undefined)
   const profileOptions = [...new Set([
     ...profiles.map(profile => profile.name),
     ...(overview.data?.profileOperations ?? []).flatMap(item => item.profile === null ? [] : [item.profile]),
@@ -161,11 +104,11 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
   const selectedProfileView = profiles.find(profile => profile.name === selectedProfile)
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
-        <h1>Usage</h1>
-        <div className="grid w-full min-w-0 gap-1.5 sm:w-auto sm:min-w-52">
-          <Label htmlFor="stats-profile">Statistics profile</Label>
+    <div className="usage-page flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div><h1>Usage</h1><p className="text-xs text-muted-foreground">{selectedProfile ?? "No profile"} · {ranges.find(item => item.value === range)?.label.toLowerCase()} · UTC</p></div>
+        <div className="ml-auto grid w-full min-w-0 gap-1.5 sm:w-auto sm:min-w-40">
+          <Label className="sr-only" htmlFor="stats-profile">Statistics profile</Label>
           <Select items={[...profileOptions.map(name => ({ value: `profile:${name}`, label: name })), { value: "unprofiled", label: "No profile" }]}
             value={selectedProfile === null ? "unprofiled" : `profile:${selectedProfile}`}
             onValueChange={value => {
@@ -197,13 +140,15 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
       </div>
       {overview.error ? (
         <ErrorState error={overview.error} />
+      ) : dimensionOptions.error ? (
+        <ErrorState error={dimensionOptions.error} />
       ) : query.error ? (
         <ErrorState error={query.error} />
-      ) : overview.isPending || query.isPending ? (
+      ) : overview.isPending || dimensionOptions.isPending || !dimensionOptions.data ? (
         <Skeleton className="h-64 w-full" />
       ) : (
-        <StatsContent stats={query.data} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
-          dimensionFilters={dimensionFilters} onDimensionFiltersChange={setDimensionFilters}
+        <StatsContent metricsPending={query.isPending} stats={{ ...(query.data ?? dimensionOptions.data), profileDimensions: dimensionOptions.data.profileDimensions }} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
+          dimensionFilters={effectiveFilters} onDimensionFiltersChange={setDimensionFilters}
           axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
       )}
     </div>
@@ -211,6 +156,7 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
 }
 
 function StatsContent({
+  metricsPending,
   stats,
   range,
   window,
@@ -223,6 +169,7 @@ function StatsContent({
   onAxisChoiceChange,
   onDimensionCellSelect,
 }: {
+  metricsPending: boolean
   stats: DashboardStats
   range: StatsRange
   window: StatsWindow
@@ -235,136 +182,41 @@ function StatsContent({
   onAxisChoiceChange: (axes: DimensionAxes | null) => void
   onDimensionCellSelect?: (scope: DimensionCellScope) => void
 }) {
+  const [sqlSort, setSqlSort] = useState("duration")
+  const topSql = sqlSort === "reads" ? stats.topSqlByLogicalReads ?? [] : sqlSort === "runs" ? stats.topSqlByCount : stats.topSqlByDuration
   const perDay = pivotPerDay(stats.operationsPerDay)
-  // Series are keyed by index: an agent kind is client-supplied text and must never become a CSS variable name.
-  const seriesKeys = perDay.agents.map((_, index) => `a${index}`)
-  const perDayRows = perDay.rows.map(row => ({
-    day: row.day,
-    ...Object.fromEntries(perDay.agents.map((agent, index) => [seriesKeys[index], row[agent]])),
-  }))
-  const perDayConfig = Object.fromEntries(
-    perDay.agents.map((agent, index) => [seriesKeys[index], { label: agentLabel(agent), color: `var(--chart-${(index % 5) + 1})` }]),
-  ) satisfies ChartConfig
   const total = stats.operations.reduce((sum, row) => sum + row.count, 0)
 
+  const rate = failureRate(stats.statuses, total)
+  const failed = stats.statuses.find(row => row.key === "failed")?.count ?? 0
+  const rejected = stats.statuses.find(row => row.key === "rejected")?.count ?? 0
+  const output = stats.workflowCosts.filter(cost => cost.accountingKind === "workflow-output")
+  const kpis = [
+    { label: "Operations", value: formatNumber(total), detail: `${stats.sessionCount == null ? "Session count unavailable" : `${formatNumber(stats.sessionCount)} sessions`}` },
+    { label: "Failed / rejected", value: `${formatNumber(failed)} / ${formatNumber(rejected)}`, detail: rate === null ? "Rate unavailable · no operations" : `${rate.toLocaleString(undefined, { maximumFractionDigits: 1 })}% of ${formatNumber(total)} operations` },
+    { label: "Estimated workflow output tokens", value: output.length ? formatNumber(output.reduce((sum, cost) => sum + cost.estimatedOutputTokens, 0)) : "Unavailable", detail: output.length ? `${formatNumber(output.reduce((sum, cost) => sum + cost.outputBytes, 0))} measured bytes · ÷ 4, rounded up per call` : "No retained workflow-output accounting" },
+    { label: "Operations with spills", value: formatNumber(stats.spillOperations), detail: "Recorded spill evidence" },
+    { label: "Operations on a cold cache", value: formatNumber(stats.coldCacheOperations), detail: "Recorded cold-cache evidence" },
+  ]
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Kpi label="Operations" value={formatNumber(total)} />
-        <Kpi label="Measured workflow output" value={`${formatNumber(stats.workflowCosts.reduce((sum, cost) => sum + cost.outputBytes, 0))} bytes`} />
-        <Kpi label="Operations with spills" value={formatNumber(stats.spillOperations)} />
-        <Kpi label="Operations on a cold cache" value={formatNumber(stats.coldCacheOperations)} />
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Operations per day (UTC)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={perDayConfig} className="h-64 w-full">
-            <BarChart data={perDayRows}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="day" tickLine={false} axisLine={false} />
-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <ChartLegend content={<ChartLegendContent />} />
-              {seriesKeys.map(key => (
-                <Bar key={key} dataKey={key} stackId="agents" fill={`var(--color-${key})`} />
-              ))}
-            </BarChart>
-          </ChartContainer>
+    <div className="usage-content flex flex-col gap-4">
+      {metricsPending && <Skeleton aria-label="Updating filtered statistics" className="h-64 w-full" />}
+      <div hidden={metricsPending}><div className="flex flex-col gap-4">
+      <Card aria-label="Usage summary" className="gap-0 overflow-hidden py-0">
+        <CardHeader className="sr-only"><CardTitle>Usage summary</CardTitle></CardHeader>
+        <CardContent className="grid min-w-0 grid-cols-1 p-0 sm:grid-cols-2 lg:grid-cols-5">
+          {kpis.map(kpi => <div key={kpi.label} className="relative min-w-0"><div className="flex h-full flex-col gap-2 p-4"><div className="text-sm text-muted-foreground">{kpi.label}</div><div className="break-words text-2xl font-semibold tabular-nums">{kpi.value}</div><p className="text-xs text-muted-foreground">{kpi.detail}</p></div><Separator orientation="vertical" className="absolute right-0 top-0 hidden h-full sm:block" /><Separator className="sm:hidden" /></div>)}
         </CardContent>
       </Card>
-      <WorkflowCostCard costs={stats.workflowCosts} />
+      <Card role="region" aria-label="Agents"><CardHeader><CardTitle><h2>Agents</h2></CardTitle><CardDescription>Output tokens are estimated from returned UTF-8 bytes ÷ 4. Per-agent model, sessions, tokens and costs are unavailable in the recorded statistics.</CardDescription></CardHeader><CardContent>
+        <Table><TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Model</TableHead><TableHead className="text-right">Sessions</TableHead><TableHead className="text-right">Operations</TableHead><TableHead className="text-right">Output tokens</TableHead><TableHead className="text-right">Est. cost</TableHead></TableRow></TableHeader><TableBody>{perDay.agents.map(agent => <TableRow key={agent}><TableCell>{agentLabel(agent)}</TableCell><TableCell>—</TableCell><TableCell className="text-right">—</TableCell><TableCell className="text-right">{formatNumber(stats.operationsPerDay.filter(row => row.agentKind === agent).reduce((sum,row) => sum + row.count,0))}</TableCell><TableCell className="text-right">—</TableCell><TableCell className="text-right">—</TableCell></TableRow>)}</TableBody></Table>
+      </CardContent></Card>
+      <Card role="region" aria-label="Top SQL"><CardHeader><div className="flex flex-wrap items-center gap-3"><CardTitle><h2>Top SQL</h2></CardTitle><SegmentedRadioGroup label="Top SQL order" value={sqlSort} options={[{ value: "duration", label: "Total time" }, { value: "runs", label: "Runs" }, { value: "reads", label: "Logical reads" }]} onValueChange={setSqlSort} /></div><CardDescription>Grouped by SQL hash · Logical reads: sum of recorded representative metric medians, not total executions. Coverage shown per operation and metric; missing data remains unavailable. SQL text and last run are unavailable.</CardDescription></CardHeader><CardContent><SqlTable rows={topSql} /></CardContent></Card>
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Statuses</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CountChart rows={stats.statuses} label="Operations" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Exit codes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CountChart rows={stats.exitCodes} label="Operations" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Most frequent SQL</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <SqlTable rows={stats.topSqlByCount} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Slowest SQL (total time)</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <SqlTable rows={stats.topSqlByDuration} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Tables by logical reads</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Table</TableHead>
-                  <TableHead className="text-right">Logical reads</TableHead>
-                  <TableHead className="text-right">Operations</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.topTablesByLogicalReads.map(row => (
-                  <TableRow key={row.table}>
-                    <TableCell className="font-mono">{row.table}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.logicalReads)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.operations)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Top waits</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Wait type</TableHead>
-                  <TableHead className="text-right">Total time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.topWaits.map(row => (
-                  <TableRow key={row.waitType}>
-                    <TableCell className="font-mono">{row.waitType}</TableCell>
-                    <TableCell className="text-right">{formatDuration(row.totalWaitMs)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Operations by kind</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CountChart rows={stats.operations} label="Operations" />
-          </CardContent>
-        </Card>
+        <Card role="region" aria-label="Tables by logical reads"><CardHeader><CardTitle><h2>Tables by logical reads</h2></CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Table</TableHead><TableHead className="text-right">Logical reads</TableHead><TableHead className="text-right">Ops</TableHead></TableRow></TableHeader><TableBody>{stats.topTablesByLogicalReads.map(row => <TableRow key={row.table}><TableCell className="font-mono">{row.table}</TableCell><TableCell className="text-right">{formatNumber(row.logicalReads)}</TableCell><TableCell className="text-right">{formatNumber(row.operations)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+        <Card role="region" aria-label="Top waits"><CardHeader><CardTitle><h2>Top waits</h2></CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Wait type</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{stats.topWaits.map(row => <TableRow key={row.waitType}><TableCell className="font-mono">{row.waitType}</TableCell><TableCell className="text-right">{formatDuration(row.totalWaitMs)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
       </div>
+      </div></div>
       <ProfileDimensionsPanel
         key={profile === null ? `scope:${unprofiled ? "unprofiled" : "all"}` : `profile:${profile}`}
         range={range}
@@ -383,6 +235,7 @@ function StatsContent({
         onAxisChoiceChange={onAxisChoiceChange}
         onCellSelect={onDimensionCellSelect}
       />
+
     </div>
   )
 }

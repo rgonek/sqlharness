@@ -1,0 +1,13 @@
+{
+  "revision": "bbda23d2a2f7c5dfd2bc7ce42657e18e6a6404e2",
+  "command": "just verify -LogDirectory D:/temp/sqlharness-screenshot-details-gate-20261029",
+  "exitCode": 1,
+  "failedStage": "ui-check",
+  "duration": "7m43s",
+  "uiPassed": 435,
+  "uiFailed": 1,
+  "reason": "Stale running-not-badge assertion contradicted screenshot 1",
+  "dotnetTestsRun": false,
+  "correction": "b23f2272",
+  "correctionScope": "Existing test only, no runtime changes"
+}

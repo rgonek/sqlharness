@@ -1,3 +1,5 @@
+import { HugeiconsIcon } from "@hugeicons/react"
+import { StarIcon } from "@hugeicons/core-free-icons"
 import { Link } from "@tanstack/react-router"
 import type { OperationSummary } from "@/api/types"
 import { FlagBadges } from "@/components/FlagBadges"
@@ -9,12 +11,12 @@ import { isInternalOperation } from "@/lib/internalOperations"
 import { useUpdateOperationAnnotation } from "@/api/queries"
 import { Button } from "@/components/ui/button"
 
-function OwnerStarButton({ operation }: { operation: OperationSummary }) {
+export function OwnerStarButton({ operation, prominent = false }: { operation: OperationSummary; prominent?: boolean }) {
   const update = useUpdateOperationAnnotation(operation.id)
-  return <Button variant="ghost" size="sm" aria-label={operation.ownerStarred ? "Unstar operation" : "Star operation"}
+  return <Button variant="ghost" size={prominent ? "icon-lg" : "icon-sm"} aria-label={operation.ownerStarred ? "Unstar operation" : "Star operation"}
     aria-pressed={operation.ownerStarred} disabled={update.isPending}
     onClick={() => update.mutate({ starred: !operation.ownerStarred })}>
-    {operation.ownerStarred ? "★" : "☆"}
+    <HugeiconsIcon icon={StarIcon} strokeWidth={2} fill={operation.ownerStarred ? "currentColor" : "none"} />
   </Button>
 }
 

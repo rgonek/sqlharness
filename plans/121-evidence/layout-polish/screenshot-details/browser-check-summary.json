@@ -1,0 +1,78 @@
+{
+  "passed": 104,
+  "failed": 0,
+  "groups": [
+    {
+      "file": "browser-results.json",
+      "passed": 10,
+      "expectedDiagnostics": [],
+      "referenceDiagnostics": [
+        {
+          "url": "http://127.0.0.1:48137/Operation%20v2.dc.html",
+          "error": "Error: <svg> attribute width: Expected length, \"{{ ed.W }}\"."
+        },
+        {
+          "url": "http://127.0.0.1:48137/Operation%20v2.dc.html",
+          "error": "Error: <svg> attribute height: Expected length, \"{{ ed.H }}\"."
+        },
+        {
+          "url": "http://127.0.0.1:48137/Operation%20v2.dc.html",
+          "error": "Error: <path> attribute d: Expected moveto path command ('M' or 'm'), \"{{ ed.d }}\"."
+        }
+      ]
+    },
+    {
+      "name": "App document overflow",
+      "passed": 13
+    },
+    {
+      "file": "session-live-results.json",
+      "passed": 5,
+      "expectedDiagnostics": [],
+      "referenceDiagnostics": []
+    },
+    {
+      "file": "control-results.json",
+      "passed": 28,
+      "expectedDiagnostics": [],
+      "referenceDiagnostics": []
+    },
+    {
+      "file": "usage-check-results.json",
+      "passed": 12,
+      "expectedDiagnostics": [],
+      "referenceDiagnostics": []
+    },
+    {
+      "file": "usage-error-results.json",
+      "passed": 7,
+      "expectedDiagnostics": [
+        {
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "url": "http://127.0.0.1:48138/api/stats?from=2026-10-28T07%3A29%3A00.000Z&to=2026-10-29T07%3A29%3A00.000Z&profile=local"
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "url": "http://127.0.0.1:48138/api/stats?from=2026-10-28T07%3A29%3A00.000Z&to=2026-10-29T07%3A29%3A00.000Z&profile=local"
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "url": "http://127.0.0.1:48138/api/stats?from=2026-10-28T07%3A29%3A00.000Z&to=2026-10-29T07%3A29%3A00.000Z&profile=local"
+        }
+      ],
+      "referenceDiagnostics": []
+    },
+    {
+      "file": "mutation-check-results.json",
+      "passed": 29,
+      "expectedDiagnostics": [
+        {
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "url": "http://127.0.0.1:48138/api/mutations/fixture-detail-approval/deny"
+        }
+      ],
+      "referenceDiagnostics": []
+    }
+  ],
+  "fixtureOnly": true
+}

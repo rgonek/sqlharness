@@ -1,0 +1,15 @@
+Test run for C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.14)
+[xUnit.net 00:00:00.49]   Discovering: SqlHarness.Tests (app domain = off, method display = ClassAndMethod, method display options = None)
+[xUnit.net 00:00:00.63] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.RegressionPolicyTests.Result_equivalence_gate_is_inconclusive_never_a_performance_fail'; falling back to single test case.
+[xUnit.net 00:00:00.92] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.Cli.CommandTests.Compare_text_renders_nullability_diagnostic'; falling back to single test case.
+[xUnit.net 00:00:02.37]   Discovered:  SqlHarness.Tests (4799 test cases to be run)
+[xUnit.net 00:00:02.44]   Starting:    SqlHarness.Tests (parallel test collections = off, stop on fail = off, explicit = off)
+[xUnit.net 00:00:03.83]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Dashboard.DashboardHostTests.Authenticated_shutdown_closes_live_stream_and_cleans_lifecycle_artifacts [1 s]
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 5,2214 Seconds

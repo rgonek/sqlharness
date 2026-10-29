@@ -1,8 +1,9 @@
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Add01Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 import { useUpdateSessionAnnotation } from "@/api/queries"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 
 const maximumNoteLength = 10_000
@@ -12,24 +13,19 @@ export function SessionNoteCard({ sessionId, note }: { sessionId: number; note: 
   const [draft, setDraft] = useState<string | null>(null)
 
   if (note === null && draft === null)
-    return <Button variant="outline" onClick={() => { update.reset(); setDraft("") }}>Add note</Button>
+    return <Button variant="outline" onClick={() => { update.reset(); setDraft("") }}><HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />Add note</Button>
 
   return (
-    <Card>
-      <CardHeader><CardTitle><h2>Note</h2></CardTitle></CardHeader>
-      <CardContent className="space-y-2">
+    <section aria-label="Session note" className="flex flex-col gap-2">
         {draft === null ? (
           <>
-            <p className="whitespace-pre-wrap break-words">{note}</p>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => { update.reset(); setDraft(note ?? "") }}>Edit note</Button>
-              {update.isSuccess && <span className="text-sm text-muted-foreground">Saved</span>}
-            </div>
+            <Button variant="secondary" className="session-note-display" title="Edit note" onClick={() => { update.reset(); setDraft(note ?? "") }}>{note}</Button>
+            {update.isSuccess && <span role="status" className="sr-only">Saved</span>}
           </>
         ) : (
           <>
             <Textarea
-              aria-label="Session note" maxLength={maximumNoteLength} value={draft} rows={6}
+              aria-label="Session note" placeholder="Note for this session" maxLength={maximumNoteLength} value={draft} rows={3}
               onChange={event => setDraft(event.target.value)}
             />
             <div className="flex items-center gap-2">
@@ -45,7 +41,6 @@ export function SessionNoteCard({ sessionId, note }: { sessionId: number; note: 
         {update.error && (
           <Alert variant="destructive"><AlertDescription>{update.error.message}</AlertDescription></Alert>
         )}
-      </CardContent>
-    </Card>
+    </section>
   )
 }

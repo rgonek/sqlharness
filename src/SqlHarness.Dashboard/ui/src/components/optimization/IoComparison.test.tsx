@@ -45,8 +45,9 @@ test("shows selected-run metrics and object LOB without replacing missing values
   expect(screen.getByText(/Elapsed \(ms\).*—.*42/)).toBeInTheDocument()
   expect(screen.getByText(/repetition 3/)).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan?occurrence=2")
-  await userEvent.click(screen.getByText("More columns"))
-  await userEvent.click(screen.getByRole("checkbox", { name: "LOB logical" }))
+  expect(screen.queryByRole("button", { name: "More columns" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "LOB logical" }))
+  expect(screen.getByRole("button", { name: "LOB logical" })).toHaveAttribute("aria-pressed", "true")
   expect(within(screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!).getByText("7")).toBeInTheDocument()
 })
 
@@ -124,4 +125,16 @@ test("batch memory does not claim statement memory is never retained", () => {
   render(<IoDetails comparison={comparison} byStatement onViewChange={vi.fn()} />)
   expect(screen.getByLabelText("Batch memory")).toHaveTextContent("Memory (sum of selected case medians)")
   expect(screen.queryByText("Statement memory is not retained in the journal.")).not.toBeInTheDocument()
+})
+
+test("the statement's counter cells toggle expansion without swallowing its plan links", async () => {
+  const linked = { ...comparison, statements: comparison.statements!.map(row => ({ ...row, planLinkBefore: "#before" })) }
+  render(<IoComparison comparison={linked} byStatement onViewChange={vi.fn()} />)
+  const row = screen.getByRole("button", { name: "SELECT * FROM Orders" }).closest("tr")!
+  await userEvent.click(within(row).getAllByRole("cell")[0])
+  expect(screen.queryByRole("rowheader", { name: "Orders" })).not.toBeInTheDocument()
+  await userEvent.click(within(row).getAllByRole("cell")[0])
+  expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
+  await userEvent.click(within(row).getByRole("link", { name: "Plan before" }))
+  expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
 })

@@ -1,0 +1,53 @@
+
+> ui@0.0.0 check
+> node scripts/check.mjs
+
+
+> ui@0.0.0 typecheck
+> tsc -b
+
+
+> ui@0.0.0 test
+> vitest run
+
+
+> ui@0.0.0 lint
+> oxlint
+
+
+ RUN  v5.0.3 C:/Users/rgone/.codex/worktrees/f735/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ❯ src/components/StatusBadge.test.tsx (9 tests | 1 failed) 1390ms
+   × running is muted informational text 11ms
+
+ Test Files  1 failed | 70 passed (71)
+      Tests  1 failed | 435 passed (436)
+   Start at  08:30:03
+   Duration  458.92s (import 53%, tests 24%, environment 15%, setup 5%, transform 2%)
+
+     Import  349 modules were evaluated 3618 times · 234.74s total, 53% of tracked time
+             ~212.10s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+(node:32256) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/StatusBadge.test.tsx > running is muted informational text
+Error: [2mexpect([22m[31melement[39m[2m).toHaveClass([22m[32m[32m"text-muted-foreground"[32m[39m[2m)[22m
+
+Expected the element to have class:
+[32m  text-muted-foreground[39m
+Received:
+[31m  group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-[0.625rem] font-medium whitespace-nowrap transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-2.5! bg-primary text-primary-foreground [a]:hover:bg-primary/80[39m
+ ❯ src/components/StatusBadge.test.tsx:15:39
+     13| test("running is muted informational text", () => {
+     14|   render(<StatusBadge operation={operation({ status: "running" })} />)
+     15|   expect(screen.getByText("running")).toHaveClass("text-muted-foregrou…
+       |                                       ^
+     16|   expect(screen.getByText("running").closest("[data-slot='badge']")).t…
+     17| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+check: FAILED (test)

@@ -1,0 +1,2 @@
+# Preserve terminal evidence byte-for-byte; raw log whitespace is data.
+**/*.log -text -whitespace

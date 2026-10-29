@@ -49,7 +49,7 @@ test("compare context is on by default and disabling it preserves other settings
 
   const toggle = await screen.findByRole("switch", { name: "Require compare subject and scope" })
   expect(toggle).toBeChecked()
-  const explanation = screen.getByText((_, node) => node?.tagName === "P" && Boolean(node.textContent?.startsWith("When enabled, CLI compare needs both")))
+  const explanation = screen.getByText((_, node) => node?.tagName === "SPAN" && Boolean(node.textContent?.startsWith("When enabled, CLI compare needs both")))
   expect(explanation).toHaveTextContent(/CLI compare needs both.*subject.*scope.*MCP compare needs both/i)
   expect(screen.getByText(/CLI applies changes on the next invocation.*Restart running MCP servers and reconnect/i)).toBeInTheDocument()
   await userEvent.click(toggle)
@@ -114,7 +114,9 @@ test("SQL execution settings show API field errors", async () => {
   const field = await screen.findByRole("spinbutton", { name: "Default execution timeout (seconds)" })
   await userEvent.clear(field)
   await userEvent.type(field, "200{Enter}")
-  expect(await screen.findByText("Must be between 1 and 300.")).toBeInTheDocument()
+  const error = await screen.findByText("Must be between 1 and 300.")
+  expect(field).toHaveAttribute("aria-errormessage", error.id)
+  expect(field).toHaveAccessibleDescription(/Must be between 1 and 300/)
   expect(field).toHaveValue(30)
 })
 
@@ -156,7 +158,7 @@ test("operation annotations default off and show process restart guidance", asyn
   const puts = stubSettings(response())
   renderApp("/settings")
 
-  const toggle = await screen.findByRole("switch", { name: "Agent operation annotations" })
+  const toggle = await screen.findByRole("switch", { name: "Agent annotations" })
   expect(toggle).not.toBeChecked()
   expect(screen.getByText(/Allows agents to label operations and mark them for keeping\./)).toBeInTheDocument()
   expect(screen.getByText(/Enabling agent annotations also enables the activity journal automatically\./)).toBeInTheDocument()
@@ -168,7 +170,7 @@ test("operation annotations load on and can be turned off without changing journ
   const puts = stubSettings(initial)
   renderApp("/settings")
 
-  const toggle = await screen.findByRole("switch", { name: "Agent operation annotations" })
+  const toggle = await screen.findByRole("switch", { name: "Agent annotations" })
   expect(toggle).toBeChecked()
   await userEvent.click(toggle)
   await waitFor(() => expect(puts).toHaveLength(1))
@@ -179,7 +181,7 @@ test("enabling operation annotations with the journal on saves the setting", asy
   const puts = stubSettings(response())
   renderApp("/settings")
 
-  await userEvent.click(await screen.findByRole("switch", { name: "Agent operation annotations" }))
+  await userEvent.click(await screen.findByRole("switch", { name: "Agent annotations" }))
   await waitFor(() => expect(puts).toHaveLength(1))
   expect((puts[0].body as SettingsResponse["settings"]).journal).toMatchObject({ enabled: true, operationAnnotations: true })
 })
@@ -189,7 +191,7 @@ test("enabling operation annotations with the journal off enables both in one sa
   const puts = stubSettings(initial)
   renderApp("/settings")
 
-  await userEvent.click(await screen.findByRole("switch", { name: "Agent operation annotations" }))
+  await userEvent.click(await screen.findByRole("switch", { name: "Agent annotations" }))
   await waitFor(() => expect(puts).toHaveLength(1))
   expect((puts[0].body as SettingsResponse["settings"]).journal.enabled).toBe(true)
   expect((puts[0].body as SettingsResponse["settings"]).journal.operationAnnotations).toBe(true)
@@ -200,7 +202,7 @@ test("disabling the journal also disables operation annotations in one save", as
   const puts = stubSettings(initial)
   renderApp("/settings")
 
-  await userEvent.click(await screen.findByRole("switch", { name: "Journal enabled" }))
+  await userEvent.click(await screen.findByRole("switch", { name: "Activity journal" }))
   await waitFor(() => expect(puts).toHaveLength(1))
   expect((puts[0].body as SettingsResponse["settings"]).journal.enabled).toBe(false)
   expect((puts[0].body as SettingsResponse["settings"]).journal.operationAnnotations).toBe(false)
@@ -212,7 +214,7 @@ test("re-enabling the journal alone leaves operation annotations off", async () 
   const puts = stubSettings(initial)
   renderApp("/settings")
 
-  await userEvent.click(await screen.findByRole("switch", { name: "Journal enabled" }))
+  await userEvent.click(await screen.findByRole("switch", { name: "Activity journal" }))
   await waitFor(() => expect(puts).toHaveLength(1))
   expect((puts[0].body as SettingsResponse["settings"]).journal).toMatchObject({ enabled: true, operationAnnotations: false })
 })
@@ -244,8 +246,8 @@ test("rapid operation annotation and journal changes save valid queued snapshots
   const user = userEvent.setup()
   renderApp("/settings")
 
-  await user.click(await screen.findByRole("switch", { name: "Agent operation annotations" }))
-  await user.click(screen.getByRole("switch", { name: "Journal enabled" }))
+  await user.click(await screen.findByRole("switch", { name: "Agent annotations" }))
+  await user.click(screen.getByRole("switch", { name: "Activity journal" }))
   await waitFor(() => expect(puts).toHaveLength(1))
   releaseFirst?.()
   await waitFor(() => expect(puts).toHaveLength(2))
@@ -262,7 +264,7 @@ test("rejected operation annotation saves keep the server value and explain rest
   })
   renderApp("/settings")
 
-  const toggle = await screen.findByRole("switch", { name: "Agent operation annotations" })
+  const toggle = await screen.findByRole("switch", { name: "Agent annotations" })
   await userEvent.click(toggle)
   expect(await screen.findByRole("alert")).toHaveTextContent(/Not saved:/)
   expect(toggle).not.toBeChecked()
@@ -309,7 +311,7 @@ test("Enabling_retention_asks_for_confirmation", async () => {
   const puts = stubSettings(response())
   renderApp("/settings")
 
-  const toggle = await screen.findByRole("switch", { name: "Retention enabled" })
+  const toggle = await screen.findByRole("switch", { name: "Retention" })
   await userEvent.click(toggle)
   let dialog = await screen.findByRole("dialog")
   expect(dialog).toHaveTextContent(/can delete activity journal data/)
@@ -459,4 +461,29 @@ test("disabling transcript matching clears cached agent operation pages after se
   await waitFor(() => expect(puts).toHaveLength(1))
   await waitFor(() => expect(client.getQueryData(queryKey)).toBeUndefined())
   expect((puts[0].body as { dashboard: { agentTranscripts: { enabled: boolean } } }).dashboard.agentTranscripts.enabled).toBe(false)
+})
+
+
+test("visible switch labels activate their controls and expose help", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+  const toggle = await screen.findByRole("switch", { name: "Connection diagnostics" })
+  expect(toggle).toHaveAccessibleDescription(/connection/)
+  await userEvent.click(screen.getByText("Connection diagnostics", { selector: "label" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect(toggle).toBeChecked()
+})
+
+test("invalid numbers expose description and linked validation without saving", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+  const field = await screen.findByRole("spinbutton", { name: "Connection timeout (seconds)" })
+  expect(field).toHaveAccessibleDescription(/Time to open/)
+  await userEvent.clear(field)
+  await userEvent.type(field, "0{Enter}")
+  expect(field).toHaveAttribute("aria-invalid", "true")
+  const error = screen.getByText(/Enter a whole number from 1 to 300/)
+  expect(field).toHaveAttribute("aria-errormessage", error.id)
+  expect(field).toHaveAccessibleDescription(/Enter a whole number/)
+  expect(puts).toHaveLength(0)
 })

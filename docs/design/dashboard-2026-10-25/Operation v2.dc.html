@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#fff;font-family:'Geist',system-ui,sans-serif;color:#0a0a0a}a{color:#0a0a0a}a:hover{color:#525252}.plan-hl{background:rgba(16,172,97,.28);border-radius:2px}.plan-stmt{background:#fafafa}</style></helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;font-size:14px">
+<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;background:#fafafa;border-bottom:1px dashed #d4d4d4;font-size:12.5px;color:#525252"><span>Podgląd typu operacji</span><div style="display:flex;padding:2px;background:#ececec;border-radius:8px;font-weight:500"><sc-for list="{{ kinds }}" as="k" hint-placeholder-count="4"><span onClick="{{ k.pick }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:6px;cursor:pointer;background:{{ k.bg }};box-shadow:{{ k.sh }};color:{{ k.fg }}">{{ k.label }}</span></sc-for></div></div>
+<header style="display:flex;align-items:center;gap:12px;padding:16px"><span style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="205 205 268 254" style="width:32px;height:32px"><path fill="#10AC61" d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"></path><path fill="#0B203B" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"></path></svg><span style="font-size:18px;font-weight:600;letter-spacing:-.02em"><span style="color:#0B203B">SQL</span><span style="color:#10AC61">Harness</span></span></span>
+<nav style="display:flex;gap:4px;flex:1;font-size:12.8px;font-weight:500"><a href="Activity.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a;background:#f5f5f5">Activity</a><a href="Usage.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Usage</a><a href="Profiles.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Profiles</a><a href="Settings.dc.html" style="height:28px;padding:0 10px;display:flex;align-items:center;border-radius:8px;text-decoration:none;color:#0a0a0a">Settings</a></nav></header>
+<div style="height:1px;background:#e5e5e5"></div>
+<main style="width:100%;max-width:1200px;margin:0 auto;box-sizing:border-box;padding:16px 24px 64px;display:flex;flex-direction:column;gap:16px">
+
+<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#737373"><a href="Activity.dc.html" style="color:#737373;text-decoration:none">Activity</a><span>/</span><a href="Session Optimization.dc.html" style="color:#737373;text-decoration:none">{{ k.session }}</a><span>/</span><span style="color:#0a0a0a">#{{ k.id }}</span></div>
+
+<div style="display:flex;flex-direction:column;gap:6px;padding:4px 0">
+<div style="display:flex;align-items:center;gap:8px;min-height:36px">
+<h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:{{ k.titleFont }}">{{ k.title }}</h1>
+<sc-if value="{{ k.keep }}" hint-placeholder-val="{{ false }}"><span title="Kept by agent" style="flex:none;display:flex;color:#7c3aed"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path></svg></span></sc-if>
+<div style="margin-left:auto;display:flex;align-items:center;gap:2px;position:relative">
+<span onClick="{{ toggleStar }}" title="{{ starTitle }}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;color:{{ starColor }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{ starFill }}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></span>
+<span onClick="{{ copySql }}" title="{{ copyTitle }}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;color:{{ copyColor }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></span>
+<span onClick="{{ toggleMenu }}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;background:{{ menuBg }}" style-hover="background:#f5f5f5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span>
+<sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:0;top:36px;width:250px;background:#fff;border-radius:10px;box-shadow:0 0 0 1px rgba(10,10,10,.1),0 8px 24px rgba(0,0,0,.1);padding:4px;z-index:10"><div onClick="{{ editNote }}" style="padding:6px 8px;border-radius:6px;cursor:pointer" style-hover="background:#f5f5f5">{{ noteMenuLabel }}</div><div style="height:1px;background:#e5e5e5;margin:4px -4px"></div><sc-for list="{{ k.menu }}" as="m" hint-placeholder-count="3"><div onClick="{{ closeMenu }}" style="padding:6px 8px;border-radius:6px;cursor:pointer" style-hover="background:#f5f5f5">{{ m }}</div></sc-for></div></sc-if>
+</div></div>
+<div style="color:#737373;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center">
+<span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;background:{{ k.sBg }};color:{{ k.sFg }}">{{ k.status }}</span>
+<sc-if value="{{ k.hasLabel }}" hint-placeholder-val="{{ false }}"><span style="color:#0a0a0a">{{ k.kind }} #{{ k.id }}</span><span>·</span></sc-if>
+<span>{{ k.agent }}</span><span style="font-family:'Geist Mono',monospace;font-size:12px;padding:0 6px;border-radius:4px;background:#f5f5f5;color:#404040">{{ k.via }}</span><span>·</span><span>{{ k.when }}</span><span>·</span><span style="font-variant-numeric:tabular-nums">{{ k.dur }}</span><span>·</span><span>{{ k.target }}</span><span>·</span>
+<span onClick="{{ toggleDetails }}" style="display:flex;align-items:center;gap:2px;color:#0a0a0a;cursor:pointer">Details<span style="display:flex;transform:rotate({{ detRot }})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"></path></svg></span></span></div>
+<sc-if value="{{ detailsOpen }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:14px;padding-top:10px">
+<sc-for list="{{ factGroups }}" as="fg" hint-placeholder-count="3"><div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:500;color:#737373">{{ fg.title }}</div><div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 16px"><sc-for list="{{ fg.facts }}" as="f" hint-placeholder-count="4"><div style="min-width:0"><div style="font-size:12.5px;color:#737373">{{ f.label }}</div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:{{ f.font }};font-size:{{ f.size }}">{{ f.value }}</div></div></sc-for></div></div></sc-for>
+</div></sc-if>
+<sc-if value="{{ noteEditing }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:8px;align-items:flex-start;padding-top:6px"><textarea value="{{ noteDraft }}" onChange="{{ onNote }}" placeholder="Note for this operation" style="flex:1;min-height:56px;padding:8px 10px;border:1px solid #d4d4d4;border-radius:8px;font:14px/1.45 'Geist',sans-serif;resize:vertical;outline:none"></textarea><span onClick="{{ saveNote }}" style="height:32px;padding:0 12px;display:flex;align-items:center;border-radius:8px;background:#171717;color:#fff;font-size:12.8px;font-weight:500;cursor:pointer">Save</span><span onClick="{{ cancelNote }}" style="height:32px;padding:0 10px;display:flex;align-items:center;border-radius:8px;font-size:12.8px;font-weight:500;cursor:pointer" style-hover="background:#f5f5f5">Cancel</span></div></sc-if>
+<sc-if value="{{ noteShown }}" hint-placeholder-val="{{ false }}"><div onClick="{{ editNote }}" style="margin-top:6px;padding:8px 12px;border-radius:8px;background:#fafafa;color:#404040;cursor:text;white-space:pre-wrap">{{ note }}</div></sc-if>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1)">
+<sc-for list="{{ k.kpis }}" as="kp" hint-placeholder-count="4"><div style="padding:12px 16px;border-left:{{ kp.border }};display:grid;gap:2px"><span style="font-size:12px;color:#737373">{{ kp.label }}</span><span style="display:flex;align-items:baseline;gap:8px"><span style="font-size:18px;font-weight:500;font-variant-numeric:tabular-nums">{{ kp.value }}</span><span style="font-size:12.5px;font-weight:500;color:{{ kp.dColor }}">{{ kp.delta }}</span></span></div></sc-for>
+</div>
+
+<div style="border-radius:14px;box-shadow:0 0 0 1px rgba(10,10,10,.1);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:0 16px;display:flex;align-items:center;gap:20px;border-bottom:1px solid #e5e5e5;font-weight:500">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3"><span onClick="{{ t.pick }}" style="padding:12px 0 10px;cursor:pointer;border-bottom:2px solid {{ t.line }};color:{{ t.color }};display:flex;gap:6px">{{ t.label }}<span style="font-weight:400;color:#737373">{{ t.count }}</span></span></sc-for>
+<sc-if value="{{ k.isCompare }}" hint-placeholder-val="{{ false }}"><a href="Session Optimization.dc.html" style="margin-left:auto;font-weight:400;font-size:13px;color:#525252">Open in session Optimization →</a></sc-if></div>
+
+<div style="display:{{ sqlDisplay }};flex-direction:column;gap:12px;padding:12px 16px 16px">
+<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px"><span style="color:#737373;margin-right:2px">Parameters</span><sc-for list="{{ k.params }}" as="pm" hint-placeholder-count="2"><span style="font-family:'Geist Mono',monospace;font-size:12px;padding:2px 8px;border-radius:6px;box-shadow:inset 0 0 0 1px #e5e5e5;color:#404040">{{ pm }}</span></sc-for></div>
+<sc-if value="{{ hasPlan }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:12px;font-size:13px"><sc-if value="{{ isCmp }}" hint-placeholder-val="{{ false }}"><div style="display:flex;padding:2px;background:#f5f5f5;border-radius:8px;font-size:12.8px;font-weight:500"><sc-for list="{{ verTabs }}" as="vt" hint-placeholder-count="2"><span onClick="{{ vt.pick }}" style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:6px;cursor:pointer;background:{{ vt.bg }};box-shadow:{{ vt.sh }};color:{{ vt.fg }}">{{ vt.label }}</span></sc-for></div></sc-if><sc-if value="{{ multiStmt }}" hint-placeholder-val="{{ false }}"><select value="{{ stmtVal }}" onChange="{{ onStmt }}" style="height:28px;padding:0 6px;border:1px solid #e5e5e5;border-radius:8px;font:500 12.8px 'Geist',sans-serif;background:#fff"><sc-for list="{{ stmtOptions }}" as="o" hint-placeholder-count="2"><option value="{{ o.v }}">{{ o.label }}</option></sc-for></select></sc-if><span style="color:#737373">{{ k.planNote }}</span><span style="margin-left:auto;color:#737373">Solid = exact match · dashed = inferred</span></div></sc-if>
+<div style="height:{{ sqlHeight }};border:1px solid #e5e5e5;border-radius:6px;overflow:hidden;position:relative"><div ref="{{ sqlRef }}" style="position:absolute;inset:0"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#737373;font-size:13px;pointer-events:none;opacity:{{ loadingOpacity }}">Loading SQL viewer…</div></div>
+<sc-if value="{{ hasPlan }}" hint-placeholder-val="{{ true }}"><div style="border:1px solid #e5e5e5;border-radius:6px;overflow:auto;background-color:#fff;background-image:radial-gradient(#e5e5e5 1px, transparent 1px);background-size:24px 24px"><div style="position:relative;width:{{ graph.w }}px;height:{{ graph.h }}px;margin:0 auto">
+<sc-for list="{{ graph.edges }}" as="ed" hint-placeholder-count="0"><svg width="{{ ed.W }}" height="{{ ed.H }}" style="position:absolute;left:0;top:0;overflow:visible;pointer-events:none"><path d="{{ ed.d }}" fill="none" stroke="#a3a3a3" stroke-width="{{ ed.w }}" stroke-linejoin="round"></path></svg><span style="position:absolute;left:{{ ed.lx }}px;top:{{ ed.ly }}px;font-size:10.5px;color:#737373;background:rgba(255,255,255,.85);padding:0 3px;border-radius:3px;pointer-events:none">{{ ed.rows }}</span></sc-for>
+<sc-for list="{{ graph.nodes }}" as="nd" hint-placeholder-count="0"><div onClick="{{ nd.select }}" title="{{ nd.tip }}" style="position:absolute;left:{{ nd.left }}px;top:{{ nd.top }}px;width:172px;height:96px;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:{{ nd.border }};background:{{ nd.bg }};box-shadow:{{ nd.ring }};cursor:pointer;display:flex;flex-direction:column;gap:2px;font-size:12px;overflow:hidden">
+<span style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ nd.op }}</span>
+<span style="font-family:'Geist Mono',monospace;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#404040">{{ nd.obj }}</span>
+<span style="color:#737373;margin-top:auto">{{ nd.rowsLine }}</span>
+<span style="color:{{ nd.costColor }};font-weight:{{ nd.costWeight }}">Cost {{ nd.cost }}</span>
+</div></sc-for>
+</div></div>
+<div style="min-height:20px;font-size:13px;color:#525252;display:flex;gap:6px 14px;flex-wrap:wrap"><sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}"><span style="font-weight:500;color:#0a0a0a">{{ sel.title }}</span><span>{{ sel.rows }}</span><span>Cost {{ sel.cost }}</span><span>Source: {{ sel.conf }} · {{ sel.rule }}</span></sc-if><sc-if value="{{ noSel }}" hint-placeholder-val="{{ true }}"><span style="color:#737373">Kliknij operator albo miejsce w SQL.</span></sc-if></div></sc-if>
+</div>
+
+<div style="display:{{ diffDisplay }};flex-direction:column;gap:12px;padding:12px 16px 16px">
+<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px"><span style="color:#737373;margin-right:2px">Parameters</span><sc-for list="{{ k.params }}" as="pm" hint-placeholder-count="2"><span style="font-family:'Geist Mono',monospace;font-size:12px;padding:2px 8px;border-radius:6px;box-shadow:inset 0 0 0 1px #e5e5e5;color:#404040">{{ pm }}</span></sc-for></div>
+<div style="display:flex;align-items:center;gap:16px;font-size:13px"><span style="font-weight:500">v0 → v2</span><span style="color:#737373">measured together in #214 · results equivalent (multiset)</span><span style="margin-left:auto;color:#525252">Copy script ▾</span></div>
+<div style="height:380px;border:1px solid #e5e5e5;border-radius:6px;overflow:hidden;position:relative"><div ref="{{ diffRef }}" style="position:absolute;inset:0"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#737373;font-size:13px;pointer-events:none;opacity:{{ loadingOpacity }}">Loading SQL viewer…</div></div>
+</div>
+
+<sc-if value="{{ tabStmts }}" hint-placeholder-val="{{ false }}"><div style="padding:4px 16px 12px;display:flex;flex-direction:column;font-size:14px">
+<div style="display:grid;grid-template-columns:{{ k.stmtCols }};gap:8px;padding:10px 8px;font-weight:500;border-bottom:1px solid #e5e5e5"><sc-for list="{{ k.stmtHead }}" as="h" hint-placeholder-count="5"><span style="text-align:{{ h.align }}">{{ h.label }}</span></sc-for></div>
+<sc-for list="{{ k.stmts }}" as="s" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:{{ k.stmtCols }};gap:8px;padding:10px 8px;border-bottom:1px solid #f0f0f0;font-variant-numeric:tabular-nums;align-items:start"><div style="min-width:0;font-family:'Geist Mono',monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.text }}</div><sc-for list="{{ s.cells }}" as="c" hint-placeholder-count="4"><span style="text-align:{{ c.align }};color:{{ c.color }}">{{ c.v }}</span></sc-for></div></sc-for>
+</div></sc-if>
+
+<sc-if value="{{ tabIo }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 16px 16px"><div style="display:flex;flex-direction:column;gap:10px;font-size:14px">
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+<div style="display:flex;padding:2px;background:#f5f5f5;border-radius:9px;font-size:12.8px;font-weight:500"><sc-for list="{{ io.modes }}" as="m" hint-placeholder-count="2"><span onClick="{{ m.pick }}" style="height:26px;padding:0 10px;display:flex;align-items:center;border-radius:7px;cursor:pointer;background:{{ m.bg }};box-shadow:{{ m.sh }};color:{{ m.fg }}">{{ m.label }}</span></sc-for></div>
+<span style="font-size:12.5px;color:#737373;margin-left:8px">Columns</span>
+<sc-for list="{{ io.colChips }}" as="c" hint-placeholder-count="3"><span onClick="{{ c.toggle }}" style="height:26px;padding:0 10px;display:flex;align-items:center;gap:6px;border-radius:999px;font-size:12.8px;font-weight:500;cursor:pointer;background:{{ c.bg }};color:{{ c.fg }};box-shadow:inset 0 0 0 1px {{ c.ring }}">{{ c.label }}<span style="font-weight:400;opacity:.7">{{ c.hint }}</span></span></sc-for>
+<span style="margin-left:auto;font-size:12.5px;color:#737373">{{ io.pairLabel }}</span></div>
+<div style="display:grid;grid-template-columns:{{ io.cols }};gap:8px;padding:8px;font-weight:500;border-bottom:1px solid #e5e5e5"><sc-for list="{{ io.head }}" as="h" hint-placeholder-count="4"><span style="text-align:{{ h.align }}">{{ h.label }}</span></sc-for></div>
+<sc-if value="{{ io.byStmt }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ io.groups }}" as="g" hint-placeholder-count="2"><div style="display:flex;flex-direction:column;border-bottom:1px solid #e5e5e5">
+<div onClick="{{ g.toggle }}" style="display:flex;flex-direction:column;gap:4px;padding:9px 8px;cursor:pointer;background:#fafafa" style-hover="background:#f5f5f5">
+<div style="display:grid;grid-template-columns:{{ io.cols }};gap:8px;align-items:start"><span style="display:flex;align-items:center;gap:6px;min-width:0"><span style="display:flex;transform:rotate({{ g.rot }});transition:transform .15s;color:#737373"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg></span><span style="font-family:'Geist Mono',monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.sql }}</span></span><sc-for list="{{ g.cells }}" as="c" hint-placeholder-count="2"><div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500"><div>{{ c.v }}</div><div style="font-size:12px;color:{{ c.color }};font-weight:400">{{ c.d }}</div></div></sc-for></div>
+<div style="display:flex;gap:6px 16px;flex-wrap:wrap;padding-left:20px;font-size:12.5px;color:#525252;font-variant-numeric:tabular-nums"><sc-if value="{{ g.hasStatus }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;padding:1px 8px;border-radius:999px;background:{{ g.statusBg }};color:{{ g.statusFg }}">{{ g.status }}</span></sc-if><sc-for list="{{ g.mem }}" as="mm" hint-placeholder-count="2"><span style="display:flex;gap:4px;align-items:center"><span style="color:#737373">{{ mm.k }}</span><span>{{ mm.v }}</span><sc-if value="{{ mm.warn }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;padding:0 6px;border-radius:999px;border:1px solid rgba(217,119,6,.5);color:#92400e">{{ mm.warnText }}</span></sc-if></span></sc-for><sc-for list="{{ g.plans }}" as="pl" hint-placeholder-count="2"><span onClick="{{ pl.open }}" style="text-decoration:underline;text-decoration-color:#a3a3a3;cursor:pointer;color:#0a0a0a">{{ pl.label }}</span></sc-for></div>
+</div>
+<sc-if value="{{ g.open }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:{{ io.cols }};gap:8px;padding:7px 8px 7px 28px;border-top:1px solid #f5f5f5;align-items:start"><span style="font-family:'Geist Mono',monospace;font-size:13px;color:{{ r.nameColor }}">{{ r.name }}</span><sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="2"><div style="text-align:right;font-variant-numeric:tabular-nums"><div>{{ c.v }}</div><div style="font-size:12px;color:{{ c.color }}">{{ c.d }}</div></div></sc-for></div></sc-for></sc-if>
+</div></sc-for></sc-if>
+<sc-if value="{{ io.whole }}" hint-placeholder-val="{{ false }}">
+<sc-for list="{{ io.wholeRows }}" as="r" hint-placeholder-count="4"><div style="display:grid;grid-template-columns:{{ io.cols }};gap:8px;padding:8px;border-bottom:1px solid #f0f0f0;align-items:start"><span style="font-family:'Geist Mono',monospace;font-size:13px;color:{{ r.nameColor }}">{{ r.name }}</span><sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="2"><div style="text-align:right;font-variant-numeric:tabular-nums"><div>{{ c.v }}</div><div style="font-size:12px;color:{{ c.color }}">{{ c.d }}</div></div></sc-for></div></sc-for>
+<div style="display:grid;grid-template-columns:{{ io.cols }};gap:8px;padding:8px;background:#fafafa;font-weight:600;align-items:start"><span>Total</span><sc-for list="{{ io.totalCells }}" as="c" hint-placeholder-count="2"><div style="text-align:right;font-variant-numeric:tabular-nums"><div>{{ c.v }}</div><div style="font-size:12px;color:{{ c.color }};font-weight:500">{{ c.d }}</div></div></sc-for></div>
+<div style="display:flex;gap:6px 16px;flex-wrap:wrap;padding:4px 8px 0;font-size:12.5px;color:#525252"><span style="color:#737373">Memory (all statements)</span><sc-for list="{{ io.memTotal }}" as="mt" hint-placeholder-count="3"><span>{{ mt }}</span></sc-for></div>
+</sc-if>
+<div style="font-size:12px;color:#737373;line-height:1.5">IO z SET STATISTICS IO (PostgreSQL: BUFFERS). Pamięć i spille z rzeczywistego planu.</div>
+</div></div></sc-if>
+<sc-if value="{{ tabResults }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px"><div style="font-size:13px;color:#737373">1 row · 1 column · stored preview (first 50 rows)</div><div style="display:inline-grid;grid-template-columns:repeat(2,minmax(120px,max-content));border:1px solid #e5e5e5;border-radius:6px;overflow:hidden;font-variant-numeric:tabular-nums;align-self:flex-start"><span style="padding:6px 12px;background:#fafafa;font-weight:500;border-bottom:1px solid #e5e5e5;color:#737373">#</span><span style="padding:6px 12px;background:#fafafa;font-weight:500;border-bottom:1px solid #e5e5e5">(No column name)</span><span style="padding:6px 12px;color:#737373">1</span><span style="padding:6px 12px">312</span></div></div></sc-if>
+
+<sc-if value="{{ tabApproval }}" hint-placeholder-val="{{ false }}"><div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;flex-direction:column">
+<sc-for list="{{ approval }}" as="a" hint-placeholder-count="4"><div style="display:grid;grid-template-columns:20px 84px minmax(0,1fr);gap:12px;align-items:start"><div style="display:flex;flex-direction:column;align-items:center;height:100%"><span style="width:10px;height:10px;border-radius:999px;margin-top:5px;background:{{ a.dot }}"></span><span style="flex:1;width:2px;background:#e5e5e5;opacity:{{ a.lineOp }};min-height:22px"></span></div><span style="color:#737373;font-variant-numeric:tabular-nums;padding-top:1px">{{ a.time }}</span><div style="padding-bottom:14px"><div style="font-weight:500">{{ a.title }}</div><div style="color:#737373;font-size:13.5px">{{ a.sub }}</div></div></div></sc-for>
+</div>
+<div style="font-size:13px;color:#737373">Mode from profile <span style="color:#0a0a0a">billing-stg</span> · approval timeout 300 s · verification click. <a href="Settings.dc.html#s-mut">Mutation settings</a></div>
+</div></sc-if>
+
+<sc-if value="{{ tabTiming }}" hint-placeholder-val="{{ false }}"><div style="padding:4px 16px 12px;display:flex;flex-direction:column">
+<sc-for list="{{ k.phases }}" as="p" hint-placeholder-count="4"><div style="display:grid;grid-template-columns:180px minmax(0,1fr) 80px 70px;gap:12px;align-items:center;padding:9px 8px;border-bottom:1px solid #f0f0f0;font-variant-numeric:tabular-nums"><span>{{ p.phase }}</span><div style="height:8px;border-radius:999px;background:#f5f5f5;overflow:hidden"><div style="height:100%;width:{{ p.pct }};background:{{ p.color }};border-radius:999px"></div></div><span style="text-align:right">{{ p.total }}</span><span style="text-align:right;color:#737373">{{ p.share }}</span></div></sc-for>
+<div onClick="{{ toggleEvents }}" style="display:flex;align-items:center;gap:6px;padding:12px 8px 4px;font-weight:500;cursor:pointer"><span style="display:flex;transform:rotate({{ evRot }});transition:transform .15s"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg></span>Connection events <span style="font-weight:400;color:#737373">3</span></div>
+<sc-if value="{{ evOpen }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;padding:0 8px 0 28px;font-size:13px;color:#404040"><sc-for list="{{ events }}" as="e" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:140px 80px 80px minmax(0,1fr);gap:12px;padding:6px 0;border-bottom:1px solid #f5f5f5;font-variant-numeric:tabular-nums"><span>{{ e.phase }}</span><span>+{{ e.off }}</span><span>{{ e.dur }}</span><span>{{ e.outcome }}</span></div></sc-for></div></sc-if>
+</div></sc-if>
+</div>
+</main></div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;kind&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;measure&quot;, &quot;query&quot;, &quot;mutate&quot;, &quot;compare&quot;], &quot;default&quot;: &quot;measure&quot;, &quot;tsType&quot;: &quot;\&quot;measure\&quot; | \&quot;query\&quot; | \&quot;mutate\&quot; | \&quot;compare\&quot;&quot;, &quot;section&quot;: &quot;Preview&quot;}}">
+const SQL_V0 = "DECLARE @from date = DATEADD(day, -90, @AsOf);\n\nSELECT o.OrderId, o.CustomerId, SUM(l.Amount) AS Total\nFROM dbo.Orders o\nJOIN dbo.OrderLines l ON l.OrderId = o.OrderId\nWHERE o.CustomerId = @CustomerId\n  AND CONVERT(date, o.CreatedAt) >= @from\nGROUP BY o.OrderId, o.CustomerId\nORDER BY Total DESC;\n\nSELECT c.Name\nFROM dbo.Customers c\nWHERE c.CustomerId = @CustomerId;\n";
+const SQL_V2 = "DECLARE @from datetime2 = DATEADD(day, -90, @AsOf);\n\nSELECT o.OrderId, o.CustomerId, t.Total\nFROM dbo.Orders o\nCROSS APPLY (\n  SELECT SUM(l.Amount) AS Total\n  FROM dbo.OrderLines l\n  WHERE l.OrderId = o.OrderId\n) t\nWHERE o.CustomerId = @CustomerId\n  AND o.CreatedAt >= @from\nORDER BY t.Total DESC;\n\nSELECT c.Name\nFROM dbo.Customers c\nWHERE c.CustomerId = @CustomerId;\n";
+const SQL_Q = "SELECT COUNT(*)\nFROM dbo.Invoices\nWHERE DueDate IS NULL\n  AND BatchId = @b;\n";
+const SQL_M = "UPDATE i\nSET i.DueDate = DATEADD(day, c.PaymentTermsDays, i.IssuedAt)\nFROM dbo.Invoices i\nJOIN dbo.Customers c ON c.CustomerId = i.CustomerId\nWHERE i.BatchId = @b\n  AND i.DueDate IS NULL;\n";
+const N = (op, obj, est, act, cost, match, rule, conf, kids) => ({ op, obj, est, act, cost, match, rule, conf: conf || "exact", kids });
+const PLANS = {
+  measure: { sql: SQL_V2, stmts: [
+    { start: "SELECT o.OrderId", label: "Statement 1 · SELECT … FROM dbo.Orders", tree: N("SELECT", "statement root", 120, 118, 0, "*", "statement root", 0, [N("Sort", "t.Total DESC", 120, 118, 6, "ORDER BY t.Total DESC", "ORDER BY", 0, [N("Nested Loops", "Inner Join · APPLY", 120, 118, 4, "CROSS APPLY", "CROSS APPLY", 0, [N("Index Seek", "dbo.Orders · IX_Orders_Customer_Created (o)", 124, 118, 22, "o.CustomerId = @CustomerId", "seek predicate"), N("Stream Aggregate", "SUM(l.Amount)", 1, 1, 3, "SUM(l.Amount)", "aggregate", 0, [N("Index Seek", "dbo.OrderLines · IX_OrderLines_OrderId_Amount (l)", 17, 17, 65, "l.OrderId = o.OrderId", "seek predicate (join)", "inferred")])])])]) },
+    { start: "SELECT c.Name", label: "Statement 2 · SELECT … FROM dbo.Customers", tree: N("SELECT", "statement root", 1, 1, 0, "*", "statement root", 0, [N("Clustered Index Seek", "dbo.Customers · PK_Customers (c)", 1, 1, 100, "c.CustomerId = @CustomerId", "seek predicate")]) }] },
+  query: { sql: SQL_Q, stmts: [{ start: "SELECT COUNT", label: "", tree: N("SELECT", "statement root", 1, 1, 0, "*", "statement root", 0, [N("Stream Aggregate", "COUNT(*)", 1, 1, 2, "COUNT(*)", "aggregate", 0, [N("Index Seek", "dbo.Invoices · IX_Invoices_BatchId (filtered DueDate IS NULL)", 300, 312, 98, "BatchId = @b", "seek predicate", "inferred")])]) }] },
+  mutate: { sql: SQL_M, stmts: [{ start: "UPDATE i", label: "", tree: N("UPDATE", "statement root", 300, 312, 0, "*", "statement root", 0, [N("Clustered Index Update", "dbo.Invoices · PK_Invoices", 300, 312, 71, "UPDATE i", "target table", 0, [N("Nested Loops", "Inner Join", 300, 312, 3, "JOIN dbo.Customers c ON c.CustomerId = i.CustomerId", "join condition", 0, [N("Index Seek", "dbo.Invoices · IX_Invoices_BatchId (i)", 300, 312, 14, "i.BatchId = @b", "seek predicate"), N("Clustered Index Seek", "dbo.Customers · PK_Customers (c)", 1, 1, 12, "c.CustomerId = i.CustomerId", "seek predicate (join)", "inferred")])])]) }] },
+};
+PLANS.cmp_v2 = PLANS.measure;
+PLANS.cmp_v0 = { sql: SQL_V0, stmts: [
+  { start: "SELECT o.OrderId", label: "Statement 1 · SELECT … FROM dbo.Orders", tree: N("SELECT", "statement root", 120, 118, 0, "*", "statement root", 0, [N("Sort", "Total DESC", 120, 118, 4, "ORDER BY Total DESC", "ORDER BY", 0, [N("Hash Match", "Aggregate", 120, 118, 9, "GROUP BY o.OrderId, o.CustomerId", "GROUP BY", 0, [N("Hash Match", "Inner Join", 2400, 1960, 21, "JOIN dbo.OrderLines l ON l.OrderId = o.OrderId", "join condition", 0, [N("Clustered Index Scan", "dbo.Orders · PK_Orders (o)", 140, 118, 38, "CONVERT(date, o.CreatedAt) >= @from", "residual predicate", "inferred"), N("Clustered Index Scan", "dbo.OrderLines · PK_OrderLines (l)", 410000, 410000, 28, "dbo.OrderLines l", "table reference")])])])]) },
+  PLANS.measure.stmts[1]] };
+const fmt = n => n.toLocaleString("en-US");
+const ph = (rows, total) => rows.map(([phase, ms]) => ({ phase, total: fmt(ms) + " ms", share: Math.round(ms * 100 / total) + "%", pct: (ms * 100 / total) + "%", color: /Execute|Benchmark|Apply/.test(phase) ? "#10AC61" : "#a3a3a3" }));
+const kp = (arr) => arr.map(([label, value, delta], i) => ({ label, value, delta: delta || "", dColor: delta && delta.startsWith("−") ? "#15803d" : "#737373", border: i ? "1px solid #e5e5e5" : "0" }));
+const KINDS = {
+  measure: { kind: "Measure", id: 213, label: "Pre-aggregate lines via CROSS APPLY", keep: true, status: "ok · exit 0", sBg: "#f5f5f5", sFg: "#404040", agent: "Claude Code", via: "mcp", when: "Today 13:54", dur: "2.1 s", target: "shop-dev / shop", session: "Optimize orders report", sessionHref: "Session Optimization.dc.html",
+    tabs: [["sql", "SQL & plan", ""], ["io", "IO", ""], ["timing", "Timing", ""]], kpis: kp([["Logical reads", "7,630"], ["Elapsed median", "151 ms"], ["CPU", "122 ms"], ["Scans", "3"], ["Rows", "118"]]),
+    planNote: "Actual plan · repetition 3 of 5", menu: ["Copy script (as executed)", "Copy script (local variables)", "Copy operation reference", "Open artifact directory"],
+    params: ["@CustomerId = 9001", "@AsOf = 2026-10-24"], vars: ["tenant = acme", "region = eu (inferred)"], mode: "measured · 5 repetitions",
+    stmtCols: "minmax(0,1fr) 90px 110px 90px 90px", stmtHead: ["Statement", "Executions", "Logical reads", "CPU", "Elapsed"],
+    stmts: [["SELECT o.OrderId, o.CustomerId, t.Total FROM dbo.Orders o CROSS APPLY (…) t …", ["1", "6,412", "104 ms", "131 ms"]], ["SELECT c.Name FROM dbo.Customers c WHERE c.CustomerId = @CustomerId", ["1", "1,218", "18 ms", "20 ms"]]],
+    phases: ph([["Connect", 96], ["Plan capture", 380], ["Execute (5×)", 1440], ["Read results", 140], ["Journal write", 44]], 2100) },
+  query: { kind: "Query", id: 212, label: "", keep: false, status: "ok · 1 row", sBg: "#f5f5f5", sFg: "#404040", agent: "Codex", via: "mcp", when: "Today 13:52", dur: "88 ms", target: "billing-stg / billing", session: "Fix invoice backfill", sessionHref: "Activity.dc.html",
+    tabs: [["sql", "SQL", ""], ["results", "Results", "1"], ["timing", "Timing", ""]], kpis: kp([["Rows", "1"], ["Columns", "1"], ["Duration", "88 ms"], ["Output", "0.1 KB"]]),
+    planNote: "Actual plan", menu: ["Copy script (as executed)", "Copy operation reference"], params: ["@b = 'B-2026-10-24'"], vars: ["tenant = acme"], mode: "query",
+    phases: ph([["Connect", 31], ["Execute", 41], ["Read results", 6], ["Journal write", 10]], 88) },
+  mutate: { kind: "Mutation", id: 215, label: "Backfill due dates", keep: false, status: "approved · verified", sBg: "#dcfce7", sFg: "#166534", agent: "Codex", via: "mcp", when: "Today 14:01", dur: "34 ms", target: "billing-stg / billing", session: "Fix invoice backfill", sessionHref: "Activity.dc.html",
+    tabs: [["sql", "SQL", ""], ["approval", "Approval", ""], ["timing", "Timing", ""]], kpis: kp([["Rows affected", "312"], ["Estimated", "300"], ["Duration", "34 ms"], ["Waited for approval", "19 s"]]),
+    planNote: "Estimated plan, captured before approval", menu: ["Copy script (as executed)", "Copy operation reference", "Open artifact directory"], params: ["@b = 'B-2026-10-24'"], vars: ["tenant = acme"], mode: "operator approval · tier data change",
+    phases: ph([["Connect", 9], ["Apply", 21], ["Verify", 3], ["Journal write", 1]], 34) },
+  compare: { kind: "Compare", id: 214, label: "orders-report · v0 → v2", keep: true, status: "ok · equivalent", sBg: "#f5f5f5", sFg: "#404040", agent: "Claude Code", via: "mcp", when: "Today 13:55", dur: "2.4 s", target: "shop-dev / shop", session: "Optimize orders report", sessionHref: "Session Optimization.dc.html",
+    tabs: [["diff", "SQL diff", ""], ["io", "IO", ""], ["plan", "Plan", ""], ["timing", "Timing", ""]], kpis: kp([["Logical reads", "7,630", "−84%"], ["Elapsed median", "151 ms", "−63%"], ["CPU", "122 ms", "−68%"], ["Results", "equivalent"]]),
+    planNote: "", menu: ["Copy v0 script", "Copy v2 script", "Copy operation reference"], params: ["@CustomerId = 9001", "@AsOf = 2026-10-24"], vars: ["tenant = acme", "region = eu (inferred)"], mode: "compare · 5 repetitions · subject orders-report · scope whole query",
+    stmtCols: "minmax(0,1fr) 120px 110px 110px 80px", stmtHead: ["Statement", "Status", "Reads before", "Reads after", "Change"],
+    stmts: [["SELECT o.OrderId, o.CustomerId, … FROM dbo.Orders o …", ["different work", "46,880", "6,412", "−86%"]], ["SELECT c.Name FROM dbo.Customers c WHERE c.CustomerId = @CustomerId", ["shared", "1,332", "1,218", "−9%"]]],
+    phases: ph([["Connect", 92], ["Baseline (5×)", 1030], ["Candidate (5×)", 880], ["Result check", 310], ["Journal write", 88]], 2400) },
+};
+const KEYWORDS = ["all","and","as","asc","by","case","cast","count","cross","declare","delete","desc","distinct","else","end","exists","from","group","having","in","inner","insert","into","is","join","left","like","not","null","on","or","order","outer","select","set","sum","then","top","union","update","values","when","where","with","apply","dateadd"];
+const PW = 172, PH = 96, PG = 36, PROW = 112, PP = 12;
+
+const VIO = {
+  v0: [{ rows: [["dbo.Orders", 1, 31840, 0, 280, 0], ["dbo.OrderLines", 1, 15040, 412, 1890, 0], ["Worktable", 2, 0, 0, 0, 0, 1]], mem: [4.2, 4.2, "Hash spill · level 1"] }, { rows: [["dbo.Customers", 1, 1332, 0, 0, 0]], mem: null }],
+  v1: [{ rows: [["dbo.Orders", 1, 4210, 0, 0, 0], ["dbo.OrderLines", 118, 7476, 0, 0, 0], ["Worktable", 1, 0, 0, 0, 0, 1]], mem: [3.8, 2.9, ""] }, { rows: [["dbo.Customers", 1, 1218, 0, 0, 0]], mem: null }],
+  v2: [{ rows: [["dbo.Orders", 1, 2104, 0, 0, 0], ["dbo.OrderLines", 118, 4308, 0, 0, 0]], mem: [1.1, 0.3, ""] }, { rows: [["dbo.Customers", 1, 1218, 0, 0, 0]], mem: null }],
+};
+const VIO_SQL = ["SELECT o.OrderId, o.CustomerId, … FROM dbo.Orders o …", "SELECT c.Name FROM dbo.Customers c WHERE c.CustomerId = @CustomerId"];
+const VIO_COLS = [["s", "Scans", 1], ["l", "Logical reads", 1], ["p", "Physical", 0], ["ra", "Read-ahead", 0], ["lob", "LOB reads", 0]];
+const VIO_IDX = { s: 1, l: 2, p: 3, ra: 4, lob: 5 };
+[["v0", [360, 392], [20, 20]], ["v1", [152, 170], [19, 18]], ["v2", [104, 131], [18, 20]]].forEach(([v, s1, s2]) => { VIO[v][0].cpu = s1[0]; VIO[v][0].el = s1[1]; VIO[v][1].cpu = s2[0]; VIO[v][1].el = s2[1]; });
+const VIO_STATUS = ["different work", "shared"];
+
+class Component extends DCLogic {
+  state = { ver: "v2", kind: null, tab: null, stmt: 0, node: null, star: false, menu: false, copied: false, note: "", noteEditing: false, noteDraft: "", ev: false, det: false, loaded: false };
+  sqlRef = React.createRef(); diffRef = React.createRef(); layouts = {};
+  planKey() { const k = this.kindKey(); return k === "compare" ? "cmp_" + (this.state.ver || "v2") : k; }
+  kindKey() { let u = null; try { u = new URLSearchParams(location.search).get("kind"); } catch (e) {} return this.state.kind || (u && KINDS[u] ? u : null) || (this.props && this.props.kind) || "measure"; }
+  tabKey() { const K = KINDS[this.kindKey()]; return this.state.tab && K.tabs.some(t => t[0] === this.state.tab) ? this.state.tab : K.tabs[0][0]; }
+  layout(kind, si) {
+    const key = kind + si; if (this.layouts[key]) return this.layouts[key];
+    const P = PLANS[kind], sql = P.sql, st = P.stmts[si];
+    const start = sql.indexOf(st.start), end = sql.indexOf(";", start) + 1;
+    const depth = n => (n.kids || []).reduce((m, k) => Math.max(m, 1 + depth(k)), 0);
+    const D = depth(st.tree), nodes = [], edges = []; let row = 0, id = 0;
+    const place = (n, d) => {
+      const me = { ...n, key: key + ":" + id++ };
+      if (n.match === "*") { me.s = start; me.e = end; } else { me.s = sql.indexOf(n.match, start); me.e = me.s + n.match.length; }
+      const kids = (n.kids || []).map(k => place(k, d + 1));
+      me.ry = kids.length ? kids.reduce((a, k) => a + k.ry, 0) / kids.length : row++;
+      me.x = PP + (D - d) * (PW + PG); me.y = PP + me.ry * PROW + (PROW - PH) / 2;
+      nodes.push(me); kids.forEach(k => edges.push([k, me])); return me;
+    };
+    place(st.tree, 0);
+    const W = PP * 2 + (D + 1) * PW + D * PG, H = PP * 2 + row * PROW;
+    return (this.layouts[key] = { start, end, nodes, W, H, edges: edges.map(([f, t]) => { const x1 = f.x + PW, y1 = f.y + PH / 2, x2 = t.x, y2 = t.y + PH / 2, mx = (x1 + x2) / 2; return { d: "M" + x1 + " " + y1 + " H" + mx + " V" + y2 + " H" + x2, w: Math.min(7, 1.5 + Math.log10(f.act + 1)), lx: x1 + 3, ly: y1 - 17, rows: fmt(f.act), W, H }; }) });
+  }
+  componentDidMount() {
+    const base = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/";
+    window.MonacoEnvironment = { getWorkerUrl: () => URL.createObjectURL(new Blob(["self.MonacoEnvironment={baseUrl:'" + base + "'};importScripts('" + base + "vs/base/worker/workerMain.js');"], { type: "text/javascript" })) };
+    const boot = () => { window.require.config({ paths: { vs: base + "vs" } }); window.require(["vs/editor/editor.main"], () => this.initMonaco()); };
+    if (window.monaco) return this.initMonaco();
+    if (window.require && window.require.config) return boot();
+    const s = document.createElement("script"); s.src = base + "vs/loader.js"; s.onload = boot; document.head.appendChild(s);
+  }
+  initMonaco() {
+    const m = window.monaco; this.m = m;
+    if (!m.languages.getLanguages().some(l => l.id === "sqlharness-tsql")) {
+      m.languages.register({ id: "sqlharness-tsql" });
+      m.languages.setMonarchTokensProvider("sqlharness-tsql", { ignoreCase: true, keywords: KEYWORDS, tokenizer: { root: [[/--.*$/, "comment"], [/'([^']|'')*'/, "string"], [/\b\d+(\.\d+)?\b/, "number"], [/[a-zA-Z_@][\w$]*/, { cases: { "@keywords": "keyword", "@default": "identifier" } }], [/[()]/, "delimiter.parenthesis"], [/[;,.]/, "delimiter"], [/[=<>!+*/%-]+/, "operator"]] } });
+      m.editor.defineTheme("sqlharness-light", { base: "vs", inherit: true, rules: [{ token: "keyword", foreground: "2F4BBF", fontStyle: "bold" }, { token: "string", foreground: "1D6B38" }, { token: "number", foreground: "A8461A" }, { token: "comment", foreground: "737373", fontStyle: "italic" }], colors: { "editor.background": "#FFFFFF", "editor.foreground": "#0A0A0A", "editorLineNumber.foreground": "#737373" } });
+    }
+    m.editor.setTheme("sqlharness-light");
+    this.opts = { readOnly: true, domReadOnly: true, minimap: { enabled: false }, folding: false, glyphMargin: false, lineNumbersMinChars: 3, overviewRulerLanes: 0, renderLineHighlight: "none", contextmenu: false, scrollBeyondLastLine: false, automaticLayout: false, padding: { top: 8, bottom: 8 }, fontSize: 12, lineHeight: 19, theme: "sqlharness-light" };
+    this.ensure(); this.setState({ loaded: true });
+  }
+  ensure() {
+    clearTimeout(this.ensureT);
+    this.ensureT = setTimeout(() => { try { this._ensure(); } catch (e) { console.warn("monaco ensure:", e && e.message); } }, 30);
+  }
+  _ensure() {
+    const m = this.m; if (!m) return;
+    const tab = this.tabKey();
+    if ((tab === "sql" || tab === "plan") && !this.sqlEd && this.sqlRef.current) {
+      const model = m.editor.createModel("", "sqlharness-tsql");
+      const ed = m.editor.create(this.sqlRef.current, { ...this.opts, model });
+      this.sqlEd = { ed, model, dec: [] };
+      ed.onMouseDown(ev => {
+        const p = ev.target && ev.target.position; if (!p) return;
+        if (!this.hasPlan()) return;
+        const kind = this.planKey(), off = model.getOffsetAt(p), P = PLANS[kind];
+        let si = this.state.stmt;
+        P.stmts.forEach((_, i) => { const L = this.layout(kind, i); if (off >= L.start && off <= L.end) si = i; });
+        const L = this.layout(kind, si);
+        const hit = L.nodes.filter(n => n.s <= off && off <= n.e).sort((a, b) => (a.e - a.s) - (b.e - b.s))[0];
+        this.setState({ stmt: si, node: hit ? hit.key : null });
+      });
+    }
+    if (tab === "diff" && !this.diffEd && this.diffRef.current) {
+      const ed = m.editor.createDiffEditor(this.diffRef.current, { ...this.opts, renderSideBySide: true, originalEditable: false, enableSplitViewResizing: false });
+      const o = m.editor.createModel(SQL_V0, "sqlharness-tsql"), n = m.editor.createModel(SQL_V2, "sqlharness-tsql");
+      ed.setModel({ original: o, modified: n }); this.diffEd = { ed, o, n };
+    }
+    if ((tab === "sql" || tab === "plan") && this.sqlEd) { this.sqlEd.ed.layout(); this.syncSql(); }
+    if (tab === "diff" && this.diffEd) this.diffEd.ed.layout();
+  }
+  syncSql() {
+    const E = this.sqlEd, m = this.m; if (!E || this.syncing) return;
+    const kind = this.planKey(); if (!PLANS[kind]) return;
+    const planOn = this.hasPlan();
+    this.syncing = true;
+    try {
+      const sql = PLANS[kind].sql;
+      if (E.model.getValue() !== sql) { E.dec = E.ed.deltaDecorations(E.dec, []); E.model.setValue(sql); }
+      const L = this.layout(kind, Math.min(this.state.stmt, PLANS[kind].stmts.length - 1));
+      const rng = (a, b) => { const p1 = E.model.getPositionAt(a), p2 = E.model.getPositionAt(b); return new m.Range(p1.lineNumber, p1.column, p2.lineNumber, p2.column); };
+      const decs = planOn && PLANS[kind].stmts.length > 1 ? [{ range: rng(L.start, L.end), options: { className: "plan-stmt", isWholeLine: true } }] : [];
+      const sel = L.nodes.find(n => n.key === this.state.node);
+      if (planOn && sel && sel.match !== "*") { const r = rng(sel.s, sel.e); decs.push({ range: r, options: { inlineClassName: "plan-hl" } }); E.ed.revealRangeInCenterIfOutsideViewport(r); }
+      E.dec = E.ed.deltaDecorations(E.dec, decs);
+    } catch (e) { console.warn("monaco sync:", e && e.message); } finally { this.syncing = false; }
+  }
+  hasPlan() { const k = this.kindKey(); return k === "measure" || (k === "compare" && this.tabKey() === "plan"); }
+  componentDidUpdate() {
+    const cur = { kind: this.planKey(), tab: this.tabKey(), stmt: this.state.stmt, node: this.state.node };
+    const p = this._prev || {};
+    this._prev = cur;
+    if (p.kind !== cur.kind || p.tab !== cur.tab) this.ensure();
+    else if (p.stmt !== cur.stmt || p.node !== cur.node) this.syncSql();
+  }
+  componentWillUnmount() { clearTimeout(this.t); clearTimeout(this.ensureT); if (this.sqlEd) { this.sqlEd.ed.dispose(); this.sqlEd.model.dispose(); } if (this.diffEd) { this.diffEd.ed.dispose(); this.diffEd.o.dispose(); this.diffEd.n.dispose(); } }
+  ioView(A, B, opt) {
+    opt = opt || {}; const single = !B; if (single) B = A;
+    const ui = this.state.ioUi || { mode: "stmt", cols: { p: true, ra: true, lob: false }, open: { 0: true, 1: true } };
+    const setUi = fn => this.setState(s => ({ ioUi: fn(s.ioUi || ui) }));
+    const f = n => n.toLocaleString("en-US");
+    const pcx = (a, b) => a ? Math.round((b - a) * 100 / a) : 0;
+    const ptx = p => (p > 0 ? "+" : p < 0 ? "−" : "±") + Math.abs(p) + "%";
+    const cell = ([b, a]) => { if (single) return { v: f(b), d: "", color: b ? "#0a0a0a" : "#737373" }; if (b === 0 && a === 0) return { v: "0", d: "", color: "#737373" }; const p = pcx(b, a); return { v: f(b) + " → " + f(a), d: b === 0 ? "new" : ptx(p), color: p < 0 ? "#15803d" : p > 0 ? "#b45309" : "#737373" }; };
+    const cols = VIO_COLS.filter(([k, , fixed]) => fixed || ui.cols[k]);
+    const stmts = VIO_SQL.map((sql, i) => {
+      const a = VIO[A][i], b = VIO[B][i], names = [];
+      [a, b].forEach(x => x.rows.forEach(r => { if (!names.includes(r[0])) names.push(r[0]); }));
+      const rows = names.map(n => { const ra = a.rows.find(r => r[0] === n), rb = b.rows.find(r => r[0] === n); const o = { name: n, wt: !!((ra && ra[6]) || (rb && rb[6])) }; for (const k in VIO_IDX) o[k] = [ra ? ra[VIO_IDX[k]] : 0, rb ? rb[VIO_IDX[k]] : 0]; return o; });
+      return { sql, rows, mem: a.mem || b.mem ? { a: a.mem, b: b.mem } : null };
+    });
+    const sum = rows => Object.fromEntries(Object.keys(VIO_IDX).map(k => [k, [rows.reduce((t, r) => t + r[k][0], 0), rows.reduce((t, r) => t + r[k][1], 0)]]));
+    const byName = {};
+    stmts.forEach(st => st.rows.forEach(r => { const t = byName[r.name] || (byName[r.name] = { name: r.name, wt: r.wt, s: [0, 0], l: [0, 0], p: [0, 0], ra: [0, 0], lob: [0, 0] }); for (const k in VIO_IDX) t[k] = [t[k][0] + r[k][0], t[k][1] + r[k][1]]; }));
+    const all = Object.values(byName);
+    const cellsOf = r => cols.map(([k]) => cell(r[k]));
+    const mb = x => x == null ? "—" : x + " MB";
+    const memOf = m => { if (!m) return [{ k: "Memory grant", v: "none", warn: false, warnText: "" }]; const sa = m.a && m.a[2], sb = m.b && m.b[2];
+      if (single) return [{ k: "Memory grant", v: mb(m.a && m.a[0]), warn: false, warnText: "" }, { k: "Max used", v: mb(m.a && m.a[1]), warn: false, warnText: "" }, { k: "Spills", v: sa ? "1" : "0", warn: !!sa, warnText: sa || "" }];
+      return [{ k: "Memory grant", v: mb(m.a && m.a[0]) + " → " + mb(m.b && m.b[0]), warn: false, warnText: "" }, { k: "Max used", v: mb(m.a && m.a[1]) + " → " + mb(m.b && m.b[1]), warn: false, warnText: "" }, { k: "Spills", v: (sa ? 1 : 0) + " → " + (sb ? 1 : 0), warn: !!(sa || sb), warnText: sa ? A + ": " + sa : B + ": " + sb }]; };
+    const two = (x, y, u) => single ? x + u : x + " → " + y + u;
+    const metaOf = (st, i) => { const a = VIO[A][i], b = VIO[B][i]; return [{ k: "Executions", v: "1", warn: false, warnText: "" }, { k: "CPU", v: two(a.cpu, b.cpu, " ms"), warn: false, warnText: "" }, { k: "Elapsed", v: two(a.el, b.el, " ms"), warn: false, warnText: "" }].concat(memOf(st.mem)); };
+    const planLinks = i => (single ? [[A, "Show plan"]] : [[A, "Plan " + A], [B, "Plan " + B]]).map(([v, label]) => ({ label, open: e => { e.stopPropagation(); opt.onPlan && opt.onPlan(v, i); } }));
+    const memSum = side => stmts.reduce((t, st) => t + (st.mem && st.mem[side] ? st.mem[side][0] : 0), 0);
+    const usedSum = side => stmts.reduce((t, st) => t + (st.mem && st.mem[side] ? st.mem[side][1] : 0), 0);
+    const spills = side => stmts.filter(st => st.mem && st.mem[side] && st.mem[side][2]).length;
+    const on = "#fff", sh = "0 1px 2px rgba(0,0,0,.08)";
+    return {
+      pairLabel: single ? A : A + " → " + B,
+      byStmt: ui.mode === "stmt", whole: ui.mode === "whole",
+      modes: [["stmt", "By statement"], ["whole", "Whole batch"]].map(([k, label]) => ({ label, bg: ui.mode === k ? on : "transparent", sh: ui.mode === k ? sh : "none", fg: ui.mode === k ? "#0a0a0a" : "#525252", pick: () => setUi(u => ({ ...u, mode: k })) })),
+      colChips: VIO_COLS.filter(c => !c[2]).map(([k, label]) => { const o = !!ui.cols[k]; const nz = all.some(r => r[k][0] || r[k][1]); return { label, hint: nz ? "" : "all 0", bg: o ? "#171717" : "#fff", fg: o ? "#fff" : "#0a0a0a", ring: o ? "#171717" : "#e5e5e5", toggle: () => setUi(u => ({ ...u, cols: { ...u.cols, [k]: !u.cols[k] } })) }; }),
+      cols: "minmax(0,1fr) " + cols.map(([k]) => k === "s" ? "90px" : "150px").join(" "),
+      head: [{ label: ui.mode === "stmt" ? "Statement / table" : "Table", align: "left" }].concat(cols.map(([, label]) => ({ label, align: "right" }))),
+      groups: stmts.map((st, i) => { const open = !!ui.open[i]; return { sql: st.sql, open, rot: open ? "90deg" : "0deg", toggle: () => setUi(u => ({ ...u, open: { ...u.open, [i]: !u.open[i] } })),
+        cells: cols.map(([k]) => cell(sum(st.rows)[k])), mem: metaOf(st, i), plans: planLinks(i),
+        hasStatus: !single, status: A === B ? "identical" : VIO_STATUS[i], statusBg: VIO_STATUS[i] === "shared" || A === B ? "#f5f5f5" : "#eef2ff", statusFg: VIO_STATUS[i] === "shared" || A === B ? "#525252" : "#3730a3",
+        rows: st.rows.map(r => ({ name: r.name, nameColor: r.wt ? "#737373" : "#0a0a0a", cells: cellsOf(r) })) }; }),
+      wholeRows: all.map(r => ({ name: r.name, nameColor: r.wt ? "#737373" : "#0a0a0a", cells: cellsOf(r) })),
+      totalCells: cols.map(([k]) => cell(sum(all)[k])),
+      memTotal: single ? ["grant " + memSum("a").toFixed(1) + " MB", "max used " + usedSum("a").toFixed(1) + " MB", "spills " + spills("a")] : ["grant " + memSum("a").toFixed(1) + " MB → " + memSum("b").toFixed(1) + " MB", "max used " + usedSum("a").toFixed(1) + " MB → " + usedSum("b").toFixed(1) + " MB", "spills " + spills("a") + " → " + spills("b")],
+    };
+  }
+  renderVals() {
+    const S = this.state, kind = this.kindKey(), K = KINDS[kind], tab = this.tabKey();
+    const pk = this.planKey(), P = PLANS[pk], L = P ? this.layout(pk, Math.min(S.stmt, P.stmts.length - 1)) : null;
+    const sel = L && L.nodes.find(n => n.key === S.node);
+    const border = c => c === "exact" ? "2px solid #059669" : "2px dashed #0284c7";
+    const actual = kind !== "mutate";
+    const rowsLine = n => actual ? "Est. " + fmt(n.est) + " · Act. " + fmt(n.act) : "Est. " + fmt(n.est) + " rows";
+    return {
+      kinds: [["measure", "Measure"], ["query", "Query"], ["mutate", "Mutate"], ["compare", "Compare"]].map(([k, label]) => ({ label, bg: kind === k ? "#fff" : "transparent", sh: kind === k ? "0 1px 2px rgba(0,0,0,.08)" : "none", fg: kind === k ? "#0a0a0a" : "#525252", pick: () => this.setState({ kind: k, tab: null, stmt: 0, node: null }) })),
+      k: { ...K, title: K.label || K.kind + " #" + K.id, titleFont: "inherit", hasLabel: !!K.label, isCompare: kind === "compare",
+        stmtHead: (K.stmtHead || []).map((label, i) => ({ label, align: i && label !== "Status" ? "right" : "left" })),
+        stmts: (K.stmts || []).map(([text, cells]) => ({ text, cells: cells.map(v => { const num = /^[\d−+]/.test(v); return { v, align: num ? "right" : "left", color: v.startsWith("−") ? "#15803d" : num ? "#0a0a0a" : "#737373" }; }) })) },
+      tabs: K.tabs.map(([key, label, count]) => ({ label, count, line: tab === key ? "#0a0a0a" : "transparent", color: tab === key ? "#0a0a0a" : "#737373", pick: () => this.setState({ tab: key }) })),
+      sqlDisplay: tab === "sql" || tab === "plan" ? "flex" : "none", diffDisplay: tab === "diff" ? "flex" : "none", hasPlan: this.hasPlan(), isCmp: kind === "compare", tabIo: tab === "io",
+      verTabs: ["v0", "v2"].map(v => ({ label: v, bg: S.ver === v ? "#fff" : "transparent", sh: S.ver === v ? "0 1px 2px rgba(0,0,0,.08)" : "none", fg: S.ver === v ? "#0a0a0a" : "#525252", pick: () => this.setState({ ver: v, node: null, stmt: 0 }) })),
+      io: kind === "measure" ? this.ioView("v2", null, { onPlan: (v, i) => this.setState({ tab: "sql", stmt: i, node: null }) }) : this.ioView("v0", "v2", { onPlan: (v, i) => this.setState({ tab: "plan", ver: v, stmt: i, node: null }) }),
+      tabStmts: tab === "stmts", tabResults: tab === "results", tabApproval: tab === "approval", tabTiming: tab === "timing",
+      sqlRef: this.sqlRef, diffRef: this.diffRef, loadingOpacity: S.loaded ? 0 : 1,
+      sqlHeight: kind === "measure" || kind === "compare" ? "300px" : "170px",
+      multiStmt: !!P && P.stmts.length > 1, stmtVal: String(S.stmt), onStmt: e => this.setState({ stmt: Number(e.target.value), node: null }),
+      stmtOptions: P ? P.stmts.map((s, i) => ({ v: String(i), label: s.label })) : [],
+      graph: L ? { w: L.W, h: L.H, edges: L.edges, nodes: L.nodes.map(n => ({ op: n.op, obj: n.obj, rowsLine: rowsLine(n), cost: n.cost + "%", costColor: n.cost >= 30 ? "#b91c1c" : "#0a0a0a", costWeight: n.cost >= 30 ? 600 : 400, tip: n.op + " · " + n.obj, left: n.x, top: n.y, border: border(n.conf), bg: n.conf === "inferred" ? "#f5fbfe" : "#fff", ring: n.key === S.node ? "0 0 0 2px #fff, 0 0 0 4px #0a0a0a" : "0 1px 2px rgba(0,0,0,.05)", select: () => this.setState(s => ({ node: s.node === n.key ? null : n.key })) })) } : { w: 0, h: 0, edges: [], nodes: [] },
+      hasSel: !!sel, noSel: !sel,
+      sel: sel ? { title: sel.op + " · " + sel.obj, rows: rowsLine(sel), cost: sel.cost + "%", conf: sel.conf, rule: sel.rule } : { title: "", rows: "", cost: "", conf: "", rule: "" },
+      starColor: S.star ? "#ca8a04" : "#0a0a0a", starFill: S.star ? "#facc15" : "none", starTitle: S.star ? "Unstar operation" : "Star operation", toggleStar: () => this.setState(s => ({ star: !s.star })),
+      copyTitle: S.copied ? "Copied" : kind === "compare" ? "Copy candidate SQL" : "Copy SQL", copyColor: S.copied ? "#15803d" : "#0a0a0a",
+      copySql: () => { try { navigator.clipboard && navigator.clipboard.writeText(P ? P.sql : SQL_V2); } catch (e) {} this.setState({ copied: true }); clearTimeout(this.t); this.t = setTimeout(() => this.setState({ copied: false }), 1400); },
+      menuOpen: S.menu, menuBg: S.menu ? "#f5f5f5" : "transparent", toggleMenu: () => this.setState(s => ({ menu: !s.menu })), closeMenu: () => this.setState({ menu: false }),
+      noteMenuLabel: S.note ? "Edit note" : "Add note",
+      note: S.note, noteShown: !!S.note && !S.noteEditing, noteEditing: S.noteEditing, noteDraft: S.noteDraft,
+      editNote: () => this.setState(s => ({ noteEditing: true, noteDraft: s.note, menu: false })), onNote: e => this.setState({ noteDraft: e.target.value }),
+      saveNote: () => this.setState(s => ({ note: s.noteDraft.trim(), noteEditing: false })), cancelNote: () => this.setState({ noteEditing: false }),
+      detailsOpen: S.det, detRot: S.det ? "180deg" : "0deg", toggleDetails: () => this.setState(s => ({ det: !s.det })),
+      factGroups: [
+        { title: "Run", facts: [["Started", "2026-10-24 " + K.when.slice(6) + ":02"], ["Duration", K.dur], ["Exit code", "0"], ["Execution mode", K.mode], ["Profile", kind === "query" || kind === "mutate" ? "billing-stg" : "dev"], ["Engine", "SqlServer 16.0"], ["Server / database", K.target], ["SQL hash", "9f2c41ab", 1]] },
+        { title: "Profile variables", facts: K.vars.map(v => { const [a, b] = v.split(" = "); return [a, b]; }) },
+        { title: "References", facts: [["Operation reference", "op_01JB7Q8X2N", 1], ["Artifact directory", "~/.sqlharness/artifacts/" + K.id, 1], ["Session", K.session], ["Producer reference", "—"]] },
+        { title: "Agent call", facts: [["Model", K.agent === "Codex" ? "gpt-5-codex" : "claude-sonnet-4.5 (from transcript)"], ["Effort", "high"], ["Turn", "42"], ["Call id", "toolu_01Hc…", 1]] },
+        { title: "Output size", facts: [["Bytes (raw / emitted)", "48,120 / 6,904"], ["Est. tokens (raw / emitted)", "12,030 / 1,726"], ["Token method", "UTF-8 bytes ÷ 4"]] },
+      ].map(g => ({ title: g.title, facts: g.facts.map(([label, value, mono]) => ({ label, value, font: mono ? "'Geist Mono',monospace" : "inherit", size: mono ? "13px" : "14px" })) })),
+      approval: [
+        ["#a3a3a3", "14:01:12", "Requested by Codex (mcp)", "Tier: data change · estimated 300 rows · mode operator approval"],
+        ["#2563eb", "14:01:31", "Approved by operator", "Deliberate click in dashboard · waited 19 s"],
+        ["#10AC61", "14:01:31", "Executed", "312 rows affected · 21 ms · transaction committed"],
+        ["#10AC61", "14:01:32", "Verified", "Row count 312 within tolerance of estimate (300)"],
+      ].map(([dot, time, title, sub], i, a) => ({ dot, time, title, sub, lineOp: i === a.length - 1 ? 0 : 1 })),
+      evOpen: S.ev, evRot: S.ev ? "90deg" : "0deg", toggleEvents: () => this.setState(s => ({ ev: !s.ev })),
+      events: [{ phase: "Open connection", off: "0 ms", dur: "71 ms", outcome: "ok" }, { phase: "Login", off: "71 ms", dur: "22 ms", outcome: "ok" }, { phase: "Set options", off: "93 ms", dur: "3 ms", outcome: "ok" }],
+    };
+  }
+}
+</script>
+</body>
+</html>

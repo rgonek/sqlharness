@@ -1,0 +1,15 @@
+{
+  "revision": "b23f2272",
+  "exitCode": 1,
+  "failedStage": "test",
+  "duration": "11m57s",
+  "uiPassed": 436,
+  "corePassed": 4773,
+  "coreFailed": 1,
+  "coreSkipped": 11,
+  "mcpPassed": 535,
+  "mcpSkipped": 4,
+  "reason": "Stale expected DashboardStats serialized field list",
+  "correction": "b3e921cd",
+  "correctionScope": "Existing contract test only"
+}

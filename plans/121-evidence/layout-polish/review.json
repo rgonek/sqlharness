@@ -1,0 +1,8 @@
+{
+  "scope": "Final uncommitted UI source relative to 386eac877dc0d5f1d1668ae3fcf969ba9b0dcfdb",
+  "reviewer": "independent review_layout agent",
+  "result": "No actionable regressions in final source review",
+  "fixedFinding": "Saved note now exposes note text as its accessible name; title retains edit guidance",
+  "confirmation": "Card composition preserves headings and labelled regions; no confirmed approval-lifecycle/security regression",
+  "verificationBoundary": "Source review only; acceptance gate is authoritative for test results"
+}

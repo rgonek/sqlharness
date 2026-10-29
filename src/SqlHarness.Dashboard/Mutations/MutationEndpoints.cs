@@ -38,7 +38,7 @@ internal static class MutationEndpoints
     internal static void Map(IEndpointRouteBuilder routes, MutationEndpointServices services, JournalReader reader)
     {
         routes.MapMethods("/mutations", [HttpMethods.Post], (Delegate)((HttpContext context) => SubmitAsync(context, services)));
-        routes.MapMethods("/mutations/events", [HttpMethods.Get], (Delegate)((HttpContext context) => EventsAsync(context, services)));
+        routes.MapMethods("/mutations/events", [HttpMethods.Get], (Delegate)((HttpContext context) => EventsAsync(context, services, reader)));
         routes.MapMethods("/mutations/{id}/approve", [HttpMethods.Post], (Delegate)((HttpContext context, string id) => DecideAsync(context, id, true, services)));
         routes.MapMethods("/mutations/{id}/deny", [HttpMethods.Post], (Delegate)((HttpContext context, string id) => DecideAsync(context, id, false, services)));
         routes.MapMethods("/mutations", [HttpMethods.Get, HttpMethods.Head], (Delegate)((long? cursor, int? limit) =>
@@ -177,7 +177,7 @@ internal static class MutationEndpoints
         return services.Broker.TryDeny(id) ? Results.Ok() : Results.Conflict(new { error = "request_not_pending" });
     }
 
-    private static async Task EventsAsync(HttpContext context, MutationEndpointServices services)
+    private static async Task EventsAsync(HttpContext context, MutationEndpointServices services, JournalReader reader)
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = "text/event-stream";
@@ -188,13 +188,13 @@ internal static class MutationEndpoints
         services.Activity.StreamOpened();
         try
         {
-            await WriteEvent(context, "snapshot", subscription.Sequence, subscription.Snapshot, services.Json, stream.Token).ConfigureAwait(false);
+            await WriteEvent(context, "snapshot", subscription.Sequence, subscription.Snapshot.Select(view => WithRequester(view, reader)), services.Json, stream.Token).ConfigureAwait(false);
             await foreach (var envelope in subscription.Events.ReadAllAsync(stream.Token).ConfigureAwait(false))
             {
                 switch (envelope.Event)
                 {
                     case MutationAdded added:
-                        await WriteEvent(context, "added", envelope.Sequence, added.View, services.Json, stream.Token).ConfigureAwait(false);
+                        await WriteEvent(context, "added", envelope.Sequence, WithRequester(added.View, reader), services.Json, stream.Token).ConfigureAwait(false);
                         break;
                     case MutationRemoved removed:
                         await WriteEvent(context, "removed", envelope.Sequence,
@@ -211,6 +211,16 @@ internal static class MutationEndpoints
             services.Activity.StreamClosed();
         }
     }
+
+    private static object WithRequester(PendingMutationView view, JournalReader reader) => new
+    {
+        view.RequestId,
+        view.Request,
+        view.Environment,
+        view.WriterSameAsReader,
+        view.ExpiresAt,
+        Requester = reader.MutationRequesterByRequestId(view.RequestId),
+    };
 
     internal static void PersistEvent(MutationEndpointServices services, BrokerEvent change)
     {

@@ -24,7 +24,7 @@ function formatRelativeTime(value: string, now: number) {
 
 function TimeFilter({ label, value, values, onChange }: { label: string; value: string; values: { value: string; label: string }[]; onChange: (value: string) => void }) {
   return <Select items={values} value={value} onValueChange={next => { if (next !== null) onChange(next) }}>
-    <SelectTrigger aria-label={label} className="h-8 w-auto min-w-32"><span className="text-muted-foreground">Time</span><SelectValue /></SelectTrigger>
+    <SelectTrigger aria-label={label} className="w-auto min-w-32"><span className="text-muted-foreground">Time</span><SelectValue /></SelectTrigger>
     <SelectContent><SelectGroup>{values.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
   </Select>
 }
@@ -32,7 +32,7 @@ function TimeFilter({ label, value, values, onChange }: { label: string; value: 
 function Facet({ label, selected, values, onChange }: { label: string; selected: string[]; values: { value: string; label: string; count?: number }[]; onChange: (values: string[]) => void }) {
   const id = useId()
   return <Popover>
-    <PopoverTrigger render={<Button variant="outline" size="sm" />} aria-label={label}>
+    <PopoverTrigger render={<Button variant="outline" />} aria-label={label}>
       <span className="text-muted-foreground">{label}</span><span>{selected.length ? selected.length === 1 ? values.find(item => item.value === selected[0])?.label : `${selected.length} selected` : "Any"}</span><HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" />
     </PopoverTrigger>
     <PopoverContent align="start" className="max-h-72 max-w-[85vw] overflow-y-auto">
@@ -50,11 +50,14 @@ function SessionGroup({ session, operations, now, expanded, onExpand }: { sessio
   const open = expanded
   const update = useUpdateSessionAnnotation(session.id)
   return <section className="border-b last:border-b-0" aria-label={sessionDisplayName(session)}>
-    <div className="activity-session-row">
+    <div className="activity-session-row cursor-pointer transition-colors hover:bg-muted/50" onClick={event => {
+      if ((event.target as HTMLElement).closest("a,button,input,[role=button]")) return
+      onExpand()
+    }}>
       <Button variant="ghost" size="icon-sm" aria-label={`${open ? "Collapse" : "Expand"} ${sessionDisplayName(session)}`} aria-expanded={open} onClick={onExpand}>
         <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={open ? "rotate-90 transition-transform" : "transition-transform"} />
       </Button>
-      <Toggle size="sm" disabled={update.isPending} aria-label={`${session.starred ? "Unstar" : "Star"} session ${sessionDisplayName(session)}`} pressed={session.starred} onPressedChange={starred => update.mutate({ starred })}>
+      <Toggle className="session-star" size="sm" disabled={update.isPending} aria-label={`${session.starred ? "Unstar" : "Star"} session ${sessionDisplayName(session)}`} pressed={session.starred} onPressedChange={starred => update.mutate({ starred })}>
         <HugeiconsIcon icon={StarIcon} strokeWidth={2} className={session.starred ? "fill-current text-amber-500" : "text-muted-foreground"} />
       </Toggle>
       <div className="min-w-0">
@@ -111,7 +114,7 @@ export function ActivityFeed({ sessions, operations, now }: { sessions: SessionS
   const allOpen = groups.length > 0 && groups.every(isOpen)
   const dirty = time !== "604800000" || !!(agent.length || cwd.length || target.length || status.length || kind.length || text || starred || archived || named)
   const facetOptions = (dimension: "agent" | "cwd" | "target", values: ReturnType<typeof options>) => values.map(item => ({ ...item, count: operations.filter(operation => matches(operation, { [dimension]: [item.value] })).length }))
-  const chip = (label: string, count: number, pressed: boolean, onClick: () => void) => <Toggle variant="outline" size="sm" pressed={pressed} onPressedChange={onClick}>{label}<span className="text-muted-foreground tabular-nums">{count}</span></Toggle>
+  const chip = (label: string, count: number, pressed: boolean, onClick: () => void) => <Toggle variant="outline" pressed={pressed} onPressedChange={onClick}>{label}<span className="text-muted-foreground tabular-nums">{count}</span></Toggle>
   return <section aria-label="Activity feed" className="flex flex-col gap-3">
     <div className="activity-filterbar" aria-label="Activity filters">
       <h1>Activity</h1>
@@ -121,19 +124,16 @@ export function ActivityFeed({ sessions, operations, now }: { sessions: SessionS
       <Facet label="Directory" selected={cwd} onChange={setCwd} values={facetOptions("cwd", options(sessions.map(session => session.cwd)))} />
       <Facet label="Target" selected={target} onChange={values => { setTarget(values); setExpansion({}) }} values={facetOptions("target", options(operations.map(targetKey)))} />
       {chip("Starred", operations.filter(operation => matches(operation, { starred: true })).length, starred, () => setStarred(!starred))}
-      <Toggle variant="outline" size="sm" pressed={archived} onPressedChange={setArchived}>Include archived</Toggle>
+      <Toggle variant="outline" pressed={archived} onPressedChange={setArchived}>Include archived</Toggle>
     </div>
     <div className="activity-chipbar">
       <div className="activity-chipgroup"><span>Status</span>{["running", "failed", "rejected", "succeeded", "abandoned"].map(value => <span key={value}>{chip(value[0].toUpperCase() + value.slice(1), operations.filter(operation => matches(operation, { status: [value] })).length, status.includes(value), () => { setStatus(toggle(status, value)); setExpansion({}) })}</span>)}</div>
       <div className="activity-chipgroup"><span>Type</span>{[...new Set(operations.map(operation => operation.operation))].sort().map(value => <span key={value}>{chip(value[0].toUpperCase() + value.slice(1), operations.filter(operation => matches(operation, { kind: [value] })).length, kind.includes(value), () => { setKind(toggle(kind, value)); setExpansion({}) })}</span>)}</div>
       <div className="activity-chipgroup"><span>Marked</span>{chip("Named", operations.filter(operation => matches(operation, { named: true })).length, named, () => { setNamed(!named); setExpansion({}) })}</div>
-    </div>
-    <div className="flex flex-wrap items-center gap-3 text-[13px] text-muted-foreground">
-      <span>{groups.length} sessions · {filtered.length} loaded operations · {time === "604800000" ? "last 7 days" : time === "all" ? "all time" : time === "86400000" ? "last 24 hours" : "last hour"}</span>
       {dirty && <Button variant="link" size="sm" onClick={() => { setTime("604800000"); setAgent([]); setCwd([]); setTarget([]); setStatus([]); setKind([]); setText(""); setStarred(false); setArchived(false); setNamed(false); setExpansion({}) }}>Reset filters</Button>}
       <Button variant="link" size="sm" className="ml-auto" onClick={() => setExpansion(Object.fromEntries(groups.map(group => [group.session.id, !allOpen])))}>{allOpen ? "Collapse all" : "Expand all"}</Button>
     </div>
     <div className="border-t">{groups.map(group => <SessionGroup key={group.session.id} {...group} now={now} expanded={isOpen(group)} onExpand={() => setExpansion(current => ({ ...current, [group.session.id]: !isOpen(group) }))} />)}{ungrouped.length > 0 && <ActivityOperations operations={ungrouped} now={now} />}{!filtered.length && !groups.length && <p className="p-10 text-center text-sm text-muted-foreground">Nothing matches these filters.</p>}</div>
-    <p className="text-xs text-muted-foreground">Recent activity and all running operations. <Link to="/operations" className="underline">Browse operation history</Link> · <Link to="/sessions" className="underline">Browse all sessions</Link> · <Link to="/named-operations" className="underline">Named operations</Link> · <Link to="/mutations" className="underline">Mutations</Link></p>
+
   </section>
 }

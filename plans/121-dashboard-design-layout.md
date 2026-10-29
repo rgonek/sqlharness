@@ -91,3 +91,19 @@ Verified and locally published at ecd3f0ae: Plan-only balanced segment widths/sp
 ## Local main integration (2026-10-27)
 
 All dashboard-shadcn-fixes follow-ups are locally integrated into main at 3a0f0549, retaining Plan 122 documentation from main. Exact merged Windows gate passed: UI 388, Core 4722 (11 skipped), MCP 535 (4 skipped), 14m30s. Initial unchanged Journal lock timing failure was retained, isolated three times successfully and followed by a full unchanged-tree green retry; no timeout/test/product workaround. Whole-branch source review and two-file C# branch format passed. README bytes and original local documentation deltas preserved; backup outside repo. No push. Dirty feature worktree retained. [Integration evidence](121-evidence/shadcn/integration/verification.md).
+
+## Session and statement hover follow-up (2026-10-28)
+
+Operator requested background feedback across Activity session headers and IO statement rows. The two style changes use semantic theme tokens and preserve disclosure/link behavior. Six synthetic browser states pass, including expanded/collapsed IO rows in light/dark themes. Full Windows gate FAILED on one unchanged shutdown lifecycle test; isolated rerun passed; see [hover evidence](121-evidence/layout-polish/hover/README.md). No local publication, restart, merge or push in this follow-up.
+
+## Default shadcn alignment (2026-10-28)
+
+All six mock-audit findings addressed, preferring default Base UI/Mira composition: accessible Settings fields, exclusive A/B radios, compact Session operations, readable profile policy/TLS/writer values, breadcrumb/container, and audited CSS/KPI simplification. Independent reviews and final scoped fixes accepted. Windows gate PASS on c2c3dcfd (UI 414, Core 4771 passed/11 skips, MCP 535 passed/4 skips; 11m00s); 55 browser checks, source/dist identity unchanged. Initial stale-selector failure retained. No merge/push/publication/restart. [Follow-up plan](121-default-shadcn-followup.md), [remaining mock differences and recommendations](121-evidence/layout-polish/default-alignment/report.md), [gallery](121-evidence/layout-polish/default-alignment/index.html).
+
+## Screenshot-specific detail follow-up (2026-10-29)
+
+DONE / VERIFIED on dashboard-layout-polish at b3e921cd; runtime bbda23d2. All fifteen screenshot requests plus circular A/B implemented with default shadcn composition where possible. Truthful Usage/read-only Top SQL logical reads, verified requester context and bounded display-only SQL modes included. Independent task reviews, final review/fix and scoped rereviews accepted. Windows just verify PASS: UI436, Core4774/11 skips, MCP535/4 skips, 15m26s; branch format5 PASS and browser104 assertions PASS. Two stale test-contract gate failures retained. No merge/push/publication/restart; Linux/live DB unverified. [Follow-up plan](121-screenshot-detail-followup.md), [report and mock tradeoffs](121-evidence/layout-polish/screenshot-details/report.md), [gallery](121-evidence/layout-polish/screenshot-details/index.html).
+
+## Local integration — 2026-10-29
+
+Merged dashboard-layout-polish (268cc96c) into main based on 939468bb. Mock conflicts resolved by preserving main's 2026-10-27 export and the branch's 2026-10-25 evidence references; no executable conflicts. Product/tests/scripts identical to verified b3e921cd/268cc96c, so accepted Windows gate evidence remains applicable without another docs-only gate. Local user documentation edits preserved separately. [Integration evidence](121-evidence/layout-polish/screenshot-details/integration.md). No push/publication/restart.

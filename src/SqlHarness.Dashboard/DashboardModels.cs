@@ -230,7 +230,7 @@ public sealed record DayAgentCount(string Day, string AgentKind, int Count);
 
 public sealed record KeyCount(string Key, int Count);
 
-public sealed record SqlHashStat(string SqlHash, int Count, long TotalDurationMs, long MaxDurationMs);
+public sealed record SqlHashStat(string SqlHash, int Count, long TotalDurationMs, long MaxDurationMs, long? LogicalReadsMedianSum = null, int LogicalReadsAvailableOperations = 0, int LogicalReadsUnavailableOperations = 0, int LogicalReadsAvailableMetrics = 0, int LogicalReadsUnavailableMetrics = 0);
 
 public sealed record TableReadStat(string Table, long LogicalReads, int Operations);
 
@@ -294,6 +294,8 @@ public sealed record DashboardStats(
     int ColdCacheOperations,
     IReadOnlyList<ProfileOperationCount> ProfileOperations,
     ProfileDimensionStats ProfileDimensions,
-    IReadOnlyList<WorkflowCost> WorkflowCosts);
+    IReadOnlyList<WorkflowCost> WorkflowCosts,
+    IReadOnlyList<SqlHashStat>? TopSqlByLogicalReads = null, int SessionCount = 0);
 
 public sealed record SessionAnnotation(string? Title, string? Note, bool Starred, bool Archived);
+internal sealed record MutationRequester(long SessionId, string? AgentLabel);

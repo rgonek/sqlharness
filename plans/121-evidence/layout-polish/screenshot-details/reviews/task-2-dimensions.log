@@ -1,0 +1,43 @@
+Build started 28.10.2026 21:02:22.
+Test run for C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.01] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.14)
+[xUnit.net 00:00:00.52]   Discovering: SqlHarness.Tests (app domain = off, method display = ClassAndMethod, method display options = None)
+[xUnit.net 00:00:00.68] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.RegressionPolicyTests.Result_equivalence_gate_is_inconclusive_never_a_performance_fail'; falling back to single test case.
+[xUnit.net 00:00:00.98] SqlHarness.Tests: Non-serializable data ('System.Object[]') found for 'SqlHarness.Tests.Cli.CommandTests.Compare_text_renders_nullability_diagnostic'; falling back to single test case.
+[xUnit.net 00:00:02.26]   Discovered:  SqlHarness.Tests (4801 test cases to be run)
+[xUnit.net 00:00:02.34]   Starting:    SqlHarness.Tests (parallel test collections = off, stop on fail = off, explicit = off)
+[xUnit.net 00:00:04.60]       Assert.Equal() Failure: Values differ
+[xUnit.net 00:00:04.60]       Expected: 27
+[xUnit.net 00:00:04.60]       Actual:   1
+[xUnit.net 00:00:04.60]       Stack Trace:
+[xUnit.net 00:00:04.60]         C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Tests\Dashboard\JournalReaderTests.cs(1845,0): at SqlHarness.Tests.Dashboard.JournalReaderTests.Dimension_stats_are_complete_filtered_and_keep_missing_values_separate_from_unknown_text()
+[xUnit.net 00:00:04.60]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+[xUnit.net 00:00:04.60]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.Dashboard.JournalReaderTests.Dimension_stats_are_complete_filtered_and_keep_missing_values_separate_from_unknown_text [2 s]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 27
+Actual:   1
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.JournalReaderTests.Dimension_stats_are_complete_filtered_and_keep_missing_values_separate_from_unknown_text() in C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Tests\Dashboard\JournalReaderTests.cs:line 1845
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Passed SqlHarness.Tests.Dashboard.JournalReaderTests.Unprofiled_scope_and_minute_bounds_match_statistics_and_drilldown [303 ms]
+[xUnit.net 00:00:06.59]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Dashboard.JournalReaderTests.Dimension_target_limit_reports_full_filtered_target_count_without_changing_totals [1 s]
+
+Total tests: 3
+     Passed: 2
+     Failed: 1
+ Total time: 8,0681 Seconds
+     1>Project "C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Tests\SqlHarness.Tests.csproj" on node 1 (VSTest target(s)).
+     1>_VSTestConsole:
+         MSB4181: The "VSTestTask" task returned false but did not log an error.
+     1>Done Building Project "C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Tests\SqlHarness.Tests.csproj" (VSTest target(s)) -- FAILED.
+
+Build FAILED.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:09.82

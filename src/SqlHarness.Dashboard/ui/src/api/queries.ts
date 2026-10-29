@@ -348,9 +348,10 @@ export function rangeWindow(range: StatsRange, now: number): StatsWindow {
 
 export function useStats(
   range: StatsRange, window: StatsWindow, profile?: string | null, dimensions: Record<string, string | null> = {},
-  rowDimension?: string, columnDimension?: string, unprofiled = false,
+  rowDimension?: string, columnDimension?: string, unprofiled = false, enabled = true,
 ) {
   return useQuery({
+    enabled,
     queryKey: queryKeys.stats(range, window, profile, dimensions, rowDimension, columnDimension, unprofiled),
     queryFn: () => getJson<DashboardStats>("/api/stats", {
       ...window,

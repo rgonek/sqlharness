@@ -1,0 +1,25 @@
+{
+  "sourceHashesRechecked": true,
+  "format": "skipped: 0 changed C# files",
+  "merged": false,
+  "pushed": false,
+  "elapsed": "11m00s",
+  "mcp": {
+    "skipped": 4,
+    "passed": 535
+  },
+  "ui": {
+    "files": 70,
+    "passed": 414
+  },
+  "exitCode": 0,
+  "sourceManifest": "tested-ui-source.json",
+  "distIdentityRechecked": true,
+  "core": {
+    "skipped": 11,
+    "passed": 4771
+  },
+  "testedRevision": "c2c3dcfd",
+  "stages": 5,
+  "published": false
+}

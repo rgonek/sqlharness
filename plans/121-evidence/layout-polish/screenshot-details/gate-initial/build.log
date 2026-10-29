@@ -1,0 +1,19 @@
+  Determining projects to restore...
+  Restored C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj (in 1,46 sec).
+  Restored C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Core\SqlHarness.Core.csproj (in 1,46 sec).
+  Restored C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj (in 1,45 sec).
+  Restored C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj (in 1,46 sec).
+  3 of 7 projects are up-to-date for restore.
+  SqlHarness.Core -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Mcp.WorkflowHost -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  SqlHarness.Dashboard -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+  SqlHarness.Tests -> C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:01:26.56

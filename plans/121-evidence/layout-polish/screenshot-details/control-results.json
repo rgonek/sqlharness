@@ -1,0 +1,189 @@
+{
+  "checks": [
+    {
+      "name": "Add note has plus icon",
+      "passed": true
+    },
+    {
+      "name": "Session time is HH:mm:ss",
+      "passed": true
+    },
+    {
+      "name": "Full timestamp remains available",
+      "passed": true
+    },
+    {
+      "name": "Description omits repeated target prose",
+      "passed": true
+    },
+    {
+      "name": "Description retains full target in title",
+      "passed": true
+    },
+    {
+      "name": "Star icon has useful size",
+      "passed": true
+    },
+    {
+      "name": "Running is a Badge",
+      "passed": true
+    },
+    {
+      "name": "Agent keep uses spark icon",
+      "passed": true
+    },
+    {
+      "name": "No agent-keep text badge in Session",
+      "passed": true
+    },
+    {
+      "name": "Version label is inline beside version",
+      "passed": true,
+      "measurement": {
+        "versionY": 381.5,
+        "labelY": 382
+      }
+    },
+    {
+      "name": "Visible A/B control is circular",
+      "passed": true,
+      "measurement": {
+        "width": 24,
+        "height": 24,
+        "radius": "3.35544e+07px"
+      }
+    },
+    {
+      "name": "Circles retain native ArrowDown",
+      "passed": true
+    },
+    {
+      "name": "Changing A retains B",
+      "passed": true
+    },
+    {
+      "name": "Selected A and B preserve distinct grey/dark appearance",
+      "passed": true
+    },
+    {
+      "name": "Single extra IO column is exposed directly",
+      "passed": true
+    },
+    {
+      "name": "LOB toggle selects column",
+      "passed": true
+    },
+    {
+      "name": "Statement disclosure inherits row surface",
+      "passed": true
+    },
+    {
+      "name": "Statement hover has no separate button surface",
+      "passed": true
+    },
+    {
+      "name": "Operation Details matches Session button geometry/style",
+      "passed": true,
+      "measurement": {
+        "sessionDetailsStyle": [
+          "24px",
+          "rgba(0, 0, 0, 0)",
+          "8px",
+          "8px",
+          "6px",
+          "12px",
+          "500"
+        ],
+        "operationDetailsStyle": [
+          "24px",
+          "rgba(0, 0, 0, 0)",
+          "8px",
+          "8px",
+          "6px",
+          "12px",
+          "500"
+        ]
+      }
+    },
+    {
+      "name": "Operation Details has chevron",
+      "passed": true
+    },
+    {
+      "name": "Operation Details disclosure opens",
+      "passed": true
+    },
+    {
+      "name": "Operation parameters do not overlap tabs",
+      "passed": true,
+      "measurement": {
+        "tabs": {
+          "x": 65,
+          "y": 292.640625,
+          "width": 1150,
+          "height": 44
+        },
+        "params": {
+          "x": 81,
+          "y": 352.640625,
+          "width": 1118,
+          "height": 28
+        }
+      }
+    },
+    {
+      "name": "Preview has play icon",
+      "passed": true
+    },
+    {
+      "name": "Refresh has icon",
+      "passed": true
+    },
+    {
+      "name": "Transcript clear action aligns right",
+      "passed": true,
+      "measurement": {
+        "clearBox": {
+          "x": 976.90625,
+          "y": 1782.296875,
+          "width": 130.09375,
+          "height": 28
+        },
+        "statusBox": {
+          "x": 401,
+          "y": 1772.296875,
+          "width": 718,
+          "height": 48
+        }
+      }
+    },
+    {
+      "name": "Transcript Clear stays in desktop summary row when space permits",
+      "passed": true,
+      "measurement": {
+        "clearBox": {
+          "x": 976.90625,
+          "y": 1782.296875,
+          "width": 130.09375,
+          "height": 28
+        },
+        "statusTextBox": {
+          "x": 413,
+          "y": 1787.296875,
+          "width": 239.171875,
+          "height": 18
+        }
+      }
+    },
+    {
+      "name": "Retention has no grey inset surface",
+      "passed": true
+    },
+    {
+      "name": "No control-check app page/console errors",
+      "passed": true,
+      "measurement": []
+    }
+  ],
+  "errors": []
+}

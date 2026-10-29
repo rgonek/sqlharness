@@ -10,10 +10,10 @@ test("succeeded is a plain badge", () => {
   expect(screen.queryByRole("button")).not.toBeInTheDocument()
 })
 
-test("running is muted informational text", () => {
+test("running is an informational badge without an error action", () => {
   render(<StatusBadge operation={operation({ status: "running" })} />)
-  expect(screen.getByText("running")).toHaveClass("text-muted-foreground")
-  expect(screen.getByText("running").closest("[data-slot='badge']")).toBeNull()
+  expect(screen.getByText("running").closest("[data-slot='badge']")).toHaveAttribute("data-tier", "info")
+  expect(screen.queryByRole("button")).not.toBeInTheDocument()
 })
 
 test("failed opens a dialog with the stored message", async () => {

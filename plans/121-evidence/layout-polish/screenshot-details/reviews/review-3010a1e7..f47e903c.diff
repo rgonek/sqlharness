@@ -1,0 +1,151 @@
+# Review package: 3010a1e7..f47e903c
+
+## Commits
+f47e903c Record mutation preview expansion fix evidence
+a44b2661 Bound mutation SQL preview expansion before substitution
+
+## Files changed
+ .../121-screenshot-detail-followup/task-3-report.md    | 16 ++++++++++++++++
+ .../ui/src/mutations/Approval.test.tsx                 | 18 ++++++++++++++++++
+ .../ui/src/mutations/sqlDisplay.test.ts                | 11 +++++++++++
+ .../ui/src/mutations/sqlDisplay.ts                     | 11 ++++++++++-
+ 4 files changed, 55 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md b/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md
+index 839904fa..4cba908b 100644
+--- a/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md
++++ b/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md
+@@ -22,10 +22,26 @@ The preview is presentation rather than executable replacement SQL; not every ac
+ - `dotnet format SqlHarness.sln --no-restore --include src/SqlHarness.Dashboard/JournalReader.cs src/SqlHarness.Dashboard/DashboardModels.cs src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs --verbosity quiet`: PASS.
+ - `git diff --check`: PASS for owned changes (unrelated parent plan has CRLF advisory only).
+ 
+ Earlier local check attempts exposed route parameter naming, seed-test API mismatches, an alert selector and a stub call-list assertion; these were corrected before the passing checks. Initial .NET invocation without SkipDashboardUi failed in its UI build stage; focused .NET checks then used the explicit property and the standalone final UI build passed. No full gate, Linux gate, live DB, publication, merge, push, restart or dependency install performed.
+ 
+ ## Self-review
+ 
+ Spec: both screenshot behaviors implemented, no fabricated requester, no automatic decisions, original execution contract untouched. Quality: small pure renderer, reuse existing shadcn/Base UI controls and API path, additive dashboard-only projection, strict fallback and bounded work, focused behavioral tests. Shared SegmentedRadioGroup change only adds optional disabled per option; existing callers are compatible. Shared Stats reader/model fields are preserved. Parent retains plan/index updates, independent review, visual captures and final Windows gate.
+ 
+ Commit: see task completion message (report committed with owned source files).
++
++## Review fix round 1 (2026-10-29)
++
++P2 cumulative preview expansion finding fixed in `a44b2661` (base `3010a1e7`). The strict formatter parameter Proxy now starts its budget at the original SQL length and charges every fully escaped literal occurrence before returning that literal. At more than 100,000 cumulative characters it throws into the existing exact-original As sent fallback, so repeated long parameters cannot first materialize a large expanded result. Counting the SQL placeholders as well as their replacement literals is intentionally conservative. A secondary final-length check rejects formatting-whitespace overhead beyond the same budget; this is additional protection rather than the expansion limiter.
++
++The new long-text repetition regression first failed against the previous implementation, reproducing expansion. After the fix, the helper returns original SQL plus its explanation; small repeated text and precision-preserving bigint still inline. The dialog regression checks disabled inline mode, selected As sent, exact original SQL, usable Deny/Approve after the original delay and immutable request data. Its first run used the native-disabled matcher against Base UI's aria-disabled radio; the assertion was corrected to the component's actual accessibility contract.
++
++Fresh checks on the fix:
++
++- `npx vitest run src/mutations/Approval.test.tsx src/mutations/sqlDisplay.test.ts src/mutations/mutationStore.test.ts`: PASS, 3 files / 18 tests.
++- `npm run typecheck`: PASS.
++- `npm run lint`: PASS.
++- `npm run build`: PASS (existing chunk-size and plugin timing advisories only); final dist ready for parent fake-browser verification.
++- `git diff --check`: PASS for owned changes; parent plan CRLF advisory unchanged.
++
++Self-review: only the preview budget and requested regression coverage changed. Original SQL/parameters/digest and lifecycle/decision paths remain unchanged. No C# tests repeated, no full gate, live decision, dependency install, source-target expansion, publication or cosmetic follow-up performed. Exact source fix commit is recorded above; this report-only commit follows it.
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx b/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
+index e5bec92f..066f4ceb 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
+@@ -223,10 +223,28 @@ test("toast Deny disables while submitting and retains busy and expired requests
+   act(() => source().emit("added", request))
+   fireEvent.click(await screen.findByRole("button", { name: "Deny" }))
+   expect(screen.getByRole("button", { name: "Denying..." })).toBeDisabled()
+   await act(async () => { finish(new Response(JSON.stringify({ status: "busy", error: "profile_execution_busy" }), { status: 409 })) })
+   expect(await screen.findByText("Another change is already running for this profile. Try again.")).toBeInTheDocument()
+   expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
+   act(() => source().emit("snapshot", [{ ...request, expiresAt: new Date(Date.now() - 1000).toISOString() }]))
+   expect(screen.getByRole("button", { name: "Deny" })).toBeDisabled()
+   fetch.mockRestore()
+ })
++
++test("expanded-preview fallback keeps original request and decision controls usable", async () => {
++  const { source } = await setup()
++  const original = { ...request, request: { ...request.request, sql: "UPDATE t SET x=@a WHERE " + Array(100).fill("@a IS NOT NULL").join(" AND "), parameters: [{ name: "a", type: "nvarchar(max)", value: "a".repeat(10000) }] } }
++  const before = JSON.stringify(original)
++  act(() => source().emit("added", original))
++  vi.useFakeTimers()
++  fireEvent.click(screen.getByRole("button", { name: "Review" }))
++  expect(screen.getByRole("radio", { name: "Values inline" })).toHaveAttribute("aria-disabled", "true")
++  expect(screen.getByRole("radio", { name: "As sent" })).toBeChecked()
++  expect(screen.getByTestId("sql-code").textContent).toBe(original.request.sql)
++  expect(screen.getByText(/Values inline is unavailable/)).toBeInTheDocument()
++  expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
++  act(() => vi.advanceTimersByTime(1000))
++  expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled()
++  expect(JSON.stringify(original)).toBe(before)
++  vi.useRealTimers()
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts
+index 05391415..b6967310 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts
+@@ -24,10 +24,21 @@ test("null is NULL and default numeric-looking text stays text", () => {
+   expect(result.sql).toContain("NULL")
+   expect(result.sql).toContain("N'123'")
+   expect(result.sql).toMatch(/\b0\b/)
+ })
+ 
+ test("normalizes contract engine and parameter prefix without changing tokens", () => {
+   const result = inlineMutationSql("SELECT @a, @ab", "SqlServer", [p("@a", "1", "int"), p("ab", "2", "int")])
+   expect(result.reason).toBeUndefined()
+   expect(result.sql).not.toContain("@a")
+ })
++
++test("bounds repeated escaped literal expansion and preserves small repeated parameters", () => {
++  const sql = "UPDATE t SET x=@a WHERE " + Array(100).fill("@a IS NOT NULL").join(" AND ")
++  const result = inlineMutationSql(sql, "sqlserver", [p("a", "a'".repeat(5000), "nvarchar(max)")])
++  expect(result.reason).toBeTruthy()
++  expect(result.sql === sql).toBe(true)
++  const small = inlineMutationSql("SELECT @a, @a, @n, @n", "sqlserver", [p("a", "O'Brien"), p("n", "9007199254740993", "bigint")])
++  expect(small.reason).toBeUndefined()
++  expect(small.sql.match(/N'O''Brien'/g)).toHaveLength(2)
++  expect(small.sql.match(/9007199254740993/g)).toHaveLength(2)
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts
+index 237823bb..19e1e61b 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts
+@@ -1,13 +1,15 @@
+ import { format } from "sql-formatter"
+ import type { MutationParameter } from "./mutationStore"
+ 
++const PREVIEW_CHARACTER_BUDGET = 100_000
++
+ /** Presentation only; never used to submit a decision or execute SQL. */
+ export function inlineMutationSql(sql: string, engine: string, parameters: MutationParameter[]): { sql: string; reason?: string } {
+   const fallback = () => ({ sql, reason: "Values inline is unavailable for this SQL or parameter type. As sent shows the original request." })
+   if (sql.length > 100_000 || parameters.length > 500 || parameters.reduce((n, p) => n + (p.value?.length ?? 0), 0) > 100_000) return fallback()
+   engine = engine.toLowerCase()
+   const postgres = engine === "postgres"
+   if (!postgres && engine !== "sqlserver") return fallback()
+   try {
+     const values = new Map<string, string>()
+     for (const parameter of parameters) {
+@@ -28,18 +30,25 @@ export function inlineMutationSql(sql: string, engine: string, parameters: Mutat
+       }
+       else if (/^(decimal|numeric)(\(\d+,\d+\))?$/.test(type) && /^[+-]?\d+(\.\d+)?$/.test(value)) {
+         // .NET decimal binding can round beyond its precision.
+         if (value.replace(/[^0-9]/g, "").length > 28) return fallback()
+         literal = value
+       }
+       else if (type === "bit" && /^(true|false|0|1)$/i.test(value)) literal = postgres ? (/^(true|1)$/i.test(value) ? "TRUE" : "FALSE") : (/^(true|1)$/i.test(value) ? "1" : "0")
+       else return fallback()
+       values.set(name, literal)
+     }
++    // Charge original SQL plus every occurrence's fully escaped literal before
++    // returning it to the formatter. Counting placeholders twice is conservative.
++    let expandedCharacters = sql.length
+     const params = new Proxy(Object.create(null) as Record<string, string>, { get: (_target, key) => {
+       const value = typeof key === "string" ? values.get(key.toLowerCase()) : undefined
+       if (value === undefined) throw new Error("Unresolved SQL parameter")
++      expandedCharacters += value.length
++      if (expandedCharacters > PREVIEW_CHARACTER_BUDGET) throw new Error("SQL preview character budget exceeded")
+       return value
+     } })
+-    return { sql: format(sql, { language: postgres ? "postgresql" : "transactsql", params, paramTypes: { named: ["@"] } }) }
++    const rendered = format(sql, { language: postgres ? "postgresql" : "transactsql", params, paramTypes: { named: ["@"] } })
++    // Secondary guard for formatting whitespace; repeated literals are bounded above.
++    return rendered.length <= PREVIEW_CHARACTER_BUDGET ? { sql: rendered } : fallback()
+   } catch { return fallback() }
+ }

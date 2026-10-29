@@ -181,7 +181,9 @@
 .app-header { min-height:64px; padding:16px; font-size:12.8px }
 .app-header nav a { height:28px; padding-inline:10px; border-radius:8px }
 .app-main { max-width:1184px; font-size:14px }
-.app-main[data-page="activity"],.app-main[data-page="sessions"],.app-main[data-page="agent-sessions"] { max-width:1280px }
+.app-main[data-page="activity"],.app-main[data-page="agent-sessions"] { max-width:1280px }
+.app-main[data-page="sessions"] { max-width:1200px }
+@media(min-width:640px) { .app-main[data-page="sessions"] { padding-inline:24px } }
 .app-main h1 { font-size:20px; line-height:28px; font-weight:600; letter-spacing:-.01em }
 .activity-filterbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px }
 .activity-filterbar h1 { margin-right:8px }
@@ -189,7 +191,7 @@
 .activity-chipbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px }
 .activity-chipgroup { display:flex; align-items:center; flex-wrap:wrap; gap:6px; border-right:1px solid var(--border); padding-right:10px }
 .activity-chipgroup > span:first-child { color:var(--muted-foreground); font-size:12px; margin-right:2px }
-.activity-session-row { display:grid; grid-template-columns:24px 28px minmax(0,1fr) 180px 120px 200px 160px; align-items:center; gap:8px; padding:10px 8px }
+.activity-session-row { display:grid; grid-template-columns:24px 28px minmax(220px,1fr) minmax(150px,1fr) 100px 160px 140px; align-items:center; gap:8px; padding:10px 8px }
 .activity-session-counts { display:flex; align-items:center; justify-content:flex-end; gap:4px; white-space:nowrap }
 .activity-running { border-radius:999px; background:#dbeafe; color:#1d4ed8; font-size:12px; padding:2px 8px }
 .activity-session-operations { padding:0 8px 10px 68px; overflow-x:auto }
@@ -197,7 +199,7 @@
 .activity-operation[data-status="running"] { background:#f7f9fe }
 .activity-operation-status [data-slot="badge"] { border:0; font-size:12px; font-weight:400 }
 .activity-operation[data-status="running"] .activity-operation-status > span { background:#dbeafe; color:#1d4ed8; border-radius:999px; padding:2px 8px; font-size:12px }
-@media(max-width:1199px) { .activity-session-row { grid-template-columns:24px 28px minmax(0,1fr) 150px 100px 120px } .activity-optimization { display:none } }
+@media(max-width:1199px) { .activity-session-row { grid-template-columns:24px 28px minmax(200px,1fr) minmax(150px,1fr) 100px 120px } .activity-optimization { display:none } }
 @media(max-width:760px) { .activity-session-row { grid-template-columns:24px 28px minmax(0,1fr) auto } .activity-directory,.activity-last-seen { display:none } .activity-session-operations { padding-left:16px } .activity-operation { min-width:680px } .activity-search { flex:1; min-width:180px } }
 .dark .activity-operation[data-status="running"] { background:var(--muted) }
 .settings-layout { padding-top:8px }
@@ -220,7 +222,7 @@
 .setting-number input { height:34px; width:106px; font-size:14px; border-radius:8px; padding:0 10px; font-variant-numeric:tabular-nums }
 .setting-number > span { min-width:44px; text-align:left }
 .setting-tag { display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:999px; padding:0 6px; font-size:11px; line-height:18px; font-weight:400; color:var(--muted-foreground) }
-.settings-retention { display:flex; flex-wrap:wrap; gap:12px; background:var(--muted); border-radius:10px; padding:10px 14px; margin-bottom:16px }
+.settings-retention { gap:0; padding-inline:16px; border-inline-start:2px solid var(--border); margin-bottom:16px }
 .settings-retention .setting-row { border:0; display:flex; align-items:center; gap:10px; padding:0 }
 .settings-retention .setting-copy { font-size:12px }
 .settings-custom-sound { font-size:12px; color:var(--muted-foreground); margin-bottom:8px }
@@ -255,19 +257,14 @@
 .operation-sql-card:has([data-slot="card-content"]:empty) { display:none }
 .operation-page .sql-block { border:1px solid var(--border); border-radius:6px; padding:12px }
 @media(max-width:639px) { .operation-metrics,.operation-metrics.measure-metrics { grid-template-columns:repeat(2,minmax(0,1fr)) } .operation-metrics > div { border-bottom:1px solid var(--border) } .operation-tabs > [data-slot="tabs-list"] { gap:10px; flex-wrap:wrap; height:auto; min-height:44px } .operation-breadcrumb { margin-bottom:16px } }
-.session-heading { padding:6px 0 0; gap:4px!important; margin-bottom:20px; border-radius:0 }
-.session-heading > [data-slot="card-header"] { padding:0; gap:8px }
-.session-heading > [data-slot="card-content"] { padding:0 }
 .session-title-row { flex-wrap:nowrap }
 .session-edit-title { opacity:0 }
 .session-title-row:hover .session-edit-title,.session-edit-title:focus-visible { opacity:1 }
-.session-subtitle { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:14px }
+.session-subtitle { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:14px; color:var(--muted-foreground) }
 .session-subtitle code { font-size:12px }
 .optimization-card { position:relative; min-width:0; border:1px solid var(--border); border-radius:16px; padding:16px }
 .optimization-card > div:first-child { padding-bottom:16px }
-.version-table { font-size:14px; margin-top:4px }
-.version-table th,.version-table td { padding:8px; height:54px }
-.version-table thead th { height:40px; font-weight:500 }
+.version-table { margin-top:4px }
 .version-table th:first-child { width:31.5% }
 .version-table [data-delta="better"] { color:#00835b }
 .version-table tbody tr:first-child { background:transparent }
@@ -306,7 +303,6 @@
 .plan-workbench-toolbar > label { display:flex; align-items:center; gap:8px; font-size:12px }
 :is(.plan-workbench,.plan-workbench-toolbar) [data-slot="select-trigger"] { height:28px; min-width:0; font-size:12px }
 .operation-tabs > [data-slot="tabs-list"] > [data-slot="tabs-trigger"] { flex:none; padding-inline:0; font-weight:400 }
-.session-heading { border:0!important }
 .comparison-panel { position:static }
 .comparison-context { position:static; min-height:0; max-width:none; margin-left:auto; font-size:12px; font-weight:400; text-align:right; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .comparison-tabs > [data-slot="tabs-list"] { display:flex }
@@ -320,17 +316,13 @@
 .plan-workbench-toolbar > label [data-slot="select-trigger"] { font-size:12px }
 .plan-workbench-toolbar > p { font-size:11px; margin-left:auto }
 @media(max-width:760px) { .comparison-context { max-width:55%; white-space:normal; font-size:10px } .comparison-selectors,.comparison-copy { position:static; margin:8px 16px; display:inline-block } .plan-workbench-toolbar > label { max-width:100% } }
-.session-heading { box-shadow:none!important; outline:0!important; overflow:visible!important }
 .session-version-diff .diff-controls { display:flex; flex-direction:row; width:auto; align-items:center }
 .session-version-diff > div > div:has(> .diff-controls) { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between }
 .session-version-diff > p:last-child { font-size:12px }
-@media(max-width:760px) { .session-heading > [data-slot="card-content"] { height:auto } .session-heading > [data-slot="card-content"] > div > button { position:static } }
 .statement-metrics { display:flex; flex-wrap:wrap; gap:8px 16px; padding:10px 0 0 24px; font-family:var(--font-sans); font-size:12px; color:var(--muted-foreground); font-weight:400 }
 .statement-metrics strong { font-weight:500; color:var(--foreground); margin-left:4px }
 
 .app-header > a { display:flex }
-.session-heading > [data-slot="card-content"] { height:auto; padding:0 }
-.session-heading .session-subtitle button { font-size:13px; font-weight:400 }
 
 .sql-diff .diff-controls { display:flex; align-items:center; flex-direction:row; width:auto }
 .sql-diff div:has(> .diff-controls) { justify-content:space-between }
@@ -364,3 +356,23 @@
 .session-title-row > [data-slot="toggle"] { flex-shrink:0 }
 
 .comparison-tabs > .comparison-context { margin:0 16px; white-space:normal; overflow-wrap:anywhere }
+
+/* A selected session star is indicated by its icon, with no selected surface. */
+.session-star[aria-pressed=true] { background:transparent }
+
+.profiles-layout { display:grid; grid-template-columns:240px minmax(0,760px); gap:40px; justify-content:center }
+.profile-section tr:last-child { border-bottom:0 }
+.mutation-dialog .sql-block { max-height:280px; overflow:auto }
+@media(max-width:760px) { .profiles-layout { grid-template-columns:minmax(0,1fr); gap:24px } }
+
+
+.app-main[data-page=stats] { max-width:1040px; padding:24px }
+.app-main[data-page=profiles] { padding-top:24px }
+.profile-section th[scope=row] { font-weight:400; color:var(--muted-foreground); width:30% }
+
+.session-note-display { width:100%; height:auto; justify-content:flex-start; padding:12px 16px; border-radius:var(--radius-xl); text-align:left; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; font-weight:400 }
+
+.io-statement-disclosure { background:transparent }
+.io-statement-disclosure:hover, .io-statement-disclosure[aria-expanded] { background:transparent }
+.operation-tabs > [data-slot="tabs-list"] { box-sizing:border-box; min-height:44px; height:auto; padding-block:8px; align-items:center }
+.operation-parameters { align-items:center; min-height:28px }
