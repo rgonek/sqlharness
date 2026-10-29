@@ -257,9 +257,18 @@ public static class OptimizationComparer
                 ?? new CompareMetricEvidence(variant, c.CaseId, c.Label, null, null, null, []), StringComparer.Ordinal);
             var labels = uniqueCases.ToDictionary(c => c.VaryingFingerprint!, c => c.Label, StringComparer.Ordinal);
             return (new VersionSnapshot(compare.Engine, compare.OperationId, variant, metrics), labels, compare.Cases.Count,
-                SnapshotAction(Snapshot(compare, variant)));
+                FullSnapshotAction(compare, variant));
         }
         return null;
+    }
+
+    private static OptimizationActionReference FullSnapshotAction(CompareEvidence compare, string variant)
+    {
+        var ids = compare.Cases.GroupBy(CaseKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Last().CaseId, StringComparer.Ordinal);
+        return new OptimizationActionReference(compare.OperationId, variant,
+            compare.Cases.Select(item => item.CaseId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray())
+        { CaseIdsByFingerprint = ids };
     }
 
     private static OptimizationActionReference SnapshotAction(VersionSnapshot snapshot)

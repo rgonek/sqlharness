@@ -18,6 +18,33 @@ public sealed class DashboardContractTests
         JsonDocument.Parse(JsonSerializer.Serialize(value, Json)).RootElement.EnumerateObject().Select(p => p.Name).ToArray();
 
     [Fact]
+    public void Approximate_comparison_payload_exposes_groups_and_case_rows()
+    {
+        var comparison = new OptimizationComparison("v0", "v1", PairBasis.ApproximateAcrossConditions, null,
+            "Different conditions — approximate, not a verdict", [], "all", "sum", "1 of 1 cases paired", null, [], null,
+            new ElapsedInfo(null, null, null, true))
+        {
+            GroupA = "group-a", GroupB = "group-b", GroupLabelA = "A", GroupLabelB = "B",
+            CaseRows = [new CaseRows("key", "left", "right", 1, null) { RowsAVaries = true }],
+        };
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(comparison, Json));
+        var root = json.RootElement;
+        Assert.Equal("ApproximateAcrossConditions", root.GetProperty("basis").GetString());
+        Assert.Equal("group-a", root.GetProperty("groupA").GetString());
+        Assert.Equal("group-b", root.GetProperty("groupB").GetString());
+        Assert.Equal("A", root.GetProperty("groupLabelA").GetString());
+        Assert.Equal("B", root.GetProperty("groupLabelB").GetString());
+        var row = Assert.Single(root.GetProperty("caseRows").EnumerateArray());
+        Assert.Equal("key", row.GetProperty("caseKey").GetString());
+        Assert.Equal("left", row.GetProperty("labelA").GetString());
+        Assert.Equal("right", row.GetProperty("labelB").GetString());
+        Assert.Equal(1, row.GetProperty("rowsA").GetInt64());
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("rowsB").ValueKind);
+        Assert.True(row.GetProperty("rowsAVaries").GetBoolean());
+        Assert.False(row.GetProperty("rowsBVaries").GetBoolean());
+    }
+
+    [Fact]
     public void Operation_summary_names_match_the_ui()
     {
         var summary = new OperationSummary(1, 2, "claude", "query", "running", null, null, "s", "u", null, null, null, null,

@@ -807,8 +807,8 @@ public sealed class OptimizationComparerTests
     [Fact]
     public void Across_groups_without_pair_keys_retains_snapshots_and_unknown_rows()
     {
-        var left = MeasureEvidence(215, "h0", 100) with { Cases = [new("0", "same label", null, null, null)] };
-        var right = MeasureEvidence(216, "h1", 50) with { Fingerprint = "other", Cases = [new("0", "same label", null, null, null)] };
+        var left = MeasureEvidence(215, "h0", 100) with { Cases = [new CompareCaseEvidence("0", "same label", null, null, null) { MeasurementFingerprint = "left-key" }], Metrics = [] };
+        var right = MeasureEvidence(216, "h1", 50) with { Fingerprint = "other", Cases = [new CompareCaseEvidence("1", "same label", null, null, null) { MeasurementFingerprint = "right-key" }], Metrics = [] };
         var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" }, [left, right], "v0", "v1", "all", "sum");
         Assert.Empty(result.Cases);
         Assert.Empty(result.Tables);
@@ -817,7 +817,9 @@ public sealed class OptimizationComparerTests
         Assert.Equal(215, result.BeforeAction?.OperationId);
         Assert.Equal(216, result.AfterAction?.OperationId);
         Assert.Equal(["0"], result.BeforeAction?.CaseIds);
-        Assert.Equal(["0"], result.AfterAction?.CaseIds);
+        Assert.Equal(["1"], result.AfterAction?.CaseIds);
+        Assert.Equal("0", result.BeforeAction?.CaseIdsByFingerprint["left-key"]);
+        Assert.Equal("1", result.AfterAction?.CaseIdsByFingerprint["right-key"]);
     }
 
     [Fact]
@@ -837,6 +839,21 @@ public sealed class OptimizationComparerTests
         Assert.Null(row.RowsB);
         Assert.False(row.RowsAVaries);
         Assert.False(row.RowsBVaries);
+    }
+
+    [Fact]
+    public void Same_group_compare_preserves_existing_verdict_semantics()
+    {
+        var result = Compare([Evidence(214, "h1", "h2", (1000, 800))], "v1", "v2");
+        Assert.Equal(PairBasis.MeasuredTogether, result.Basis);
+        Assert.Equal(214, result.OperationId);
+        Assert.Equal("results equivalent (direct)", result.EquivalenceLabel);
+        Assert.Equal("better", Assert.Single(result.Cases).Outcome);
+        Assert.Equal("whole batch", result.VerdictBasis);
+        Assert.Equal(1000, Assert.Single(result.Tables).ReadsBefore);
+        Assert.Equal(800, Assert.Single(result.Tables).ReadsAfter);
+        Assert.Null(result.Elapsed.PolicyVerdict);
+        Assert.Single(result.CaseRows);
     }
 
     private static OptimizationComparison Compare(IReadOnlyList<CompareEvidence> evidence, string a, string b) =>
