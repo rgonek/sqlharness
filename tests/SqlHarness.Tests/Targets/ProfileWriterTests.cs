@@ -233,10 +233,40 @@ public sealed class ProfileWriterTests
             {
                 File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(File.ReadAllBytes(path)), new("new", "d", new Dictionary<string, string>(), "integrated"));
-                Assert.Equal(ProfileWriteStatus.Success, result.Status);
+                Assert.Equal(OperatingSystem.IsLinux() ? ProfileWriteStatus.Success : ProfileWriteStatus.SecurityMetadata, result.Status);
                 Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
             }
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public void Linux_extended_metadata_blocks_replacement()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
+            var bytes = File.ReadAllBytes(path);
+            Assert.Equal(0, SetXattr(path, "user.sqlharness-test", [1], 1, 0));
+            var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(bytes), new("new", "d", new Dictionary<string, string>(), "integrated"));
+            Assert.Equal(ProfileWriteStatus.SecurityMetadata, result.Status);
+            Assert.Equal(bytes, File.ReadAllBytes(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Metadata_mismatch_is_rejected_for_owner_group_and_mode()
+    {
+        var original = new LinuxProfileMetadata.Metadata(12, 34, 0x8180);
+        Assert.True(LinuxProfileMetadata.CanReplace(original, original, original));
+        Assert.False(LinuxProfileMetadata.CanReplace(original, original with { User = 13 }, original));
+        Assert.False(LinuxProfileMetadata.CanReplace(original, original, original with { Group = 35 }));
+        Assert.False(LinuxProfileMetadata.CanReplace(original, original, original with { Mode = 0x81a0 }));
+    }
+
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "setxattr", SetLastError = true)]
+    private static extern int SetXattr(string path, string name, byte[] value, nuint size, int flags);
 }

@@ -7,7 +7,7 @@ using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Core.Targets;
 
-public enum ProfileWriteStatus { Success, Invalid, Conflict, NotFound, IoError }
+public enum ProfileWriteStatus { Success, Invalid, Conflict, NotFound, IoError, SecurityMetadata }
 public sealed record ProfileFieldError(string Field, string Message);
 public sealed record ProfileWriteResult(ProfileWriteStatus Status, string? Revision = null, IReadOnlyDictionary<string, TargetProfile>? Profiles = null, ProfileFieldError? Error = null);
 
@@ -64,10 +64,18 @@ public static class ProfileWriter
                 IReadOnlyDictionary<string, TargetProfile> savedProfiles;
                 try { savedProfiles = ProfileStore.ParseForEditing(candidate); }
                 catch (Exception e) when (e is JsonException or NotSupportedException or SqlHarnessSafetyException) { return new(ProfileWriteStatus.Invalid); }
+                LinuxProfileMetadata.Metadata originalMetadata = default;
+                if (!OperatingSystem.IsWindows() && !LinuxProfileMetadata.TryRead(path, out originalMetadata))
+                    return new(ProfileWriteStatus.SecurityMetadata);
                 temp = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, $".sqlharness-{Guid.NewGuid():N}.tmp");
                 using (var stream = CreateProtectedTemp(path, temp)) { onTempCreated?.Invoke(); stream.Write(candidate); stream.Flush(true); }
                 if (!OperatingSystem.IsWindows())
                     File.SetUnixFileMode(temp, File.GetUnixFileMode(path));
+                if (!OperatingSystem.IsWindows() &&
+                    (!LinuxProfileMetadata.TryRead(path, out var latestMetadata) ||
+                     !LinuxProfileMetadata.TryRead(temp, out var tempMetadata) ||
+                     !LinuxProfileMetadata.CanReplace(originalMetadata, latestMetadata, tempMetadata)))
+                    return new(ProfileWriteStatus.SecurityMetadata);
                 if (Revision(File.ReadAllBytes(path)) != expectedRevision) return new(ProfileWriteStatus.Conflict);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Replace(temp, path, null);

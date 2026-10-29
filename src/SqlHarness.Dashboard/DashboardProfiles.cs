@@ -96,6 +96,7 @@ internal static class DashboardProfiles
             ProfileWriteStatus.Conflict => Results.Json(new { error = "Profiles changed; reload before saving." }, json, statusCode: 409),
             ProfileWriteStatus.NotFound => Results.Json(new { error = "Profile not found." }, json, statusCode: 404),
             ProfileWriteStatus.Invalid => Results.Json(new { errors = new[] { result.Error ?? new ProfileFieldError("$", "Invalid profile or profiles document.") } }, json, statusCode: 400),
+            ProfileWriteStatus.SecurityMetadata => Results.Json(new { error = "Could not preserve file security settings; profile was not saved." }, json, statusCode: 500),
             _ => Results.Json(new { error = "Could not save profiles." }, json, statusCode: 500),
         };
     }
