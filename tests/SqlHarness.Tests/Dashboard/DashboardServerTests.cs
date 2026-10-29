@@ -412,7 +412,8 @@ public sealed class DashboardServerTests
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
         var writes = server.Endpoints.Where(endpoint => endpoint.Methods.Any(method => method is not "GET" and not "HEAD")).ToArray();
-        Assert.Equal(10, writes.Length);
+        Assert.Equal(11, writes.Length);
+        Assert.Equal(["PUT"], Assert.Single(writes, endpoint => endpoint.Route == "/api/profiles").Methods);
         var settingsPut = Assert.Single(writes, endpoint => endpoint.Route == "/api/settings");
         Assert.Equal(["PUT"], settingsPut.Methods);
         var pricesRefresh = Assert.Single(writes, endpoint => endpoint.Route == "/api/prices/refresh");

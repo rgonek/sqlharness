@@ -1,3 +1,7 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Mutations;
 using SqlHarness.Core.Targets;
@@ -10,9 +14,10 @@ public sealed record ProfileView(
     string Name, string Engine, string Server, string Database, string Auth, string? SqlUser, string? PasswordEnvVar,
     string? SslMode, bool TrustServerCertificate, string? RootCertificate, string Tls, IReadOnlyList<ProfileVariable> Vars,
     string? Environment, string MutationMode, string? MutationWriterKind, bool AcknowledgeProductionYolo,
-    string? ConfiguredMode, string EffectiveMode, string ModeSource, bool WriterConfigured, bool ProductionAcknowledgementRequired);
+    string? ConfiguredMode, string EffectiveMode, string ModeSource, bool WriterConfigured, bool ProductionAcknowledgementRequired,
+    TargetProfile? EditableProfile = null);
 
-public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message);
+public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message, string? Revision = null);
 
 /// <summary>
 /// Read-only view of targets.json. It never reads environment variables: a profile's
@@ -27,11 +32,13 @@ internal static class DashboardProfiles
         if (!File.Exists(path))
             return new ProfilesResponse("missing", [], null);
         IReadOnlyDictionary<string, TargetProfile> profiles;
+        byte[] bytes;
         try
         {
-            profiles = ProfileStore.Load(path);
+            bytes = File.ReadAllBytes(path);
+            profiles = ProfileStore.Parse(bytes);
         }
-        catch (Exception exception) when (exception is SqlHarnessSafetyException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is SqlHarnessSafetyException or IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {
             // The loader's message names the path; the page gets a fixed sentence instead.
             return new ProfilesResponse("invalid", [], InvalidMessage);
@@ -40,7 +47,51 @@ internal static class DashboardProfiles
         return new ProfilesResponse("valid", profiles
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => View(pair.Key, pair.Value, config ?? new MutationsConfig()))
-            .ToArray(), null);
+            .ToArray(), null, ProfileWriter.Revision(bytes));
+    }
+
+
+    private sealed record PutRequest(string Name, string ExpectedRevision, TargetProfile Profile);
+    private static readonly JsonSerializerOptions StrictJson = new(JsonSerializerDefaults.Web)
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+    };
+
+    internal static async Task<IResult> PutAsync(HttpContext context, string path, JsonSerializerOptions json, MutationsConfig? config = null)
+    {
+        const int limit = 1024 * 1024;
+        if (context.Request.ContentLength > limit) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8192];
+        int count;
+        while ((count = await context.Request.Body.ReadAsync(chunk, context.RequestAborted)) > 0)
+        {
+            if (buffer.Length + count > limit) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            buffer.Write(chunk, 0, count);
+        }
+        PutRequest? request;
+        try
+        {
+            using var document = JsonDocument.Parse(buffer.ToArray());
+            ProfileStore.RejectDuplicateProperties(document.RootElement);
+            request = document.RootElement.Deserialize<PutRequest>(StrictJson);
+            if (request is null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.ExpectedRevision) || request.Profile is null)
+                throw new JsonException();
+        }
+        catch (Exception e) when (e is JsonException or NotSupportedException)
+        {
+            return Results.Json(new { errors = new[] { new { field = "$", message = "Invalid profile request." } } }, json, statusCode: 400);
+        }
+        context.RequestAborted.ThrowIfCancellationRequested();
+        var result = ProfileWriter.Update(path, request.Name, request.ExpectedRevision, request.Profile, context.RequestAborted);
+        return result.Status switch
+        {
+            ProfileWriteStatus.Success => Results.Json(Read(path, config), json),
+            ProfileWriteStatus.Conflict => Results.Json(new { error = "Profiles changed; reload before saving." }, json, statusCode: 409),
+            ProfileWriteStatus.NotFound => Results.Json(new { error = "Profile not found." }, json, statusCode: 404),
+            ProfileWriteStatus.Invalid => Results.Json(new { errors = new[] { new { field = "$", message = "Invalid profile or profiles document." } } }, json, statusCode: 400),
+            _ => Results.Json(new { error = "Could not save profiles." }, json, statusCode: 500),
+        };
     }
 
     /// <summary>Reads only profile names and variable definitions for Statistics aggregation.</summary>
@@ -89,6 +140,6 @@ internal static class DashboardProfiles
             policy.EffectiveMode,
             profile.Mutations?.Writer is { } writer ? writer.SameAsReader ? "sameAsReader" : "separate" : null,
             profile.Mutations?.AcknowledgeProductionYolo ?? false,
-            policy.ConfiguredMode, policy.EffectiveMode, policy.ModeSource, policy.WriterConfigured, policy.ProductionAcknowledgementRequired);
+            policy.ConfiguredMode, policy.EffectiveMode, policy.ModeSource, policy.WriterConfigured, policy.ProductionAcknowledgementRequired, profile);
     }
 }
