@@ -264,5 +264,29 @@ test("404 for a stale cross-group selection resets B to group defaults", async (
   const { router } = renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&groupB=fp-2&scope=whole%20query&a=v1&b=v3")
   await waitFor(() => expect(router.state.location.search.groupB).toBeUndefined(), { timeout: 12000 })
   expect(await screen.findAllByRole("radio", { name: /^B v39/, checked: true })).toHaveLength(1)
+  expect(router.state.location.search.a).toBe("v1")
   expect(calls.some(call => call.includes("groupB=fp-2"))).toBe(true)
+})
+
+test("selecting a nondefault A in another group keeps it when B is unset", async () => {
+  const shared = { ...section, subjects: [{ ...section.subjects[0]!, groups: [
+    { ...section.subjects[0]!.groups[0]!, scopes: [{ scope: "whole query", defaultA: "v0", defaultB: null, versions: versions.slice(0, 1) }] },
+    { ...section.subjects[0]!.groups[0]!, fingerprint: "fp-2", label: "other conditions", scopes: [{ scope: "whole query", defaultA: "v1", defaultB: null, versions: versions.slice(1, 3) }] },
+  ] }] }
+  stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": shared })
+  const { router } = renderApp("/sessions/7")
+  const candidate = await screen.findByRole("radio", { name: "A v2" })
+  await userEvent.click(candidate)
+  await waitFor(() => expect(router.state.location.search).toMatchObject({ group: "fp-2", a: "v2" }))
+  expect(router.state.location.search.groupB).toBeUndefined()
+  expect(router.state.location.search.b).toBeUndefined()
+  expect(candidate).toBeChecked()
+})
+
+test("invalid B recovery preserves a valid explicit A", async () => {
+  stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": section, "/api/sessions/7/optimization/compare": comparison })
+  const { router } = renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&groupB=missing&scope=whole%20query&a=v1&b=v3")
+  await waitFor(() => expect(router.state.location.search.groupB).toBeUndefined())
+  expect(router.state.location.search.a).toBe("v1")
+  expect(await screen.findByRole("radio", { name: "A v1", checked: true })).toBeInTheDocument()
 })

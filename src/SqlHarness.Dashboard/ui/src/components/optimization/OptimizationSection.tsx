@@ -84,13 +84,13 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations, 
 
   useEffect(() => {
     if (!matchesCard || (!search.groupB && !search.b) || validB) return
-    update({ groupB: undefined, a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })
+    update({ groupB: undefined, a: hasVersion(aGroup?.fingerprint, search.a) ? search.a : undefined, b: undefined, case: undefined, agg: undefined, view: undefined })
   }, [matchesCard, search.groupB, search.b, validB])
 
   useEffect(() => {
     if (!(activeCompareQuery.error instanceof NotFoundError) || !matchesCard || (!search.groupB && !search.b)) return
     void activeQueryRefetch()
-    update({ groupB: undefined, a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })
+    update({ groupB: undefined, a: hasVersion(aGroup?.fingerprint, search.a) ? search.a : undefined, b: undefined, case: undefined, agg: undefined, view: undefined })
   }, [activeCompareQuery.error])
 
   return <article aria-current={matchesCard ? "true" : undefined} className="optimization-card">
@@ -116,7 +116,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations, 
       {versions.length > 0 ? <VersionTable subject={`${subject.subject}-${subject.database}`} sessionId={sessionId} agentSessionKey={agentSessionKey} sessionSearch={selectedSearch}
         versions={versions} operations={operations} selectedA={selectedA} selectedB={selectedB || null} groupA={aGroup?.fingerprint} groupB={bGroup?.fingerprint}
         onSelect={(side, version, fingerprint) => side === "a"
-          ? update({ group: fingerprint, groupB: bGroup?.fingerprint !== fingerprint ? bGroup?.fingerprint : undefined, a: version, b: selectedB || undefined })
+          ? update({ group: fingerprint, groupB: selectedB && bGroup?.fingerprint !== fingerprint ? bGroup?.fingerprint : undefined, a: version, b: selectedB || undefined })
           : update({ group: aGroup?.fingerprint, groupB: fingerprint !== aGroup?.fingerprint ? fingerprint : undefined, a: selectedA, b: version })} /> : <p className="text-sm text-muted-foreground">No retained versions for this scope.</p>}
       {!selectedB && <p className="text-sm text-muted-foreground">Select a version for B to compare it with {selectedA}.</p>}
       {activeCompareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}

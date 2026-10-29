@@ -44,4 +44,11 @@ test("shows rows column and dash for missing", () => {
   render(<VersionTable subject="Rows" sessionId={1} sessionSearch={{}} versions={[{ ...versions[0], rowsReturnedSum: 5 }, { ...versions[1], rowsReturnedSum: null }]} selectedA="v0" selectedB={null} onSelect={() => {}} />)
   expect(screen.getByRole("columnheader", { name: "Rows" })).toBeInTheDocument()
   expect(screen.getByText("5")).toBeInTheDocument()
+  const missingRow = screen.getByRole("rowheader", { name: "v1" }).closest("tr")!
+  expect(within(missingRow).getAllByRole("cell")[1]).toHaveTextContent("—")
+})
+
+test("shows explicit row count variation separately from missing", () => {
+  render(<VersionTable subject="Rows" sessionId={1} sessionSearch={{}} versions={[{ ...versions[0], rowsReturnedSum: null, rowsReturnedVaries: true }]} selectedA="v0" selectedB={null} onSelect={() => {}} />)
+  expect(screen.getByText("varies")).toBeInTheDocument()
 })
