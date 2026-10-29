@@ -202,6 +202,10 @@ public static class OptimizationSummaryBuilder
                     latest.Compare.OperationId)
                 {
                     VerdictBasis = verdictBasis,
+                    RowsReturnedSum = latest.Compare.Cases.Count == 0 || latest.Compare.Cases.Any(c =>
+                        !metrics.Any(m => m.CaseId == c.CaseId && m.RowsReturned.HasValue))
+                        ? null : Sum(latest.Compare.Cases.Select(c => metrics.First(m => m.CaseId == c.CaseId).RowsReturned!.Value)),
+                    RowsReturnedVaries = metrics.Any(m => m.RowsReturnedVaries),
                 };
             })
             .ToArray();

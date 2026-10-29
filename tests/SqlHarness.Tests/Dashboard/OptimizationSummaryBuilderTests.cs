@@ -243,6 +243,37 @@ public sealed class OptimizationSummaryBuilderTests
         Assert.Empty(section.Unassigned);
     }
 
+    [Theory]
+    [InlineData(false, 4L)]
+    [InlineData(true, null)]
+    public void Version_row_sums_complete_case_counts_and_preserves_missing(bool missing, long? expected)
+    {
+        var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
+        {
+            Cases = [new("0", "a", null, true, null), new("1", "b", null, true, null), new("2", "c", null, true, null)],
+            Metrics = [Metric("baseline", "0", 1) with { RowsReturned = 1 },
+                Metric("baseline", "1", 1) with { RowsReturned = 0 },
+                Metric("baseline", "2", 1) with { RowsReturned = missing ? null : 3 }],
+        };
+        var row = Assert.Single(Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build([compare]).Subjects).Groups).Scopes)
+            .Versions.Single(v => v.Version == "v0");
+        Assert.Equal(expected, row.RowsReturnedSum);
+    }
+
+    [Fact]
+    public void Version_row_reports_variation_only_when_a_case_asserts_it()
+    {
+        var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
+        {
+            Cases = [new("0", "a", null, true, null), new("1", "b", null, true, null)],
+            Metrics = [Metric("baseline", "0", 1) with { RowsReturnedVaries = true }],
+        };
+        var row = Assert.Single(Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build([compare]).Subjects).Groups).Scopes)
+            .Versions.Single(v => v.Version == "v0");
+        Assert.Null(row.RowsReturnedSum);
+        Assert.True(row.RowsReturnedVaries);
+    }
+
     private static CompareEvidence Compare(long id, string? subject, string? scope, string database, string fingerprint,
         string baselineHash, string candidateHash, (long Baseline, long Candidate) reads = default,
         bool equivalent = true, string comparisonMode = "Ordered", string status = "succeeded") =>

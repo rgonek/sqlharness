@@ -710,6 +710,40 @@ public sealed class JournalReaderTests
         };
 
     [Fact]
+    public void Optimization_evidence_reads_rows_returned_and_varying_key()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:row-evidence");
+        var conditions = JournalSeed.ReproConditions() with
+        {
+            Cases = [new ConditionsCase("0", 0, "case", null, [], "case-fp") { VaryingFingerprint = "varying-key" }],
+        };
+        var compare = seed.Compare(session, "orders", "whole", "h0", "h1");
+        seed.CompareEvidence(compare, conditions, "{}", new BenchmarkJournalRecord([
+            OptimizationVariant("baseline", 100, matrixCell: 0) with { RowsReturned = 3, ResultSets = 2 },
+            OptimizationVariant("candidate", 80, matrixCell: 0) with { RowsReturnedVaries = true },
+        ], []));
+        var reader = Reader(home);
+        var evidence = Assert.Single(reader.OptimizationEvidence(Assert.Single(reader.Sessions(new SessionQuery(HasCompare: true)).Items).Id));
+        using var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT json_extract(conditions_json, '$.cases[0].varyingFingerprint') FROM operations WHERE id = $id";
+        command.Parameters.AddWithValue("$id", compare.OperationId);
+        var storedKey = Assert.IsType<string>(command.ExecuteScalar());
+        Assert.NotEqual("varying-key", storedKey);
+        Assert.Equal(storedKey, Assert.Single(evidence.Cases).VaryingFingerprint);
+        var baseline = evidence.Metrics.Single(m => m.Variant == "baseline");
+        var candidate = evidence.Metrics.Single(m => m.Variant == "candidate");
+        Assert.Equal(3, baseline.RowsReturned);
+        Assert.Equal(2, baseline.ResultSets);
+        Assert.Null(candidate.RowsReturned);
+        Assert.True(candidate.RowsReturnedVaries);
+        Assert.False(baseline.RowsReturnedVaries);
+    }
+
+    [Fact]
     public void Optimization_reader_loads_measure_observations_with_legacy_case_fingerprint_fallback()
     {
         using var home = new TempHome();

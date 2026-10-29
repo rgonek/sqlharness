@@ -48,6 +48,8 @@ public sealed record VersionRow(
     long LatestOperationId)
 {
     public string VerdictBasis { get; init; } = "whole batch";
+    public long? RowsReturnedSum { get; init; }
+    public bool RowsReturnedVaries { get; init; }
 }
 
 public sealed record UnassignedCompare(long OperationId, string StartedAt, string Status);
@@ -81,6 +83,7 @@ public sealed record CompareCaseEvidence(
     string? RegressionVerdict)
 {
     public string? MeasurementFingerprint { get; init; }
+    public string? VaryingFingerprint { get; init; }
 }
 
 /// <summary>One baseline or candidate per-case metric row and its journaled per-table IO rows.</summary>
@@ -93,6 +96,9 @@ public sealed record CompareMetricEvidence(
     long? ScansSum,
     IReadOnlyList<CompareTableIoEvidence> TableRows)
 {
+    public long? RowsReturned { get; init; }
+    public int? ResultSets { get; init; }
+    public bool RowsReturnedVaries { get; init; }
     public double? CpuMedianMs { get; init; }
     public PostgresBuffers? Postgres { get; init; }
     public string? MeasurementFingerprint { get; init; }

@@ -24,7 +24,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         long? MetricId, string? Variant, string? CaseId, string? CaseLabel, long? LogicalReadsMedian, long? ElapsedMedianMs,
         long? CpuMedianMs, long? PgSharedHit, long? PgSharedRead, long? PgSharedDirtied, long? PgSharedWritten,
         long? PgTempRead, long? PgTempWritten,
-        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, int OmittedStatements);
+        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, int OmittedStatements, int? ResultSets, long? RowsReturned);
 
     private sealed record StoredStatement(long Id, long OperationId, string Variant, string? ParameterSet, string CaseId, int Ordinal, string Key,
         int Occurrence, string Hash, string? Text, long? Executions, string? PlanHash, string Status,
@@ -557,7 +557,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                    m.id, m.variant, m.case_id, m.case_label, m.logical_reads_median, m.elapsed_ms_median,
                    m.cpu_ms_median, m.pg_shared_hit, m.pg_shared_read, m.pg_shared_dirtied,
                    m.pg_shared_written, m.pg_temp_read, m.pg_temp_written,
-                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, COALESCE(m.omitted_statements, 0)
+                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, COALESCE(m.omitted_statements, 0), m.result_sets, m.rows_returned
             FROM operations o JOIN sessions s ON s.id = o.session_id
             LEFT JOIN operation_metrics m ON m.operation_id = o.id
             LEFT JOIN operation_table_io t ON t.metric_id = m.id
@@ -576,7 +576,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             r.IsDBNull(16) ? null : r.GetInt64(16), NullableString(r, 17), NullableString(r, 18), NullableString(r, 19),
             NullableLong(r, 20), NullableLong(r, 21), NullableLong(r, 22), NullableLong(r, 23), NullableLong(r, 24),
             NullableLong(r, 25), NullableLong(r, 26), NullableLong(r, 27), NullableLong(r, 28), NullableString(r, 29),
-            NullableLong(r, 30), NullableLong(r, 31), NullableLong(r, 32), r.GetInt32(33)));
+            NullableLong(r, 30), NullableLong(r, 31), NullableLong(r, 32), r.GetInt32(33),
+            r.IsDBNull(34) ? null : r.GetInt32(34), NullableLong(r, 35)));
 
         var statementsByMetric = LoadStoredStatements(connection, rows.Select(row => row.OperationId).Distinct(), storeSensitive)
             .GroupBy(row => (row.OperationId, row.Variant, row.CaseId))
@@ -637,6 +638,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     return new CompareMetricEvidence(metric.Key.Variant!, metric.Key.CaseId!, metric.Key.CaseLabel!,
                         samples[0].LogicalReadsMedian, samples[0].ElapsedMedianMs, scans, tableRows)
                     {
+                        RowsReturned = samples[0].RowsReturned,
+                        ResultSets = samples[0].ResultSets,
+                        RowsReturnedVaries = RowsReturnedVaries(first.ConditionsJson, metric.Key.CaseId!, metric.Key.Variant!),
                         CpuMedianMs = samples[0].CpuMedianMs,
                         Postgres = postgres,
                         MeasurementFingerprint = caseFingerprint,
@@ -1971,6 +1975,23 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         }
     }
 
+    private static bool RowsReturnedVaries(string? conditionsJson, string caseId, string variant)
+    {
+        var cases = Property(Json(conditionsJson), "cases");
+        if (cases is not { ValueKind: JsonValueKind.Array } array)
+            return false;
+        foreach (var item in array.EnumerateArray())
+        {
+            if (StringProperty(item, "id") != caseId)
+                continue;
+            var variants = Property(item, "rowsReturnedVariesVariants");
+            return variants is { ValueKind: JsonValueKind.Array } names
+                && names.EnumerateArray().Any(name => name.ValueKind == JsonValueKind.String
+                    && string.Equals(name.GetString(), variant, StringComparison.OrdinalIgnoreCase));
+        }
+        return false;
+    }
+
     private static IReadOnlyList<CompareCaseEvidence> ReadOptimizationCases(
         JsonElement? summary, ConditionsModel? conditions, IReadOnlyList<CompareMetricEvidence> metrics)
     {
@@ -1978,7 +1999,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         if (conditions?.Cases is { } conditionCases)
             foreach (var item in conditionCases)
                 cases[item.Id] = new CompareCaseEvidence(item.Id, item.Label, item.SetName, null, null)
-                { MeasurementFingerprint = item.EffectiveMeasurementFingerprint };
+                { MeasurementFingerprint = item.EffectiveMeasurementFingerprint, VaryingFingerprint = item.VaryingFingerprint };
 
         var summaryCases = Property(summary, "cases");
         if (summaryCases is { ValueKind: JsonValueKind.Array } caseArray)

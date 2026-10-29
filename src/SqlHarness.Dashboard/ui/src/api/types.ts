@@ -172,6 +172,7 @@ export type ConditionsGroup = {
 export type ScopeVersions = { scope: string; versions: OptimizationVersion[]; defaultA: string | null; defaultB: string | null }
 export type OptimizationVersion = {
   version: string; hash: string; logicalReadsSum: number | null; logicalReadsMean: number | null; scansSum: number | null
+  rowsReturnedSum?: number | null; rowsReturnedVaries?: boolean
   elapsedMedianMs: number | null; caseOutcome: string; measuredIn: number[]; latestOperationId: number; verdictBasis: string
 }
 export type UnassignedCompare = { operationId: number; startedAt: string; status: string }
