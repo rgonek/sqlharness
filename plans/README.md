@@ -44,6 +44,41 @@ Recommended study order: **116 -> 117 -> 118 -> 119 -> 120**. These arrows are s
 - Cross-artifact evidence reuse remains excluded by 109's decision. A suite describes explicit new comparisons and preserves their identities; it does not reuse another run's proof.
 - Additional server-environment capture and mutation-to-postcheck links were considered but are outside the selected five. Plan 118 explains retained conditions only; it does not authorize metadata queries or mutation lifecycle changes.
 
+## Agent observation follow-up (2026-10-23)
+
+All non-report observations are accounted for below. These are plans, not implementation/live/deployment approval. **P1** prioritizes correct evidence interpretation, **P2** diagnostic value, **P3** ergonomics and workflow cost, **P4** exploratory or residual work. Research/diagnostic plans may finish with a documented rejection or unresolved cause; they do not authorize an incidental product implementation.
+
+| Plan | Scope and priority | Dependencies | Status |
+|---|---|---|---|
+| [104](104-stable-local-object-io-aggregation.md) | **P1** Correct local-object IO aggregation across repetitions (implementation) | 079/093/102 DONE | DONE; locally integrated at `56f3dae4`; see integration evidence |
+| [105](105-artifact-diagnostic-evidence.md) | **P2** Expose bounded statement IO, scans, grants and compilation evidence (implementation) | 103; 104 recommended | DONE; locally integrated — see [evidence](105-evidence/integration/verification.md) |
+| [111](111-stored-plan-retrieval-study.md) | **P4** Evaluate a bounded catalog-plan retrieval path (research) | No new hard predecessor; see plan | RESEARCH COMPLETE; locally integrated at `4aea22d4`; implementation deferred pending recurrence ([evidence](111-evidence/integration.md)) |
+| [112](112-write-and-index-evidence-study.md) | **P4** Evaluate write-statement and existing-index evidence (research) | No new hard predecessor; see plan | TODO |
+| [113](113-partial-publication-follow-up.md) | **P4** Reconcile partial-matrix retention and publication-denial evidence (diagnostic) | 076 DONE; mitigation exists | TODO |
+
+Recommended scheduling: **104 → 103 → 105** for evidence correctness and availability; **106** and **107** are separate useful tracks; **108/110** are small lower-priority changes. Freeze **109**'s current baseline before changing the affected response shapes, then evaluate against the final shapes. **111/112/113** remain low-priority research/diagnosis. The only hard dependency between new plans is **103 → 105** (105 requires 103); the other arrows are scheduling recommendations. Serialize shared artifact/projection/MCP edits across 103–106/108/109.
+
+### Observation coverage and already resolved work
+
+| Observation | Plan or disposition |
+|---|---|
+| scan-counts-agent-path | 105; lower-priority scan-count portion |
+| statement-metrics-and-local-object-noise | 103 completeness/hidden work; 104 aggregation; 105 statement IO; 109 lightweight discovery and named-set metrics pointers |
+| plan-memory-and-compilation-evidence | 105; grants/compilation need explicit source granularity and availability |
+| error-message-cell-clipping | 106 |
+| list-parameter-runtime-divergence | 107; identify loaded build and exact named-set path before claiming a new source defect |
+| artifact-plan-variant-default | 108 |
+| artifact-review-workflow-cost | 109; study equivalent-evidence cost, relevant result-set selection and safe evidence reuse |
+| mcp-timeout-layers | 110; no timeout-policy increase or automatic retries |
+| query-store-plan-cell-clipping | 111 |
+| write-statement-and-index-maintenance-evidence | 111 stored DML-plan use case; 112 write evidence, existing-index overlap and expanded-list family discovery |
+| partial-compare-journal-coverage | 076 already resolved retention; 113 verifies residual publication/recurrence, with existing bounded Windows rename retry |
+| table-valued-parameter-substitution | 083 already implements TVP/list support; 107 diagnoses installed behavior. No duplicate TVP implementation. The setup-in-batch measurement question is assessed in 109. |
+| sql-optimization-response-consilium | 077 already owns the selected response-contract work; 109 studies the deferred statement summary/cost questions. No duplicate envelope rewrite or universal evidence-sufficient flag. |
+
+Plan 095 is DONE; older observation references to TODO are historical. Page budgets do not by themselves add missing diagnostics. Wrong SQL, unused parameters, failed file writes, outer-orchestration clipping, unconsumed continuations and unsupported inferences are agent/workflow evidence for 109, not independent SQLHarness defects. Negative candidate outcomes are valid investigation evidence. Final-report content, coverage wording and report format remain excluded.
+
+
 ## Limit-economics execution notes (2026-10-20)
 
 Recommended order: **093 → 094 → 095 → 096 → 097**, then **089 → 098** for both session views. The arrows are scheduling advice except for 095's hard implementation predecessors 093 and 094: confirm actual implementations on main, not ancestry alone. 096/097 and 089/098 edit shared files and should not run concurrently; neither pair introduces an artificial semantic dependency.
