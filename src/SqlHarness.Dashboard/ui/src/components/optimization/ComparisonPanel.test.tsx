@@ -206,3 +206,18 @@ test("incomplete attribution visibly falls back to Whole batch", async () => {
   expect(screen.getByRole("radio", { name: "Whole batch" })).toBeChecked()
   expect(screen.getByText("basis: whole batch")).toBeInTheDocument()
 })
+
+test("approximate comparison shows per-case rows and coverage", async () => {
+  renderPanel({ ...comparison, basis: "ApproximateAcrossConditions", equivalenceLabel: "", mixed: null, coverageLabel: "1 paired case", caseRows: [{ caseKey: "key", labelA: "6795", labelB: "6795", rowsA: 1, rowsB: 1, rowsAVaries: false, rowsBVaries: false }, { caseKey: "other", labelA: "42", labelB: "42", rowsA: 1, rowsB: 2, rowsAVaries: false, rowsBVaries: false }] })
+  expect(await screen.findByText(/6795: 1 → 1 rows/)).toBeInTheDocument()
+  expect(screen.getByText(/rows differ/)).toBeInTheDocument()
+  expect(screen.getByText("1 paired case")).toBeInTheDocument()
+})
+
+test("approximate comparison without paired cases hides metric totals", async () => {
+  renderPanel({ ...comparison, basis: "ApproximateAcrossConditions", equivalenceLabel: "", mixed: null, cases: [], caseRows: [], wholeBatch: { before: 500, after: 650, shared: null, label: "whole batch: 500 → 650", sharedBefore: null, sharedAfter: null, changedBefore: null, changedAfter: null } })
+  await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
+  expect(screen.getByText("No paired cases for metric comparison.")).toBeInTheDocument()
+  expect(screen.queryByText("Total (whole batch)")).not.toBeInTheDocument()
+  expect(screen.queryByText("whole batch: 500 → 650")).not.toBeInTheDocument()
+})

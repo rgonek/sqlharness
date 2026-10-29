@@ -14,8 +14,8 @@ import { StatsPage } from "@/pages/StatsPage"
 import { NamedOperationsPage } from "@/pages/NamedOperationsPage"
 
 export type OptimizationView = "changed" | "whole" | "statements"
-export type SessionSearch = { subject?: string; db?: string; group?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; view?: OptimizationView; unassigned?: boolean }
-export type OperationDetailSearch = { case?: string; agg?: string; view?: OptimizationView; planCase?: string; planVariant?: string; planParameterSet?: string; planParameterSetNull?: boolean; planRepetition?: number; planDocument?: number; planStatement?: number; returnSession?: number; returnAgentKind?: "claude" | "codex" | "opencode"; returnAgentId?: string; returnSubject?: string; returnDb?: string; returnGroup?: string; returnScope?: string; returnA?: string; returnB?: string; returnCase?: string; returnAgg?: string; returnView?: OptimizationView; returnUnassigned?: boolean }
+export type SessionSearch = { subject?: string; db?: string; group?: string; groupB?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; view?: OptimizationView; unassigned?: boolean }
+export type OperationDetailSearch = { case?: string; agg?: string; view?: OptimizationView; planCase?: string; planVariant?: string; planParameterSet?: string; planParameterSetNull?: boolean; planRepetition?: number; planDocument?: number; planStatement?: number; returnSession?: number; returnAgentKind?: "claude" | "codex" | "opencode"; returnAgentId?: string; returnSubject?: string; returnDb?: string; returnGroup?: string; returnGroupB?: string; returnScope?: string; returnA?: string; returnB?: string; returnCase?: string; returnAgg?: string; returnView?: OptimizationView; returnUnassigned?: boolean }
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
@@ -26,6 +26,7 @@ const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sess
     subject: typeof search.subject === "string" && search.subject.length <= 64 ? search.subject : undefined,
     db: typeof search.db === "string" && search.db.length <= 128 ? search.db : undefined,
     group: typeof search.group === "string" && search.group.length <= 256 ? search.group : undefined,
+    groupB: typeof search.groupB === "string" && search.groupB.length <= 256 ? search.groupB : undefined,
     scope: typeof search.scope === "string" && search.scope.length <= 64 ? search.scope : undefined,
     a: typeof search.a === "string" && search.a.length <= 64 ? search.a : undefined,
     b: typeof search.b === "string" && search.b.length <= 64 ? search.b : undefined,
@@ -40,6 +41,7 @@ const agentSessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "
     subject: typeof search.subject === "string" && search.subject.length <= 64 ? search.subject : undefined,
     db: typeof search.db === "string" && search.db.length <= 128 ? search.db : undefined,
     group: typeof search.group === "string" && search.group.length <= 256 ? search.group : undefined,
+    groupB: typeof search.groupB === "string" && search.groupB.length <= 256 ? search.groupB : undefined,
     scope: typeof search.scope === "string" && search.scope.length <= 64 ? search.scope : undefined,
     a: typeof search.a === "string" && search.a.length <= 64 ? search.a : undefined,
     b: typeof search.b === "string" && search.b.length <= 64 ? search.b : undefined,
@@ -70,6 +72,7 @@ const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/op
     returnSubject: typeof search.returnSubject === "string" && search.returnSubject.length <= 64 ? search.returnSubject : undefined,
     returnDb: typeof search.returnDb === "string" && search.returnDb.length <= 128 ? search.returnDb : undefined,
     returnGroup: typeof search.returnGroup === "string" && search.returnGroup.length <= 256 ? search.returnGroup : undefined,
+    returnGroupB: typeof search.returnGroupB === "string" && search.returnGroupB.length <= 256 ? search.returnGroupB : undefined,
     returnScope: typeof search.returnScope === "string" && search.returnScope.length <= 64 ? search.returnScope : undefined,
     returnA: typeof search.returnA === "string" && search.returnA.length <= 64 ? search.returnA : undefined,
     returnB: typeof search.returnB === "string" && search.returnB.length <= 64 ? search.returnB : undefined,

@@ -39,3 +39,9 @@ test("version labels share the version line and retain their full title", () => 
   expect(screen.getByRole("radio", { name: "A v0" }).nextElementSibling).toHaveTextContent("A")
   expect(screen.getByRole("radio", { name: "B v0" }).nextElementSibling).toHaveTextContent("B")
 })
+
+test("shows rows column and dash for missing", () => {
+  render(<VersionTable subject="Rows" sessionId={1} sessionSearch={{}} versions={[{ ...versions[0], rowsReturnedSum: 5 }, { ...versions[1], rowsReturnedSum: null }]} selectedA="v0" selectedB={null} onSelect={() => {}} />)
+  expect(screen.getByRole("columnheader", { name: "Rows" })).toBeInTheDocument()
+  expect(screen.getByText("5")).toBeInTheDocument()
+})

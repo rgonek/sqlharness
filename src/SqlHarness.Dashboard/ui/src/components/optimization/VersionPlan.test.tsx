@@ -41,3 +41,12 @@ test("plan opens the exact mapped case and side", async () => {
   render(<QueryClientProvider client={client}><VersionPlan a="v0" b="v1" before={null} after={action} engine="SqlServer" selectedCase="selected" /></QueryClientProvider>)
   expect(await screen.findByText("Selected plan case: right-case")).toBeInTheDocument()
 })
+
+test("all cases without paired metrics opens an action case", async () => {
+  stubFetch({ "/api/operations/10": operationDetail({ variants: [variant({ variant: "candidate", caseId: "retained" })] }) })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  trackQueryClient(client)
+  const action: OptimizationActionReference = { operationId: 10, side: "candidate", caseIds: ["retained"] }
+  render(<QueryClientProvider client={client}><VersionPlan a="v0" b="v1" before={null} after={action} engine="SqlServer" selectedCase="all" /></QueryClientProvider>)
+  expect(await screen.findByText("Selected plan case: retained")).toBeInTheDocument()
+})

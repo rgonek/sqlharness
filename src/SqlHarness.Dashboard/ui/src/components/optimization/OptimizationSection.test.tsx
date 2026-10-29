@@ -129,52 +129,6 @@ test("version table shows measure-only outcomes and unverified comparison label"
   expect(await screen.findByText("results not compared")).toBeInTheDocument()
 })
 
-test("shows group and scope selectors only when the selected group has choices", async () => {
-  stubSession({
-    "/api/sessions/7": sessionWithCompare(true),
-    "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false },
-    "/api/sessions/7/optimization": sectionWithChoices,
-    "/api/sessions/7/optimization/compare": comparison,
-  })
-  const { router } = renderApp("/sessions/7?subject=Orders&db=shop&group=fp-2&scope=fragment%20A&a=v4&b=v9&case=case-1&agg=mean&view=whole")
-  expect(await screen.findByRole("combobox", { name: "Orders conditions group" })).toBeInTheDocument()
-  const scope = await screen.findByRole("combobox", { name: "Orders scope" })
-  await userEvent.click(scope)
-  await userEvent.click(await screen.findByRole("option", { name: "whole query" }))
-  expect(router.state.location.search).toMatchObject({ group: "fp-2", scope: "whole query" })
-  expect(screen.getByRole("combobox", { name: "Orders scope" })).toHaveTextContent("whole query")
-  for (const key of ["a", "b", "case", "agg", "view"]) {
-    expect(router.state.location.search).not.toHaveProperty(key)
-  }
-  expect(await screen.findByRole("radio", { name: "A v0" })).toBeChecked()
-  expect(screen.getByRole("radio", { name: "B v39" })).toBeChecked()
-})
-
-test("changing conditions group selects its first scope and clears all dependent selections", async () => {
-  stubSession({
-    "/api/sessions/7": sessionWithCompare(true),
-    "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false },
-    "/api/sessions/7/optimization": sectionWithChoices,
-    "/api/sessions/7/optimization/compare": comparison,
-  })
-  const { router } = renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&scope=whole%20query&a=v1&b=v2&case=case-1&agg=mean&view=whole")
-
-  const group = await screen.findByRole("combobox", { name: "Orders conditions group" })
-  await userEvent.click(group)
-  await userEvent.click(await screen.findByRole("option", { name: "2 cases" }))
-
-  expect(router.state.location.search).toMatchObject({ group: "fp-2", scope: "whole query" })
-  expect(group).toHaveTextContent("2 cases")
-  expect(screen.getByRole("combobox", { name: "Orders scope" })).toHaveTextContent("whole query")
-  for (const key of ["a", "b", "case", "agg", "view"]) {
-    expect(router.state.location.search).not.toHaveProperty(key)
-  }
-  expect(await screen.findByRole("radio", { name: "A v0" })).toBeChecked()
-  expect(screen.getByRole("radio", { name: "B v39" })).toBeChecked()
-  await userEvent.click(screen.getByRole("button", { name: "All cases · Sum" }))
-  expect(screen.getByRole("radio", { name: /^All cases$/ })).toBeChecked()
-})
-
 test("hides one-option controls and gives each subject its own accessible selector names", async () => {
   const multiple = {
     ...sectionWithChoices,
@@ -194,9 +148,10 @@ test("hides one-option controls and gives each subject its own accessible select
   stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/sql": { hash: "", text: null, tooLarge: false }, "/api/sessions/7/optimization": multiple, "/api/sessions/7/optimization/compare": comparison })
   renderApp("/sessions/7?subject=Orders&db=shop&group=fp-2")
 
-  expect(await screen.findByRole("combobox", { name: "Orders conditions group" })).toBeInTheDocument()
+  expect(await screen.findByRole("combobox", { name: "Orders scope" })).toBeInTheDocument()
+  expect(screen.queryByRole("combobox", { name: "Orders conditions group" })).not.toBeInTheDocument()
   expect(screen.getByRole("combobox", { name: "Orders scope" })).toBeInTheDocument()
-  expect(screen.getByRole("combobox", { name: "Customers conditions group" })).toBeInTheDocument()
+  expect(screen.queryByRole("combobox", { name: "Customers conditions group" })).not.toBeInTheDocument()
   expect(screen.getByRole("combobox", { name: "Customers scope" })).toBeInTheDocument()
   expect(screen.queryByRole("combobox", { name: "Products conditions group" })).not.toBeInTheDocument()
   expect(screen.queryByRole("combobox", { name: "Products scope" })).not.toBeInTheDocument()
@@ -256,4 +211,58 @@ test("links every retained measurement operation with the current session return
     expect(url.pathname).toMatch(/^\/operations\/(201|214|219)$/)
     expect(Object.fromEntries(url.searchParams)).toMatchObject({ returnSession: "7", returnSubject: "Orders", returnDb: "shop", returnGroup: "fp-1", returnScope: "whole query" })
   }
+})
+
+test("lists versions across conditions and selects B in another group", async () => {
+  const shared = { ...section, subjects: [{ ...section.subjects[0]!, groups: [
+    { ...section.subjects[0]!.groups[0]!, scopes: [{ scope: "whole query", defaultA: "v1", defaultB: "v2", versions: versions.slice(0, 3) }] },
+    { ...section.subjects[0]!.groups[0]!, fingerprint: "fp-2", label: "other conditions", scopes: [{ scope: "whole query", defaultA: "v3", defaultB: null, versions: versions.slice(3, 4) }] },
+  ] }] }
+  stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": shared, "/api/sessions/7/optimization/compare": { ...comparison, basis: "ApproximateAcrossConditions", mixed: null } })
+  const { router } = renderApp("/sessions/7")
+  const table = await screen.findByRole("table", { name: "Orders-shop versions" })
+  expect(within(table).getAllByRole("row")).toHaveLength(5)
+  expect(screen.queryByRole("combobox", { name: "Orders conditions group" })).not.toBeInTheDocument()
+  await userEvent.click(within(table).getByRole("radio", { name: "B v3" }))
+  expect(router.state.location.search).toMatchObject({ group: "fp-1", groupB: "fp-2", a: "v1", b: "v3" })
+  expect(await screen.findByText("Different conditions — approximate, not a verdict")).toBeInTheDocument()
+})
+
+test("same version labels in different groups remain distinct selections", async () => {
+  const shared = { ...section, subjects: [{ ...section.subjects[0]!, groups: [
+    { ...section.subjects[0]!.groups[0]!, scopes: [{ scope: "whole query", defaultA: "v0", defaultB: null, versions: versions.slice(0, 1) }] },
+    { ...section.subjects[0]!.groups[0]!, fingerprint: "fp-2", label: "other conditions", scopes: [{ scope: "whole query", defaultA: "v0", defaultB: null, versions: versions.slice(0, 1) }] },
+  ] }] }
+  stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": shared, "/api/sessions/7/optimization/compare": { ...comparison, basis: "ApproximateAcrossConditions", mixed: null } })
+  const { router } = renderApp("/sessions/7")
+  const table = await screen.findByRole("table", { name: "Orders-shop versions" })
+  const candidates = within(table).getAllByRole("radio", { name: /B v0/ })
+  expect(candidates).toHaveLength(2)
+  await userEvent.click(candidates[1])
+  expect(router.state.location.search).toMatchObject({ group: "fp-1", groupB: "fp-2", a: "v0", b: "v0" })
+  expect(candidates[1]).toBeChecked()
+  expect(candidates[0]).not.toBeChecked()
+})
+
+test("stale group B resets to the selected group defaults", async () => {
+  const calls = stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": section, "/api/sessions/7/optimization/compare": comparison })
+  renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&groupB=missing&scope=whole%20query&a=v1&b=v3")
+  expect(await screen.findByRole("radio", { name: "B v39", checked: true })).toBeInTheDocument()
+  expect(calls.some(call => call.includes("groupB=missing"))).toBe(false)
+})
+
+test("scope picker includes scopes from every conditions group", async () => {
+  stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": sectionWithChoices, "/api/sessions/7/optimization/compare": comparison })
+  renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1")
+  await userEvent.click(await screen.findByRole("combobox", { name: "Orders scope" }))
+  expect(await screen.findByRole("option", { name: "fragment A" })).toBeInTheDocument()
+})
+
+test("404 for a stale cross-group selection resets B to group defaults", async () => {
+  const calls = stubSession({ "/api/sessions/7": sessionWithCompare(true), "/api/sessions/7/optimization": sectionWithChoices,
+    "/api/sessions/7/optimization/compare": (url: URL) => url.searchParams.has("groupB") ? new Response("", { status: 404 }) : new Response(JSON.stringify(comparison), { status: 200 }) })
+  const { router } = renderApp("/sessions/7?subject=Orders&db=shop&group=fp-1&groupB=fp-2&scope=whole%20query&a=v1&b=v3")
+  await waitFor(() => expect(router.state.location.search.groupB).toBeUndefined(), { timeout: 12000 })
+  expect(await screen.findAllByRole("radio", { name: /^B v39/, checked: true })).toHaveLength(1)
+  expect(calls.some(call => call.includes("groupB=fp-2"))).toBe(true)
 })

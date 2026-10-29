@@ -38,8 +38,8 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
   initialFrom?: string
   initialTo?: string
 }) {
-  const [fromSelection, setFromSelection] = useState<string | null>(() => keyOf(options.find(option => option.version === initialFrom) ?? options[0]))
-  const [toSelection, setToSelection] = useState<string | null>(() => keyOf(options.find(option => option.version === initialTo) ?? options.at(-1)))
+  const [fromSelection, setFromSelection] = useState<string | null>(() => keyOf((!selectionControls && options.length === 2 && options[0]?.version === initialFrom ? options[0] : options.find(option => option.version === initialFrom)) ?? options[0]))
+  const [toSelection, setToSelection] = useState<string | null>(() => keyOf((!selectionControls && options.length === 2 && options[1]?.version === initialTo ? options[1] : options.find(option => option.version === initialTo)) ?? options.at(-1)))
   const fromOption = selectedOption(options, fromSelection) ?? options[0]
   const toOption = selectedOption(options, toSelection) ?? options.at(-1)
   const selectItems = options.map(option => ({ value: keyOf(option)!, label: option.label ?? option.version }))

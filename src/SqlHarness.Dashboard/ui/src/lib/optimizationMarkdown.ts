@@ -7,6 +7,7 @@ export function optimizationBasisLabel(comparison: OptimizationComparison): stri
     case "MeasuredTogether": return comparison.operationId === null ? "measured together" : `measured together in #${comparison.operationId}`
     case "DifferentRunsSameConditions": return "different runs, same conditions"
     case "ConditionsDiffer": return "conditions differ"
+    case "ApproximateAcrossConditions": return "different conditions"
     case "SameSql": return "same SQL"
     default: return "comparison basis unavailable"
   }
@@ -58,10 +59,15 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
     `Basis: ${optimizationBasisLabel(comparison)}`,
     `View: ${viewLabel(comparison.view)}`,
     `basis: ${comparison.verdictBasis ?? "whole batch"}`,
-    `Equivalence: ${comparison.equivalenceLabel}`,
+    ...(comparison.basis === "ApproximateAcrossConditions" ? [] : [`Equivalence: ${comparison.equivalenceLabel}`]),
     "",
   ]
 
+  if (comparison.basis === "ApproximateAcrossConditions") {
+    lines.push("Different conditions — approximate, not a verdict")
+    for (const row of comparison.caseRows ?? []) lines.push(`${row.labelA === row.labelB ? row.labelA : `${row.labelA} / ${row.labelB}`}: ${row.rowsAVaries ? "varies" : number(row.rowsA)} → ${row.rowsBVaries ? "varies" : number(row.rowsB)} rows${!row.rowsAVaries && !row.rowsBVaries && row.rowsA !== null && row.rowsB !== null && row.rowsA !== row.rowsB ? " · rows differ" : ""}`)
+    if (!comparison.caseRows?.length) return lines.join("\n")
+  }
   if (comparison.wholeBatch?.label) lines.push(comparison.wholeBatch.label)
   for (const text of [
     (comparison.omittedStatementsBefore ?? 0) > 0 ? `omitted statements: ${comparison.omittedStatementsBefore} (their reads remain in the batch total)` : null,

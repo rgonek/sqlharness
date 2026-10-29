@@ -27,7 +27,7 @@ function ActionPlan({ action, engine, selectedCase, toolbarTarget }: { action: O
   const query = useOperation(action.operationId)
   if (query.isPending) return <p role="status">Loading plan…</p>
   if (query.error) return <ErrorState error={query.error} />
-  const caseId = action.caseIdsByFingerprint?.[selectedCase] ?? (action.caseIds.includes(selectedCase) ? selectedCase : null)
+  const caseId = action.caseIdsByFingerprint?.[selectedCase] ?? (action.caseIds.includes(selectedCase) ? selectedCase : selectedCase === "all" ? action.caseIds[0] ?? null : null)
   const variants = query.data.variants.filter(variant => variant.variant === action.side || (action.side === "measure" && variant.variant === "query"))
   const matches = caseId === null ? [] : variants.filter(item => item.caseId === caseId)
   const variant = matches.length === 1 ? matches[0] : undefined

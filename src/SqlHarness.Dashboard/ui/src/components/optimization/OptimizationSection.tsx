@@ -1,5 +1,6 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router"
-import { Fragment, useId, useState } from "react"
+import { Fragment, useEffect, useId, useState } from "react"
+import { NotFoundError } from "@/api/client"
 import type { OperationSummary, OptimizationSubject, ScopeVersions } from "@/api/types"
 import type { AgentSessionKey } from "@/api/types"
 import { useAgentSessionOptimization, useAgentSessionOptimizationComparison, useSessionOptimization, useSessionOptimizationComparison } from "@/api/queries"
@@ -32,7 +33,7 @@ export function OptimizationSection({ sessionId, agentSessionKey, operations = [
   if (!section) return null
   return <section aria-labelledby="optimization-heading" className="space-y-4">
     <h2 id="optimization-heading" className="sr-only">Optimization</h2>
-    {section.subjects.map(subject => <SubjectCard key={subjectKey(subject)} sessionId={sessionId} agentSessionKey={agentSessionKey} search={search} subject={subject} operations={operations} />)}
+    {section.subjects.map(subject => <SubjectCard key={subjectKey(subject)} sessionId={sessionId} agentSessionKey={agentSessionKey} search={search} subject={subject} operations={operations} refetchOptimization={activeQuery.refetch} />)}
     {!!section.unassigned.length && <Collapsible className="rounded-lg border p-3">
       <CollapsibleTrigger className="cursor-pointer font-medium">Unassigned compares ({section.unassigned.length})</CollapsibleTrigger>
       <CollapsibleContent keepMounted><p className="mt-2 text-sm text-muted-foreground">These compares do not have a complete subject and scope, so they are not included in version comparisons.</p>
@@ -41,7 +42,7 @@ export function OptimizationSection({ sessionId, agentSessionKey, operations = [
   </section>
 }
 
-function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }: { sessionId: number; agentSessionKey?: AgentSessionKey; search: SessionSearch; subject: OptimizationSubject; operations: OperationSummary[] }) {
+function SubjectCard({ sessionId, agentSessionKey, search, subject, operations, refetchOptimization }: { refetchOptimization: () => unknown; sessionId: number; agentSessionKey?: AgentSessionKey; search: SessionSearch; subject: OptimizationSubject; operations: OperationSummary[] }) {
   const navigate = useNavigate({ from: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id" } as never)
   const controlId = useId()
   const [comparisonTab, setComparisonTab] = useState("diff")
@@ -49,29 +50,48 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
   const matchesSubject = search.subject === subject.subject && (search.db ?? "") === subject.database
   const groups = subject.groups
   const group = (matchesSubject && groups.find(item => item.fingerprint === search.group)) || groups[0]
-  const scopes = [...(group?.scopes ?? [])].sort((left, right) => scopeOrder(left) - scopeOrder(right) || left.scope.localeCompare(right.scope))
-  const scope = (matchesSubject && scopes.find(item => item.scope === search.scope)) || scopes[0]
+  const scopes = [...new Map(groups.flatMap(item => item.scopes).map(item => [item.scope, item])).values()].sort((left, right) => scopeOrder(left) - scopeOrder(right) || left.scope.localeCompare(right.scope))
+  const scope = (matchesSubject && scopes.find(item => item.scope === search.scope)) || group?.scopes.slice().sort((left, right) => scopeOrder(left) - scopeOrder(right) || left.scope.localeCompare(right.scope))[0] || scopes[0]
+  const scopeOf = (item: typeof groups[number]) => item.scopes.find(value => value.scope === scope?.scope)
+  const versions = groups.flatMap((item, index) => (scopeOf(item)?.versions ?? []).map(row => ({ ...row, group: { fingerprint: item.fingerprint, label: item.label, badge: String.fromCharCode(65 + index) } }))).sort((left, right) => left.version.localeCompare(right.version, undefined, { numeric: true }))
   const matchesCard = matchesSubject && (!search.group || search.group === group?.fingerprint) && (!search.scope || search.scope === scope?.scope)
-  const versions = scope?.versions ?? []
-  const hasVersion = (version: string | undefined) => version !== undefined && versions.some(item => item.version === version)
-  const selectedA = hasVersion(matchesCard ? search.a : undefined) ? search.a! : scope?.defaultA ?? versions[0]?.version ?? ""
-  const selectedB = hasVersion(matchesCard ? search.b : undefined) ? search.b! : scope?.defaultB ?? ""
+  const groupScope = group && scopeOf(group)
+  const aGroup = group && groupScope ? group : groups.find(item => scopeOf(item)?.versions.length)
+  const aScope = aGroup && scopeOf(aGroup)
+  const hasVersion = (fingerprint: string | undefined, version: string | undefined) => !!fingerprint && !!version && versions.some(item => item.group.fingerprint === fingerprint && item.version === version)
+  const selectedA = hasVersion(aGroup?.fingerprint, matchesCard ? search.a : undefined) ? search.a! : aScope?.defaultA ?? aScope?.versions[0]?.version ?? ""
+  const requestedBGroup = matchesCard && search.groupB ? groups.find(item => item.fingerprint === search.groupB) : aGroup
+  const validB = hasVersion(requestedBGroup?.fingerprint, matchesCard ? search.b : undefined)
+  const bGroup = validB ? requestedBGroup : aGroup
+  const selectedB = validB ? search.b! : aScope?.defaultB ?? ""
   const caseId = matchesCard ? search.case ?? "all" : "all"
   const aggregate = matchesCard ? search.agg ?? "sum" : "sum"
   const view = matchesCard ? search.view ?? "statements" : "statements"
-  const selectedSearch: SessionSearch = { subject: subject.subject, db: subject.database, group: group?.fingerprint, scope: scope?.scope, a: selectedA || undefined, b: selectedB || undefined, case: caseId, agg: aggregate, view }
-  const compareParams = group && scope && selectedA && selectedB ? {
-    subject: subject.subject, database: subject.database, group: group.fingerprint, scope: scope.scope,
+  const selectedSearch: SessionSearch = { subject: subject.subject, db: subject.database, group: aGroup?.fingerprint, groupB: bGroup?.fingerprint !== aGroup?.fingerprint ? bGroup?.fingerprint : undefined, scope: scope?.scope, a: selectedA || undefined, b: selectedB || undefined, case: caseId, agg: aggregate, view }
+  const compareParams = aGroup && scope && selectedA && selectedB ? {
+    subject: subject.subject, database: subject.database, group: aGroup.fingerprint, groupB: selectedSearch.groupB, scope: scope.scope,
     a: selectedA, b: selectedB, case: caseId, aggregate, view,
   } : null
   const compareQuery = useSessionOptimizationComparison(sessionId, agentSessionKey ? null : compareParams)
   const agentCompareQuery = useAgentSessionOptimizationComparison(agentSessionKey ?? { agentKind: "", conversationId: "" }, agentSessionKey ? compareParams : null)
   const activeCompareQuery = agentSessionKey ? agentCompareQuery : compareQuery
+  const activeQueryRefetch = refetchOptimization
 
   function update(patch: Record<string, string | undefined>, reset = false) {
-    void navigate({ to: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id", params: agentSessionKey ? { kind: agentSessionKey.agentKind, id: agentSessionKey.conversationId } : { id: String(sessionId) }, search: (current: Record<string, unknown>) => ({ ...current, subject: subject.subject, db: subject.database, group: group?.fingerprint,
-      scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined } : {}), ...patch }), replace: false, resetScroll: false })
+    void navigate({ to: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id", params: agentSessionKey ? { kind: agentSessionKey.agentKind, id: agentSessionKey.conversationId } : { id: String(sessionId) }, search: (current: Record<string, unknown>) => ({ ...current, subject: subject.subject, db: subject.database, group: aGroup?.fingerprint, groupB: selectedSearch.groupB,
+      scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, groupB: undefined, case: undefined, agg: undefined, view: undefined } : {}), ...patch }), replace: false, resetScroll: false })
   }
+
+  useEffect(() => {
+    if (!matchesCard || (!search.groupB && !search.b) || validB) return
+    update({ groupB: undefined, a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })
+  }, [matchesCard, search.groupB, search.b, validB])
+
+  useEffect(() => {
+    if (!(activeCompareQuery.error instanceof NotFoundError) || !matchesCard || (!search.groupB && !search.b)) return
+    void activeQueryRefetch()
+    update({ groupB: undefined, a: undefined, b: undefined, case: undefined, agg: undefined, view: undefined })
+  }, [activeCompareQuery.error])
 
   return <article aria-current={matchesCard ? "true" : undefined} className="optimization-card">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-base font-semibold">Optimization</div><p className="mt-1 text-sm text-muted-foreground">{[subject.subject, subject.database, subject.engine, scope?.scope].map(value => value?.trim()).filter((value): value is string => !!value).map((value, index) => <Fragment key={index}>{index > 0 && " · "}{index === 0 && subject.subject.trim() ? <span role="heading" aria-level={3}>{value}</span> : <span>{value}</span>}</Fragment>)}</p></div>
@@ -79,18 +99,6 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
         <div ref={setToolbarTarget} />
       </div>
     </div>
-    {groups.length > 1 && group && <div className="grid max-w-xl gap-1 text-sm">
-      <Label htmlFor={`${controlId}-group`}>Conditions group</Label>
-      <Select items={groups.map(item => ({ value: item.fingerprint, label: item.label }))} value={group.fingerprint} onValueChange={fingerprint => {
-        const next = groups.find(item => item.fingerprint === fingerprint)
-        if (next) update({ group: next.fingerprint, scope: [...next.scopes].sort((left, right) => scopeOrder(left) - scopeOrder(right))[0]?.scope }, true)
-      }}>
-        <SelectTrigger id={`${controlId}-group`} aria-label={`${subject.subject} conditions group`} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent><SelectGroup>{groups.map(item => <SelectItem key={item.fingerprint} value={item.fingerprint}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
-      </Select>
-    </div>}
     {scopes.length > 1 && group && scope && <div className="grid max-w-md gap-1 text-sm">
       <Label htmlFor={`${controlId}-scope`}>Scope</Label>
       <Select items={scopes.map(item => ({ value: item.scope, label: item.scope }))} value={scope.scope} onValueChange={selectedScope => {
@@ -106,12 +114,14 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations }
     {group && scope ? <>
 
       {versions.length > 0 ? <VersionTable subject={`${subject.subject}-${subject.database}`} sessionId={sessionId} agentSessionKey={agentSessionKey} sessionSearch={selectedSearch}
-        versions={versions} operations={operations} selectedA={selectedA} selectedB={selectedB || null}
-        onSelect={(side, version) => update({ a: selectedA, b: selectedB || undefined, [side]: version })} /> : <p className="text-sm text-muted-foreground">No retained versions for this scope.</p>}
+        versions={versions} operations={operations} selectedA={selectedA} selectedB={selectedB || null} groupA={aGroup?.fingerprint} groupB={bGroup?.fingerprint}
+        onSelect={(side, version, fingerprint) => side === "a"
+          ? update({ group: fingerprint, groupB: bGroup?.fingerprint !== fingerprint ? bGroup?.fingerprint : undefined, a: version, b: selectedB || undefined })
+          : update({ group: aGroup?.fingerprint, groupB: fingerprint !== aGroup?.fingerprint ? fingerprint : undefined, a: selectedA, b: version })} /> : <p className="text-sm text-muted-foreground">No retained versions for this scope.</p>}
       {!selectedB && <p className="text-sm text-muted-foreground">Select a version for B to compare it with {selectedA}.</p>}
       {activeCompareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
       {activeCompareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {activeCompareQuery.error.message}</p>}
-      {activeCompareQuery.data && <div className="optimization-comparison"><ComparisonPanel toolbarTarget={toolbarTarget} pending={activeCompareQuery.isPlaceholderData} activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={versions} engine={subject.engine}
+      {activeCompareQuery.data && <div className="optimization-comparison"><ComparisonPanel toolbarTarget={toolbarTarget} pending={activeCompareQuery.isPlaceholderData} activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={[versions.find(item => item.group.fingerprint === aGroup?.fingerprint && item.version === selectedA), versions.find(item => item.group.fingerprint === bGroup?.fingerprint && item.version === selectedB)].filter((item): item is typeof versions[number] => !!item)} engine={subject.engine}
         sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={patch => update(patch)} /></div>}
     </> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
   </article>
