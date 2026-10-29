@@ -1,0 +1,6 @@
+import fs from 'node:fs/promises';
+const root=process.env.SQLHARNESS_VISUAL_ROOT,out=root+'/plans/121-evidence/layout-polish/screenshot-details';
+const files=['browser-results.json','session-live-results.json','control-results.json','usage-check-results.json','usage-error-results.json','mutation-check-results.json'];
+const groups=[];let total=0;
+for(const file of files){const r=JSON.parse(await fs.readFile(out+'/'+file,'utf8'));if(r.checks.some(c=>!c.passed))throw Error('Failed check '+file);const errors=file==='browser-results.json'?r.errors.filter(e=>!e.url?.startsWith('http://127.0.0.1:48137/')):r.errors;if(errors.length)throw Error(JSON.stringify(errors));groups.push({file,passed:r.checks.length,expectedDiagnostics:r.expectedDiagnostics??[],referenceDiagnostics:file==='browser-results.json'?r.errors:[]});total+=r.checks.length;if(r.pages){const app=r.pages.filter(p=>p.url.startsWith('http://127.0.0.1:48138/'));for(const p of app)if(p.overflow.scroll>p.overflow.width)throw Error('Document overflow '+p.name);groups.push({name:'App document overflow',passed:app.length});total+=app.length;}}
+await fs.writeFile(out+'/browser-check-summary.json',JSON.stringify({passed:total,failed:0,groups,fixtureOnly:true},null,2));console.log('PASS '+total+' browser assertions');

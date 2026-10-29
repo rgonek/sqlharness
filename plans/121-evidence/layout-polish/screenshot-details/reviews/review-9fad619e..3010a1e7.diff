@@ -1,0 +1,696 @@
+# Review package: 9fad619e..3010a1e7
+
+## Commits
+3010a1e7 Polish mutation approval context and SQL display modes
+
+## Files changed
+ .../task-3-report.md                               | 31 ++++++++++++++
+ src/SqlHarness.Dashboard/DashboardModels.cs        |  3 +-
+ src/SqlHarness.Dashboard/JournalReader.cs          | 16 +++++++
+ .../Mutations/MutationEndpoints.cs                 | 18 ++++++--
+ .../ui/src/components/SegmentedRadioGroup.tsx      |  4 +-
+ .../ui/src/mutations/Approval.test.tsx             | 49 +++++++++++++++++++++-
+ .../ui/src/mutations/ApprovalDialog.tsx            | 34 ++++++++++-----
+ .../ui/src/mutations/ApprovalToast.tsx             | 34 ++++++++++++---
+ .../ui/src/mutations/mutationStore.ts              |  2 +-
+ .../ui/src/mutations/sqlDisplay.test.ts            | 33 +++++++++++++++
+ .../ui/src/mutations/sqlDisplay.ts                 | 45 ++++++++++++++++++++
+ .../Dashboard/JournalReaderTests.cs                | 25 +++++++++++
+ 12 files changed, 267 insertions(+), 27 deletions(-)
+
+## Diff
+diff --git a/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md b/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md
+new file mode 100644
+index 00000000..839904fa
+--- /dev/null
++++ b/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md
+@@ -0,0 +1,31 @@
++# Task 3 report: mutation toast and review context
++
++Implemented screenshot items 14-15 in the existing isolated worktree. The Base Toast now presents plain environment text, a bounded 240-character/two-line SQL snippet, Review and Deny. Deny uses postMutationDecision; submitted/busy/error/expired state stays visible until authoritative removal. Dialog target sits below the title, requester shows an actual session link when available, and the existing segmented radio component selects Values inline / As sent. Existing parameter table, digest, classification, writer alerts, 1-second approval delay, expiry and Enter guard remain. Both dialog decisions disable during submission.
++
++## Provenance
++
++Only the outbound dashboard mutation SSE snapshot/added projection is enriched. JournalReader joins mutation_requests.operation_id -> operations.session_id -> sessions.agent_kind. The operation_id is populated by existing ActivityJournal.LinkMutation after its exact prepared-operation/digest/token checks; neither submitted session keys nor latest/global agent records are used. Unknown/unlinked requests return null requester. UI renders the retained agent kind through existing agentLabel(). No Core/broker execution, policy, authorization, digest, migration, collection or mutation behavior changed.
++
++## Preview contract and limitations
++
++sqlDisplay.ts uses installed sql-formatter dialect tokenization and strict parameter lookups. It normalizes engine case and one optional parameter-name @ prefix (as Core SqlParameterNames does), detects duplicate/missing names, and leaves quoted strings, identifiers, comments (including nested blocks), SQL Server @@ variables, PostgreSQL dollar quotes and operators intact. Known text/null/integer/decimal/bit values render without JavaScript numeric conversion; numeric-looking default strings stay quoted text. Unsupported types, parse failures, missing/ambiguous names, PostgreSQL backslash text, decimal inputs over 28 digits and inputs above 100,000 SQL/value characters or 500 parameters return exact original SQL with an honest explanation and disabled inline option. As sent remains the default and preserves formatting/copy controls. The immutable original request/parameters/digest never enter a submit payload through this helper.
++
++The preview is presentation rather than executable replacement SQL; not every accepted provider type is previewed. It does not emulate server-dependent encoding, collation or assignment coercions. Browser visual acceptance belongs to the parent fixture harness; no real approve/deny was issued.
++
++## Focused verification
++
++- `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~MutationEndpointsTests|FullyQualifiedName~MutationEvidenceTests|FullyQualifiedName~Mutation_requester" --no-restore -p:SkipDashboardUi=true --verbosity quiet`: PASS, 35 tests. Includes verified-link behavior and a projection regression proving unlinked context remains unknown and linked context wins over a different/latest session.
++- `npx vitest run src/mutations/Approval.test.tsx src/mutations/sqlDisplay.test.ts src/mutations/mutationStore.test.ts`: PASS, 3 files / 16 tests. Fake fetch/SSE only; lexical boundaries, precision/text/null, case/prefix normalization, fallback, bounded work, requester known/unknown, immutable display modes, toast failed/busy/submitting/expiry, existing lifecycle/delay/Enter tests.
++- `npm run typecheck`: PASS.
++- `npm run lint`: PASS.
++- `npm run build`: PASS. Existing chunk-size advisory remains.
++- `dotnet format SqlHarness.sln --no-restore --include src/SqlHarness.Dashboard/JournalReader.cs src/SqlHarness.Dashboard/DashboardModels.cs src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs --verbosity quiet`: PASS.
++- `git diff --check`: PASS for owned changes (unrelated parent plan has CRLF advisory only).
++
++Earlier local check attempts exposed route parameter naming, seed-test API mismatches, an alert selector and a stub call-list assertion; these were corrected before the passing checks. Initial .NET invocation without SkipDashboardUi failed in its UI build stage; focused .NET checks then used the explicit property and the standalone final UI build passed. No full gate, Linux gate, live DB, publication, merge, push, restart or dependency install performed.
++
++## Self-review
++
++Spec: both screenshot behaviors implemented, no fabricated requester, no automatic decisions, original execution contract untouched. Quality: small pure renderer, reuse existing shadcn/Base UI controls and API path, additive dashboard-only projection, strict fallback and bounded work, focused behavioral tests. Shared SegmentedRadioGroup change only adds optional disabled per option; existing callers are compatible. Shared Stats reader/model fields are preserved. Parent retains plan/index updates, independent review, visual captures and final Windows gate.
++
++Commit: see task completion message (report committed with owned source files).
+diff --git a/src/SqlHarness.Dashboard/DashboardModels.cs b/src/SqlHarness.Dashboard/DashboardModels.cs
+index 108884ad..836a740d 100644
+--- a/src/SqlHarness.Dashboard/DashboardModels.cs
++++ b/src/SqlHarness.Dashboard/DashboardModels.cs
+@@ -290,11 +290,12 @@ public sealed record DashboardStats(
+     IReadOnlyList<TableReadStat> TopTablesByLogicalReads,
+     IReadOnlyList<WaitStat> TopWaits,
+     IReadOnlyList<TargetStat> Targets,
+     int SpillOperations,
+     int ColdCacheOperations,
+     IReadOnlyList<ProfileOperationCount> ProfileOperations,
+     ProfileDimensionStats ProfileDimensions,
+     IReadOnlyList<WorkflowCost> WorkflowCosts,
+     IReadOnlyList<SqlHashStat>? TopSqlByLogicalReads = null, int SessionCount = 0);
+ 
+-public sealed record SessionAnnotation(string? Title, string? Note, bool Starred, bool Archived);
+\ No newline at end of file
++public sealed record SessionAnnotation(string? Title, string? Note, bool Starred, bool Archived);
++internal sealed record MutationRequester(long SessionId, string? AgentLabel);
+\ No newline at end of file
+diff --git a/src/SqlHarness.Dashboard/JournalReader.cs b/src/SqlHarness.Dashboard/JournalReader.cs
+index e253f77f..b732489c 100644
+--- a/src/SqlHarness.Dashboard/JournalReader.cs
++++ b/src/SqlHarness.Dashboard/JournalReader.cs
+@@ -846,20 +846,36 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+             var anchor = Array.FindIndex(ordered, item => item.OperationId == cursor.Value);
+             if (anchor < 0)
+                 return new Page<CompareAttemptSummary>([], null);
+             start = anchor + 1;
+         }
+         var page = ordered.Skip(start).Take(pageLimit).ToArray();
+         page = HydrateCompareEvidence(connection, page).ToArray();
+         return new Page<CompareAttemptSummary>(page, start + page.Length < ordered.Length ? page[^1].OperationId : null);
+     }
+ 
++    /// <summary>Requester context only through the journal's verified prepared-operation link.</summary>
++    internal MutationRequester? MutationRequesterByRequestId(string requestId)
++    {
++        using var connection = OpenSnapshot();
++        if (connection is null)
++            return null;
++        return Query(connection, """
++            SELECT s.id, s.agent_kind
++            FROM mutation_requests m
++            JOIN operations o ON o.id = m.operation_id
++            JOIN sessions s ON s.id = o.session_id
++            WHERE m.request_id = $requestId;
++            """, [("$requestId", requestId)], reader => new MutationRequester(reader.GetInt64(0), NullableString(reader, 1)))
++            .FirstOrDefault();
++    }
++
+     /// <summary>Reads bounded mutation history newest first; SQL and values are present only when sensitive journaling was enabled.</summary>
+     public Page<MutationRequestSummary> MutationRequests(long? cursor = null, int limit = MutationHistoryPageLimit)
+     {
+         using var connection = OpenSnapshot();
+         if (connection is null)
+             return new Page<MutationRequestSummary>([], null);
+         var pageLimit = Math.Clamp(limit, 1, MaximumLimit);
+         var rows = Query(connection, """
+             SELECT id, request_id, session_key, profile, engine, server, database_name, tier, mode, digest,
+                    sql_text, parameters_json, state, status, verification, created_at, decided_at, finished_at, environment
+diff --git a/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs b/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs
+index 4fecff49..4edb9f5a 100644
+--- a/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs
++++ b/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs
+@@ -31,21 +31,21 @@ internal sealed class MutationEndpointServices(
+     internal DashboardActivity Activity { get; } = activity;
+     internal CancellationToken Stopping { get; } = stopping;
+     internal JsonSerializerOptions Json { get; } = json;
+ }
+ 
+ internal static class MutationEndpoints
+ {
+     internal static void Map(IEndpointRouteBuilder routes, MutationEndpointServices services, JournalReader reader)
+     {
+         routes.MapMethods("/mutations", [HttpMethods.Post], (Delegate)((HttpContext context) => SubmitAsync(context, services)));
+-        routes.MapMethods("/mutations/events", [HttpMethods.Get], (Delegate)((HttpContext context) => EventsAsync(context, services)));
++        routes.MapMethods("/mutations/events", [HttpMethods.Get], (Delegate)((HttpContext context) => EventsAsync(context, services, reader)));
+         routes.MapMethods("/mutations/{id}/approve", [HttpMethods.Post], (Delegate)((HttpContext context, string id) => DecideAsync(context, id, true, services)));
+         routes.MapMethods("/mutations/{id}/deny", [HttpMethods.Post], (Delegate)((HttpContext context, string id) => DecideAsync(context, id, false, services)));
+         routes.MapMethods("/mutations", [HttpMethods.Get, HttpMethods.Head], (Delegate)((long? cursor, int? limit) =>
+             Results.Json(reader.MutationRequests(cursor, limit ?? JournalReader.MutationHistoryPageLimit), services.Json)));
+     }
+ 
+     private static async Task<IResult> SubmitAsync(HttpContext context, MutationEndpointServices services)
+     {
+         MutationRequest? request;
+         string? preparationToken;
+@@ -170,55 +170,65 @@ internal static class MutationEndpoints
+             return result switch
+             {
+                 MutationApprovalResult.Accepted => Results.Ok(),
+                 MutationApprovalResult.Busy => Results.Conflict(new { status = MutationStatus.Busy, error = "profile_execution_busy" }),
+                 _ => Results.Conflict(new { error = "request_not_pending" }),
+             };
+         }
+         return services.Broker.TryDeny(id) ? Results.Ok() : Results.Conflict(new { error = "request_not_pending" });
+     }
+ 
+-    private static async Task EventsAsync(HttpContext context, MutationEndpointServices services)
++    private static async Task EventsAsync(HttpContext context, MutationEndpointServices services, JournalReader reader)
+     {
+         context.Response.StatusCode = StatusCodes.Status200OK;
+         context.Response.ContentType = "text/event-stream";
+         context.Response.Headers.CacheControl = "no-cache";
+         context.Response.Headers["X-Accel-Buffering"] = "no";
+         using var stream = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, services.Stopping);
+         using var subscription = services.Broker.Subscribe();
+         services.Activity.StreamOpened();
+         try
+         {
+-            await WriteEvent(context, "snapshot", subscription.Sequence, subscription.Snapshot, services.Json, stream.Token).ConfigureAwait(false);
++            await WriteEvent(context, "snapshot", subscription.Sequence, subscription.Snapshot.Select(view => WithRequester(view, reader)), services.Json, stream.Token).ConfigureAwait(false);
+             await foreach (var envelope in subscription.Events.ReadAllAsync(stream.Token).ConfigureAwait(false))
+             {
+                 switch (envelope.Event)
+                 {
+                     case MutationAdded added:
+-                        await WriteEvent(context, "added", envelope.Sequence, added.View, services.Json, stream.Token).ConfigureAwait(false);
++                        await WriteEvent(context, "added", envelope.Sequence, WithRequester(added.View, reader), services.Json, stream.Token).ConfigureAwait(false);
+                         break;
+                     case MutationRemoved removed:
+                         await WriteEvent(context, "removed", envelope.Sequence,
+                             new { requestId = removed.RequestId, state = StateName(removed.State) }, services.Json, stream.Token).ConfigureAwait(false);
+                         break;
+                 }
+             }
+         }
+         catch (OperationCanceledException) when (stream.IsCancellationRequested)
+         {
+         }
+         finally
+         {
+             services.Activity.StreamClosed();
+         }
+     }
+ 
++    private static object WithRequester(PendingMutationView view, JournalReader reader) => new
++    {
++        view.RequestId,
++        view.Request,
++        view.Environment,
++        view.WriterSameAsReader,
++        view.ExpiresAt,
++        Requester = reader.MutationRequesterByRequestId(view.RequestId),
++    };
++
+     internal static void PersistEvent(MutationEndpointServices services, BrokerEvent change)
+     {
+         if (change is MutationRemoved removed)
+         {
+             var status = removed.State switch
+             {
+                 MutationState.Approved => null,
+                 MutationState.Denied => MutationStatus.Denied,
+                 MutationState.Expired => MutationStatus.Timeout,
+                 MutationState.Cancelled => null,
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/SegmentedRadioGroup.tsx b/src/SqlHarness.Dashboard/ui/src/components/SegmentedRadioGroup.tsx
+index 67294834..9abc9102 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/SegmentedRadioGroup.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/SegmentedRadioGroup.tsx
+@@ -1,21 +1,21 @@
+ import { useId, type ReactNode } from "react"
+ import { cn } from "cn"
+ import { Label } from "@/components/ui/label"
+ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+ 
+ /** A single-choice radio group presented as joined, labelled segments. */
+ export function SegmentedRadioGroup({ label, value, onValueChange, options, className }: {
+   label: string
+   value: string
+   onValueChange: (value: string) => void
+-  options: { value: string; label: ReactNode; ariaLabel?: string }[]
++  options: { value: string; label: ReactNode; ariaLabel?: string; disabled?: boolean }[]
+   className?: string
+ }) {
+   const id = useId()
+   return <RadioGroup aria-label={label} value={value} onValueChange={onValueChange} className={cn("flex w-fit max-w-full flex-wrap gap-0", className)}>
+     {options.map((option, index) => <div key={option.value} className="relative min-w-0 max-w-full border border-input first:rounded-l-lg last:rounded-r-lg [&+div]:border-l-0 has-[[aria-checked=true]]:bg-muted has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50">
+-      <RadioGroupItem id={`${id}-${index}`} value={option.value} aria-label={option.ariaLabel} className="absolute inset-0 size-full aspect-auto opacity-0 after:inset-0" />
++      <RadioGroupItem id={`${id}-${index}`} value={option.value} disabled={option.disabled} aria-label={option.ariaLabel} className="absolute inset-0 size-full aspect-auto opacity-0 after:inset-0" />
+       <Label htmlFor={`${id}-${index}`} className="cursor-pointer break-words px-2.5 py-1.5">{option.label}</Label>
+     </div>)}
+   </RadioGroup>
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx b/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
+index 7c58bb5b..e5bec92f 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
+@@ -57,38 +57,40 @@ async function setup() {
+ }
+ 
+ test("live added event shows a safe toast and the default sound; snapshots and digest joins stay silent", async () => {
+   const { play, source } = await setup()
+   expect(source().url).toBe("/api/mutations/events")
+   act(() => source().emit("snapshot", [request]))
+   expect(play).not.toHaveBeenCalled()
+   act(() => source().emit("snapshot", [{ ...request, requestId: "r-reconnect", request: { ...request.request, digest: "c".repeat(64) } }]))
+   expect(play).not.toHaveBeenCalled()
+   expect(await screen.findByText("YOLO is on for production profile prod-db")).toBeInTheDocument()
+-  expect(screen.getByText("A change needs your decision")).toBeInTheDocument()
+-  expect(screen.queryByText(request.request.sql)).not.toBeInTheDocument()
++  expect(screen.getByText("production")).toBeInTheDocument()
++  expect(screen.getByText(request.request.sql)).toBeInTheDocument()
+   act(() => source().emit("added", request))
+   expect(play).not.toHaveBeenCalled()
+   act(() => source().emit("added", { ...request, requestId: "r-2" }))
+   expect(play).not.toHaveBeenCalled()
+   act(() => source().emit("added", { ...request, requestId: "r-3", request: { ...request.request, digest: "b".repeat(64) } }))
+   await waitFor(() => expect(play).toHaveBeenCalledTimes(1))
+   act(() => source().emit("added", { ...request, requestId: "r-3", request: { ...request.request, digest: "b".repeat(64) } }))
+   expect(play).toHaveBeenCalledTimes(1)
+ })
+ 
+ test("approval dialog renders SQL and parameter values as literal text and waits before approval", async () => {
+   const { source } = await setup()
+   vi.useFakeTimers()
+   act(() => source().emit("snapshot", [request]))
+   fireEvent.click(screen.getByRole("button", { name: "Review" }))
+   expect(screen.getByText("production")).toBeInTheDocument()
++  expect(screen.getByText("Requested by unknown requester")).toBeInTheDocument()
++  expect(screen.getByText(/Digest 0123456789ab/)).toBeInTheDocument()
+   expect(screen.getByTestId("sql-code").textContent).toBe("<script>alert(1)</script>")
+   expect(screen.getByText("<img src=x onerror=1>")).toBeInTheDocument()
+   const parameters = screen.getByRole("table")
+   expect(within(parameters).getByRole("rowheader", { name: "p" })).toBeInTheDocument()
+   expect(within(parameters).getByText("NULL")).toBeInTheDocument()
+   expect(within(parameters).getByText("0123456789abcdef".repeat(40))).toBeInTheDocument()
+   expect(within(parameters).getByText("long_parameter_name_that_must_remain_selectable")).toBeInTheDocument()
+   expect(document.querySelector("script")).toBeNull()
+   expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled()
+   expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
+@@ -178,10 +180,53 @@ test("a hidden tab receives only a safe notification whose click opens the appro
+   expect(FakeNotification.last?.title).toBe("SQLHarness: a change needs your decision")
+   expect(FakeNotification.last?.title).not.toContain(liveRequest.request.sql)
+   act(() => FakeNotification.last?.onclick?.())
+   expect(focus).toHaveBeenCalledOnce()
+   expect(screen.getByRole("dialog")).toBeInTheDocument()
+   if (previousNotification) Object.defineProperty(window, "Notification", previousNotification)
+   else delete (window as Window & { Notification?: typeof Notification }).Notification
+   if (previousVisibility) Object.defineProperty(document, "visibilityState", previousVisibility)
+   vi.restoreAllMocks()
+ })
++
++
++test("toast Deny keeps failed requests visible and uses the decision endpoint", async () => {
++  const { source } = await setup()
++  const fetch = stubApprovalPageFetch({ "POST /api/mutations/r-1/deny": () => new Response("", { status: 500 }) })
++  act(() => source().emit("added", request))
++  fireEvent.click(await screen.findByRole("button", { name: "Deny" }))
++  expect(await screen.findByText("The decision could not be submitted. Try again.")).toBeInTheDocument()
++  expect(screen.getByRole("button", { name: "Review" })).toBeEnabled()
++  expect(fetch).toContain("/api/mutations/r-1/deny")
++})
++
++test("requester context and display modes retain the original request", async () => {
++  const { source } = await setup()
++  const original = { ...request, requester: { sessionId: 42, agentLabel: "codex" }, request: { ...request.request, sql: "UPDATE t SET x=@a", parameters: [{ name: "a", type: null, value: "123" }] } }
++  const before = JSON.stringify(original)
++  act(() => source().emit("added", original))
++  fireEvent.click(await screen.findByRole("button", { name: "Review" }))
++  expect(screen.getByText(/Requested by/)).toHaveTextContent("Codex")
++  expect(screen.getByRole("link", { name: "session 42" })).toHaveAttribute("href", "/sessions/42")
++  expect(screen.queryByText("Review the requested database change before deciding.")).not.toBeInTheDocument()
++  fireEvent.click(screen.getByRole("radio", { name: "Values inline" }))
++  expect(screen.getByTestId("sql-code").textContent).toContain("'123'")
++  fireEvent.click(screen.getByRole("radio", { name: "As sent" }))
++  expect(screen.getByTestId("sql-code").textContent).toBe(original.request.sql)
++  expect(JSON.stringify(original)).toBe(before)
++})
++
++
++test("toast Deny disables while submitting and retains busy and expired requests", async () => {
++  const { source } = await setup()
++  let finish!: (response: Response) => void
++  const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(input => String(input).endsWith("/deny") ? new Promise<Response>(resolve => { finish = resolve }) : Promise.resolve(new Response("{}")))
++  act(() => source().emit("added", request))
++  fireEvent.click(await screen.findByRole("button", { name: "Deny" }))
++  expect(screen.getByRole("button", { name: "Denying..." })).toBeDisabled()
++  await act(async () => { finish(new Response(JSON.stringify({ status: "busy", error: "profile_execution_busy" }), { status: 409 })) })
++  expect(await screen.findByText("Another change is already running for this profile. Try again.")).toBeInTheDocument()
++  expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
++  act(() => source().emit("snapshot", [{ ...request, expiresAt: new Date(Date.now() - 1000).toISOString() }]))
++  expect(screen.getByRole("button", { name: "Deny" })).toBeDisabled()
++  fetch.mockRestore()
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalDialog.tsx b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalDialog.tsx
+index cce50e92..69426c78 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalDialog.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalDialog.tsx
+@@ -1,88 +1,100 @@
+-import { useEffect, useState } from "react"
++import { useEffect, useMemo, useState } from "react"
+ import { Alert, AlertDescription } from "@/components/ui/alert"
+ import { Separator } from "@/components/ui/separator"
+ import { Button } from "@/components/ui/button"
+ import { Badge } from "@/components/ui/badge"
+ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
++import { agentLabel } from "@/lib/agents"
++import { Link } from "@tanstack/react-router"
++import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
++import { inlineMutationSql } from "./sqlDisplay"
+ import { SqlBlock } from "@/components/SqlBlock"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { postMutationDecision } from "@/api/client"
+ import { mutationStore, usePendingMutations } from "./mutationStore"
+ 
+ export function ApprovalDialog({ requestId }: { requestId: string | null }) {
+   const pending = usePendingMutations()
+   const item = pending.find(request => request.requestId === requestId)
+   const [openedAtState, setOpenedAtState] = useState<{ requestId: string | null; time: number | null }>({ requestId: null, time: null })
++  const [modeState, setModeState] = useState<{ id: string | null; mode: string }>({ id: null, mode: "sent" })
++  const [submitting, setSubmitting] = useState(false)
++  const preview = useMemo(() => item ? inlineMutationSql(item.request.sql, item.request.engine, item.request.parameters) : null, [item])
++  const mode = modeState.id === requestId ? modeState.mode : "sent"
+   const [now, setNow] = useState(0)
+   const [messageState, setMessageState] = useState<{ requestId: string | null; message: string }>({ requestId: null, message: "" })
+   useEffect(() => {
+     const initialize = window.setTimeout(() => {
+       const currentTime = Date.now()
+       setOpenedAtState({ requestId, time: requestId ? currentTime : null })
+       setNow(currentTime)
+     }, 0)
+     const timer = window.setInterval(() => setNow(Date.now()), 250)
+     return () => { window.clearTimeout(initialize); window.clearInterval(timer) }
+   }, [requestId])
+   const openedAt = openedAtState.requestId === requestId ? openedAtState.time : null
+   const message = messageState.requestId === requestId ? messageState.message : ""
+   const close = () => mutationStore.close()
+   const decide = async (decision: "approve" | "deny") => {
+     const currentTime = now
+-    if (!requestId || (decision === "approve" && (openedAt === null || currentTime - openedAt < 1_000 || !item || Date.parse(item.expiresAt) <= currentTime))) return
++    if (submitting || !item || Date.parse(item.expiresAt) <= Date.now() || !requestId || (decision === "approve" && (openedAt === null || currentTime - openedAt < 1_000 || !item || Date.parse(item.expiresAt) <= currentTime))) return
+     setMessageState({ requestId, message: "" })
++    setSubmitting(true)
+     try {
+       const result = await postMutationDecision(requestId, decision)
+       if (result === "not-pending") setMessageState({ requestId, message: "This request is no longer pending" })
+       else if (result === "busy") setMessageState({ requestId, message: "Another change is already running for this profile. This request was not executed." })
+       else if (decision === "deny") close()
+     } catch {
+       setMessageState({ requestId, message: "The decision could not be submitted. Try again." })
+-    }
++    } finally { setSubmitting(false) }
+   }
+   const remaining = item ? Math.max(0, Math.ceil((Date.parse(item.expiresAt) - now) / 1_000)) : 0
+   const environment = item?.environment || "unknown"
+   const riskyEnvironment = /^(prod|production|staging)$/i.test(environment)
+   const open = requestId !== null && (item !== undefined || Boolean(message))
+   return (
+     <Dialog open={open} onOpenChange={value => { if (!value) close() }}>
+       <DialogContent className="mutation-dialog max-h-[90vh] overflow-y-auto sm:max-w-[720px]" onKeyDownCapture={event => { if (event.key === "Enter") event.preventDefault() }}>
+         {item ? <>
+           <DialogHeader className="pr-6">
+             <DialogTitle className="flex flex-wrap items-center gap-3">
+               <span className={`text-xl font-semibold ${riskyEnvironment ? "text-destructive" : "text-foreground"}`}>{environment}</span>
+               <Badge variant="outline">{item.request.tier}</Badge><span className="text-xs font-normal text-muted-foreground">{pending.indexOf(item) + 1} of {pending.length} pending</span>
+             </DialogTitle>
+-            <DialogDescription>Review the requested database change before deciding.</DialogDescription>
++            <DialogDescription className="break-all">{item.request.profile} | {item.request.server} / {item.request.database} | {item.request.engine}</DialogDescription>
++            <p className="text-sm text-muted-foreground">Requested by {item.requester ? <>{agentLabel(item.requester.agentLabel || "unknown")} in <Link to="/sessions/$id" params={{ id: String(item.requester.sessionId) }} className="underline">session {item.requester.sessionId}</Link></> : "unknown requester"}</p>
+           </DialogHeader>
+           <Separator />
+-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground" aria-label="Mutation target">
+-            <span>{item.request.profile}</span><span>·</span><span className="break-all font-mono text-xs">{item.request.server} / {item.request.database}</span><span>·</span><span>{item.request.engine}</span>
+-          </div>
+           {item.writerSameAsReader && <Alert variant="destructive"><AlertDescription>The writer uses the same account as the reader.</AlertDescription></Alert>}
+           {hasMultipleStatements(item.request.sql) && <Alert variant="destructive"><AlertDescription>This request contains multiple statements.</AlertDescription></Alert>}
+-          <div className="rounded-md border p-3"><SqlBlock sql={item.request.sql} engine={item.request.engine} label="SQL" initiallyFormatted={false} /></div>
+-          <div className="space-y-2">
++          <SegmentedRadioGroup label="SQL display" value={mode} onValueChange={value => setModeState({ id: requestId, mode: value })} options={[
++            { value: "inline", label: "Values inline", disabled: Boolean(preview?.reason) },
++            { value: "sent", label: "As sent" },
++          ]} />
++          {preview?.reason && <p className="text-sm text-muted-foreground">{preview.reason}</p>}
++          <div className="rounded-md border p-3"><SqlBlock sql={mode === "inline" && preview && !preview.reason ? preview.sql : item.request.sql} engine={item.request.engine} label="SQL" initiallyFormatted={false} /></div>
++          <div className="flex flex-col gap-2">
+             <h3 className="font-medium">Parameters</h3>
+             <Table>
+               <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Type</TableHead><TableHead>Value</TableHead></TableRow></TableHeader>
+               <TableBody>{item.request.parameters.map((parameter, index) => <TableRow key={`${parameter.name}-${index}`}><TableHead scope="row" className="whitespace-normal break-all">{parameter.name}</TableHead><TableCell className="whitespace-normal break-all">{parameter.type ?? "—"}</TableCell><TableCell className="whitespace-pre-wrap break-all">{parameter.value ?? "NULL"}</TableCell></TableRow>)}</TableBody>
+             </Table>
+           </div>
+ 
+           {message && <p role="alert" className="text-destructive">{message}</p>}
+           <Separator />
+           <DialogFooter>
+             <p className="mr-auto self-center text-xs text-muted-foreground">Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")} · Digest {item.request.digest.slice(0, 12)}</p>
+-            <Button variant="outline" onClick={() => void decide("deny")}>Deny</Button>
+-            <Button onClick={() => void decide("approve")} disabled={openedAt === null || now - openedAt < 1_000 || remaining === 0}>Approve</Button>
++            <Button variant="outline" disabled={submitting || remaining === 0} onClick={() => void decide("deny")}>Deny</Button>
++            <Button onClick={() => void decide("approve")} disabled={submitting || openedAt === null || now - openedAt < 1_000 || remaining === 0}>Approve</Button>
+           </DialogFooter>
+         </> : <><DialogHeader><DialogTitle>Request no longer pending</DialogTitle></DialogHeader>{message && <p role="alert">{message}</p>}</>}
+       </DialogContent>
+     </Dialog>
+   )
+ }
+ 
+ function hasMultipleStatements(sql: string): boolean {
+   return /;\s*\S/.test(sql)
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx
+index 1db2829a..c4b401ef 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx
+@@ -1,38 +1,60 @@
+-import { useEffect, useRef, useSyncExternalStore } from "react"
++import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+ import { Button } from "@/components/ui/button"
+-import { Badge } from "@/components/ui/badge"
++import { postMutationDecision } from "@/api/client"
+ import { Toast, ToastContent, ToastDescription, ToastPortal, ToastProvider, ToastTitle, ToastViewport, useToastManager } from "@/components/ui/toast"
+ import { useNow } from "@/lib/useNow"
+ import { mutationStore, type PendingMutation } from "./mutationStore"
+ 
++function ToastDecision({ item, expired }: { item: PendingMutation; expired: boolean }) {
++  const [busy, setBusy] = useState(false)
++  const [error, setError] = useState("")
++  const deny = async () => {
++    if (busy || expired) return
++    setBusy(true)
++    setError("")
++    try {
++      const result = await postMutationDecision(item.requestId, "deny")
++      if (result === "not-pending") setError("This request is no longer pending")
++      else if (result === "busy") setError("Another change is already running for this profile. Try again.")
++      // The authoritative removed event dismisses the toast.
++    } catch { setError("The decision could not be submitted. Try again.") }
++    finally { setBusy(false) }
++  }
++  return <div className="flex flex-col gap-2">
++    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
++    <div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={busy || expired} onClick={() => void deny()}>{busy ? "Denying..." : "Deny"}</Button><Button size="sm" onClick={() => mutationStore.open(item.requestId)}>Review</Button></div>
++  </div>
++}
++
+ function ApprovalNotifications({ pending, hidden }: { pending: PendingMutation[]; hidden: boolean }) {
+   const { toasts, add, close } = useToastManager<{ request: PendingMutation }>()
+   const previous = useRef(new Set<string>())
+   const now = useNow()
+   useEffect(() => {
+     const ids = new Set(pending.map(item => item.requestId))
+     for (const id of previous.current) if (!ids.has(id)) close(id)
+-    for (const request of pending) add({ id: request.requestId, title: "A change needs your decision", timeout: 0, data: { request } })
++    for (const request of pending) add({ id: request.requestId, title: request.environment || "unknown", timeout: 0, data: { request } })
+     previous.current = ids
+   }, [pending, add, close])
+   if (hidden) return null
+   return <ToastPortal><ToastViewport>
+     {toasts.map(notification => {
+       const item = notification.data?.request
+       if (!item) return null
+       const remaining = Math.max(0, Math.ceil((Date.parse(item.expiresAt) - now) / 1000))
+       return <Toast key={notification.id} toast={notification} swipeDirection={[]}>
+         <ToastContent><section className="flex min-w-0 flex-1 flex-col gap-2" aria-label="Pending change approval">
+-          <div className="flex flex-wrap items-center gap-2"><ToastTitle /><Badge variant="outline">{item.environment || "unknown"}</Badge></div>
+-          <ToastDescription>{item.request.profile} · {item.request.database} · {item.request.tier}</ToastDescription>
+-          <div className="flex items-center justify-between gap-3"><span className="text-xs text-muted-foreground">Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}{pending.length > 1 ? ` · ${pending.length} pending` : ""}</span><Button size="sm" onClick={() => mutationStore.open(item.requestId)}>Review</Button></div>
++          <ToastTitle className="text-base font-semibold" />
++          <ToastDescription>{item.request.profile} | {item.request.database} | {item.request.tier}</ToastDescription>
++          <pre className="line-clamp-2 whitespace-pre-wrap break-all font-mono text-xs">{item.request.sql.slice(0, 240)}{item.request.sql.length > 240 ? "..." : ""}</pre>
++          <div className="flex items-center justify-between gap-3"><span className="text-xs text-muted-foreground">Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}{pending.length > 1 ? ` | ${pending.length} pending` : ""}</span></div><ToastDecision item={item} expired={remaining === 0} />
+         </section></ToastContent>
+       </Toast>
+     })}
+   </ToastViewport></ToastPortal>
+ }
+ 
+ export function ApprovalToast() {
+   const state = useSyncExternalStore(mutationStore.subscribe, mutationStore.getSnapshot, mutationStore.getSnapshot)
+   return <>
+     <ToastProvider timeout={0}><ApprovalNotifications pending={state.pending} hidden={state.openRequestId !== null} /></ToastProvider>
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/mutationStore.ts b/src/SqlHarness.Dashboard/ui/src/mutations/mutationStore.ts
+index 76d23820..b7dc7432 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/mutationStore.ts
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/mutationStore.ts
+@@ -1,19 +1,19 @@
+ import { useSyncExternalStore } from "react"
+ 
+ export type MutationParameter = { name: string; type: string | null; value: string | null }
+ export type MutationRequest = {
+   profile: string; server: string; database: string; engine: string; tier: string; sql: string
+   parameters: MutationParameter[]; digest: string; grantees: string[]
+ }
+ export type PendingMutation = {
+-  requestId: string; request: MutationRequest; environment: string; writerSameAsReader: boolean; expiresAt: string
++  requester?: { sessionId: number; agentLabel: string | null } | null; requestId: string; request: MutationRequest; environment: string; writerSameAsReader: boolean; expiresAt: string
+ }
+ export type MutationTerminal = { requestId: string; state: string }
+ 
+ type MutationState = { pending: PendingMutation[]; openRequestId: string | null; terminal: MutationTerminal | null }
+ let state: MutationState = { pending: [], openRequestId: null, terminal: null }
+ const listeners = new Set<() => void>()
+ const publish = (next: MutationState) => { state = next; listeners.forEach(listener => listener()) }
+ 
+ export const mutationStore = {
+   getSnapshot: () => state,
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts
+new file mode 100644
+index 00000000..05391415
+--- /dev/null
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts
+@@ -0,0 +1,33 @@
++import { expect, test } from "vitest"
++import { inlineMutationSql } from "./sqlDisplay"
++const p = (name: string, value: string | null, type: string | null = null) => ({ name, value, type })
++test("SQL Server lexical boundaries and precision", () => {
++  const result = inlineMutationSql("SELECT @@ROWCOUNT, @A, @ab, [@a], '@a' /* outer /* @a */ @ab */ -- @a", "sqlserver", [p("a", "O'Brien"), p("ab", "9007199254740993", "bigint")])
++  for (const text of ["N'O''Brien'", "9007199254740993", "@@ROWCOUNT", "[@a]", "'@a'", "/* outer /* @a */ @ab */"]) expect(result.sql).toContain(text)
++  expect(result.reason).toBeUndefined()
++})
++test("PostgreSQL dollar quotes, comments, operators and empty text", () => {
++  const result = inlineMutationSql("SELECT @a, $$@a$$, $body$@a$body$, '@a', x @> y -- @a", "postgres", [p("a", "")])
++  for (const text of ["''", "$$@a$$", "$body$@a$body$", "x @> y"]) expect(result.sql).toContain(text)
++  expect(result.reason).toBeUndefined()
++})
++test("unsupported, missing, duplicate, ambiguous and huge inputs retain exact original", () => {
++  for (const params of [[p("a", "1", "geography")], [], [p("a", "1"), p("A", "2")], [p("a", "a\\b")]]) {
++    const result = inlineMutationSql("SELECT @a", "postgres", params)
++    expect(result.reason).toBeTruthy()
++    expect(result.sql).toBe("SELECT @a")
++  }
++  expect(inlineMutationSql("x".repeat(100001), "postgres", []).reason).toBeTruthy()
++})
++test("null is NULL and default numeric-looking text stays text", () => {
++  const result = inlineMutationSql("SELECT @a,@b,@c", "sqlserver", [p("a", null), p("b", "123"), p("c", "false", "bit")])
++  expect(result.sql).toContain("NULL")
++  expect(result.sql).toContain("N'123'")
++  expect(result.sql).toMatch(/\b0\b/)
++})
++
++test("normalizes contract engine and parameter prefix without changing tokens", () => {
++  const result = inlineMutationSql("SELECT @a, @ab", "SqlServer", [p("@a", "1", "int"), p("ab", "2", "int")])
++  expect(result.reason).toBeUndefined()
++  expect(result.sql).not.toContain("@a")
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts
+new file mode 100644
+index 00000000..237823bb
+--- /dev/null
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts
+@@ -0,0 +1,45 @@
++import { format } from "sql-formatter"
++import type { MutationParameter } from "./mutationStore"
++
++/** Presentation only; never used to submit a decision or execute SQL. */
++export function inlineMutationSql(sql: string, engine: string, parameters: MutationParameter[]): { sql: string; reason?: string } {
++  const fallback = () => ({ sql, reason: "Values inline is unavailable for this SQL or parameter type. As sent shows the original request." })
++  if (sql.length > 100_000 || parameters.length > 500 || parameters.reduce((n, p) => n + (p.value?.length ?? 0), 0) > 100_000) return fallback()
++  engine = engine.toLowerCase()
++  const postgres = engine === "postgres"
++  if (!postgres && engine !== "sqlserver") return fallback()
++  try {
++    const values = new Map<string, string>()
++    for (const parameter of parameters) {
++      const name = parameter.name.replace(/^@/, "").toLowerCase()
++      if (!/^[a-z_][a-z0-9_]*$/i.test(name) || values.has(name)) return fallback()
++      const type = (parameter.type || "nvarchar").toLowerCase()
++      const value = parameter.value
++      let literal: string
++      if (value === null) literal = "NULL"
++      else if (/^(nvarchar|varchar|nchar|char)(\((max|\d+)\))?$/.test(type)) {
++        if (postgres && value.includes("\\")) return fallback()
++        literal = `${!postgres && type.startsWith("n") ? "N" : ""}'${value.replaceAll("'", "''")}'`
++      } else if (/^(tinyint|smallint|int|bigint)$/.test(type) && /^[+-]?\d+$/.test(value)) {
++        const ranges: Record<string, [bigint, bigint]> = { tinyint: [0n, 255n], smallint: [-32768n, 32767n], int: [-2147483648n, 2147483647n], bigint: [-9223372036854775808n, 9223372036854775807n] }
++        const [min, max] = ranges[type]
++        if (BigInt(value) < min || BigInt(value) > max) return fallback()
++        literal = value
++      }
++      else if (/^(decimal|numeric)(\(\d+,\d+\))?$/.test(type) && /^[+-]?\d+(\.\d+)?$/.test(value)) {
++        // .NET decimal binding can round beyond its precision.
++        if (value.replace(/[^0-9]/g, "").length > 28) return fallback()
++        literal = value
++      }
++      else if (type === "bit" && /^(true|false|0|1)$/i.test(value)) literal = postgres ? (/^(true|1)$/i.test(value) ? "TRUE" : "FALSE") : (/^(true|1)$/i.test(value) ? "1" : "0")
++      else return fallback()
++      values.set(name, literal)
++    }
++    const params = new Proxy(Object.create(null) as Record<string, string>, { get: (_target, key) => {
++      const value = typeof key === "string" ? values.get(key.toLowerCase()) : undefined
++      if (value === undefined) throw new Error("Unresolved SQL parameter")
++      return value
++    } })
++    return { sql: format(sql, { language: postgres ? "postgresql" : "transactsql", params, paramTypes: { named: ["@"] } }) }
++  } catch { return fallback() }
++}
+diff --git a/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs b/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs
+index e1d8e4f4..0b31e680 100644
+--- a/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs
++++ b/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs
+@@ -8,20 +8,45 @@ using SqlHarness.Core;
+ using SqlHarness.Dashboard;
+ using SqlHarness.Tests.Journal;
+ 
+ namespace SqlHarness.Tests.Dashboard;
+ 
+ public sealed class JournalReaderTests
+ {
+     private static JournalReader Reader(TempHome home, FakeProcesses? processes = null) =>
+         new(home.DatabasePath, processes ?? new FakeProcesses());
+ 
++    [Fact]
++    public void Mutation_requester_uses_only_the_retained_operation_link()
++    {
++        using var home = new TempHome();
++        var seed = new JournalSeed(home.DatabasePath);
++        var actual = seed.Operation(JournalSeed.Session("actual", "codex"));
++        seed.Operation(JournalSeed.Session("latest", "claude"));
++        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
++        journal.RecordMutation(new MutationJournalRecord("request", "latest", "local", "sqlserver", "srv", "db",
++            "dml", "operator", "digest", "UPDATE t SET x=1", "[]", DateTimeOffset.UtcNow));
++        var reader = Reader(home);
++        Assert.Null(reader.MutationRequesterByRequestId("request"));
++        Assert.Null(reader.MutationRequesterByRequestId("missing"));
++        using (var connection = OpenSeedDatabase(home.DatabasePath))
++        using (var command = connection.CreateCommand())
++        {
++            command.CommandText = "UPDATE mutation_requests SET operation_id = $id WHERE request_id = 'request'";
++            command.Parameters.AddWithValue("$id", actual.OperationId);
++            command.ExecuteNonQuery();
++        }
++        var requester = Assert.IsType<MutationRequester>(reader.MutationRequesterByRequestId("request"));
++        Assert.Equal(reader.Sessions(new SessionQuery()).Items.Single(session => session.SessionKey == "actual").Id, requester.SessionId);
++        Assert.Equal("codex", requester.AgentLabel);
++    }
++
+     [Fact]
+     public void Operation_json_exposes_session_evidence_version_without_writing()
+     {
+         using var home = new TempHome();
+         var seed = new JournalSeed(home.DatabasePath);
+         var old = seed.Operation(JournalSeed.Session("old"));
+         var fresh = seed.Operation(JournalSeed.Session("fresh"));
+         using (var connection = OpenSeedDatabase(home.DatabasePath))
+         using (var command = connection.CreateCommand())
+         {

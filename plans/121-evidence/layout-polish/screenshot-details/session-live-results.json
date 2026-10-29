@@ -1,0 +1,27 @@
+{
+  "checks": [
+    {
+      "name": "Running uses Badge",
+      "passed": true
+    },
+    {
+      "name": "SSE event refetches Session operations",
+      "passed": true
+    },
+    {
+      "name": "Existing row refreshes status after event",
+      "passed": true
+    },
+    {
+      "name": "Existing row retained",
+      "passed": true
+    },
+    {
+      "name": "No live refresh page/console errors",
+      "passed": true
+    }
+  ],
+  "getsBefore": 1,
+  "getsAfter": 2,
+  "errors": []
+}

@@ -1,0 +1,150 @@
+# Review package: abdacbe1..9fad619e
+
+## Commits
+9fad619e fix(dashboard): normalize usage filters for current range
+
+## Files changed
+ src/SqlHarness.Dashboard/ui/src/api/queries.ts     |  3 +-
+ .../ui/src/pages/StatsPage.test.tsx                | 37 ++++++++++++++++++++++
+ .../ui/src/pages/StatsPage.tsx                     | 10 ++++--
+ 3 files changed, 47 insertions(+), 3 deletions(-)
+
+## Diff
+diff --git a/src/SqlHarness.Dashboard/ui/src/api/queries.ts b/src/SqlHarness.Dashboard/ui/src/api/queries.ts
+index d233d5ed..33e879e9 100644
+--- a/src/SqlHarness.Dashboard/ui/src/api/queries.ts
++++ b/src/SqlHarness.Dashboard/ui/src/api/queries.ts
+@@ -341,23 +341,24 @@ export function rangeStart(range: StatsRange, now: number): string | undefined {
+   return new Date(start).toISOString()
+ }
+ 
+ export function rangeWindow(range: StatsRange, now: number): StatsWindow {
+   const to = new Date(Math.floor(now / 60_000) * 60_000).toISOString()
+   return { from: rangeStart(range, now), to }
+ }
+ 
+ export function useStats(
+   range: StatsRange, window: StatsWindow, profile?: string | null, dimensions: Record<string, string | null> = {},
+-  rowDimension?: string, columnDimension?: string, unprofiled = false,
++  rowDimension?: string, columnDimension?: string, unprofiled = false, enabled = true,
+ ) {
+   return useQuery({
++    enabled,
+     queryKey: queryKeys.stats(range, window, profile, dimensions, rowDimension, columnDimension, unprofiled),
+     queryFn: () => getJson<DashboardStats>("/api/stats", {
+       ...window,
+       profile,
+       unprofiled: unprofiled ? "true" : undefined,
+       dimensions: Object.keys(dimensions).length ? JSON.stringify(dimensions) : undefined,
+       rowDimension,
+       columnDimension,
+     }),
+   })
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
+index 5edce1e3..e1209148 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
+@@ -514,10 +514,47 @@ test("KPI counts lead the failure rate and legacy volumes are excluded from outp
+   const response = stats({ operations: [{ key: "query", count: 4 }], statuses: [{ key: "failed", count: 1 }, { key: "rejected", count: 2 }], sessionCount: 2 })
+   response.workflowCosts = [{ ...response.workflowCosts[0], accountingKind: "legacy-artifact-volume", outputBytes: 999999, estimatedOutputTokens: 999999 }]
+   stubFetch({ "/api/stats": response, "/api/profiles": profilesResponse() })
+   renderApp("/stats")
+   expect(await screen.findByText("1 / 2")).toBeInTheDocument()
+   expect(screen.getByText("75% of 4 operations")).toBeInTheDocument()
+   expect(screen.getByText("2 sessions")).toBeInTheDocument()
+   expect(screen.getByText("No retained workflow-output accounting")).toBeInTheDocument()
+   expect(screen.queryByText(/999,999/)).not.toBeInTheDocument()
+ })
++
++test("a recorded dimension absent in the new range cannot leave an invisible aggregate filter", async () => {
++  const requests: URL[] = []
++  stubFetch({ "/api/stats": (url: URL) => {
++    requests.push(url)
++    const from = url.searchParams.get("from")
++    const to = url.searchParams.get("to")
++    const recent = from !== null && to !== null && Date.parse(to) - Date.parse(from) <= 24 * 60 * 60 * 1000
++    const response = profileStats("app")
++    if (!recent) response.profileDimensions.dimensions.push({ name: "legacy", values: [dimensionValue("legacy", "older", 3, 30)] })
++    const hiddenFilter = recent && JSON.parse(url.searchParams.get("dimensions") ?? "{}").legacy !== undefined
++    const count = hiddenFilter ? 0 : recent ? 2 : 3
++    response.operations = count ? [{ key: "query", count }] : []
++    response.statuses = count ? [{ key: "succeeded", count }] : []
++    response.topSqlByDuration = count ? [{ sqlHash: recent ? "newcohort" : "oldcohort", count, totalDurationMs: 20, maxDurationMs: 10 }] : []
++    if (recent && response.profileDimensions.matrix) {
++      response.profileDimensions.matrix.cells = hiddenFilter ? [] : response.profileDimensions.matrix.cells.slice(0, 1)
++      response.profileDimensions.matrix.totals = matrixMetrics(count, count * 10)
++      response.profileDimensions.operations = count
++    }
++    return jsonResponse(response)
++  }, "/api/profiles": profilesResponse() })
++  renderApp("/stats")
++  await screen.findByRole("combobox", { name: "legacy" })
++  await userEvent.click(screen.getByRole("tab", { name: "All time" }))
++  await userEvent.click(await screen.findByRole("combobox", { name: "legacy" }))
++  await userEvent.click(await screen.findByRole("option", { name: "older" }))
++  await waitFor(() => expect(requests.some(url => url.searchParams.get("dimensions")?.includes("legacy"))).toBe(true))
++  await userEvent.click(screen.getByRole("tab", { name: "24 hours" }))
++  expect(await screen.findByText(/Full-scope total: 2 \(2 operations\)/)).toBeInTheDocument()
++  expect(await screen.findByText("newcohort")).toBeInTheDocument()
++  expect(screen.queryByRole("combobox", { name: "legacy" })).not.toBeInTheDocument()
++  const summary = screen.getByLabelText("Usage summary")
++  expect(within(summary).getByText("2")).toBeInTheDocument()
++  const currentAggregate = requests.filter(url => url.searchParams.has("from") && !url.searchParams.has("rowDimension")).at(-1)!
++  expect(JSON.parse(currentAggregate.searchParams.get("dimensions") ?? "{}")).not.toHaveProperty("legacy")
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
+index 4d07e896..9cace046 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
+@@ -82,21 +82,27 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
+   const profilesQuery = useProfiles()
+   const profiles = profilesQuery.data?.profiles ?? []
+   const selectedProfile = manualProfile
+     ? manualProfile.value
+     : overview.data?.profileOperations.length
+       ? overview.data.profileOperations[0].profile
+       : profiles[0]?.name ?? null
+   const selectedUnprofiled = manualProfile ? manualProfile.value === null
+     : overview.data?.profileOperations[0]?.profile === null && overview.data.profileOperations.length > 0
+   const dimensionOptions = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
+-  const query = useStats(range, window, selectedProfile, dimensionFilters, undefined, undefined, selectedUnprofiled)
++  // Only current, loaded dimension options may remove retained selections. While
++  // the new range is loading, keep selections intact and hide its pending metrics.
++  const dimensionNames = dimensionOptions.data?.profileDimensions.dimensions.map(dimension => dimension.name)
++  const effectiveFilters = dimensionNames
++    ? Object.fromEntries(Object.entries(dimensionFilters).filter(([name]) => dimensionNames.includes(name)))
++    : dimensionFilters
++  const query = useStats(range, window, selectedProfile, effectiveFilters, undefined, undefined, selectedUnprofiled, dimensionOptions.data !== undefined)
+   const profileOptions = [...new Set([
+     ...profiles.map(profile => profile.name),
+     ...(overview.data?.profileOperations ?? []).flatMap(item => item.profile === null ? [] : [item.profile]),
+     ...(manualProfile?.value ? [manualProfile.value] : []),
+   ])].sort((left, right) => left.localeCompare(right))
+   const selectedProfileView = profiles.find(profile => profile.name === selectedProfile)
+ 
+   return (
+     <div className="usage-page flex flex-col gap-4">
+       <div className="flex flex-wrap items-center gap-3">
+@@ -133,21 +139,21 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
+         </Tabs>
+       </div>
+       {overview.error ? (
+         <ErrorState error={overview.error} />
+       ) : query.error ? (
+         <ErrorState error={query.error} />
+       ) : overview.isPending || dimensionOptions.isPending ? (
+         <Skeleton className="h-64 w-full" />
+       ) : (
+         <StatsContent metricsPending={query.isPending} stats={{ ...(query.data ?? dimensionOptions.data!), profileDimensions: dimensionOptions.data!.profileDimensions }} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
+-          dimensionFilters={dimensionFilters} onDimensionFiltersChange={setDimensionFilters}
++          dimensionFilters={effectiveFilters} onDimensionFiltersChange={setDimensionFilters}
+           axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
+       )}
+     </div>
+   )
+ }
+ 
+ function StatsContent({
+   metricsPending,
+   stats,
+   range,

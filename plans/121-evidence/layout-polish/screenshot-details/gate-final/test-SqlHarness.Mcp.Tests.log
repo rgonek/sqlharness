@@ -1,0 +1,14 @@
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+Test run for C:\Users\rgone\.codex\worktrees\f735\sqlharness\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:03.00]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [SKIP]
+[xUnit.net 00:00:03.01]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [SKIP]
+[xUnit.net 00:00:03.01]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [SKIP]
+[xUnit.net 00:00:03.18]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [SKIP]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [1 ms]
+
+Passed!  - Failed:     0, Passed:   535, Skipped:     4, Total:   539, Duration: 2 m 49 s - SqlHarness.Mcp.Tests.dll (net10.0)
+==> test project: tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj exit 0

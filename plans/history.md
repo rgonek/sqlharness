@@ -483,3 +483,7 @@ Plan [097](097-singleton-parameter-batches.md) is implemented on `plan-097`. Its
 ### Plan 121 default-shadcn alignment — 2026-10-28
 
 Completed locally on dashboard-layout-polish; tested c2c3dcfd, runtime UI 3fe231df. Six mock-audit findings resolved with default shadcn composition, three final layout issues fixed and independently accepted. Windows just verify PASS (414 UI; 4771 Core/11 skips; 535 MCP/4 skips; 11m00s), 55 browser checks; final source/dist identity unchanged. Initial stale-selector gate failure retained. No merge/push/publication/restart; Linux/live DB unverified. [Plan](121-default-shadcn-followup.md), [default-vs-mock report](121-evidence/layout-polish/default-alignment/report.md).
+
+### Plan 121 screenshot details — 2026-10-29
+
+Completed locally on dashboard-layout-polish; tested b3e921cd, runtime bbda23d2. Fifteen screenshot corrections plus A/B circles; Usage journal projections and logical-read ranking, verified mutation requester and bounded display-only inline SQL. All task reviews and final scoped reviews accepted. Windows just verify PASS (436 UI; 4774 Core/11 skips; 535 MCP/4 skips; 15m26s), branch format5 and browser104 PASS. Earlier stale StatusBadge and DashboardStats contract failures retained; corrected tests preserve runtime. No merge/push/publication/restart; Linux/live DB unverified. [Plan](121-screenshot-detail-followup.md), [report](121-evidence/layout-polish/screenshot-details/report.md), [gallery](121-evidence/layout-polish/screenshot-details/index.html).

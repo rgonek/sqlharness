@@ -1,0 +1,148 @@
+{
+  "checks": [
+    {
+      "name": "Toast content stays inside viewport after animation",
+      "passed": true,
+      "measurement": {
+        "x": 897,
+        "y": 719,
+        "width": 350,
+        "height": 148
+      }
+    },
+    {
+      "name": "Toast exposes Deny",
+      "passed": true
+    },
+    {
+      "name": "Toast exposes Review",
+      "passed": true
+    },
+    {
+      "name": "Toast shows SQL preview",
+      "passed": true
+    },
+    {
+      "name": "Toast uses requested mock headline",
+      "passed": true
+    },
+    {
+      "name": "Environment is not Badge",
+      "passed": true
+    },
+    {
+      "name": "Generic Review prose removed",
+      "passed": true
+    },
+    {
+      "name": "Requester uses known agent display label",
+      "passed": true
+    },
+    {
+      "name": "Requester links exact journal session",
+      "passed": true
+    },
+    {
+      "name": "Target is present in header context",
+      "passed": true
+    },
+    {
+      "name": "Approve initially guarded",
+      "passed": true
+    },
+    {
+      "name": "As sent shows exact original SQL",
+      "passed": true
+    },
+    {
+      "name": "Values inline substitutes only bound SQL parameter",
+      "passed": true
+    },
+    {
+      "name": "Original digest retained",
+      "passed": true
+    },
+    {
+      "name": "Original parameter table retained",
+      "passed": true
+    },
+    {
+      "name": "Returning As sent restores original SQL",
+      "passed": true
+    },
+    {
+      "name": "Approve enabled after read delay",
+      "passed": true
+    },
+    {
+      "name": "Enter and display modes do not submit a decision",
+      "passed": true
+    },
+    {
+      "name": "Mutation dialog mobile fits document",
+      "passed": true
+    },
+    {
+      "name": "Failed deny keeps toast",
+      "passed": true
+    },
+    {
+      "name": "Deny uses guarded existing endpoint",
+      "passed": true
+    },
+    {
+      "name": "Only two mocked Deny requests were submitted",
+      "passed": true
+    },
+    {
+      "name": "Unsupported preview disables inline",
+      "passed": true
+    },
+    {
+      "name": "Unsupported preview preserves As sent",
+      "passed": true
+    },
+    {
+      "name": "Unknown requester is not invented",
+      "passed": true
+    },
+    {
+      "name": "Repeated-value expansion falls back before rendering oversized inline SQL",
+      "passed": true
+    },
+    {
+      "name": "Budget fallback preserves exact original SQL",
+      "passed": true
+    },
+    {
+      "name": "Budget fallback retains usable decision controls",
+      "passed": true
+    },
+    {
+      "name": "No mutation app page/console errors",
+      "passed": true,
+      "measurement": []
+    }
+  ],
+  "errors": [],
+  "expectedDiagnostics": [
+    {
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://127.0.0.1:48138/api/mutations/fixture-detail-approval/deny"
+    }
+  ],
+  "decisions": [
+    {
+      "url": "http://127.0.0.1:48138/api/mutations/fixture-detail-approval/deny",
+      "method": "POST",
+      "guard": "1"
+    },
+    {
+      "url": "http://127.0.0.1:48138/api/mutations/fixture-detail-approval/deny",
+      "method": "POST",
+      "guard": "1"
+    }
+  ],
+  "boundedOpenMs": 1030,
+  "fixtureOnly": true
+}

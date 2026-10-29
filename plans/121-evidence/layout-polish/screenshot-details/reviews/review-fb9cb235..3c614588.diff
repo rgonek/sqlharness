@@ -1,0 +1,582 @@
+# Review package: fb9cb235..3c614588
+
+## Commits
+3c614588 fix(dashboard): refine session and operation detail controls
+
+## Files changed
+ .../ui/src/components/OperationTable.tsx           |  8 +++++---
+ .../ui/src/components/SessionNoteCard.tsx          |  4 +++-
+ .../ui/src/components/SessionOperationsTable.tsx   | 22 +++++++++++----------
+ .../ui/src/components/StatusBadge.tsx              |  2 +-
+ .../components/optimization/IoComparison.test.tsx  |  5 +++--
+ .../src/components/optimization/IoComparison.tsx   |  4 ++--
+ .../components/optimization/VersionTable.test.tsx  | 11 +++++++++++
+ .../src/components/optimization/VersionTable.tsx   |  9 +++++----
+ src/SqlHarness.Dashboard/ui/src/index.css          |  7 ++++++-
+ .../ui/src/pages/OperationPage.tsx                 |  3 ++-
+ .../ui/src/pages/SessionPage.test.tsx              | 23 +++++++++++++++++++---
+ .../ui/src/pages/SettingsPage.tsx                  | 10 ++++++----
+ 12 files changed, 76 insertions(+), 32 deletions(-)
+
+## Diff
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/OperationTable.tsx b/src/SqlHarness.Dashboard/ui/src/components/OperationTable.tsx
+index 24235749..ac4b6072 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/OperationTable.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/OperationTable.tsx
+@@ -1,27 +1,29 @@
++import { HugeiconsIcon } from "@hugeicons/react"
++import { StarIcon } from "@hugeicons/core-free-icons"
+ import { Link } from "@tanstack/react-router"
+ import type { OperationSummary } from "@/api/types"
+ import { FlagBadges } from "@/components/FlagBadges"
+ import { StatusBadge } from "@/components/StatusBadge"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { agentLabel } from "@/lib/agents"
+ import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
+ import { isInternalOperation } from "@/lib/internalOperations"
+ import { useUpdateOperationAnnotation } from "@/api/queries"
+ import { Button } from "@/components/ui/button"
+ 
+-export function OwnerStarButton({ operation }: { operation: OperationSummary }) {
++export function OwnerStarButton({ operation, prominent = false }: { operation: OperationSummary; prominent?: boolean }) {
+   const update = useUpdateOperationAnnotation(operation.id)
+-  return <Button variant="ghost" size="sm" aria-label={operation.ownerStarred ? "Unstar operation" : "Star operation"}
++  return <Button variant="ghost" size={prominent ? "icon-lg" : "icon-sm"} aria-label={operation.ownerStarred ? "Unstar operation" : "Star operation"}
+     aria-pressed={operation.ownerStarred} disabled={update.isPending}
+     onClick={() => update.mutate({ starred: !operation.ownerStarred })}>
+-    {operation.ownerStarred ? "★" : "☆"}
++    <HugeiconsIcon icon={StarIcon} strokeWidth={2} fill={operation.ownerStarred ? "currentColor" : "none"} />
+   </Button>
+ }
+ 
+ /** Live elapsed time for running rows when `now` is given; recorded duration otherwise. */
+ export function OperationTable({ operations, now, showInternal, membership }: { operations: OperationSummary[]; now?: number; showInternal: boolean; membership?: Record<number, string> }) {
+   const visibleOperations = showInternal ? operations : operations.filter(operation => !isInternalOperation(operation))
+   return (
+     <div className="overflow-x-auto">
+       <Table>
+         <TableHeader>
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/SessionNoteCard.tsx b/src/SqlHarness.Dashboard/ui/src/components/SessionNoteCard.tsx
+index fb96ae12..da35bef9 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/SessionNoteCard.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/SessionNoteCard.tsx
+@@ -1,24 +1,26 @@
++import { HugeiconsIcon } from "@hugeicons/react"
++import { Add01Icon } from "@hugeicons/core-free-icons"
+ import { useState } from "react"
+ import { useUpdateSessionAnnotation } from "@/api/queries"
+ import { Alert, AlertDescription } from "@/components/ui/alert"
+ import { Button } from "@/components/ui/button"
+ import { Textarea } from "@/components/ui/textarea"
+ 
+ const maximumNoteLength = 10_000
+ 
+ export function SessionNoteCard({ sessionId, note }: { sessionId: number; note: string | null }) {
+   const update = useUpdateSessionAnnotation(sessionId)
+   const [draft, setDraft] = useState<string | null>(null)
+ 
+   if (note === null && draft === null)
+-    return <Button variant="outline" onClick={() => { update.reset(); setDraft("") }}>Add note</Button>
++    return <Button variant="outline" onClick={() => { update.reset(); setDraft("") }}><HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />Add note</Button>
+ 
+   return (
+     <section aria-label="Session note" className="flex flex-col gap-2">
+         {draft === null ? (
+           <>
+             <Button variant="secondary" className="session-note-display" title="Edit note" onClick={() => { update.reset(); setDraft(note ?? "") }}>{note}</Button>
+             {update.isSuccess && <span role="status" className="sr-only">Saved</span>}
+           </>
+         ) : (
+           <>
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/SessionOperationsTable.tsx b/src/SqlHarness.Dashboard/ui/src/components/SessionOperationsTable.tsx
+index 6955f66d..b5eff710 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/SessionOperationsTable.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/SessionOperationsTable.tsx
+@@ -1,40 +1,42 @@
+ import { Link } from "@tanstack/react-router"
+ import type { OperationSummary } from "@/api/types"
+ import { OwnerStarButton } from "@/components/OperationTable"
+ import { FlagBadges } from "@/components/FlagBadges"
+ import { StatusBadge } from "@/components/StatusBadge"
+-import { Badge } from "@/components/ui/badge"
++import { HugeiconsIcon } from "@hugeicons/react"
++import { SparklesIcon } from "@hugeicons/core-free-icons"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
+ import { isInternalOperation } from "@/lib/internalOperations"
+ 
+ /** Session transport is in the header; summaries do not carry per-operation transport. */
+ export function SessionOperationsTable({ operations, showInternal }: { operations: OperationSummary[]; showInternal: boolean }) {
+   const visible = showInternal ? operations : operations.filter(operation => !isInternalOperation(operation))
+   return <Table>
+     <TableHeader><TableRow>
+       <TableHead>ID</TableHead><TableHead>Time</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead>
+       <TableHead>Status</TableHead><TableHead className="text-right">Duration</TableHead><TableHead className="text-right">Reads</TableHead>
+     </TableRow></TableHeader>
+     <TableBody>{visible.map(operation => {
+       const target = [operation.profile, operation.engine, operation.server, operation.database].filter(Boolean).join(" / ")
+       return <TableRow key={operation.id}>
+         <TableCell><Link to="/operations/$id" params={{ id: String(operation.id) }} search={{ returnSession: operation.sessionId }}>{operation.id}</Link></TableCell>
+-        <TableCell className="whitespace-nowrap">{formatTimestamp(operation.startedAt)}</TableCell>
++        <TableCell className="whitespace-nowrap"><time dateTime={operation.startedAt} title={formatTimestamp(operation.startedAt)}>{new Date(operation.startedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time></TableCell>
+         <TableCell>{operation.operation}</TableCell>
+-        <TableCell className="min-w-48 max-w-80 whitespace-normal break-words">
+-          <div className="flex flex-wrap items-center gap-1"><OwnerStarButton operation={operation} />{operation.agentLabel && <span>{operation.agentLabel}</span>}{operation.agentKeep && <Badge variant="outline">Agent keep</Badge>}</div>
+-          {operation.subject && <div>{operation.subject}</div>}
+-          {operation.sqlPreview && <code className="block break-all">{operation.sqlPreview}{operation.sqlPreviewTruncated ? "…" : ""}</code>}
+-          {target && <div className="text-sm text-muted-foreground">{target}</div>}
+-          {operation.progress && <div className="text-sm text-muted-foreground">{operation.progress.polls} polls</div>}
+-          {operation.versionPair && <div className="text-sm text-muted-foreground">{operation.versionPair} · {formatNumber(operation.readsBefore)} → {formatNumber(operation.readsAfter)}</div>}
+-          <FlagBadges operation={operation} />
++        <TableCell className="min-w-48 max-w-80">
++          <div className="flex items-center gap-1">
++            <OwnerStarButton operation={operation} prominent />
++            {operation.agentKeep && <HugeiconsIcon icon={SparklesIcon} className="size-4 shrink-0 text-muted-foreground" aria-label="Kept by agent" />}
++            <span className="truncate" title={[operation.agentLabel, operation.subject, operation.sqlPreview, target].filter(Boolean).join("\n")}>{operation.agentLabel || operation.sqlPreview || operation.subject || operation.operation}{!operation.agentLabel && operation.sqlPreview && operation.sqlPreviewTruncated ? "…" : ""}</span>
++            {operation.progress && <span className="shrink-0 text-xs text-muted-foreground">{operation.progress.polls} polls</span>}
++            {operation.versionPair && <span className="shrink-0 text-xs text-muted-foreground">{operation.versionPair} · {formatNumber(operation.readsBefore)} → {formatNumber(operation.readsAfter)}</span>}
++            <FlagBadges operation={operation} />
++          </div>
+         </TableCell>
+         <TableCell><StatusBadge operation={operation} /></TableCell>
+         <TableCell className="text-right whitespace-nowrap">{formatDuration(operation.durationMs)}</TableCell>
+         <TableCell className="text-right">{formatNumber(operation.logicalReadsMedian)}</TableCell>
+       </TableRow>
+     })}</TableBody>
+   </Table>
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/StatusBadge.tsx b/src/SqlHarness.Dashboard/ui/src/components/StatusBadge.tsx
+index 329b3c83..aa88e07e 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/StatusBadge.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/StatusBadge.tsx
+@@ -1,21 +1,21 @@
+ import type { OperationSummary } from "@/api/types"
+ import { Badge } from "@/components/ui/badge"
+ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+ import { describeError } from "@/lib/errors"
+ import { badgeTier, statusVariant } from "@/lib/flags"
+ 
+ type StatusFields = Pick<OperationSummary, "status" | "exitCode" | "errorKind" | "errorMessage" | "cancelReason">
+ 
+ export function StatusBadge({ operation }: { operation: StatusFields }) {
+-  if (badgeTier(operation.status) === "info") return <span className="text-sm text-muted-foreground">{operation.status}</span>
++  if (badgeTier(operation.status) === "info" && operation.status !== "running") return <span className="text-sm text-muted-foreground">{operation.status}</span>
+   const badge = <Badge data-tier={badgeTier(operation.status)} variant={statusVariant(operation.status)}>{operation.status}</Badge>
+   if (operation.status !== "failed" && operation.status !== "rejected") return badge
+ 
+   const heading = [operation.errorKind ?? "error", operation.exitCode !== null ? `exit ${operation.exitCode}` : null]
+     .filter(Boolean)
+     .join(" · ")
+   const sentence = describeError(operation.exitCode, operation.errorKind, operation.cancelReason)
+   return (
+     <Dialog>
+       <Tooltip>
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx b/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx
+index e2717456..00fdf52d 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx
+@@ -38,22 +38,23 @@ test("IO expands statements, switches scope and toggles optional counters", asyn
+   expect(screen.getByRole("rowheader", { name: "Total (whole batch)" })).toBeInTheDocument()
+ })
+ 
+ test("shows selected-run metrics and object LOB without replacing missing values", async () => {
+   const statement = { ...comparison.statements![0], cpuBeforeMs: null, cpuAfterMs: 0, elapsedBeforeMs: null, elapsedAfterMs: 42, planRepetitionBefore: null, planRepetitionAfter: 3, planLinkAfter: "/plan?occurrence=2", objects: [{ ...comparison.statements![0].objects[0], lobLogicalReadsBefore: null, lobLogicalReadsAfter: 7 }] }
+   render(<IoComparison comparison={{ ...comparison, selectedCase: "case1", statements: [statement] }} byStatement onViewChange={vi.fn()} />)
+   expect(screen.getByText(/CPU \(ms\).*—.*0/)).toBeInTheDocument()
+   expect(screen.getByText(/Elapsed \(ms\).*—.*42/)).toBeInTheDocument()
+   expect(screen.getByText(/repetition 3/)).toBeInTheDocument()
+   expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan?occurrence=2")
+-  await userEvent.click(screen.getByText("More columns"))
+-  await userEvent.click(screen.getByRole("checkbox", { name: "LOB logical" }))
++  expect(screen.queryByRole("button", { name: "More columns" })).not.toBeInTheDocument()
++  await userEvent.click(screen.getByRole("button", { name: "LOB logical" }))
++  expect(screen.getByRole("button", { name: "LOB logical" })).toHaveAttribute("aria-pressed", "true")
+   expect(within(screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!).getByText("7")).toBeInTheDocument()
+ })
+ 
+ test("explains unavailable statement metrics for all cases", () => {
+   render(<IoComparison comparison={{ ...comparison, statementMetricsUnavailableReason: "Select a single case for statement metrics." }} byStatement onViewChange={vi.fn()} />)
+   expect(screen.getByText("Select a single case for statement metrics.")).toBeInTheDocument()
+ })
+ 
+ test.each([
+   { statements: [], tableIoUnavailable: false },
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx b/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx
+index 7c4e6e41..d23798e1 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx
+@@ -32,32 +32,32 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
+     if (byStatement) setColumns(current => current.filter(key => key === "lobLogicalReads"))
+   }
+   const extraCells = (table?: string, object?: IoRow) => visibleColumns.map(key => <TableCell key={key}><Pair before={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsBefore ?? null : !byStatement && table ? extras?.before[table]?.[key] ?? null : null} after={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsAfter ?? null : !byStatement && table ? extras?.after[table]?.[key] ?? null : null} /></TableCell>)
+   const [closed, setClosed] = useState<string[]>([])
+   const rows = comparison.statements ?? []
+   const renderRow = (row: IoRow, key: string) => <TableRow key={key}><TableHead scope="row" className="whitespace-normal pl-8 font-mono text-[13px]">{row.table}</TableHead>{scans && <TableCell><Pair before={row.scansBefore} after={row.scansAfter} /></TableCell>}<TableCell><Pair before={row.readsBefore} after={row.readsAfter} change={row.change} /></TableCell>{extraCells(row.table, row)}</TableRow>
+   return <section aria-label="IO comparison" className="io-comparison space-y-3">
+     <div className="flex flex-wrap items-center gap-2">
+       <SegmentedRadioGroup label="IO view" value={byStatement ? "statements" : "whole"} options={[{ value: "statements", label: "By statement" }, { value: "whole", label: "Whole batch" }]} onValueChange={value => { if (value === "statements" || value === "whole") onViewChange(value) }} />
+       <span className="ml-2 text-xs text-muted-foreground">Columns</span><Button size="sm" variant={scans ? "secondary" : "outline"} aria-pressed={scans} onClick={() => setScans(!scans)}>Scans</Button>
+-      <Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}>More columns</PopoverTrigger><PopoverContent align="start"><FieldSet><FieldLegend>Columns</FieldLegend><FieldGroup>{visibleOptions.map(column => <Field key={column.key} orientation="horizontal"><FieldLabel><Checkbox checked={columns.includes(column.key)} onCheckedChange={() => setColumns(current => current.includes(column.key) ? current.filter(item => item !== column.key) : [...current, column.key])} />{column.label}</FieldLabel></Field>)}</FieldGroup></FieldSet></PopoverContent></Popover>
++      {visibleOptions.length === 1 ? <Button size="sm" variant={columns.includes("lobLogicalReads") ? "secondary" : "outline"} aria-pressed={columns.includes("lobLogicalReads")} onClick={() => setColumns(current => current.includes("lobLogicalReads") ? current.filter(key => key !== "lobLogicalReads") : [...current, "lobLogicalReads"])}>LOB logical</Button> : <Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}>More columns</PopoverTrigger><PopoverContent align="start"><FieldSet><FieldLegend>Columns</FieldLegend><FieldGroup>{visibleOptions.map(column => <Field key={column.key} orientation="horizontal"><FieldLabel><Checkbox checked={columns.includes(column.key)} onCheckedChange={() => setColumns(current => current.includes(column.key) ? current.filter(item => item !== column.key) : [...current, column.key])} />{column.label}</FieldLabel></Field>)}</FieldGroup></FieldSet></PopoverContent></Popover>}
+     </div>
+     <ComparisonPending pending={pending} announce>{comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <Table className="io-table" aria-label="IO before and after">
+       <TableHeader><TableRow><TableHead>{byStatement ? "Statement / table" : "Table"}</TableHead>{scans && <TableHead className="text-right">Scans</TableHead>}<TableHead className="text-right">Logical reads</TableHead>{visibleColumns.map(key => <TableHead key={key} className="text-right">{availableColumns.find(column => column.key === key)?.label}</TableHead>)}</TableRow></TableHeader>
+       <TableBody>{byStatement ? rows.map(row => {
+         const key = `${row.key}:${row.occurrence}`
+         const open = !closed.includes(key)
+         return <Fragment key={key}><TableRow className="cursor-pointer bg-muted/40 hover:bg-muted has-aria-expanded:bg-muted/40 has-aria-expanded:hover:bg-muted" onClick={event => {
+           if ((event.target as HTMLElement).closest("a,button,input,[role=button]")) return
+           setClosed(current => open ? [...current, key] : current.filter(item => item !== key))
+         }}><TableHead scope="row" className="whitespace-normal">
+-          <Button variant="ghost" className="w-full justify-start" aria-expanded={open} onClick={() => setClosed(current => open ? [...current, key] : current.filter(item => item !== key))}><HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} /><span className="truncate" title={row.text}>{row.text}</span></Button>
++          <Button variant="ghost" className="io-statement-disclosure w-full justify-start" aria-expanded={open} onClick={() => setClosed(current => open ? [...current, key] : current.filter(item => item !== key))}><HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} /><span className="truncate" title={row.text}>{row.text}</span></Button>
+           <div className="mt-1 flex flex-wrap gap-2 pl-6 text-xs font-normal text-muted-foreground"><span>{row.status}</span><span>attribution: {row.attribution}</span>{row.planLinkBefore && <a href={row.planLinkBefore} className="underline hover:text-foreground focus-visible:outline-ring">Plan before</a>}{row.planLinkAfter && <a href={row.planLinkAfter} className="underline hover:text-foreground focus-visible:outline-ring">Plan after</a>}{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}</div>
+           {open && <div className="statement-metrics">{row.executions !== null && <span>Executions <strong>{number(row.executions)}</strong></span>}{!comparison.statementMetricsUnavailableReason && <StatementMetrics row={row} />}</div>}
+         </TableHead>{scans && <TableCell><Pair before={row.scansBefore} after={row.scansAfter} /></TableCell>}<TableCell><Pair before={row.readsBefore} after={row.readsAfter} change={row.change} /></TableCell>{extraCells()}</TableRow>{open && row.objects.map((item, index) => renderRow(item, `${key}:${index}`))}</Fragment>
+       }) : comparison.tables.map((row, index) => renderRow(row, `${row.table}:${index}`))}
+         <TableRow className="bg-muted/40 font-medium"><TableHead scope="row">Total (whole batch)</TableHead>{scans && <TableCell className="text-right">—</TableCell>}<TableCell><Pair before={comparison.wholeBatch?.before ?? null} after={comparison.wholeBatch?.after ?? null} /></TableCell>{extraCells()}</TableRow>
+       </TableBody>
+     </Table>}
+     {byStatement && comparison.statementMetricsUnavailableReason && <p className="text-xs text-muted-foreground">{comparison.statementMetricsUnavailableReason}</p>}
+     {comparison.collapsed && <p className="text-xs text-muted-foreground">{comparison.collapsed.label}</p>}
+     <p className="text-xs text-muted-foreground">IO from recorded STATISTICS IO / BUFFERS. Unavailable measurements are shown as —.</p></ComparisonPending>
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx
+index f813ce76..3e8aa333 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx
+@@ -1,14 +1,15 @@
+ import { useState } from "react"
+ import { render, screen, within } from "@testing-library/react"
+ import userEvent from "@testing-library/user-event"
+ import { expect, test } from "vitest"
++import { operation } from "@/test/fixtures"
+ import { VersionTable } from "./VersionTable"
+ 
+ const versions = ["v0", "v1", "v2"].map(version => ({ version, hash: version, logicalReadsSum: 10, logicalReadsMean: 10, scansSum: 1, elapsedMedianMs: 1, caseOutcome: "ok", measuredIn: [], latestOperationId: 1, verdictBasis: "whole batch" }))
+ function Choices({ subject }: { subject: string }) {
+   const [a, setA] = useState("v0")
+   const [b, setB] = useState<string | null>(null)
+   return <VersionTable subject={subject} sessionId={1} sessionSearch={{}} versions={versions} selectedA={a} selectedB={b} onSelect={(side, version) => side === "a" ? setA(version) : setB(version)} />
+ }
+ 
+ test("A and B are independent exclusive native groups, isolated per table instance", async () => {
+@@ -21,10 +22,20 @@ test("A and B are independent exclusive native groups, isolated per table instan
+   await userEvent.click(first.getByRole("radio", { name: "A v1" }))
+   first.getByRole("radio", { name: "B v2" }).focus()
+   await userEvent.keyboard(" ")
+   expect(first.getByRole("radio", { name: "A v1" })).toBeChecked()
+   expect(first.getByRole("radio", { name: "A v0" })).not.toBeChecked()
+   expect(first.getByRole("radio", { name: "B v2" })).toBeChecked()
+   expect(second.getByRole("radio", { name: "A v0" })).toBeChecked()
+   expect(first.getByRole("radio", { name: "A v0" }).getAttribute("name")).not.toBe(second.getByRole("radio", { name: "A v0" }).getAttribute("name"))
+   expect(first.getAllByRole("radio").filter(radio => (radio as HTMLInputElement).checked)).toHaveLength(2)
+ })
++
++
++test("version labels share the version line and retain their full title", () => {
++  render(<VersionTable subject="Orders" sessionId={1} sessionSearch={{}} versions={[{ ...versions[0], measuredIn: [10] }]} operations={[operation({ id: 10, agentLabel: "Candidate with a complete label" })]} selectedA="v0" selectedB={null} onSelect={() => {}} />)
++  const label = screen.getByText("Candidate with a complete label")
++  expect(label).toHaveAttribute("title", "Candidate with a complete label")
++  expect(label.parentElement).toHaveTextContent("v0")
++  expect(screen.getByRole("radio", { name: "A v0" }).nextElementSibling).toHaveTextContent("A")
++  expect(screen.getByRole("radio", { name: "B v0" }).nextElementSibling).toHaveTextContent("B")
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx
+index f036ac65..17f0f575 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx
+@@ -1,12 +1,13 @@
++import { cn } from "@/lib/utils"
+ import { useId } from "react"
+-import { Button } from "@/components/ui/button"
++import { buttonVariants, Button } from "@/components/ui/button"
+ import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
+ import type { AgentSessionKey, OperationSummary, OptimizationVersion } from "@/api/types"
+ import { Link } from "@tanstack/react-router"
+ import { operationReturnSearch } from "@/lib/sessionSearch"
+ import type { SessionSearch } from "@/router"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { HugeiconsIcon } from "@hugeicons/react";
+ import { MoreHorizontalCircle01Icon, SparklesIcon } from "@hugeicons/core-free-icons";
+ 
+ function metric(value: number | null): string {
+@@ -15,20 +16,20 @@ function metric(value: number | null): string {
+ 
+ export function VersionTable({ subject, sessionId, agentSessionKey, sessionSearch, versions, selectedA, selectedB, onSelect, operations = [] }: {
+   operations?: OperationSummary[]; subject: string; sessionId: number; agentSessionKey?: AgentSessionKey; sessionSearch: SessionSearch; versions: OptimizationVersion[]; selectedA: string; selectedB: string | null; onSelect: (side: "a" | "b", version: string) => void
+ }) {
+   const groupId = useId()
+   const baseline = versions.find(version => version.version === selectedA)
+   const delta = (value: number | null, reference: number | null | undefined) => value === null || reference === null || reference === undefined || reference === 0 ? null : `${value > reference ? "+" : ""}${Math.round((value - reference) * 100 / reference)}%`
+   return <Table className="version-table" aria-label={`${subject} versions`}>
+     <TableHeader><TableRow><TableHead>Version</TableHead><TableHead className="text-right">Logical reads</TableHead><TableHead className="text-right">vs A</TableHead><TableHead className="text-right">Elapsed median</TableHead><TableHead className="text-right">vs A</TableHead><TableHead>Outcome</TableHead><TableHead id={`${groupId}-a-label`}><span aria-hidden="true">A</span><span className="sr-only">Baseline A</span></TableHead><TableHead id={`${groupId}-b-label`}><span aria-hidden="true">B</span><span className="sr-only">Candidate B</span></TableHead><TableHead className="w-10"><span className="sr-only">Observed in</span></TableHead></TableRow></TableHeader>
+     <TableBody>{versions.map(version => <TableRow key={`${version.version}:${version.hash}`} className={selectedA === version.version || selectedB === version.version ? "bg-muted/40" : undefined}>
+-      <TableHead scope="row" className="whitespace-normal"><div className="flex items-center gap-2">{version.version}{operations.some(operation => version.measuredIn.includes(operation.id) && operation.agentKeep) && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-3.5 text-violet-600" aria-label="Kept by agent" />}</div>{operations.filter(operation => version.measuredIn.includes(operation.id) && operation.agentLabel).map(operation => <div key={operation.id} className="mt-1 text-xs font-normal text-muted-foreground" title={`Agent label for operation #${operation.id}`}>{operation.agentLabel}</div>)}</TableHead>
++      <TableHead scope="row" className="max-w-80"><div className="flex items-center gap-2">{version.version}{operations.some(operation => version.measuredIn.includes(operation.id) && operation.agentKeep) && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-3.5 text-muted-foreground" aria-label="Kept by agent" />}{operations.filter(operation => version.measuredIn.includes(operation.id) && operation.agentLabel).map(operation => <span key={operation.id} className="truncate text-xs font-normal text-muted-foreground" title={operation.agentLabel ?? undefined}>{operation.agentLabel}</span>)}</div></TableHead>
+       <TableCell className="text-right tabular-nums">{metric(version.logicalReadsSum)}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.logicalReadsSum !== null && baseline?.logicalReadsSum !== null && baseline?.logicalReadsSum !== undefined && version.logicalReadsSum < baseline.logicalReadsSum ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.logicalReadsSum, baseline?.logicalReadsSum) ?? "—"}</TableCell>
+       <TableCell className="text-right tabular-nums">{metric(version.elapsedMedianMs)}{version.elapsedMedianMs !== null && " ms"}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== undefined && version.elapsedMedianMs < baseline.elapsedMedianMs ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.elapsedMedianMs, baseline?.elapsedMedianMs) ?? "—"}</TableCell><TableCell title={`basis: ${version.verdictBasis}`}>{version.caseOutcome}</TableCell>
+ 
+-      <TableCell><input type="radio" className="accent-primary" value={version.version} name={`${groupId}-a`} aria-describedby={`${groupId}-a-label`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} /></TableCell>
+-      <TableCell><input type="radio" className="accent-primary" value={version.version} name={`${groupId}-b`} aria-describedby={`${groupId}-b-label`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} /></TableCell>
++      <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-a`} aria-describedby={`${groupId}-a-label`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }), "rounded-full peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>A</span></label></TableCell>
++      <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-b`} aria-describedby={`${groupId}-b-label`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }), "rounded-full peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>B</span></label></TableCell>
+       <TableCell><Popover><PopoverTrigger render={<Button variant="ghost" size="icon-sm" />} aria-label={`Details for ${version.version}`}><HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} /></PopoverTrigger><PopoverContent align="end"><PopoverTitle>{version.version}</PopoverTitle><p>basis: {version.verdictBasis}</p><p>Scans: {metric(version.scansSum)}</p>{version.measuredIn.map(operationId => <Link key={operationId} to="/operations/$id" params={{ id: String(operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="block underline">Operation #{operationId}</Link>)}</PopoverContent></Popover></TableCell>
+     </TableRow>)}</TableBody>
+   </Table>
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/index.css b/src/SqlHarness.Dashboard/ui/src/index.css
+index a66d8ab2..6fc0a85b 100644
+--- a/src/SqlHarness.Dashboard/ui/src/index.css
++++ b/src/SqlHarness.Dashboard/ui/src/index.css
+@@ -215,21 +215,21 @@
+ .settings-card > p { margin:2px 0 12px; color:var(--muted-foreground); font-size:13.5px; line-height:1.45 }
+ .setting-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 32px; align-items:start; padding:14px 0; border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent) }
+ .setting-copy { display:grid; gap:3px; min-width:0; font-size:14px; line-height:20px }
+ .setting-description { color:var(--muted-foreground); font-size:13.5px; line-height:1.45; max-width:560px }
+ .setting-description p + p { margin-top:4px }
+ .setting-control { padding-top:1px; text-align:right }
+ .setting-number { display:flex; align-items:center; gap:6px }
+ .setting-number input { height:34px; width:106px; font-size:14px; border-radius:8px; padding:0 10px; font-variant-numeric:tabular-nums }
+ .setting-number > span { min-width:44px; text-align:left }
+ .setting-tag { display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:999px; padding:0 6px; font-size:11px; line-height:18px; font-weight:400; color:var(--muted-foreground) }
+-.settings-retention { display:flex; flex-wrap:wrap; gap:12px; background:var(--muted); border-radius:10px; padding:10px 14px; margin-bottom:16px }
++.settings-retention { gap:0; padding-inline:16px; border-inline-start:2px solid var(--border); margin-bottom:16px }
+ .settings-retention .setting-row { border:0; display:flex; align-items:center; gap:10px; padding:0 }
+ .settings-retention .setting-copy { font-size:12px }
+ .settings-custom-sound { font-size:12px; color:var(--muted-foreground); margin-bottom:8px }
+ .settings-custom-sound summary { cursor:pointer }
+ .settings-transcript-status { background:var(--muted); padding:10px 12px; border-radius:10px; font-size:12px; margin-bottom:14px }
+ .settings-transcript-status > div { display:flex; align-items:center; flex-wrap:wrap; gap:12px }
+ .settings-transcript-status p { font-size:12px }
+ .settings-transcript-status button { height:28px; font-size:12px }
+ @media(max-width:639px) { .settings-card { padding-inline:14px } .setting-row { gap:12px; grid-template-columns:minmax(0,1fr) auto } .setting-row:has([data-slot="radio-group"]),.setting-row:has(#approval-sound) { grid-template-columns:1fr } .setting-control { max-width:100% } .settings-layout nav { position:static } .app-header { gap:8px; padding:12px 10px } .app-header nav a { padding-inline:6px } }
+ .operation-breadcrumb { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:13px; color:var(--muted-foreground); margin-bottom:24px }
+@@ -364,10 +364,15 @@
+ .profile-section tr:last-child { border-bottom:0 }
+ .mutation-dialog .sql-block { max-height:280px; overflow:auto }
+ @media(max-width:760px) { .profiles-layout { grid-template-columns:minmax(0,1fr); gap:24px } }
+ 
+ 
+ .app-main[data-page=stats] { max-width:1040px; padding:24px }
+ .app-main[data-page=profiles] { padding-top:24px }
+ .profile-section th[scope=row] { font-weight:400; color:var(--muted-foreground); width:30% }
+ 
+ .session-note-display { width:100%; height:auto; justify-content:flex-start; padding:12px 16px; border-radius:var(--radius-xl); text-align:left; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; font-weight:400 }
++
++.io-statement-disclosure { background:transparent }
++.io-statement-disclosure:hover, .io-statement-disclosure[aria-expanded] { background:transparent }
++.operation-tabs > [data-slot="tabs-list"] { box-sizing:border-box; min-height:44px; height:auto; padding-block:8px; align-items:center }
++.operation-parameters { align-items:center; min-height:28px }
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx
+index 16be35db..50412f93 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx
+@@ -1,10 +1,11 @@
++import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
+ import { ComparisonPending } from "@/components/optimization/ComparisonPending"
+ import { CopyButton } from "@/components/CopyButton"
+ import { useState, type ReactNode } from "react"
+ import type { OperationDetail } from "@/api/types"
+ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
+ import { NotFoundError } from "@/api/client"
+ import type { AgentSessionKey } from "@/api/types"
+ import { useOperation, useOperationOptimization, useUpdateOperationAnnotation } from "@/api/queries"
+ import { ErrorState } from "@/components/ErrorState"
+ import { FlagBadges } from "@/components/FlagBadges"
+@@ -181,21 +182,21 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
+   const hasPlanParameterSet = returnSearch.planParameterSetNull === true || returnSearch.planParameterSet !== undefined
+   const planTarget = hasPlanParameterSet && returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
+     && returnSearch.planDocument !== undefined && returnSearch.planStatement !== undefined
+     ? { caseId: returnSearch.planCase, parameterSet: returnSearch.planParameterSetNull ? null : returnSearch.planParameterSet!, repetition: returnSearch.planRepetition, documentOrdinal: returnSearch.planDocument, statementIndex: returnSearch.planStatement }
+     : undefined
+   const targetVariant = planTarget ? detail.variants.find(variant => variant.caseId === planTarget.caseId
+     && variant.variant === returnSearch.planVariant && variant.parameterSet === planTarget.parameterSet) : undefined
+   const tabVariant = targetVariant ?? detail.variants[0]
+   return (
+     <div className="operation-page space-y-4">
+-      <OperationHeading detail={detail} returnSearch={returnSearch} metadata={<Collapsible className="operation-heading-metadata"><CollapsibleTrigger className="text-sm text-muted-foreground underline">Details</CollapsibleTrigger><CollapsibleContent keepMounted>
++      <OperationHeading detail={detail} returnSearch={returnSearch} metadata={<Collapsible className="operation-heading-metadata"><CollapsibleTrigger className="group" render={<Button variant="ghost" size="sm" />}>Details<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" className="transition-transform group-aria-expanded:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
+           <div className="mt-3 grid grid-cols-2 gap-4 md:grid-cols-4">
+             <Fact label="Started">{formatTimestamp(op.startedAt)}</Fact>
+             <Fact label="Finished">{formatTimestamp(op.finishedAt)}</Fact>
+             <Fact label="Duration">{formatDuration(op.durationMs)}</Fact>
+             <Fact label="Exit code">{op.exitCode ?? "—"}{op.errorKind ? ` (${op.errorKind}${op.cancelReason ? `: ${op.cancelReason}` : ""})` : ""}</Fact>
+             <Fact label="Profile">{op.profile ?? "—"}</Fact>
+             <Fact label="Engine">{op.engine ?? "—"}</Fact>
+             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
+             {op.operation === "query" && <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>}
+             <Fact label="SQL hash"><span className="break-all font-mono">{op.sqlHash ?? "—"}</span></Fact>
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/SessionPage.test.tsx b/src/SqlHarness.Dashboard/ui/src/pages/SessionPage.test.tsx
+index e1c7ac10..c1063fd6 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/SessionPage.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/SessionPage.test.tsx
+@@ -41,21 +41,21 @@ test("shows session facts and its operations", async () => {
+       operations: [operation({ id: 70, operation: "compare" })],
+     },
+   }))
+ 
+   renderApp("/sessions/7")
+ 
+   expect(await screen.findByRole("heading", { level: 1, name: "mcp:xyz" })).toBeInTheDocument()
+   expect(screen.getByRole("button", { name: "Session metadata" })).toHaveAttribute("aria-expanded", "false")
+   await userEvent.click(await screen.findByRole("button", { name: "Session metadata" }))
+   expect(screen.getByText("claude-code 2.1.0")).toBeInTheDocument()
+-  expect(screen.getByText("compare")).toBeInTheDocument()
++  expect((await screen.findByRole("link", { name: "70" })).closest("tr")?.children[2]).toHaveTextContent("compare")
+ })
+ 
+ test("loads older operation pages, keeps rows through a retry, and disables Load more while pending", async () => {
+   let settleOlder!: (response: Response) => void
+   let olderAttempts = 0
+   const pendingOlder = new Promise<Response>(resolve => { settleOlder = resolve })
+   const calls = stubFetch(sessionRoutes({
+     "/api/sessions/21": sessionDetail({ session: session({ id: 21, operations: 4 }) }),
+     "/api/sessions/21/operations": (url: URL) => {
+       const cursor = url.searchParams.get("cursor")
+@@ -399,17 +399,34 @@ test("compact operations preserve detail return context, flags, target and owner
+     "/api/sessions/7": sessionDetail({ session: session({ id: 7 }), operations: [operation({ id: 70, sessionId: 7, agentKeep: true, hasSpill: true, profile: "pg", sqlPreview: "select 1" })] }),
+     "PATCH /api/operations/70/annotation": (_url: URL, init?: RequestInit) => {
+       bodies.push(JSON.parse(String(init?.body)))
+       return Response.json({ agentLabel: null, agentKeep: true, ownerStarred: true, ownerNote: null })
+     },
+   }))
+   renderApp("/sessions/7")
+   const link = await screen.findByRole("link", { name: "70" })
+   expect(link).toHaveAttribute("href", "/operations/70?returnSession=7")
+   const row = link.closest("tr")!
+-  expect(within(row).getByText("Agent keep")).toBeInTheDocument()
++  expect(within(row).getByLabelText("Kept by agent")).toBeInTheDocument()
+   expect(within(row).getByText("select 1")).toBeInTheDocument()
+-  expect(within(row).getByText(/pg/)).toBeInTheDocument()
++  expect(within(row).getByText("select 1")).toHaveAttribute("title", expect.stringContaining("pg"))
+   expect(screen.queryByRole("columnheader", { name: "Owner" })).not.toBeInTheDocument()
+   await userEvent.click(within(row).getByRole("button", { name: "Star operation" }))
+   await waitFor(() => expect(bodies).toEqual([{ starred: true }]))
+ })
++
++
++test("compact rows prefer labels while exposing SQL, subject, target and complete timestamp", async () => {
++  const startedAt = "2026-10-28T12:34:56Z"
++  stubFetch(sessionRoutes({ "/api/sessions/7": sessionDetail({ session: session({ id: 7 }), operations: [operation({ id: 71, sessionId: 7, startedAt, agentLabel: "Fast candidate", subject: "Orders", sqlPreview: "select * from Orders", profile: "production", status: "running", agentKeep: true })] }) }))
++  renderApp("/sessions/7")
++  const row = (await screen.findByRole("link", { name: "71" })).closest("tr")!
++  const label = within(row).getByText("Fast candidate")
++  expect(label).toHaveAttribute("title", expect.stringContaining("select * from Orders"))
++  expect(label).toHaveAttribute("title", expect.stringContaining("production"))
++  expect(within(row).queryByText("production")).not.toBeInTheDocument()
++  expect(within(row).getByText("running")).toHaveAttribute("data-slot", "badge")
++  const time = row.querySelector("time")!
++  expect(time).toHaveAttribute("datetime", startedAt)
++  expect(time.textContent).toMatch(/^\d{2}:\d{2}:\d{2}$/)
++  expect(time).toHaveAttribute("title", expect.stringContaining("2026"))
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx
+index 12d62585..01fd6869 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx
+@@ -1,10 +1,12 @@
++import { HugeiconsIcon } from "@hugeicons/react"
++import { PlayIcon, RefreshIcon } from "@hugeicons/core-free-icons"
+ import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
+ import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+ import { FieldErrorsError } from "@/api/client"
+ import { useClearTranscripts, usePrices, useRefreshPrices, useSaveSettings, useSettings, useTranscriptStatus } from "@/api/queries"
+ import type { Settings } from "@/api/types"
+ import { ErrorState } from "@/components/ErrorState"
+ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+ import { Button } from "@/components/ui/button"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+@@ -75,21 +77,21 @@ function StatusLine({ status }: { status?: Status }) {
+   if (!status) return null
+   if (status.state === "error") return <p role="alert" className="text-sm text-destructive">{status.message}</p>
+   return <p role="status" className="text-sm text-muted-foreground">{status.state === "saving" ? "Saving…" : "Saved"}</p>
+ }
+ 
+ function ModelPricesCard() {
+   const prices = usePrices()
+   const refresh = useRefreshPrices()
+   return (
+     <SettingRow title="Price table" description={prices.data ? `models.dev · fetched ${prices.data.fetchedAt.slice(0, 10)} · ${prices.data.origin === "embedded" ? "built in" : "refreshed"}` : "Stored pricing reference data from models.dev."}>
+-      <Button variant="outline" aria-label="Refresh model prices" onClick={() => refresh.mutate()} disabled={refresh.isPending}>Refresh</Button>
++      <Button variant="outline" aria-label="Refresh model prices" onClick={() => refresh.mutate()} disabled={refresh.isPending}><HugeiconsIcon icon={RefreshIcon} data-icon="inline-start" />Refresh</Button>
+       {refresh.error && <p className="text-sm text-destructive">{refresh.error.message}</p>}
+     </SettingRow>
+   )
+ }
+ 
+ function BrowserSoundSettings() {
+   const [preferences, setPreferences] = useState<SoundPreferences | null>(null)
+   const [error, setError] = useState<string>()
+   const [notice, setNotice] = useState<string>()
+   const [permission, setPermission] = useState(() => typeof Notification === "undefined" ? "unsupported" : Notification.permission)
+@@ -125,21 +127,21 @@ function BrowserSoundSettings() {
+     try { setPermission(await Notification.requestPermission()) }
+     catch (reason) { setError(`Browser notification permission could not be requested: ${reason instanceof Error ? reason.message : "request failed"}.`) }
+   }
+ 
+   return (
+     <div>
+       <SettingRow controlId="approval-sound" title="Approval sound" tag="This browser only" description="Played when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.">
+         {preferences ? <div className="flex flex-wrap items-center justify-end gap-2"><Select<SoundPreferences["selection"] | "upload"> items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : []), { value: "upload", label: "Custom audio…" }]} value={preferences.selection} onValueChange={value => { if (value === "upload") document.getElementById("custom-audio")?.click(); else if (value !== null) store({ ...preferences, selection: value }) }}>
+           <SelectTrigger id="approval-sound" aria-describedby="approval-sound-description" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
+           <SelectContent><SelectGroup>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectGroup></SelectContent>
+-        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}>Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
++        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}><HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
+       </SettingRow>
+       {preferences && <><div className="sr-only"><Label htmlFor="custom-audio">Custom audio file</Label><Input id="custom-audio" tabIndex={-1} type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg" onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} /><p>Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p></div>
+       <SettingRow controlId="approval-sound-muted" title="Mute approval sound" tag="This browser only" description="Keep notifications, silence the sound."><Toggle id="approval-sound-muted" label="Mute approval sound" checked={preferences.muted} onChange={muted => store({ ...preferences, muted })} /></SettingRow></>}
+       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
+       <SettingRow title="Browser notifications" tag="This browser only" description="Show a system notification when approval is needed. The browser asks only after you press Enable.">
+         <Button type="button" variant="outline" aria-label={permission === "granted" ? "Browser notifications enabled" : "Enable browser notifications"} onClick={() => { void requestNotifications() }}>{permission === "granted" ? "Enabled" : "Enable"}</Button><span className="sr-only">Permission: {permission}. The browser asks only after you press the button.</span>
+       </SettingRow>
+     </div>
+   )
+ }
+@@ -150,21 +152,21 @@ function AgentTranscriptsStatus() {
+   const [confirming, setConfirming] = useState(false)
+   return (
+     <div className="grid gap-2">
+       {status.data && <p>Matched {status.data.matched} · Unmatched {status.data.unmatched} · Read errors {status.data.readErrors}</p>}
+       {status.data?.lastCycleAt && <p className="text-sm text-muted-foreground">Last cycle: {status.data.lastCycleAt}</p>}
+       {!!status.data?.coverage?.length && <Table aria-label="Agent session matching coverage">
+         <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Transport</TableHead><TableHead>Exact</TableHead><TableHead>Inferred</TableHead><TableHead>Unassigned</TableHead></TableRow></TableHeader>
+         <TableBody>{status.data.coverage.map(row => <TableRow key={`${row.agentKind}:${row.transport}`}><TableHead scope="row" className="whitespace-normal">{row.agentKind}</TableHead><TableCell>{row.transport}</TableCell><TableCell>{row.exact}</TableCell><TableCell>{row.inferred}</TableCell><TableCell>{row.unassigned}</TableCell></TableRow>)}</TableBody>
+       </Table>}
+       {status.error && <p role="alert" className="text-sm text-destructive">{status.error.message}</p>}
+-      <div>
++      <div className="flex w-full justify-end">
+         <Button variant="outline" disabled={clear.isPending} onClick={() => setConfirming(true)}>Clear matched data</Button>
+       </div>
+       {clear.error && <p role="alert" className="text-sm text-destructive">{clear.error.message}</p>}
+       <Dialog open={confirming} onOpenChange={setConfirming}>
+         <DialogContent>
+           <DialogHeader>
+             <DialogTitle>Clear matched data?</DialogTitle>
+             <DialogDescription>Removes matched titles, models, conversations and frozen version labels. Session and agent-session annotations are kept.</DialogDescription>
+           </DialogHeader>
+           <DialogFooter>
+@@ -265,21 +267,21 @@ export function SettingsPage() {
+   <NumberField id="mutation-approval-timeout" label="Approval timeout (seconds)" unit="sec" description="How long an approval request stays open before it is rejected." value={draft.mutations.approvalTimeoutSeconds} min={1} max={3600} error={fieldErrors["mutations.approvalTimeoutSeconds"]} onCommit={value => setMutations({ approvalTimeoutSeconds: value })} />
+   <SettingRow title="Verification" description="Approve or reject each request with a deliberate click."><code className="rounded bg-muted px-2 py-1">{draft.mutations.verification}</code></SettingRow>
+   {draft.mutations.verification !== "click" && <p role="alert" className="text-sm text-destructive">Verification value “{draft.mutations.verification}” is unsupported. This plan supports click verification only; the value was retained without changing it.</p>}
+   <StatusLine status={status.mutations} /><BrowserSoundSettings />
+ </section>
+ <section id="settings-journal" aria-label="Journal & privacy" className="settings-card"><h2>Journal & privacy</h2><p>What SQLHarness records about each operation, and for how long.</p>
+   <SettingRow controlId="journal-enabled" title="Activity journal" description="Record operations so they appear in Activity and sessions. Disabling the journal also disables agent annotations."><Toggle id="journal-enabled" label="Journal enabled" checked={journal.enabled} onChange={value => setJournal(value ? { enabled: true } : { enabled: false, operationAnnotations: false })} /></SettingRow>
+   <SettingRow controlId="journal-sensitive" title="Store sensitive data" description="Store SQL text, full plans (may include parameter values) and error messages for new operations. Existing rows are not changed."><Toggle id="journal-sensitive" label="Store sensitive data" checked={journal.storeSensitive} onChange={value => value ? setConfirmingSensitive(true) : setJournal({ storeSensitive: false })} /></SettingRow>
+   <SettingRow controlId="journal-operation-annotations" title="Agent annotations" restart description="Allows agents to label operations and mark them for keeping. Enabling agent annotations also enables the activity journal automatically. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention."><Toggle id="journal-operation-annotations" label="Agent operation annotations" checked={journal.operationAnnotations} onChange={value => setJournal(value ? { enabled: true, operationAnnotations: true } : { operationAnnotations: false })} /></SettingRow>
+   <SettingRow controlId="retention-enabled" title="Retention" description="Delete old journal data on dashboard start, hourly, and on the next mcp serve."><Toggle id="retention-enabled" label="Retention enabled" checked={journal.retention.enabled} onChange={value => setRetention({ enabled: value })} /></SettingRow>
+-  <div className="settings-retention"><NumberField id="retention-age" label="Maximum age (days)" unit="days" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} /><NumberField id="retention-size" label="Maximum size (MB)" unit="MB" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} /></div><StatusLine status={status.journal} />
++  <FieldGroup className="settings-retention"><NumberField id="retention-age" label="Maximum age (days)" unit="days" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} /><NumberField id="retention-size" label="Maximum size (MB)" unit="MB" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} /></FieldGroup><StatusLine status={status.journal} />
+ </section>
+ <section id="settings-agents" aria-label="Agents" className="settings-card"><h2>Agents</h2><p>Reading agent transcripts and compare rules for agents.</p>
+   <SettingRow controlId="dashboard-agent-transcripts" title="Read agent transcripts" description="Reads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored."><Toggle id="dashboard-agent-transcripts" label="Read agent transcripts" checked={draft.dashboard.agentTranscripts.enabled} onChange={value => setDashboard({ agentTranscripts: { enabled: value } })} /></SettingRow>
+   <div className="settings-transcript-status"><AgentTranscriptsStatus /></div>
+   <SettingRow controlId="compare-require-context" title="Require compare subject and scope" restart description={<><span className="block">When enabled, CLI compare needs both <code>--subject</code> and <code>--scope</code>, and MCP compare needs both fields. This setting is on by default.</span><span className="mt-1 block">CLI applies changes on the next invocation. Restart running MCP servers and reconnect their clients to apply changes; saving here does not restart them.</span></>}><Toggle id="compare-require-context" label="Require compare subject and scope" checked={draft.compare.requireContext} onChange={value => setCompare({ requireContext: value })} /></SettingRow><StatusLine status={status.compare} />
+ </section>
+ <section id="settings-dashboard" aria-label="Dashboard" className="settings-card"><h2>Dashboard</h2><p>This dashboard process.</p>
+   <SettingRow controlId="dashboard-autostart" title="Start with mcp serve" description="Launch the dashboard when an MCP server starts."><Toggle id="dashboard-autostart" label="Start with mcp serve" checked={draft.dashboard.autoStart} onChange={value => setDashboard({ autoStart: value })} /></SettingRow>
+   <SettingRow controlId="dashboard-safety-notifications" title="Safety notifications" description="Show safety warnings raised by running sessions."><Toggle id="dashboard-safety-notifications" label="Safety notifications" checked={draft.dashboard.safetyNotifications} onChange={value => setDashboard({ safetyNotifications: value })} /></SettingRow>
+   <NumberField id="dashboard-idle" label="Idle shutdown (hours)" unit="hours" description="Stop the dashboard after this long without activity." value={draft.dashboard.idleShutdownHours} min={1} max={168} error={fieldErrors["dashboard.idleShutdownHours"]} onCommit={value => setDashboard({ idleShutdownHours: value })} />

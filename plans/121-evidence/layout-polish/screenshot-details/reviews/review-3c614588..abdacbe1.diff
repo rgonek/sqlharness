@@ -1,0 +1,934 @@
+# Review package: 3c614588..abdacbe1
+
+## Commits
+abdacbe1 fix(dashboard): show scoped usage KPIs and SQL logical reads
+
+## Files changed
+ .../specs/2026-10-06-activity-dashboard-design.md  |   8 +
+ src/SqlHarness.Dashboard/DashboardModels.cs        |   5 +-
+ src/SqlHarness.Dashboard/JournalReader.cs          |  36 ++++-
+ src/SqlHarness.Dashboard/ui/src/api/types.ts       |   4 +-
+ src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts  |   8 +-
+ src/SqlHarness.Dashboard/ui/src/lib/stats.ts       |   4 +
+ .../ui/src/pages/StatsPage.test.tsx                |  60 +++----
+ .../ui/src/pages/StatsPage.tsx                     | 175 ++++-----------------
+ src/SqlHarness.Dashboard/ui/src/test/fixtures.ts   |   4 +-
+ .../Dashboard/JournalReaderTests.cs                |  72 +++++++++
+ 10 files changed, 195 insertions(+), 181 deletions(-)
+
+## Diff
+diff --git a/docs/superpowers/specs/2026-10-06-activity-dashboard-design.md b/docs/superpowers/specs/2026-10-06-activity-dashboard-design.md
+index c1e22fbe..d2c34a81 100644
+--- a/docs/superpowers/specs/2026-10-06-activity-dashboard-design.md
++++ b/docs/superpowers/specs/2026-10-06-activity-dashboard-design.md
+@@ -240,10 +240,18 @@ Each phase is independently verifiable and keeps both gates green.
+ 1. **Journal core and session identity:** config, SQLite schema, `ActivityJournal`, module hook, MCP `clientInfo`, CLI process walk, sensitivity and contract tests.
+ 2. **Metrics capture:** extended IO parser, plan/EXPLAIN metric extraction, `operation_metrics`, `operation_table_io`, deduplicated plans.
+ 3. **Dashboard server and API:** project, `dashboard` command, lock/singleton, auth, endpoints, SSE, abandoned detection.
+ 4. **SPA:** Vite/React/shadcn (Base UI) scaffold, embedding, the five views, `ui` gate stage.
+ 5. **Autostart and retention:** detached spawn from `mcp serve`, idle shutdown, retention job.
+ 
+ ## Documentation
+ 
+ - Update `AGENTS.md` and `README.md`: the journal location and its sensitivity, `config.json`, `storeSensitive` caveats (plans embed SQL and may embed parameter values), and the `dashboard` command.
+ - Agents need no new instructions. The journal is invisible to them, so `docs/mcp.md` changes only to mention autostart and the stdout guarantee.
++
++### Usage statistics projection (2026-10-28)
++
++`GET /api/stats` applies its UTC half-open time window, profile/unprofiled scope and recorded dimension predicates to every aggregate, including workflow output. Invalid, duplicate or non-string recorded dimension values retain the operation-history resolver semantics. `sessionCount` counts distinct journal sessions containing matching operations (not conversations). The unfiltered scope request still supplies dimension filter options. `profileOperations` retains its time-window-only profile-chooser metadata contract and is not a selected-cohort KPI.
++
++SQL groups add nullable `logicalReadsMedianSum`, operation coverage (`logicalReadsAvailableOperations`, `logicalReadsUnavailableOperations`) and metric coverage (`logicalReadsAvailableMetrics`, `logicalReadsUnavailableMetrics`). The value sums available stored `operation_metrics.logical_reads_median` rows once per metric, across cases/variants. It does not multiply by measured repetitions and is not actual execution-total IO. Null means no recorded median; zero is recorded zero; any missing operations or metric rows make coverage partial. Operations with no metrics are counted as unavailable operations, not fabricated metric rows. Metrics are collapsed by operation before joining, preserving operation counts/durations. `topSqlByLogicalReads` ranks all matching SQL groups before the bounded top-20 projection; count/time orders retain their own full-population rankings.
++
++Usage presents a joined KPI band and the SQL logical-read order. Failed/rejected percentage is `(failed + rejected) / all matching operations`, unavailable for an empty cohort. Measured output includes only `accountingKind=workflow-output` bytes and their retained per-call byte-based token estimates; legacy artifact volumes, input/discovery/chat tokens and model prices are not substituted. The detailed accounting/chart disclosure is removed from the page; journal and API accounting contracts remain available.
+diff --git a/src/SqlHarness.Dashboard/DashboardModels.cs b/src/SqlHarness.Dashboard/DashboardModels.cs
+index d380f167..108884ad 100644
+--- a/src/SqlHarness.Dashboard/DashboardModels.cs
++++ b/src/SqlHarness.Dashboard/DashboardModels.cs
+@@ -223,21 +223,21 @@ public sealed record PlanSourceMapOmission(
+ public sealed record PlanSourceMapError(
+     int DocumentOrdinal,
+     string? DocumentSha256,
+     string Code,
+     string Message);
+ 
+ public sealed record DayAgentCount(string Day, string AgentKind, int Count);
+ 
+ public sealed record KeyCount(string Key, int Count);
+ 
+-public sealed record SqlHashStat(string SqlHash, int Count, long TotalDurationMs, long MaxDurationMs);
++public sealed record SqlHashStat(string SqlHash, int Count, long TotalDurationMs, long MaxDurationMs, long? LogicalReadsMedianSum = null, int LogicalReadsAvailableOperations = 0, int LogicalReadsUnavailableOperations = 0, int LogicalReadsAvailableMetrics = 0, int LogicalReadsUnavailableMetrics = 0);
+ 
+ public sealed record TableReadStat(string Table, long LogicalReads, int Operations);
+ 
+ public sealed record WaitStat(string WaitType, double TotalWaitMs);
+ 
+ public sealed record TargetStat(string? Profile, string? Database, int Count, string? Engine = null, string? Server = null);
+ 
+ /// <summary>One profile's complete operation count in the selected time window.</summary>
+ public sealed record ProfileOperationCount(string? Profile, int Operations);
+ 
+@@ -287,13 +287,14 @@ public sealed record DashboardStats(
+     IReadOnlyList<KeyCount> Operations,
+     IReadOnlyList<SqlHashStat> TopSqlByCount,
+     IReadOnlyList<SqlHashStat> TopSqlByDuration,
+     IReadOnlyList<TableReadStat> TopTablesByLogicalReads,
+     IReadOnlyList<WaitStat> TopWaits,
+     IReadOnlyList<TargetStat> Targets,
+     int SpillOperations,
+     int ColdCacheOperations,
+     IReadOnlyList<ProfileOperationCount> ProfileOperations,
+     ProfileDimensionStats ProfileDimensions,
+-    IReadOnlyList<WorkflowCost> WorkflowCosts);
++    IReadOnlyList<WorkflowCost> WorkflowCosts,
++    IReadOnlyList<SqlHashStat>? TopSqlByLogicalReads = null, int SessionCount = 0);
+ 
+ public sealed record SessionAnnotation(string? Title, string? Note, bool Starred, bool Archived);
+\ No newline at end of file
+diff --git a/src/SqlHarness.Dashboard/JournalReader.cs b/src/SqlHarness.Dashboard/JournalReader.cs
+index 418961fa..e253f77f 100644
+--- a/src/SqlHarness.Dashboard/JournalReader.cs
++++ b/src/SqlHarness.Dashboard/JournalReader.cs
+@@ -1355,23 +1355,28 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+     }
+ 
+     public DashboardStats Stats(
+         StatsQuery query,
+         IReadOnlyDictionary<string, IReadOnlyList<string>>? profileDimensions = null)
+     {
+         using var connection = OpenSnapshot();
+         if (connection is null)
+             return new DashboardStats([], [], [], [], [], [], [], [], [], 0, 0, [],
+                 new ProfileDimensionStats(query.Profile,
+-                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0), []);
++                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0), [], []);
+         (string, object?)[] window = [("$from", Iso(query.From)), ("$to", Iso(query.To))];
+-        const string inWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
++        connection.CreateFunction<string?, string?, bool>("stats_scope", (profile, variables) =>
++            (query.UnprofiledOnly ? profile is null : query.Profile is null || profile == query.Profile)
++            && (query.Dimensions is not { Count: > 0 }
++                || OperationDimensionResolver.Matches(query.Dimensions, OperationDimensionResolver.ReadRecordedValues(variables))));
++        const string timeWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
++        const string inWindow = timeWindow + " AND stats_scope(o.profile, o.vars_json)";
+ 
+         var perDay = Query(connection, $"""
+             SELECT substr(o.started_at, 1, 10) AS day, s.agent_kind, COUNT(*) FROM operations o JOIN sessions s ON s.id = o.session_id
+             WHERE {inWindow} GROUP BY day, s.agent_kind ORDER BY day, s.agent_kind;
+             """, window, r => new DayAgentCount(r.GetString(0), r.GetString(1), r.GetInt32(2)));
+ 
+         var liveness = new ProcessLiveness(processes, _dead);
+         var statuses = Query(connection, $"""
+             SELECT o.status, COUNT(*) FROM operations o WHERE {inWindow} AND o.status <> 'running' GROUP BY o.status;
+             """, window, r => new KeyCount(r.GetString(0), r.GetInt32(1))).ToList();
+@@ -1382,27 +1387,44 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+             statuses.Add(new KeyCount(group.Key, group.Count()));
+ 
+         var exitCodes = Query(connection, $"""
+             SELECT CAST(o.exit_code AS TEXT), COUNT(*) FROM operations o WHERE {inWindow} AND o.exit_code IS NOT NULL
+             GROUP BY o.exit_code ORDER BY o.exit_code;
+             """, window, r => new KeyCount(r.GetString(0), r.GetInt32(1)));
+         var operations = Query(connection, $"""
+             SELECT o.operation, COUNT(*) FROM operations o WHERE {inWindow} GROUP BY o.operation ORDER BY COUNT(*) DESC, o.operation;
+             """, window, r => new KeyCount(r.GetString(0), r.GetInt32(1)));
+ 
+-        const string sqlStats = "SELECT o.sql_hash, COUNT(*) AS n, COALESCE(SUM(o.duration_ms), 0) AS total, COALESCE(MAX(o.duration_ms), 0) FROM operations o";
++        // Collapse metrics before the join so operation counts and durations cannot fan out.
++        const string sqlStats = """
++            WITH metric_reads AS (
++                SELECT operation_id, SUM(logical_reads_median) AS reads,
++                    COUNT(logical_reads_median) AS available, COUNT(*) - COUNT(logical_reads_median) AS unavailable
++                FROM operation_metrics GROUP BY operation_id
++            )
++            SELECT o.sql_hash, COUNT(*) AS n, COALESCE(SUM(o.duration_ms), 0) AS total,
++                COALESCE(MAX(o.duration_ms), 0), SUM(m.reads) AS reads,
++                SUM(CASE WHEN m.available > 0 THEN 1 ELSE 0 END),
++                SUM(CASE WHEN COALESCE(m.available, 0) = 0 THEN 1 ELSE 0 END),
++                COALESCE(SUM(m.available), 0), COALESCE(SUM(m.unavailable), 0)
++            FROM operations o LEFT JOIN metric_reads m ON m.operation_id = o.id
++            """;
+         var byCount = Query(connection, $"""
+             {sqlStats} WHERE {inWindow} AND o.sql_hash IS NOT NULL GROUP BY o.sql_hash ORDER BY n DESC, total DESC, o.sql_hash LIMIT {TopLimit};
+             """, window, ReadSqlStat);
+         var byDuration = Query(connection, $"""
+             {sqlStats} WHERE {inWindow} AND o.sql_hash IS NOT NULL GROUP BY o.sql_hash ORDER BY total DESC, n DESC, o.sql_hash LIMIT {TopLimit};
+             """, window, ReadSqlStat);
++        var byReads = Query(connection, $"""
++            {sqlStats} WHERE {inWindow} AND o.sql_hash IS NOT NULL GROUP BY o.sql_hash ORDER BY reads DESC, n DESC, o.sql_hash LIMIT {TopLimit};
++            """, window, ReadSqlStat);
++        var sessionCount = Scalar<long>(connection, $"SELECT COUNT(DISTINCT o.session_id) FROM operations o WHERE {inWindow};", window);
+ 
+         var tables = Query(connection, $"""
+             SELECT t.table_name, SUM(t.logical_reads * m.runs), COUNT(DISTINCT o.id)
+             FROM operation_table_io t JOIN operation_metrics m ON m.id = t.metric_id JOIN operations o ON o.id = m.operation_id
+             WHERE {inWindow} GROUP BY t.table_name ORDER BY 2 DESC, t.table_name LIMIT {TopLimit};
+             """, window, r => new TableReadStat(r.GetString(0), r.GetInt64(1), r.GetInt32(2)));
+ 
+         var waits = new Dictionary<string, double>(StringComparer.Ordinal);
+         foreach (var (json, runs) in Query(connection, $"""
+             SELECT m.waits_json, m.runs FROM operation_metrics m JOIN operations o ON o.id = m.operation_id
+@@ -1426,21 +1448,21 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+         }
+ 
+         var targets = Query(connection, $"""
+             SELECT o.profile, o.database, COUNT(*), o.engine, o.server FROM operations o WHERE {inWindow}
+             GROUP BY o.profile, o.database, o.engine, o.server ORDER BY COUNT(*) DESC, o.profile, o.engine, o.server, o.database LIMIT {TopLimit};
+             """, window, r => new TargetStat(NullableString(r, 0), NullableString(r, 1), r.GetInt32(2), NullableString(r, 3), NullableString(r, 4)));
+ 
+         // These aggregates intentionally read every operation in the requested window.
+         // The bounded Targets list above is presentation data and cannot back dimension totals.
+         var profileOperations = Query(connection, $"""
+-            SELECT o.profile, COUNT(*) FROM operations o WHERE {inWindow}
++            SELECT o.profile, COUNT(*) FROM operations o WHERE {timeWindow}
+             GROUP BY o.profile ORDER BY COUNT(*) DESC, o.profile;
+             """, window, r => new ProfileOperationCount(NullableString(r, 0), r.GetInt32(1)));
+         (string, object?)[] dimensionWindow = [.. window, ("$profile", query.Profile), ("$unprofiled", query.UnprofiledOnly ? 1 : 0)];
+         var dimensionRows = Query(connection, $"""
+             SELECT o.profile, o.engine, o.server, o.database, o.status, o.duration_ms, o.vars_json
+             FROM operations o WHERE {inWindow}
+               AND (($unprofiled = 1 AND o.profile IS NULL) OR ($unprofiled = 0 AND $profile IS NOT NULL AND o.profile = $profile));
+             """, dimensionWindow, r => new DimensionOperation(
+                 NullableString(r, 0), NullableString(r, 1), NullableString(r, 2), NullableString(r, 3),
+                 r.GetString(4), NullableLong(r, 5), NullableString(r, 6),
+@@ -1463,31 +1485,31 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+             byCount,
+             byDuration,
+             tables,
+             waits.OrderByDescending(w => w.Value).ThenBy(w => w.Key, StringComparer.Ordinal).Take(TopLimit)
+                 .Select(w => new WaitStat(w.Key, w.Value)).ToArray(),
+             targets,
+             (int)spills,
+             (int)cold,
+             profileOperations,
+             dimensionStats,
+-            WorkflowCosts(connection, window));
++            WorkflowCosts(connection, window), byReads, (int)sessionCount);
+     }
+ 
+     private static IReadOnlyList<WorkflowCost> WorkflowCosts(SqliteConnection connection, (string, object?)[] window)
+     {
+         var rows = Query(connection, $"""
+             SELECT o.operation_ref, o.parent_operation_ref, o.operation, o.status, o.emitted_bytes, o.dry_run,
+                    root.raw_bytes, root.status, root.dry_run, root.operation
+             FROM operations o
+             LEFT JOIN operations root ON root.operation_ref = COALESCE(o.parent_operation_ref, o.operation_ref)
+-            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to);
++            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to) AND stats_scope(o.profile, o.vars_json);
+             """, window, r => new WorkflowOutputRow(
+                 NullableString(r, 0), NullableString(r, 1), r.GetString(2), r.GetString(3), NullableLong(r, 4), r.GetInt64(5) != 0,
+                 NullableLong(r, 6), NullableString(r, 7), !r.IsDBNull(8) && r.GetInt64(8) != 0, NullableString(r, 9)));
+ 
+         var costs = new List<WorkflowCost>();
+         foreach (var group in rows.GroupBy(row => row.ParentOperationRef ?? row.OperationRef,
+                      StringComparer.Ordinal))
+         {
+             var measuredRows = group.Where(row => row.EmittedBytes.HasValue).ToArray();
+             if (measuredRows.Length == 0)
+@@ -1875,21 +1897,21 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+         Json(NullableString(r, 27)),
+         r.IsDBNull(28) ? null : new PostgresBuffers(NullableLong(r, 28), NullableLong(r, 29), NullableLong(r, 30),
+             NullableLong(r, 31), NullableLong(r, 32), NullableLong(r, 33)),
+         [], [])
+     {
+         CaseId = r.GetString(15),
+         CaseLabel = r.GetString(16),
+     };
+ 
+     private static SqlHashStat ReadSqlStat(SqliteDataReader r) =>
+-        new(r.GetString(0), r.GetInt32(1), r.GetInt64(2), r.GetInt64(3));
++        new(r.GetString(0), r.GetInt32(1), r.GetInt64(2), r.GetInt64(3), NullableLong(r, 4), r.GetInt32(5), r.GetInt32(6), r.GetInt32(7), r.GetInt32(8));
+ 
+     private static Spread? SpreadAt(SqliteDataReader r, int index) =>
+         r.IsDBNull(index) ? null : new Spread(r.GetInt64(index), r.GetInt64(index + 1), r.GetInt64(index + 2));
+ 
+     /// <summary>A stored JSON value, or null when it is absent or malformed, so one bad row never fails a response.</summary>
+     private static JsonElement? Json(string? text)
+     {
+         if (text is null)
+             return null;
+         try
+diff --git a/src/SqlHarness.Dashboard/ui/src/api/types.ts b/src/SqlHarness.Dashboard/ui/src/api/types.ts
+index 4184565d..6927a12c 100644
+--- a/src/SqlHarness.Dashboard/ui/src/api/types.ts
++++ b/src/SqlHarness.Dashboard/ui/src/api/types.ts
+@@ -422,21 +422,21 @@ export type OperationDetail = {
+ }
+ 
+ export type OperationPhaseSummary = { phase: string; count: number; totalMs: number; maxMs: number }
+ export type OperationEventSummary = {
+   offsetMs: number; phase: string; durationMs: number; outcome: string; errorNumber: number | null
+   clientConnectionId: string | null; droppedCount: number | null
+ }
+ 
+ export type KeyCount = { key: string; count: number }
+ export type DayAgentCount = { day: string; agentKind: string; count: number }
+-export type SqlHashStat = { sqlHash: string; count: number; totalDurationMs: number; maxDurationMs: number }
++export type SqlHashStat = { sqlHash: string; count: number; totalDurationMs: number; maxDurationMs: number; logicalReadsMedianSum?: number | null; logicalReadsAvailableOperations?: number; logicalReadsUnavailableOperations?: number; logicalReadsAvailableMetrics?: number; logicalReadsUnavailableMetrics?: number }
+ export type TableReadStat = { table: string; logicalReads: number; operations: number }
+ export type WaitStat = { waitType: string; totalWaitMs: number }
+ export type TargetStat = { profile: string | null; database: string | null; count: number; engine?: string | null; server?: string | null }
+ export type ProfileOperationCount = { profile: string | null; operations: number }
+ export type DimensionValueSummary = {
+   name: string; value: string; isUnknown: boolean; source: string; operations: number | null; percentage: number | null
+   totalDurationMs: number | null; durationAvailableOperations: number | null; durationUnavailableOperations: number | null
+   failed: number | null; rejected: number | null
+ }
+ export type DimensionStat = { name: string; values: DimensionValueSummary[] }
+@@ -473,20 +473,22 @@ export type WorkflowCostComparison = {
+   estimatedOutputTokenDelta: number | null
+ }
+ 
+ export type DashboardStats = {
+   operationsPerDay: DayAgentCount[]
+   statuses: KeyCount[]
+   exitCodes: KeyCount[]
+   operations: KeyCount[]
+   topSqlByCount: SqlHashStat[]
+   topSqlByDuration: SqlHashStat[]
++  topSqlByLogicalReads?: SqlHashStat[]
++  sessionCount?: number
+   topTablesByLogicalReads: TableReadStat[]
+   topWaits: WaitStat[]
+   targets: TargetStat[]
+   spillOperations: number
+   coldCacheOperations: number
+   profileOperations: ProfileOperationCount[]
+   profileDimensions: ProfileDimensionStats
+   workflowCosts: WorkflowCost[]
+ }
+ 
+diff --git a/src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts b/src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts
+index 353c0053..56a2e680 100644
+--- a/src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts
++++ b/src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts
+@@ -1,12 +1,18 @@
+ import { expect, test } from "vitest"
+ import { stats } from "@/test/fixtures"
+-import { pivotPerDay } from "./stats"
++import { failureRate, pivotPerDay } from "./stats"
+ 
+ test("pivots per-day counts into one row per day with a column per agent", () => {
+   const { rows, agents } = pivotPerDay(stats().operationsPerDay)
+   expect(agents).toEqual(["claude", "codex"])
+   expect(rows).toEqual([
+     { day: "2026-10-06", claude: 2, codex: 0 },
+     { day: "2026-10-07", claude: 3, codex: 1 },
+   ])
+ })
++
++test("failure rate includes rejected operations and has no zero-cohort percentage", () => {
++  expect(failureRate([{ key: "failed", count: 1 }, { key: "rejected", count: 2 }], 4)).toBe(75)
++  expect(failureRate([], 0)).toBeNull()
++  expect(failureRate([], 2)).toBe(0)
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/lib/stats.ts b/src/SqlHarness.Dashboard/ui/src/lib/stats.ts
+index d0b9e772..7ea843fd 100644
+--- a/src/SqlHarness.Dashboard/ui/src/lib/stats.ts
++++ b/src/SqlHarness.Dashboard/ui/src/lib/stats.ts
+@@ -5,10 +5,14 @@ export function pivotPerDay(rows: DayAgentCount[]): { rows: Record<string, strin
+   const days = [...new Set(rows.map(row => row.day))].sort()
+   return {
+     agents,
+     rows: days.map(day => {
+       const entry: Record<string, string | number> = { day }
+       for (const agent of agents) entry[agent] = rows.find(row => row.day === day && row.agentKind === agent)?.count ?? 0
+       return entry
+     }),
+   }
+ }
++
++export function failureRate(statuses: { key: string; count: number }[], operations: number): number | null {
++  return operations === 0 ? null : statuses.filter(row => row.key === "failed" || row.key === "rejected").reduce((sum, row) => sum + row.count, 0) / operations * 100
++}
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
+index 2498d239..5edce1e3 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
+@@ -8,55 +8,47 @@ import { renderApp, stubFetch } from "@/test/render"
+ import { queryKeys } from "@/api/queries"
+ import { Matrix } from "./ProfileDimensionsPanel"
+ import { ProfileDimensionsPanel } from "./ProfileDimensionsPanel"
+ import { StatsPage } from "./StatsPage"
+ 
+ test("shows KPIs, charts and top lists, and switches range", async () => {
+   const calls = stubFetch({ "/api/stats": stats(), "/api/profiles": profilesResponse() })
+   renderApp("/stats")
+ 
+   expect(await screen.findByRole("heading", { name: "Usage" })).toBeInTheDocument()
+-  expect(await screen.findByText("Workflow output cost")).toBeInTheDocument()
+-  expect(screen.getByText("single-measured-execution-output")).toBeInTheDocument()
+-  expect(screen.getByText(/Input, discovery and chat are unmeasured/)).toBeInTheDocument()
+-  expect(screen.getByText("Estimated output-token delta")).toBeInTheDocument()
+-  expect(screen.getByText("Dry runs")).toBeInTheDocument()
+-  expect(screen.getByText("Database executions")).toBeInTheDocument()
+-  expect(screen.getByText(/Token estimation method: UTF-8 bytes divided by four, rounded up/)).toBeInTheDocument()
+-  expect(screen.getByText("Operations per day (UTC)")).toBeInTheDocument()
+-  expect(screen.getByText("aaaaaaaaaaaa")).toBeInTheDocument()
++  expect(await screen.findByText("Estimated workflow output tokens")).toBeInTheDocument()
++  expect(screen.queryByText("Detailed usage and workflow accounting")).not.toBeInTheDocument()
++  expect(screen.queryByText("Workflow output cost")).not.toBeInTheDocument()
++  expect(screen.queryByText("Operations per day (UTC)")).not.toBeInTheDocument()
++  expect(screen.getByText("bbbbbbbbbbbb")).toBeInTheDocument()
+   expect(screen.getByRole("cell", { name: "Orders" })).toBeInTheDocument()
+   expect(screen.getByRole("cell", { name: "PAGEIOLATCH_SH" })).toBeInTheDocument()
+ 
+   await userEvent.click(screen.getByRole("tab", { name: "All time" }))
+-  await screen.findByText("Workflow output cost")
++  await screen.findByText("Estimated workflow output tokens")
+   expect(calls.some(call => call.startsWith("/api/stats?") && !call.includes("from="))).toBe(true)
+   expect(calls.some(call => call.startsWith("/api/stats?from="))).toBe(true)
+ })
+ 
+-test("per-day chart keys series by index so agent kinds never reach CSS variable names", async () => {
+-  const hostile = "my agent; } body { display:none"
+-  stubFetch({
+-    "/api/stats": stats({ operationsPerDay: [
+-      { day: "2026-10-07", agentKind: "my agent", count: 2 },
+-      { day: "2026-10-07", agentKind: hostile, count: 1 },
+-    ] }),
+-    "/api/profiles": profilesResponse(),
+-  })
+-  const { container } = renderApp("/stats")
+-
+-  await screen.findByText("Operations per day (UTC)")
+-  const css = Array.from(container.querySelectorAll("style")).map(style => style.textContent ?? "").join("\n")
+-  expect(css).toContain("--color-a0:")
+-  expect(css).toContain("--color-a1:")
+-  expect(css).not.toContain("my agent")
+-  expect(css).not.toContain("display:none")
++test("reads ordering uses server-ranked groups and preserves missing versus zero", async () => {
++  stubFetch({ "/api/stats": stats({ topSqlByLogicalReads: [
++    { sqlHash: "readsonly", count: 2, totalDurationMs: 3, maxDurationMs: 2, logicalReadsMedianSum: 0, logicalReadsAvailableOperations: 1, logicalReadsAvailableMetrics: 1, logicalReadsUnavailableMetrics: 1 },
++    { sqlHash: "missing", count: 1, totalDurationMs: 1, maxDurationMs: 1 },
++  ] }), "/api/profiles": profilesResponse() })
++  renderApp("/stats")
++  await screen.findByRole("region", { name: "Top SQL" })
++  await userEvent.click(screen.getByRole("radio", { name: "Logical reads" }))
++  const region = screen.getByRole("region", { name: "Top SQL" })
++  expect(within(region).getByText("readsonly")).toBeInTheDocument()
++  expect(within(region).getByText("1/2 ops · 1 recorded metrics · 1 missing metrics")).toBeInTheDocument()
++  expect(within(region).getByText("Unavailable")).toBeInTheDocument()
++  expect(within(region).queryByText("aaaaaaaaaaaa")).not.toBeInTheDocument()
+ })
+ 
+ test("no-profile activity has a distinct scope and drills down without a profile filter", async () => {
+   const requests: URL[] = []
+   const calls = stubFetch({
+     "/api/stats": (url: URL) => {
+       if (url.searchParams.get("unprofiled") !== "true") return jsonResponse(stats({ profileOperations: [{ profile: "app", operations: 1 }] }))
+       requests.push(url)
+       const literalUnknown = dimensionValue("region", "Unknown", 1, 10)
+       const api = dimensionValue("component", "api", 1, 10)
+@@ -93,21 +85,21 @@ test("no-profile activity has a distinct scope and drills down without a profile
+   expect(drilldown.searchParams.get("unprofiled")).toBe("true")
+   expect(drilldown.searchParams.has("profile")).toBe(false)
+   expect(JSON.parse(drilldown.searchParams.get("dimensions") ?? "{}")).toEqual({ region: "Unknown", component: "api" })
+   expect(requests[0].searchParams.get("unprofiled")).toBe("true")
+ })
+ 
+ test("distinguishes empty activity from incomplete estimate coverage", async () => {
+   stubFetch({ "/api/stats": stats({ operations: [], statuses: [], profileOperations: [], workflowCosts: [] }),
+     "/api/profiles": profilesResponse() })
+   renderApp("/stats")
+-  expect(await screen.findByText("No measured workflow output in this time range.")).toBeInTheDocument()
++  expect(await screen.findByText("No retained workflow-output accounting")).toBeInTheDocument()
+ })
+ 
+ test("selects a profile and shows filtered, searchable dimension matrix totals", async () => {
+   const originalWarn = console.warn
+   vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+     if (!String(args[0]).startsWith("The width(0) and height(0) of chart")) originalWarn(...args)
+   })
+   const calls = stubFetch({
+     "/api/stats": (url: URL) => jsonResponse(filteredProfileStats(url)),
+     "/api/profiles": profilesResponse(),
+@@ -510,10 +502,22 @@ function filteredProfileStats(url: URL) {
+ 
+ function dimensionValue(name: string, value: string, operations: number, totalDurationMs: number | null, failed = 0, rejected = 0): DimensionValueSummary {
+   return { name, value, isUnknown: false, source: "recorded", operations, percentage: operations / 3 * 100,
+     totalDurationMs, durationAvailableOperations: totalDurationMs === null ? 0 : operations,
+     durationUnavailableOperations: totalDurationMs === null ? operations : 0, failed, rejected }
+ }
+ 
+ function matrixMetrics(operations: number, totalDurationMs: number) {
+   return { operations, totalDurationMs, durationAvailableOperations: operations, durationUnavailableOperations: 0, failed: 0, rejected: 0 }
+ }
++
++test("KPI counts lead the failure rate and legacy volumes are excluded from output", async () => {
++  const response = stats({ operations: [{ key: "query", count: 4 }], statuses: [{ key: "failed", count: 1 }, { key: "rejected", count: 2 }], sessionCount: 2 })
++  response.workflowCosts = [{ ...response.workflowCosts[0], accountingKind: "legacy-artifact-volume", outputBytes: 999999, estimatedOutputTokens: 999999 }]
++  stubFetch({ "/api/stats": response, "/api/profiles": profilesResponse() })
++  renderApp("/stats")
++  expect(await screen.findByText("1 / 2")).toBeInTheDocument()
++  expect(screen.getByText("75% of 4 operations")).toBeInTheDocument()
++  expect(screen.getByText("2 sessions")).toBeInTheDocument()
++  expect(screen.getByText("No retained workflow-output accounting")).toBeInTheDocument()
++  expect(screen.queryByText(/999,999/)).not.toBeInTheDocument()
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
+index 3ea40197..4d07e896 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
+@@ -1,135 +1,68 @@
+ import { useId, useState } from "react"
+ import { useNavigate } from "@tanstack/react-router"
+-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
+ import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
+-import type { DashboardStats, KeyCount, ProfileView, SqlHashStat, WorkflowCost } from "@/api/types"
++import type { DashboardStats, ProfileView, SqlHashStat } from "@/api/types"
+ import { agentLabel } from "@/lib/agents"
+ import { ErrorState } from "@/components/ErrorState"
+-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+-import { Button } from "@/components/ui/button"
+ import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
+-import { Kpi } from "@/components/Kpi"
+ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+-import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+ import { Label } from "@/components/ui/label"
+ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
++import { Separator } from "@/components/ui/separator"
+ import { Skeleton } from "@/components/ui/skeleton"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+ import { formatDuration, formatNumber, shortHash } from "@/lib/format"
+-import { pivotPerDay } from "@/lib/stats"
++import { failureRate, pivotPerDay } from "@/lib/stats"
+ import { ProfileDimensionsPanel, type DimensionAxes, type DimensionCellScope } from "./ProfileDimensionsPanel"
+ 
+ const ranges: { value: StatsRange; label: string }[] = [
+   { value: "24h", label: "24 hours" },
+   { value: "7d", label: "7 days" },
+   { value: "30d", label: "30 days" },
+   { value: "all", label: "All time" },
+ ]
+ 
+-function WorkflowCostCard({ costs }: { costs: WorkflowCost[] }) {
+-  const outputBytes = costs.reduce((sum, cost) => sum + cost.outputBytes, 0)
+-  return (
+-    <Card>
+-      <CardHeader>
+-        <CardTitle>Workflow output cost</CardTitle>
+-      </CardHeader>
+-      <CardContent className="space-y-3 overflow-x-auto">
+-        {costs.length > 0 ? (
+-          <Table>
+-            <TableHeader>
+-              <TableRow>
+-                <TableHead>Workflow</TableHead>
+-                <TableHead className="text-right">Output bytes</TableHead>
+-                <TableHead className="text-right">Estimated output tokens</TableHead>
+-                <TableHead className="text-right">Calls</TableHead>
+-                <TableHead className="text-right">Dry runs</TableHead>
+-                <TableHead className="text-right">Database executions</TableHead>
+-                <TableHead>Comparison</TableHead>
+-                <TableHead className="text-right">Baseline bytes</TableHead>
+-                <TableHead className="text-right">Output overhead bytes</TableHead>
+-                <TableHead className="text-right">Estimated output-token delta</TableHead>
+-              </TableRow>
+-            </TableHeader>
+-            <TableBody>
+-              {costs.map((cost, index) => (
+-                <TableRow key={cost.rootOperationRef ?? `legacy-${index}`}>
+-                  <TableCell>{cost.rootOperationRef ?? "Legacy output"}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.outputBytes)}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.estimatedOutputTokens)}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.callCount)}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.dryRunCalls)}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.databaseExecutionCalls)}</TableCell>
+-                  <TableCell>{cost.comparison?.baselineKind ?? "Unavailable"}</TableCell>
+-                  <TableCell className="text-right">{cost.comparison ? formatNumber(cost.comparison.baselineBytes) : "—"}</TableCell>
+-                  <TableCell className="text-right">{cost.comparison ? formatNumber(cost.comparison.outputOverheadBytes) : "—"}</TableCell>
+-                  <TableCell className="text-right">{cost.comparison?.estimatedOutputTokenDelta == null ? "—" : formatNumber(cost.comparison.estimatedOutputTokenDelta)}</TableCell>
+-                </TableRow>
+-              ))}
+-            </TableBody>
+-          </Table>
+-        ) : <p className="text-sm text-muted-foreground">No measured workflow output in this time range.</p>}
+-        {costs.length > 0 && <p className="text-sm text-muted-foreground">Measured output: {formatNumber(outputBytes)} bytes. Input, discovery and chat are unmeasured. Token estimation method: UTF-8 bytes divided by four, rounded up.</p>}
+-        {costs.some(cost => cost.accountingKind === "legacy-artifact-volume") &&
+-          <p className="text-xs text-muted-foreground">Legacy artifact-volume estimates are reported separately without a comparison.</p>}
+-      </CardContent>
+-    </Card>
+-  )
+-}
+-
+ function SqlHash({ value }: { value: string }) {
+   const id = useId()
+   return <Tooltip><TooltipTrigger aria-describedby={id} render={<span tabIndex={0} className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />}>{shortHash(value)}</TooltipTrigger><TooltipContent id={id} role="tooltip" className="break-all">{value}</TooltipContent></Tooltip>
+ }
+ 
+ function SqlTable({ rows }: { rows: SqlHashStat[] }) {
+   return (
+     <Table>
+       <TableHeader>
+         <TableRow>
+           <TableHead>SQL hash</TableHead>
+           <TableHead className="text-right">Runs</TableHead>
+           <TableHead className="text-right">Total</TableHead>
+           <TableHead className="text-right">Slowest</TableHead>
++          <TableHead className="text-right">Logical reads</TableHead>
+         </TableRow>
+       </TableHeader>
+       <TableBody>
+         {rows.map(row => (
+           <TableRow key={row.sqlHash}>
+             <TableCell className="font-mono"><SqlHash value={row.sqlHash} /></TableCell>
+             <TableCell className="text-right">{formatNumber(row.count)}</TableCell>
+             <TableCell className="text-right">{formatDuration(row.totalDurationMs)}</TableCell>
+             <TableCell className="text-right">{formatDuration(row.maxDurationMs)}</TableCell>
++            <TableCell className="text-right"><div>{row.logicalReadsMedianSum == null ? "Unavailable" : formatNumber(row.logicalReadsMedianSum)}</div><div className="text-xs text-muted-foreground">{row.logicalReadsAvailableOperations ?? 0}/{row.count} ops · {row.logicalReadsAvailableMetrics ?? 0} recorded metrics{(row.logicalReadsUnavailableMetrics ?? 0) > 0 ? ` · ${row.logicalReadsUnavailableMetrics} missing metrics` : ""}</div></TableCell>
+           </TableRow>
+         ))}
+       </TableBody>
+     </Table>
+   )
+ }
+ 
+-function CountChart({ rows, label }: { rows: KeyCount[]; label: string }) {
+-  const config = { count: { label, color: "var(--chart-1)" } } satisfies ChartConfig
+-  return (
+-    <ChartContainer config={config} className="h-56 w-full">
+-      <BarChart data={rows}>
+-        <CartesianGrid vertical={false} />
+-        <XAxis dataKey="key" tickLine={false} axisLine={false} />
+-        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
+-        <ChartTooltip content={<ChartTooltipContent />} />
+-        <Bar dataKey="count" fill="var(--color-count)" radius={4} />
+-      </BarChart>
+-    </ChartContainer>
+-  )
+-}
+-
+ type StatsPageProps = { onDimensionCellSelect?: (scope: DimensionCellScope) => void }
+ 
+ export function StatsPage(props: StatsPageProps = {}) {
+   return props.onDimensionCellSelect
+     ? <StatsPageContent onDimensionCellSelect={props.onDimensionCellSelect} />
+     : <StatsPageRoute />
+ }
+ 
+ function StatsPageRoute() {
+   const navigate = useNavigate()
+@@ -148,21 +81,22 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
+   const overview = useStats(range, window)
+   const profilesQuery = useProfiles()
+   const profiles = profilesQuery.data?.profiles ?? []
+   const selectedProfile = manualProfile
+     ? manualProfile.value
+     : overview.data?.profileOperations.length
+       ? overview.data.profileOperations[0].profile
+       : profiles[0]?.name ?? null
+   const selectedUnprofiled = manualProfile ? manualProfile.value === null
+     : overview.data?.profileOperations[0]?.profile === null && overview.data.profileOperations.length > 0
+-  const query = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
++  const dimensionOptions = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
++  const query = useStats(range, window, selectedProfile, dimensionFilters, undefined, undefined, selectedUnprofiled)
+   const profileOptions = [...new Set([
+     ...profiles.map(profile => profile.name),
+     ...(overview.data?.profileOperations ?? []).flatMap(item => item.profile === null ? [] : [item.profile]),
+     ...(manualProfile?.value ? [manualProfile.value] : []),
+   ])].sort((left, right) => left.localeCompare(right))
+   const selectedProfileView = profiles.find(profile => profile.name === selectedProfile)
+ 
+   return (
+     <div className="usage-page flex flex-col gap-4">
+       <div className="flex flex-wrap items-center gap-3">
+@@ -195,146 +129,105 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
+                 {item.label}
+               </TabsTrigger>
+             ))}
+           </TabsList>
+         </Tabs>
+       </div>
+       {overview.error ? (
+         <ErrorState error={overview.error} />
+       ) : query.error ? (
+         <ErrorState error={query.error} />
+-      ) : overview.isPending || query.isPending ? (
++      ) : overview.isPending || dimensionOptions.isPending ? (
+         <Skeleton className="h-64 w-full" />
+       ) : (
+-        <StatsContent stats={query.data} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
++        <StatsContent metricsPending={query.isPending} stats={{ ...(query.data ?? dimensionOptions.data!), profileDimensions: dimensionOptions.data!.profileDimensions }} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
+           dimensionFilters={dimensionFilters} onDimensionFiltersChange={setDimensionFilters}
+           axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
+       )}
+     </div>
+   )
+ }
+ 
+ function StatsContent({
++  metricsPending,
+   stats,
+   range,
+   window,
+   profile,
+   unprofiled,
+   profileView,
+   dimensionFilters,
+   onDimensionFiltersChange,
+   axisChoice,
+   onAxisChoiceChange,
+   onDimensionCellSelect,
+ }: {
++  metricsPending: boolean
+   stats: DashboardStats
+   range: StatsRange
+   window: StatsWindow
+   profile: string | null
+   unprofiled: boolean
+   profileView: ProfileView | undefined
+   dimensionFilters: Record<string, string | null>
+   onDimensionFiltersChange: (filters: Record<string, string | null>) => void
+   axisChoice: DimensionAxes | null
+   onAxisChoiceChange: (axes: DimensionAxes | null) => void
+   onDimensionCellSelect?: (scope: DimensionCellScope) => void
+ }) {
+   const [sqlSort, setSqlSort] = useState("duration")
+-  const topSql = [...new Map([...stats.topSqlByCount, ...stats.topSqlByDuration].map(row => [row.sqlHash, row])).values()].sort((a,b) => sqlSort === "runs" ? b.count - a.count : b.totalDurationMs - a.totalDurationMs)
++  const topSql = sqlSort === "reads" ? stats.topSqlByLogicalReads ?? [] : sqlSort === "runs" ? stats.topSqlByCount : stats.topSqlByDuration
+   const perDay = pivotPerDay(stats.operationsPerDay)
+-  // Series are keyed by index: an agent kind is client-supplied text and must never become a CSS variable name.
+-  const seriesKeys = perDay.agents.map((_, index) => `a${index}`)
+-  const perDayRows = perDay.rows.map(row => ({
+-    day: row.day,
+-    ...Object.fromEntries(perDay.agents.map((agent, index) => [seriesKeys[index], row[agent]])),
+-  }))
+-  const perDayConfig = Object.fromEntries(
+-    perDay.agents.map((agent, index) => [seriesKeys[index], { label: agentLabel(agent), color: `var(--chart-${(index % 5) + 1})` }]),
+-  ) satisfies ChartConfig
+   const total = stats.operations.reduce((sum, row) => sum + row.count, 0)
+ 
++  const rate = failureRate(stats.statuses, total)
++  const failed = stats.statuses.find(row => row.key === "failed")?.count ?? 0
++  const rejected = stats.statuses.find(row => row.key === "rejected")?.count ?? 0
++  const output = stats.workflowCosts.filter(cost => cost.accountingKind === "workflow-output")
++  const kpis = [
++    { label: "Operations", value: formatNumber(total), detail: `${stats.sessionCount == null ? "Session count unavailable" : `${formatNumber(stats.sessionCount)} sessions`}` },
++    { label: "Failed / rejected", value: `${formatNumber(failed)} / ${formatNumber(rejected)}`, detail: rate === null ? "Rate unavailable · no operations" : `${rate.toLocaleString(undefined, { maximumFractionDigits: 1 })}% of ${formatNumber(total)} operations` },
++    { label: "Estimated workflow output tokens", value: output.length ? formatNumber(output.reduce((sum, cost) => sum + cost.estimatedOutputTokens, 0)) : "Unavailable", detail: output.length ? `${formatNumber(output.reduce((sum, cost) => sum + cost.outputBytes, 0))} measured bytes · ÷ 4, rounded up per call` : "No retained workflow-output accounting" },
++    { label: "Operations with spills", value: formatNumber(stats.spillOperations), detail: "Recorded spill evidence" },
++    { label: "Operations on a cold cache", value: formatNumber(stats.coldCacheOperations), detail: "Recorded cold-cache evidence" },
++  ]
+   return (
+     <div className="usage-content flex flex-col gap-4">
+-      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 [&>*]:min-w-0 [&>*]:break-words">
+-        <Kpi label="Operations" value={formatNumber(total)} />
+-        <Kpi label="Failed / rejected" value={`${formatNumber(stats.statuses.find(row => row.key === "failed")?.count ?? 0)} / ${formatNumber(stats.statuses.find(row => row.key === "rejected")?.count ?? 0)}`} />
+-        <Kpi label="Measured workflow output" value={`${formatNumber(stats.workflowCosts.reduce((sum, cost) => sum + cost.outputBytes, 0))} bytes`} />
+-        <Kpi label="Operations with spills" value={formatNumber(stats.spillOperations)} />
+-        <Kpi label="Operations on a cold cache" value={formatNumber(stats.coldCacheOperations)} />
+-      </div>
++      {metricsPending && <Skeleton aria-label="Updating filtered statistics" className="h-64 w-full" />}
++      <div hidden={metricsPending}><div className="flex flex-col gap-4">
++      <Card aria-label="Usage summary" className="gap-0 overflow-hidden py-0">
++        <CardHeader className="sr-only"><CardTitle>Usage summary</CardTitle></CardHeader>
++        <CardContent className="grid min-w-0 grid-cols-1 p-0 sm:grid-cols-2 lg:grid-cols-5">
++          {kpis.map(kpi => <div key={kpi.label} className="relative min-w-0"><div className="flex h-full flex-col gap-2 p-4"><div className="text-sm text-muted-foreground">{kpi.label}</div><div className="break-words text-2xl font-semibold tabular-nums">{kpi.value}</div><p className="text-xs text-muted-foreground">{kpi.detail}</p></div><Separator orientation="vertical" className="absolute right-0 top-0 hidden h-full sm:block" /><Separator className="sm:hidden" /></div>)}
++        </CardContent>
++      </Card>
+       <Card role="region" aria-label="Agents"><CardHeader><CardTitle><h2>Agents</h2></CardTitle><CardDescription>Output tokens are estimated from returned UTF-8 bytes ÷ 4. Per-agent model, sessions, tokens and costs are unavailable in the recorded statistics.</CardDescription></CardHeader><CardContent>
+         <Table><TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Model</TableHead><TableHead className="text-right">Sessions</TableHead><TableHead className="text-right">Operations</TableHead><TableHead className="text-right">Output tokens</TableHead><TableHead className="text-right">Est. cost</TableHead></TableRow></TableHeader><TableBody>{perDay.agents.map(agent => <TableRow key={agent}><TableCell>{agentLabel(agent)}</TableCell><TableCell>—</TableCell><TableCell className="text-right">—</TableCell><TableCell className="text-right">{formatNumber(stats.operationsPerDay.filter(row => row.agentKind === agent).reduce((sum,row) => sum + row.count,0))}</TableCell><TableCell className="text-right">—</TableCell><TableCell className="text-right">—</TableCell></TableRow>)}</TableBody></Table>
+       </CardContent></Card>
+-      <Card role="region" aria-label="Top SQL"><CardHeader><div className="flex flex-wrap items-center gap-3"><CardTitle><h2>Top SQL</h2></CardTitle><SegmentedRadioGroup label="Top SQL order" value={sqlSort} options={[{ value: "duration", label: "Total time" }, { value: "runs", label: "Runs" }]} onValueChange={setSqlSort} /></div><CardDescription>Grouped by SQL hash · text, logical reads and last run are unavailable in these statistics.</CardDescription></CardHeader><CardContent><SqlTable rows={topSql} /></CardContent></Card>
++      <Card role="region" aria-label="Top SQL"><CardHeader><div className="flex flex-wrap items-center gap-3"><CardTitle><h2>Top SQL</h2></CardTitle><SegmentedRadioGroup label="Top SQL order" value={sqlSort} options={[{ value: "duration", label: "Total time" }, { value: "runs", label: "Runs" }, { value: "reads", label: "Logical reads" }]} onValueChange={setSqlSort} /></div><CardDescription>Grouped by SQL hash · Logical reads: sum of recorded representative metric medians, not total executions. Coverage shown per operation and metric; missing data remains unavailable. SQL text and last run are unavailable.</CardDescription></CardHeader><CardContent><SqlTable rows={topSql} /></CardContent></Card>
+       <div className="grid gap-4 md:grid-cols-2">
+         <Card role="region" aria-label="Tables by logical reads"><CardHeader><CardTitle><h2>Tables by logical reads</h2></CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Table</TableHead><TableHead className="text-right">Logical reads</TableHead><TableHead className="text-right">Ops</TableHead></TableRow></TableHeader><TableBody>{stats.topTablesByLogicalReads.map(row => <TableRow key={row.table}><TableCell className="font-mono">{row.table}</TableCell><TableCell className="text-right">{formatNumber(row.logicalReads)}</TableCell><TableCell className="text-right">{formatNumber(row.operations)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+         <Card role="region" aria-label="Top waits"><CardHeader><CardTitle><h2>Top waits</h2></CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Wait type</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{stats.topWaits.map(row => <TableRow key={row.waitType}><TableCell className="font-mono">{row.waitType}</TableCell><TableCell className="text-right">{formatDuration(row.totalWaitMs)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+       </div>
++      </div></div>
+       <ProfileDimensionsPanel
+         key={profile === null ? `scope:${unprofiled ? "unprofiled" : "all"}` : `profile:${profile}`}
+         range={range}
+         window={window}
+         profile={profile}
+         unprofiled={unprofiled}
+         profileName={profile ?? "No profile"}
+         databaseTemplate={profileView?.database}
+         profileDefinitionAvailable={stats.profileDimensions.profileDefinitionAvailable}
+         dimensions={stats.profileDimensions.dimensions}
+         filterOptions={stats.profileDimensions.dimensions}
+         targets={stats.profileDimensions.targets}
+         dimensionFilters={dimensionFilters}
+         onDimensionFiltersChange={onDimensionFiltersChange}
+         axisChoice={axisChoice}
+         onAxisChoiceChange={onAxisChoiceChange}
+         onCellSelect={onDimensionCellSelect}
+       />
+-      <Collapsible className="flex flex-col gap-3"><CollapsibleTrigger render={<Button variant="outline" className="self-start" />}>Detailed usage and workflow accounting</CollapsibleTrigger><CollapsibleContent keepMounted className="flex flex-col gap-4">
+-      <Card>
+-        <CardHeader>
+-          <CardTitle>Operations per day (UTC)</CardTitle>
+-        </CardHeader>
+-        <CardContent>
+-          <ChartContainer config={perDayConfig} className="h-64 w-full">
+-            <BarChart data={perDayRows}>
+-              <CartesianGrid vertical={false} />
+-              <XAxis dataKey="day" tickLine={false} axisLine={false} />
+-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
+-              <ChartTooltip content={<ChartTooltipContent />} />
+-              <ChartLegend content={<ChartLegendContent />} />
+-              {seriesKeys.map(key => (
+-                <Bar key={key} dataKey={key} stackId="agents" fill={`var(--color-${key})`} />
+-              ))}
+-            </BarChart>
+-          </ChartContainer>
+-        </CardContent>
+-      </Card>
+-      <WorkflowCostCard costs={stats.workflowCosts} />
+-      <div className="grid gap-4 md:grid-cols-2">
+-        <Card>
+-          <CardHeader>
+-            <CardTitle>Statuses</CardTitle>
+-          </CardHeader>
+-          <CardContent>
+-            <CountChart rows={stats.statuses} label="Operations" />
+-          </CardContent>
+-        </Card>
+-        <Card>
+-          <CardHeader>
+-            <CardTitle>Exit codes</CardTitle>
+-          </CardHeader>
+-          <CardContent>
+-            <CountChart rows={stats.exitCodes} label="Operations" />
+-          </CardContent>
+-        </Card>
+-        <Card>
+-          <CardHeader>
+-            <CardTitle>Operations by kind</CardTitle>
+-          </CardHeader>
+-          <CardContent>
+-            <CountChart rows={stats.operations} label="Operations" />
+-          </CardContent>
+-        </Card>
+-      </div>
+-      </CollapsibleContent></Collapsible>
++
+     </div>
+   )
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/test/fixtures.ts b/src/SqlHarness.Dashboard/ui/src/test/fixtures.ts
+index cdd5d739..b17e5ee4 100644
+--- a/src/SqlHarness.Dashboard/ui/src/test/fixtures.ts
++++ b/src/SqlHarness.Dashboard/ui/src/test/fixtures.ts
+@@ -61,21 +61,23 @@ export const operationDetail = (over: Partial<OperationDetail> = {}): OperationD
+ 
+ export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
+   operationsPerDay: [
+     { day: "2026-10-06", agentKind: "claude", count: 2 },
+     { day: "2026-10-07", agentKind: "claude", count: 3 },
+     { day: "2026-10-07", agentKind: "codex", count: 1 },
+   ],
+   statuses: [{ key: "succeeded", count: 5 }, { key: "rejected", count: 1 }],
+   exitCodes: [{ key: "0", count: 5 }, { key: "2", count: 1 }],
+   operations: [{ key: "query", count: 4 }, { key: "measure", count: 2 }],
+-  topSqlByCount: [{ sqlHash: "sha256:aaaaaaaaaaaaaaaa", count: 4, totalDurationMs: 400, maxDurationMs: 150 }],
++  sessionCount: 2,
++  topSqlByCount: [{ sqlHash: "sha256:aaaaaaaaaaaaaaaa", count: 4, totalDurationMs: 400, maxDurationMs: 150, logicalReadsMedianSum: 120, logicalReadsAvailableOperations: 2, logicalReadsUnavailableOperations: 2, logicalReadsAvailableMetrics: 3, logicalReadsUnavailableMetrics: 1 }],
++  topSqlByLogicalReads: [{ sqlHash: "sha256:aaaaaaaaaaaaaaaa", count: 4, totalDurationMs: 400, maxDurationMs: 150, logicalReadsMedianSum: 120, logicalReadsAvailableOperations: 2, logicalReadsUnavailableOperations: 2, logicalReadsAvailableMetrics: 3, logicalReadsUnavailableMetrics: 1 }],
+   topSqlByDuration: [{ sqlHash: "sha256:bbbbbbbbbbbbbbbb", count: 1, totalDurationMs: 9000, maxDurationMs: 9000 }],
+   topTablesByLogicalReads: [{ table: "Orders", logicalReads: 210, operations: 1 }],
+   topWaits: [{ waitType: "PAGEIOLATCH_SH", totalWaitMs: 120 }],
+   targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }],
+   workflowCosts: [{ rootOperationRef: "root-1", outputBytes: 4000, estimatedOutputTokens: 1000, callCount: 3,
+     tokenEstimationMethod: "utf8-bytes-div-4", accountingKind: "workflow-output",
+     coverage: { input: "unmeasured", discovery: "unmeasured", chat: "unmeasured" },
+     comparison: { baselineKind: "single-measured-execution-output", baselineBytes: 4000,
+       baselineEstimatedTokens: 1000, outputOverheadBytes: 0, estimatedOutputTokenDelta: 0 },
+     dryRunCalls: 0, databaseExecutionCalls: 1 }], spillOperations: 1, coldCacheOperations: 1,
+diff --git a/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs b/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs
+index 9c6d481e..e1d8e4f4 100644
+--- a/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs
++++ b/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs
+@@ -1513,20 +1513,92 @@ public sealed class JournalReaderTests
+ 
+         var page = reader.Operations(new OperationQuery(SessionId: sessionId, Operation: "query", Limit: 2));
+         var rest = reader.Operations(new OperationQuery(SessionId: sessionId, Operation: "query", Limit: 2, Cursor: page.NextCursor));
+ 
+         Assert.Equal(2, page.Items.Count);
+         Assert.Single(rest.Items);
+         Assert.True(page.Items[0].Id > page.Items[1].Id);
+         Assert.All(page.Items.Concat(rest.Items), o => Assert.Equal("query", o.Operation));
+     }
+ 
++    [Fact]
++    public void Stats_reads_cover_all_groups_and_share_scope()
++    {
++        using var home = new TempHome();
++        var seed = new JournalSeed(home.DatabasePath);
++        var session = JournalSeed.Session("cli:reads");
++        for (var i = 0; i < 25; i++)
++            for (var run = 0; run < 3; run++)
++                seed.Operation(session, sql: $"SELECT {i}", durationMs: 1000);
++        var benchmark = JournalSeed.Benchmark(readsMedian: 70);
++        benchmark = benchmark with { Variants = [benchmark.Variants[0], benchmark.Variants[0] with { Variant = "candidate", LogicalReads = null }] };
++        seed.Operation(session, sql: "SELECT reads", durationMs: 1, benchmark: benchmark);
++        seed.Operation(session, sql: "SELECT reads", durationMs: 2);
++        seed.Operation(session, sql: "SELECT zero", benchmark: JournalSeed.Benchmark(readsMedian: 0));
++        var reader = Reader(home);
++        var stats = reader.Stats(new StatsQuery(Profile: "local", Dimensions: new Dictionary<string, string?> { ["tenant"] = "acme" }));
++        Assert.Equal(1, stats.SessionCount);
++        var top = stats.TopSqlByLogicalReads![0];
++        Assert.Equal(OperationJournalDescriber.SqlHash("SELECT reads"), top.SqlHash);
++        Assert.Equal(70, top.LogicalReadsMedianSum);
++        Assert.Equal(2, top.Count);
++        Assert.Equal(3, top.TotalDurationMs);
++        Assert.Equal(1, top.LogicalReadsAvailableOperations);
++        Assert.Equal(1, top.LogicalReadsUnavailableOperations);
++        Assert.Equal(1, top.LogicalReadsUnavailableMetrics);
++        Assert.DoesNotContain(stats.TopSqlByCount, x => x.SqlHash == top.SqlHash);
++        Assert.DoesNotContain(stats.TopSqlByDuration, x => x.SqlHash == top.SqlHash);
++        Assert.Equal(0, stats.TopSqlByLogicalReads.Single(x => x.SqlHash == OperationJournalDescriber.SqlHash("SELECT zero")).LogicalReadsMedianSum);
++        Assert.Null(stats.TopSqlByDuration[0].LogicalReadsMedianSum);
++        var empty = reader.Stats(new StatsQuery(Profile: "other"));
++        Assert.Empty(empty.Operations);
++        Assert.Empty(empty.TopSqlByLogicalReads!);
++        Assert.Empty(empty.WorkflowCosts);
++        Assert.Equal(0, empty.SessionCount);
++    }
++
++    [Fact]
++    public void Stats_all_metrics_use_identical_profile_dimension_and_window_cohort()
++    {
++        using var home = new TempHome();
++        var seed = new JournalSeed(home.DatabasePath);
++        var first = JournalSeed.Session("cli:first");
++        var second = JournalSeed.Session("cli:second");
++        seed.Operation(first, profile: "local", status: "failed", benchmark: JournalSeed.Benchmark(physical: 1));
++        seed.Operation(second, profile: "local", benchmark: JournalSeed.Benchmark(physical: 1));
++        seed.Operation(second, profile: "other", benchmark: JournalSeed.Benchmark(1000, physical: 1));
++        seed.Operation(second, profile: null, benchmark: JournalSeed.Benchmark(1000, physical: 1));
++        seed.Operation(second, variables: new Dictionary<string, string> { ["tenant"] = "other" }, benchmark: JournalSeed.Benchmark(1000, physical: 1));
++        var reader = Reader(home);
++        var scoped = reader.Stats(new StatsQuery(Profile: "local", Dimensions: new Dictionary<string, string?> { ["tenant"] = "acme" }));
++        Assert.Equal(2, scoped.SessionCount);
++        Assert.Equal(2, scoped.Operations.Sum(x => x.Count));
++        Assert.Equal(2, scoped.OperationsPerDay.Sum(x => x.Count));
++        Assert.Equal(2, scoped.Statuses.Sum(x => x.Count));
++        Assert.Equal(1, scoped.Statuses.Single(x => x.Key == "failed").Count);
++        Assert.Equal(2, scoped.ExitCodes.Sum(x => x.Count));
++        Assert.Equal(2, scoped.Targets.Sum(x => x.Count));
++        Assert.Equal(2, scoped.SpillOperations);
++        Assert.Equal(2, scoped.ColdCacheOperations);
++        Assert.Equal(30, Assert.Single(scoped.TopTablesByLogicalReads).LogicalReads);
++        Assert.Equal(240, Assert.Single(scoped.TopWaits).TotalWaitMs);
++        Assert.Equal(2, Assert.Single(scoped.WorkflowCosts).CallCount);
++        Assert.Equal(2, Assert.Single(scoped.TopSqlByLogicalReads!).Count);
++        Assert.Single(reader.Stats(new StatsQuery(UnprofiledOnly: true)).OperationsPerDay);
++        Assert.Equal(1, reader.Stats(new StatsQuery(UnprofiledOnly: true)).Operations.Sum(x => x.Count));
++        var empty = reader.Stats(new StatsQuery(From: new DateTimeOffset(2026, 10, 8, 0, 0, 0, TimeSpan.Zero), Profile: "local"));
++        Assert.Empty(empty.Operations);
++        Assert.Empty(empty.TopSqlByLogicalReads!);
++        Assert.Empty(empty.WorkflowCosts);
++        Assert.Equal(0, empty.SessionCount);
++    }
++
+     [Fact]
+     public void Stats_aggregate_days_statuses_sql_tables_waits_tokens_and_targets()
+     {
+         using var home = new TempHome();
+         var seed = new JournalSeed(home.DatabasePath);
+         var s = JournalSeed.Session("cli:a");
+         seed.Operation(s, sql: "SELECT 1", durationMs: 10);
+         seed.Operation(s, sql: "SELECT 1", durationMs: 30);
+         seed.Operation(s, operation: "measure", sql: "SELECT 2", durationMs: 100, benchmark: JournalSeed.Benchmark(readsMedian: 70, physical: 2));
+         seed.Operation(s, status: "rejected", exitCode: 2, sql: "DELETE x");

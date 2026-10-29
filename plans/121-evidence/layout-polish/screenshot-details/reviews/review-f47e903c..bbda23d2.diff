@@ -1,0 +1,209 @@
+# Review package: f47e903c..bbda23d2
+
+## Commits
+bbda23d2 fix(dashboard): close screenshot follow-up review findings
+
+## Files changed
+ .../src/components/optimization/VersionTable.tsx   |  4 ++--
+ .../ui/src/mutations/Approval.test.tsx             | 12 ++++++++++
+ .../ui/src/mutations/ApprovalToast.tsx             |  4 ++--
+ .../ui/src/pages/SettingsPage.tsx                  |  2 +-
+ .../ui/src/pages/StatsPage.test.tsx                | 28 ++++++++++++++++++++++
+ .../ui/src/pages/StatsPage.tsx                     |  6 +++--
+ 6 files changed, 49 insertions(+), 7 deletions(-)
+
+## Diff
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx
+index 17f0f575..c60df581 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx
+@@ -20,16 +20,16 @@ export function VersionTable({ subject, sessionId, agentSessionKey, sessionSearc
+   const groupId = useId()
+   const baseline = versions.find(version => version.version === selectedA)
+   const delta = (value: number | null, reference: number | null | undefined) => value === null || reference === null || reference === undefined || reference === 0 ? null : `${value > reference ? "+" : ""}${Math.round((value - reference) * 100 / reference)}%`
+   return <Table className="version-table" aria-label={`${subject} versions`}>
+     <TableHeader><TableRow><TableHead>Version</TableHead><TableHead className="text-right">Logical reads</TableHead><TableHead className="text-right">vs A</TableHead><TableHead className="text-right">Elapsed median</TableHead><TableHead className="text-right">vs A</TableHead><TableHead>Outcome</TableHead><TableHead id={`${groupId}-a-label`}><span aria-hidden="true">A</span><span className="sr-only">Baseline A</span></TableHead><TableHead id={`${groupId}-b-label`}><span aria-hidden="true">B</span><span className="sr-only">Candidate B</span></TableHead><TableHead className="w-10"><span className="sr-only">Observed in</span></TableHead></TableRow></TableHeader>
+     <TableBody>{versions.map(version => <TableRow key={`${version.version}:${version.hash}`} className={selectedA === version.version || selectedB === version.version ? "bg-muted/40" : undefined}>
+       <TableHead scope="row" className="max-w-80"><div className="flex items-center gap-2">{version.version}{operations.some(operation => version.measuredIn.includes(operation.id) && operation.agentKeep) && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-3.5 text-muted-foreground" aria-label="Kept by agent" />}{operations.filter(operation => version.measuredIn.includes(operation.id) && operation.agentLabel).map(operation => <span key={operation.id} className="truncate text-xs font-normal text-muted-foreground" title={operation.agentLabel ?? undefined}>{operation.agentLabel}</span>)}</div></TableHead>
+       <TableCell className="text-right tabular-nums">{metric(version.logicalReadsSum)}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.logicalReadsSum !== null && baseline?.logicalReadsSum !== null && baseline?.logicalReadsSum !== undefined && version.logicalReadsSum < baseline.logicalReadsSum ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.logicalReadsSum, baseline?.logicalReadsSum) ?? "—"}</TableCell>
+       <TableCell className="text-right tabular-nums">{metric(version.elapsedMedianMs)}{version.elapsedMedianMs !== null && " ms"}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== undefined && version.elapsedMedianMs < baseline.elapsedMedianMs ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.elapsedMedianMs, baseline?.elapsedMedianMs) ?? "—"}</TableCell><TableCell title={`basis: ${version.verdictBasis}`}>{version.caseOutcome}</TableCell>
+ 
+-      <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-a`} aria-describedby={`${groupId}-a-label`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }), "rounded-full peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>A</span></label></TableCell>
+-      <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-b`} aria-describedby={`${groupId}-b-label`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }), "rounded-full peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>B</span></label></TableCell>
++      <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-a`} aria-describedby={`${groupId}-a-label`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: selectedA === version.version ? "secondary" : "outline", size: "icon-sm" }), "rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>A</span></label></TableCell>
++      <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-b`} aria-describedby={`${groupId}-b-label`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: selectedB === version.version ? "default" : "outline", size: "icon-sm" }), "rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>B</span></label></TableCell>
+       <TableCell><Popover><PopoverTrigger render={<Button variant="ghost" size="icon-sm" />} aria-label={`Details for ${version.version}`}><HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} /></PopoverTrigger><PopoverContent align="end"><PopoverTitle>{version.version}</PopoverTitle><p>basis: {version.verdictBasis}</p><p>Scans: {metric(version.scansSum)}</p>{version.measuredIn.map(operationId => <Link key={operationId} to="/operations/$id" params={{ id: String(operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="block underline">Operation #{operationId}</Link>)}</PopoverContent></Popover></TableCell>
+     </TableRow>)}</TableBody>
+   </Table>
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx b/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
+index 066f4ceb..f23d8bbf 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
+@@ -241,10 +241,22 @@ test("expanded-preview fallback keeps original request and decision controls usa
+   expect(screen.getByRole("radio", { name: "Values inline" })).toHaveAttribute("aria-disabled", "true")
+   expect(screen.getByRole("radio", { name: "As sent" })).toBeChecked()
+   expect(screen.getByTestId("sql-code").textContent).toBe(original.request.sql)
+   expect(screen.getByText(/Values inline is unavailable/)).toBeInTheDocument()
+   expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
+   act(() => vi.advanceTimersByTime(1000))
+   expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled()
+   expect(JSON.stringify(original)).toBe(before)
+   vi.useRealTimers()
+ })
++
++test.each(["prod", "production", "staging", "STAGING", "development", ""])("toast presents the approval headline for environment %s", async environment => {
++  const { source } = await setup()
++  act(() => source().emit("snapshot", [{ ...request, environment }]))
++  const notification = await screen.findByLabelText("Pending change approval")
++  const title = notification.querySelector('[data-slot="toast-title"]')!
++  expect(title).toHaveTextContent(`Approve change on ${environment || "unknown"}?`)
++  expect(within(notification).getByText(environment || "unknown").classList.contains("text-destructive")).toBe(/^(prod|production|staging)$/i.test(environment))
++  expect(notification.querySelector('[data-slot="badge"]')).toBeNull()
++  expect(within(notification).getByRole("button", { name: "Review" })).toBeEnabled()
++  expect(within(notification).getByRole("button", { name: "Deny" })).toBeEnabled()
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx
+index c4b401ef..92c2d9ba 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx
+@@ -26,32 +26,32 @@ function ToastDecision({ item, expired }: { item: PendingMutation; expired: bool
+   </div>
+ }
+ 
+ function ApprovalNotifications({ pending, hidden }: { pending: PendingMutation[]; hidden: boolean }) {
+   const { toasts, add, close } = useToastManager<{ request: PendingMutation }>()
+   const previous = useRef(new Set<string>())
+   const now = useNow()
+   useEffect(() => {
+     const ids = new Set(pending.map(item => item.requestId))
+     for (const id of previous.current) if (!ids.has(id)) close(id)
+-    for (const request of pending) add({ id: request.requestId, title: request.environment || "unknown", timeout: 0, data: { request } })
++    for (const request of pending) add({ id: request.requestId, title: `Approve change on ${request.environment || "unknown"}?`, timeout: 0, data: { request } })
+     previous.current = ids
+   }, [pending, add, close])
+   if (hidden) return null
+   return <ToastPortal><ToastViewport>
+     {toasts.map(notification => {
+       const item = notification.data?.request
+       if (!item) return null
+       const remaining = Math.max(0, Math.ceil((Date.parse(item.expiresAt) - now) / 1000))
+       return <Toast key={notification.id} toast={notification} swipeDirection={[]}>
+         <ToastContent><section className="flex min-w-0 flex-1 flex-col gap-2" aria-label="Pending change approval">
+-          <ToastTitle className="text-base font-semibold" />
++          <ToastTitle className="text-base font-semibold">Approve change on <span className={/^(prod|production|staging)$/i.test(item.environment || "unknown") ? "text-destructive" : undefined}>{item.environment || "unknown"}</span>?</ToastTitle>
+           <ToastDescription>{item.request.profile} | {item.request.database} | {item.request.tier}</ToastDescription>
+           <pre className="line-clamp-2 whitespace-pre-wrap break-all font-mono text-xs">{item.request.sql.slice(0, 240)}{item.request.sql.length > 240 ? "..." : ""}</pre>
+           <div className="flex items-center justify-between gap-3"><span className="text-xs text-muted-foreground">Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}{pending.length > 1 ? ` | ${pending.length} pending` : ""}</span></div><ToastDecision item={item} expired={remaining === 0} />
+         </section></ToastContent>
+       </Toast>
+     })}
+   </ToastViewport></ToastPortal>
+ }
+ 
+ export function ApprovalToast() {
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx
+index 01fd6869..aa52b9d6 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx
+@@ -152,21 +152,21 @@ function AgentTranscriptsStatus() {
+   const [confirming, setConfirming] = useState(false)
+   return (
+     <div className="grid gap-2">
+       {status.data && <p>Matched {status.data.matched} · Unmatched {status.data.unmatched} · Read errors {status.data.readErrors}</p>}
+       {status.data?.lastCycleAt && <p className="text-sm text-muted-foreground">Last cycle: {status.data.lastCycleAt}</p>}
+       {!!status.data?.coverage?.length && <Table aria-label="Agent session matching coverage">
+         <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Transport</TableHead><TableHead>Exact</TableHead><TableHead>Inferred</TableHead><TableHead>Unassigned</TableHead></TableRow></TableHeader>
+         <TableBody>{status.data.coverage.map(row => <TableRow key={`${row.agentKind}:${row.transport}`}><TableHead scope="row" className="whitespace-normal">{row.agentKind}</TableHead><TableCell>{row.transport}</TableCell><TableCell>{row.exact}</TableCell><TableCell>{row.inferred}</TableCell><TableCell>{row.unassigned}</TableCell></TableRow>)}</TableBody>
+       </Table>}
+       {status.error && <p role="alert" className="text-sm text-destructive">{status.error.message}</p>}
+-      <div className="flex w-full justify-end">
++      <div className="ml-auto flex w-auto justify-end">
+         <Button variant="outline" disabled={clear.isPending} onClick={() => setConfirming(true)}>Clear matched data</Button>
+       </div>
+       {clear.error && <p role="alert" className="text-sm text-destructive">{clear.error.message}</p>}
+       <Dialog open={confirming} onOpenChange={setConfirming}>
+         <DialogContent>
+           <DialogHeader>
+             <DialogTitle>Clear matched data?</DialogTitle>
+             <DialogDescription>Removes matched titles, models, conversations and frozen version labels. Session and agent-session annotations are kept.</DialogDescription>
+           </DialogHeader>
+           <DialogFooter>
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
+index e1209148..31b6cd65 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
+@@ -551,10 +551,38 @@ test("a recorded dimension absent in the new range cannot leave an invisible agg
+   await waitFor(() => expect(requests.some(url => url.searchParams.get("dimensions")?.includes("legacy"))).toBe(true))
+   await userEvent.click(screen.getByRole("tab", { name: "24 hours" }))
+   expect(await screen.findByText(/Full-scope total: 2 \(2 operations\)/)).toBeInTheDocument()
+   expect(await screen.findByText("newcohort")).toBeInTheDocument()
+   expect(screen.queryByRole("combobox", { name: "legacy" })).not.toBeInTheDocument()
+   const summary = screen.getByLabelText("Usage summary")
+   expect(within(summary).getByText("2")).toBeInTheDocument()
+   const currentAggregate = requests.filter(url => url.searchParams.has("from") && !url.searchParams.has("rowDimension")).at(-1)!
+   expect(JSON.parse(currentAggregate.searchParams.get("dimensions") ?? "{}")).not.toHaveProperty("legacy")
+ })
++
++test("retained dimensions survive an options failure on range change and recover without stale aggregate requests", async () => {
++  const requests: URL[] = []
++  let failOptions = true
++  stubFetch({ "/api/stats": (url: URL) => {
++    requests.push(url)
++    if (url.searchParams.has("from") && Date.parse(url.searchParams.get("to")!) - Date.parse(url.searchParams.get("from")!) <= 24 * 60 * 60 * 1000 && url.searchParams.get("profile") === "app" && failOptions) {
++      return new Response("dimension lookup unavailable", { status: 500 })
++    }
++    return jsonResponse(filteredProfileStats(url))
++  }, "/api/profiles": profilesResponse() })
++  const { client } = renderApp("/stats")
++  await screen.findByRole("combobox", { name: "project" })
++  await userEvent.click(screen.getByRole("tab", { name: "All time" }))
++  await userEvent.click(await screen.findByRole("combobox", { name: "project" }))
++  await userEvent.click(await screen.findByRole("option", { name: "alpha" }))
++  await waitFor(() => expect(requests.some(url => url.searchParams.get("dimensions")?.includes("alpha"))).toBe(true))
++  requests.length = 0
++  await userEvent.click(screen.getByRole("tab", { name: "24 hours" }))
++  expect(await screen.findByText("Request failed")).toBeInTheDocument()
++  expect(screen.queryByLabelText("Usage summary")).not.toBeInTheDocument()
++  expect(requests.some(url => url.searchParams.has("dimensions"))).toBe(false)
++  failOptions = false
++  await client.invalidateQueries({ queryKey: ["stats"] })
++  expect(await screen.findByRole("combobox", { name: "project" })).toHaveTextContent("alpha")
++  await waitFor(() => expect(requests.some(url => url.searchParams.get("dimensions")?.includes("alpha"))).toBe(true))
++  expect(await screen.findByLabelText("Usage summary")).toBeInTheDocument()
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
+index 9cace046..fa29986f 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
+@@ -133,26 +133,28 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
+             {ranges.map(item => (
+               <TabsTrigger key={item.value} value={item.value}>
+                 {item.label}
+               </TabsTrigger>
+             ))}
+           </TabsList>
+         </Tabs>
+       </div>
+       {overview.error ? (
+         <ErrorState error={overview.error} />
++      ) : dimensionOptions.error ? (
++        <ErrorState error={dimensionOptions.error} />
+       ) : query.error ? (
+         <ErrorState error={query.error} />
+-      ) : overview.isPending || dimensionOptions.isPending ? (
++      ) : overview.isPending || dimensionOptions.isPending || !dimensionOptions.data ? (
+         <Skeleton className="h-64 w-full" />
+       ) : (
+-        <StatsContent metricsPending={query.isPending} stats={{ ...(query.data ?? dimensionOptions.data!), profileDimensions: dimensionOptions.data!.profileDimensions }} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
++        <StatsContent metricsPending={query.isPending} stats={{ ...(query.data ?? dimensionOptions.data), profileDimensions: dimensionOptions.data.profileDimensions }} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
+           dimensionFilters={effectiveFilters} onDimensionFiltersChange={setDimensionFilters}
+           axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
+       )}
+     </div>
+   )
+ }
+ 
+ function StatsContent({
+   metricsPending,
+   stats,

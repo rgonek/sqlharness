@@ -1,0 +1,65 @@
+{
+  "labelClick": {
+    "before": "false",
+    "after": "true",
+    "changed": true
+  },
+  "switchInfo": {
+    "before": null,
+    "ariaDescribedBy": "diagnostics-enabled-description",
+    "ariaLabelledBy": "diagnostics-enabled-label",
+    "labels": []
+  },
+  "invalid": {
+    "invalid": "true",
+    "describedBy": "connection-timeout-description connection-timeout-error",
+    "errorMessage": "connection-timeout-error"
+  },
+  "errorInfo": {
+    "text": "Enter a whole number from 1 to 300.",
+    "id": "connection-timeout-error",
+    "role": "alert"
+  },
+  "switchDescriptions": [
+    {
+      "label": "Connection diagnostics",
+      "description": "diagnostics-enabled-description"
+    },
+    {
+      "label": "Mute approval sound",
+      "description": "approval-sound-muted-description"
+    },
+    {
+      "label": "Journal enabled",
+      "description": "journal-enabled-description"
+    },
+    {
+      "label": "Store sensitive data",
+      "description": "journal-sensitive-description"
+    },
+    {
+      "label": "Agent operation annotations",
+      "description": "journal-operation-annotations-description"
+    },
+    {
+      "label": "Retention enabled",
+      "description": "retention-enabled-description"
+    },
+    {
+      "label": "Read agent transcripts",
+      "description": "dashboard-agent-transcripts-description"
+    },
+    {
+      "label": "Require compare subject and scope",
+      "description": "compare-require-context-description"
+    },
+    {
+      "label": "Start with mcp serve",
+      "description": "dashboard-autostart-description"
+    },
+    {
+      "label": "Safety notifications",
+      "description": "dashboard-safety-notifications-description"
+    }
+  ]
+}

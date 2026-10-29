@@ -1,0 +1,22 @@
+{
+  "revision": "b3e921cd42a0fcc8d512cd0b85936acbc407e8aa",
+  "runtimeRevision": "bbda23d2a2f7c5dfd2bc7ce42657e18e6a6404e2",
+  "command": "just verify -LogDirectory D:/temp/sqlharness-screenshot-details-gate-20261029-final",
+  "exitCode": 0,
+  "stages": 5,
+  "duration": "15m26s",
+  "build": "PASS",
+  "uiPassed": 436,
+  "uiFiles": 71,
+  "corePassed": 4774,
+  "coreSkipped": 11,
+  "mcpPassed": 535,
+  "mcpSkipped": 4,
+  "formatGate": "skipped: 0 uncommitted C# files",
+  "branchFormat": "PASS: 5 changed C# files vs 3f95e9b9",
+  "browserAssertions": 104,
+  "linux": "not run",
+  "liveDatabaseUat": "not run",
+  "publication": "not performed",
+  "runner": "Existing ignored Core output xunit config: sequential collections; snapshot retained"
+}

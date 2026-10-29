@@ -1,0 +1,2406 @@
+# Review package: 3f95e9b9..f47e903c
+
+## Commits
+f47e903c Record mutation preview expansion fix evidence
+a44b2661 Bound mutation SQL preview expansion before substitution
+3010a1e7 Polish mutation approval context and SQL display modes
+9fad619e fix(dashboard): normalize usage filters for current range
+abdacbe1 fix(dashboard): show scoped usage KPIs and SQL logical reads
+3c614588 fix(dashboard): refine session and operation detail controls
+fb9cb235 Plan dashboard screenshot-specific corrections
+
+## Files changed
+ .../task-3-report.md                               |  47 ++++++
+ .../specs/2026-10-06-activity-dashboard-design.md  |   8 +
+ .../2026-10-28-dashboard-detail-corrections.md     |  22 +++
+ plans/121-screenshot-detail-followup.md            |  69 ++++++++
+ src/SqlHarness.Dashboard/DashboardModels.cs        |   8 +-
+ src/SqlHarness.Dashboard/JournalReader.cs          |  52 +++++-
+ .../Mutations/MutationEndpoints.cs                 |  18 +-
+ src/SqlHarness.Dashboard/ui/src/api/queries.ts     |   3 +-
+ src/SqlHarness.Dashboard/ui/src/api/types.ts       |   4 +-
+ .../ui/src/components/OperationTable.tsx           |   8 +-
+ .../ui/src/components/SegmentedRadioGroup.tsx      |   4 +-
+ .../ui/src/components/SessionNoteCard.tsx          |   4 +-
+ .../ui/src/components/SessionOperationsTable.tsx   |  22 +--
+ .../ui/src/components/StatusBadge.tsx              |   2 +-
+ .../components/optimization/IoComparison.test.tsx  |   5 +-
+ .../src/components/optimization/IoComparison.tsx   |   4 +-
+ .../components/optimization/VersionTable.test.tsx  |  11 ++
+ .../src/components/optimization/VersionTable.tsx   |   9 +-
+ src/SqlHarness.Dashboard/ui/src/index.css          |   7 +-
+ src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts  |   8 +-
+ src/SqlHarness.Dashboard/ui/src/lib/stats.ts       |   4 +
+ .../ui/src/mutations/Approval.test.tsx             |  67 +++++++-
+ .../ui/src/mutations/ApprovalDialog.tsx            |  34 ++--
+ .../ui/src/mutations/ApprovalToast.tsx             |  34 +++-
+ .../ui/src/mutations/mutationStore.ts              |   2 +-
+ .../ui/src/mutations/sqlDisplay.test.ts            |  44 +++++
+ .../ui/src/mutations/sqlDisplay.ts                 |  54 ++++++
+ .../ui/src/pages/OperationPage.tsx                 |   3 +-
+ .../ui/src/pages/SessionPage.test.tsx              |  23 ++-
+ .../ui/src/pages/SettingsPage.tsx                  |  10 +-
+ .../ui/src/pages/StatsPage.test.tsx                |  97 +++++++----
+ .../ui/src/pages/StatsPage.tsx                     | 183 +++++----------------
+ src/SqlHarness.Dashboard/ui/src/test/fixtures.ts   |   4 +-
+ .../Dashboard/JournalReaderTests.cs                |  97 +++++++++++
+ 34 files changed, 729 insertions(+), 242 deletions(-)
+
+## Diff
+diff --git a/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md b/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md
+new file mode 100644
+index 00000000..4cba908b
+--- /dev/null
++++ b/.superpowers/sdd/121-screenshot-detail-followup/task-3-report.md
+@@ -0,0 +1,47 @@
++# Task 3 report: mutation toast and review context
++
++Implemented screenshot items 14-15 in the existing isolated worktree. The Base Toast now presents plain environment text, a bounded 240-character/two-line SQL snippet, Review and Deny. Deny uses postMutationDecision; submitted/busy/error/expired state stays visible until authoritative removal. Dialog target sits below the title, requester shows an actual session link when available, and the existing segmented radio component selects Values inline / As sent. Existing parameter table, digest, classification, writer alerts, 1-second approval delay, expiry and Enter guard remain. Both dialog decisions disable during submission.
++
++## Provenance
++
++Only the outbound dashboard mutation SSE snapshot/added projection is enriched. JournalReader joins mutation_requests.operation_id -> operations.session_id -> sessions.agent_kind. The operation_id is populated by existing ActivityJournal.LinkMutation after its exact prepared-operation/digest/token checks; neither submitted session keys nor latest/global agent records are used. Unknown/unlinked requests return null requester. UI renders the retained agent kind through existing agentLabel(). No Core/broker execution, policy, authorization, digest, migration, collection or mutation behavior changed.
++
++## Preview contract and limitations
++
++sqlDisplay.ts uses installed sql-formatter dialect tokenization and strict parameter lookups. It normalizes engine case and one optional parameter-name @ prefix (as Core SqlParameterNames does), detects duplicate/missing names, and leaves quoted strings, identifiers, comments (including nested blocks), SQL Server @@ variables, PostgreSQL dollar quotes and operators intact. Known text/null/integer/decimal/bit values render without JavaScript numeric conversion; numeric-looking default strings stay quoted text. Unsupported types, parse failures, missing/ambiguous names, PostgreSQL backslash text, decimal inputs over 28 digits and inputs above 100,000 SQL/value characters or 500 parameters return exact original SQL with an honest explanation and disabled inline option. As sent remains the default and preserves formatting/copy controls. The immutable original request/parameters/digest never enter a submit payload through this helper.
++
++The preview is presentation rather than executable replacement SQL; not every accepted provider type is previewed. It does not emulate server-dependent encoding, collation or assignment coercions. Browser visual acceptance belongs to the parent fixture harness; no real approve/deny was issued.
++
++## Focused verification
++
++- `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~MutationEndpointsTests|FullyQualifiedName~MutationEvidenceTests|FullyQualifiedName~Mutation_requester" --no-restore -p:SkipDashboardUi=true --verbosity quiet`: PASS, 35 tests. Includes verified-link behavior and a projection regression proving unlinked context remains unknown and linked context wins over a different/latest session.
++- `npx vitest run src/mutations/Approval.test.tsx src/mutations/sqlDisplay.test.ts src/mutations/mutationStore.test.ts`: PASS, 3 files / 16 tests. Fake fetch/SSE only; lexical boundaries, precision/text/null, case/prefix normalization, fallback, bounded work, requester known/unknown, immutable display modes, toast failed/busy/submitting/expiry, existing lifecycle/delay/Enter tests.
++- `npm run typecheck`: PASS.
++- `npm run lint`: PASS.
++- `npm run build`: PASS. Existing chunk-size advisory remains.
++- `dotnet format SqlHarness.sln --no-restore --include src/SqlHarness.Dashboard/JournalReader.cs src/SqlHarness.Dashboard/DashboardModels.cs src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs --verbosity quiet`: PASS.
++- `git diff --check`: PASS for owned changes (unrelated parent plan has CRLF advisory only).
++
++Earlier local check attempts exposed route parameter naming, seed-test API mismatches, an alert selector and a stub call-list assertion; these were corrected before the passing checks. Initial .NET invocation without SkipDashboardUi failed in its UI build stage; focused .NET checks then used the explicit property and the standalone final UI build passed. No full gate, Linux gate, live DB, publication, merge, push, restart or dependency install performed.
++
++## Self-review
++
++Spec: both screenshot behaviors implemented, no fabricated requester, no automatic decisions, original execution contract untouched. Quality: small pure renderer, reuse existing shadcn/Base UI controls and API path, additive dashboard-only projection, strict fallback and bounded work, focused behavioral tests. Shared SegmentedRadioGroup change only adds optional disabled per option; existing callers are compatible. Shared Stats reader/model fields are preserved. Parent retains plan/index updates, independent review, visual captures and final Windows gate.
++
++Commit: see task completion message (report committed with owned source files).
++
++## Review fix round 1 (2026-10-29)
++
++P2 cumulative preview expansion finding fixed in `a44b2661` (base `3010a1e7`). The strict formatter parameter Proxy now starts its budget at the original SQL length and charges every fully escaped literal occurrence before returning that literal. At more than 100,000 cumulative characters it throws into the existing exact-original As sent fallback, so repeated long parameters cannot first materialize a large expanded result. Counting the SQL placeholders as well as their replacement literals is intentionally conservative. A secondary final-length check rejects formatting-whitespace overhead beyond the same budget; this is additional protection rather than the expansion limiter.
++
++The new long-text repetition regression first failed against the previous implementation, reproducing expansion. After the fix, the helper returns original SQL plus its explanation; small repeated text and precision-preserving bigint still inline. The dialog regression checks disabled inline mode, selected As sent, exact original SQL, usable Deny/Approve after the original delay and immutable request data. Its first run used the native-disabled matcher against Base UI's aria-disabled radio; the assertion was corrected to the component's actual accessibility contract.
++
++Fresh checks on the fix:
++
++- `npx vitest run src/mutations/Approval.test.tsx src/mutations/sqlDisplay.test.ts src/mutations/mutationStore.test.ts`: PASS, 3 files / 18 tests.
++- `npm run typecheck`: PASS.
++- `npm run lint`: PASS.
++- `npm run build`: PASS (existing chunk-size and plugin timing advisories only); final dist ready for parent fake-browser verification.
++- `git diff --check`: PASS for owned changes; parent plan CRLF advisory unchanged.
++
++Self-review: only the preview budget and requested regression coverage changed. Original SQL/parameters/digest and lifecycle/decision paths remain unchanged. No C# tests repeated, no full gate, live decision, dependency install, source-target expansion, publication or cosmetic follow-up performed. Exact source fix commit is recorded above; this report-only commit follows it.
+diff --git a/docs/superpowers/specs/2026-10-06-activity-dashboard-design.md b/docs/superpowers/specs/2026-10-06-activity-dashboard-design.md
+index c1e22fbe..d2c34a81 100644
+--- a/docs/superpowers/specs/2026-10-06-activity-dashboard-design.md
++++ b/docs/superpowers/specs/2026-10-06-activity-dashboard-design.md
+@@ -240,10 +240,18 @@ Each phase is independently verifiable and keeps both gates green.
+ 1. **Journal core and session identity:** config, SQLite schema, `ActivityJournal`, module hook, MCP `clientInfo`, CLI process walk, sensitivity and contract tests.
+ 2. **Metrics capture:** extended IO parser, plan/EXPLAIN metric extraction, `operation_metrics`, `operation_table_io`, deduplicated plans.
+ 3. **Dashboard server and API:** project, `dashboard` command, lock/singleton, auth, endpoints, SSE, abandoned detection.
+ 4. **SPA:** Vite/React/shadcn (Base UI) scaffold, embedding, the five views, `ui` gate stage.
+ 5. **Autostart and retention:** detached spawn from `mcp serve`, idle shutdown, retention job.
+ 
+ ## Documentation
+ 
+ - Update `AGENTS.md` and `README.md`: the journal location and its sensitivity, `config.json`, `storeSensitive` caveats (plans embed SQL and may embed parameter values), and the `dashboard` command.
+ - Agents need no new instructions. The journal is invisible to them, so `docs/mcp.md` changes only to mention autostart and the stdout guarantee.
++
++### Usage statistics projection (2026-10-28)
++
++`GET /api/stats` applies its UTC half-open time window, profile/unprofiled scope and recorded dimension predicates to every aggregate, including workflow output. Invalid, duplicate or non-string recorded dimension values retain the operation-history resolver semantics. `sessionCount` counts distinct journal sessions containing matching operations (not conversations). The unfiltered scope request still supplies dimension filter options. `profileOperations` retains its time-window-only profile-chooser metadata contract and is not a selected-cohort KPI.
++
++SQL groups add nullable `logicalReadsMedianSum`, operation coverage (`logicalReadsAvailableOperations`, `logicalReadsUnavailableOperations`) and metric coverage (`logicalReadsAvailableMetrics`, `logicalReadsUnavailableMetrics`). The value sums available stored `operation_metrics.logical_reads_median` rows once per metric, across cases/variants. It does not multiply by measured repetitions and is not actual execution-total IO. Null means no recorded median; zero is recorded zero; any missing operations or metric rows make coverage partial. Operations with no metrics are counted as unavailable operations, not fabricated metric rows. Metrics are collapsed by operation before joining, preserving operation counts/durations. `topSqlByLogicalReads` ranks all matching SQL groups before the bounded top-20 projection; count/time orders retain their own full-population rankings.
++
++Usage presents a joined KPI band and the SQL logical-read order. Failed/rejected percentage is `(failed + rejected) / all matching operations`, unavailable for an empty cohort. Measured output includes only `accountingKind=workflow-output` bytes and their retained per-call byte-based token estimates; legacy artifact volumes, input/discovery/chat tokens and model prices are not substituted. The detailed accounting/chart disclosure is removed from the page; journal and API accounting contracts remain available.
+diff --git a/docs/superpowers/specs/2026-10-28-dashboard-detail-corrections.md b/docs/superpowers/specs/2026-10-28-dashboard-detail-corrections.md
+new file mode 100644
+index 00000000..fb222900
+--- /dev/null
++++ b/docs/superpowers/specs/2026-10-28-dashboard-detail-corrections.md
+@@ -0,0 +1,22 @@
++# Dashboard screenshot follow-up
++
++Operator approved the fifteen screenshot-specific corrections and circular A/B controls after the default-shadcn alignment. Keep the existing isolated dashboard-layout-polish worktree and current Base UI/Mira/Hugeicons preset. Prefer standard variants/composition, with explicit operator-requested exceptions for A/B circles and the joined Usage KPI layout. No merge/push/publication/restart/live DB decisions. No schema migration, collection expansion or historical backfill: additive read-only projections of existing journal data are authorized for requested statistics/requester context.
++
++1. Session operations: compact single-line description (agent label, otherwise real SQL preview/subject/fallback), no repeated full target line. Preserve access to original full values through title/detail; star uses a larger Hugeicons star and agent keep a spark icon, running is Badge. Time matches mock HH:mm:ss, full timestamp remains accessible. Preserve pagination/internal filtering/star PATCH/return context/flags and SSE refresh. Answer auto-refresh question grounded in AppLayout/useLiveFeed and test its behavior.
++2. Version labels go inline beside v0/v1/v2, truncating only as needed with complete values available.
++3. A single extra IO column is a visible toggle alongside Scans; no one-item More columns. Preserve useful multi-option whole-batch choices.
++4. Statement disclosure button has the same surface as its row, including hover; preserve focus, row toggle and independent links.
++5. Repair Operation tab/header/parameters geometry shown in screenshot, retaining selected-state semantics and mobile layout.
++6. Operation Details matches Session ghost button/chevron behavior.
++7. Usage KPI band is closer to mock (joined layout, useful secondary information), derives failed/rejected percentage with an explicit denominator/empty case, real session count if projected from filtered journal rows, measured output only from real retained accounting. No fabricated chat tokens/cost or unsupported metrics.
++8. Top SQL gets real logical reads and corresponding ordering from retained metrics; no N+1 fetching or multiplication by joins. Explicitly name aggregation semantics and distinguish missing data from zero. Ranking must consider all filtered SQL groups rather than only the union of pre-truncated count/time lists.
++9. Remove the Detailed usage and workflow accounting disclosure and its detailed UI contents from Usage, per explicit operator request. Do not delete underlying journal/accounting contracts or expand unrelated APIs.
++10. Preview gets play icon.
++11. Replace awkward grey retention inset with coherent default Field/layout composition preserving validation/destructive confirmations and enabled/disabled behavior.
++12. Transcript clear button aligns right; keep summary readable/wrapping on mobile.
++13. Refresh gets refresh icon; Session Add note gets plus icon.
++14. Approval Toast remains shadcn Base Toast, aligns with mock: environment is prominent plain text, compact SQL preview, Review and Deny. Deny uses the existing broker decision path, with pending/error/expiry behavior and no auto-decisions.
++15. Approval Dialog removes generic Review description; target moves below title and shows requester/actual session link when authoritative context is available. Values inline / As sent is a standard single-choice control. Original SQL/parameters/digest and approval lifecycle remain authoritative. Inline is a DISPLAY preview only: safe dialect/type-aware rendering that does not rewrite quoted text/comments/identifiers/parameter prefixes or SQL Server system variables. Unsupported ambiguous types remain As sent with an honest explanation; no lossy fabricated preview. Preserve 1s approve delay, expiry, Enter guard, busy/error and writer/tier alerts. Unknown requester must not be invented.
++16. Circular A/B controls restore prior visible letters/selection appearance while native radio groups remain interactive, keyboard-accessible, uniquely scoped and valid within table cells.
++
++Verification: meaningful focused regression tests, independent task/final review, fresh fixture-only desktop/mobile captures covering all requested changes and safety controls, final Windows just verify on unchanged source tree. Do not call scoped checks a full pass or repeat unchanged gates unnecessarily. Linux/live DB acceptance stays unverified. Record remaining data/visual limitations in a final report with per-screenshot disposition.
+diff --git a/plans/121-screenshot-detail-followup.md b/plans/121-screenshot-detail-followup.md
+new file mode 100644
+index 00000000..465ffdd2
+--- /dev/null
++++ b/plans/121-screenshot-detail-followup.md
+@@ -0,0 +1,69 @@
++# Dashboard screenshot detail Implementation Plan
++
++> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Read the extracted task brief and spec. Tasks execute serially because shared UI/API/CSS files overlap.
++
++**Goal:** Address all fifteen screenshot comments and restore circular A/B visuals while keeping truthful statistics and mutation safety.
++
++**Architecture:** Reuse installed shadcn Base UI/Mira components and existing live feed. Add bounded read-only dashboard projections only where requested data exists in the journal; no schema changes or backfill. Keep original mutation payload authoritative and preview rendering separate.
++
++**Tech Stack:** React/TypeScript, shadcn/Base UI/Hugeicons, C# dashboard journal queries, Vitest/xUnit, Playwright fixtures.
++
++**Spec:** [operator screenshot requirements](../docs/superpowers/specs/2026-10-28-dashboard-detail-corrections.md). Current base `3f95e9b9`, existing worktree `C:/Users/rgone/.codex/worktrees/f735/sqlharness`.
++
++## Global Constraints
++
++- Existing preset/fonts/icons; consult shadcn skill and official CLI docs for changed components. Use standard variants before custom markup. User explicitly authorizes joined KPI geometry and visual A/B circles.
++- Preserve unrelated edits, mutation/credential policy, approval lifecycle, paging/filter/navigation and native radio semantics.
++- Read-only journal projections permitted; no migrations/collection changes/backfill; no fabricated metrics/requester/costs.
++- No merge/push/publication/installed restart or live decision. Work with fake browser API.
++- Commit task-owned paths after focused checks; final full gate is controller-owned.
++
++## Review Focus
++
++- SSE invalidation reaches loaded Session operation pages and running transitions; compact descriptions do not remove evidence access.
++- A/B custom circles preserve native keyboard, focus and instance isolation; row surfaces have no nested button behavior.
++- Stats filters/ranking/unknown metrics/zero denominators and multiple metric rows do not duplicate operations or fabricate totals.
++- Mutation source correlation never invents requester and inline preview cannot change executed SQL or replace inside lexical literals/comments.
++- Toast Deny and dialog modes preserve one-second approval guard, expiry, busy/error handling, accessible labels and mobile reflow.
++
++## Task 1: Session, Operation, IO and Settings visual corrections
++
++**Files:** UI SessionOperationsTable/OwnerStarButton/StatusBadge, VersionTable, IoComparison, OperationPage and associated components, SessionNoteCard, SettingsPage, scoped index.css and focused tests. Do not modify StatsPage, mutation files or backend.
++
++- [ ] Read spec items1-6,10-13,16, current mocks and source; use shadcn skill/official docs Button/Table/Tabs/Field/ToggleGroup.
++- [ ] Add focused regression coverage for compact row label/star/spark/running, single-extra IO column toggle, native A/B selection and distinct instances, matching Details, and preservation of Settings validation/confirmation. Reuse SSE Session tests; verify auto-refresh via real cache invalidation path, not polling assertions that mirror implementation.
++- [ ] Make Session descriptions one compact line without repeated target prose; retain full label/SQL/target through title or existing detail navigation. Time HH:mm:ss with full timestamp accessible. Larger Hugeicons star action, spark for keep, running Badge. Preserve flags, returnSession, internal toggle and pagination.
++- [ ] Place version label inline with vN. Restore visible circular A/B labels over real native radio inputs, preserving focus/keyboard and semantics. Use existing variant utilities/semantic colors rather than raw theme skins.
++- [ ] Expose the sole IO extra (LOB logical reads in statement view) beside Scans; keep multi-option whole-batch selection if useful. Statement disclosure inherits row background, hover and focus preserve whole-row behavior.
++- [ ] Align Operation tab/parameter header and Details with Session. Avoid global toolbar/overlay regressions.
++- [ ] Add Play/Refresh/Plus icons to Preview/Refresh/Add note; keep accessible names/workflows. Improve retention Field inset and right-align transcript clear action responsively.
++- [ ] Run relevant focused tests/typecheck/lint/build; self-review and commit only owned paths. Report beside brief with exact tests, commits and screenshot disposition. No full gate or plan/index changes.
++
++## Task 2: Truthful mock-like Usage KPIs and Top SQL logical reads
++
++**Files:** StatsPage/helpers/tests, dashboard stats DTOs/JournalReader and focused xUnit tests, UI types/fixtures as needed, affected dashboard docs. Preserve Task1 changes.
++
++- [ ] Read spec items7-9 and mock Usage KPI/formulas. Inspect retained stats and operation_metrics schema before deciding aggregation. Use shadcn Card/Table/Separator/RadioGroup docs.
++- [ ] Test failed/rejected percentage including zero operations, real distinct session count if added, missing vs zero logical reads, multiple metric rows avoiding operation count/time fanout, top logical-reads ranking outside previous count/time top lists, and all existing scope/range/profile/dimension filters. Existing populated old-session rows remain on original contracts; no writes/backfill.
++- [ ] Add bounded read-only logical-reads projection per SQL group and a real top-by-reads query/list. Define aggregation clearly (recorded representative metric medians are not total physical executions); include coverage/unavailable behavior so partial/missing data is not shown as complete zero. No schema changes or N+1 per-row calls.
++- [ ] Add Logical reads column and ordering to Top SQL. KPI joined section uses standard Card/Separator/layout as far as possible, useful real secondary info and failed+rejected/total percentage; never use mock constants, fake sessions, chat tokens or estimated price without source. Measured workflow output may use actual recorded estimated tokens with clearly scoped labeling, but no invented model costs.
++- [ ] Remove the Detailed usage and workflow accounting disclosure AND its UI contents, keeping underlying APIs untouched. Remove unused imports/helpers only where no longer used; do not remove unrelated dimensions/table views.
++- [ ] Update affected authoritative dashboard contract/docs for additive fields and aggregation semantics. Run focused .NET stats tests and UI Stats tests/typecheck/lint/build. Commit only owned paths; report exact semantics/coverage/tests. No full gate or plan/index edits.
++
++## Task 3: Mutation toast, requester context and SQL display modes
++
++**Files:** ApprovalToast/Dialog and tests, mutation UI store/types, small SQL display helper or additive backend projection, MutationEndpoints/Broker pending view and JournalReader/types/tests if exact context projection needed. Preserve Stats changes in shared files. Do not change Core execution/classification/digest semantics or authorization.
++
++- [ ] Read spec items14-15 and mutation mock1b; use shadcn Toast/Dialog/RadioGroup/Button docs. Inspect actual pending DTO, prepared SessionKey/OperationRef and existing journal linkage. Source actor/session only from the retained journal correlation; do not guess from other pending/live operations. Preserve unknown state honestly.
++- [ ] Add focused tests for toast SQL preview/Review/Deny, deny pending/busy/error/expiry, dialog original SQL/parameters/digest preservation, actor/link known/unknown, modes and 1s/Enter guards. Fake API only, no real decisions.
++- [ ] Toast uses existing Base Toast with plain prominent environment, compact target/SQL, Review and Deny. Use existing postMutationDecision path; no auto-approval/denial. Keep errors visible and do not falsely dismiss failed requests.
++- [ ] Dialog header replaces generic Review prose with target/context, including actual agent label and session link when available. Move presentation without changing policy alerts or classification.
++- [ ] Add Values inline / As sent using standard single-choice control, preserving existing formatting/copy affordances as useful. Keep original SQL/parameters/digest immutable. Reuse trusted literal/token machinery if available; otherwise implement a small tested dialect-aware display renderer with safe fallback. Cover quoted strings/comments/identifiers, nested block comments, SQL Server @@ variables, parameter name prefixes, escaping/null/bool/numeric/text and PostgreSQL dollar quoting. Unknown/ambiguous values never get a misleading preview; keep As sent accessible and explain limitation. Display mode never influences submit payload.
++- [ ] Update affected dashboard-only DTO/docs if needed; no MCP startup/request-target changes, credential reads or DB writes. Run focused .NET mutation/context tests and UI mutation tests/typecheck/lint/build; self-review and commit owned paths. Report actor provenance/preview limits and exact tests. No full gate or plan/index edits.
++
++## Task 4: Controller verification and report
++
++- [ ] Independent spec/quality task reviews, then bounded combined review and unified fix wave if needed.
++- [ ] Fresh desktop/mobile fixture screenshots and interactions for all sixteen requirements; verify no app errors/overflow, safely mocked mutation decisions, screenshot disposition report with live-refresh answer and data limits.
++- [ ] Final just verify on final product tree; inspect failures, retain exact logs and source identity. No Linux/live acceptance claim.
++- [ ] Update plan/Plan121/index/history and report at `121-evidence/layout-polish/screenshot-details/report.md`; commit reviewable evidence. Keep branch locally without integration/publication.
+diff --git a/src/SqlHarness.Dashboard/DashboardModels.cs b/src/SqlHarness.Dashboard/DashboardModels.cs
+index d380f167..836a740d 100644
+--- a/src/SqlHarness.Dashboard/DashboardModels.cs
++++ b/src/SqlHarness.Dashboard/DashboardModels.cs
+@@ -223,21 +223,21 @@ public sealed record PlanSourceMapOmission(
+ public sealed record PlanSourceMapError(
+     int DocumentOrdinal,
+     string? DocumentSha256,
+     string Code,
+     string Message);
+ 
+ public sealed record DayAgentCount(string Day, string AgentKind, int Count);
+ 
+ public sealed record KeyCount(string Key, int Count);
+ 
+-public sealed record SqlHashStat(string SqlHash, int Count, long TotalDurationMs, long MaxDurationMs);
++public sealed record SqlHashStat(string SqlHash, int Count, long TotalDurationMs, long MaxDurationMs, long? LogicalReadsMedianSum = null, int LogicalReadsAvailableOperations = 0, int LogicalReadsUnavailableOperations = 0, int LogicalReadsAvailableMetrics = 0, int LogicalReadsUnavailableMetrics = 0);
+ 
+ public sealed record TableReadStat(string Table, long LogicalReads, int Operations);
+ 
+ public sealed record WaitStat(string WaitType, double TotalWaitMs);
+ 
+ public sealed record TargetStat(string? Profile, string? Database, int Count, string? Engine = null, string? Server = null);
+ 
+ /// <summary>One profile's complete operation count in the selected time window.</summary>
+ public sealed record ProfileOperationCount(string? Profile, int Operations);
+ 
+@@ -287,13 +287,15 @@ public sealed record DashboardStats(
+     IReadOnlyList<KeyCount> Operations,
+     IReadOnlyList<SqlHashStat> TopSqlByCount,
+     IReadOnlyList<SqlHashStat> TopSqlByDuration,
+     IReadOnlyList<TableReadStat> TopTablesByLogicalReads,
+     IReadOnlyList<WaitStat> TopWaits,
+     IReadOnlyList<TargetStat> Targets,
+     int SpillOperations,
+     int ColdCacheOperations,
+     IReadOnlyList<ProfileOperationCount> ProfileOperations,
+     ProfileDimensionStats ProfileDimensions,
+-    IReadOnlyList<WorkflowCost> WorkflowCosts);
++    IReadOnlyList<WorkflowCost> WorkflowCosts,
++    IReadOnlyList<SqlHashStat>? TopSqlByLogicalReads = null, int SessionCount = 0);
+ 
+-public sealed record SessionAnnotation(string? Title, string? Note, bool Starred, bool Archived);
+\ No newline at end of file
++public sealed record SessionAnnotation(string? Title, string? Note, bool Starred, bool Archived);
++internal sealed record MutationRequester(long SessionId, string? AgentLabel);
+\ No newline at end of file
+diff --git a/src/SqlHarness.Dashboard/JournalReader.cs b/src/SqlHarness.Dashboard/JournalReader.cs
+index 418961fa..b732489c 100644
+--- a/src/SqlHarness.Dashboard/JournalReader.cs
++++ b/src/SqlHarness.Dashboard/JournalReader.cs
+@@ -846,20 +846,36 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+             var anchor = Array.FindIndex(ordered, item => item.OperationId == cursor.Value);
+             if (anchor < 0)
+                 return new Page<CompareAttemptSummary>([], null);
+             start = anchor + 1;
+         }
+         var page = ordered.Skip(start).Take(pageLimit).ToArray();
+         page = HydrateCompareEvidence(connection, page).ToArray();
+         return new Page<CompareAttemptSummary>(page, start + page.Length < ordered.Length ? page[^1].OperationId : null);
+     }
+ 
++    /// <summary>Requester context only through the journal's verified prepared-operation link.</summary>
++    internal MutationRequester? MutationRequesterByRequestId(string requestId)
++    {
++        using var connection = OpenSnapshot();
++        if (connection is null)
++            return null;
++        return Query(connection, """
++            SELECT s.id, s.agent_kind
++            FROM mutation_requests m
++            JOIN operations o ON o.id = m.operation_id
++            JOIN sessions s ON s.id = o.session_id
++            WHERE m.request_id = $requestId;
++            """, [("$requestId", requestId)], reader => new MutationRequester(reader.GetInt64(0), NullableString(reader, 1)))
++            .FirstOrDefault();
++    }
++
+     /// <summary>Reads bounded mutation history newest first; SQL and values are present only when sensitive journaling was enabled.</summary>
+     public Page<MutationRequestSummary> MutationRequests(long? cursor = null, int limit = MutationHistoryPageLimit)
+     {
+         using var connection = OpenSnapshot();
+         if (connection is null)
+             return new Page<MutationRequestSummary>([], null);
+         var pageLimit = Math.Clamp(limit, 1, MaximumLimit);
+         var rows = Query(connection, """
+             SELECT id, request_id, session_key, profile, engine, server, database_name, tier, mode, digest,
+                    sql_text, parameters_json, state, status, verification, created_at, decided_at, finished_at, environment
+@@ -1355,23 +1371,28 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+     }
+ 
+     public DashboardStats Stats(
+         StatsQuery query,
+         IReadOnlyDictionary<string, IReadOnlyList<string>>? profileDimensions = null)
+     {
+         using var connection = OpenSnapshot();
+         if (connection is null)
+             return new DashboardStats([], [], [], [], [], [], [], [], [], 0, 0, [],
+                 new ProfileDimensionStats(query.Profile,
+-                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0), []);
++                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0), [], []);
+         (string, object?)[] window = [("$from", Iso(query.From)), ("$to", Iso(query.To))];
+-        const string inWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
++        connection.CreateFunction<string?, string?, bool>("stats_scope", (profile, variables) =>
++            (query.UnprofiledOnly ? profile is null : query.Profile is null || profile == query.Profile)
++            && (query.Dimensions is not { Count: > 0 }
++                || OperationDimensionResolver.Matches(query.Dimensions, OperationDimensionResolver.ReadRecordedValues(variables))));
++        const string timeWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
++        const string inWindow = timeWindow + " AND stats_scope(o.profile, o.vars_json)";
+ 
+         var perDay = Query(connection, $"""
+             SELECT substr(o.started_at, 1, 10) AS day, s.agent_kind, COUNT(*) FROM operations o JOIN sessions s ON s.id = o.session_id
+             WHERE {inWindow} GROUP BY day, s.agent_kind ORDER BY day, s.agent_kind;
+             """, window, r => new DayAgentCount(r.GetString(0), r.GetString(1), r.GetInt32(2)));
+ 
+         var liveness = new ProcessLiveness(processes, _dead);
+         var statuses = Query(connection, $"""
+             SELECT o.status, COUNT(*) FROM operations o WHERE {inWindow} AND o.status <> 'running' GROUP BY o.status;
+             """, window, r => new KeyCount(r.GetString(0), r.GetInt32(1))).ToList();
+@@ -1382,27 +1403,44 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+             statuses.Add(new KeyCount(group.Key, group.Count()));
+ 
+         var exitCodes = Query(connection, $"""
+             SELECT CAST(o.exit_code AS TEXT), COUNT(*) FROM operations o WHERE {inWindow} AND o.exit_code IS NOT NULL
+             GROUP BY o.exit_code ORDER BY o.exit_code;
+             """, window, r => new KeyCount(r.GetString(0), r.GetInt32(1)));
+         var operations = Query(connection, $"""
+             SELECT o.operation, COUNT(*) FROM operations o WHERE {inWindow} GROUP BY o.operation ORDER BY COUNT(*) DESC, o.operation;
+             """, window, r => new KeyCount(r.GetString(0), r.GetInt32(1)));
+ 
+-        const string sqlStats = "SELECT o.sql_hash, COUNT(*) AS n, COALESCE(SUM(o.duration_ms), 0) AS total, COALESCE(MAX(o.duration_ms), 0) FROM operations o";
++        // Collapse metrics before the join so operation counts and durations cannot fan out.
++        const string sqlStats = """
++            WITH metric_reads AS (
++                SELECT operation_id, SUM(logical_reads_median) AS reads,
++                    COUNT(logical_reads_median) AS available, COUNT(*) - COUNT(logical_reads_median) AS unavailable
++                FROM operation_metrics GROUP BY operation_id
++            )
++            SELECT o.sql_hash, COUNT(*) AS n, COALESCE(SUM(o.duration_ms), 0) AS total,
++                COALESCE(MAX(o.duration_ms), 0), SUM(m.reads) AS reads,
++                SUM(CASE WHEN m.available > 0 THEN 1 ELSE 0 END),
++                SUM(CASE WHEN COALESCE(m.available, 0) = 0 THEN 1 ELSE 0 END),
++                COALESCE(SUM(m.available), 0), COALESCE(SUM(m.unavailable), 0)
++            FROM operations o LEFT JOIN metric_reads m ON m.operation_id = o.id
++            """;
+         var byCount = Query(connection, $"""
+             {sqlStats} WHERE {inWindow} AND o.sql_hash IS NOT NULL GROUP BY o.sql_hash ORDER BY n DESC, total DESC, o.sql_hash LIMIT {TopLimit};
+             """, window, ReadSqlStat);
+         var byDuration = Query(connection, $"""
+             {sqlStats} WHERE {inWindow} AND o.sql_hash IS NOT NULL GROUP BY o.sql_hash ORDER BY total DESC, n DESC, o.sql_hash LIMIT {TopLimit};
+             """, window, ReadSqlStat);
++        var byReads = Query(connection, $"""
++            {sqlStats} WHERE {inWindow} AND o.sql_hash IS NOT NULL GROUP BY o.sql_hash ORDER BY reads DESC, n DESC, o.sql_hash LIMIT {TopLimit};
++            """, window, ReadSqlStat);
++        var sessionCount = Scalar<long>(connection, $"SELECT COUNT(DISTINCT o.session_id) FROM operations o WHERE {inWindow};", window);
+ 
+         var tables = Query(connection, $"""
+             SELECT t.table_name, SUM(t.logical_reads * m.runs), COUNT(DISTINCT o.id)
+             FROM operation_table_io t JOIN operation_metrics m ON m.id = t.metric_id JOIN operations o ON o.id = m.operation_id
+             WHERE {inWindow} GROUP BY t.table_name ORDER BY 2 DESC, t.table_name LIMIT {TopLimit};
+             """, window, r => new TableReadStat(r.GetString(0), r.GetInt64(1), r.GetInt32(2)));
+ 
+         var waits = new Dictionary<string, double>(StringComparer.Ordinal);
+         foreach (var (json, runs) in Query(connection, $"""
+             SELECT m.waits_json, m.runs FROM operation_metrics m JOIN operations o ON o.id = m.operation_id
+@@ -1426,21 +1464,21 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+         }
+ 
+         var targets = Query(connection, $"""
+             SELECT o.profile, o.database, COUNT(*), o.engine, o.server FROM operations o WHERE {inWindow}
+             GROUP BY o.profile, o.database, o.engine, o.server ORDER BY COUNT(*) DESC, o.profile, o.engine, o.server, o.database LIMIT {TopLimit};
+             """, window, r => new TargetStat(NullableString(r, 0), NullableString(r, 1), r.GetInt32(2), NullableString(r, 3), NullableString(r, 4)));
+ 
+         // These aggregates intentionally read every operation in the requested window.
+         // The bounded Targets list above is presentation data and cannot back dimension totals.
+         var profileOperations = Query(connection, $"""
+-            SELECT o.profile, COUNT(*) FROM operations o WHERE {inWindow}
++            SELECT o.profile, COUNT(*) FROM operations o WHERE {timeWindow}
+             GROUP BY o.profile ORDER BY COUNT(*) DESC, o.profile;
+             """, window, r => new ProfileOperationCount(NullableString(r, 0), r.GetInt32(1)));
+         (string, object?)[] dimensionWindow = [.. window, ("$profile", query.Profile), ("$unprofiled", query.UnprofiledOnly ? 1 : 0)];
+         var dimensionRows = Query(connection, $"""
+             SELECT o.profile, o.engine, o.server, o.database, o.status, o.duration_ms, o.vars_json
+             FROM operations o WHERE {inWindow}
+               AND (($unprofiled = 1 AND o.profile IS NULL) OR ($unprofiled = 0 AND $profile IS NOT NULL AND o.profile = $profile));
+             """, dimensionWindow, r => new DimensionOperation(
+                 NullableString(r, 0), NullableString(r, 1), NullableString(r, 2), NullableString(r, 3),
+                 r.GetString(4), NullableLong(r, 5), NullableString(r, 6),
+@@ -1463,31 +1501,31 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+             byCount,
+             byDuration,
+             tables,
+             waits.OrderByDescending(w => w.Value).ThenBy(w => w.Key, StringComparer.Ordinal).Take(TopLimit)
+                 .Select(w => new WaitStat(w.Key, w.Value)).ToArray(),
+             targets,
+             (int)spills,
+             (int)cold,
+             profileOperations,
+             dimensionStats,
+-            WorkflowCosts(connection, window));
++            WorkflowCosts(connection, window), byReads, (int)sessionCount);
+     }
+ 
+     private static IReadOnlyList<WorkflowCost> WorkflowCosts(SqliteConnection connection, (string, object?)[] window)
+     {
+         var rows = Query(connection, $"""
+             SELECT o.operation_ref, o.parent_operation_ref, o.operation, o.status, o.emitted_bytes, o.dry_run,
+                    root.raw_bytes, root.status, root.dry_run, root.operation
+             FROM operations o
+             LEFT JOIN operations root ON root.operation_ref = COALESCE(o.parent_operation_ref, o.operation_ref)
+-            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to);
++            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to) AND stats_scope(o.profile, o.vars_json);
+             """, window, r => new WorkflowOutputRow(
+                 NullableString(r, 0), NullableString(r, 1), r.GetString(2), r.GetString(3), NullableLong(r, 4), r.GetInt64(5) != 0,
+                 NullableLong(r, 6), NullableString(r, 7), !r.IsDBNull(8) && r.GetInt64(8) != 0, NullableString(r, 9)));
+ 
+         var costs = new List<WorkflowCost>();
+         foreach (var group in rows.GroupBy(row => row.ParentOperationRef ?? row.OperationRef,
+                      StringComparer.Ordinal))
+         {
+             var measuredRows = group.Where(row => row.EmittedBytes.HasValue).ToArray();
+             if (measuredRows.Length == 0)
+@@ -1875,21 +1913,21 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
+         Json(NullableString(r, 27)),
+         r.IsDBNull(28) ? null : new PostgresBuffers(NullableLong(r, 28), NullableLong(r, 29), NullableLong(r, 30),
+             NullableLong(r, 31), NullableLong(r, 32), NullableLong(r, 33)),
+         [], [])
+     {
+         CaseId = r.GetString(15),
+         CaseLabel = r.GetString(16),
+     };
+ 
+     private static SqlHashStat ReadSqlStat(SqliteDataReader r) =>
+-        new(r.GetString(0), r.GetInt32(1), r.GetInt64(2), r.GetInt64(3));
++        new(r.GetString(0), r.GetInt32(1), r.GetInt64(2), r.GetInt64(3), NullableLong(r, 4), r.GetInt32(5), r.GetInt32(6), r.GetInt32(7), r.GetInt32(8));
+ 
+     private static Spread? SpreadAt(SqliteDataReader r, int index) =>
+         r.IsDBNull(index) ? null : new Spread(r.GetInt64(index), r.GetInt64(index + 1), r.GetInt64(index + 2));
+ 
+     /// <summary>A stored JSON value, or null when it is absent or malformed, so one bad row never fails a response.</summary>
+     private static JsonElement? Json(string? text)
+     {
+         if (text is null)
+             return null;
+         try
+diff --git a/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs b/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs
+index 4fecff49..4edb9f5a 100644
+--- a/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs
++++ b/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs
+@@ -31,21 +31,21 @@ internal sealed class MutationEndpointServices(
+     internal DashboardActivity Activity { get; } = activity;
+     internal CancellationToken Stopping { get; } = stopping;
+     internal JsonSerializerOptions Json { get; } = json;
+ }
+ 
+ internal static class MutationEndpoints
+ {
+     internal static void Map(IEndpointRouteBuilder routes, MutationEndpointServices services, JournalReader reader)
+     {
+         routes.MapMethods("/mutations", [HttpMethods.Post], (Delegate)((HttpContext context) => SubmitAsync(context, services)));
+-        routes.MapMethods("/mutations/events", [HttpMethods.Get], (Delegate)((HttpContext context) => EventsAsync(context, services)));
++        routes.MapMethods("/mutations/events", [HttpMethods.Get], (Delegate)((HttpContext context) => EventsAsync(context, services, reader)));
+         routes.MapMethods("/mutations/{id}/approve", [HttpMethods.Post], (Delegate)((HttpContext context, string id) => DecideAsync(context, id, true, services)));
+         routes.MapMethods("/mutations/{id}/deny", [HttpMethods.Post], (Delegate)((HttpContext context, string id) => DecideAsync(context, id, false, services)));
+         routes.MapMethods("/mutations", [HttpMethods.Get, HttpMethods.Head], (Delegate)((long? cursor, int? limit) =>
+             Results.Json(reader.MutationRequests(cursor, limit ?? JournalReader.MutationHistoryPageLimit), services.Json)));
+     }
+ 
+     private static async Task<IResult> SubmitAsync(HttpContext context, MutationEndpointServices services)
+     {
+         MutationRequest? request;
+         string? preparationToken;
+@@ -170,55 +170,65 @@ internal static class MutationEndpoints
+             return result switch
+             {
+                 MutationApprovalResult.Accepted => Results.Ok(),
+                 MutationApprovalResult.Busy => Results.Conflict(new { status = MutationStatus.Busy, error = "profile_execution_busy" }),
+                 _ => Results.Conflict(new { error = "request_not_pending" }),
+             };
+         }
+         return services.Broker.TryDeny(id) ? Results.Ok() : Results.Conflict(new { error = "request_not_pending" });
+     }
+ 
+-    private static async Task EventsAsync(HttpContext context, MutationEndpointServices services)
++    private static async Task EventsAsync(HttpContext context, MutationEndpointServices services, JournalReader reader)
+     {
+         context.Response.StatusCode = StatusCodes.Status200OK;
+         context.Response.ContentType = "text/event-stream";
+         context.Response.Headers.CacheControl = "no-cache";
+         context.Response.Headers["X-Accel-Buffering"] = "no";
+         using var stream = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, services.Stopping);
+         using var subscription = services.Broker.Subscribe();
+         services.Activity.StreamOpened();
+         try
+         {
+-            await WriteEvent(context, "snapshot", subscription.Sequence, subscription.Snapshot, services.Json, stream.Token).ConfigureAwait(false);
++            await WriteEvent(context, "snapshot", subscription.Sequence, subscription.Snapshot.Select(view => WithRequester(view, reader)), services.Json, stream.Token).ConfigureAwait(false);
+             await foreach (var envelope in subscription.Events.ReadAllAsync(stream.Token).ConfigureAwait(false))
+             {
+                 switch (envelope.Event)
+                 {
+                     case MutationAdded added:
+-                        await WriteEvent(context, "added", envelope.Sequence, added.View, services.Json, stream.Token).ConfigureAwait(false);
++                        await WriteEvent(context, "added", envelope.Sequence, WithRequester(added.View, reader), services.Json, stream.Token).ConfigureAwait(false);
+                         break;
+                     case MutationRemoved removed:
+                         await WriteEvent(context, "removed", envelope.Sequence,
+                             new { requestId = removed.RequestId, state = StateName(removed.State) }, services.Json, stream.Token).ConfigureAwait(false);
+                         break;
+                 }
+             }
+         }
+         catch (OperationCanceledException) when (stream.IsCancellationRequested)
+         {
+         }
+         finally
+         {
+             services.Activity.StreamClosed();
+         }
+     }
+ 
++    private static object WithRequester(PendingMutationView view, JournalReader reader) => new
++    {
++        view.RequestId,
++        view.Request,
++        view.Environment,
++        view.WriterSameAsReader,
++        view.ExpiresAt,
++        Requester = reader.MutationRequesterByRequestId(view.RequestId),
++    };
++
+     internal static void PersistEvent(MutationEndpointServices services, BrokerEvent change)
+     {
+         if (change is MutationRemoved removed)
+         {
+             var status = removed.State switch
+             {
+                 MutationState.Approved => null,
+                 MutationState.Denied => MutationStatus.Denied,
+                 MutationState.Expired => MutationStatus.Timeout,
+                 MutationState.Cancelled => null,
+diff --git a/src/SqlHarness.Dashboard/ui/src/api/queries.ts b/src/SqlHarness.Dashboard/ui/src/api/queries.ts
+index d233d5ed..33e879e9 100644
+--- a/src/SqlHarness.Dashboard/ui/src/api/queries.ts
++++ b/src/SqlHarness.Dashboard/ui/src/api/queries.ts
+@@ -341,23 +341,24 @@ export function rangeStart(range: StatsRange, now: number): string | undefined {
+   return new Date(start).toISOString()
+ }
+ 
+ export function rangeWindow(range: StatsRange, now: number): StatsWindow {
+   const to = new Date(Math.floor(now / 60_000) * 60_000).toISOString()
+   return { from: rangeStart(range, now), to }
+ }
+ 
+ export function useStats(
+   range: StatsRange, window: StatsWindow, profile?: string | null, dimensions: Record<string, string | null> = {},
+-  rowDimension?: string, columnDimension?: string, unprofiled = false,
++  rowDimension?: string, columnDimension?: string, unprofiled = false, enabled = true,
+ ) {
+   return useQuery({
++    enabled,
+     queryKey: queryKeys.stats(range, window, profile, dimensions, rowDimension, columnDimension, unprofiled),
+     queryFn: () => getJson<DashboardStats>("/api/stats", {
+       ...window,
+       profile,
+       unprofiled: unprofiled ? "true" : undefined,
+       dimensions: Object.keys(dimensions).length ? JSON.stringify(dimensions) : undefined,
+       rowDimension,
+       columnDimension,
+     }),
+   })
+diff --git a/src/SqlHarness.Dashboard/ui/src/api/types.ts b/src/SqlHarness.Dashboard/ui/src/api/types.ts
+index 4184565d..6927a12c 100644
+--- a/src/SqlHarness.Dashboard/ui/src/api/types.ts
++++ b/src/SqlHarness.Dashboard/ui/src/api/types.ts
+@@ -422,21 +422,21 @@ export type OperationDetail = {
+ }
+ 
+ export type OperationPhaseSummary = { phase: string; count: number; totalMs: number; maxMs: number }
+ export type OperationEventSummary = {
+   offsetMs: number; phase: string; durationMs: number; outcome: string; errorNumber: number | null
+   clientConnectionId: string | null; droppedCount: number | null
+ }
+ 
+ export type KeyCount = { key: string; count: number }
+ export type DayAgentCount = { day: string; agentKind: string; count: number }
+-export type SqlHashStat = { sqlHash: string; count: number; totalDurationMs: number; maxDurationMs: number }
++export type SqlHashStat = { sqlHash: string; count: number; totalDurationMs: number; maxDurationMs: number; logicalReadsMedianSum?: number | null; logicalReadsAvailableOperations?: number; logicalReadsUnavailableOperations?: number; logicalReadsAvailableMetrics?: number; logicalReadsUnavailableMetrics?: number }
+ export type TableReadStat = { table: string; logicalReads: number; operations: number }
+ export type WaitStat = { waitType: string; totalWaitMs: number }
+ export type TargetStat = { profile: string | null; database: string | null; count: number; engine?: string | null; server?: string | null }
+ export type ProfileOperationCount = { profile: string | null; operations: number }
+ export type DimensionValueSummary = {
+   name: string; value: string; isUnknown: boolean; source: string; operations: number | null; percentage: number | null
+   totalDurationMs: number | null; durationAvailableOperations: number | null; durationUnavailableOperations: number | null
+   failed: number | null; rejected: number | null
+ }
+ export type DimensionStat = { name: string; values: DimensionValueSummary[] }
+@@ -473,20 +473,22 @@ export type WorkflowCostComparison = {
+   estimatedOutputTokenDelta: number | null
+ }
+ 
+ export type DashboardStats = {
+   operationsPerDay: DayAgentCount[]
+   statuses: KeyCount[]
+   exitCodes: KeyCount[]
+   operations: KeyCount[]
+   topSqlByCount: SqlHashStat[]
+   topSqlByDuration: SqlHashStat[]
++  topSqlByLogicalReads?: SqlHashStat[]
++  sessionCount?: number
+   topTablesByLogicalReads: TableReadStat[]
+   topWaits: WaitStat[]
+   targets: TargetStat[]
+   spillOperations: number
+   coldCacheOperations: number
+   profileOperations: ProfileOperationCount[]
+   profileDimensions: ProfileDimensionStats
+   workflowCosts: WorkflowCost[]
+ }
+ 
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/OperationTable.tsx b/src/SqlHarness.Dashboard/ui/src/components/OperationTable.tsx
+index 24235749..ac4b6072 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/OperationTable.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/OperationTable.tsx
+@@ -1,27 +1,29 @@
++import { HugeiconsIcon } from "@hugeicons/react"
++import { StarIcon } from "@hugeicons/core-free-icons"
+ import { Link } from "@tanstack/react-router"
+ import type { OperationSummary } from "@/api/types"
+ import { FlagBadges } from "@/components/FlagBadges"
+ import { StatusBadge } from "@/components/StatusBadge"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { agentLabel } from "@/lib/agents"
+ import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
+ import { isInternalOperation } from "@/lib/internalOperations"
+ import { useUpdateOperationAnnotation } from "@/api/queries"
+ import { Button } from "@/components/ui/button"
+ 
+-export function OwnerStarButton({ operation }: { operation: OperationSummary }) {
++export function OwnerStarButton({ operation, prominent = false }: { operation: OperationSummary; prominent?: boolean }) {
+   const update = useUpdateOperationAnnotation(operation.id)
+-  return <Button variant="ghost" size="sm" aria-label={operation.ownerStarred ? "Unstar operation" : "Star operation"}
++  return <Button variant="ghost" size={prominent ? "icon-lg" : "icon-sm"} aria-label={operation.ownerStarred ? "Unstar operation" : "Star operation"}
+     aria-pressed={operation.ownerStarred} disabled={update.isPending}
+     onClick={() => update.mutate({ starred: !operation.ownerStarred })}>
+-    {operation.ownerStarred ? "★" : "☆"}
++    <HugeiconsIcon icon={StarIcon} strokeWidth={2} fill={operation.ownerStarred ? "currentColor" : "none"} />
+   </Button>
+ }
+ 
+ /** Live elapsed time for running rows when `now` is given; recorded duration otherwise. */
+ export function OperationTable({ operations, now, showInternal, membership }: { operations: OperationSummary[]; now?: number; showInternal: boolean; membership?: Record<number, string> }) {
+   const visibleOperations = showInternal ? operations : operations.filter(operation => !isInternalOperation(operation))
+   return (
+     <div className="overflow-x-auto">
+       <Table>
+         <TableHeader>
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/SegmentedRadioGroup.tsx b/src/SqlHarness.Dashboard/ui/src/components/SegmentedRadioGroup.tsx
+index 67294834..9abc9102 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/SegmentedRadioGroup.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/SegmentedRadioGroup.tsx
+@@ -1,21 +1,21 @@
+ import { useId, type ReactNode } from "react"
+ import { cn } from "cn"
+ import { Label } from "@/components/ui/label"
+ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+ 
+ /** A single-choice radio group presented as joined, labelled segments. */
+ export function SegmentedRadioGroup({ label, value, onValueChange, options, className }: {
+   label: string
+   value: string
+   onValueChange: (value: string) => void
+-  options: { value: string; label: ReactNode; ariaLabel?: string }[]
++  options: { value: string; label: ReactNode; ariaLabel?: string; disabled?: boolean }[]
+   className?: string
+ }) {
+   const id = useId()
+   return <RadioGroup aria-label={label} value={value} onValueChange={onValueChange} className={cn("flex w-fit max-w-full flex-wrap gap-0", className)}>
+     {options.map((option, index) => <div key={option.value} className="relative min-w-0 max-w-full border border-input first:rounded-l-lg last:rounded-r-lg [&+div]:border-l-0 has-[[aria-checked=true]]:bg-muted has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50">
+-      <RadioGroupItem id={`${id}-${index}`} value={option.value} aria-label={option.ariaLabel} className="absolute inset-0 size-full aspect-auto opacity-0 after:inset-0" />
++      <RadioGroupItem id={`${id}-${index}`} value={option.value} disabled={option.disabled} aria-label={option.ariaLabel} className="absolute inset-0 size-full aspect-auto opacity-0 after:inset-0" />
+       <Label htmlFor={`${id}-${index}`} className="cursor-pointer break-words px-2.5 py-1.5">{option.label}</Label>
+     </div>)}
+   </RadioGroup>
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/SessionNoteCard.tsx b/src/SqlHarness.Dashboard/ui/src/components/SessionNoteCard.tsx
+index fb96ae12..da35bef9 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/SessionNoteCard.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/SessionNoteCard.tsx
+@@ -1,24 +1,26 @@
++import { HugeiconsIcon } from "@hugeicons/react"
++import { Add01Icon } from "@hugeicons/core-free-icons"
+ import { useState } from "react"
+ import { useUpdateSessionAnnotation } from "@/api/queries"
+ import { Alert, AlertDescription } from "@/components/ui/alert"
+ import { Button } from "@/components/ui/button"
+ import { Textarea } from "@/components/ui/textarea"
+ 
+ const maximumNoteLength = 10_000
+ 
+ export function SessionNoteCard({ sessionId, note }: { sessionId: number; note: string | null }) {
+   const update = useUpdateSessionAnnotation(sessionId)
+   const [draft, setDraft] = useState<string | null>(null)
+ 
+   if (note === null && draft === null)
+-    return <Button variant="outline" onClick={() => { update.reset(); setDraft("") }}>Add note</Button>
++    return <Button variant="outline" onClick={() => { update.reset(); setDraft("") }}><HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />Add note</Button>
+ 
+   return (
+     <section aria-label="Session note" className="flex flex-col gap-2">
+         {draft === null ? (
+           <>
+             <Button variant="secondary" className="session-note-display" title="Edit note" onClick={() => { update.reset(); setDraft(note ?? "") }}>{note}</Button>
+             {update.isSuccess && <span role="status" className="sr-only">Saved</span>}
+           </>
+         ) : (
+           <>
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/SessionOperationsTable.tsx b/src/SqlHarness.Dashboard/ui/src/components/SessionOperationsTable.tsx
+index 6955f66d..b5eff710 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/SessionOperationsTable.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/SessionOperationsTable.tsx
+@@ -1,40 +1,42 @@
+ import { Link } from "@tanstack/react-router"
+ import type { OperationSummary } from "@/api/types"
+ import { OwnerStarButton } from "@/components/OperationTable"
+ import { FlagBadges } from "@/components/FlagBadges"
+ import { StatusBadge } from "@/components/StatusBadge"
+-import { Badge } from "@/components/ui/badge"
++import { HugeiconsIcon } from "@hugeicons/react"
++import { SparklesIcon } from "@hugeicons/core-free-icons"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
+ import { isInternalOperation } from "@/lib/internalOperations"
+ 
+ /** Session transport is in the header; summaries do not carry per-operation transport. */
+ export function SessionOperationsTable({ operations, showInternal }: { operations: OperationSummary[]; showInternal: boolean }) {
+   const visible = showInternal ? operations : operations.filter(operation => !isInternalOperation(operation))
+   return <Table>
+     <TableHeader><TableRow>
+       <TableHead>ID</TableHead><TableHead>Time</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead>
+       <TableHead>Status</TableHead><TableHead className="text-right">Duration</TableHead><TableHead className="text-right">Reads</TableHead>
+     </TableRow></TableHeader>
+     <TableBody>{visible.map(operation => {
+       const target = [operation.profile, operation.engine, operation.server, operation.database].filter(Boolean).join(" / ")
+       return <TableRow key={operation.id}>
+         <TableCell><Link to="/operations/$id" params={{ id: String(operation.id) }} search={{ returnSession: operation.sessionId }}>{operation.id}</Link></TableCell>
+-        <TableCell className="whitespace-nowrap">{formatTimestamp(operation.startedAt)}</TableCell>
++        <TableCell className="whitespace-nowrap"><time dateTime={operation.startedAt} title={formatTimestamp(operation.startedAt)}>{new Date(operation.startedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time></TableCell>
+         <TableCell>{operation.operation}</TableCell>
+-        <TableCell className="min-w-48 max-w-80 whitespace-normal break-words">
+-          <div className="flex flex-wrap items-center gap-1"><OwnerStarButton operation={operation} />{operation.agentLabel && <span>{operation.agentLabel}</span>}{operation.agentKeep && <Badge variant="outline">Agent keep</Badge>}</div>
+-          {operation.subject && <div>{operation.subject}</div>}
+-          {operation.sqlPreview && <code className="block break-all">{operation.sqlPreview}{operation.sqlPreviewTruncated ? "…" : ""}</code>}
+-          {target && <div className="text-sm text-muted-foreground">{target}</div>}
+-          {operation.progress && <div className="text-sm text-muted-foreground">{operation.progress.polls} polls</div>}
+-          {operation.versionPair && <div className="text-sm text-muted-foreground">{operation.versionPair} · {formatNumber(operation.readsBefore)} → {formatNumber(operation.readsAfter)}</div>}
+-          <FlagBadges operation={operation} />
++        <TableCell className="min-w-48 max-w-80">
++          <div className="flex items-center gap-1">
++            <OwnerStarButton operation={operation} prominent />
++            {operation.agentKeep && <HugeiconsIcon icon={SparklesIcon} className="size-4 shrink-0 text-muted-foreground" aria-label="Kept by agent" />}
++            <span className="truncate" title={[operation.agentLabel, operation.subject, operation.sqlPreview, target].filter(Boolean).join("\n")}>{operation.agentLabel || operation.sqlPreview || operation.subject || operation.operation}{!operation.agentLabel && operation.sqlPreview && operation.sqlPreviewTruncated ? "…" : ""}</span>
++            {operation.progress && <span className="shrink-0 text-xs text-muted-foreground">{operation.progress.polls} polls</span>}
++            {operation.versionPair && <span className="shrink-0 text-xs text-muted-foreground">{operation.versionPair} · {formatNumber(operation.readsBefore)} → {formatNumber(operation.readsAfter)}</span>}
++            <FlagBadges operation={operation} />
++          </div>
+         </TableCell>
+         <TableCell><StatusBadge operation={operation} /></TableCell>
+         <TableCell className="text-right whitespace-nowrap">{formatDuration(operation.durationMs)}</TableCell>
+         <TableCell className="text-right">{formatNumber(operation.logicalReadsMedian)}</TableCell>
+       </TableRow>
+     })}</TableBody>
+   </Table>
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/StatusBadge.tsx b/src/SqlHarness.Dashboard/ui/src/components/StatusBadge.tsx
+index 329b3c83..aa88e07e 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/StatusBadge.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/StatusBadge.tsx
+@@ -1,21 +1,21 @@
+ import type { OperationSummary } from "@/api/types"
+ import { Badge } from "@/components/ui/badge"
+ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+ import { describeError } from "@/lib/errors"
+ import { badgeTier, statusVariant } from "@/lib/flags"
+ 
+ type StatusFields = Pick<OperationSummary, "status" | "exitCode" | "errorKind" | "errorMessage" | "cancelReason">
+ 
+ export function StatusBadge({ operation }: { operation: StatusFields }) {
+-  if (badgeTier(operation.status) === "info") return <span className="text-sm text-muted-foreground">{operation.status}</span>
++  if (badgeTier(operation.status) === "info" && operation.status !== "running") return <span className="text-sm text-muted-foreground">{operation.status}</span>
+   const badge = <Badge data-tier={badgeTier(operation.status)} variant={statusVariant(operation.status)}>{operation.status}</Badge>
+   if (operation.status !== "failed" && operation.status !== "rejected") return badge
+ 
+   const heading = [operation.errorKind ?? "error", operation.exitCode !== null ? `exit ${operation.exitCode}` : null]
+     .filter(Boolean)
+     .join(" · ")
+   const sentence = describeError(operation.exitCode, operation.errorKind, operation.cancelReason)
+   return (
+     <Dialog>
+       <Tooltip>
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx b/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx
+index e2717456..00fdf52d 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx
+@@ -38,22 +38,23 @@ test("IO expands statements, switches scope and toggles optional counters", asyn
+   expect(screen.getByRole("rowheader", { name: "Total (whole batch)" })).toBeInTheDocument()
+ })
+ 
+ test("shows selected-run metrics and object LOB without replacing missing values", async () => {
+   const statement = { ...comparison.statements![0], cpuBeforeMs: null, cpuAfterMs: 0, elapsedBeforeMs: null, elapsedAfterMs: 42, planRepetitionBefore: null, planRepetitionAfter: 3, planLinkAfter: "/plan?occurrence=2", objects: [{ ...comparison.statements![0].objects[0], lobLogicalReadsBefore: null, lobLogicalReadsAfter: 7 }] }
+   render(<IoComparison comparison={{ ...comparison, selectedCase: "case1", statements: [statement] }} byStatement onViewChange={vi.fn()} />)
+   expect(screen.getByText(/CPU \(ms\).*—.*0/)).toBeInTheDocument()
+   expect(screen.getByText(/Elapsed \(ms\).*—.*42/)).toBeInTheDocument()
+   expect(screen.getByText(/repetition 3/)).toBeInTheDocument()
+   expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan?occurrence=2")
+-  await userEvent.click(screen.getByText("More columns"))
+-  await userEvent.click(screen.getByRole("checkbox", { name: "LOB logical" }))
++  expect(screen.queryByRole("button", { name: "More columns" })).not.toBeInTheDocument()
++  await userEvent.click(screen.getByRole("button", { name: "LOB logical" }))
++  expect(screen.getByRole("button", { name: "LOB logical" })).toHaveAttribute("aria-pressed", "true")
+   expect(within(screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!).getByText("7")).toBeInTheDocument()
+ })
+ 
+ test("explains unavailable statement metrics for all cases", () => {
+   render(<IoComparison comparison={{ ...comparison, statementMetricsUnavailableReason: "Select a single case for statement metrics." }} byStatement onViewChange={vi.fn()} />)
+   expect(screen.getByText("Select a single case for statement metrics.")).toBeInTheDocument()
+ })
+ 
+ test.each([
+   { statements: [], tableIoUnavailable: false },
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx b/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx
+index 7c4e6e41..d23798e1 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx
+@@ -32,32 +32,32 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
+     if (byStatement) setColumns(current => current.filter(key => key === "lobLogicalReads"))
+   }
+   const extraCells = (table?: string, object?: IoRow) => visibleColumns.map(key => <TableCell key={key}><Pair before={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsBefore ?? null : !byStatement && table ? extras?.before[table]?.[key] ?? null : null} after={byStatement && key === "lobLogicalReads" ? object?.lobLogicalReadsAfter ?? null : !byStatement && table ? extras?.after[table]?.[key] ?? null : null} /></TableCell>)
+   const [closed, setClosed] = useState<string[]>([])
+   const rows = comparison.statements ?? []
+   const renderRow = (row: IoRow, key: string) => <TableRow key={key}><TableHead scope="row" className="whitespace-normal pl-8 font-mono text-[13px]">{row.table}</TableHead>{scans && <TableCell><Pair before={row.scansBefore} after={row.scansAfter} /></TableCell>}<TableCell><Pair before={row.readsBefore} after={row.readsAfter} change={row.change} /></TableCell>{extraCells(row.table, row)}</TableRow>
+   return <section aria-label="IO comparison" className="io-comparison space-y-3">
+     <div className="flex flex-wrap items-center gap-2">
+       <SegmentedRadioGroup label="IO view" value={byStatement ? "statements" : "whole"} options={[{ value: "statements", label: "By statement" }, { value: "whole", label: "Whole batch" }]} onValueChange={value => { if (value === "statements" || value === "whole") onViewChange(value) }} />
+       <span className="ml-2 text-xs text-muted-foreground">Columns</span><Button size="sm" variant={scans ? "secondary" : "outline"} aria-pressed={scans} onClick={() => setScans(!scans)}>Scans</Button>
+-      <Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}>More columns</PopoverTrigger><PopoverContent align="start"><FieldSet><FieldLegend>Columns</FieldLegend><FieldGroup>{visibleOptions.map(column => <Field key={column.key} orientation="horizontal"><FieldLabel><Checkbox checked={columns.includes(column.key)} onCheckedChange={() => setColumns(current => current.includes(column.key) ? current.filter(item => item !== column.key) : [...current, column.key])} />{column.label}</FieldLabel></Field>)}</FieldGroup></FieldSet></PopoverContent></Popover>
++      {visibleOptions.length === 1 ? <Button size="sm" variant={columns.includes("lobLogicalReads") ? "secondary" : "outline"} aria-pressed={columns.includes("lobLogicalReads")} onClick={() => setColumns(current => current.includes("lobLogicalReads") ? current.filter(key => key !== "lobLogicalReads") : [...current, "lobLogicalReads"])}>LOB logical</Button> : <Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}>More columns</PopoverTrigger><PopoverContent align="start"><FieldSet><FieldLegend>Columns</FieldLegend><FieldGroup>{visibleOptions.map(column => <Field key={column.key} orientation="horizontal"><FieldLabel><Checkbox checked={columns.includes(column.key)} onCheckedChange={() => setColumns(current => current.includes(column.key) ? current.filter(item => item !== column.key) : [...current, column.key])} />{column.label}</FieldLabel></Field>)}</FieldGroup></FieldSet></PopoverContent></Popover>}
+     </div>
+     <ComparisonPending pending={pending} announce>{comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <Table className="io-table" aria-label="IO before and after">
+       <TableHeader><TableRow><TableHead>{byStatement ? "Statement / table" : "Table"}</TableHead>{scans && <TableHead className="text-right">Scans</TableHead>}<TableHead className="text-right">Logical reads</TableHead>{visibleColumns.map(key => <TableHead key={key} className="text-right">{availableColumns.find(column => column.key === key)?.label}</TableHead>)}</TableRow></TableHeader>
+       <TableBody>{byStatement ? rows.map(row => {
+         const key = `${row.key}:${row.occurrence}`
+         const open = !closed.includes(key)
+         return <Fragment key={key}><TableRow className="cursor-pointer bg-muted/40 hover:bg-muted has-aria-expanded:bg-muted/40 has-aria-expanded:hover:bg-muted" onClick={event => {
+           if ((event.target as HTMLElement).closest("a,button,input,[role=button]")) return
+           setClosed(current => open ? [...current, key] : current.filter(item => item !== key))
+         }}><TableHead scope="row" className="whitespace-normal">
+-          <Button variant="ghost" className="w-full justify-start" aria-expanded={open} onClick={() => setClosed(current => open ? [...current, key] : current.filter(item => item !== key))}><HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} /><span className="truncate" title={row.text}>{row.text}</span></Button>
++          <Button variant="ghost" className="io-statement-disclosure w-full justify-start" aria-expanded={open} onClick={() => setClosed(current => open ? [...current, key] : current.filter(item => item !== key))}><HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} /><span className="truncate" title={row.text}>{row.text}</span></Button>
+           <div className="mt-1 flex flex-wrap gap-2 pl-6 text-xs font-normal text-muted-foreground"><span>{row.status}</span><span>attribution: {row.attribution}</span>{row.planLinkBefore && <a href={row.planLinkBefore} className="underline hover:text-foreground focus-visible:outline-ring">Plan before</a>}{row.planLinkAfter && <a href={row.planLinkAfter} className="underline hover:text-foreground focus-visible:outline-ring">Plan after</a>}{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}</div>
+           {open && <div className="statement-metrics">{row.executions !== null && <span>Executions <strong>{number(row.executions)}</strong></span>}{!comparison.statementMetricsUnavailableReason && <StatementMetrics row={row} />}</div>}
+         </TableHead>{scans && <TableCell><Pair before={row.scansBefore} after={row.scansAfter} /></TableCell>}<TableCell><Pair before={row.readsBefore} after={row.readsAfter} change={row.change} /></TableCell>{extraCells()}</TableRow>{open && row.objects.map((item, index) => renderRow(item, `${key}:${index}`))}</Fragment>
+       }) : comparison.tables.map((row, index) => renderRow(row, `${row.table}:${index}`))}
+         <TableRow className="bg-muted/40 font-medium"><TableHead scope="row">Total (whole batch)</TableHead>{scans && <TableCell className="text-right">—</TableCell>}<TableCell><Pair before={comparison.wholeBatch?.before ?? null} after={comparison.wholeBatch?.after ?? null} /></TableCell>{extraCells()}</TableRow>
+       </TableBody>
+     </Table>}
+     {byStatement && comparison.statementMetricsUnavailableReason && <p className="text-xs text-muted-foreground">{comparison.statementMetricsUnavailableReason}</p>}
+     {comparison.collapsed && <p className="text-xs text-muted-foreground">{comparison.collapsed.label}</p>}
+     <p className="text-xs text-muted-foreground">IO from recorded STATISTICS IO / BUFFERS. Unavailable measurements are shown as —.</p></ComparisonPending>
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx
+index f813ce76..3e8aa333 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx
+@@ -1,14 +1,15 @@
+ import { useState } from "react"
+ import { render, screen, within } from "@testing-library/react"
+ import userEvent from "@testing-library/user-event"
+ import { expect, test } from "vitest"
++import { operation } from "@/test/fixtures"
+ import { VersionTable } from "./VersionTable"
+ 
+ const versions = ["v0", "v1", "v2"].map(version => ({ version, hash: version, logicalReadsSum: 10, logicalReadsMean: 10, scansSum: 1, elapsedMedianMs: 1, caseOutcome: "ok", measuredIn: [], latestOperationId: 1, verdictBasis: "whole batch" }))
+ function Choices({ subject }: { subject: string }) {
+   const [a, setA] = useState("v0")
+   const [b, setB] = useState<string | null>(null)
+   return <VersionTable subject={subject} sessionId={1} sessionSearch={{}} versions={versions} selectedA={a} selectedB={b} onSelect={(side, version) => side === "a" ? setA(version) : setB(version)} />
+ }
+ 
+ test("A and B are independent exclusive native groups, isolated per table instance", async () => {
+@@ -21,10 +22,20 @@ test("A and B are independent exclusive native groups, isolated per table instan
+   await userEvent.click(first.getByRole("radio", { name: "A v1" }))
+   first.getByRole("radio", { name: "B v2" }).focus()
+   await userEvent.keyboard(" ")
+   expect(first.getByRole("radio", { name: "A v1" })).toBeChecked()
+   expect(first.getByRole("radio", { name: "A v0" })).not.toBeChecked()
+   expect(first.getByRole("radio", { name: "B v2" })).toBeChecked()
+   expect(second.getByRole("radio", { name: "A v0" })).toBeChecked()
+   expect(first.getByRole("radio", { name: "A v0" }).getAttribute("name")).not.toBe(second.getByRole("radio", { name: "A v0" }).getAttribute("name"))
+   expect(first.getAllByRole("radio").filter(radio => (radio as HTMLInputElement).checked)).toHaveLength(2)
+ })
++
++
++test("version labels share the version line and retain their full title", () => {
++  render(<VersionTable subject="Orders" sessionId={1} sessionSearch={{}} versions={[{ ...versions[0], measuredIn: [10] }]} operations={[operation({ id: 10, agentLabel: "Candidate with a complete label" })]} selectedA="v0" selectedB={null} onSelect={() => {}} />)
++  const label = screen.getByText("Candidate with a complete label")
++  expect(label).toHaveAttribute("title", "Candidate with a complete label")
++  expect(label.parentElement).toHaveTextContent("v0")
++  expect(screen.getByRole("radio", { name: "A v0" }).nextElementSibling).toHaveTextContent("A")
++  expect(screen.getByRole("radio", { name: "B v0" }).nextElementSibling).toHaveTextContent("B")
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx
+index f036ac65..17f0f575 100644
+--- a/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx
+@@ -1,12 +1,13 @@
++import { cn } from "@/lib/utils"
+ import { useId } from "react"
+-import { Button } from "@/components/ui/button"
++import { buttonVariants, Button } from "@/components/ui/button"
+ import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
+ import type { AgentSessionKey, OperationSummary, OptimizationVersion } from "@/api/types"
+ import { Link } from "@tanstack/react-router"
+ import { operationReturnSearch } from "@/lib/sessionSearch"
+ import type { SessionSearch } from "@/router"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { HugeiconsIcon } from "@hugeicons/react";
+ import { MoreHorizontalCircle01Icon, SparklesIcon } from "@hugeicons/core-free-icons";
+ 
+ function metric(value: number | null): string {
+@@ -15,20 +16,20 @@ function metric(value: number | null): string {
+ 
+ export function VersionTable({ subject, sessionId, agentSessionKey, sessionSearch, versions, selectedA, selectedB, onSelect, operations = [] }: {
+   operations?: OperationSummary[]; subject: string; sessionId: number; agentSessionKey?: AgentSessionKey; sessionSearch: SessionSearch; versions: OptimizationVersion[]; selectedA: string; selectedB: string | null; onSelect: (side: "a" | "b", version: string) => void
+ }) {
+   const groupId = useId()
+   const baseline = versions.find(version => version.version === selectedA)
+   const delta = (value: number | null, reference: number | null | undefined) => value === null || reference === null || reference === undefined || reference === 0 ? null : `${value > reference ? "+" : ""}${Math.round((value - reference) * 100 / reference)}%`
+   return <Table className="version-table" aria-label={`${subject} versions`}>
+     <TableHeader><TableRow><TableHead>Version</TableHead><TableHead className="text-right">Logical reads</TableHead><TableHead className="text-right">vs A</TableHead><TableHead className="text-right">Elapsed median</TableHead><TableHead className="text-right">vs A</TableHead><TableHead>Outcome</TableHead><TableHead id={`${groupId}-a-label`}><span aria-hidden="true">A</span><span className="sr-only">Baseline A</span></TableHead><TableHead id={`${groupId}-b-label`}><span aria-hidden="true">B</span><span className="sr-only">Candidate B</span></TableHead><TableHead className="w-10"><span className="sr-only">Observed in</span></TableHead></TableRow></TableHeader>
+     <TableBody>{versions.map(version => <TableRow key={`${version.version}:${version.hash}`} className={selectedA === version.version || selectedB === version.version ? "bg-muted/40" : undefined}>
+-      <TableHead scope="row" className="whitespace-normal"><div className="flex items-center gap-2">{version.version}{operations.some(operation => version.measuredIn.includes(operation.id) && operation.agentKeep) && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-3.5 text-violet-600" aria-label="Kept by agent" />}</div>{operations.filter(operation => version.measuredIn.includes(operation.id) && operation.agentLabel).map(operation => <div key={operation.id} className="mt-1 text-xs font-normal text-muted-foreground" title={`Agent label for operation #${operation.id}`}>{operation.agentLabel}</div>)}</TableHead>
++      <TableHead scope="row" className="max-w-80"><div className="flex items-center gap-2">{version.version}{operations.some(operation => version.measuredIn.includes(operation.id) && operation.agentKeep) && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-3.5 text-muted-foreground" aria-label="Kept by agent" />}{operations.filter(operation => version.measuredIn.includes(operation.id) && operation.agentLabel).map(operation => <span key={operation.id} className="truncate text-xs font-normal text-muted-foreground" title={operation.agentLabel ?? undefined}>{operation.agentLabel}</span>)}</div></TableHead>
+       <TableCell className="text-right tabular-nums">{metric(version.logicalReadsSum)}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.logicalReadsSum !== null && baseline?.logicalReadsSum !== null && baseline?.logicalReadsSum !== undefined && version.logicalReadsSum < baseline.logicalReadsSum ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.logicalReadsSum, baseline?.logicalReadsSum) ?? "—"}</TableCell>
+       <TableCell className="text-right tabular-nums">{metric(version.elapsedMedianMs)}{version.elapsedMedianMs !== null && " ms"}</TableCell><TableCell className="text-right tabular-nums" data-delta={version.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== null && baseline?.elapsedMedianMs !== undefined && version.elapsedMedianMs < baseline.elapsedMedianMs ? "better" : undefined}>{selectedA === version.version ? "—" : delta(version.elapsedMedianMs, baseline?.elapsedMedianMs) ?? "—"}</TableCell><TableCell title={`basis: ${version.verdictBasis}`}>{version.caseOutcome}</TableCell>
+ 
+-      <TableCell><input type="radio" className="accent-primary" value={version.version} name={`${groupId}-a`} aria-describedby={`${groupId}-a-label`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} /></TableCell>
+-      <TableCell><input type="radio" className="accent-primary" value={version.version} name={`${groupId}-b`} aria-describedby={`${groupId}-b-label`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} /></TableCell>
++      <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-a`} aria-describedby={`${groupId}-a-label`} aria-label={`A ${version.version}`} checked={selectedA === version.version} onChange={() => onSelect("a", version.version)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }), "rounded-full peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>A</span></label></TableCell>
++      <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-b`} aria-describedby={`${groupId}-b-label`} aria-label={`B ${version.version}`} checked={selectedB === version.version} onChange={() => onSelect("b", version.version)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }), "rounded-full peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>B</span></label></TableCell>
+       <TableCell><Popover><PopoverTrigger render={<Button variant="ghost" size="icon-sm" />} aria-label={`Details for ${version.version}`}><HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} /></PopoverTrigger><PopoverContent align="end"><PopoverTitle>{version.version}</PopoverTitle><p>basis: {version.verdictBasis}</p><p>Scans: {metric(version.scansSum)}</p>{version.measuredIn.map(operationId => <Link key={operationId} to="/operations/$id" params={{ id: String(operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="block underline">Operation #{operationId}</Link>)}</PopoverContent></Popover></TableCell>
+     </TableRow>)}</TableBody>
+   </Table>
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/index.css b/src/SqlHarness.Dashboard/ui/src/index.css
+index a66d8ab2..6fc0a85b 100644
+--- a/src/SqlHarness.Dashboard/ui/src/index.css
++++ b/src/SqlHarness.Dashboard/ui/src/index.css
+@@ -215,21 +215,21 @@
+ .settings-card > p { margin:2px 0 12px; color:var(--muted-foreground); font-size:13.5px; line-height:1.45 }
+ .setting-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 32px; align-items:start; padding:14px 0; border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent) }
+ .setting-copy { display:grid; gap:3px; min-width:0; font-size:14px; line-height:20px }
+ .setting-description { color:var(--muted-foreground); font-size:13.5px; line-height:1.45; max-width:560px }
+ .setting-description p + p { margin-top:4px }
+ .setting-control { padding-top:1px; text-align:right }
+ .setting-number { display:flex; align-items:center; gap:6px }
+ .setting-number input { height:34px; width:106px; font-size:14px; border-radius:8px; padding:0 10px; font-variant-numeric:tabular-nums }
+ .setting-number > span { min-width:44px; text-align:left }
+ .setting-tag { display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:999px; padding:0 6px; font-size:11px; line-height:18px; font-weight:400; color:var(--muted-foreground) }
+-.settings-retention { display:flex; flex-wrap:wrap; gap:12px; background:var(--muted); border-radius:10px; padding:10px 14px; margin-bottom:16px }
++.settings-retention { gap:0; padding-inline:16px; border-inline-start:2px solid var(--border); margin-bottom:16px }
+ .settings-retention .setting-row { border:0; display:flex; align-items:center; gap:10px; padding:0 }
+ .settings-retention .setting-copy { font-size:12px }
+ .settings-custom-sound { font-size:12px; color:var(--muted-foreground); margin-bottom:8px }
+ .settings-custom-sound summary { cursor:pointer }
+ .settings-transcript-status { background:var(--muted); padding:10px 12px; border-radius:10px; font-size:12px; margin-bottom:14px }
+ .settings-transcript-status > div { display:flex; align-items:center; flex-wrap:wrap; gap:12px }
+ .settings-transcript-status p { font-size:12px }
+ .settings-transcript-status button { height:28px; font-size:12px }
+ @media(max-width:639px) { .settings-card { padding-inline:14px } .setting-row { gap:12px; grid-template-columns:minmax(0,1fr) auto } .setting-row:has([data-slot="radio-group"]),.setting-row:has(#approval-sound) { grid-template-columns:1fr } .setting-control { max-width:100% } .settings-layout nav { position:static } .app-header { gap:8px; padding:12px 10px } .app-header nav a { padding-inline:6px } }
+ .operation-breadcrumb { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:13px; color:var(--muted-foreground); margin-bottom:24px }
+@@ -364,10 +364,15 @@
+ .profile-section tr:last-child { border-bottom:0 }
+ .mutation-dialog .sql-block { max-height:280px; overflow:auto }
+ @media(max-width:760px) { .profiles-layout { grid-template-columns:minmax(0,1fr); gap:24px } }
+ 
+ 
+ .app-main[data-page=stats] { max-width:1040px; padding:24px }
+ .app-main[data-page=profiles] { padding-top:24px }
+ .profile-section th[scope=row] { font-weight:400; color:var(--muted-foreground); width:30% }
+ 
+ .session-note-display { width:100%; height:auto; justify-content:flex-start; padding:12px 16px; border-radius:var(--radius-xl); text-align:left; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; font-weight:400 }
++
++.io-statement-disclosure { background:transparent }
++.io-statement-disclosure:hover, .io-statement-disclosure[aria-expanded] { background:transparent }
++.operation-tabs > [data-slot="tabs-list"] { box-sizing:border-box; min-height:44px; height:auto; padding-block:8px; align-items:center }
++.operation-parameters { align-items:center; min-height:28px }
+diff --git a/src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts b/src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts
+index 353c0053..56a2e680 100644
+--- a/src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts
++++ b/src/SqlHarness.Dashboard/ui/src/lib/stats.test.ts
+@@ -1,12 +1,18 @@
+ import { expect, test } from "vitest"
+ import { stats } from "@/test/fixtures"
+-import { pivotPerDay } from "./stats"
++import { failureRate, pivotPerDay } from "./stats"
+ 
+ test("pivots per-day counts into one row per day with a column per agent", () => {
+   const { rows, agents } = pivotPerDay(stats().operationsPerDay)
+   expect(agents).toEqual(["claude", "codex"])
+   expect(rows).toEqual([
+     { day: "2026-10-06", claude: 2, codex: 0 },
+     { day: "2026-10-07", claude: 3, codex: 1 },
+   ])
+ })
++
++test("failure rate includes rejected operations and has no zero-cohort percentage", () => {
++  expect(failureRate([{ key: "failed", count: 1 }, { key: "rejected", count: 2 }], 4)).toBe(75)
++  expect(failureRate([], 0)).toBeNull()
++  expect(failureRate([], 2)).toBe(0)
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/lib/stats.ts b/src/SqlHarness.Dashboard/ui/src/lib/stats.ts
+index d0b9e772..7ea843fd 100644
+--- a/src/SqlHarness.Dashboard/ui/src/lib/stats.ts
++++ b/src/SqlHarness.Dashboard/ui/src/lib/stats.ts
+@@ -5,10 +5,14 @@ export function pivotPerDay(rows: DayAgentCount[]): { rows: Record<string, strin
+   const days = [...new Set(rows.map(row => row.day))].sort()
+   return {
+     agents,
+     rows: days.map(day => {
+       const entry: Record<string, string | number> = { day }
+       for (const agent of agents) entry[agent] = rows.find(row => row.day === day && row.agentKind === agent)?.count ?? 0
+       return entry
+     }),
+   }
+ }
++
++export function failureRate(statuses: { key: string; count: number }[], operations: number): number | null {
++  return operations === 0 ? null : statuses.filter(row => row.key === "failed" || row.key === "rejected").reduce((sum, row) => sum + row.count, 0) / operations * 100
++}
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx b/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
+index 7c58bb5b..066f4ceb 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/Approval.test.tsx
+@@ -57,38 +57,40 @@ async function setup() {
+ }
+ 
+ test("live added event shows a safe toast and the default sound; snapshots and digest joins stay silent", async () => {
+   const { play, source } = await setup()
+   expect(source().url).toBe("/api/mutations/events")
+   act(() => source().emit("snapshot", [request]))
+   expect(play).not.toHaveBeenCalled()
+   act(() => source().emit("snapshot", [{ ...request, requestId: "r-reconnect", request: { ...request.request, digest: "c".repeat(64) } }]))
+   expect(play).not.toHaveBeenCalled()
+   expect(await screen.findByText("YOLO is on for production profile prod-db")).toBeInTheDocument()
+-  expect(screen.getByText("A change needs your decision")).toBeInTheDocument()
+-  expect(screen.queryByText(request.request.sql)).not.toBeInTheDocument()
++  expect(screen.getByText("production")).toBeInTheDocument()
++  expect(screen.getByText(request.request.sql)).toBeInTheDocument()
+   act(() => source().emit("added", request))
+   expect(play).not.toHaveBeenCalled()
+   act(() => source().emit("added", { ...request, requestId: "r-2" }))
+   expect(play).not.toHaveBeenCalled()
+   act(() => source().emit("added", { ...request, requestId: "r-3", request: { ...request.request, digest: "b".repeat(64) } }))
+   await waitFor(() => expect(play).toHaveBeenCalledTimes(1))
+   act(() => source().emit("added", { ...request, requestId: "r-3", request: { ...request.request, digest: "b".repeat(64) } }))
+   expect(play).toHaveBeenCalledTimes(1)
+ })
+ 
+ test("approval dialog renders SQL and parameter values as literal text and waits before approval", async () => {
+   const { source } = await setup()
+   vi.useFakeTimers()
+   act(() => source().emit("snapshot", [request]))
+   fireEvent.click(screen.getByRole("button", { name: "Review" }))
+   expect(screen.getByText("production")).toBeInTheDocument()
++  expect(screen.getByText("Requested by unknown requester")).toBeInTheDocument()
++  expect(screen.getByText(/Digest 0123456789ab/)).toBeInTheDocument()
+   expect(screen.getByTestId("sql-code").textContent).toBe("<script>alert(1)</script>")
+   expect(screen.getByText("<img src=x onerror=1>")).toBeInTheDocument()
+   const parameters = screen.getByRole("table")
+   expect(within(parameters).getByRole("rowheader", { name: "p" })).toBeInTheDocument()
+   expect(within(parameters).getByText("NULL")).toBeInTheDocument()
+   expect(within(parameters).getByText("0123456789abcdef".repeat(40))).toBeInTheDocument()
+   expect(within(parameters).getByText("long_parameter_name_that_must_remain_selectable")).toBeInTheDocument()
+   expect(document.querySelector("script")).toBeNull()
+   expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled()
+   expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
+@@ -178,10 +180,71 @@ test("a hidden tab receives only a safe notification whose click opens the appro
+   expect(FakeNotification.last?.title).toBe("SQLHarness: a change needs your decision")
+   expect(FakeNotification.last?.title).not.toContain(liveRequest.request.sql)
+   act(() => FakeNotification.last?.onclick?.())
+   expect(focus).toHaveBeenCalledOnce()
+   expect(screen.getByRole("dialog")).toBeInTheDocument()
+   if (previousNotification) Object.defineProperty(window, "Notification", previousNotification)
+   else delete (window as Window & { Notification?: typeof Notification }).Notification
+   if (previousVisibility) Object.defineProperty(document, "visibilityState", previousVisibility)
+   vi.restoreAllMocks()
+ })
++
++
++test("toast Deny keeps failed requests visible and uses the decision endpoint", async () => {
++  const { source } = await setup()
++  const fetch = stubApprovalPageFetch({ "POST /api/mutations/r-1/deny": () => new Response("", { status: 500 }) })
++  act(() => source().emit("added", request))
++  fireEvent.click(await screen.findByRole("button", { name: "Deny" }))
++  expect(await screen.findByText("The decision could not be submitted. Try again.")).toBeInTheDocument()
++  expect(screen.getByRole("button", { name: "Review" })).toBeEnabled()
++  expect(fetch).toContain("/api/mutations/r-1/deny")
++})
++
++test("requester context and display modes retain the original request", async () => {
++  const { source } = await setup()
++  const original = { ...request, requester: { sessionId: 42, agentLabel: "codex" }, request: { ...request.request, sql: "UPDATE t SET x=@a", parameters: [{ name: "a", type: null, value: "123" }] } }
++  const before = JSON.stringify(original)
++  act(() => source().emit("added", original))
++  fireEvent.click(await screen.findByRole("button", { name: "Review" }))
++  expect(screen.getByText(/Requested by/)).toHaveTextContent("Codex")
++  expect(screen.getByRole("link", { name: "session 42" })).toHaveAttribute("href", "/sessions/42")
++  expect(screen.queryByText("Review the requested database change before deciding.")).not.toBeInTheDocument()
++  fireEvent.click(screen.getByRole("radio", { name: "Values inline" }))
++  expect(screen.getByTestId("sql-code").textContent).toContain("'123'")
++  fireEvent.click(screen.getByRole("radio", { name: "As sent" }))
++  expect(screen.getByTestId("sql-code").textContent).toBe(original.request.sql)
++  expect(JSON.stringify(original)).toBe(before)
++})
++
++
++test("toast Deny disables while submitting and retains busy and expired requests", async () => {
++  const { source } = await setup()
++  let finish!: (response: Response) => void
++  const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(input => String(input).endsWith("/deny") ? new Promise<Response>(resolve => { finish = resolve }) : Promise.resolve(new Response("{}")))
++  act(() => source().emit("added", request))
++  fireEvent.click(await screen.findByRole("button", { name: "Deny" }))
++  expect(screen.getByRole("button", { name: "Denying..." })).toBeDisabled()
++  await act(async () => { finish(new Response(JSON.stringify({ status: "busy", error: "profile_execution_busy" }), { status: 409 })) })
++  expect(await screen.findByText("Another change is already running for this profile. Try again.")).toBeInTheDocument()
++  expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
++  act(() => source().emit("snapshot", [{ ...request, expiresAt: new Date(Date.now() - 1000).toISOString() }]))
++  expect(screen.getByRole("button", { name: "Deny" })).toBeDisabled()
++  fetch.mockRestore()
++})
++
++test("expanded-preview fallback keeps original request and decision controls usable", async () => {
++  const { source } = await setup()
++  const original = { ...request, request: { ...request.request, sql: "UPDATE t SET x=@a WHERE " + Array(100).fill("@a IS NOT NULL").join(" AND "), parameters: [{ name: "a", type: "nvarchar(max)", value: "a".repeat(10000) }] } }
++  const before = JSON.stringify(original)
++  act(() => source().emit("added", original))
++  vi.useFakeTimers()
++  fireEvent.click(screen.getByRole("button", { name: "Review" }))
++  expect(screen.getByRole("radio", { name: "Values inline" })).toHaveAttribute("aria-disabled", "true")
++  expect(screen.getByRole("radio", { name: "As sent" })).toBeChecked()
++  expect(screen.getByTestId("sql-code").textContent).toBe(original.request.sql)
++  expect(screen.getByText(/Values inline is unavailable/)).toBeInTheDocument()
++  expect(screen.getByRole("button", { name: "Deny" })).toBeEnabled()
++  act(() => vi.advanceTimersByTime(1000))
++  expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled()
++  expect(JSON.stringify(original)).toBe(before)
++  vi.useRealTimers()
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalDialog.tsx b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalDialog.tsx
+index cce50e92..69426c78 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalDialog.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalDialog.tsx
+@@ -1,88 +1,100 @@
+-import { useEffect, useState } from "react"
++import { useEffect, useMemo, useState } from "react"
+ import { Alert, AlertDescription } from "@/components/ui/alert"
+ import { Separator } from "@/components/ui/separator"
+ import { Button } from "@/components/ui/button"
+ import { Badge } from "@/components/ui/badge"
+ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
++import { agentLabel } from "@/lib/agents"
++import { Link } from "@tanstack/react-router"
++import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
++import { inlineMutationSql } from "./sqlDisplay"
+ import { SqlBlock } from "@/components/SqlBlock"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { postMutationDecision } from "@/api/client"
+ import { mutationStore, usePendingMutations } from "./mutationStore"
+ 
+ export function ApprovalDialog({ requestId }: { requestId: string | null }) {
+   const pending = usePendingMutations()
+   const item = pending.find(request => request.requestId === requestId)
+   const [openedAtState, setOpenedAtState] = useState<{ requestId: string | null; time: number | null }>({ requestId: null, time: null })
++  const [modeState, setModeState] = useState<{ id: string | null; mode: string }>({ id: null, mode: "sent" })
++  const [submitting, setSubmitting] = useState(false)
++  const preview = useMemo(() => item ? inlineMutationSql(item.request.sql, item.request.engine, item.request.parameters) : null, [item])
++  const mode = modeState.id === requestId ? modeState.mode : "sent"
+   const [now, setNow] = useState(0)
+   const [messageState, setMessageState] = useState<{ requestId: string | null; message: string }>({ requestId: null, message: "" })
+   useEffect(() => {
+     const initialize = window.setTimeout(() => {
+       const currentTime = Date.now()
+       setOpenedAtState({ requestId, time: requestId ? currentTime : null })
+       setNow(currentTime)
+     }, 0)
+     const timer = window.setInterval(() => setNow(Date.now()), 250)
+     return () => { window.clearTimeout(initialize); window.clearInterval(timer) }
+   }, [requestId])
+   const openedAt = openedAtState.requestId === requestId ? openedAtState.time : null
+   const message = messageState.requestId === requestId ? messageState.message : ""
+   const close = () => mutationStore.close()
+   const decide = async (decision: "approve" | "deny") => {
+     const currentTime = now
+-    if (!requestId || (decision === "approve" && (openedAt === null || currentTime - openedAt < 1_000 || !item || Date.parse(item.expiresAt) <= currentTime))) return
++    if (submitting || !item || Date.parse(item.expiresAt) <= Date.now() || !requestId || (decision === "approve" && (openedAt === null || currentTime - openedAt < 1_000 || !item || Date.parse(item.expiresAt) <= currentTime))) return
+     setMessageState({ requestId, message: "" })
++    setSubmitting(true)
+     try {
+       const result = await postMutationDecision(requestId, decision)
+       if (result === "not-pending") setMessageState({ requestId, message: "This request is no longer pending" })
+       else if (result === "busy") setMessageState({ requestId, message: "Another change is already running for this profile. This request was not executed." })
+       else if (decision === "deny") close()
+     } catch {
+       setMessageState({ requestId, message: "The decision could not be submitted. Try again." })
+-    }
++    } finally { setSubmitting(false) }
+   }
+   const remaining = item ? Math.max(0, Math.ceil((Date.parse(item.expiresAt) - now) / 1_000)) : 0
+   const environment = item?.environment || "unknown"
+   const riskyEnvironment = /^(prod|production|staging)$/i.test(environment)
+   const open = requestId !== null && (item !== undefined || Boolean(message))
+   return (
+     <Dialog open={open} onOpenChange={value => { if (!value) close() }}>
+       <DialogContent className="mutation-dialog max-h-[90vh] overflow-y-auto sm:max-w-[720px]" onKeyDownCapture={event => { if (event.key === "Enter") event.preventDefault() }}>
+         {item ? <>
+           <DialogHeader className="pr-6">
+             <DialogTitle className="flex flex-wrap items-center gap-3">
+               <span className={`text-xl font-semibold ${riskyEnvironment ? "text-destructive" : "text-foreground"}`}>{environment}</span>
+               <Badge variant="outline">{item.request.tier}</Badge><span className="text-xs font-normal text-muted-foreground">{pending.indexOf(item) + 1} of {pending.length} pending</span>
+             </DialogTitle>
+-            <DialogDescription>Review the requested database change before deciding.</DialogDescription>
++            <DialogDescription className="break-all">{item.request.profile} | {item.request.server} / {item.request.database} | {item.request.engine}</DialogDescription>
++            <p className="text-sm text-muted-foreground">Requested by {item.requester ? <>{agentLabel(item.requester.agentLabel || "unknown")} in <Link to="/sessions/$id" params={{ id: String(item.requester.sessionId) }} className="underline">session {item.requester.sessionId}</Link></> : "unknown requester"}</p>
+           </DialogHeader>
+           <Separator />
+-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground" aria-label="Mutation target">
+-            <span>{item.request.profile}</span><span>·</span><span className="break-all font-mono text-xs">{item.request.server} / {item.request.database}</span><span>·</span><span>{item.request.engine}</span>
+-          </div>
+           {item.writerSameAsReader && <Alert variant="destructive"><AlertDescription>The writer uses the same account as the reader.</AlertDescription></Alert>}
+           {hasMultipleStatements(item.request.sql) && <Alert variant="destructive"><AlertDescription>This request contains multiple statements.</AlertDescription></Alert>}
+-          <div className="rounded-md border p-3"><SqlBlock sql={item.request.sql} engine={item.request.engine} label="SQL" initiallyFormatted={false} /></div>
+-          <div className="space-y-2">
++          <SegmentedRadioGroup label="SQL display" value={mode} onValueChange={value => setModeState({ id: requestId, mode: value })} options={[
++            { value: "inline", label: "Values inline", disabled: Boolean(preview?.reason) },
++            { value: "sent", label: "As sent" },
++          ]} />
++          {preview?.reason && <p className="text-sm text-muted-foreground">{preview.reason}</p>}
++          <div className="rounded-md border p-3"><SqlBlock sql={mode === "inline" && preview && !preview.reason ? preview.sql : item.request.sql} engine={item.request.engine} label="SQL" initiallyFormatted={false} /></div>
++          <div className="flex flex-col gap-2">
+             <h3 className="font-medium">Parameters</h3>
+             <Table>
+               <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Type</TableHead><TableHead>Value</TableHead></TableRow></TableHeader>
+               <TableBody>{item.request.parameters.map((parameter, index) => <TableRow key={`${parameter.name}-${index}`}><TableHead scope="row" className="whitespace-normal break-all">{parameter.name}</TableHead><TableCell className="whitespace-normal break-all">{parameter.type ?? "—"}</TableCell><TableCell className="whitespace-pre-wrap break-all">{parameter.value ?? "NULL"}</TableCell></TableRow>)}</TableBody>
+             </Table>
+           </div>
+ 
+           {message && <p role="alert" className="text-destructive">{message}</p>}
+           <Separator />
+           <DialogFooter>
+             <p className="mr-auto self-center text-xs text-muted-foreground">Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")} · Digest {item.request.digest.slice(0, 12)}</p>
+-            <Button variant="outline" onClick={() => void decide("deny")}>Deny</Button>
+-            <Button onClick={() => void decide("approve")} disabled={openedAt === null || now - openedAt < 1_000 || remaining === 0}>Approve</Button>
++            <Button variant="outline" disabled={submitting || remaining === 0} onClick={() => void decide("deny")}>Deny</Button>
++            <Button onClick={() => void decide("approve")} disabled={submitting || openedAt === null || now - openedAt < 1_000 || remaining === 0}>Approve</Button>
+           </DialogFooter>
+         </> : <><DialogHeader><DialogTitle>Request no longer pending</DialogTitle></DialogHeader>{message && <p role="alert">{message}</p>}</>}
+       </DialogContent>
+     </Dialog>
+   )
+ }
+ 
+ function hasMultipleStatements(sql: string): boolean {
+   return /;\s*\S/.test(sql)
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx
+index 1db2829a..c4b401ef 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/ApprovalToast.tsx
+@@ -1,38 +1,60 @@
+-import { useEffect, useRef, useSyncExternalStore } from "react"
++import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+ import { Button } from "@/components/ui/button"
+-import { Badge } from "@/components/ui/badge"
++import { postMutationDecision } from "@/api/client"
+ import { Toast, ToastContent, ToastDescription, ToastPortal, ToastProvider, ToastTitle, ToastViewport, useToastManager } from "@/components/ui/toast"
+ import { useNow } from "@/lib/useNow"
+ import { mutationStore, type PendingMutation } from "./mutationStore"
+ 
++function ToastDecision({ item, expired }: { item: PendingMutation; expired: boolean }) {
++  const [busy, setBusy] = useState(false)
++  const [error, setError] = useState("")
++  const deny = async () => {
++    if (busy || expired) return
++    setBusy(true)
++    setError("")
++    try {
++      const result = await postMutationDecision(item.requestId, "deny")
++      if (result === "not-pending") setError("This request is no longer pending")
++      else if (result === "busy") setError("Another change is already running for this profile. Try again.")
++      // The authoritative removed event dismisses the toast.
++    } catch { setError("The decision could not be submitted. Try again.") }
++    finally { setBusy(false) }
++  }
++  return <div className="flex flex-col gap-2">
++    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
++    <div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={busy || expired} onClick={() => void deny()}>{busy ? "Denying..." : "Deny"}</Button><Button size="sm" onClick={() => mutationStore.open(item.requestId)}>Review</Button></div>
++  </div>
++}
++
+ function ApprovalNotifications({ pending, hidden }: { pending: PendingMutation[]; hidden: boolean }) {
+   const { toasts, add, close } = useToastManager<{ request: PendingMutation }>()
+   const previous = useRef(new Set<string>())
+   const now = useNow()
+   useEffect(() => {
+     const ids = new Set(pending.map(item => item.requestId))
+     for (const id of previous.current) if (!ids.has(id)) close(id)
+-    for (const request of pending) add({ id: request.requestId, title: "A change needs your decision", timeout: 0, data: { request } })
++    for (const request of pending) add({ id: request.requestId, title: request.environment || "unknown", timeout: 0, data: { request } })
+     previous.current = ids
+   }, [pending, add, close])
+   if (hidden) return null
+   return <ToastPortal><ToastViewport>
+     {toasts.map(notification => {
+       const item = notification.data?.request
+       if (!item) return null
+       const remaining = Math.max(0, Math.ceil((Date.parse(item.expiresAt) - now) / 1000))
+       return <Toast key={notification.id} toast={notification} swipeDirection={[]}>
+         <ToastContent><section className="flex min-w-0 flex-1 flex-col gap-2" aria-label="Pending change approval">
+-          <div className="flex flex-wrap items-center gap-2"><ToastTitle /><Badge variant="outline">{item.environment || "unknown"}</Badge></div>
+-          <ToastDescription>{item.request.profile} · {item.request.database} · {item.request.tier}</ToastDescription>
+-          <div className="flex items-center justify-between gap-3"><span className="text-xs text-muted-foreground">Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}{pending.length > 1 ? ` · ${pending.length} pending` : ""}</span><Button size="sm" onClick={() => mutationStore.open(item.requestId)}>Review</Button></div>
++          <ToastTitle className="text-base font-semibold" />
++          <ToastDescription>{item.request.profile} | {item.request.database} | {item.request.tier}</ToastDescription>
++          <pre className="line-clamp-2 whitespace-pre-wrap break-all font-mono text-xs">{item.request.sql.slice(0, 240)}{item.request.sql.length > 240 ? "..." : ""}</pre>
++          <div className="flex items-center justify-between gap-3"><span className="text-xs text-muted-foreground">Expires in {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}{pending.length > 1 ? ` | ${pending.length} pending` : ""}</span></div><ToastDecision item={item} expired={remaining === 0} />
+         </section></ToastContent>
+       </Toast>
+     })}
+   </ToastViewport></ToastPortal>
+ }
+ 
+ export function ApprovalToast() {
+   const state = useSyncExternalStore(mutationStore.subscribe, mutationStore.getSnapshot, mutationStore.getSnapshot)
+   return <>
+     <ToastProvider timeout={0}><ApprovalNotifications pending={state.pending} hidden={state.openRequestId !== null} /></ToastProvider>
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/mutationStore.ts b/src/SqlHarness.Dashboard/ui/src/mutations/mutationStore.ts
+index 76d23820..b7dc7432 100644
+--- a/src/SqlHarness.Dashboard/ui/src/mutations/mutationStore.ts
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/mutationStore.ts
+@@ -1,19 +1,19 @@
+ import { useSyncExternalStore } from "react"
+ 
+ export type MutationParameter = { name: string; type: string | null; value: string | null }
+ export type MutationRequest = {
+   profile: string; server: string; database: string; engine: string; tier: string; sql: string
+   parameters: MutationParameter[]; digest: string; grantees: string[]
+ }
+ export type PendingMutation = {
+-  requestId: string; request: MutationRequest; environment: string; writerSameAsReader: boolean; expiresAt: string
++  requester?: { sessionId: number; agentLabel: string | null } | null; requestId: string; request: MutationRequest; environment: string; writerSameAsReader: boolean; expiresAt: string
+ }
+ export type MutationTerminal = { requestId: string; state: string }
+ 
+ type MutationState = { pending: PendingMutation[]; openRequestId: string | null; terminal: MutationTerminal | null }
+ let state: MutationState = { pending: [], openRequestId: null, terminal: null }
+ const listeners = new Set<() => void>()
+ const publish = (next: MutationState) => { state = next; listeners.forEach(listener => listener()) }
+ 
+ export const mutationStore = {
+   getSnapshot: () => state,
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts
+new file mode 100644
+index 00000000..b6967310
+--- /dev/null
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.test.ts
+@@ -0,0 +1,44 @@
++import { expect, test } from "vitest"
++import { inlineMutationSql } from "./sqlDisplay"
++const p = (name: string, value: string | null, type: string | null = null) => ({ name, value, type })
++test("SQL Server lexical boundaries and precision", () => {
++  const result = inlineMutationSql("SELECT @@ROWCOUNT, @A, @ab, [@a], '@a' /* outer /* @a */ @ab */ -- @a", "sqlserver", [p("a", "O'Brien"), p("ab", "9007199254740993", "bigint")])
++  for (const text of ["N'O''Brien'", "9007199254740993", "@@ROWCOUNT", "[@a]", "'@a'", "/* outer /* @a */ @ab */"]) expect(result.sql).toContain(text)
++  expect(result.reason).toBeUndefined()
++})
++test("PostgreSQL dollar quotes, comments, operators and empty text", () => {
++  const result = inlineMutationSql("SELECT @a, $$@a$$, $body$@a$body$, '@a', x @> y -- @a", "postgres", [p("a", "")])
++  for (const text of ["''", "$$@a$$", "$body$@a$body$", "x @> y"]) expect(result.sql).toContain(text)
++  expect(result.reason).toBeUndefined()
++})
++test("unsupported, missing, duplicate, ambiguous and huge inputs retain exact original", () => {
++  for (const params of [[p("a", "1", "geography")], [], [p("a", "1"), p("A", "2")], [p("a", "a\\b")]]) {
++    const result = inlineMutationSql("SELECT @a", "postgres", params)
++    expect(result.reason).toBeTruthy()
++    expect(result.sql).toBe("SELECT @a")
++  }
++  expect(inlineMutationSql("x".repeat(100001), "postgres", []).reason).toBeTruthy()
++})
++test("null is NULL and default numeric-looking text stays text", () => {
++  const result = inlineMutationSql("SELECT @a,@b,@c", "sqlserver", [p("a", null), p("b", "123"), p("c", "false", "bit")])
++  expect(result.sql).toContain("NULL")
++  expect(result.sql).toContain("N'123'")
++  expect(result.sql).toMatch(/\b0\b/)
++})
++
++test("normalizes contract engine and parameter prefix without changing tokens", () => {
++  const result = inlineMutationSql("SELECT @a, @ab", "SqlServer", [p("@a", "1", "int"), p("ab", "2", "int")])
++  expect(result.reason).toBeUndefined()
++  expect(result.sql).not.toContain("@a")
++})
++
++test("bounds repeated escaped literal expansion and preserves small repeated parameters", () => {
++  const sql = "UPDATE t SET x=@a WHERE " + Array(100).fill("@a IS NOT NULL").join(" AND ")
++  const result = inlineMutationSql(sql, "sqlserver", [p("a", "a'".repeat(5000), "nvarchar(max)")])
++  expect(result.reason).toBeTruthy()
++  expect(result.sql === sql).toBe(true)
++  const small = inlineMutationSql("SELECT @a, @a, @n, @n", "sqlserver", [p("a", "O'Brien"), p("n", "9007199254740993", "bigint")])
++  expect(small.reason).toBeUndefined()
++  expect(small.sql.match(/N'O''Brien'/g)).toHaveLength(2)
++  expect(small.sql.match(/9007199254740993/g)).toHaveLength(2)
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts
+new file mode 100644
+index 00000000..19e1e61b
+--- /dev/null
++++ b/src/SqlHarness.Dashboard/ui/src/mutations/sqlDisplay.ts
+@@ -0,0 +1,54 @@
++import { format } from "sql-formatter"
++import type { MutationParameter } from "./mutationStore"
++
++const PREVIEW_CHARACTER_BUDGET = 100_000
++
++/** Presentation only; never used to submit a decision or execute SQL. */
++export function inlineMutationSql(sql: string, engine: string, parameters: MutationParameter[]): { sql: string; reason?: string } {
++  const fallback = () => ({ sql, reason: "Values inline is unavailable for this SQL or parameter type. As sent shows the original request." })
++  if (sql.length > 100_000 || parameters.length > 500 || parameters.reduce((n, p) => n + (p.value?.length ?? 0), 0) > 100_000) return fallback()
++  engine = engine.toLowerCase()
++  const postgres = engine === "postgres"
++  if (!postgres && engine !== "sqlserver") return fallback()
++  try {
++    const values = new Map<string, string>()
++    for (const parameter of parameters) {
++      const name = parameter.name.replace(/^@/, "").toLowerCase()
++      if (!/^[a-z_][a-z0-9_]*$/i.test(name) || values.has(name)) return fallback()
++      const type = (parameter.type || "nvarchar").toLowerCase()
++      const value = parameter.value
++      let literal: string
++      if (value === null) literal = "NULL"
++      else if (/^(nvarchar|varchar|nchar|char)(\((max|\d+)\))?$/.test(type)) {
++        if (postgres && value.includes("\\")) return fallback()
++        literal = `${!postgres && type.startsWith("n") ? "N" : ""}'${value.replaceAll("'", "''")}'`
++      } else if (/^(tinyint|smallint|int|bigint)$/.test(type) && /^[+-]?\d+$/.test(value)) {
++        const ranges: Record<string, [bigint, bigint]> = { tinyint: [0n, 255n], smallint: [-32768n, 32767n], int: [-2147483648n, 2147483647n], bigint: [-9223372036854775808n, 9223372036854775807n] }
++        const [min, max] = ranges[type]
++        if (BigInt(value) < min || BigInt(value) > max) return fallback()
++        literal = value
++      }
++      else if (/^(decimal|numeric)(\(\d+,\d+\))?$/.test(type) && /^[+-]?\d+(\.\d+)?$/.test(value)) {
++        // .NET decimal binding can round beyond its precision.
++        if (value.replace(/[^0-9]/g, "").length > 28) return fallback()
++        literal = value
++      }
++      else if (type === "bit" && /^(true|false|0|1)$/i.test(value)) literal = postgres ? (/^(true|1)$/i.test(value) ? "TRUE" : "FALSE") : (/^(true|1)$/i.test(value) ? "1" : "0")
++      else return fallback()
++      values.set(name, literal)
++    }
++    // Charge original SQL plus every occurrence's fully escaped literal before
++    // returning it to the formatter. Counting placeholders twice is conservative.
++    let expandedCharacters = sql.length
++    const params = new Proxy(Object.create(null) as Record<string, string>, { get: (_target, key) => {
++      const value = typeof key === "string" ? values.get(key.toLowerCase()) : undefined
++      if (value === undefined) throw new Error("Unresolved SQL parameter")
++      expandedCharacters += value.length
++      if (expandedCharacters > PREVIEW_CHARACTER_BUDGET) throw new Error("SQL preview character budget exceeded")
++      return value
++    } })
++    const rendered = format(sql, { language: postgres ? "postgresql" : "transactsql", params, paramTypes: { named: ["@"] } })
++    // Secondary guard for formatting whitespace; repeated literals are bounded above.
++    return rendered.length <= PREVIEW_CHARACTER_BUDGET ? { sql: rendered } : fallback()
++  } catch { return fallback() }
++}
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx
+index 16be35db..50412f93 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx
+@@ -1,10 +1,11 @@
++import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
+ import { ComparisonPending } from "@/components/optimization/ComparisonPending"
+ import { CopyButton } from "@/components/CopyButton"
+ import { useState, type ReactNode } from "react"
+ import type { OperationDetail } from "@/api/types"
+ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
+ import { NotFoundError } from "@/api/client"
+ import type { AgentSessionKey } from "@/api/types"
+ import { useOperation, useOperationOptimization, useUpdateOperationAnnotation } from "@/api/queries"
+ import { ErrorState } from "@/components/ErrorState"
+ import { FlagBadges } from "@/components/FlagBadges"
+@@ -181,21 +182,21 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
+   const hasPlanParameterSet = returnSearch.planParameterSetNull === true || returnSearch.planParameterSet !== undefined
+   const planTarget = hasPlanParameterSet && returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
+     && returnSearch.planDocument !== undefined && returnSearch.planStatement !== undefined
+     ? { caseId: returnSearch.planCase, parameterSet: returnSearch.planParameterSetNull ? null : returnSearch.planParameterSet!, repetition: returnSearch.planRepetition, documentOrdinal: returnSearch.planDocument, statementIndex: returnSearch.planStatement }
+     : undefined
+   const targetVariant = planTarget ? detail.variants.find(variant => variant.caseId === planTarget.caseId
+     && variant.variant === returnSearch.planVariant && variant.parameterSet === planTarget.parameterSet) : undefined
+   const tabVariant = targetVariant ?? detail.variants[0]
+   return (
+     <div className="operation-page space-y-4">
+-      <OperationHeading detail={detail} returnSearch={returnSearch} metadata={<Collapsible className="operation-heading-metadata"><CollapsibleTrigger className="text-sm text-muted-foreground underline">Details</CollapsibleTrigger><CollapsibleContent keepMounted>
++      <OperationHeading detail={detail} returnSearch={returnSearch} metadata={<Collapsible className="operation-heading-metadata"><CollapsibleTrigger className="group" render={<Button variant="ghost" size="sm" />}>Details<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" className="transition-transform group-aria-expanded:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
+           <div className="mt-3 grid grid-cols-2 gap-4 md:grid-cols-4">
+             <Fact label="Started">{formatTimestamp(op.startedAt)}</Fact>
+             <Fact label="Finished">{formatTimestamp(op.finishedAt)}</Fact>
+             <Fact label="Duration">{formatDuration(op.durationMs)}</Fact>
+             <Fact label="Exit code">{op.exitCode ?? "—"}{op.errorKind ? ` (${op.errorKind}${op.cancelReason ? `: ${op.cancelReason}` : ""})` : ""}</Fact>
+             <Fact label="Profile">{op.profile ?? "—"}</Fact>
+             <Fact label="Engine">{op.engine ?? "—"}</Fact>
+             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
+             {op.operation === "query" && <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>}
+             <Fact label="SQL hash"><span className="break-all font-mono">{op.sqlHash ?? "—"}</span></Fact>
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/SessionPage.test.tsx b/src/SqlHarness.Dashboard/ui/src/pages/SessionPage.test.tsx
+index e1c7ac10..c1063fd6 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/SessionPage.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/SessionPage.test.tsx
+@@ -41,21 +41,21 @@ test("shows session facts and its operations", async () => {
+       operations: [operation({ id: 70, operation: "compare" })],
+     },
+   }))
+ 
+   renderApp("/sessions/7")
+ 
+   expect(await screen.findByRole("heading", { level: 1, name: "mcp:xyz" })).toBeInTheDocument()
+   expect(screen.getByRole("button", { name: "Session metadata" })).toHaveAttribute("aria-expanded", "false")
+   await userEvent.click(await screen.findByRole("button", { name: "Session metadata" }))
+   expect(screen.getByText("claude-code 2.1.0")).toBeInTheDocument()
+-  expect(screen.getByText("compare")).toBeInTheDocument()
++  expect((await screen.findByRole("link", { name: "70" })).closest("tr")?.children[2]).toHaveTextContent("compare")
+ })
+ 
+ test("loads older operation pages, keeps rows through a retry, and disables Load more while pending", async () => {
+   let settleOlder!: (response: Response) => void
+   let olderAttempts = 0
+   const pendingOlder = new Promise<Response>(resolve => { settleOlder = resolve })
+   const calls = stubFetch(sessionRoutes({
+     "/api/sessions/21": sessionDetail({ session: session({ id: 21, operations: 4 }) }),
+     "/api/sessions/21/operations": (url: URL) => {
+       const cursor = url.searchParams.get("cursor")
+@@ -399,17 +399,34 @@ test("compact operations preserve detail return context, flags, target and owner
+     "/api/sessions/7": sessionDetail({ session: session({ id: 7 }), operations: [operation({ id: 70, sessionId: 7, agentKeep: true, hasSpill: true, profile: "pg", sqlPreview: "select 1" })] }),
+     "PATCH /api/operations/70/annotation": (_url: URL, init?: RequestInit) => {
+       bodies.push(JSON.parse(String(init?.body)))
+       return Response.json({ agentLabel: null, agentKeep: true, ownerStarred: true, ownerNote: null })
+     },
+   }))
+   renderApp("/sessions/7")
+   const link = await screen.findByRole("link", { name: "70" })
+   expect(link).toHaveAttribute("href", "/operations/70?returnSession=7")
+   const row = link.closest("tr")!
+-  expect(within(row).getByText("Agent keep")).toBeInTheDocument()
++  expect(within(row).getByLabelText("Kept by agent")).toBeInTheDocument()
+   expect(within(row).getByText("select 1")).toBeInTheDocument()
+-  expect(within(row).getByText(/pg/)).toBeInTheDocument()
++  expect(within(row).getByText("select 1")).toHaveAttribute("title", expect.stringContaining("pg"))
+   expect(screen.queryByRole("columnheader", { name: "Owner" })).not.toBeInTheDocument()
+   await userEvent.click(within(row).getByRole("button", { name: "Star operation" }))
+   await waitFor(() => expect(bodies).toEqual([{ starred: true }]))
+ })
++
++
++test("compact rows prefer labels while exposing SQL, subject, target and complete timestamp", async () => {
++  const startedAt = "2026-10-28T12:34:56Z"
++  stubFetch(sessionRoutes({ "/api/sessions/7": sessionDetail({ session: session({ id: 7 }), operations: [operation({ id: 71, sessionId: 7, startedAt, agentLabel: "Fast candidate", subject: "Orders", sqlPreview: "select * from Orders", profile: "production", status: "running", agentKeep: true })] }) }))
++  renderApp("/sessions/7")
++  const row = (await screen.findByRole("link", { name: "71" })).closest("tr")!
++  const label = within(row).getByText("Fast candidate")
++  expect(label).toHaveAttribute("title", expect.stringContaining("select * from Orders"))
++  expect(label).toHaveAttribute("title", expect.stringContaining("production"))
++  expect(within(row).queryByText("production")).not.toBeInTheDocument()
++  expect(within(row).getByText("running")).toHaveAttribute("data-slot", "badge")
++  const time = row.querySelector("time")!
++  expect(time).toHaveAttribute("datetime", startedAt)
++  expect(time.textContent).toMatch(/^\d{2}:\d{2}:\d{2}$/)
++  expect(time).toHaveAttribute("title", expect.stringContaining("2026"))
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx
+index 12d62585..01fd6869 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx
+@@ -1,10 +1,12 @@
++import { HugeiconsIcon } from "@hugeicons/react"
++import { PlayIcon, RefreshIcon } from "@hugeicons/core-free-icons"
+ import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
+ import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+ import { FieldErrorsError } from "@/api/client"
+ import { useClearTranscripts, usePrices, useRefreshPrices, useSaveSettings, useSettings, useTranscriptStatus } from "@/api/queries"
+ import type { Settings } from "@/api/types"
+ import { ErrorState } from "@/components/ErrorState"
+ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+ import { Button } from "@/components/ui/button"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+@@ -75,21 +77,21 @@ function StatusLine({ status }: { status?: Status }) {
+   if (!status) return null
+   if (status.state === "error") return <p role="alert" className="text-sm text-destructive">{status.message}</p>
+   return <p role="status" className="text-sm text-muted-foreground">{status.state === "saving" ? "Saving…" : "Saved"}</p>
+ }
+ 
+ function ModelPricesCard() {
+   const prices = usePrices()
+   const refresh = useRefreshPrices()
+   return (
+     <SettingRow title="Price table" description={prices.data ? `models.dev · fetched ${prices.data.fetchedAt.slice(0, 10)} · ${prices.data.origin === "embedded" ? "built in" : "refreshed"}` : "Stored pricing reference data from models.dev."}>
+-      <Button variant="outline" aria-label="Refresh model prices" onClick={() => refresh.mutate()} disabled={refresh.isPending}>Refresh</Button>
++      <Button variant="outline" aria-label="Refresh model prices" onClick={() => refresh.mutate()} disabled={refresh.isPending}><HugeiconsIcon icon={RefreshIcon} data-icon="inline-start" />Refresh</Button>
+       {refresh.error && <p className="text-sm text-destructive">{refresh.error.message}</p>}
+     </SettingRow>
+   )
+ }
+ 
+ function BrowserSoundSettings() {
+   const [preferences, setPreferences] = useState<SoundPreferences | null>(null)
+   const [error, setError] = useState<string>()
+   const [notice, setNotice] = useState<string>()
+   const [permission, setPermission] = useState(() => typeof Notification === "undefined" ? "unsupported" : Notification.permission)
+@@ -125,21 +127,21 @@ function BrowserSoundSettings() {
+     try { setPermission(await Notification.requestPermission()) }
+     catch (reason) { setError(`Browser notification permission could not be requested: ${reason instanceof Error ? reason.message : "request failed"}.`) }
+   }
+ 
+   return (
+     <div>
+       <SettingRow controlId="approval-sound" title="Approval sound" tag="This browser only" description="Played when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.">
+         {preferences ? <div className="flex flex-wrap items-center justify-end gap-2"><Select<SoundPreferences["selection"] | "upload"> items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : []), { value: "upload", label: "Custom audio…" }]} value={preferences.selection} onValueChange={value => { if (value === "upload") document.getElementById("custom-audio")?.click(); else if (value !== null) store({ ...preferences, selection: value }) }}>
+           <SelectTrigger id="approval-sound" aria-describedby="approval-sound-description" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
+           <SelectContent><SelectGroup>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectGroup></SelectContent>
+-        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}>Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
++        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}><HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
+       </SettingRow>
+       {preferences && <><div className="sr-only"><Label htmlFor="custom-audio">Custom audio file</Label><Input id="custom-audio" tabIndex={-1} type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg" onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} /><p>Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p></div>
+       <SettingRow controlId="approval-sound-muted" title="Mute approval sound" tag="This browser only" description="Keep notifications, silence the sound."><Toggle id="approval-sound-muted" label="Mute approval sound" checked={preferences.muted} onChange={muted => store({ ...preferences, muted })} /></SettingRow></>}
+       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
+       <SettingRow title="Browser notifications" tag="This browser only" description="Show a system notification when approval is needed. The browser asks only after you press Enable.">
+         <Button type="button" variant="outline" aria-label={permission === "granted" ? "Browser notifications enabled" : "Enable browser notifications"} onClick={() => { void requestNotifications() }}>{permission === "granted" ? "Enabled" : "Enable"}</Button><span className="sr-only">Permission: {permission}. The browser asks only after you press the button.</span>
+       </SettingRow>
+     </div>
+   )
+ }
+@@ -150,21 +152,21 @@ function AgentTranscriptsStatus() {
+   const [confirming, setConfirming] = useState(false)
+   return (
+     <div className="grid gap-2">
+       {status.data && <p>Matched {status.data.matched} · Unmatched {status.data.unmatched} · Read errors {status.data.readErrors}</p>}
+       {status.data?.lastCycleAt && <p className="text-sm text-muted-foreground">Last cycle: {status.data.lastCycleAt}</p>}
+       {!!status.data?.coverage?.length && <Table aria-label="Agent session matching coverage">
+         <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Transport</TableHead><TableHead>Exact</TableHead><TableHead>Inferred</TableHead><TableHead>Unassigned</TableHead></TableRow></TableHeader>
+         <TableBody>{status.data.coverage.map(row => <TableRow key={`${row.agentKind}:${row.transport}`}><TableHead scope="row" className="whitespace-normal">{row.agentKind}</TableHead><TableCell>{row.transport}</TableCell><TableCell>{row.exact}</TableCell><TableCell>{row.inferred}</TableCell><TableCell>{row.unassigned}</TableCell></TableRow>)}</TableBody>
+       </Table>}
+       {status.error && <p role="alert" className="text-sm text-destructive">{status.error.message}</p>}
+-      <div>
++      <div className="flex w-full justify-end">
+         <Button variant="outline" disabled={clear.isPending} onClick={() => setConfirming(true)}>Clear matched data</Button>
+       </div>
+       {clear.error && <p role="alert" className="text-sm text-destructive">{clear.error.message}</p>}
+       <Dialog open={confirming} onOpenChange={setConfirming}>
+         <DialogContent>
+           <DialogHeader>
+             <DialogTitle>Clear matched data?</DialogTitle>
+             <DialogDescription>Removes matched titles, models, conversations and frozen version labels. Session and agent-session annotations are kept.</DialogDescription>
+           </DialogHeader>
+           <DialogFooter>
+@@ -265,21 +267,21 @@ export function SettingsPage() {
+   <NumberField id="mutation-approval-timeout" label="Approval timeout (seconds)" unit="sec" description="How long an approval request stays open before it is rejected." value={draft.mutations.approvalTimeoutSeconds} min={1} max={3600} error={fieldErrors["mutations.approvalTimeoutSeconds"]} onCommit={value => setMutations({ approvalTimeoutSeconds: value })} />
+   <SettingRow title="Verification" description="Approve or reject each request with a deliberate click."><code className="rounded bg-muted px-2 py-1">{draft.mutations.verification}</code></SettingRow>
+   {draft.mutations.verification !== "click" && <p role="alert" className="text-sm text-destructive">Verification value “{draft.mutations.verification}” is unsupported. This plan supports click verification only; the value was retained without changing it.</p>}
+   <StatusLine status={status.mutations} /><BrowserSoundSettings />
+ </section>
+ <section id="settings-journal" aria-label="Journal & privacy" className="settings-card"><h2>Journal & privacy</h2><p>What SQLHarness records about each operation, and for how long.</p>
+   <SettingRow controlId="journal-enabled" title="Activity journal" description="Record operations so they appear in Activity and sessions. Disabling the journal also disables agent annotations."><Toggle id="journal-enabled" label="Journal enabled" checked={journal.enabled} onChange={value => setJournal(value ? { enabled: true } : { enabled: false, operationAnnotations: false })} /></SettingRow>
+   <SettingRow controlId="journal-sensitive" title="Store sensitive data" description="Store SQL text, full plans (may include parameter values) and error messages for new operations. Existing rows are not changed."><Toggle id="journal-sensitive" label="Store sensitive data" checked={journal.storeSensitive} onChange={value => value ? setConfirmingSensitive(true) : setJournal({ storeSensitive: false })} /></SettingRow>
+   <SettingRow controlId="journal-operation-annotations" title="Agent annotations" restart description="Allows agents to label operations and mark them for keeping. Enabling agent annotations also enables the activity journal automatically. Restart the MCP server and reconnect the client after changing this setting. Keep markers do not prevent retention."><Toggle id="journal-operation-annotations" label="Agent operation annotations" checked={journal.operationAnnotations} onChange={value => setJournal(value ? { enabled: true, operationAnnotations: true } : { operationAnnotations: false })} /></SettingRow>
+   <SettingRow controlId="retention-enabled" title="Retention" description="Delete old journal data on dashboard start, hourly, and on the next mcp serve."><Toggle id="retention-enabled" label="Retention enabled" checked={journal.retention.enabled} onChange={value => setRetention({ enabled: value })} /></SettingRow>
+-  <div className="settings-retention"><NumberField id="retention-age" label="Maximum age (days)" unit="days" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} /><NumberField id="retention-size" label="Maximum size (MB)" unit="MB" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} /></div><StatusLine status={status.journal} />
++  <FieldGroup className="settings-retention"><NumberField id="retention-age" label="Maximum age (days)" unit="days" value={journal.retention.maxAgeDays} min={1} max={3650} error={fieldErrors["journal.retention.maxAgeDays"]} onCommit={value => setRetention({ maxAgeDays: value })} /><NumberField id="retention-size" label="Maximum size (MB)" unit="MB" value={journal.retention.maxSizeMb} min={10} max={102400} error={fieldErrors["journal.retention.maxSizeMb"]} onCommit={value => setRetention({ maxSizeMb: value })} /></FieldGroup><StatusLine status={status.journal} />
+ </section>
+ <section id="settings-agents" aria-label="Agents" className="settings-card"><h2>Agents</h2><p>Reading agent transcripts and compare rules for agents.</p>
+   <SettingRow controlId="dashboard-agent-transcripts" title="Read agent transcripts" description="Reads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored."><Toggle id="dashboard-agent-transcripts" label="Read agent transcripts" checked={draft.dashboard.agentTranscripts.enabled} onChange={value => setDashboard({ agentTranscripts: { enabled: value } })} /></SettingRow>
+   <div className="settings-transcript-status"><AgentTranscriptsStatus /></div>
+   <SettingRow controlId="compare-require-context" title="Require compare subject and scope" restart description={<><span className="block">When enabled, CLI compare needs both <code>--subject</code> and <code>--scope</code>, and MCP compare needs both fields. This setting is on by default.</span><span className="mt-1 block">CLI applies changes on the next invocation. Restart running MCP servers and reconnect their clients to apply changes; saving here does not restart them.</span></>}><Toggle id="compare-require-context" label="Require compare subject and scope" checked={draft.compare.requireContext} onChange={value => setCompare({ requireContext: value })} /></SettingRow><StatusLine status={status.compare} />
+ </section>
+ <section id="settings-dashboard" aria-label="Dashboard" className="settings-card"><h2>Dashboard</h2><p>This dashboard process.</p>
+   <SettingRow controlId="dashboard-autostart" title="Start with mcp serve" description="Launch the dashboard when an MCP server starts."><Toggle id="dashboard-autostart" label="Start with mcp serve" checked={draft.dashboard.autoStart} onChange={value => setDashboard({ autoStart: value })} /></SettingRow>
+   <SettingRow controlId="dashboard-safety-notifications" title="Safety notifications" description="Show safety warnings raised by running sessions."><Toggle id="dashboard-safety-notifications" label="Safety notifications" checked={draft.dashboard.safetyNotifications} onChange={value => setDashboard({ safetyNotifications: value })} /></SettingRow>
+   <NumberField id="dashboard-idle" label="Idle shutdown (hours)" unit="hours" description="Stop the dashboard after this long without activity." value={draft.dashboard.idleShutdownHours} min={1} max={168} error={fieldErrors["dashboard.idleShutdownHours"]} onCommit={value => setDashboard({ idleShutdownHours: value })} />
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
+index 2498d239..e1209148 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.test.tsx
+@@ -8,55 +8,47 @@ import { renderApp, stubFetch } from "@/test/render"
+ import { queryKeys } from "@/api/queries"
+ import { Matrix } from "./ProfileDimensionsPanel"
+ import { ProfileDimensionsPanel } from "./ProfileDimensionsPanel"
+ import { StatsPage } from "./StatsPage"
+ 
+ test("shows KPIs, charts and top lists, and switches range", async () => {
+   const calls = stubFetch({ "/api/stats": stats(), "/api/profiles": profilesResponse() })
+   renderApp("/stats")
+ 
+   expect(await screen.findByRole("heading", { name: "Usage" })).toBeInTheDocument()
+-  expect(await screen.findByText("Workflow output cost")).toBeInTheDocument()
+-  expect(screen.getByText("single-measured-execution-output")).toBeInTheDocument()
+-  expect(screen.getByText(/Input, discovery and chat are unmeasured/)).toBeInTheDocument()
+-  expect(screen.getByText("Estimated output-token delta")).toBeInTheDocument()
+-  expect(screen.getByText("Dry runs")).toBeInTheDocument()
+-  expect(screen.getByText("Database executions")).toBeInTheDocument()
+-  expect(screen.getByText(/Token estimation method: UTF-8 bytes divided by four, rounded up/)).toBeInTheDocument()
+-  expect(screen.getByText("Operations per day (UTC)")).toBeInTheDocument()
+-  expect(screen.getByText("aaaaaaaaaaaa")).toBeInTheDocument()
++  expect(await screen.findByText("Estimated workflow output tokens")).toBeInTheDocument()
++  expect(screen.queryByText("Detailed usage and workflow accounting")).not.toBeInTheDocument()
++  expect(screen.queryByText("Workflow output cost")).not.toBeInTheDocument()
++  expect(screen.queryByText("Operations per day (UTC)")).not.toBeInTheDocument()
++  expect(screen.getByText("bbbbbbbbbbbb")).toBeInTheDocument()
+   expect(screen.getByRole("cell", { name: "Orders" })).toBeInTheDocument()
+   expect(screen.getByRole("cell", { name: "PAGEIOLATCH_SH" })).toBeInTheDocument()
+ 
+   await userEvent.click(screen.getByRole("tab", { name: "All time" }))
+-  await screen.findByText("Workflow output cost")
++  await screen.findByText("Estimated workflow output tokens")
+   expect(calls.some(call => call.startsWith("/api/stats?") && !call.includes("from="))).toBe(true)
+   expect(calls.some(call => call.startsWith("/api/stats?from="))).toBe(true)
+ })
+ 
+-test("per-day chart keys series by index so agent kinds never reach CSS variable names", async () => {
+-  const hostile = "my agent; } body { display:none"
+-  stubFetch({
+-    "/api/stats": stats({ operationsPerDay: [
+-      { day: "2026-10-07", agentKind: "my agent", count: 2 },
+-      { day: "2026-10-07", agentKind: hostile, count: 1 },
+-    ] }),
+-    "/api/profiles": profilesResponse(),
+-  })
+-  const { container } = renderApp("/stats")
+-
+-  await screen.findByText("Operations per day (UTC)")
+-  const css = Array.from(container.querySelectorAll("style")).map(style => style.textContent ?? "").join("\n")
+-  expect(css).toContain("--color-a0:")
+-  expect(css).toContain("--color-a1:")
+-  expect(css).not.toContain("my agent")
+-  expect(css).not.toContain("display:none")
++test("reads ordering uses server-ranked groups and preserves missing versus zero", async () => {
++  stubFetch({ "/api/stats": stats({ topSqlByLogicalReads: [
++    { sqlHash: "readsonly", count: 2, totalDurationMs: 3, maxDurationMs: 2, logicalReadsMedianSum: 0, logicalReadsAvailableOperations: 1, logicalReadsAvailableMetrics: 1, logicalReadsUnavailableMetrics: 1 },
++    { sqlHash: "missing", count: 1, totalDurationMs: 1, maxDurationMs: 1 },
++  ] }), "/api/profiles": profilesResponse() })
++  renderApp("/stats")
++  await screen.findByRole("region", { name: "Top SQL" })
++  await userEvent.click(screen.getByRole("radio", { name: "Logical reads" }))
++  const region = screen.getByRole("region", { name: "Top SQL" })
++  expect(within(region).getByText("readsonly")).toBeInTheDocument()
++  expect(within(region).getByText("1/2 ops · 1 recorded metrics · 1 missing metrics")).toBeInTheDocument()
++  expect(within(region).getByText("Unavailable")).toBeInTheDocument()
++  expect(within(region).queryByText("aaaaaaaaaaaa")).not.toBeInTheDocument()
+ })
+ 
+ test("no-profile activity has a distinct scope and drills down without a profile filter", async () => {
+   const requests: URL[] = []
+   const calls = stubFetch({
+     "/api/stats": (url: URL) => {
+       if (url.searchParams.get("unprofiled") !== "true") return jsonResponse(stats({ profileOperations: [{ profile: "app", operations: 1 }] }))
+       requests.push(url)
+       const literalUnknown = dimensionValue("region", "Unknown", 1, 10)
+       const api = dimensionValue("component", "api", 1, 10)
+@@ -93,21 +85,21 @@ test("no-profile activity has a distinct scope and drills down without a profile
+   expect(drilldown.searchParams.get("unprofiled")).toBe("true")
+   expect(drilldown.searchParams.has("profile")).toBe(false)
+   expect(JSON.parse(drilldown.searchParams.get("dimensions") ?? "{}")).toEqual({ region: "Unknown", component: "api" })
+   expect(requests[0].searchParams.get("unprofiled")).toBe("true")
+ })
+ 
+ test("distinguishes empty activity from incomplete estimate coverage", async () => {
+   stubFetch({ "/api/stats": stats({ operations: [], statuses: [], profileOperations: [], workflowCosts: [] }),
+     "/api/profiles": profilesResponse() })
+   renderApp("/stats")
+-  expect(await screen.findByText("No measured workflow output in this time range.")).toBeInTheDocument()
++  expect(await screen.findByText("No retained workflow-output accounting")).toBeInTheDocument()
+ })
+ 
+ test("selects a profile and shows filtered, searchable dimension matrix totals", async () => {
+   const originalWarn = console.warn
+   vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+     if (!String(args[0]).startsWith("The width(0) and height(0) of chart")) originalWarn(...args)
+   })
+   const calls = stubFetch({
+     "/api/stats": (url: URL) => jsonResponse(filteredProfileStats(url)),
+     "/api/profiles": profilesResponse(),
+@@ -510,10 +502,59 @@ function filteredProfileStats(url: URL) {
+ 
+ function dimensionValue(name: string, value: string, operations: number, totalDurationMs: number | null, failed = 0, rejected = 0): DimensionValueSummary {
+   return { name, value, isUnknown: false, source: "recorded", operations, percentage: operations / 3 * 100,
+     totalDurationMs, durationAvailableOperations: totalDurationMs === null ? 0 : operations,
+     durationUnavailableOperations: totalDurationMs === null ? operations : 0, failed, rejected }
+ }
+ 
+ function matrixMetrics(operations: number, totalDurationMs: number) {
+   return { operations, totalDurationMs, durationAvailableOperations: operations, durationUnavailableOperations: 0, failed: 0, rejected: 0 }
+ }
++
++test("KPI counts lead the failure rate and legacy volumes are excluded from output", async () => {
++  const response = stats({ operations: [{ key: "query", count: 4 }], statuses: [{ key: "failed", count: 1 }, { key: "rejected", count: 2 }], sessionCount: 2 })
++  response.workflowCosts = [{ ...response.workflowCosts[0], accountingKind: "legacy-artifact-volume", outputBytes: 999999, estimatedOutputTokens: 999999 }]
++  stubFetch({ "/api/stats": response, "/api/profiles": profilesResponse() })
++  renderApp("/stats")
++  expect(await screen.findByText("1 / 2")).toBeInTheDocument()
++  expect(screen.getByText("75% of 4 operations")).toBeInTheDocument()
++  expect(screen.getByText("2 sessions")).toBeInTheDocument()
++  expect(screen.getByText("No retained workflow-output accounting")).toBeInTheDocument()
++  expect(screen.queryByText(/999,999/)).not.toBeInTheDocument()
++})
++
++test("a recorded dimension absent in the new range cannot leave an invisible aggregate filter", async () => {
++  const requests: URL[] = []
++  stubFetch({ "/api/stats": (url: URL) => {
++    requests.push(url)
++    const from = url.searchParams.get("from")
++    const to = url.searchParams.get("to")
++    const recent = from !== null && to !== null && Date.parse(to) - Date.parse(from) <= 24 * 60 * 60 * 1000
++    const response = profileStats("app")
++    if (!recent) response.profileDimensions.dimensions.push({ name: "legacy", values: [dimensionValue("legacy", "older", 3, 30)] })
++    const hiddenFilter = recent && JSON.parse(url.searchParams.get("dimensions") ?? "{}").legacy !== undefined
++    const count = hiddenFilter ? 0 : recent ? 2 : 3
++    response.operations = count ? [{ key: "query", count }] : []
++    response.statuses = count ? [{ key: "succeeded", count }] : []
++    response.topSqlByDuration = count ? [{ sqlHash: recent ? "newcohort" : "oldcohort", count, totalDurationMs: 20, maxDurationMs: 10 }] : []
++    if (recent && response.profileDimensions.matrix) {
++      response.profileDimensions.matrix.cells = hiddenFilter ? [] : response.profileDimensions.matrix.cells.slice(0, 1)
++      response.profileDimensions.matrix.totals = matrixMetrics(count, count * 10)
++      response.profileDimensions.operations = count
++    }
++    return jsonResponse(response)
++  }, "/api/profiles": profilesResponse() })
++  renderApp("/stats")
++  await screen.findByRole("combobox", { name: "legacy" })
++  await userEvent.click(screen.getByRole("tab", { name: "All time" }))
++  await userEvent.click(await screen.findByRole("combobox", { name: "legacy" }))
++  await userEvent.click(await screen.findByRole("option", { name: "older" }))
++  await waitFor(() => expect(requests.some(url => url.searchParams.get("dimensions")?.includes("legacy"))).toBe(true))
++  await userEvent.click(screen.getByRole("tab", { name: "24 hours" }))
++  expect(await screen.findByText(/Full-scope total: 2 \(2 operations\)/)).toBeInTheDocument()
++  expect(await screen.findByText("newcohort")).toBeInTheDocument()
++  expect(screen.queryByRole("combobox", { name: "legacy" })).not.toBeInTheDocument()
++  const summary = screen.getByLabelText("Usage summary")
++  expect(within(summary).getByText("2")).toBeInTheDocument()
++  const currentAggregate = requests.filter(url => url.searchParams.has("from") && !url.searchParams.has("rowDimension")).at(-1)!
++  expect(JSON.parse(currentAggregate.searchParams.get("dimensions") ?? "{}")).not.toHaveProperty("legacy")
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
+index 3ea40197..9cace046 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/StatsPage.tsx
+@@ -1,135 +1,68 @@
+ import { useId, useState } from "react"
+ import { useNavigate } from "@tanstack/react-router"
+-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
+ import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
+-import type { DashboardStats, KeyCount, ProfileView, SqlHashStat, WorkflowCost } from "@/api/types"
++import type { DashboardStats, ProfileView, SqlHashStat } from "@/api/types"
+ import { agentLabel } from "@/lib/agents"
+ import { ErrorState } from "@/components/ErrorState"
+-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+-import { Button } from "@/components/ui/button"
+ import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
+-import { Kpi } from "@/components/Kpi"
+ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+-import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+ import { Label } from "@/components/ui/label"
+ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
++import { Separator } from "@/components/ui/separator"
+ import { Skeleton } from "@/components/ui/skeleton"
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+ import { formatDuration, formatNumber, shortHash } from "@/lib/format"
+-import { pivotPerDay } from "@/lib/stats"
++import { failureRate, pivotPerDay } from "@/lib/stats"
+ import { ProfileDimensionsPanel, type DimensionAxes, type DimensionCellScope } from "./ProfileDimensionsPanel"
+ 
+ const ranges: { value: StatsRange; label: string }[] = [
+   { value: "24h", label: "24 hours" },
+   { value: "7d", label: "7 days" },
+   { value: "30d", label: "30 days" },
+   { value: "all", label: "All time" },
+ ]
+ 
+-function WorkflowCostCard({ costs }: { costs: WorkflowCost[] }) {
+-  const outputBytes = costs.reduce((sum, cost) => sum + cost.outputBytes, 0)
+-  return (
+-    <Card>
+-      <CardHeader>
+-        <CardTitle>Workflow output cost</CardTitle>
+-      </CardHeader>
+-      <CardContent className="space-y-3 overflow-x-auto">
+-        {costs.length > 0 ? (
+-          <Table>
+-            <TableHeader>
+-              <TableRow>
+-                <TableHead>Workflow</TableHead>
+-                <TableHead className="text-right">Output bytes</TableHead>
+-                <TableHead className="text-right">Estimated output tokens</TableHead>
+-                <TableHead className="text-right">Calls</TableHead>
+-                <TableHead className="text-right">Dry runs</TableHead>
+-                <TableHead className="text-right">Database executions</TableHead>
+-                <TableHead>Comparison</TableHead>
+-                <TableHead className="text-right">Baseline bytes</TableHead>
+-                <TableHead className="text-right">Output overhead bytes</TableHead>
+-                <TableHead className="text-right">Estimated output-token delta</TableHead>
+-              </TableRow>
+-            </TableHeader>
+-            <TableBody>
+-              {costs.map((cost, index) => (
+-                <TableRow key={cost.rootOperationRef ?? `legacy-${index}`}>
+-                  <TableCell>{cost.rootOperationRef ?? "Legacy output"}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.outputBytes)}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.estimatedOutputTokens)}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.callCount)}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.dryRunCalls)}</TableCell>
+-                  <TableCell className="text-right">{formatNumber(cost.databaseExecutionCalls)}</TableCell>
+-                  <TableCell>{cost.comparison?.baselineKind ?? "Unavailable"}</TableCell>
+-                  <TableCell className="text-right">{cost.comparison ? formatNumber(cost.comparison.baselineBytes) : "—"}</TableCell>
+-                  <TableCell className="text-right">{cost.comparison ? formatNumber(cost.comparison.outputOverheadBytes) : "—"}</TableCell>
+-                  <TableCell className="text-right">{cost.comparison?.estimatedOutputTokenDelta == null ? "—" : formatNumber(cost.comparison.estimatedOutputTokenDelta)}</TableCell>
+-                </TableRow>
+-              ))}
+-            </TableBody>
+-          </Table>
+-        ) : <p className="text-sm text-muted-foreground">No measured workflow output in this time range.</p>}
+-        {costs.length > 0 && <p className="text-sm text-muted-foreground">Measured output: {formatNumber(outputBytes)} bytes. Input, discovery and chat are unmeasured. Token estimation method: UTF-8 bytes divided by four, rounded up.</p>}
+-        {costs.some(cost => cost.accountingKind === "legacy-artifact-volume") &&
+-          <p className="text-xs text-muted-foreground">Legacy artifact-volume estimates are reported separately without a comparison.</p>}
+-      </CardContent>
+-    </Card>
+-  )
+-}
+-
+ function SqlHash({ value }: { value: string }) {
+   const id = useId()
+   return <Tooltip><TooltipTrigger aria-describedby={id} render={<span tabIndex={0} className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />}>{shortHash(value)}</TooltipTrigger><TooltipContent id={id} role="tooltip" className="break-all">{value}</TooltipContent></Tooltip>
+ }
+ 
+ function SqlTable({ rows }: { rows: SqlHashStat[] }) {
+   return (
+     <Table>
+       <TableHeader>
+         <TableRow>
+           <TableHead>SQL hash</TableHead>
+           <TableHead className="text-right">Runs</TableHead>
+           <TableHead className="text-right">Total</TableHead>
+           <TableHead className="text-right">Slowest</TableHead>
++          <TableHead className="text-right">Logical reads</TableHead>
+         </TableRow>
+       </TableHeader>
+       <TableBody>
+         {rows.map(row => (
+           <TableRow key={row.sqlHash}>
+             <TableCell className="font-mono"><SqlHash value={row.sqlHash} /></TableCell>
+             <TableCell className="text-right">{formatNumber(row.count)}</TableCell>
+             <TableCell className="text-right">{formatDuration(row.totalDurationMs)}</TableCell>
+             <TableCell className="text-right">{formatDuration(row.maxDurationMs)}</TableCell>
++            <TableCell className="text-right"><div>{row.logicalReadsMedianSum == null ? "Unavailable" : formatNumber(row.logicalReadsMedianSum)}</div><div className="text-xs text-muted-foreground">{row.logicalReadsAvailableOperations ?? 0}/{row.count} ops · {row.logicalReadsAvailableMetrics ?? 0} recorded metrics{(row.logicalReadsUnavailableMetrics ?? 0) > 0 ? ` · ${row.logicalReadsUnavailableMetrics} missing metrics` : ""}</div></TableCell>
+           </TableRow>
+         ))}
+       </TableBody>
+     </Table>
+   )
+ }
+ 
+-function CountChart({ rows, label }: { rows: KeyCount[]; label: string }) {
+-  const config = { count: { label, color: "var(--chart-1)" } } satisfies ChartConfig
+-  return (
+-    <ChartContainer config={config} className="h-56 w-full">
+-      <BarChart data={rows}>
+-        <CartesianGrid vertical={false} />
+-        <XAxis dataKey="key" tickLine={false} axisLine={false} />
+-        <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
+-        <ChartTooltip content={<ChartTooltipContent />} />
+-        <Bar dataKey="count" fill="var(--color-count)" radius={4} />
+-      </BarChart>
+-    </ChartContainer>
+-  )
+-}
+-
+ type StatsPageProps = { onDimensionCellSelect?: (scope: DimensionCellScope) => void }
+ 
+ export function StatsPage(props: StatsPageProps = {}) {
+   return props.onDimensionCellSelect
+     ? <StatsPageContent onDimensionCellSelect={props.onDimensionCellSelect} />
+     : <StatsPageRoute />
+ }
+ 
+ function StatsPageRoute() {
+   const navigate = useNavigate()
+@@ -148,21 +81,28 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
+   const overview = useStats(range, window)
+   const profilesQuery = useProfiles()
+   const profiles = profilesQuery.data?.profiles ?? []
+   const selectedProfile = manualProfile
+     ? manualProfile.value
+     : overview.data?.profileOperations.length
+       ? overview.data.profileOperations[0].profile
+       : profiles[0]?.name ?? null
+   const selectedUnprofiled = manualProfile ? manualProfile.value === null
+     : overview.data?.profileOperations[0]?.profile === null && overview.data.profileOperations.length > 0
+-  const query = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
++  const dimensionOptions = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
++  // Only current, loaded dimension options may remove retained selections. While
++  // the new range is loading, keep selections intact and hide its pending metrics.
++  const dimensionNames = dimensionOptions.data?.profileDimensions.dimensions.map(dimension => dimension.name)
++  const effectiveFilters = dimensionNames
++    ? Object.fromEntries(Object.entries(dimensionFilters).filter(([name]) => dimensionNames.includes(name)))
++    : dimensionFilters
++  const query = useStats(range, window, selectedProfile, effectiveFilters, undefined, undefined, selectedUnprofiled, dimensionOptions.data !== undefined)
+   const profileOptions = [...new Set([
+     ...profiles.map(profile => profile.name),
+     ...(overview.data?.profileOperations ?? []).flatMap(item => item.profile === null ? [] : [item.profile]),
+     ...(manualProfile?.value ? [manualProfile.value] : []),
+   ])].sort((left, right) => left.localeCompare(right))
+   const selectedProfileView = profiles.find(profile => profile.name === selectedProfile)
+ 
+   return (
+     <div className="usage-page flex flex-col gap-4">
+       <div className="flex flex-wrap items-center gap-3">
+@@ -195,146 +135,105 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
+                 {item.label}
+               </TabsTrigger>
+             ))}
+           </TabsList>
+         </Tabs>
+       </div>
+       {overview.error ? (
+         <ErrorState error={overview.error} />
+       ) : query.error ? (
+         <ErrorState error={query.error} />
+-      ) : overview.isPending || query.isPending ? (
++      ) : overview.isPending || dimensionOptions.isPending ? (
+         <Skeleton className="h-64 w-full" />
+       ) : (
+-        <StatsContent stats={query.data} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
+-          dimensionFilters={dimensionFilters} onDimensionFiltersChange={setDimensionFilters}
++        <StatsContent metricsPending={query.isPending} stats={{ ...(query.data ?? dimensionOptions.data!), profileDimensions: dimensionOptions.data!.profileDimensions }} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
++          dimensionFilters={effectiveFilters} onDimensionFiltersChange={setDimensionFilters}
+           axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
+       )}
+     </div>
+   )
+ }
+ 
+ function StatsContent({
++  metricsPending,
+   stats,
+   range,
+   window,
+   profile,
+   unprofiled,
+   profileView,
+   dimensionFilters,
+   onDimensionFiltersChange,
+   axisChoice,
+   onAxisChoiceChange,
+   onDimensionCellSelect,
+ }: {
++  metricsPending: boolean
+   stats: DashboardStats
+   range: StatsRange
+   window: StatsWindow
+   profile: string | null
+   unprofiled: boolean
+   profileView: ProfileView | undefined
+   dimensionFilters: Record<string, string | null>
+   onDimensionFiltersChange: (filters: Record<string, string | null>) => void
+   axisChoice: DimensionAxes | null
+   onAxisChoiceChange: (axes: DimensionAxes | null) => void
+   onDimensionCellSelect?: (scope: DimensionCellScope) => void
+ }) {
+   const [sqlSort, setSqlSort] = useState("duration")
+-  const topSql = [...new Map([...stats.topSqlByCount, ...stats.topSqlByDuration].map(row => [row.sqlHash, row])).values()].sort((a,b) => sqlSort === "runs" ? b.count - a.count : b.totalDurationMs - a.totalDurationMs)
++  const topSql = sqlSort === "reads" ? stats.topSqlByLogicalReads ?? [] : sqlSort === "runs" ? stats.topSqlByCount : stats.topSqlByDuration
+   const perDay = pivotPerDay(stats.operationsPerDay)
+-  // Series are keyed by index: an agent kind is client-supplied text and must never become a CSS variable name.
+-  const seriesKeys = perDay.agents.map((_, index) => `a${index}`)
+-  const perDayRows = perDay.rows.map(row => ({
+-    day: row.day,
+-    ...Object.fromEntries(perDay.agents.map((agent, index) => [seriesKeys[index], row[agent]])),
+-  }))
+-  const perDayConfig = Object.fromEntries(
+-    perDay.agents.map((agent, index) => [seriesKeys[index], { label: agentLabel(agent), color: `var(--chart-${(index % 5) + 1})` }]),
+-  ) satisfies ChartConfig
+   const total = stats.operations.reduce((sum, row) => sum + row.count, 0)
+ 
++  const rate = failureRate(stats.statuses, total)
++  const failed = stats.statuses.find(row => row.key === "failed")?.count ?? 0
++  const rejected = stats.statuses.find(row => row.key === "rejected")?.count ?? 0
++  const output = stats.workflowCosts.filter(cost => cost.accountingKind === "workflow-output")
++  const kpis = [
++    { label: "Operations", value: formatNumber(total), detail: `${stats.sessionCount == null ? "Session count unavailable" : `${formatNumber(stats.sessionCount)} sessions`}` },
++    { label: "Failed / rejected", value: `${formatNumber(failed)} / ${formatNumber(rejected)}`, detail: rate === null ? "Rate unavailable · no operations" : `${rate.toLocaleString(undefined, { maximumFractionDigits: 1 })}% of ${formatNumber(total)} operations` },
++    { label: "Estimated workflow output tokens", value: output.length ? formatNumber(output.reduce((sum, cost) => sum + cost.estimatedOutputTokens, 0)) : "Unavailable", detail: output.length ? `${formatNumber(output.reduce((sum, cost) => sum + cost.outputBytes, 0))} measured bytes · ÷ 4, rounded up per call` : "No retained workflow-output accounting" },
++    { label: "Operations with spills", value: formatNumber(stats.spillOperations), detail: "Recorded spill evidence" },
++    { label: "Operations on a cold cache", value: formatNumber(stats.coldCacheOperations), detail: "Recorded cold-cache evidence" },
++  ]
+   return (
+     <div className="usage-content flex flex-col gap-4">
+-      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 [&>*]:min-w-0 [&>*]:break-words">
+-        <Kpi label="Operations" value={formatNumber(total)} />
+-        <Kpi label="Failed / rejected" value={`${formatNumber(stats.statuses.find(row => row.key === "failed")?.count ?? 0)} / ${formatNumber(stats.statuses.find(row => row.key === "rejected")?.count ?? 0)}`} />
+-        <Kpi label="Measured workflow output" value={`${formatNumber(stats.workflowCosts.reduce((sum, cost) => sum + cost.outputBytes, 0))} bytes`} />
+-        <Kpi label="Operations with spills" value={formatNumber(stats.spillOperations)} />
+-        <Kpi label="Operations on a cold cache" value={formatNumber(stats.coldCacheOperations)} />
+-      </div>
++      {metricsPending && <Skeleton aria-label="Updating filtered statistics" className="h-64 w-full" />}
++      <div hidden={metricsPending}><div className="flex flex-col gap-4">
++      <Card aria-label="Usage summary" className="gap-0 overflow-hidden py-0">
++        <CardHeader className="sr-only"><CardTitle>Usage summary</CardTitle></CardHeader>
++        <CardContent className="grid min-w-0 grid-cols-1 p-0 sm:grid-cols-2 lg:grid-cols-5">
++          {kpis.map(kpi => <div key={kpi.label} className="relative min-w-0"><div className="flex h-full flex-col gap-2 p-4"><div className="text-sm text-muted-foreground">{kpi.label}</div><div className="break-words text-2xl font-semibold tabular-nums">{kpi.value}</div><p className="text-xs text-muted-foreground">{kpi.detail}</p></div><Separator orientation="vertical" className="absolute right-0 top-0 hidden h-full sm:block" /><Separator className="sm:hidden" /></div>)}
++        </CardContent>
++      </Card>
+       <Card role="region" aria-label="Agents"><CardHeader><CardTitle><h2>Agents</h2></CardTitle><CardDescription>Output tokens are estimated from returned UTF-8 bytes ÷ 4. Per-agent model, sessions, tokens and costs are unavailable in the recorded statistics.</CardDescription></CardHeader><CardContent>
+         <Table><TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Model</TableHead><TableHead className="text-right">Sessions</TableHead><TableHead className="text-right">Operations</TableHead><TableHead className="text-right">Output tokens</TableHead><TableHead className="text-right">Est. cost</TableHead></TableRow></TableHeader><TableBody>{perDay.agents.map(agent => <TableRow key={agent}><TableCell>{agentLabel(agent)}</TableCell><TableCell>—</TableCell><TableCell className="text-right">—</TableCell><TableCell className="text-right">{formatNumber(stats.operationsPerDay.filter(row => row.agentKind === agent).reduce((sum,row) => sum + row.count,0))}</TableCell><TableCell className="text-right">—</TableCell><TableCell className="text-right">—</TableCell></TableRow>)}</TableBody></Table>
+       </CardContent></Card>
+-      <Card role="region" aria-label="Top SQL"><CardHeader><div className="flex flex-wrap items-center gap-3"><CardTitle><h2>Top SQL</h2></CardTitle><SegmentedRadioGroup label="Top SQL order" value={sqlSort} options={[{ value: "duration", label: "Total time" }, { value: "runs", label: "Runs" }]} onValueChange={setSqlSort} /></div><CardDescription>Grouped by SQL hash · text, logical reads and last run are unavailable in these statistics.</CardDescription></CardHeader><CardContent><SqlTable rows={topSql} /></CardContent></Card>
++      <Card role="region" aria-label="Top SQL"><CardHeader><div className="flex flex-wrap items-center gap-3"><CardTitle><h2>Top SQL</h2></CardTitle><SegmentedRadioGroup label="Top SQL order" value={sqlSort} options={[{ value: "duration", label: "Total time" }, { value: "runs", label: "Runs" }, { value: "reads", label: "Logical reads" }]} onValueChange={setSqlSort} /></div><CardDescription>Grouped by SQL hash · Logical reads: sum of recorded representative metric medians, not total executions. Coverage shown per operation and metric; missing data remains unavailable. SQL text and last run are unavailable.</CardDescription></CardHeader><CardContent><SqlTable rows={topSql} /></CardContent></Card>
+       <div className="grid gap-4 md:grid-cols-2">
+         <Card role="region" aria-label="Tables by logical reads"><CardHeader><CardTitle><h2>Tables by logical reads</h2></CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Table</TableHead><TableHead className="text-right">Logical reads</TableHead><TableHead className="text-right">Ops</TableHead></TableRow></TableHeader><TableBody>{stats.topTablesByLogicalReads.map(row => <TableRow key={row.table}><TableCell className="font-mono">{row.table}</TableCell><TableCell className="text-right">{formatNumber(row.logicalReads)}</TableCell><TableCell className="text-right">{formatNumber(row.operations)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+         <Card role="region" aria-label="Top waits"><CardHeader><CardTitle><h2>Top waits</h2></CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Wait type</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{stats.topWaits.map(row => <TableRow key={row.waitType}><TableCell className="font-mono">{row.waitType}</TableCell><TableCell className="text-right">{formatDuration(row.totalWaitMs)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+       </div>
++      </div></div>
+       <ProfileDimensionsPanel
+         key={profile === null ? `scope:${unprofiled ? "unprofiled" : "all"}` : `profile:${profile}`}
+         range={range}
+         window={window}
+         profile={profile}
+         unprofiled={unprofiled}
+         profileName={profile ?? "No profile"}
+         databaseTemplate={profileView?.database}
+         profileDefinitionAvailable={stats.profileDimensions.profileDefinitionAvailable}
+         dimensions={stats.profileDimensions.dimensions}
+         filterOptions={stats.profileDimensions.dimensions}
+         targets={stats.profileDimensions.targets}
+         dimensionFilters={dimensionFilters}
+         onDimensionFiltersChange={onDimensionFiltersChange}
+         axisChoice={axisChoice}
+         onAxisChoiceChange={onAxisChoiceChange}
+         onCellSelect={onDimensionCellSelect}
+       />
+-      <Collapsible className="flex flex-col gap-3"><CollapsibleTrigger render={<Button variant="outline" className="self-start" />}>Detailed usage and workflow accounting</CollapsibleTrigger><CollapsibleContent keepMounted className="flex flex-col gap-4">
+-      <Card>
+-        <CardHeader>
+-          <CardTitle>Operations per day (UTC)</CardTitle>
+-        </CardHeader>
+-        <CardContent>
+-          <ChartContainer config={perDayConfig} className="h-64 w-full">
+-            <BarChart data={perDayRows}>
+-              <CartesianGrid vertical={false} />
+-              <XAxis dataKey="day" tickLine={false} axisLine={false} />
+-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
+-              <ChartTooltip content={<ChartTooltipContent />} />
+-              <ChartLegend content={<ChartLegendContent />} />
+-              {seriesKeys.map(key => (
+-                <Bar key={key} dataKey={key} stackId="agents" fill={`var(--color-${key})`} />
+-              ))}
+-            </BarChart>
+-          </ChartContainer>
+-        </CardContent>
+-      </Card>
+-      <WorkflowCostCard costs={stats.workflowCosts} />
+-      <div className="grid gap-4 md:grid-cols-2">
+-        <Card>
+-          <CardHeader>
+-            <CardTitle>Statuses</CardTitle>
+-          </CardHeader>
+-          <CardContent>
+-            <CountChart rows={stats.statuses} label="Operations" />
+-          </CardContent>
+-        </Card>
+-        <Card>
+-          <CardHeader>
+-            <CardTitle>Exit codes</CardTitle>
+-          </CardHeader>
+-          <CardContent>
+-            <CountChart rows={stats.exitCodes} label="Operations" />
+-          </CardContent>
+-        </Card>
+-        <Card>
+-          <CardHeader>
+-            <CardTitle>Operations by kind</CardTitle>
+-          </CardHeader>
+-          <CardContent>
+-            <CountChart rows={stats.operations} label="Operations" />
+-          </CardContent>
+-        </Card>
+-      </div>
+-      </CollapsibleContent></Collapsible>
++
+     </div>
+   )
+ }
+diff --git a/src/SqlHarness.Dashboard/ui/src/test/fixtures.ts b/src/SqlHarness.Dashboard/ui/src/test/fixtures.ts
+index cdd5d739..b17e5ee4 100644
+--- a/src/SqlHarness.Dashboard/ui/src/test/fixtures.ts
++++ b/src/SqlHarness.Dashboard/ui/src/test/fixtures.ts
+@@ -61,21 +61,23 @@ export const operationDetail = (over: Partial<OperationDetail> = {}): OperationD
+ 
+ export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
+   operationsPerDay: [
+     { day: "2026-10-06", agentKind: "claude", count: 2 },
+     { day: "2026-10-07", agentKind: "claude", count: 3 },
+     { day: "2026-10-07", agentKind: "codex", count: 1 },
+   ],
+   statuses: [{ key: "succeeded", count: 5 }, { key: "rejected", count: 1 }],
+   exitCodes: [{ key: "0", count: 5 }, { key: "2", count: 1 }],
+   operations: [{ key: "query", count: 4 }, { key: "measure", count: 2 }],
+-  topSqlByCount: [{ sqlHash: "sha256:aaaaaaaaaaaaaaaa", count: 4, totalDurationMs: 400, maxDurationMs: 150 }],
++  sessionCount: 2,
++  topSqlByCount: [{ sqlHash: "sha256:aaaaaaaaaaaaaaaa", count: 4, totalDurationMs: 400, maxDurationMs: 150, logicalReadsMedianSum: 120, logicalReadsAvailableOperations: 2, logicalReadsUnavailableOperations: 2, logicalReadsAvailableMetrics: 3, logicalReadsUnavailableMetrics: 1 }],
++  topSqlByLogicalReads: [{ sqlHash: "sha256:aaaaaaaaaaaaaaaa", count: 4, totalDurationMs: 400, maxDurationMs: 150, logicalReadsMedianSum: 120, logicalReadsAvailableOperations: 2, logicalReadsUnavailableOperations: 2, logicalReadsAvailableMetrics: 3, logicalReadsUnavailableMetrics: 1 }],
+   topSqlByDuration: [{ sqlHash: "sha256:bbbbbbbbbbbbbbbb", count: 1, totalDurationMs: 9000, maxDurationMs: 9000 }],
+   topTablesByLogicalReads: [{ table: "Orders", logicalReads: 210, operations: 1 }],
+   topWaits: [{ waitType: "PAGEIOLATCH_SH", totalWaitMs: 120 }],
+   targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }],
+   workflowCosts: [{ rootOperationRef: "root-1", outputBytes: 4000, estimatedOutputTokens: 1000, callCount: 3,
+     tokenEstimationMethod: "utf8-bytes-div-4", accountingKind: "workflow-output",
+     coverage: { input: "unmeasured", discovery: "unmeasured", chat: "unmeasured" },
+     comparison: { baselineKind: "single-measured-execution-output", baselineBytes: 4000,
+       baselineEstimatedTokens: 1000, outputOverheadBytes: 0, estimatedOutputTokenDelta: 0 },
+     dryRunCalls: 0, databaseExecutionCalls: 1 }], spillOperations: 1, coldCacheOperations: 1,
+diff --git a/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs b/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs
+index 9c6d481e..0b31e680 100644
+--- a/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs
++++ b/tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs
+@@ -8,20 +8,45 @@ using SqlHarness.Core;
+ using SqlHarness.Dashboard;
+ using SqlHarness.Tests.Journal;
+ 
+ namespace SqlHarness.Tests.Dashboard;
+ 
+ public sealed class JournalReaderTests
+ {
+     private static JournalReader Reader(TempHome home, FakeProcesses? processes = null) =>
+         new(home.DatabasePath, processes ?? new FakeProcesses());
+ 
++    [Fact]
++    public void Mutation_requester_uses_only_the_retained_operation_link()
++    {
++        using var home = new TempHome();
++        var seed = new JournalSeed(home.DatabasePath);
++        var actual = seed.Operation(JournalSeed.Session("actual", "codex"));
++        seed.Operation(JournalSeed.Session("latest", "claude"));
++        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
++        journal.RecordMutation(new MutationJournalRecord("request", "latest", "local", "sqlserver", "srv", "db",
++            "dml", "operator", "digest", "UPDATE t SET x=1", "[]", DateTimeOffset.UtcNow));
++        var reader = Reader(home);
++        Assert.Null(reader.MutationRequesterByRequestId("request"));
++        Assert.Null(reader.MutationRequesterByRequestId("missing"));
++        using (var connection = OpenSeedDatabase(home.DatabasePath))
++        using (var command = connection.CreateCommand())
++        {
++            command.CommandText = "UPDATE mutation_requests SET operation_id = $id WHERE request_id = 'request'";
++            command.Parameters.AddWithValue("$id", actual.OperationId);
++            command.ExecuteNonQuery();
++        }
++        var requester = Assert.IsType<MutationRequester>(reader.MutationRequesterByRequestId("request"));
++        Assert.Equal(reader.Sessions(new SessionQuery()).Items.Single(session => session.SessionKey == "actual").Id, requester.SessionId);
++        Assert.Equal("codex", requester.AgentLabel);
++    }
++
+     [Fact]
+     public void Operation_json_exposes_session_evidence_version_without_writing()
+     {
+         using var home = new TempHome();
+         var seed = new JournalSeed(home.DatabasePath);
+         var old = seed.Operation(JournalSeed.Session("old"));
+         var fresh = seed.Operation(JournalSeed.Session("fresh"));
+         using (var connection = OpenSeedDatabase(home.DatabasePath))
+         using (var command = connection.CreateCommand())
+         {
+@@ -1513,20 +1538,92 @@ public sealed class JournalReaderTests
+ 
+         var page = reader.Operations(new OperationQuery(SessionId: sessionId, Operation: "query", Limit: 2));
+         var rest = reader.Operations(new OperationQuery(SessionId: sessionId, Operation: "query", Limit: 2, Cursor: page.NextCursor));
+ 
+         Assert.Equal(2, page.Items.Count);
+         Assert.Single(rest.Items);
+         Assert.True(page.Items[0].Id > page.Items[1].Id);
+         Assert.All(page.Items.Concat(rest.Items), o => Assert.Equal("query", o.Operation));
+     }
+ 
++    [Fact]
++    public void Stats_reads_cover_all_groups_and_share_scope()
++    {
++        using var home = new TempHome();
++        var seed = new JournalSeed(home.DatabasePath);
++        var session = JournalSeed.Session("cli:reads");
++        for (var i = 0; i < 25; i++)
++            for (var run = 0; run < 3; run++)
++                seed.Operation(session, sql: $"SELECT {i}", durationMs: 1000);
++        var benchmark = JournalSeed.Benchmark(readsMedian: 70);
++        benchmark = benchmark with { Variants = [benchmark.Variants[0], benchmark.Variants[0] with { Variant = "candidate", LogicalReads = null }] };
++        seed.Operation(session, sql: "SELECT reads", durationMs: 1, benchmark: benchmark);
++        seed.Operation(session, sql: "SELECT reads", durationMs: 2);
++        seed.Operation(session, sql: "SELECT zero", benchmark: JournalSeed.Benchmark(readsMedian: 0));
++        var reader = Reader(home);
++        var stats = reader.Stats(new StatsQuery(Profile: "local", Dimensions: new Dictionary<string, string?> { ["tenant"] = "acme" }));
++        Assert.Equal(1, stats.SessionCount);
++        var top = stats.TopSqlByLogicalReads![0];
++        Assert.Equal(OperationJournalDescriber.SqlHash("SELECT reads"), top.SqlHash);
++        Assert.Equal(70, top.LogicalReadsMedianSum);
++        Assert.Equal(2, top.Count);
++        Assert.Equal(3, top.TotalDurationMs);
++        Assert.Equal(1, top.LogicalReadsAvailableOperations);
++        Assert.Equal(1, top.LogicalReadsUnavailableOperations);
++        Assert.Equal(1, top.LogicalReadsUnavailableMetrics);
++        Assert.DoesNotContain(stats.TopSqlByCount, x => x.SqlHash == top.SqlHash);
++        Assert.DoesNotContain(stats.TopSqlByDuration, x => x.SqlHash == top.SqlHash);
++        Assert.Equal(0, stats.TopSqlByLogicalReads.Single(x => x.SqlHash == OperationJournalDescriber.SqlHash("SELECT zero")).LogicalReadsMedianSum);
++        Assert.Null(stats.TopSqlByDuration[0].LogicalReadsMedianSum);
++        var empty = reader.Stats(new StatsQuery(Profile: "other"));
++        Assert.Empty(empty.Operations);
++        Assert.Empty(empty.TopSqlByLogicalReads!);
++        Assert.Empty(empty.WorkflowCosts);
++        Assert.Equal(0, empty.SessionCount);
++    }
++
++    [Fact]
++    public void Stats_all_metrics_use_identical_profile_dimension_and_window_cohort()
++    {
++        using var home = new TempHome();
++        var seed = new JournalSeed(home.DatabasePath);
++        var first = JournalSeed.Session("cli:first");
++        var second = JournalSeed.Session("cli:second");
++        seed.Operation(first, profile: "local", status: "failed", benchmark: JournalSeed.Benchmark(physical: 1));
++        seed.Operation(second, profile: "local", benchmark: JournalSeed.Benchmark(physical: 1));
++        seed.Operation(second, profile: "other", benchmark: JournalSeed.Benchmark(1000, physical: 1));
++        seed.Operation(second, profile: null, benchmark: JournalSeed.Benchmark(1000, physical: 1));
++        seed.Operation(second, variables: new Dictionary<string, string> { ["tenant"] = "other" }, benchmark: JournalSeed.Benchmark(1000, physical: 1));
++        var reader = Reader(home);
++        var scoped = reader.Stats(new StatsQuery(Profile: "local", Dimensions: new Dictionary<string, string?> { ["tenant"] = "acme" }));
++        Assert.Equal(2, scoped.SessionCount);
++        Assert.Equal(2, scoped.Operations.Sum(x => x.Count));
++        Assert.Equal(2, scoped.OperationsPerDay.Sum(x => x.Count));
++        Assert.Equal(2, scoped.Statuses.Sum(x => x.Count));
++        Assert.Equal(1, scoped.Statuses.Single(x => x.Key == "failed").Count);
++        Assert.Equal(2, scoped.ExitCodes.Sum(x => x.Count));
++        Assert.Equal(2, scoped.Targets.Sum(x => x.Count));
++        Assert.Equal(2, scoped.SpillOperations);
++        Assert.Equal(2, scoped.ColdCacheOperations);
++        Assert.Equal(30, Assert.Single(scoped.TopTablesByLogicalReads).LogicalReads);
++        Assert.Equal(240, Assert.Single(scoped.TopWaits).TotalWaitMs);
++        Assert.Equal(2, Assert.Single(scoped.WorkflowCosts).CallCount);
++        Assert.Equal(2, Assert.Single(scoped.TopSqlByLogicalReads!).Count);
++        Assert.Single(reader.Stats(new StatsQuery(UnprofiledOnly: true)).OperationsPerDay);
++        Assert.Equal(1, reader.Stats(new StatsQuery(UnprofiledOnly: true)).Operations.Sum(x => x.Count));
++        var empty = reader.Stats(new StatsQuery(From: new DateTimeOffset(2026, 10, 8, 0, 0, 0, TimeSpan.Zero), Profile: "local"));
++        Assert.Empty(empty.Operations);
++        Assert.Empty(empty.TopSqlByLogicalReads!);
++        Assert.Empty(empty.WorkflowCosts);
++        Assert.Equal(0, empty.SessionCount);
++    }
++
+     [Fact]
+     public void Stats_aggregate_days_statuses_sql_tables_waits_tokens_and_targets()
+     {
+         using var home = new TempHome();
+         var seed = new JournalSeed(home.DatabasePath);
+         var s = JournalSeed.Session("cli:a");
+         seed.Operation(s, sql: "SELECT 1", durationMs: 10);
+         seed.Operation(s, sql: "SELECT 1", durationMs: 30);
+         seed.Operation(s, operation: "measure", sql: "SELECT 2", durationMs: 100, benchmark: JournalSeed.Benchmark(readsMedian: 70, physical: 2));
+         seed.Operation(s, status: "rejected", exitCode: 2, sql: "DELETE x");
