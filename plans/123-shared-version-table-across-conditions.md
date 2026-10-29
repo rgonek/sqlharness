@@ -18,17 +18,16 @@
 - A cross-group comparison never reports `better`/`worse`, never claims results equivalence, and always shows the copy `Different conditions — approximate, not a verdict`.
 - Case pairing across groups uses only the journaled varying-only case key. No pairing by label text, by case index or by case id.
 - Row counts are new evidence only: no backfill from artifacts, plan documents or `runs.jsonl`. Missing values render as `—`, never `0`.
+- No backward compatibility work: old dashboard URLs, old payload shapes and pre-26 evidence need no special handling beyond rendering `—`. Remove replaced code (the group select, single-group-only URL handling) instead of keeping both paths.
 - The varying-only key is an HMAC over the same sealed parameters as the existing case fingerprint, so `storeSensitive = false` reveals nothing new.
-- Additive journal migration only (`CurrentVersion` 25 → 26); no rewrite of retained rows.
-- Existing URLs with `group=` keep opening the same group and default A/B.
+- Journal migration 26 only adds the two columns (needed so the existing journal opens); no rewrite of retained rows.
 
 ## Review focus
 
 1. A version measured in both groups (same SQL hash re-run under new conditions) appears as two rows with distinct group badges, and selecting either one resolves to the correct group's evidence (Tasks 3, 4).
 2. Cross-group selection where no case pairs (fixed and varying both differ) shows `0 of N cases paired`, SQL and plan diffs, and no metric totals (Task 3).
 3. Repetitions within one variant/case returning different row counts (non-deterministic query, concurrent writes) journal `rows_returned = NULL` and are shown as `varies`, not as one of the values (Task 1).
-4. Old journal rows (pre-26) and measure operations without result capture render `—` for rows and still pair if the varying key exists, or `0 paired` if it does not (Tasks 2, 3).
-5. A stale `groupB` or a `b` version not in `groupB` returns 404 on the compare endpoint, and the UI falls back to the group's defaults (Tasks 3, 4).
+4. A stale `groupB` or a `b` version not in `groupB` returns 404 on the compare endpoint, and the UI falls back to the group's defaults (Tasks 3, 4).
 
 ## Order and cost
 
@@ -147,7 +146,6 @@ Order **1 → 2 → 3 → 4 → 5**. Tasks 2–4 require 1; 4 requires 3. Serial
 - [ ] **Step 1: Failing tests**
   - `OptimizationSection.test.tsx` "lists versions from all conditions groups in one table": fixture with the session-8 shape → rows v0, v1, v2, v3 in one table, each with a conditions badge (`A` for the first group, `B` for the second, with the full group label in a tooltip/legend); the "Conditions group" select is gone.
   - "selecting B from another group sets groupB and shows the approximate banner": click B on v3 while A = v1 → navigation search `{ group: <6542…>, groupB: <d5e2…>, a: "v1", b: "v3" }`, banner text `Different conditions — approximate, not a verdict`.
-  - "legacy group URL keeps defaults": `group=<d5e2…>` without `groupB` → A = v2, B = v3.
   - `VersionTable.test.tsx` "shows rows column and dash for missing": `rowsReturnedSum` 5 → `5`, null → `—`.
   - `ComparisonPanel.test.tsx` "approximate comparison shows per-case rows and coverage": `CaseRows` rendered as `6795: 1 → 1 rows`; differing rows highlighted as `rows differ`; no verdict chip.
 - [ ] **Step 2: Run** `npm --prefix src/SqlHarness.Dashboard/ui run test -- OptimizationSection VersionTable ComparisonPanel` — FAIL.
@@ -168,6 +166,5 @@ Order **1 → 2 → 3 → 4 → 5**. Tasks 2–4 require 1; 4 requires 3. Serial
 
 ## Deferred
 
-- Backfilling row counts from stored actual plans (root operator `ActualRows`) or from `runs.jsonl` — excluded by the no-backfill constraint; revisit only if old sessions matter.
 - Journaling the per-case result hash for a stronger "same result" signal across groups.
 - Explaining which fixed parameters differ (Plan 118's bounded explanation subset); the banner shows both group labels instead.
