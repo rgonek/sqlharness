@@ -101,7 +101,7 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
     </div>}
 
 
-    {approximate && <p role="note">Different conditions — approximate, not a verdict</p>}
+    {approximate && <div role="note"><p>Different conditions — approximate, not a verdict</p><p className="text-sm">A: {comparison.groupLabelA ?? "—"}</p><p className="text-sm">B: {comparison.groupLabelB ?? "—"}</p></div>}
     {approximate && (comparison.caseRows ?? []).map(row => <p key={row.caseKey} className="text-sm">{row.labelA === row.labelB ? row.labelA : `${row.labelA} / ${row.labelB}`}: {row.rowsAVaries ? "varies" : row.rowsA ?? "—"} → {row.rowsBVaries ? "varies" : row.rowsB ?? "—"} rows{!row.rowsAVaries && !row.rowsBVaries && row.rowsA !== null && row.rowsB !== null && row.rowsA !== row.rowsB && " · rows differ"}</p>)}
     {comparison.coverageLabel && <p className="text-sm text-muted-foreground">{comparison.coverageLabel}</p>}
     {comparison.versionLabelsProvisional && comparison.versionLabelNote && <p role="note" className="text-sm text-muted-foreground">{comparison.versionLabelNote}</p>}

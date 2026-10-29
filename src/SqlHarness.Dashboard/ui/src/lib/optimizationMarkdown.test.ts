@@ -72,3 +72,11 @@ test("statement-view Markdown preserves the PostgreSQL unavailable message when 
   const markdown = optimizationMarkdown({ ...comparison, view: "statements", tableIoUnavailable: true, tables: [], collapsed: null, statements: [] }, "Orders", "whole query")
   expect(markdown).toContain("per-statement IO not available for this engine")
 })
+
+test("same version across conditions exports both labels and group identities", () => {
+  const markdown = optimizationMarkdown({ ...comparison, a: "v0", b: "v0", basis: "ApproximateAcrossConditions", groupA: "fp-a", groupB: "fp-b", groupLabelA: "Cold cache", groupLabelB: "Warm cache", operationId: null, equivalenceLabel: "", mixed: null }, "Orders", "whole query")
+  expect(markdown).toContain("A: Cold cache (group: fp-a)")
+  expect(markdown).toContain("B: Warm cache (group: fp-b)")
+  expect(markdown).toContain("Different conditions — approximate, not a verdict")
+  expect(markdown).not.toContain("Equivalence:")
+})

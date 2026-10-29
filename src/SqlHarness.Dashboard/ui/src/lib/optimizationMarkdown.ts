@@ -64,7 +64,7 @@ export function optimizationMarkdown(comparison: OptimizationComparison, subject
   ]
 
   if (comparison.basis === "ApproximateAcrossConditions") {
-    lines.push("Different conditions — approximate, not a verdict")
+    lines.push("Different conditions — approximate, not a verdict", `A: ${comparison.groupLabelA ?? "—"} (group: ${comparison.groupA ?? "—"})`, `B: ${comparison.groupLabelB ?? "—"} (group: ${comparison.groupB ?? "—"})`)
     for (const row of comparison.caseRows ?? []) lines.push(`${row.labelA === row.labelB ? row.labelA : `${row.labelA} / ${row.labelB}`}: ${row.rowsAVaries ? "varies" : number(row.rowsA)} → ${row.rowsBVaries ? "varies" : number(row.rowsB)} rows${!row.rowsAVaries && !row.rowsBVaries && row.rowsA !== null && row.rowsB !== null && row.rowsA !== row.rowsB ? " · rows differ" : ""}`)
     if (!comparison.caseRows?.length) return lines.join("\n")
   }

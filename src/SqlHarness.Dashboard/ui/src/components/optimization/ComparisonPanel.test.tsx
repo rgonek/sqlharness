@@ -221,3 +221,9 @@ test("approximate comparison without paired cases hides metric totals", async ()
   expect(screen.queryByText("Total (whole batch)")).not.toBeInTheDocument()
   expect(screen.queryByText("whole batch: 500 → 650")).not.toBeInTheDocument()
 })
+
+ test("same version across conditions identifies both sides", async () => {
+  renderPanel({ ...comparison, a: "v0", b: "v0", basis: "ApproximateAcrossConditions", groupA: "fp-a", groupB: "fp-b", groupLabelA: "Cold cache", groupLabelB: "Warm cache", equivalenceLabel: "", mixed: null })
+  expect(await screen.findByText("A: Cold cache")).toBeInTheDocument()
+  expect(screen.getByText("B: Warm cache")).toBeInTheDocument()
+})
