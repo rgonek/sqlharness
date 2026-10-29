@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
 
+using SqlHarness.Core.Mutations;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
@@ -152,7 +153,8 @@ public static class SqlHarnessCapabilitiesProvider
         return Build(
             [new SqlHarnessEngineSummary(detail.Name, detail.Summary)],
             new SqlHarnessProfileCapability(profileName, detail.Name,
-                targetProfile?.Mutations?.Mode ?? mutationsConfig?.DefaultMode ?? "never", targetProfile?.Mutations?.Writer is not null),
+                targetProfile is null ? (mutationsConfig ?? new MutationsConfig()).DefaultMode : ProfileMutationCapability(targetProfile, mutationsConfig).Mode,
+                targetProfile is not null && ProfileMutationCapability(targetProfile, mutationsConfig).WriterConfigured),
             detail.ParameterTypes,
             detail.EngineLimits,
             detail.SessionTempStatements,
@@ -173,8 +175,11 @@ public static class SqlHarnessCapabilitiesProvider
     public static SqlHarnessMutationCapability MutationCapability(MutationsConfig? config, bool dashboardReachable) =>
         new(config?.DefaultMode ?? "never", config?.Verification ?? "click", config?.ApprovalTimeoutSeconds ?? 120, dashboardReachable);
 
-    public static (string Mode, bool WriterConfigured) ProfileMutationCapability(TargetProfile profile, MutationsConfig? config = null) =>
-        (profile.Mutations?.Mode ?? config?.DefaultMode ?? "never", profile.Mutations?.Writer is not null);
+    public static (string Mode, bool WriterConfigured) ProfileMutationCapability(TargetProfile profile, MutationsConfig? config = null)
+    {
+        var policy = MutationPolicyResolver.Resolve(profile, config ?? new MutationsConfig());
+        return (policy.EffectiveMode, policy.WriterConfigured);
+    }
 
     private sealed record EngineDetail(
         SqlEngine Engine,

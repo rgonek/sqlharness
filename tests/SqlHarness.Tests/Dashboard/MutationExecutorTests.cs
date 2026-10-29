@@ -11,6 +11,39 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class MutationExecutorTests
 {
+    [Theory]
+    [InlineData("prod")]
+    [InlineData("production")]
+    [InlineData("staging")]
+    public async Task Inherited_yolo_without_acknowledgement_never_executes_dml(string environment)
+    {
+        var module = new FakeModule();
+        var profile = Profile(null!, new MutationWriter(SameAsReader: true)) with { Environment = environment, Auth = "integrated" };
+        var executor = new MutationExecutor(module,
+            () => new Dictionary<string, TargetProfile> { ["local"] = profile },
+            () => new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "yolo" } },
+            new RecordingJournal(), TimeProvider.System);
+
+        var result = await executor.ExecuteAsync(Request(), new MutationExecutionContext("id", MutationExecutionOrigin.Automatic), default);
+
+        Assert.Equal(MutationStatus.Failed, result.Status);
+        Assert.Empty(module.Operations);
+    }
+
+    [Fact]
+    public async Task Acknowledged_production_yolo_dml_can_execute()
+    {
+        var module = new FakeModule();
+        var profile = Profile("yolo", new MutationWriter(SameAsReader: true)) with
+        {
+            Environment = "production", Auth = "integrated",
+            Mutations = new ProfileMutations("yolo", new MutationWriter(SameAsReader: true), true),
+        };
+        var result = await Executor(module, profile).ExecuteAsync(Request(), Context(origin: MutationExecutionOrigin.Automatic), default);
+        Assert.Equal(MutationStatus.Success, result.Status);
+        Assert.Single(module.Operations);
+    }
+
     [Fact]
     public async Task Mode_changed_to_never_rejects_without_module_execution()
     {

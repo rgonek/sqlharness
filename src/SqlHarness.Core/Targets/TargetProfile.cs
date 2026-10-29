@@ -15,4 +15,4 @@ public sealed record TargetProfile(
     ProfileMutations? Mutations = null);
 
 public sealed record MutationWriter(string? SqlUser = null, string? PasswordEnvVar = null, bool SameAsReader = false);
-public sealed record ProfileMutations(string Mode, MutationWriter? Writer = null, bool AcknowledgeProductionYolo = false);
+public sealed record ProfileMutations(string? Mode = null, MutationWriter? Writer = null, bool AcknowledgeProductionYolo = false);

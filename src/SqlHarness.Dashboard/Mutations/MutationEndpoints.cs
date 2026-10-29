@@ -118,8 +118,15 @@ internal static class MutationEndpoints
         var operationRef = request.OperationRef;
         request = prepared.Request;
 
-        if (!Enum.TryParse<MutationMode>(profile.Mutations?.Mode ?? config.Mutations.DefaultMode, true, out var mode))
+        EffectiveMutationPolicy policy;
+        try { policy = MutationPolicyResolver.Resolve(profile, config.Mutations); }
+        catch (SqlHarnessSafetyException)
+        {
             return Error(StatusCodes.Status400BadRequest, "invalid_mutation_mode");
+        }
+        if (policy.ProductionAcknowledgementRequired && string.Equals(report.Tier, "dml", StringComparison.OrdinalIgnoreCase))
+            return Error(StatusCodes.Status400BadRequest, "production_yolo_acknowledgement_required");
+        var mode = Enum.Parse<MutationMode>(policy.EffectiveMode, true);
 
         var decision = MutationPolicy.Decide(mode, ParseTier(report.Tier));
         var id = Guid.NewGuid().ToString("N");

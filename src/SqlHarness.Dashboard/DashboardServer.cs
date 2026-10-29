@@ -374,7 +374,7 @@ public static partial class DashboardServer
             }
         });
         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
-        MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
+        MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath, loadConfig().Mutations), Json));
         MapRead(api, "/transcripts", () => Results.Json(matcher.Status(TranscriptsEnabled(options.ConfigPath)) with
         {
             Coverage = reader.AgentSessionCoverage(),

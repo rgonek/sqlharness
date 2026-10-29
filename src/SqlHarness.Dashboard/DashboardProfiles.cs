@@ -1,4 +1,5 @@
 using SqlHarness.Core;
+using SqlHarness.Core.Mutations;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Dashboard;
@@ -8,7 +9,8 @@ public sealed record ProfileVariable(string Name, string Rule);
 public sealed record ProfileView(
     string Name, string Engine, string Server, string Database, string Auth, string? SqlUser, string? PasswordEnvVar,
     string? SslMode, bool TrustServerCertificate, string? RootCertificate, string Tls, IReadOnlyList<ProfileVariable> Vars,
-    string? Environment, string MutationMode, string? MutationWriterKind, bool AcknowledgeProductionYolo);
+    string? Environment, string MutationMode, string? MutationWriterKind, bool AcknowledgeProductionYolo,
+    string? ConfiguredMode, string EffectiveMode, string ModeSource, bool WriterConfigured, bool ProductionAcknowledgementRequired);
 
 public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message);
 
@@ -20,7 +22,7 @@ internal static class DashboardProfiles
 {
     internal const string InvalidMessage = "targets.json could not be read. Run `sqlharness doctor` for details.";
 
-    internal static ProfilesResponse Read(string path)
+    internal static ProfilesResponse Read(string path, MutationsConfig? config = null)
     {
         if (!File.Exists(path))
             return new ProfilesResponse("missing", [], null);
@@ -37,7 +39,7 @@ internal static class DashboardProfiles
 
         return new ProfilesResponse("valid", profiles
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .Select(pair => View(pair.Key, pair.Value))
+            .Select(pair => View(pair.Key, pair.Value, config ?? new MutationsConfig()))
             .ToArray(), null);
     }
 
@@ -67,21 +69,26 @@ internal static class DashboardProfiles
             ? profile.SslMode ?? (profile.TrustServerCertificate ? "disable (legacy)" : "require (legacy)")
             : profile.TrustServerCertificate ? "trust server certificate" : "verify";
 
-    private static ProfileView View(string name, TargetProfile profile) => new(
-        name,
-        EngineOf(profile),
-        profile.Server,
-        profile.Database,
-        profile.Auth,
-        profile.SqlUser,
-        profile.PasswordEnvVar,
-        profile.SslMode,
-        profile.TrustServerCertificate,
-        profile.RootCertificate,
-        Tls(profile),
-        profile.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new ProfileVariable(pair.Key, pair.Value)).ToArray(),
-        profile.Environment,
-        profile.Mutations?.Mode ?? "never",
-        profile.Mutations?.Writer is { } writer ? writer.SameAsReader ? "sameAsReader" : "separate" : null,
-        profile.Mutations?.AcknowledgeProductionYolo ?? false);
+    private static ProfileView View(string name, TargetProfile profile, MutationsConfig config)
+    {
+        var policy = MutationPolicyResolver.Resolve(profile, config);
+        return new(
+            name,
+            EngineOf(profile),
+            profile.Server,
+            profile.Database,
+            profile.Auth,
+            profile.SqlUser,
+            profile.PasswordEnvVar,
+            profile.SslMode,
+            profile.TrustServerCertificate,
+            profile.RootCertificate,
+            Tls(profile),
+            profile.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new ProfileVariable(pair.Key, pair.Value)).ToArray(),
+            profile.Environment,
+            policy.EffectiveMode,
+            profile.Mutations?.Writer is { } writer ? writer.SameAsReader ? "sameAsReader" : "separate" : null,
+            profile.Mutations?.AcknowledgeProductionYolo ?? false,
+            policy.ConfiguredMode, policy.EffectiveMode, policy.ModeSource, policy.WriterConfigured, policy.ProductionAcknowledgementRequired);
+    }
 }

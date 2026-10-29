@@ -85,10 +85,10 @@ public static class ProfileStore
         if (profile.Mutations is not { } mutations)
             return;
 
-        if (!TryParseMutationMode(mutations.Mode, out var mode))
+        if (mutations.Mode is not null && !TryParseMutationMode(mutations.Mode, out _))
             throw new JsonException("A profile mutation mode is invalid.");
 
-        if (mode != MutationMode.Never && mutations.Writer is null)
+        if (mutations.Mode is not null && TryParseMutationMode(mutations.Mode, out var mode) && mode != MutationMode.Never && mutations.Writer is null)
             throw new JsonException("A profile that allows mutations needs mutations.writer.");
 
         if (mutations.Writer is { } writer)
@@ -100,7 +100,7 @@ public static class ProfileStore
                 throw new JsonException("mutations.writer needs sqlUser and passwordEnvVar, or sameAsReader.");
         }
 
-        if (mode == MutationMode.Yolo &&
+        if (string.Equals(mutations.Mode, "yolo", StringComparison.OrdinalIgnoreCase) &&
             profile.Environment is { } environment &&
             (environment.Equals("prod", StringComparison.OrdinalIgnoreCase) ||
              environment.Equals("production", StringComparison.OrdinalIgnoreCase) ||

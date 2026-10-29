@@ -29,6 +29,23 @@ public sealed class MutationEndpointsTests
                 System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(PreparationToken))))));
 
     [Fact]
+    public async Task Inherited_production_yolo_without_acknowledgement_is_rejected_at_submission()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        File.WriteAllText(Path.Combine(home.Path, "config.json"), """{ "mutations": { "defaultMode": "yolo" } }""");
+        File.WriteAllText(Path.Combine(home.Path, "targets.json"), """
+            {"app":{"server":"srv","database":"db","auth":"integrated","engine":"sqlserver","vars":{},"environment":"production","mutations":{"writer":{"sameAsReader":true}}}}
+            """);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        using var response = await client.PostAsJsonAsync("/api/mutations", Wire(Request()));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("production_yolo_acknowledgement_required", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Http_broker_transports_token_while_normal_serialization_omits_it()
     {
         using var home = new TempHome();

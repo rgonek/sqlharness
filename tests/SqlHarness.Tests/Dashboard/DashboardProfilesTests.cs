@@ -7,6 +7,29 @@ public sealed class DashboardProfilesTests
     private static string TargetsPath(TempHome home) => Path.Combine(home.Path, "targets.json");
 
     [Fact]
+    public async Task Profiles_report_inherited_policy_and_follow_global_changes()
+    {
+        using var home = new TempHome();
+        File.WriteAllText(TargetsPath(home), """
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {}, "environment": "staging",
+              "mutations": { "writer": { "sameAsReader": true } } } }
+            """);
+        var config = Path.Combine(home.Path, "config.json");
+        File.WriteAllText(config, """{ "mutations": { "defaultMode": "operator" } }""");
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (_, client) = dashboard;
+        var profile = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement.GetProperty("profiles")[0];
+        Assert.Equal("operator", profile.GetProperty("mutationMode").GetString());
+        Assert.Equal(JsonValueKind.Null, profile.GetProperty("configuredMode").ValueKind);
+        Assert.Equal("global", profile.GetProperty("modeSource").GetString());
+        Assert.True(profile.GetProperty("writerConfigured").GetBoolean());
+        File.WriteAllText(config, """{ "mutations": { "defaultMode": "yolo" } }""");
+        profile = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement.GetProperty("profiles")[0];
+        Assert.Equal("yolo", profile.GetProperty("effectiveMode").GetString());
+        Assert.True(profile.GetProperty("productionAcknowledgementRequired").GetBoolean());
+    }
+
+    [Fact]
     public async Task Profiles_list_names_templates_and_auth_metadata()
     {
         using var home = new TempHome();

@@ -155,6 +155,19 @@ public sealed class McpMappingTests : IDisposable
         Assert.False(activeProfile.GetProperty("writerConfigured").GetBoolean());
     }
 
+    [Fact]
+    public void Capabilities_inherit_global_mode_with_writer_only_profile()
+    {
+        var profiles = ProfileStore.Load(_targetsFile).ToDictionary(pair => pair.Key, pair => pair.Value);
+        profiles[ProfileName] = profiles[ProfileName] with { Mutations = new ProfileMutations(null, new MutationWriter(SameAsReader: true)) };
+        var process = McpProcessContext.Create(new McpServerOptions { RequestScope = true, AllowedProfiles = [ProfileName] },
+            () => profiles, config: new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "yolo" } });
+        var document = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(process, includeDiagnostics: false), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var profile = Assert.Single(document.GetProperty("allowedProfileMutations").EnumerateArray());
+        Assert.Equal("yolo", profile.GetProperty("mode").GetString());
+        Assert.True(profile.GetProperty("writerConfigured").GetBoolean());
+    }
+
     private static readonly string[] BroadFieldNames =
     [
         "tools", "supportedProtocolVersions", "protocolVersion", "server", "serverVersion",

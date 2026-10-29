@@ -154,6 +154,11 @@ public sealed class CapabilitiesCommandTests
         Assert.Equal("operator", scoped.RootElement.GetProperty("profile").GetProperty("mutationMode").GetString());
         Assert.False(scoped.RootElement.GetProperty("profile").GetProperty("writerConfigured").GetBoolean());
 
+        var inherited = profile with { Mutations = new ProfileMutations(null, new MutationWriter(SameAsReader: true)) };
+        using var inheritedDocument = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p", targetProfile: inherited, mutationsConfig: config.Mutations)));
+        Assert.Equal("operator", inheritedDocument.RootElement.GetProperty("profile").GetProperty("mutationMode").GetString());
+        Assert.True(inheritedDocument.RootElement.GetProperty("profile").GetProperty("writerConfigured").GetBoolean());
+
         using var enabled = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p", targetProfile: enabledProfile, mutationsConfig: config.Mutations)));
         Assert.Equal("yolo", enabled.RootElement.GetProperty("profile").GetProperty("mutationMode").GetString());
         Assert.True(enabled.RootElement.GetProperty("profile").GetProperty("writerConfigured").GetBoolean());
