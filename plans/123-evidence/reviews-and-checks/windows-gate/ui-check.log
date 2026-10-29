@@ -1,0 +1,279 @@
+
+> ui@0.0.0 check
+> node scripts/check.mjs
+
+
+> ui@0.0.0 typecheck
+> tsc -b
+
+
+> ui@0.0.0 lint
+> oxlint
+
+
+> ui@0.0.0 test
+> vitest run
+
+src/components/optimization/OptimizationSection.tsx:87:5: warning react-hooks(exhaustive-deps): React Hook useEffect has missing dependencies: 'update', 'aGroup.fingerprint', 'hasVersion', and 'search.a' help: Either include it or remove the dependency array.
+src/components/optimization/OptimizationSection.tsx:93:5: warning react-hooks(exhaustive-deps): React Hook useEffect has missing dependencies: 'update', 'matchesCard', 'search.b', 'aGroup.fingerprint', 'hasVersion', 'search.groupB', 'activeQueryRefetch', and 'search.a' help: Either include it or remove the dependency array.
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/he.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/el.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/es.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/hr.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/be.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/ru.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/tk.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/tr.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/fr.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/parity.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/nl.test.ts (0 test)
+ ❯ node_modules-incomplete-123/zod/src/v4/core/tests/locales/en.test.ts (0 test)
+
+ Test Files  12 failed | 73 passed (85)
+      Tests  448 passed (448)
+   Start at  19:54:41
+   Duration  571.29s (import 48%, tests 27%, environment 16%, setup 6%, transform 3%)
+
+     Import  364 modules were evaluated 3643 times · 263.99s total, 48% of tracked time
+             ~237.61s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+(node:16044) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 12 ⎯⎯⎯⎯⎯⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/be.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/be.test.ts ]
+Error: Failed to resolve import "../../../locales/be.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/be.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/be.test.ts:2:15
+  1  |  import { describe, expect, it } from "vitest";
+  2  |  import be from "../../../locales/be.js";
+     |                  ^
+  3  |  describe("Belarusian localization", () => {
+  4  |  	const localeError = be().localeError;
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/el.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/el.test.ts ]
+Error: Failed to resolve import "../../../../index.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/el.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/el.test.ts:2:18
+  1  |  import { expect, test } from "vitest";
+  2  |  import { z } from "../../../../index.js";
+     |                     ^
+  3  |  import el from "../../../locales/el.js";
+  4  |  test("Greek locale - too_small errors", () => {
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/en.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/en.test.ts ]
+Error: Failed to resolve import "../../util.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/en.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/en.test.ts:2:27
+  1  |  import { expect, test } from "vitest";
+  2  |  import { parsedType } from "../../util.js";
+     |                              ^
+  3  |  test("parsedType", () => {
+  4  |  	expect(parsedType("string")).toBe("string");
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/es.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/es.test.ts ]
+Error: Failed to resolve import "../../../../index.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/es.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/es.test.ts:2:18
+  1  |  import { expect, test } from "vitest";
+  2  |  import { z } from "../../../../index.js";
+     |                     ^
+  3  |  import es from "../../../locales/es.js";
+  4  |  test("Spanish locale - type name translations in too_small errors", () => {
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/fr.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/fr.test.ts ]
+Error: Failed to resolve import "../../../../index.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/fr.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/fr.test.ts:2:18
+  1  |  import { expect, test } from "vitest";
+  2  |  import { z } from "../../../../index.js";
+     |                     ^
+  3  |  import fr from "../../../locales/fr.js";
+  4  |  test("French locale - type name translations in too_small errors", () => {
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/he.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/he.test.ts ]
+Error: Failed to resolve import "../../../../index.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/he.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/he.test.ts:2:18
+  1  |  import { beforeEach, describe, expect, test } from "vitest";
+  2  |  import { z } from "../../../../index.js";
+     |                     ^
+  3  |  import he from "../../../locales/he.js";
+  4  |  describe("Hebrew localization", () => {
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/hr.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/hr.test.ts ]
+Error: Failed to resolve import "../../../../index.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/hr.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/hr.test.ts:2:18
+  1  |  import { expect, test } from "vitest";
+  2  |  import { z } from "../../../../index.js";
+     |                     ^
+  3  |  import hr from "../../../locales/hr.js";
+  4  |  test("Croatian locale - type name translations in too_small errors", () => {
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/nl.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/nl.test.ts ]
+Error: Failed to resolve import "../../../locales/nl.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/nl.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/nl.test.ts:2:15
+  1  |  import { expect, test } from "vitest";
+  2  |  import nl from "../../../locales/nl.js";
+     |                  ^
+  3  |  test("Dutch locale error messages", () => {
+  4  |  	const { localeError } = nl();
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/parity.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/parity.test.ts ]
+Error: Failed to resolve import "../../../../index.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/parity.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/parity.test.ts:4:18
+  2  |  import { fileURLToPath } from "node:url";
+  3  |  import { expect, test } from "vitest";
+  4  |  import { z } from "../../../../index.js";
+     |                     ^
+  5  |  // Every locale must carry an entry for each key `en` translates. Four keys have drifted this way already — `credit_c...
+  6  |  //
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/ru.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/ru.test.ts ]
+Error: Failed to resolve import "../../../locales/ru.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/ru.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/ru.test.ts:2:15
+  1  |  import { describe, expect, it } from "vitest";
+  2  |  import ru from "../../../locales/ru.js";
+     |                  ^
+  3  |  describe("Russian localization", () => {
+  4  |  	const localeError = ru().localeError;
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/tk.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/tk.test.ts ]
+Error: Failed to resolve import "../../util.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/tk.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/tk.test.ts:3:27
+  1  |  import { expect, test } from "vitest";
+  2  |  import * as z from "zod/v4";
+  3  |  import { parsedType } from "../../util.js";
+     |                              ^
+  4  |  test("parsedType", () => {
+  5  |  	expect(parsedType("string")).toBe("string");
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/12]⎯
+
+ FAIL  node_modules-incomplete-123/zod/src/v4/core/tests/locales/tr.test.ts [ node_modules-incomplete-123/zod/src/v4/core/tests/locales/tr.test.ts ]
+Error: Failed to resolve import "../../util.js" from "node_modules-incomplete-123/zod/src/v4/core/tests/locales/tr.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui/node_modules-incomplete-123/zod/src/v4/core/tests/locales/tr.test.ts:3:27
+  1  |  import { expect, test } from "vitest";
+  2  |  import * as z from "zod/v4";
+  3  |  import { parsedType } from "../../util.js";
+     |                              ^
+  4  |  test("parsedType", () => {
+  5  |  	expect(parsedType("string")).toBe("string");
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8766:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8763:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26593:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26663:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26629:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8545:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:20157:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯
+
+check: FAILED (test)

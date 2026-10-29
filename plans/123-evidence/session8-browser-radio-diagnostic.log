@@ -1,0 +1,149 @@
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+API /api/sessions/8/optimization/compare
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+page errors: [] body: SQLHarness
+Activity
+Usage
+Profiles
+Settings
+Activity
+Session 8 fixture
+Session 8 fixture
+Claude Code via cli
+·
+3 operations
+·
+Details
+Add note
+Optimization
+Optimization
+
+orders · ShopDb · SqlServer · whole query
+
+All cases · Sum
+Version	Conditions	Rows	Logical reads	vs A	Elapsed median	vs A	Outcome	A
+Baseline A
+	B
+Candidate B
+	
+Observed in
+
+
+v0
+	A	10	100	—	10 ms	—	1/1 ok	
+A
+	
+B
+	
+
+
+v1
+	A	11	90	-10%	10 ms	0%	1/1 ok	
+A
+	
+B
+	
+
+
+v2
+	B	—	80	—	10 ms	—	1/1 ok	
+A
+	
+B
+	
+
+
+v3
+	B	13	70	—	10 ms	—	1/1 ok	
+A
+	
+B
+	
+
+Different conditions — approximate, not a verdict
+
+case 1: 10 → 12 rows · rows differ
+
+1 paired case
+
+SQL diff
+IO
+Plan
+v0 → v2 · different conditions
+
+SQL text for v0 is not stored (journal.storeSensitive was off).
+
+SQL text for v1 is not stored (journal.storeSensitive was off).
+
+Comparison evidence and scripts
+Operations (0)
+Newest first. Loaded 0 of 3 operations.
+Show internal operations
+ID	Time	Type	Description	Status	Duration	Reads
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 20000ms exceeded.
+Call log:
+  - waiting for getByRole('table', { name: 'orders-ShopDb versions' }).getByRole('radio', { name: 'B v2' })
+    - locator resolved to <input value="v2" type="radio" name="_r_e_-b" aria-label="B v2" class="peer sr-only" aria-describedby="_r_e_-b-label"/>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <label class="relative inline-flex">…</label> intercepts pointer events
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <label class="relative inline-flex">…</label> intercepts pointer events
+    - retrying click action
+      - waiting 100ms
+    38 × waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <label class="relative inline-flex">…</label> intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+
+    at C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\plans\123-evidence\session8-fixture.mjs:35:47 {
+  log: [
+    "  - waiting for getByRole('table', { name: 'orders-ShopDb versions' }).getByRole('radio', { name: 'B v2' })",
+    '    - locator resolved to <input value="v2" type="radio" name="_r_e_-b" aria-label="B v2" class="peer sr-only" aria-describedby="_r_e_-b-label"/>',
+    '  - attempting click action',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is visible, enabled and stable',
+    '      - scrolling into view if needed',
+    '      - done scrolling',
+    '      - <label class="relative inline-flex">…</label> intercepts pointer events',
+    '    - retrying click action',
+    '    - waiting 20ms',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is visible, enabled and stable',
+    '      - scrolling into view if needed',
+    '      - done scrolling',
+    '      - <label class="relative inline-flex">…</label> intercepts pointer events',
+    '    - retrying click action',
+    '      - waiting 100ms',
+    '    38 × waiting for element to be visible, enabled and stable',
+    '       - element is visible, enabled and stable',
+    '       - scrolling into view if needed',
+    '       - done scrolling',
+    '       - <label class="relative inline-flex">…</label> intercepts pointer events',
+    '     - retrying click action',
+    '       - waiting 500ms'
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.18.0

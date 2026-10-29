@@ -4,6 +4,10 @@ Compare list classification repair is locally integrated via `1742bd3b`, with th
 
 # Plan history
 
+## Plan 123 feature branch — 2026-10-29
+
+Plan [123](123-shared-version-table-across-conditions.md) is implemented on `plan-123`; Tasks 1–4 were reviewed. Windows gate and synthetic browser passed; Task 5 review and whole-branch review remain pending and are tracked in [evidence](123-evidence/verification.md); integration and publication remain pending.
+
 ## Plan 104 locally integrated — 2026-10-24
 
 Plan [104](104-stable-local-object-io-aggregation.md) is locally integrated into `main` at `56f3dae4`, preserving Plan 105 from main parent `9718b052`. Luna high resolved the catalog/schema conflicts; Luna xhigh and Sol low approved integration. The exact combined product `d2f2b060` passed Windows `just verify` (Core 4717 passed/11 skipped, MCP 524 passed/4 skipped, UI 372, exit 0; 9m53s) and branch format (21 C# files, exit 0). An initial unchanged process-test timeout, isolated passing retry and final full passing gate are archived; no source or timeout change was made for that failure. Main fast-forward preserved the verified product. Unrelated dirty README/index work and untracked studies were restored; the original untracked Plan 104 is backed up. One nonblocking retrieval-hint note remains deferred. No push, installation, Linux or implementation live-DB acceptance. See [integration evidence](104-evidence/integration/verification.md).

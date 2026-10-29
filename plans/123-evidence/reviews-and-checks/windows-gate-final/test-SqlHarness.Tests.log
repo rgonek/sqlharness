@@ -1,0 +1,28 @@
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+Test run for C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:36.98]     SqlHarness.Tests.Dashboard.DashboardLockTests.Publish_replaces_a_leftover_temp_file_and_stays_owner_only_on_unix [SKIP]
+  Skipped SqlHarness.Tests.Dashboard.DashboardLockTests.Publish_replaces_a_leftover_temp_file_and_stays_owner_only_on_unix [1 ms]
+[xUnit.net 00:00:38.25]     SqlHarness.Tests.Dashboard.DashboardLockTests.Info_file_is_owner_only_on_unix [SKIP]
+  Skipped SqlHarness.Tests.Dashboard.DashboardLockTests.Info_file_is_owner_only_on_unix [1 ms]
+[xUnit.net 00:00:38.53]     SqlHarness.Tests.Dashboard.DashboardLockTests.Lock_file_and_home_are_owner_only_on_unix [SKIP]
+  Skipped SqlHarness.Tests.Dashboard.DashboardLockTests.Lock_file_and_home_are_owner_only_on_unix [1 ms]
+[xUnit.net 00:01:06.21]     SqlHarness.Tests.Journal.ActivityJournalTests.Database_and_directory_are_owner_only_on_unix [SKIP]
+  Skipped SqlHarness.Tests.Journal.ActivityJournalTests.Database_and_directory_are_owner_only_on_unix [1 ms]
+[xUnit.net 00:02:26.86]     SqlHarness.Tests.Cli.DoctorHomeModeTests.Doctor_warns_when_an_existing_home_is_broad [SKIP]
+  Skipped SqlHarness.Tests.Cli.DoctorHomeModeTests.Doctor_warns_when_an_existing_home_is_broad [1 ms]
+[xUnit.net 00:02:26.86]     SqlHarness.Tests.Cli.DoctorHomeModeTests.Does_not_warn_about_a_private_home [SKIP]
+  Skipped SqlHarness.Tests.Cli.DoctorHomeModeTests.Does_not_warn_about_a_private_home [1 ms]
+[xUnit.net 00:02:32.12]     SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_leaves_an_existing_broad_home_unchanged [SKIP]
+[xUnit.net 00:02:32.12]     SqlHarness.Tests.HomeDirectoryTests.HomeMode_reports_the_existing_home_mode [SKIP]
+[xUnit.net 00:02:32.12]     SqlHarness.Tests.HomeDirectoryTests.A_writer_creates_the_home_owner_only [SKIP]
+[xUnit.net 00:02:32.12]     SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_ignores_paths_outside_the_home [SKIP]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_leaves_an_existing_broad_home_unchanged [1 ms]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.HomeMode_reports_the_existing_home_mode [1 ms]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.A_writer_creates_the_home_owner_only [1 ms]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_ignores_paths_outside_the_home [1 ms]
+[xUnit.net 00:02:32.12]     SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_creates_a_fresh_home_owner_only [SKIP]
+  Skipped SqlHarness.Tests.HomeDirectoryTests.EnsureHomeFor_creates_a_fresh_home_owner_only [1 ms]
+
+Passed!  - Failed:     0, Passed:  4792, Skipped:    11, Total:  4803, Duration: 2 m 32 s - SqlHarness.Tests.dll (net10.0)
+==> test project: tests/SqlHarness.Tests/SqlHarness.Tests.csproj exit 0

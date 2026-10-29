@@ -1,0 +1,8 @@
+just verify -LogDirectory plans/123-evidence/reviews-and-checks/windows-gate-final
+Product revision d3d3c068
+==> ui-install skipped (lockfile unchanged)
+==> build ok 46.3s
+==> ui-check ok 8m17s (71 files, 446 tests)
+==> test ok 2m51s (Core 4792 passed, 11 skipped; MCP 535 passed, 4 skipped)
+==> format skipped (0 changed C# files); branch mode checked separately
+verify: OK stages=5 11m09s; exit 0

@@ -1,0 +1,53 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+  Failed SqlHarness.Tests.CanonicalResultsTests.Supported_scalar_bytes_are_independent_of_current_culture [11 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: CanonicalResult { Hash = 66AF85BF522137931D39A07A4653AF0A1E582AC72F5B1012B14E8871EE9498D4, Footprint = OutputFootprint { Bytes = 695, Lines = 1, EstimatedTokenCount = 174 }, RowCounts = System.Int64[] }
+Actual:   CanonicalResult { Hash = 66AF85BF522137931D39A07A4653AF0A1E582AC72F5B1012B14E8871EE9498D4, Footprint = OutputFootprint { Bytes = 695, Lines = 1, EstimatedTokenCount = 174 }, RowCounts = System.Int64[] }
+  Stack Trace:
+     at SqlHarness.Tests.CanonicalResultsTests.Supported_scalar_bytes_are_independent_of_current_culture() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\tests\SqlHarness.Tests\CanonicalResultsTests.cs:line 330
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:15.79]     SqlHarness.Tests.CanonicalResultsTests.Supported_scalar_bytes_are_independent_of_current_culture [FAIL]
+[xUnit.net 00:00:15.84]     SqlHarness.Tests.CanonicalResultsTests.Identical_results_have_identical_hashes_and_footprints [FAIL]
+  Failed SqlHarness.Tests.CanonicalResultsTests.Identical_results_have_identical_hashes_and_footprints [1 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: CanonicalResult { Hash = 75B1314E5D9879901617E97B2C6FB49EB38D9119D11CEE4DF3FE62734C7F8714, Footprint = OutputFootprint { Bytes = 427, Lines = 1, EstimatedTokenCount = 107 }, RowCounts = System.Int64[] }
+Actual:   CanonicalResult { Hash = 75B1314E5D9879901617E97B2C6FB49EB38D9119D11CEE4DF3FE62734C7F8714, Footprint = OutputFootprint { Bytes = 427, Lines = 1, EstimatedTokenCount = 107 }, RowCounts = System.Int64[] }
+  Stack Trace:
+     at SqlHarness.Tests.CanonicalResultsTests.Identical_results_have_identical_hashes_and_footprints() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\tests\SqlHarness.Tests\CanonicalResultsTests.cs:line 85
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:15.85]     SqlHarness.Tests.CanonicalResultsTests.Snapshot_midstream_does_not_change_continued_hash_or_footprint [FAIL]
+  Failed SqlHarness.Tests.CanonicalResultsTests.Snapshot_midstream_does_not_change_continued_hash_or_footprint [9 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: CanonicalResult { Hash = E9C862F311EA0CFC2734AEB38CBEB4AF31FF48DCE143CDF0F95F8B794DC67C55, Footprint = OutputFootprint { Bytes = 433, Lines = 1, EstimatedTokenCount = 109 }, RowCounts = System.Int64[] }
+Actual:   CanonicalResult { Hash = E9C862F311EA0CFC2734AEB38CBEB4AF31FF48DCE143CDF0F95F8B794DC67C55, Footprint = OutputFootprint { Bytes = 433, Lines = 1, EstimatedTokenCount = 109 }, RowCounts = System.Int64[] }
+  Stack Trace:
+     at SqlHarness.Tests.CanonicalResultsTests.Snapshot_midstream_does_not_change_continued_hash_or_footprint() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\tests\SqlHarness.Tests\CanonicalResultsTests.cs:line 371
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:16.60]     SqlHarness.Tests.Journal.JournalBenchmarkBuilderTests.Variant_rows_returned_tracks_repetition_agreement(a: 5, b: 5, c: 5, expected: 5, varies: False) [FAIL]
+  Failed SqlHarness.Tests.Journal.JournalBenchmarkBuilderTests.Variant_rows_returned_tracks_repetition_agreement(a: 5, b: 5, c: 5, expected: 5, varies: False) [< 1 ms]
+  Error Message:
+   System.ArgumentException : Object of type 'System.Int32' cannot be converted to type 'System.Nullable`1[System.Int64]'.
+  Stack Trace:
+     at System.RuntimeType.CheckValue(Object& value, Binder binder, CultureInfo culture, BindingFlags invokeAttr)
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:30.14]     SqlHarness.Tests.Journal.ActivityJournalTests.Database_and_directory_are_owner_only_on_unix [SKIP]
+  Skipped SqlHarness.Tests.Journal.ActivityJournalTests.Database_and_directory_are_owner_only_on_unix [1 ms]
+
+Failed!  - Failed:     4, Passed:   167, Skipped:     1, Total:   172, Duration: 21 s - SqlHarness.Tests.dll (net10.0)

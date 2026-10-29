@@ -1,0 +1,16 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.goto: Timeout 30000ms exceeded.
+Call log:
+  - navigating to "http://127.0.0.1:48139/sessions/8?subject=orders&db=ShopDb&group=fp0&a=v0&b=v1", waiting until "load"
+
+    at C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\plans\123-evidence\session8-fixture.mjs:25:13 {
+  log: [
+    '  - navigating to "http://127.0.0.1:48139/sessions/8?subject=orders&db=ShopDb&group=fp0&a=v0&b=v1", waiting until "load"'
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.18.0

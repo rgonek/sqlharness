@@ -1,0 +1,40 @@
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+console error: %o
+
+%s
+
+%s
+ TypeError: Cannot read properties of undefined (reading 'filter')
+    at AppLayout (http://127.0.0.1:48139/src/components/AppLayout.tsx:67:51)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=1a9f4bef:14142:12)
+    at renderWithHooks (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=1a9f4bef:4400:19)
+    at updateFunctionComponent (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=1a9f4bef:5775:16)
+    at beginWork (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=1a9f4bef:6391:20)
+    at runWithFiberInDEV (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=1a9f4bef:944:66)
+    at performUnitOfWork (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=1a9f4bef:9148:92)
+    at workLoopSync (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=1a9f4bef:9044:37)
+    at renderRootSync (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=1a9f4bef:9028:6)
+    at performWorkOnRoot (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=1a9f4bef:8715:27) The above error occurred in the <AppLayout> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundary.
+page errors: [] body: Something went wrong!
+Hide Error
+Cannot read properties of undefined (reading 'filter')
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.waitFor: Timeout 20000ms exceeded.
+Call log:
+  - waiting for getByRole('table', { name: 'orders-ShopDb versions' }) to be visible
+
+    at C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\342c\sqlharness\plans\123-evidence\session8-fixture.mjs:28:82 {
+  log: [
+    "  - waiting for getByRole('table', { name: 'orders-ShopDb versions' }) to be visible"
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.18.0

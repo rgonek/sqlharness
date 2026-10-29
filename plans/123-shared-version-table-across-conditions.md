@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. A queue entry is not execution approval; live DB, installation and publication stay out of scope.
 
-**Status:** TODO
+**Status:** IMPLEMENTED; Tasks 1–4 reviewed; Task 5 review and whole-branch Sol review pending; see [verification evidence](123-evidence/verification.md).
 
 **Goal:** One version table per subject and scope across all conditions groups, with an explicitly labelled *approximate* A/B comparison when A and B come from different groups, supported by per-case result row counts.
 
@@ -48,7 +48,7 @@ Order **1 → 2 → 3 → 4 → 5**. Tasks 2–4 require 1; 4 requires 3. Serial
 **Files:**
 - Modify: `src/SqlHarness.Core/CanonicalResults.cs` (`CanonicalResult`, `CanonicalResultAccumulator`)
 - Modify: `src/SqlHarness.Core/Artifacts.cs` (`CompareRunArtifact`)
-- Modify: `src/SqlHarness.Core/SqlHarnessModule.cs` (where `CompareRunArtifact` is built from `CollectedCompare`)
+- Modify: `src/SqlHarness.Core/Dialect/SqlServerDialect.cs`, `src/SqlHarness.Core/Postgres/PostgresBenchmark.cs` (where `CompareRunArtifact` is built from `CollectedCompare`)
 - Modify: `src/SqlHarness.Core/Journal/BenchmarkJournalRecord.cs` (`JournalVariantMetrics`)
 - Modify: `src/SqlHarness.Core/Journal/JournalBenchmarkBuilder.cs`
 - Modify: `src/SqlHarness.Core/Journal/ActivityJournal.cs` (`InsertMetric`, conditions sealing at ~line 815)
@@ -63,22 +63,22 @@ Order **1 → 2 → 3 → 4 → 5**. Tasks 2–4 require 1; 4 requires 3. Serial
 - Produces: `ConditionsCase` gains `public string? VaryingFingerprint { get; init; }`, stored inside the existing conditions JSON.
 - Produces: `operation_metrics.result_sets INTEGER`, `operation_metrics.rows_returned INTEGER` (migration 26).
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
   - `JournalBenchmarkBuilderTests.Variant_rows_returned_is_sum_of_result_sets_when_repetitions_agree`: three runs with `ResultRowCounts = [4, 1]` → `ResultSets == 2`, `RowsReturned == 5`.
   - `JournalBenchmarkBuilderTests.Variant_rows_returned_is_null_when_repetitions_disagree`: runs `[5]`, `[5]`, `[6]` → `RowsReturned == null`, `ResultSets == 1`.
   - `JournalBenchmarkBuilderTests.Variant_rows_returned_is_null_without_capture`: `ResultRowCounts == null` → both null.
   - `ConditionsModelBuilderTests.Varying_fingerprint_ignores_fixed_parameters`: two models with the same varying `@clientId = 6795` and fixed `@Now` vs `@Today` → equal `VaryingFingerprint`, different `Fingerprint`.
   - `ConditionsModelBuilderTests.Varying_fingerprint_differs_by_varying_value`: `@clientId = 6795` vs `18` → different.
   - `ActivityJournalBenchmarkTests.Metrics_round_trip_result_sets_and_rows_returned` and `JournalContractTests` schema version 26 with both columns present after migrating a v25 database.
-- [ ] **Step 2: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~JournalBenchmarkBuilderTests|FullyQualifiedName~ConditionsModelBuilderTests|FullyQualifiedName~ActivityJournalBenchmarkTests|FullyQualifiedName~JournalContractTests"` — expected FAIL (missing members/columns).
-- [ ] **Step 3: Implement**
+- [x] **Step 2: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~JournalBenchmarkBuilderTests|FullyQualifiedName~ConditionsModelBuilderTests|FullyQualifiedName~ActivityJournalBenchmarkTests|FullyQualifiedName~JournalContractTests"` — expected FAIL (missing members/columns).
+- [x] **Step 3: Implement**
   - `CanonicalResultAccumulator.EndResultSet` appends `_currentRowCount` to a list returned via `Complete()`.
   - Fill `ResultRowCounts` from `CollectedCompare.Canonical.RowCounts` wherever `CompareRunArtifact` is created (compare and measure paths).
   - Builder: per `(variant, parameterSet, matrixCell)` group, set `ResultSets`/`RowsReturned` only when every run has non-null counts and all lists are equal; otherwise `RowsReturned = null` (and `ResultSets` = the common count when all counts agree, else null).
   - `ConditionsModelBuilder.CaseVaryingFingerprintPayload(ConditionsModel model, string setupHash, ConditionsCase item)`: same payload as `CaseMeasurementFingerprintPayload` minus `@fixed`. Seal it with `Hmac(salt, ...)` next to `MeasurementFingerprint` in `ActivityJournal`.
   - Migration `[26] = "ALTER TABLE operation_metrics ADD COLUMN result_sets INTEGER; ALTER TABLE operation_metrics ADD COLUMN rows_returned INTEGER;"`, add both columns to `Current`, `CurrentVersion = 26`, extend `InsertMetric`.
-- [ ] **Step 4: Run** the same filter — expected PASS.
-- [ ] **Step 5: Commit** `Journal per-case row counts and varying case key`
+- [x] **Step 4: Run** the same filter — expected PASS.
+- [x] **Step 5: Commit** `Journal per-case row counts and varying case key`
 
 ### Task 2: Dashboard evidence and version-row row counts
 
@@ -93,11 +93,11 @@ Order **1 → 2 → 3 → 4 → 5**. Tasks 2–4 require 1; 4 requires 3. Serial
 - Consumes: Task 1 columns and `ConditionsCase.VaryingFingerprint`.
 - Produces: `CompareMetricEvidence` gains `long? RowsReturned { get; init; }`, `int? ResultSets { get; init; }`; `CompareCaseEvidence` gains `string? VaryingFingerprint { get; init; }`; `VersionRow` gains `long? RowsReturnedSum { get; init; }` (sum over the latest measurement's cases; null if any case is null). TS: `rowsReturnedSum?: number | null`.
 
-- [ ] **Step 1: Failing tests**: `JournalReaderTests.Optimization_evidence_reads_rows_returned_and_varying_key` (seeded v26 rows → values; seeded NULL → null). `OptimizationSummaryBuilderTests.Version_row_rows_returned_sum_is_null_when_any_case_missing` and `..._sums_cases` (cases 1, 0, 3 → 4).
-- [ ] **Step 2: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~JournalReaderTests|FullyQualifiedName~OptimizationSummaryBuilderTests"` — FAIL.
-- [ ] **Step 3: Implement** reader mapping (`SELECT` the two new columns; varying key from the parsed conditions case, as `MeasurementFingerprint` already is) and `RowsReturnedSum` in `BuildVersions`.
-- [ ] **Step 4: Run** the filter — PASS.
-- [ ] **Step 5: Commit** `Expose per-case row counts in optimization evidence`
+- [x] **Step 1: Failing tests**: `JournalReaderTests.Optimization_evidence_reads_rows_returned_and_varying_key` (seeded v26 rows → values; seeded NULL → null). `OptimizationSummaryBuilderTests.Version_row_rows_returned_sum_is_null_when_any_case_missing` and `..._sums_cases` (cases 1, 0, 3 → 4).
+- [x] **Step 2: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~JournalReaderTests|FullyQualifiedName~OptimizationSummaryBuilderTests"` — FAIL.
+- [x] **Step 3: Implement** reader mapping (`SELECT` the two new columns; varying key from the parsed conditions case, as `MeasurementFingerprint` already is) and `RowsReturnedSum` in `BuildVersions`.
+- [x] **Step 4: Run** the filter — PASS.
+- [x] **Step 5: Commit** `Expose per-case row counts in optimization evidence`
 
 ### Task 3: Cross-group approximate comparison and endpoints
 
@@ -114,21 +114,21 @@ Order **1 → 2 → 3 → 4 → 5**. Tasks 2–4 require 1; 4 requires 3. Serial
 - Produces: `OptimizationComparison` gains `string? GroupA`, `string? GroupB`, `string? GroupLabelA`, `string? GroupLabelB` and `IReadOnlyList<CaseRows> CaseRows` where `record CaseRows(string CaseKey, string LabelA, string LabelB, long? RowsA, long? RowsB)`.
 - Produces: compare endpoints accept optional `groupB`; when absent or equal to `group`, behaviour is today's `Compare`. TS query params gain `groupB?: string`.
 
-- [ ] **Step 1: Failing tests** in `OptimizationComparerTests`:
+- [x] **Step 1: Failing tests** in `OptimizationComparerTests`:
   - `Across_groups_pairs_cases_by_varying_fingerprint_only`: group A cases {6795, 18, 4017, 1027}, group B {6795, 18, 4017, 1027, -1} with matching varying keys → 4 paired, `CoverageLabel == "4 of 5 cases paired"`, `Basis == ApproximateAcrossConditions`.
   - `Across_groups_never_emits_verdict_or_equivalence`: B reads lower than A → `EquivalenceLabel == "Different conditions — approximate, not a verdict"`, no `better`/`worse` in any row outcome.
   - `Across_groups_with_no_pairs_keeps_sql_and_plan_snapshots`: no shared varying key → `Cases` empty, `Tables` empty, SQL/plan snapshots for both hashes present, `CoverageLabel == "0 of 5 cases paired"`.
   - `Across_groups_case_rows_carry_rows_returned`: A 6795 rows 1, B 6795 rows 1 → `CaseRows` entry with `RowsA == 1 && RowsB == 1`; null stays null.
   - `Same_group_compare_is_unchanged`: existing `Compare` output for one group equals the current snapshot (guard).
   - `DashboardServerTests.Optimization_compare_with_group_b_returns_approximate_comparison` (both session and agent-session routes) and `..._with_unknown_group_b_returns_404` and `..._b_not_in_group_b_returns_404`.
-- [ ] **Step 2: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~OptimizationComparerTests|FullyQualifiedName~DashboardServerTests|FullyQualifiedName~DashboardContractTests"` — FAIL.
-- [ ] **Step 3: Implement**
+- [x] **Step 2: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~OptimizationComparerTests|FullyQualifiedName~DashboardServerTests|FullyQualifiedName~DashboardContractTests"` — FAIL.
+- [x] **Step 3: Implement**
   - Resolve version A in `groupA`'s selected scope and B in `groupB`'s same-named scope; different scope names → existing `ConditionsDiffer` empty result.
   - Pair key = `VaryingFingerprint`; a case without it never pairs. Labels come from each side's case label.
   - Metrics (`Tables`, `WholeBatch`, statements) use the latest snapshot of each hash restricted to paired cases, reusing the existing snapshot/aggregation helpers; `OperationId = null`; no `Equivalent`/`EquivalentPath` call.
   - Handlers: shared helper resolves subject, `group`, optional `groupB`, scope, A in group, B in groupB; evidence filter includes both fingerprints.
-- [ ] **Step 4: Run** the filter — PASS.
-- [ ] **Step 5: Commit** `Add approximate cross-group optimization comparison`
+- [x] **Step 4: Run** the filter — PASS.
+- [x] **Step 5: Commit** `Add approximate cross-group optimization comparison`
 
 ### Task 4: Shared version table UI
 
@@ -143,15 +143,15 @@ Order **1 → 2 → 3 → 4 → 5**. Tasks 2–4 require 1; 4 requires 3. Serial
 - Consumes: Task 2 `rowsReturnedSum`, Task 3 `groupB` param and comparison fields.
 - Produces: `SessionSearch.groupB?: string`. URL semantics: `group` = A's group, `groupB` = B's group (omitted when equal).
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
   - `OptimizationSection.test.tsx` "lists versions from all conditions groups in one table": fixture with the session-8 shape → rows v0, v1, v2, v3 in one table, each with a conditions badge (`A` for the first group, `B` for the second, with the full group label in a tooltip/legend); the "Conditions group" select is gone.
   - "selecting B from another group sets groupB and shows the approximate banner": click B on v3 while A = v1 → navigation search `{ group: <6542…>, groupB: <d5e2…>, a: "v1", b: "v3" }`, banner text `Different conditions — approximate, not a verdict`.
   - `VersionTable.test.tsx` "shows rows column and dash for missing": `rowsReturnedSum` 5 → `5`, null → `—`.
   - `ComparisonPanel.test.tsx` "approximate comparison shows per-case rows and coverage": `CaseRows` rendered as `6795: 1 → 1 rows`; differing rows highlighted as `rows differ`; no verdict chip.
-- [ ] **Step 2: Run** `npm --prefix src/SqlHarness.Dashboard/ui run test -- OptimizationSection VersionTable ComparisonPanel` — FAIL.
-- [ ] **Step 3: Implement**: build table rows as `groups.flatMap(group => scopeOf(group).versions.map(row => ({ ...row, group })))`, ordered by numeric version; row identity `${group.fingerprint}:${version}`; A/B selection stores version + group; the scope select lists the union of scope names. Remove the group select. Keep defaults from the group in `group` (or the first group).
-- [ ] **Step 4: Run** the same command — PASS.
-- [ ] **Step 5: Commit** `Show one version table across conditions groups`
+- [x] **Step 2: Run** `npm --prefix src/SqlHarness.Dashboard/ui run test -- OptimizationSection VersionTable ComparisonPanel` — FAIL.
+- [x] **Step 3: Implement**: build table rows as `groups.flatMap(group => scopeOf(group).versions.map(row => ({ ...row, group })))`, ordered by numeric version; row identity `${group.fingerprint}:${version}`; A/B selection stores version + group; the scope select lists the union of scope names. Remove the group select. Keep defaults from the group in `group` (or the first group).
+- [x] **Step 4: Run** the same command — PASS.
+- [x] **Step 5: Commit** `Show one version table across conditions groups`
 
 ### Task 5: Documentation and verification
 
@@ -159,10 +159,10 @@ Order **1 → 2 → 3 → 4 → 5**. Tasks 2–4 require 1; 4 requires 3. Serial
 - Modify: `README.md` (dashboard optimization section: shared table, approximate cross-group mode, row counts for new sessions only)
 - Modify: `plans/README.md` (status), this plan's status line
 
-- [ ] **Step 1:** Update README copy; no tool description/schema change is needed (MCP interfaces unchanged — confirm with `git diff --stat src/SqlHarness.Mcp` being empty).
-- [ ] **Step 2:** Run `just verify` on the final tree per [verification](../docs/agents/verification.md); record revision and counts in `plans/123-evidence/verification.md`.
-- [ ] **Step 3:** Browser check of the session-8 shape with a fixture (not a live journal): one table v0–v3, cross-group banner, rows column. Save screenshots under `plans/123-evidence/`.
-- [ ] **Step 4: Commit** `Document shared version table and verify plan 123`
+- [x] **Step 1:** Update README copy; no tool description/schema change is needed (MCP interfaces unchanged — confirm with `git diff --stat src/SqlHarness.Mcp` being empty).
+- [x] **Step 2:** Run `just verify` on the final tree per [verification](../docs/agents/verification.md); record revision and counts in `plans/123-evidence/verification.md`.
+- [x] **Step 3:** Browser check of the session-8 shape with a fixture (not a live journal): one table v0–v3, cross-group banner, rows column. Save screenshots under `plans/123-evidence/`.
+- [x] **Step 4: Commit** `Document shared version table and verify plan 123`
 
 ## Deferred
 
