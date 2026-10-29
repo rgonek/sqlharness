@@ -266,12 +266,12 @@ public static partial class DashboardServer
                         ? Results.NotFound()
                         : Results.Json(reader.AgentOptimization(new AgentSessionKey(kind, id), loadConfig().Journal.StoreSensitive), Json));
         MapRead(api, "/agent-sessions/{kind}/{id}/optimization/compare", (string kind, string id, string? subject, string? database,
-            string? group, string? scope, string? a, string? b, string? @case, string? aggregate, string? view) =>
+            string? group, string? groupB, string? scope, string? a, string? b, string? @case, string? aggregate, string? view) =>
             !TranscriptsEnabled(options.ConfigPath)
                 ? Results.NotFound()
                 : kind is not ("claude" or "codex" or "opencode") || id.Length is 0 or > 512
                     ? BadRequest("kind or id is invalid.")
-                    : AgentSessionOptimizationCompare(reader, new AgentSessionKey(kind, id), subject, database, group, scope,
+                    : AgentSessionOptimizationCompare(reader, new AgentSessionKey(kind, id), subject, database, group, groupB, scope,
                         a, b, @case, aggregate, view, loadConfig().Journal.StoreSensitive, Json));
         MapRead(api, "/agent-sessions/{kind}/{id}/sql", (string kind, string id, string? hash) =>
             !TranscriptsEnabled(options.ConfigPath)
@@ -291,8 +291,8 @@ public static partial class DashboardServer
         MapRead(api, "/sessions/{id:long}/optimization", (long id) =>
             reader.Session(id) is null ? Results.NotFound() : Results.Json(reader.Optimization(id, loadConfig().Journal.StoreSensitive), Json));
         MapRead(api, "/sessions/{id:long}/optimization/compare", (long id, string? subject, string? database,
-            string? group, string? scope, string? a, string? b, string? @case, string? aggregate, string? view) =>
-            SessionOptimizationCompare(reader, id, subject, database, group, scope, a, b, @case, aggregate, view, loadConfig().Journal.StoreSensitive, Json));
+            string? group, string? groupB, string? scope, string? a, string? b, string? @case, string? aggregate, string? view) =>
+            SessionOptimizationCompare(reader, id, subject, database, group, groupB, scope, a, b, @case, aggregate, view, loadConfig().Journal.StoreSensitive, Json));
         MapRead(api, "/sessions/{id:long}/compares", (long id, long? cursor, int? limit) =>
             Results.Json(reader.CompareAttempts(id, cursor, limit ?? JournalReader.CompareHistoryPageLimit), Json));
         MapRead(api, "/sessions/{id:long}/sql", (long id, string? hash) =>
@@ -430,7 +430,7 @@ public static partial class DashboardServer
     }
 
     private static IResult SessionOptimizationCompare(JournalReader reader, long sessionId, string? subject,
-        string? database, string? fingerprint, string? scope, string? a, string? b, string? selectedCase,
+        string? database, string? fingerprint, string? fingerprintB, string? scope, string? a, string? b, string? selectedCase,
         string? aggregate, string? view, bool storeSensitive, JsonSerializerOptions json)
     {
         var normalizedAggregate = NormalizeAggregate(aggregate);
@@ -443,101 +443,56 @@ public static partial class DashboardServer
             return BadRequest("view must be changed, whole or statements.");
         var evidence = reader.OptimizationEvidence(sessionId, storeSensitive);
         var section = OptimizationSummaryBuilder.Build(evidence);
-        var subjectChoices = section.Subjects.Where(item => (subject is null || item.Subject == subject)
-            && (database is null || item.Database == database)).ToArray();
-        if (subjectChoices.Length != 1)
-            return Results.NotFound();
-        var selectedSubject = subjectChoices[0];
-        var groupChoices = selectedSubject.Groups.Where(item => fingerprint is null || item.Fingerprint == fingerprint).ToArray();
-        if (groupChoices.Length != 1)
-            return Results.NotFound();
-        var selectedGroup = groupChoices[0];
-        var scopeName = NormalizeOptimizationScope(scope);
-        var scopeChoices = selectedGroup.Scopes.Where(item => scopeName is null || NormalizeOptimizationScope(item.Scope) == scopeName)
-            .OrderBy(item => item.Scope == "whole query" ? 0 : 1).ThenBy(item => item.Scope, StringComparer.Ordinal).ToArray();
-        if (scopeChoices.Length == 0)
-            return Results.NotFound();
-        var selectedScope = scopeChoices[0];
-        var selectedA = a ?? selectedScope.DefaultA;
-        var selectedB = b ?? selectedScope.DefaultB;
-        if (selectedA is null || selectedB is null
-            || !selectedScope.Versions.Any(version => version.Version == selectedA)
-            || !selectedScope.Versions.Any(version => version.Version == selectedB))
-            return Results.NotFound();
-
-        var scopedGroup = selectedGroup with
-        {
-            Scopes = [selectedScope],
-            DefaultA = selectedScope.DefaultA ?? selectedA,
-            DefaultB = selectedScope.DefaultB,
-        };
-        var scopedEvidence = evidence.Where(item => item.Subject == selectedSubject.Subject
-                && (item.Database ?? string.Empty) == selectedSubject.Database
-                && item.Fingerprint == selectedGroup.Fingerprint
-                && NormalizeOptimizationScope(item.Scope) == NormalizeOptimizationScope(selectedScope.Scope))
-            .ToArray();
-        var comparison = OptimizationComparer.Compare(scopedGroup, scopedEvidence, selectedA, selectedB,
-            selectedCase ?? "all", normalizedAggregate, normalizedView);
-        if (selectedCase is not null && selectedCase != "all"
-            && !comparison.Cases.Any(item => item.Id == selectedCase))
-            return Results.NotFound();
-        return Results.Json(comparison, json);
+        return CompareOptimization(section, evidence, subject, database, fingerprint, fingerprintB, scope, a, b,
+            selectedCase, normalizedAggregate, normalizedView, json);
     }
 
     private static IResult AgentSessionOptimizationCompare(JournalReader reader, AgentSessionKey key, string? subject,
-        string? database, string? fingerprint, string? scope, string? a, string? b, string? selectedCase,
+        string? database, string? fingerprint, string? fingerprintB, string? scope, string? a, string? b, string? selectedCase,
         string? aggregate, string? view, bool storeSensitive, JsonSerializerOptions json)
     {
         var normalizedAggregate = NormalizeAggregate(aggregate);
-        if (normalizedAggregate is null)
-            return BadRequest("aggregate must be sum or mean.");
-        if (reader.AgentSession(key) is null)
-            return Results.NotFound();
-        if (!TryNormalizeView(view, out var normalizedView))
-            return BadRequest("view must be changed, whole or statements.");
+        if (normalizedAggregate is null) return BadRequest("aggregate must be sum or mean.");
+        if (reader.AgentSession(key) is null) return Results.NotFound();
+        if (!TryNormalizeView(view, out var normalizedView)) return BadRequest("view must be changed, whole or statements.");
+        return CompareOptimization(reader.AgentOptimization(key, storeSensitive), reader.OptimizationEvidenceForAgentSession(key, storeSensitive),
+            subject, database, fingerprint, fingerprintB, scope, a, b, selectedCase, normalizedAggregate, normalizedView, json);
+    }
 
-        var evidence = reader.OptimizationEvidenceForAgentSession(key, storeSensitive);
-        var section = reader.AgentOptimization(key, storeSensitive);
-        var subjectChoices = section.Subjects.Where(item => (subject is null || item.Subject == subject)
+    private static IResult CompareOptimization(OptimizationSection section, IReadOnlyList<CompareEvidence> evidence,
+        string? subject, string? database, string? fingerprint, string? fingerprintB, string? scope, string? a, string? b,
+        string? selectedCase, string aggregate, string view, JsonSerializerOptions json)
+    {
+        var subjects = section.Subjects.Where(item => (subject is null || item.Subject == subject)
             && (database is null || item.Database == database)).ToArray();
-        if (subjectChoices.Length != 1)
-            return Results.NotFound();
-        var selectedSubject = subjectChoices[0];
-        var groupChoices = selectedSubject.Groups.Where(item => fingerprint is null || item.Fingerprint == fingerprint).ToArray();
-        if (groupChoices.Length != 1)
-            return Results.NotFound();
-        var selectedGroup = groupChoices[0];
+        if (subjects.Length != 1) return Results.NotFound();
+        var selectedSubject = subjects[0];
+        var groups = selectedSubject.Groups.Where(item => fingerprint is null || item.Fingerprint == fingerprint).ToArray();
+        if (groups.Length != 1) return Results.NotFound();
+        var groupA = groups[0];
+        var groupB = fingerprintB is null ? groupA : selectedSubject.Groups.FirstOrDefault(item => item.Fingerprint == fingerprintB);
+        if (groupB is null) return Results.NotFound();
         var scopeName = NormalizeOptimizationScope(scope);
-        var scopeChoices = selectedGroup.Scopes.Where(item => scopeName is null || NormalizeOptimizationScope(item.Scope) == scopeName)
-            .OrderBy(item => item.Scope == "whole query" ? 0 : 1).ThenBy(item => item.Scope, StringComparer.Ordinal).ToArray();
-        if (scopeChoices.Length == 0)
-            return Results.NotFound();
-        var selectedScope = scopeChoices[0];
-        var selectedA = a ?? selectedScope.DefaultA;
-        var selectedB = b ?? selectedScope.DefaultB;
-        if (selectedA is null || selectedB is null
-            || !selectedScope.Versions.Any(version => version.Version == selectedA)
-            || !selectedScope.Versions.Any(version => version.Version == selectedB))
-            return Results.NotFound();
-        var scopedGroup = selectedGroup with
-        {
-            Scopes = [selectedScope],
-            DefaultA = selectedScope.DefaultA ?? selectedA,
-            DefaultB = selectedScope.DefaultB,
-        };
+        var scopeA = groupA.Scopes.Where(item => scopeName is null || NormalizeOptimizationScope(item.Scope) == scopeName)
+            .OrderBy(item => item.Scope == "whole query" ? 0 : 1).ThenBy(item => item.Scope, StringComparer.Ordinal).FirstOrDefault();
+        if (scopeA is null) return Results.NotFound();
+        var scopeB = groupB.Scopes.FirstOrDefault(item => NormalizeOptimizationScope(item.Scope) == NormalizeOptimizationScope(scopeA.Scope));
+        if (scopeB is null) return Results.NotFound();
+        var selectedA = a ?? scopeA.DefaultA;
+        var selectedB = b ?? scopeB.DefaultB;
+        if (selectedA is null || selectedB is null || !scopeA.Versions.Any(v => v.Version == selectedA)
+            || !scopeB.Versions.Any(v => v.Version == selectedB)) return Results.NotFound();
+        var scopedA = groupA with { Scopes = [scopeA] };
+        var scopedB = groupB with { Scopes = [scopeB] };
         var scopedEvidence = evidence.Where(item => item.Subject == selectedSubject.Subject
-                && (item.Database ?? string.Empty) == selectedSubject.Database
-                && item.Fingerprint == selectedGroup.Fingerprint
-                && NormalizeOptimizationScope(item.Scope) == NormalizeOptimizationScope(selectedScope.Scope))
-            .ToArray();
-        var comparison = OptimizationComparer.Compare(scopedGroup, scopedEvidence, selectedA, selectedB,
-            selectedCase ?? "all", normalizedAggregate, normalizedView) with
-        {
-            VersionLabelsProvisional = section.VersionLabelsProvisional,
-            VersionLabelNote = section.VersionLabelNote,
-        };
-        if (selectedCase is not null && selectedCase != "all"
-            && !comparison.Cases.Any(item => item.Id == selectedCase))
+            && (item.Database ?? "") == selectedSubject.Database
+            && (item.Fingerprint == groupA.Fingerprint || item.Fingerprint == groupB.Fingerprint)
+            && NormalizeOptimizationScope(item.Scope) == NormalizeOptimizationScope(scopeA.Scope)).ToArray();
+        var comparison = (groupA.Fingerprint == groupB.Fingerprint
+            ? OptimizationComparer.Compare(scopedA, scopedEvidence, selectedA, selectedB, selectedCase ?? "all", aggregate, view)
+            : OptimizationComparer.CompareAcrossGroups(scopedA, scopedB, scopedEvidence, selectedA, selectedB, selectedCase ?? "all", aggregate, view))
+            with { VersionLabelsProvisional = section.VersionLabelsProvisional, VersionLabelNote = section.VersionLabelNote };
+        if (selectedCase is not null && selectedCase != "all" && !comparison.Cases.Any(item => item.Id == selectedCase))
             return Results.NotFound();
         return Results.Json(comparison, json);
     }

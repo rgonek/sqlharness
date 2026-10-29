@@ -140,6 +140,9 @@ public static class OptimizationComparer
             resolvedSelection, normalizedAggregate, coverage, mixed, visibleTables, collapsed,
             new ElapsedInfo(elapsedBefore, elapsedAfter, direct?.RegressionVerdict, basis == PairBasis.DifferentRunsSameConditions))
         {
+            CaseRows = commonIds.Select(id => new CaseRows(id, caseLabels.GetValueOrDefault(id, id), caseLabels.GetValueOrDefault(id, id),
+                before.Metrics[id].RowsReturned, after.Metrics[id].RowsReturned)
+            { RowsAVaries = before.Metrics[id].RowsReturnedVaries, RowsBVaries = after.Metrics[id].RowsReturnedVaries }).ToArray(),
             BeforeAction = Action(before),
             AfterAction = Action(after),
             TableIoUnavailable = tableIoUnavailable,
@@ -168,6 +171,102 @@ public static class OptimizationComparer
             };
         }
 
+    }
+
+    public static OptimizationComparison CompareAcrossGroups(ConditionsGroup groupA, ConditionsGroup groupB,
+        IReadOnlyList<CompareEvidence> compares, string a, string b, string selectedCase, string aggregate, string view = "changed")
+    {
+        var va = VersionsFor(groupA, a);
+        var vb = VersionsFor(groupB, b);
+        if (va.Count != 1 || vb.Count != 1 || va[0].Scope != vb[0].Scope)
+            return Empty(a, b, PairBasis.ConditionsDiffer, "conditions differ", selectedCase, aggregate);
+        var scope = va[0].Scope;
+        var ea = compares.Where(c => c.Fingerprint == groupA.Fingerprint && NormalizeScope(c.Scope) == scope)
+            .OrderBy(c => c.StartedAt, StringComparer.Ordinal).ThenBy(c => c.OperationId).ToArray();
+        var eb = compares.Where(c => c.Fingerprint == groupB.Fingerprint && NormalizeScope(c.Scope) == scope)
+            .OrderBy(c => c.StartedAt, StringComparer.Ordinal).ThenBy(c => c.OperationId).ToArray();
+        if (!TryResolveIdentity(groupA, ea, out var sa, out var da) || !TryResolveIdentity(groupB, eb, out var sb, out var db)
+            || sa != sb || da != db)
+            return Empty(a, b, PairBasis.ConditionsDiffer, "conditions differ", selectedCase, aggregate);
+        var before = LatestVaryingSnapshot(ea.Where(c => c.Subject == sa && (c.Database ?? "") == da).ToArray(), va[0].Hash);
+        var after = LatestVaryingSnapshot(eb.Where(c => c.Subject == sb && (c.Database ?? "") == db).ToArray(), vb[0].Hash);
+        if (before is null || after is null)
+            return Empty(a, b, PairBasis.ConditionsDiffer, "conditions differ", selectedCase, aggregate);
+        var left = before.Value.Snapshot;
+        var right = after.Value.Snapshot;
+        var ids = left.Metrics.Keys.Intersect(right.Metrics.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var options = ids.Select(id => new CaseOption(id, before.Value.Labels[id], "unavailable")).ToArray();
+        var rows = ids.Select(id => new CaseRows(id, before.Value.Labels[id], after.Value.Labels[id],
+            left.Metrics[id].RowsReturned, right.Metrics[id].RowsReturned)
+        { RowsAVaries = left.Metrics[id].RowsReturnedVaries, RowsBVaries = right.Metrics[id].RowsReturnedVaries }).ToArray();
+        var selection = selectedCase == "all" || ids.Contains(selectedCase, StringComparer.Ordinal) ? selectedCase : "all";
+        var selected = selection == "all" ? ids : [selection];
+        var mode = aggregate.Equals("mean", StringComparison.OrdinalIgnoreCase) ? "mean" : "sum";
+        var comparisons = ids.ToDictionary(id => id, id => CompareCase(left.Metrics[id], right.Metrics[id]));
+        var postgres = IsPostgres(left.Engine ?? right.Engine);
+        var confirmed = selected.Length > 0 && selected.All(id => comparisons[id].VerdictBasis == "changed statements");
+        var effectiveView = view is "whole" or "statements" ? view : "changed";
+        if (!confirmed && effectiveView != "statements") effectiveView = "whole";
+        var tables = postgres ? [] : confirmed && effectiveView != "whole"
+            ? BuildStatementTableRows(left.Metrics, right.Metrics, selected, comparisons, mode)
+            : BuildTableRows(left, right, selected, mode);
+        var statements = BuildStatementRows(left.Metrics, right.Metrics, selected, comparisons, mode, selection != "all");
+        var batchA = AggregateReads(left.Metrics, selected, mode);
+        var batchB = AggregateReads(right.Metrics, selected, mode);
+        var sharedA = ReduceNullable(selected.Select(id => comparisons[id].SharedBefore), mode);
+        var sharedB = ReduceNullable(selected.Select(id => comparisons[id].SharedAfter), mode);
+        return new OptimizationComparison(a, b, PairBasis.ApproximateAcrossConditions, null,
+            "Different conditions — approximate, not a verdict", options, selection, mode,
+            $"{ids.Length} of {before.Value.Count + after.Value.Count - ids.Length} cases paired", null,
+            tables.Where(row => !IsCollapsed(row)).ToArray(), postgres ? null : Collapse(tables),
+            new ElapsedInfo(Aggregate(left.Metrics, selected, m => m.ElapsedMedianMs, mode),
+                Aggregate(right.Metrics, selected, m => m.ElapsedMedianMs, mode), null, true))
+        {
+            GroupA = groupA.Fingerprint, GroupB = groupB.Fingerprint, GroupLabelA = groupA.Label, GroupLabelB = groupB.Label,
+            CaseRows = rows, BeforeAction = ids.Length == 0 ? before.Value.FullAction : SnapshotAction(left),
+            AfterAction = ids.Length == 0 ? after.Value.FullAction : SnapshotAction(right),
+            TableIoUnavailable = postgres, CpuBeforeMs = Aggregate(left.Metrics, selected, m => m.CpuMedianMs, mode),
+            CpuAfterMs = Aggregate(right.Metrics, selected, m => m.CpuMedianMs, mode),
+            BuffersBefore = AggregateBuffers(left.Metrics, selected, mode), BuffersAfter = AggregateBuffers(right.Metrics, selected, mode),
+            VerdictBasis = confirmed ? "changed statements" : "whole batch", View = effectiveView,
+            WholeBatch = new WholeBatchLine(batchA, batchB, sharedA, batchA.HasValue && batchB.HasValue ? $"whole batch: {batchA} → {batchB} reads" : "whole batch: reads unavailable")
+            { SharedBefore = sharedA, SharedAfter = sharedB, ChangedBefore = confirmed && batchA.HasValue && sharedA.HasValue ? batchA - sharedA : null,
+              ChangedAfter = confirmed && batchB.HasValue && sharedB.HasValue ? batchB - sharedB : null },
+            Statements = effectiveView == "changed" ? statements.Where(row => row.Status != "shared").ToArray() : statements,
+            FallbackNote = confirmed ? null : "per-statement attribution incomplete",
+            StatementMetricsUnavailableReason = selection == "all" ? "Select a single case for statement CPU, elapsed, LOB logical reads, grants and spill warnings." : null,
+            OmittedStatementsBefore = selected.Sum(id => left.Metrics[id].OmittedStatements),
+            OmittedStatementsAfter = selected.Sum(id => right.Metrics[id].OmittedStatements),
+        };
+    }
+
+    private static (VersionSnapshot Snapshot, Dictionary<string, string> Labels, int Count, OptimizationActionReference FullAction)? LatestVaryingSnapshot(
+        IReadOnlyList<CompareEvidence> compares, string hash)
+    {
+        foreach (var compare in compares.Reverse())
+        {
+            var variant = compare.IsMeasure && compare.BaselineHash == hash ? "measure"
+                : compare.BaselineHash == hash ? "baseline" : compare.CandidateHash == hash ? "candidate" : null;
+            if (variant is null) continue;
+            var uniqueCases = compare.Cases.Where(c => !string.IsNullOrEmpty(c.VaryingFingerprint))
+                .GroupBy(c => c.VaryingFingerprint!, StringComparer.Ordinal).Where(g => g.Count() == 1)
+                .Select(g => g.Single()).ToArray();
+            var byId = compare.Metrics.Where(m => m.Variant.Equals(variant, StringComparison.OrdinalIgnoreCase))
+                .GroupBy(m => m.CaseId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
+            var metrics = uniqueCases.ToDictionary(c => c.VaryingFingerprint!, c => byId.GetValueOrDefault(c.CaseId)
+                ?? new CompareMetricEvidence(variant, c.CaseId, c.Label, null, null, null, []), StringComparer.Ordinal);
+            var labels = uniqueCases.ToDictionary(c => c.VaryingFingerprint!, c => c.Label, StringComparer.Ordinal);
+            return (new VersionSnapshot(compare.Engine, compare.OperationId, variant, metrics), labels, compare.Cases.Count,
+                SnapshotAction(Snapshot(compare, variant)));
+        }
+        return null;
+    }
+
+    private static OptimizationActionReference SnapshotAction(VersionSnapshot snapshot)
+    {
+        var ids = snapshot.Metrics.ToDictionary(pair => pair.Key, pair => pair.Value.CaseId, StringComparer.Ordinal);
+        return new OptimizationActionReference(snapshot.OperationId, snapshot.Variant, ids.Values.Order(StringComparer.Ordinal).ToArray())
+        { CaseIdsByFingerprint = ids };
     }
 
     internal static (string VerdictBasis, long? ChangedBefore, long? ChangedAfter, long? SharedBefore, long? SharedAfter)

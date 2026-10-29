@@ -424,7 +424,13 @@ public sealed class AgentSessionsTests
         seed.Operation(child, agent: new AgentCallMetadata("tool-pending", null, null, null, null, null, null));
         var compare = seed.Compare(child, "orders", "whole", "sha256:h0", "sha256:h1",
             agent: new AgentCallMetadata("tool-linked", null, null, null, null, null, null));
+        seed.RecordConditions(compare);
         JournalSeed.Link(home.DatabasePath, compare.OperationId, "claude", "conversation-1", "Conversation");
+        var other = seed.Compare(child, "orders", "whole", "sha256:h2", "sha256:h3",
+            agent: new AgentCallMetadata("tool-linked-2", null, null, null, null, null, null));
+        seed.RecordConditions(other, JournalSeed.ReproConditions() with { FixedForFingerprint = [new ConditionsParameter("@fixed", "int", JsonSerializer.SerializeToElement(2))] });
+        JournalSeed.Link(home.DatabasePath, other.OperationId, "claude", "conversation-1", "Conversation");
+
         await using var dashboard = await StartEnabled(home);
         var (_, client) = dashboard;
         var before = SqlHarness.Tests.Journal.JournalDb.Rows(home.DatabasePath, "SELECT * FROM compare_version_labels").Count;
@@ -435,7 +441,20 @@ public sealed class AgentSessionsTests
         Assert.True(summary.RootElement.GetProperty("versionLabelsProvisional").GetBoolean());
         Assert.Equal("versions may renumber while matching catches up", summary.RootElement.GetProperty("versionLabelNote").GetString());
 
-        using var compareResponse = await client.GetAsync("/api/agent-sessions/claude/conversation-1/optimization/compare");
+        var groups = summary.RootElement.GetProperty("subjects")[0].GetProperty("groups");
+        var first = groups.EnumerateArray().Single(g => g.GetProperty("scopes")[0].GetProperty("versions").EnumerateArray().Any(v => v.GetProperty("hash").GetString() == "sha256:h0"));
+        var second = groups.EnumerateArray().Single(g => g.GetProperty("scopes")[0].GetProperty("versions").EnumerateArray().Any(v => v.GetProperty("hash").GetString() == "sha256:h3"));
+        var firstGroup = first.GetProperty("fingerprint").GetString();
+        var secondGroup = second.GetProperty("fingerprint").GetString();
+        var firstVersion = first.GetProperty("scopes")[0].GetProperty("versions").EnumerateArray().Single(v => v.GetProperty("hash").GetString() == "sha256:h0").GetProperty("version").GetString();
+        var secondVersion = second.GetProperty("scopes")[0].GetProperty("versions").EnumerateArray().Single(v => v.GetProperty("hash").GetString() == "sha256:h3").GetProperty("version").GetString();
+        using var crossResponse = await client.GetAsync($"/api/agent-sessions/claude/conversation-1/optimization/compare?group={firstGroup}&groupB={secondGroup}&a={firstVersion}&b={secondVersion}");
+        Assert.Equal(HttpStatusCode.OK, crossResponse.StatusCode);
+        using var cross = JsonDocument.Parse(await crossResponse.Content.ReadAsStringAsync());
+        Assert.Equal("ApproximateAcrossConditions", cross.RootElement.GetProperty("basis").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/agent-sessions/claude/conversation-1/optimization/compare?group={firstGroup}&groupB=missing&a={firstVersion}&b={secondVersion}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/agent-sessions/claude/conversation-1/optimization/compare?group={firstGroup}&groupB={secondGroup}&a={firstVersion}&b={firstVersion}")).StatusCode);
+        using var compareResponse = await client.GetAsync($"/api/agent-sessions/claude/conversation-1/optimization/compare?group={firstGroup}");
         Assert.Equal(HttpStatusCode.OK, compareResponse.StatusCode);
         using var comparison = JsonDocument.Parse(await compareResponse.Content.ReadAsStringAsync());
         Assert.True(comparison.RootElement.GetProperty("versionLabelsProvisional").GetBoolean());

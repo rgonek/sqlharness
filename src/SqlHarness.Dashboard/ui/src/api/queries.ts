@@ -137,7 +137,7 @@ export function useAgentSessionOptimizationComparison(key: AgentSessionKey, para
     queryKey: ["agent-session-optimization-comparison", key, params] as const,
     placeholderData: (previousData, previousQuery) => params !== null && previousQuery?.queryKey[1].agentKind === key.agentKind && previousQuery.queryKey[1].conversationId === key.conversationId ? previousData : undefined,
     queryFn: () => getJson<OptimizationComparison>(`/api/agent-sessions/${encodeURIComponent(key.agentKind)}/${encodeURIComponent(key.conversationId)}/optimization/compare`, {
-      subject: params!.subject, database: params!.database, group: params!.group, scope: params!.scope,
+      subject: params!.subject, database: params!.database, group: params!.group, groupB: params!.groupB, scope: params!.scope,
       a: params!.a, b: params!.b, case: params!.case, aggregate: params!.aggregate, view: params!.view ?? "changed",
     }),
     enabled: params !== null,
@@ -200,7 +200,7 @@ export function useSessionCompares(id: number) {
 }
 
 export type OptimizationCompareParams = {
-  subject: string; database: string; group: string; scope?: string; a: string; b: string; case: string; aggregate: string; view?: "changed" | "whole" | "statements"
+  subject: string; database: string; group: string; groupB?: string; scope?: string; a: string; b: string; case: string; aggregate: string; view?: "changed" | "whole" | "statements"
 }
 
 export function useSessionOptimization(id: number, enabled = true) {
@@ -216,7 +216,7 @@ export function useSessionOptimizationComparison(id: number, params: Optimizatio
     queryKey: params ? queryKeys.optimizationComparison(id, params) : ["session-optimization-comparison", id, null],
     placeholderData: (previousData, previousQuery) => params !== null && previousQuery?.queryKey[1] === id ? previousData : undefined,
     queryFn: () => getJson<OptimizationComparison>(`/api/sessions/${id}/optimization/compare`, {
-      subject: params!.subject, database: params!.database, group: params!.group, scope: params!.scope,
+      subject: params!.subject, database: params!.database, group: params!.group, groupB: params!.groupB, scope: params!.scope,
       a: params!.a, b: params!.b, case: params!.case, aggregate: params!.aggregate, view: params!.view ?? "changed",
     }),
     enabled: params !== null,

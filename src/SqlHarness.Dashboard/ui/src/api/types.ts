@@ -194,7 +194,9 @@ export type StatementRow = {
   udfElapsedMilliseconds: number | null
 }
 export type OptimizationComparison = {
-  a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql"
+  a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql" | "ApproximateAcrossConditions"
+  groupA?: string | null; groupB?: string | null; groupLabelA?: string | null; groupLabelB?: string | null
+  caseRows?: { caseKey: string; labelA: string; labelB: string; rowsA: number | null; rowsB: number | null; rowsAVaries: boolean; rowsBVaries: boolean }[]
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]
   selectedCase: string; aggregate: string; coverageLabel: string; statementMetricsUnavailableReason?: string | null
   versionLabelsProvisional?: boolean; versionLabelNote?: string | null

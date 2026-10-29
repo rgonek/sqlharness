@@ -606,6 +606,9 @@ public sealed class DashboardServerTests
         seed.CompareEvidence(fragment, JournalSeed.ReproConditions(),
             """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
             OptimizationMetrics(300, 30));
+        var otherGroup = seed.Compare(session, "orders", "whole", "other-base", "other-candidate");
+        seed.CompareEvidence(otherGroup, JournalSeed.ReproConditions() with { FixedForFingerprint = [new ConditionsParameter("@fixed", "int", JsonSerializer.SerializeToElement(2))] },
+            """{"kind":"compare","comparison":"Ordered","cases":[{"caseId":"0","caseLabel":"@id = 1"}]}""", OptimizationMetrics(90, 10));
         var otherSubject = seed.Compare(session, "customers", "whole", "base", "candidate");
         seed.CompareEvidence(otherSubject, JournalSeed.ReproConditions(),
             """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"@id = 1","equivalence":{"equivalent":true}}]}""",
@@ -613,6 +616,8 @@ public sealed class DashboardServerTests
         var id = new JournalReader(home.DatabasePath, new FakeProcesses()).Sessions(new SessionQuery()).Items.Single().Id;
         var fingerprint = new JournalReader(home.DatabasePath, new FakeProcesses()).OptimizationEvidence(id)
             .First(item => item.OperationId == compare.OperationId).Fingerprint;
+        var fingerprintB = new JournalReader(home.DatabasePath, new FakeProcesses()).OptimizationEvidence(id)
+            .Single(item => item.OperationId == otherGroup.OperationId).Fingerprint;
         await using var dashboard = await StartAuthenticated(home);
         var (_, client) = dashboard;
 
@@ -635,6 +640,12 @@ public sealed class DashboardServerTests
         using var fragmentComparison = JsonDocument.Parse(await fragmentResponse.Content.ReadAsStringAsync());
         Assert.Equal(300, fragmentComparison.RootElement.GetProperty("tables")[0].GetProperty("readsBefore").GetInt64());
 
+        using var crossResponse = await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&groupB={fingerprintB}&a=v0&b=v3");
+        Assert.Equal(HttpStatusCode.OK, crossResponse.StatusCode);
+        using var cross = JsonDocument.Parse(await crossResponse.Content.ReadAsStringAsync());
+        Assert.Equal("ApproximateAcrossConditions", cross.RootElement.GetProperty("basis").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&groupB=missing&a=v0&b=v3")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&groupB={fingerprintB}&a=v0&b=v1")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await client.GetAsync($"/api/sessions/{id}/optimization/compare?subject=orders&database=db&group={fingerprint}&aggregate=median")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,

@@ -126,13 +126,18 @@ public sealed record CompareStatementEvidence(
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<PairBasis>))]
-public enum PairBasis { MeasuredTogether, DifferentRunsSameConditions, ConditionsDiffer, SameSql }
+public enum PairBasis { MeasuredTogether, DifferentRunsSameConditions, ConditionsDiffer, SameSql, ApproximateAcrossConditions }
 
 public sealed record OptimizationComparison(
     string A, string B, PairBasis Basis, long? OperationId, string EquivalenceLabel,
     IReadOnlyList<CaseOption> Cases, string SelectedCase, string Aggregate, string CoverageLabel,
     MixedWarning? Mixed, IReadOnlyList<TableRow> Tables, CollapsedRow? Collapsed, ElapsedInfo Elapsed)
 {
+    public string? GroupA { get; init; }
+    public string? GroupB { get; init; }
+    public string? GroupLabelA { get; init; }
+    public string? GroupLabelB { get; init; }
+    public IReadOnlyList<CaseRows> CaseRows { get; init; } = [];
     public bool VersionLabelsProvisional { get; init; }
     public string? VersionLabelNote { get; init; }
     public string VerdictBasis { get; init; } = "whole batch";
@@ -190,6 +195,12 @@ public sealed record OptimizationActionReference(long OperationId, string Side, 
 {
     public IReadOnlyDictionary<string, string> CaseIdsByFingerprint { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+public sealed record CaseRows(string CaseKey, string LabelA, string LabelB, long? RowsA, long? RowsB)
+{
+    public bool RowsAVaries { get; init; }
+    public bool RowsBVaries { get; init; }
 }
 
 public sealed record CaseOption(string Id, string Label, string Outcome);
