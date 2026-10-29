@@ -34,10 +34,16 @@ try {
  for(const label of ['A','B'])if(!await table.getByText(label,{exact:true}).count())throw Error(`badge ${label} missing`);
  await table.getByRole('radio',{name:'B v2'}).locator('..').click();
  await page.waitForURL(url=>url.searchParams.get('groupB')==='fp1' && url.searchParams.get('b')==='v2');
+ await page.getByText('A: Conditions A',{exact:true}).waitFor();
+ await page.getByText('B: Conditions B',{exact:true}).waitFor();
+ await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+ await page.getByRole('button',{name:'Copy summary'}).click();
+ const copied=await page.evaluate(()=>navigator.clipboard.readText());
+ for(const text of ['A: Conditions A (group: fp0)','B: Conditions B (group: fp1)'])if(!copied.includes(text))throw Error(`copied summary missing ${text}`);
  await page.getByText('Different conditions — approximate, not a verdict',{exact:true}).waitFor();
  if(errors.length)throw Error(errors.join('\n'));
  await page.screenshot({path:'plans/123-evidence/session8-shared-table.png',fullPage:true});
- console.log('PASS: one shared table v0–v3, A/B group badges, Rows column, cross-group banner; page errors 0');
+ console.log('PASS: one shared table v0–v3, A/B group badges, Rows column, cross-group banner, A/B labels and copied group identities; page errors 0');
 } catch (error) {
  console.error('page errors:', errors, 'body:', await page.locator('body').innerText());
  await page.screenshot({path:'plans/123-evidence/session8-diagnostic.png',fullPage:true});

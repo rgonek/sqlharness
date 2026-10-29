@@ -1,0 +1,16 @@
+
+> ui@0.0.0 test
+> vitest run ComparisonPanel optimizationMarkdown
+
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/342c/sqlharness/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  2 passed (2)
+      Tests  19 passed (19)
+   Start at  20:27:04
+   Duration  18.17s (import 47%, tests 30%, environment 10%, transform 9%, setup 4%)
+
+    Isolate  2 workers spawned · ~1.06s startup each (spawn + environment, per file)
+             at least ~1.06s faster with isolate: false — reuses workers across files instead of one per file
+

@@ -6,6 +6,6 @@ Windows gate attempt 1: `just verify -LogDirectory plans/123-evidence/reviews-an
 
 `pwsh -NoProfile ./scripts/format-changed.ps1 -Mode branch -BaseRef f5497956` failed WHITESPACE and FINALNEWLINE; repo `-Fix` corrected 8 files. Subsequent same check passed 29 files exit 0. Logs under reviews-and-checks.
 
-Synthetic browser fixture: PASS; [details and reproduction](verification.md). Diagnostics and screenshot retained. No live journal, actual server restart, installation or database.
+Synthetic browser fixture: PASS; [details and reproduction](../verification.md). Diagnostics and screenshot retained. No live journal, actual server restart, installation or database.
 
 Whole-branch Sol review remains pending. Linux unverified; no merge, push or publication.
