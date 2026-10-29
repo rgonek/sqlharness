@@ -60,6 +60,7 @@ the tool. Keep workload values out.
 | 2026-10-20 multi-statement read batch, function replaced by ranked CTE (unmapped) | optimization | adopt (proposed, not applied) | 1 | pre-measurement source context with parameter type table, bottleneck explanation, change description, case x metric table (before → after, equality), plan check, limits and uncovered branches, question for a human | ~15 / ~20 | yes (source context, equivalence reasoning for branches without data, untrusted-constraint risk) | 3 clarifications (overstated review coverage x2; unlabeled hypothesis) | external context; explicit review coverage; tool-known hidden work not on agent path; no API decision |
 | 2026-10-20 static-list aggregation (unmapped) | optimization | adopt (proposed, not applied) | 1 | source context, variant x metric table, equality, plans, limits, evidence links | ~7 / ~10 | yes (source applicability, callers, rewrite rationale, deferral) | 1 clarification; 1 interim metadata revision | external context and review coverage; no API decision |
 | 2026-10-23 multi-scope read-batch candidate (unmapped) | optimization | partial | 5 | scope x outcome table, exception list, metric trade-offs, equivalence, limits, evidence links | not recorded (derived metrics; exact statement audit not recorded) | yes (source applicability, sampling limits, adoption decision) | not recorded; parameter correction and coverage-driven outcome revisions identified | preserve outcome history and evidence scope; no API decision |
+| 2026-10-29 current-source ranking candidate (unmapped) | optimization | partial | 1 | source context, case x variant table, equivalence, IO-memory trade-off, rejected alternative, limits, evidence links | not recorded (approximate source counts below) | yes (source applicability, trade-off interpretation, deferred implementation) | 1 retro clarification | external context and explicit review coverage; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -903,3 +904,64 @@ Recorded against repository HEAD `fdc161d1`. Status: collecting observations, no
   [memory/compilation observation](../../observations/plan-memory-and-compilation-evidence.md).
 - **Operator decision:** Record the four accepted observations, commit and push documentation only.
   No plan, implementation, skill modification, installation or private-evidence publication approved.
+
+## 2026-10-29 - current-source ranking candidate with an IO-memory trade-off
+
+Kind: optimization · Outcome: partial · Scopes: 1 · System label: unmapped.
+
+- **Inspected state:** Repository HEAD `9c9d20b4`. Status: collecting observations, not approved for
+  implementation. The actual final chat report and preceding investigation calls were available;
+  this entry describes observed reporting, not a reconstructed or modeled report.
+- **Actual report:** The question was whether a query in current application source could be
+  optimized. The report identified the source method, caller conditions, fixed SQL construction
+  and typed parameter. It presented a case x variant logical-read table, repeated comparison and
+  equivalence results, an independent two-direction EXCEPT check, and a rejected alternative.
+  The selected candidate reduced IO without demonstrated elapsed improvement and introduced a
+  memory grant and row-estimation concern. It remained an unimplemented proposal.
+- **Report blocks:** Source context; case x variant results table; result equivalence; IO-memory
+  trade-off; rejected alternative; implementation decision; evidence links; measurement limits.
+  No human question or follow-up offer appeared in the final investigation report.
+- **Evidence and interpretation:** Comparisons supplied repeated read/time/CPU outcomes, stability
+  and multiset equality. Query rows supplied schema/uniqueness evidence, case selection and the
+  independent equivalence result. Artifact metrics and selected full plan hierarchies supplied
+  grants, estimates and repeated-lookup evidence. Source inspection supplied caller applicability
+  and parameter construction. The decision to defer implementation was authored interpretation.
+- **Content provenance:** Approximate statement/clause counts by source: 12 compare-backed,
+  2 query-backed, 2 artifact-backed, 2 application-code-backed and 3 agent interpretations.
+  These are overlapping qualitative counts, not a formal numeric-statement audit; the exact
+  journal-backed/total numeric-statement ratio is not recorded. Metrics and the table were
+  transcribed manually. Source applicability, caller conditions and the adoption decision have
+  no journal operation proving them. A journal-only rendering would omit that context.
+- **Corrections:** One retro clarification narrowed full-plan review to the largest tested case;
+  measurements and equivalence had covered all requested cases. The cause was incomplete coverage
+  wording, not an incorrect metric or demonstrated tool defect. Rejecting a later alternative
+  after measurement was ordinary investigation progress, not a correction. An invalid artifact
+  argument was corrected but did not change a delivered result claim.
+- **Dashboard usefulness:** Retain candidate identity, per-case evidence, the rejected alternative,
+  the IO-memory compromise, deferred implementation and explicit plan-review coverage. Actual
+  dashboard use and reconstruction benefit: not recorded. An operation reference establishes
+  available evidence, not completed review or a justified adoption decision.
+- **Observed workflow cost:** 14 MCP calls: capabilities, four queries, two comparisons and seven
+  artifact requests. The retained journal covered 12 successful operations; capabilities and one
+  rejected artifact request were outside that set. The output counters and selector/pagination
+  evidence are recorded in the [review-cost follow-up](../../observations/artifact-review-workflow-cost.md#follow-up-2026-10-29---selectors-and-repeated-statement-detail).
+- **Cost coverage:** Measured emitted bytes and byte-derived token estimates were inspected;
+  actual tokenization, inputs/discovery, source reads, orchestration, final prose and complete
+  workflow cost were not measured. Retro added two bounded read-only journal invocations and source
+  reads; its output/token cost is not recorded. No live SQL was rerun and no modeled replacement
+  workflow or token-saving claim is made.
+- **Diagnostic qualification:** Existing phase aggregates distinguished statement timing from
+  operation timing and exposed substantial residual phase cost in successful comparisons.
+  Causes and detailed event coverage remain unverified; see the
+  [phase follow-up](../../observations/mcp-timeout-layers.md#follow-up-2026-10-29---successful-comparisons-with-residual-phase-cost).
+  Full plan review was limited to the largest case. Cross-case cache/order sensitivity and endpoint
+  latency remained unmeasured. Cached compile metadata is not a per-execution compile benchmark.
+- **Optional API implications:** Preserve external source context, authored trade-offs and review
+  coverage beside journal metrics. Whether one shared report API serves these needs remains a
+  synthesis question; this entry neither selects an API change nor establishes readiness.
+- **Related coverage and cheapest next check:** Compare with earlier current-source observations
+  and the existing template. Plan 109 owns equivalent-evidence workflow research; its locally
+  integrated status does not prove the running producer build. An offline synthetic review task
+  can test which follow-up reads change a decision without losing required evidence.
+- **Operator decision:** Record all three proposed observations. No plan, code, skill change,
+  installation, commit, push or publication was authorized.

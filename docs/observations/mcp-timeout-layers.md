@@ -83,3 +83,37 @@ Cheapest next check: correlate the already retained execution phases with saved 
 before considering new diagnostics. Further attribution needs evidence that the existing records do
 not provide. No automatic retry, timeout increase, dashboard action or installation is proposed.
 See the [report entry](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-23---multi-scope-read-batch-candidate-and-changing-evidence-coverage).
+
+## Follow-up 2026-10-29 - successful comparisons with residual phase cost
+
+Inspected repository HEAD `9c9d20b4`. Status: collecting observations, not approved for implementation.
+The system label is unmapped. This follow-up concerns successful operations, not another timeout.
+
+Two bounded read-only journal invocations inspected the relevant investigation operations, output
+counters and existing phase aggregates. The first target-check query was connection-dominant.
+Both successful comparisons were execution-dominant, with a substantial residual `other` phase;
+connection and artifact phases were recorded separately. Reported statement execution time and
+whole-operation time are different scopes and must not be presented as interchangeable.
+
+[ActivityJournal.cs](../../src/SqlHarness.Core/Journal/ActivityJournal.cs), inspected at lines 201-215,
+stores `other` as the nonnegative remainder of operation duration after the named phase totals.
+It does not identify a particular activity or causal bottleneck. These observations do not show
+whether residual cost came from comparison, collection, serialization, scheduling or another path.
+The running build's exact provenance was not established by the inspected source HEAD.
+
+Detailed connection/artifact events were not read: the aggregates were sufficient to qualify the
+timing claim and did not warrant attributing delay to authentication, network or artifact storage.
+Availability of detailed historical events remains unverified; current settings are not proof of
+earlier capture. No live SQL, dashboard API or token file was accessed for this retrospective.
+
+Classification: diagnostic observation with unresolved cause, not a demonstrated runtime or
+infrastructure defect. Confidence is high in the phase patterns and limited for causality. No
+operation identifiers, event timestamps, target names or workload timings are retained here.
+
+[Plan 068](../../plans/068-operation-phase-timings-and-diagnostics.md) owns phase instrumentation;
+the existing timeout observation remains applicable to interpretation boundaries. Question for
+later synthesis: does repeated residual-phase cost justify finer attribution for successful
+comparisons? The cheapest next check is to correlate existing records with the source instrumentation
+boundaries, then use an offline synthetic characterization if needed. No retry, timeout increase,
+new instrumentation or implementation is selected. See the
+[report observation](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-29---current-source-ranking-candidate-with-an-io-memory-trade-off).

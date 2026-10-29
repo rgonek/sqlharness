@@ -59,3 +59,51 @@ respectively. Do not remove useful commands merely to reduce command count.
 Potential directions such as selecting the relevant result set or reusing reviewed evidence are
 questions, not an implementation checklist. No default-limit increase, API change, new safeguard or
 skill edit is selected by this record.
+
+## Follow-up 2026-10-29 - selectors and repeated statement detail
+
+Inspected repository HEAD `9c9d20b4`. Status: collecting observations, not approved for implementation.
+The earlier observation remains unchanged. The system label is unmapped.
+
+A current-source optimization investigation made 14 MCP calls: one capabilities discovery, four
+queries, two comparisons and seven artifact requests. The bounded read-only journal review found
+12 successful operations: four queries, two comparisons and six artifact reads. Capabilities and
+the rejected artifact arguments were outside that retained set.
+
+One artifact request used `section: statements` with plan selectors and returned `safety_rejected`
+in validation: `Plan selectors are only valid for the plan section.` Removing the selectors allowed
+the read. Classification: agent slip, not a demonstrated safety or pagination defect.
+[ArtifactReader.cs](../../src/SqlHarness.Core/ArtifactReader.cs), inspected at line 414, implements
+this restriction; the variant description in
+[McpToolCatalog.cs](../../src/SqlHarness.Mcp/Tools/McpToolCatalog.cs) identifies it as a plan selector.
+
+The corrected statements read and its advancing continuation exposed repeated operator and diagnostic
+details after a metrics read had already supplied the decision-relevant grant and compile information.
+The first statements response disclosed omitted records and a continuation; the agent followed it.
+Outer orchestration also clipped displayed output. That clipping is a separate agent/output-budget
+issue, not evidence that SQLHarness lost saved records. Complete statement retrieval was possible;
+its necessity for the decision and the avoidable fraction of this cost were not measured.
+
+The 12 retained operations emitted 76,522 bytes, with 19,135 byte-derived estimated tokens. Artifact
+reads emitted 61,345 bytes, approximately 80 percent of that output. These are tool-output counters,
+not actual model tokenization, business-workload measurements or complete session cost. Input,
+discovery, source reads, orchestration and final prose are outside coverage; the rejected response
+is also outside these byte totals. Do not assume every MCP representation reached model context.
+Two read-only journal invocations belonged to the retrospective, separately from investigation calls;
+their output/token cost and the retrospective's source-discovery cost were not measured.
+
+Confidence is high in the observed validation result, pagination and retained counters. A possible
+UX gap is the amount of repeated evidence an agent requests when compact metrics already answer
+its question; the best interface or safeguard remains unresolved. Negative candidate performance
+was useful evidence and is not classified as friction.
+
+Existing coverage: [plan 109](../../plans/109-artifact-review-workflow-study.md) is recorded as research
+complete and locally integrated, with live acceptance unverified. It already studies accurate
+selectors, compact discovery and equivalent-evidence cost. Local source status does not identify
+the running build. No duplicate plan or additional skill prose is selected here.
+
+Question for later synthesis: which additional statement reads change the decision after metrics
+and a complete selected plan have been inspected? The cheapest useful check is an offline synthetic
+saved-artifact task comparing emitted bytes and evidence completeness with accurate existing
+selectors. This is a research question, not an approved implementation or a claim of token savings.
+See the [report observation](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-29---current-source-ranking-candidate-with-an-io-memory-trade-off).
