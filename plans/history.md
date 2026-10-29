@@ -4,9 +4,9 @@ Compare list classification repair is locally integrated via `1742bd3b`, with th
 
 # Plan history
 
-## Plan 123 feature branch — 2026-10-29
+## Plan 123 locally integrated — 2026-10-29
 
-Plan [123](123-shared-version-table-across-conditions.md) is DONE on `plan-123`. Terra medium implemented; Terra high approved all task reviews; Sol low approved the whole-branch fix scoped review. Final product `6aa51e26` passed Windows `just verify` (UI 448, Core 4792 / 11 skipped, MCP 535 / 4 skipped), branch C# format passed for 29 files, and synthetic browser checks passed. The sole Important final finding (missing A/B conditions context in display/export) was fixed and re-reviewed. Accepted minor coverage/diagnostic issues and initial failed checks remain in the [evidence](123-evidence/verification.md). No merge, push, installation, Linux or live-journal acceptance.
+Plan [123](123-shared-version-table-across-conditions.md) is DONE and locally integrated into `main` by fast-forward to `7ca0cfbd`. Terra medium implemented; Terra high approved all task reviews; Sol low approved the whole-branch fix scoped review. Final product `6aa51e26` passed Windows `just verify` (UI 448, Core 4792 / 11 skipped, MCP 535 / 4 skipped), branch C# format passed for 29 files, and synthetic browser checks passed. The sole Important final finding (missing A/B conditions context in display/export) was fixed and re-reviewed. Accepted minor coverage/diagnostic issues and initial failed checks remain in the [evidence](123-evidence/verification.md). Integrated product/test/script tree is identical to verified `6aa51e26`; no redundant gate. [Integration evidence](123-evidence/integration.md). No push, installation, Linux or live-journal acceptance.
 
 ## Plan 104 locally integrated — 2026-10-24
 
