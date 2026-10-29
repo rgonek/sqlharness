@@ -37,7 +37,7 @@ internal static class DashboardProfiles
         try
         {
             bytes = File.ReadAllBytes(path);
-            profiles = ProfileStore.Parse(bytes);
+            profiles = ProfileStore.ParseForEditing(bytes);
         }
         catch (Exception exception) when (exception is SqlHarnessSafetyException or IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {

@@ -84,6 +84,15 @@ public static class ProfileStore
         return profiles;
     }
 
+    public static IReadOnlyDictionary<string, TargetProfile> ParseForEditing(ReadOnlyMemory<byte> bytes)
+    {
+        var profiles = Parse(bytes);
+        foreach (var profile in profiles.Values)
+            if (ProfileWriter.ValidateProfile(profile) is not null)
+                throw new JsonException("The profile document is invalid.");
+        return profiles;
+    }
+
     internal static void ValidateMutations(TargetProfile profile)
     {
         if (profile.Mutations is not { } mutations)

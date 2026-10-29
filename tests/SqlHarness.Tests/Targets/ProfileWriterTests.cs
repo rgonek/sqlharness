@@ -1,3 +1,4 @@
+using System.Security.AccessControl;
 using System.Text;
 
 using SqlHarness.Core.Targets;
@@ -185,6 +186,56 @@ public sealed class ProfileWriterTests
             Assert.Equal(ProfileWriteStatus.Invalid, result.Status);
             Assert.Equal("mutations", result.Error?.Field);
             Assert.Equal(before, File.ReadAllBytes(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData("\"auth\":\"bogus\",\"database\":\"d\",\"vars\":{}")]
+    [InlineData("\"auth\":\"integrated\",\"database\":\"d\",\"vars\":{},\"sslMode\":\"require\"")]
+    [InlineData("\"auth\":\"integrated\",\"database\":\"d\",\"vars\":{\"v\":\"[\"}")]
+    [InlineData("\"auth\":\"integrated\",\"database\":\"d_{missing}\",\"vars\":{}")]
+    public void Invalid_sibling_blocks_save_and_preserves_bytes(string invalidFields)
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"},\"b\":{\"server\":\"s\"," + invalidFields + "}}");
+            var before = File.ReadAllBytes(path);
+            var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(before), new("new", "d", new Dictionary<string, string>(), "integrated"));
+            Assert.Equal(ProfileWriteStatus.Invalid, result.Status);
+            Assert.Equal(before, File.ReadAllBytes(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Save_preserves_restricted_file_permissions()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
+            if (OperatingSystem.IsWindows())
+            {
+                var info = new FileInfo(path);
+                var security = info.GetAccessControl();
+                security.SetAccessRuleProtection(true, false);
+                var identity = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+                security.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(identity, System.Security.AccessControl.FileSystemRights.FullControl, System.Security.AccessControl.AccessControlType.Allow));
+                info.SetAccessControl(security);
+                var original = info.GetAccessControl().GetSecurityDescriptorSddlForm(System.Security.AccessControl.AccessControlSections.Access);
+                var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(File.ReadAllBytes(path)), new("new", "d", new Dictionary<string, string>(), "integrated"));
+                Assert.Equal(ProfileWriteStatus.Success, result.Status);
+                Assert.Equal(original, info.GetAccessControl().GetSecurityDescriptorSddlForm(System.Security.AccessControl.AccessControlSections.Access));
+            }
+            else
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(File.ReadAllBytes(path)), new("new", "d", new Dictionary<string, string>(), "integrated"));
+                Assert.Equal(ProfileWriteStatus.Success, result.Status);
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+            }
         }
         finally { File.Delete(path); }
     }

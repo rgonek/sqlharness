@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.AccessControl;
 using System.Text.Json;
 
 using SqlHarness.Core.Auth;
@@ -37,7 +38,7 @@ public static class ProfileWriter
                 try { original = File.ReadAllBytes(path); }
                 catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { return new(ProfileWriteStatus.Invalid); }
                 IReadOnlyDictionary<string, TargetProfile> current;
-                try { current = ProfileStore.Parse(original); }
+                try { current = ProfileStore.ParseForEditing(original); }
                 catch (Exception e) when (e is JsonException or NotSupportedException or SqlHarnessSafetyException) { return new(ProfileWriteStatus.Invalid); }
                 if (Revision(original) != expectedRevision) return new(ProfileWriteStatus.Conflict);
                 if (!current.ContainsKey(name)) return new(ProfileWriteStatus.NotFound);
@@ -61,13 +62,15 @@ public static class ProfileWriter
                 replacement.CopyTo(candidate.AsSpan((int)start));
                 original.AsSpan((int)end).CopyTo(candidate.AsSpan((int)start + replacement.Length));
                 IReadOnlyDictionary<string, TargetProfile> savedProfiles;
-                try { savedProfiles = ProfileStore.Parse(candidate); }
+                try { savedProfiles = ProfileStore.ParseForEditing(candidate); }
                 catch (Exception e) when (e is JsonException or NotSupportedException or SqlHarnessSafetyException) { return new(ProfileWriteStatus.Invalid); }
                 temp = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, $".sqlharness-{Guid.NewGuid():N}.tmp");
-                using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { onTempCreated?.Invoke(); stream.Write(candidate); stream.Flush(true); }
+                using (var stream = CreateProtectedTemp(path, temp)) { onTempCreated?.Invoke(); stream.Write(candidate); stream.Flush(true); }
+                if (!OperatingSystem.IsWindows())
+                    File.SetUnixFileMode(temp, File.GetUnixFileMode(path));
                 if (Revision(File.ReadAllBytes(path)) != expectedRevision) return new(ProfileWriteStatus.Conflict);
                 cancellationToken.ThrowIfCancellationRequested();
-                File.Move(temp, path, true);
+                File.Replace(temp, path, null);
                 temp = null;
                 return new(ProfileWriteStatus.Success, Revision(candidate), savedProfiles);
             }
@@ -76,7 +79,23 @@ public static class ProfileWriter
         }
     }
 
-    private static ProfileFieldError? ValidateProfile(TargetProfile profile)
+    private static FileStream CreateProtectedTemp(string path, string temp)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var security = new FileInfo(path).GetAccessControl(AccessControlSections.Access);
+            return new FileInfo(temp).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None, 4096, FileOptions.None, security);
+        }
+        return new FileStream(temp, new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.None,
+            UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+        });
+    }
+
+    internal static ProfileFieldError? ValidateProfile(TargetProfile profile)
     {
         if (profile is null) return new("profile", "Profile is required.");
         if (string.IsNullOrWhiteSpace(profile.Server)) return new("server", "Server is required.");

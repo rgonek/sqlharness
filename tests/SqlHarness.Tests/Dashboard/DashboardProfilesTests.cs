@@ -196,6 +196,19 @@ public sealed class DashboardProfilesTests
     }
 
     [Fact]
+    public async Task Invalid_sibling_is_not_offered_for_editing()
+    {
+        using var home = new TempHome();
+        File.WriteAllText(TargetsPath(home), "{\"p\":{\"server\":\"s\",\"database\":\"d\",\"auth\":\"bogus\",\"vars\":{}}}");
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (_, client) = dashboard;
+        var response = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement;
+        Assert.Equal("invalid", response.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, response.GetProperty("revision").ValueKind);
+        Assert.Empty(response.GetProperty("profiles").EnumerateArray());
+    }
+
+    [Fact]
     public async Task Missing_and_invalid_files_return_empty_lists_without_file_content()
     {
         using var home = new TempHome();
