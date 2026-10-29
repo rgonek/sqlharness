@@ -491,7 +491,8 @@ public static partial class DashboardServer
         var comparison = (groupA.Fingerprint == groupB.Fingerprint
             ? OptimizationComparer.Compare(scopedA, scopedEvidence, selectedA, selectedB, selectedCase ?? "all", aggregate, view)
             : OptimizationComparer.CompareAcrossGroups(scopedA, scopedB, scopedEvidence, selectedA, selectedB, selectedCase ?? "all", aggregate, view))
-            with { VersionLabelsProvisional = section.VersionLabelsProvisional, VersionLabelNote = section.VersionLabelNote };
+            with
+        { VersionLabelsProvisional = section.VersionLabelsProvisional, VersionLabelNote = section.VersionLabelNote };
         if (selectedCase is not null && selectedCase != "all" && !comparison.Cases.Any(item => item.Id == selectedCase))
             return Results.NotFound();
         return Results.Json(comparison, json);

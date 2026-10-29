@@ -24,7 +24,10 @@ public sealed class DashboardContractTests
             "Different conditions — approximate, not a verdict", [], "all", "sum", "1 of 1 cases paired", null, [], null,
             new ElapsedInfo(null, null, null, true))
         {
-            GroupA = "group-a", GroupB = "group-b", GroupLabelA = "A", GroupLabelB = "B",
+            GroupA = "group-a",
+            GroupB = "group-b",
+            GroupLabelA = "A",
+            GroupLabelB = "B",
             CaseRows = [new CaseRows("key", "left", "right", 1, null) { RowsAVaries = true }],
         };
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(comparison, Json));

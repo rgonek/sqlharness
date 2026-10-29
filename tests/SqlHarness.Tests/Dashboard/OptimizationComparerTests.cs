@@ -771,12 +771,15 @@ public sealed class OptimizationComparerTests
     [Fact]
     public void Across_groups_pairs_only_varying_keys_and_never_claims_verdict()
     {
-        var left = MeasureEvidence(215, "h0", 100) with {
+        var left = MeasureEvidence(215, "h0", 100) with
+        {
             Cases = [new CompareCaseEvidence("0", "A", null, null, null) { VaryingFingerprint = "key" }],
             Metrics = [Metric("measure", "0", 100) with { RowsReturned = 1, RowsReturnedVaries = true }],
         };
-        var right = MeasureEvidence(216, "h1", 50) with {
-            Fingerprint = "other", Cases = [new CompareCaseEvidence("0", "B", null, null, null) { VaryingFingerprint = "key" }, new CompareCaseEvidence("1", "extra", null, null, null) { VaryingFingerprint = "other" }],
+        var right = MeasureEvidence(216, "h1", 50) with
+        {
+            Fingerprint = "other",
+            Cases = [new CompareCaseEvidence("0", "B", null, null, null) { VaryingFingerprint = "key" }, new CompareCaseEvidence("1", "extra", null, null, null) { VaryingFingerprint = "other" }],
             Metrics = [Metric("measure", "0", 50) with { RowsReturned = 1 }, Metric("measure", "1", 30)],
         };
         var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" }, [left, right], "v0", "v1", "all", "sum");
@@ -791,12 +794,17 @@ public sealed class OptimizationComparerTests
     [Fact]
     public void Across_groups_pair_four_of_five_varying_cases()
     {
-        var left = MeasureEvidence(215, "h0", 100) with {
+        var left = MeasureEvidence(215, "h0", 100) with
+        {
             Cases = Enumerable.Range(0, 4).Select(i => new CompareCaseEvidence(i.ToString(), $"A{i}", null, null, null) { VaryingFingerprint = $"key{i}" }).ToArray(),
-            Metrics = Enumerable.Range(0, 4).Select(i => Metric("measure", i.ToString(), 100)).ToArray() };
-        var right = MeasureEvidence(216, "h1", 50) with { Fingerprint = "other",
+            Metrics = Enumerable.Range(0, 4).Select(i => Metric("measure", i.ToString(), 100)).ToArray()
+        };
+        var right = MeasureEvidence(216, "h1", 50) with
+        {
+            Fingerprint = "other",
             Cases = Enumerable.Range(0, 5).Select(i => new CompareCaseEvidence(i.ToString(), $"B{i}", null, null, null) { VaryingFingerprint = $"key{i}" }).ToArray(),
-            Metrics = Enumerable.Range(0, 5).Select(i => Metric("measure", i.ToString(), 50)).ToArray() };
+            Metrics = Enumerable.Range(0, 5).Select(i => Metric("measure", i.ToString(), 50)).ToArray()
+        };
         var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" }, [left, right], "v0", "v1", "all", "sum");
         Assert.Equal(4, result.Cases.Count);
         Assert.Equal("4 of 5 cases paired", result.CoverageLabel);
@@ -825,13 +833,21 @@ public sealed class OptimizationComparerTests
     [Fact]
     public void Across_groups_rejects_ambiguous_keys_and_keeps_missing_rows_unknown()
     {
-        var left = MeasureEvidence(215, "h0", 100) with {
+        var left = MeasureEvidence(215, "h0", 100) with
+        {
             Cases = [new CompareCaseEvidence("0", "A", null, null, null) { VaryingFingerprint = "duplicate" },
                 new CompareCaseEvidence("1", "B", null, null, null) { VaryingFingerprint = "duplicate" },
-                new CompareCaseEvidence("2", "C", null, null, null) { VaryingFingerprint = "unique" }], Metrics = [] };
-        var right = MeasureEvidence(216, "h1", 50) with { Fingerprint = "other", Cases = [
+                new CompareCaseEvidence("2", "C", null, null, null) { VaryingFingerprint = "unique" }],
+            Metrics = []
+        };
+        var right = MeasureEvidence(216, "h1", 50) with
+        {
+            Fingerprint = "other",
+            Cases = [
             new CompareCaseEvidence("0", "A", null, null, null) { VaryingFingerprint = "duplicate" },
-            new CompareCaseEvidence("2", "C", null, null, null) { VaryingFingerprint = "unique" }], Metrics = [] };
+            new CompareCaseEvidence("2", "C", null, null, null) { VaryingFingerprint = "unique" }],
+            Metrics = []
+        };
         var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" }, [left, right], "v0", "v1", "all", "sum");
         var row = Assert.Single(result.CaseRows);
         Assert.Equal("unique", row.CaseKey);
