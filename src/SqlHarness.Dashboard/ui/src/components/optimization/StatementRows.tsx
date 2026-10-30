@@ -1,4 +1,5 @@
 import type { MetricAvailabilityPair, StatementRow } from "@/api/types"
+import { executionLabel } from "./statementLabels"
 import { HiddenWorkFlag } from "./HiddenWorkFlag"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -34,15 +35,6 @@ export function MetricReasons({ availability, measured = false }: { availability
     }
   }
   return <>{[...groups].map(([reason, metrics]) => <span key={reason} className="text-xs text-muted-foreground">{metrics.join(", ")}: {reason}</span>)}</>
-}
-
-export function executionLabel(row: StatementRow, measured = false): string | null {
-  if (row.executionsBefore === undefined && row.executionsAfter === undefined)
-    return row.executions == null ? null : `${number(row.executions)} ${row.executions === 1 ? "execution" : "executions"}`
-  const before = row.executionsBefore ?? null
-  const after = row.executionsAfter ?? null
-  if (measured) return after == null ? null : `${number(after)} ${after === 1 ? "execution" : "executions"}`
-  return before == null && after == null ? null : `${number(before)} → ${number(after)} executions`
 }
 
 export function StatementMetrics({ row, measured = false }: { row: StatementRow; measured?: boolean }) {

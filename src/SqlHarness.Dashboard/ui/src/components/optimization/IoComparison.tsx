@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { IoExtraMetric, IoExtras } from "@/lib/ioComparison"
 import { HiddenWorkFlag } from "./HiddenWorkFlag"
-import { executionLabel, MetricReasons, StatementMetrics } from "./StatementRows"
+import { MetricReasons, StatementMetrics } from "./StatementRows"
+import { executionLabel } from "./statementLabels"
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 
