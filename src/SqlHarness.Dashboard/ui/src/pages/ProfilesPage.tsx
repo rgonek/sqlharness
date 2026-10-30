@@ -64,7 +64,7 @@ export function ProfilesPage() {
     <aside className="flex min-w-0 flex-col gap-3" aria-label="Profiles">
       <h2 className="text-sm font-medium">Profiles</h2>
       <Input disabled={saving} aria-label="Search profiles" placeholder="Search profiles" value={search} onChange={event => { if (!editing || discard()) { leaveEdit(); setSearch(event.target.value) } }} />
-      <div className="flex flex-col gap-1">{filtered.map(item => <Button disabled={saving} key={item.name} variant={profile?.name === item.name ? "secondary" : "ghost"} className="h-auto min-w-0 flex-col items-stretch gap-1 px-3 py-2 text-left" aria-pressed={profile?.name === item.name} onClick={() => { if (!editing || item.name === profile?.name || discard()) { if (item.name !== profile?.name) leaveEdit(); setSelected(item.name) } }}>
+      <div className="flex flex-col gap-1">{filtered.map(item => <Button disabled={saving} key={item.name} variant={profile?.name === item.name ? "secondary" : "ghost"} className="h-auto min-w-0 flex-col items-stretch gap-1 px-3 py-2 text-left" aria-pressed={profile?.name === item.name} onClick={() => { if (!editing || item.name === editing.profile.name || discard()) { if (item.name !== editing?.profile.name) leaveEdit(); setSelected(item.name) } }}>
         <span className="flex items-center justify-between gap-2"><span className="truncate">{item.name}</span><span className="text-muted-foreground">{item.environment ?? "—"}</span></span>
         <span className="truncate text-xs font-normal text-muted-foreground">{item.engine} · {item.server}</span>
       </Button>)}</div>

@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 const {chromium}=createRequire(path.resolve(process.env.PLAYWRIGHT_MODULE))('playwright');
-const browser=await chromium.launch({headless:true}); const page=await browser.newPage(); page.setDefaultTimeout(120000); page.on('console',m=>console.log('CONSOLE',m.type(),m.text())); page.on('requestfailed',r=>console.log('REQUEST FAILED',r.url(),r.failure()?.errorText)); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
+const browser=await chromium.launch({headless:true,...(process.env.BROWSER_EXECUTABLE ? {executablePath:process.env.BROWSER_EXECUTABLE} : {})}); const page=await browser.newPage(); page.setDefaultTimeout(120000); page.on('console',m=>console.log('CONSOLE',m.type(),m.text())); page.on('requestfailed',r=>console.log('REQUEST FAILED',r.url(),r.failure()?.errorText)); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
 const editableProfile={server:'host',database:'db',vars:{},auth:'sql',sqlUser:'reader',passwordEnvVar:'PASS',engine:'sqlserver',environment:'production',mutations:{mode:null,writer:null}};
 const view={name:'pg',engine:'sqlserver',server:'host',database:'db',auth:'sql',sqlUser:'reader',passwordEnvVar:'PASS',sslMode:null,trustServerCertificate:false,tls:'verify',rootCertificate:null,vars:[],environment:'production',mutationMode:'yolo',mutationWriterKind:null,acknowledgeProductionYolo:false,configuredMode:null,effectiveMode:'yolo',modeSource:'global',writerConfigured:false,productionAcknowledgementRequired:true,editableProfile};
 let conflict=true, submitted=[];
