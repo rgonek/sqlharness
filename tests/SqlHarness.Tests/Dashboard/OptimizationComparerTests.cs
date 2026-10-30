@@ -1048,6 +1048,44 @@ public sealed class OptimizationComparerTests
         Assert.Single(result.CaseRows);
     }
 
+    [Fact]
+    public void Batch_label_keeps_known_totals_when_shared_is_unknown()
+    {
+        var result = Compare([Evidence(214, "h1", "h2", (100, 90))], "v1", "v2");
+        Assert.Equal("whole batch: 100 → 90 reads", result.WholeBatch.Label);
+    }
+
+    [Theory]
+    [InlineData("sum", 30, 3, 5, 7, 9, 11, 13, 15)]
+    [InlineData("mean", 15, 2, 3, 4, 5, 6, 7, 8)]
+    public void Stored_table_counters_aggregate_case_representatives(string mode, long data, long scans, long physical,
+        long pageServer, long readAhead, long lob, long lobPhysical, long lobReadAhead)
+    {
+        var evidence = Evidence(214, "h1", "h2", (100, 90), (100, 90)) with
+        {
+            Metrics = [
+                Metric("baseline", "0", 100) with { TableRows = [new CompareTableIoEvidence("Orders", 10, 4, 1) { PhysicalReads = 2, PageServerReads = 3, ReadAheadReads = 4, LobPhysicalReads = 6, LobReadAheadReads = 7 }] },
+                Metric("baseline", "1", 100) with { TableRows = [new CompareTableIoEvidence("Orders", 20, 7, 2) { PhysicalReads = 3, PageServerReads = 4, ReadAheadReads = 5, LobPhysicalReads = 7, LobReadAheadReads = 8 }] },
+                Metric("candidate", "0", 90) with { TableRows = [new CompareTableIoEvidence("Orders", 0, 0, 0) { PhysicalReads = 0, PageServerReads = 0, ReadAheadReads = 0, LobPhysicalReads = 0, LobReadAheadReads = 0 }] },
+                Metric("candidate", "1", 90) with { TableRows = [new CompareTableIoEvidence("Orders", 1, null, 0) { PhysicalReads = null, PageServerReads = 0, ReadAheadReads = 0, LobPhysicalReads = 0, LobReadAheadReads = 0 }] },
+            ],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", mode);
+        var row = Assert.Single(result.Tables);
+        Assert.Equal(data, row.DataLogicalReadsBefore);
+        Assert.Equal(scans, row.ScansBefore);
+        Assert.Equal(physical, row.PhysicalReadsBefore);
+        Assert.Equal(pageServer, row.PageServerReadsBefore);
+        Assert.Equal(readAhead, row.ReadAheadReadsBefore);
+        Assert.Equal(lob, row.LobLogicalReadsBefore);
+        Assert.Equal(lobPhysical, row.LobPhysicalReadsBefore);
+        Assert.Equal(lobReadAhead, row.LobReadAheadReadsBefore);
+        Assert.Equal(mode == "sum" ? 41 : 21, row.ReadsBefore);
+        Assert.Null(row.ReadsAfter);
+        Assert.Null(row.PhysicalReadsAfter);
+        Assert.Equal(0, row.PageServerReadsAfter);
+    }
+
     private static OptimizationComparison Compare(IReadOnlyList<CompareEvidence> evidence, string a, string b) =>
         OptimizationComparer.Compare(Group("h1", "h2", "h3"), evidence, a, b, "all", "sum");
 

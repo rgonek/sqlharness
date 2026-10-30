@@ -1,6 +1,6 @@
 import type { OperationDetail, OptimizationActionReference, OptimizationComparison, VariantDetail } from "@/api/types"
 
-export type IoExtraMetric = "physicalReads" | "readAheadReads" | "lobLogicalReads" | "lobPhysicalReads" | "lobReadAheadReads"
+export type IoExtraMetric = "physicalReads" | "pageServerReads" | "readAheadReads" | "lobLogicalReads" | "lobPhysicalReads" | "lobReadAheadReads"
 export type IoExtras = { before: Record<string, Partial<Record<IoExtraMetric, number | null>>>; after: Record<string, Partial<Record<IoExtraMetric, number | null>>> }
 
 export function selectedVariants(detail: OperationDetail | undefined, action: OptimizationActionReference | null | undefined, comparison: OptimizationComparison): VariantDetail[] {
@@ -20,7 +20,7 @@ export function aggregate(values: (number | null)[], mean: boolean): number | nu
 
 export function tableExtras(variants: VariantDetail[], mean: boolean): IoExtras["before"] {
   const names = [...new Set(variants.flatMap(variant => variant.tableIo.map(row => row.table)))]
-  const metrics: IoExtraMetric[] = ["physicalReads", "readAheadReads", "lobLogicalReads", "lobPhysicalReads", "lobReadAheadReads"]
+  const metrics: IoExtraMetric[] = ["physicalReads", "pageServerReads", "readAheadReads", "lobLogicalReads", "lobPhysicalReads", "lobReadAheadReads"]
   return Object.fromEntries(names.map(name => [name, Object.fromEntries(metrics.map(metric => [metric, aggregate(variants.map(variant => {
     const rows = variant.tableIo.filter(row => row.table === name)
     return rows.length ? aggregate(rows.map(row => row[metric]), false) : null

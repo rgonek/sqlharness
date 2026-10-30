@@ -125,8 +125,8 @@ public static class OptimizationComparer
         var batchBefore = AggregateReads(before.Metrics, selectedIds, normalizedAggregate);
         var batchAfter = AggregateReads(after.Metrics, selectedIds, normalizedAggregate);
         var wholeBatch = new WholeBatchLine(batchBefore, batchAfter, sharedBefore,
-            batchBefore is { } wb && batchAfter is { } wa && sharedBefore is { } sh
-                ? $"whole batch: {wb.ToString(CultureInfo.InvariantCulture)} → {wa.ToString(CultureInfo.InvariantCulture)} reads (shared statements: {sh.ToString(CultureInfo.InvariantCulture)})"
+            batchBefore is { } wb && batchAfter is { } wa
+                ? $"whole batch: {wb.ToString(CultureInfo.InvariantCulture)} → {wa.ToString(CultureInfo.InvariantCulture)} reads" + (sharedBefore is { } sh ? $" (shared statements: {sh.ToString(CultureInfo.InvariantCulture)})" : "")
                 : "whole batch: reads unavailable")
         { SharedBefore = sharedBefore, SharedAfter = sharedAfter };
         wholeBatch = wholeBatch with
@@ -711,7 +711,23 @@ public static class OptimizationComparer
             var scansBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, Scans);
             var scansAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, Scans);
             return new TableRow(table, scansBefore, scansAfter, readsBefore, readsAfter,
-                Change(readsBefore, readsAfter));
+                Change(readsBefore, readsAfter))
+            {
+                DataLogicalReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.LogicalReads),
+                DataLogicalReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.LogicalReads),
+                PhysicalReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.PhysicalReads),
+                PhysicalReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.PhysicalReads),
+                PageServerReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.PageServerReads),
+                PageServerReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.PageServerReads),
+                ReadAheadReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.ReadAheadReads),
+                ReadAheadReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.ReadAheadReads),
+                LobLogicalReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.LobLogicalReads),
+                LobLogicalReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.LobLogicalReads),
+                LobPhysicalReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.LobPhysicalReads),
+                LobPhysicalReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.LobPhysicalReads),
+                LobReadAheadReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.LobReadAheadReads),
+                LobReadAheadReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.LobReadAheadReads),
+            };
         })
         .OrderByDescending(row => AbsoluteChange(row.ReadsBefore, row.ReadsAfter))
         .ThenBy(row => row.Table, StringComparer.OrdinalIgnoreCase).ToArray();

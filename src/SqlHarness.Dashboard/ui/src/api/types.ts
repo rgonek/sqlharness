@@ -204,7 +204,7 @@ export type OptimizationComparison = {
   selectedCase: string; aggregate: string; coverageLabel: string; statementMetricsUnavailableReason?: string | null
   versionLabelsProvisional?: boolean; versionLabelNote?: string | null
   mixed: { better: number; worse: number; worstCaseLabel: string; worstChangePercent: number } | null
-  tables: { table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
+  tables: { table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string; dataLogicalReadsBefore?: number | null; dataLogicalReadsAfter?: number | null; physicalReadsBefore?: number | null; physicalReadsAfter?: number | null; pageServerReadsBefore?: number | null; pageServerReadsAfter?: number | null; readAheadReadsBefore?: number | null; readAheadReadsAfter?: number | null; lobLogicalReadsBefore?: number | null; lobLogicalReadsAfter?: number | null; lobPhysicalReadsBefore?: number | null; lobPhysicalReadsAfter?: number | null; lobReadAheadReadsBefore?: number | null; lobReadAheadReadsAfter?: number | null }[]
   collapsed: { count: number; label: string } | null
   elapsed: { beforeMs: number | null; afterMs: number | null; policyVerdict: string | null; differentRun: boolean }
   tableIoUnavailable?: boolean; cpuBeforeMs?: number | null; cpuAfterMs?: number | null

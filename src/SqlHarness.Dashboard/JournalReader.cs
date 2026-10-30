@@ -24,7 +24,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         long? MetricId, string? Variant, string? CaseId, string? CaseLabel, long? LogicalReadsMedian, long? ElapsedMedianMs,
         long? CpuMedianMs, long? PgSharedHit, long? PgSharedRead, long? PgSharedDirtied, long? PgSharedWritten,
         long? PgTempRead, long? PgTempWritten,
-        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, int OmittedStatements, int? ResultSets, long? RowsReturned);
+        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, long? PhysicalReads, long? PageServerReads, long? ReadAheadReads, long? LobPhysicalReads, long? LobReadAheadReads, int OmittedStatements, int? ResultSets, long? RowsReturned);
 
     private sealed record StoredStatement(long Id, long OperationId, string Variant, string? ParameterSet, string CaseId, int Ordinal, string Key,
         int Occurrence, string Hash, string? Text, long? Executions, string? PlanHash, string Status,
@@ -557,7 +557,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                    m.id, m.variant, m.case_id, m.case_label, m.logical_reads_median, m.elapsed_ms_median,
                    m.cpu_ms_median, m.pg_shared_hit, m.pg_shared_read, m.pg_shared_dirtied,
                    m.pg_shared_written, m.pg_temp_read, m.pg_temp_written,
-                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, COALESCE(m.omitted_statements, 0), m.result_sets, m.rows_returned
+                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, t.physical_reads, t.page_server_reads, t.read_ahead_reads, t.lob_physical_reads, t.lob_read_ahead_reads, COALESCE(m.omitted_statements, 0), m.result_sets, m.rows_returned
             FROM operations o JOIN sessions s ON s.id = o.session_id
             LEFT JOIN operation_metrics m ON m.operation_id = o.id
             LEFT JOIN operation_table_io t ON t.metric_id = m.id
@@ -576,8 +576,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             r.IsDBNull(16) ? null : r.GetInt64(16), NullableString(r, 17), NullableString(r, 18), NullableString(r, 19),
             NullableLong(r, 20), NullableLong(r, 21), NullableLong(r, 22), NullableLong(r, 23), NullableLong(r, 24),
             NullableLong(r, 25), NullableLong(r, 26), NullableLong(r, 27), NullableLong(r, 28), NullableString(r, 29),
-            NullableLong(r, 30), NullableLong(r, 31), NullableLong(r, 32), r.GetInt32(33),
-            r.IsDBNull(34) ? null : r.GetInt32(34), NullableLong(r, 35)));
+            NullableLong(r, 30), NullableLong(r, 31), NullableLong(r, 32), NullableLong(r, 33), NullableLong(r, 34), NullableLong(r, 35), NullableLong(r, 36), NullableLong(r, 37), r.GetInt32(38),
+            r.IsDBNull(39) ? null : r.GetInt32(39), NullableLong(r, 40)));
 
         var statementsByMetric = LoadStoredStatements(connection, rows.Select(row => row.OperationId).Distinct(), storeSensitive)
             .GroupBy(row => (row.OperationId, row.Variant, row.CaseId))
@@ -593,7 +593,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 {
                     var samples = metric.ToArray();
                     var tableRows = samples.Where(row => row.Table is not null)
-                        .Select(row => new CompareTableIoEvidence(row.Table!, row.TableLogicalReads!.Value, row.TableLobLogicalReads, row.ScanCount))
+                        .Select(row => new CompareTableIoEvidence(row.Table!, row.TableLogicalReads!.Value, row.TableLobLogicalReads, row.ScanCount)
+                        { PhysicalReads = row.PhysicalReads, PageServerReads = row.PageServerReads, ReadAheadReads = row.ReadAheadReads,
+                          LobPhysicalReads = row.LobPhysicalReads, LobReadAheadReads = row.LobReadAheadReads })
                         .ToArray();
                     long? scans = tableRows.Length == 0 || tableRows.Any(row => row.Scans is null)
                         ? null

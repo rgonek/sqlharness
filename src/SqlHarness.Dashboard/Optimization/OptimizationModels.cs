@@ -108,7 +108,14 @@ public sealed record CompareMetricEvidence(
     public string StatementAttribution { get; init; } = "unavailable";
 }
 
-public sealed record CompareTableIoEvidence(string Table, long LogicalReads, long? LobLogicalReads, long? Scans);
+public sealed record CompareTableIoEvidence(string Table, long LogicalReads, long? LobLogicalReads, long? Scans)
+{
+    public long? PhysicalReads { get; init; }
+    public long? PageServerReads { get; init; }
+    public long? ReadAheadReads { get; init; }
+    public long? LobPhysicalReads { get; init; }
+    public long? LobReadAheadReads { get; init; }
+}
 public sealed record CompareStatementEvidence(
     string Key, int Occurrence, string? Text, string? PlanHash, string Status, long? Reads,
     long? Scans, long? Executions, IReadOnlyList<HiddenWork> HiddenWork,
@@ -217,6 +224,18 @@ public sealed record TableRow(string Table, long? ScansBefore, long? ScansAfter,
     public IReadOnlyDictionary<string, MetricAvailabilityPair>? Availability { get; init; }
     [JsonIgnore]
     public string? ObjectKind { get; init; }
+    public long? DataLogicalReadsBefore { get; init; }
+    public long? DataLogicalReadsAfter { get; init; }
+    public long? PhysicalReadsBefore { get; init; }
+    public long? PhysicalReadsAfter { get; init; }
+    public long? PageServerReadsBefore { get; init; }
+    public long? PageServerReadsAfter { get; init; }
+    public long? ReadAheadReadsBefore { get; init; }
+    public long? ReadAheadReadsAfter { get; init; }
+    public long? LobPhysicalReadsBefore { get; init; }
+    public long? LobPhysicalReadsAfter { get; init; }
+    public long? LobReadAheadReadsBefore { get; init; }
+    public long? LobReadAheadReadsAfter { get; init; }
     public long? LobLogicalReadsBefore { get; init; }
     public long? LobLogicalReadsAfter { get; init; }
 }

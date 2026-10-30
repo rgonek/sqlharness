@@ -93,7 +93,7 @@ test("does not turn unknown spill into no warning or sum metrics across cases", 
 
 test("only exposes supported counters when switching IO views", async () => {
   const onViewChange = vi.fn()
-  const extras = { before: { Orders: { physicalReads: 8, readAheadReads: 9, lobPhysicalReads: 10, lobReadAheadReads: 11 } }, after: { Orders: { physicalReads: 0, readAheadReads: 1, lobPhysicalReads: 2, lobReadAheadReads: 3 } } }
+  const extras = { before: { Orders: { physicalReads: 8, readAheadReads: 9, lobLogicalReads: 4, lobPhysicalReads: 10, lobReadAheadReads: 11 } }, after: { Orders: { physicalReads: 0, readAheadReads: 1, lobLogicalReads: 0, lobPhysicalReads: 2, lobReadAheadReads: 3 } } }
   const { rerender } = render(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={extras} />)
   await userEvent.click(screen.getByText("More columns"))
   for (const name of ["Physical", "Read-ahead", "LOB physical", "LOB read-ahead", "LOB logical"]) await userEvent.click(screen.getByRole("checkbox", { name }))
@@ -168,4 +168,24 @@ test("shows unequal per-side execution counts", () => {
   expect(screen.getByText(/Executions.*2 → 7/)).toBeInTheDocument()
   rerender(<IoComparison comparison={{ ...comparison, statements: [{ ...statement, executionsAfter: null }] }} byStatement onViewChange={vi.fn()} />)
   expect(screen.getByText(/Executions.*2 → —/)).toBeInTheDocument()
+})
+
+
+test("whole batch exposes recorded counters and hides unavailable ones", async () => {
+  const row = { ...comparison.tables[0], physicalReadsBefore: 8, physicalReadsAfter: 0, pageServerReadsBefore: 9, pageServerReadsAfter: null }
+  render(<IoComparison comparison={{ ...comparison, tables: [row] }} byStatement={false} onViewChange={vi.fn()} />)
+  await userEvent.click(screen.getByText("More columns"))
+  expect(screen.getByRole("checkbox", { name: "Physical" })).toBeInTheDocument()
+  expect(screen.getByRole("checkbox", { name: "Page server" })).toBeInTheDocument()
+  expect(screen.queryByRole("checkbox", { name: "Read-ahead" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("checkbox", { name: "Physical" }))
+  expect(within(screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!).getByText("8 →")).toBeInTheDocument()
+})
+
+
+test("PostgreSQL does not offer unavailable SQL Server counters", () => {
+  render(<IoComparison comparison={{ ...comparison, tableIoUnavailable: true, tables: [], statements: [] }} byStatement={false} onViewChange={vi.fn()} />)
+  expect(screen.getByText("per-table IO not available for this engine")).toBeInTheDocument()
+  expect(screen.queryByText("More columns")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Scans" })).not.toBeInTheDocument()
 })
