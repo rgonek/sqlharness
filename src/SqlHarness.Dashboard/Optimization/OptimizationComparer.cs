@@ -94,11 +94,12 @@ public static class OptimizationComparer
         var validSelection = selectedCase == "all" || pairedIds.Contains(selectedCase, StringComparer.Ordinal);
         var resolvedSelection = validSelection ? selectedCase : "all";
         var selectedIds = resolvedSelection == "all" ? commonIds : [resolvedSelection];
+        var timingIds = resolvedSelection == "all" ? (direct is null ? before.Metrics.Keys.Union(after.Metrics.Keys, StringComparer.Ordinal).ToArray() : direct.Cases.Select(CaseKey).Distinct(StringComparer.Ordinal).ToArray()) : [resolvedSelection];
         var coverage = commonIds.Length < totalCaseIds.Length
             ? $"{commonIds.Length.ToString(CultureInfo.InvariantCulture)} of {totalCaseIds.Length.ToString(CultureInfo.InvariantCulture)} cases"
             : string.Empty;
         var normalizedAggregate = aggregate.Equals("mean", StringComparison.OrdinalIgnoreCase) ? "mean" : "sum";
-        var allCasesConfirmed = selectedIds.Length > 0 && selectedIds.All(id => caseComparisons.TryGetValue(id, out var item)
+        var allCasesConfirmed = timingIds.Length > 0 && timingIds.All(id => caseComparisons.TryGetValue(id, out var item)
             && item.VerdictBasis == "changed statements");
         var verdictBasis = allCasesConfirmed ? "changed statements" : "whole batch";
         var requestedView = view is "whole" or "statements" ? view : "changed";
@@ -107,11 +108,10 @@ public static class OptimizationComparer
         var tableRows = tableIoUnavailable
             ? []
             : allCasesConfirmed && effectiveView is not "whole"
-                ? BuildStatementTableRows(before.Metrics, after.Metrics, selectedIds, caseComparisons, normalizedAggregate)
-                : BuildTableRows(before, after, selectedIds, normalizedAggregate);
+                ? BuildStatementTableRows(before.Metrics, after.Metrics, timingIds, caseComparisons, normalizedAggregate)
+                : BuildTableRows(before, after, timingIds, normalizedAggregate);
         var collapsed = tableIoUnavailable ? null : Collapse(tableRows);
         var visibleTables = tableIoUnavailable ? tableRows : tableRows.Where(row => !IsCollapsed(row)).ToArray();
-        var timingIds = resolvedSelection == "all" ? (direct is null ? before.Metrics.Keys.Union(after.Metrics.Keys, StringComparer.Ordinal).ToArray() : direct.Cases.Select(CaseKey).ToArray()) : [resolvedSelection];
         var elapsedBefore = Aggregate(before.Metrics, timingIds, metric => metric.ElapsedMedianMs, normalizedAggregate);
         var elapsedAfter = Aggregate(after.Metrics, timingIds, metric => metric.ElapsedMedianMs, normalizedAggregate);
         var cpuBefore = Aggregate(before.Metrics, timingIds, metric => metric.CpuMedianMs, normalizedAggregate);
@@ -119,14 +119,14 @@ public static class OptimizationComparer
         var buffersBefore = AggregateBuffers(before.Metrics, selectedIds, normalizedAggregate);
         var buffersAfter = AggregateBuffers(after.Metrics, selectedIds, normalizedAggregate);
         var mixed = Mixed(caseOptions, before.Metrics, after.Metrics, caseComparisons);
-        var allStatementRows = BuildStatementRows(before.Metrics, after.Metrics, selectedIds, caseComparisons, normalizedAggregate, resolvedSelection != "all");
+        var allStatementRows = BuildStatementRows(before.Metrics, after.Metrics, timingIds, caseComparisons, normalizedAggregate, resolvedSelection != "all");
         var statementRows = effectiveView == "changed"
             ? allStatementRows.Where(row => row.Status != "shared").ToArray()
             : allStatementRows;
-        var sharedBefore = ReduceNullable(selectedIds.Select(id => caseComparisons.GetValueOrDefault(id).SharedBefore), normalizedAggregate);
-        var sharedAfter = ReduceNullable(selectedIds.Select(id => caseComparisons.GetValueOrDefault(id).SharedAfter), normalizedAggregate);
-        var batchBefore = AggregateReads(before.Metrics, selectedIds, normalizedAggregate);
-        var batchAfter = AggregateReads(after.Metrics, selectedIds, normalizedAggregate);
+        var sharedBefore = ReduceNullable(timingIds.Select(id => caseComparisons.GetValueOrDefault(id).SharedBefore), normalizedAggregate);
+        var sharedAfter = ReduceNullable(timingIds.Select(id => caseComparisons.GetValueOrDefault(id).SharedAfter), normalizedAggregate);
+        var batchBefore = AggregateReads(before.Metrics, timingIds, normalizedAggregate);
+        var batchAfter = AggregateReads(after.Metrics, timingIds, normalizedAggregate);
         var wholeBatch = new WholeBatchLine(batchBefore, batchAfter, sharedBefore,
             batchBefore is { } wb && batchAfter is { } wa
                 ? $"whole batch: {wb.ToString(CultureInfo.InvariantCulture)} → {wa.ToString(CultureInfo.InvariantCulture)} reads" + (sharedBefore is { } sh ? $" (shared statements: {sh.ToString(CultureInfo.InvariantCulture)})" : "")
@@ -163,8 +163,8 @@ public static class OptimizationComparer
             Statements = statementRows,
             FallbackNote = allCasesConfirmed ? null : "per-statement attribution incomplete",
             StatementMetricsUnavailableReason = resolvedSelection == "all" ? "Select a single case for statement CPU, elapsed, LOB logical reads, grants and spill warnings." : null,
-            OmittedStatementsBefore = selectedIds.Where(before.Metrics.ContainsKey).Sum(id => before.Metrics[id].OmittedStatements),
-            OmittedStatementsAfter = selectedIds.Where(after.Metrics.ContainsKey).Sum(id => after.Metrics[id].OmittedStatements),
+            OmittedStatementsBefore = timingIds.Where(before.Metrics.ContainsKey).Sum(id => before.Metrics[id].OmittedStatements),
+            OmittedStatementsAfter = timingIds.Where(after.Metrics.ContainsKey).Sum(id => after.Metrics[id].OmittedStatements),
         };
 
         static OptimizationActionReference Action(VersionSnapshot snapshot)

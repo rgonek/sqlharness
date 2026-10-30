@@ -322,6 +322,55 @@ public sealed class OptimizationComparerTests
         Assert.Equal("single case required", row.Availability["cpu"].Before.Reason);
     }
 
+    [Theory]
+    [InlineData(false, "sum", 22, 20, 5)]
+    [InlineData(true, "mean", 11, 10, 3)]
+    public void Statement_and_table_contributors_do_not_depend_on_batch_reads(bool allMissing, string aggregate, long expectedBefore, long expectedAfter, long expectedPhysical)
+    {
+        var compare = Evidence(203, "h1", "h2", (100, 90), (120, 110)) with
+        {
+            Metrics = [
+                CaseMetric("baseline", "0", 100, Statement("work", "SELECT work", 10, "old")) with { LogicalReadsMedian = allMissing ? null : 100, TableRows = [new CompareTableIoEvidence("Orders", 10, 0, 1) { PhysicalReads = 2 }] },
+                CaseMetric("candidate", "0", 90, Statement("work", "SELECT work", 9, "new")) with { LogicalReadsMedian = allMissing ? null : 90, TableRows = [new CompareTableIoEvidence("Orders", 9, 0, 1) { PhysicalReads = 1 }] },
+                CaseMetric("baseline", "1", 120, Statement("work", "SELECT work", 12, "old")) with { LogicalReadsMedian = null, TableRows = [new CompareTableIoEvidence("Orders", 12, 0, 1) { PhysicalReads = 3 }] },
+                CaseMetric("candidate", "1", 110, Statement("work", "SELECT work", 11, "new")) with { LogicalReadsMedian = null, TableRows = [new CompareTableIoEvidence("Orders", 11, 0, 1) { PhysicalReads = null }] }],
+        };
+        var statements = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", aggregate, "statements");
+        var row = Assert.Single(statements.Statements);
+        Assert.Equal(expectedBefore, row.ReadsBefore);
+        Assert.Equal(expectedAfter, row.ReadsAfter);
+        Assert.Equal(2, row.Availability!["reads"].Before.AvailableCases);
+        Assert.Equal(2, row.Availability["reads"].Before.TotalCases);
+        var table = Assert.Single(OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", aggregate, "whole").Tables);
+        Assert.Equal(expectedPhysical, table.PhysicalReadsBefore);
+        Assert.Null(table.PhysicalReadsAfter);
+    }
+
+    [Fact]
+    public void Missing_batch_reads_do_not_hide_unavailable_statement_or_missing_case()
+    {
+        var compare = Evidence(203, "h1", "h2", (100, 90), (120, 110), (130, 120)) with
+        {
+            Metrics = [CaseMetric("baseline", "0", 100, Statement("work", "SELECT work", 10, "p")),
+                CaseMetric("candidate", "0", 90, Statement("work", "SELECT work", 9, "p")),
+                CaseMetric("baseline", "1", 120, Statement("work", "SELECT work", 12, "p") with { Status = "partial" }) with { LogicalReadsMedian = null, StatementAttribution = "partial" },
+                CaseMetric("candidate", "1", 110, Statement("work", "SELECT work", 11, "p")) with { LogicalReadsMedian = null },
+                CaseMetric("baseline", "2", 130, Statement("work", "SELECT work", 13, "p"))],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "sum", "statements");
+        var row = Assert.Single(result.Statements);
+        Assert.Null(row.ReadsBefore);
+        Assert.Null(row.ReadsAfter);
+        Assert.Equal(2, row.Availability!["reads"].Before.AvailableCases);
+        Assert.Equal(2, row.Availability["reads"].After.AvailableCases);
+        Assert.Equal(3, row.Availability["reads"].Before.TotalCases);
+        Assert.Equal("whole batch", result.VerdictBasis);
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Null(result.WholeBatch.After);
+        var table = Assert.Single(OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "mean", "whole").Tables);
+        Assert.Null(table.ReadsAfter);
+    }
+
     [Fact]
     public void Omitted_statement_and_missing_object_evidence_are_not_zero()
     {
@@ -834,7 +883,7 @@ public sealed class OptimizationComparerTests
     }
 
     [Fact]
-    public void Partial_cases_aggregate_over_common_cases()
+    public void Partial_cases_do_not_drop_missing_table_contributors()
     {
         var evidence = Evidence(214, "h1", "h2", (1000, 500), (1000, 700), (1000, 300)) with
         {
@@ -849,8 +898,8 @@ public sealed class OptimizationComparerTests
         var result = Compare([evidence], "v1", "v2");
 
         Assert.Equal("2 of 3 cases", result.CoverageLabel);
-        Assert.Equal(2000, result.Tables.Single().ReadsBefore);
-        Assert.Equal(1200, result.Tables.Single().ReadsAfter);
+        Assert.Equal(3000, result.Tables.Single().ReadsBefore);
+        Assert.Null(result.Tables.Single().ReadsAfter);
     }
 
     [Fact]
@@ -876,7 +925,7 @@ public sealed class OptimizationComparerTests
         var result = Compare([evidence], "v1", "v2");
 
         Assert.Equal("unavailable", Assert.Single(result.Cases).Outcome);
-        Assert.Empty(result.Tables);
+        Assert.Equal(100, Assert.Single(result.Tables).ReadsBefore);
         Assert.Equal(100, result.Elapsed.BeforeMs);
         Assert.Equal(100, result.Elapsed.AfterMs);
     }
