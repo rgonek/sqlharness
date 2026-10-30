@@ -12,6 +12,47 @@ public sealed class OptimizationComparerTests
     [InlineData("rejected")]
     [InlineData("running")]
     [InlineData("abandoned")]
+    public void Ineligible_attempt_alone_supplies_no_pair_evidence(string status)
+    {
+        var attempt = Evidence(1, "h1", "h2", (100, 50)) with { Status = status };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [attempt], "v1", "v2", "all", "sum");
+        Assert.Null(result.OperationId);
+        Assert.Empty(result.Cases);
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Null(result.WholeBatch.After);
+    }
+
+    [Fact]
+    public void Successful_policy_failure_still_supplies_direct_pair()
+    {
+        var attempt = Evidence(1, "h1", "h2", (100, 50)) with { RegressionVerdict = "fail" };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [attempt], "v1", "v2", "all", "sum");
+        Assert.Equal(PairBasis.MeasuredTogether, result.Basis);
+        Assert.Equal(1, result.OperationId);
+        Assert.Equal(100, result.WholeBatch.Before);
+        Assert.Equal(50, result.WholeBatch.After);
+    }
+
+    [Fact]
+    public void Metadata_only_attempt_does_not_replace_recorded_direct_pair()
+    {
+        var good = Evidence(1, "h1", "h2", (100, 50));
+        var statement = new CompareStatementEvidence("key", 0, "SELECT 1", "plan", "confirmed", null, null, null, [], []);
+        var metadata = new[] { "baseline", "candidate" }.Select(variant =>
+            new CompareMetricEvidence(variant, "0", "case", null, null, null, []) { Statements = [statement] }).ToArray();
+        var later = Evidence(2, "h1", "h2", (1, 1)) with { Metrics = metadata };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [good, later], "v1", "v2", "all", "sum");
+        Assert.Equal(1, result.OperationId);
+        Assert.Equal(100, result.WholeBatch.Before);
+        Assert.Equal(50, result.WholeBatch.After);
+    }
+
+    [Theory]
+    [InlineData("failed")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
+    [InlineData("running")]
+    [InlineData("abandoned")]
     public void Ineligible_attempt_does_not_override_successful_pair(string status)
     {
         var good = Evidence(1, "h1", "h2", (100, 50));

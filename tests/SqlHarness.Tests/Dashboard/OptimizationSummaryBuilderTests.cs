@@ -4,6 +4,19 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class OptimizationSummaryBuilderTests
 {
+    [Fact]
+    public void Statement_metadata_alone_is_not_measurement_but_confirmed_zero_is()
+    {
+        var statement = new CompareStatementEvidence("key", 0, "SELECT 1", "plan", "confirmed", null, null, null, [], []);
+        var metric = new CompareMetricEvidence("baseline", "0", "case", null, null, null, []) { Statements = [statement] };
+        var evidence = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with { Metrics = [metric] };
+        Assert.Empty(OptimizationSummaryBuilder.Build([evidence]).Subjects);
+        var zero = evidence with { Metrics = [metric with { Statements = [statement with { Reads = 0 }] }] };
+        Assert.Single(OptimizationSummaryBuilder.Build([zero]).Subjects);
+        var ambiguous = evidence with { Metrics = [metric with { Statements = [statement with { Reads = 0, Status = "ambiguous" }] }] };
+        Assert.Empty(OptimizationSummaryBuilder.Build([ambiguous]).Subjects);
+    }
+
     [Theory]
     [InlineData("failed")]
     [InlineData("cancelled")]

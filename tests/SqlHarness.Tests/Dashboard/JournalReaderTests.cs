@@ -16,6 +16,51 @@ public sealed class JournalReaderTests
         new(home.DatabasePath, processes ?? new FakeProcesses());
 
     [Fact]
+    public void Interrupted_compare_retains_history_and_measurements_without_optimization_versions()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:interrupted"), "orders", "whole", "h0", "h1");
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
+            """{"kind":"compare","cases":[{"caseId":"0","caseLabel":"case"}]}""",
+            new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2)], []));
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE operations SET status = 'failed' WHERE id = $id";
+            command.Parameters.AddWithValue("$id", handle.OperationId);
+            command.ExecuteNonQuery();
+        }
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+        Assert.Equal("failed", Assert.Single(reader.CompareAttempts(sessionId).Items).Status);
+        Assert.Equal(100, Assert.Single(Assert.Single(reader.OptimizationEvidence(sessionId)).Metrics).LogicalReadsMedian);
+        var detail = reader.Operation(handle.OperationId)!;
+        Assert.Equal("failed", detail.Operation.Status);
+        Assert.NotEmpty(detail.Variants);
+        Assert.Empty(reader.Optimization(sessionId).Subjects);
+    }
+
+    [Fact]
+    public void Statement_without_object_counters_does_not_invent_zero_reads()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:metadata"), "orders", "whole", "h0", "h1");
+        var benchmark = new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2)], [])
+        {
+            Statements = [StoredStatement("baseline", "SELECT 1", "plan") with { Executions = null, Objects = [] }],
+        };
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(), "{}", benchmark);
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+        var metric = Assert.Single(Assert.Single(reader.OptimizationEvidence(sessionId)).Metrics);
+        var statement = Assert.Single(metric.Statements);
+        Assert.Null(statement.Reads);
+        Assert.Null(statement.Scans);
+    }
+
+    [Fact]
     public void Mutation_requester_uses_only_the_retained_operation_link()
     {
         using var home = new TempHome();

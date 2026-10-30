@@ -2,6 +2,7 @@ import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import { agentCall, operation, operationDetail, session, variant } from "@/test/fixtures"
+import type { OperationStatus } from "@/api/types"
 import { renderApp, stubFetch } from "@/test/render"
 
 const defaultOptimization = {
@@ -41,6 +42,17 @@ test("shows the stored error as text and keeps interrupted compare measurements 
   expect(screen.getByText(message)).toBeVisible()
   expect(container.querySelector("img")).toBeNull()
   expect(screen.getByText("Baseline", { exact: false })).toBeInTheDocument()
+})
+
+test.each([
+  ["cancelled", "cancelled", "client", "Cancelled by the client."],
+  ["rejected", "safety_rejected", null, "SQLHarness rejected the request before running it (validation or safety rule)."],
+])("shows %s reason and missing message in operation detail", async (status, kind, reason, sentence) => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, status: status as OperationStatus, errorKind: kind, cancelReason: reason, errorMessage: null }) }) })
+  renderApp("/operations/10")
+  const alert = await screen.findByRole("alert")
+  expect(alert).toHaveTextContent(sentence)
+  expect(alert).toHaveTextContent("No error message is available for this operation.")
 })
 
 test("compare operation returns to its session with the originating subject and scope", async () => {

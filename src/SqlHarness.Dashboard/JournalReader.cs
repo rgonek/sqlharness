@@ -618,9 +618,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                                 LobLogicalReadsBefore = item.EvidenceEligible ? item.ObjectLobReads : null,
                                 LobLogicalReadsAfter = item.EvidenceEligible ? item.ObjectLobReads : null
                             }).ToArray();
-                        var reads = objectRows.All(item => item.ReadsBefore.HasValue)
+                        var reads = objectRows.Length > 0 && objectRows.All(item => item.ReadsBefore.HasValue)
                             ? objectRows.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsBefore!.Value)) : (long?)null;
-                        var scansForStatement = objectRows.All(item => item.ScansBefore.HasValue)
+                        var scansForStatement = objectRows.Length > 0 && objectRows.All(item => item.ScansBefore.HasValue)
                             ? objectRows.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ScansBefore!.Value)) : (long?)null;
                         var text = storeSensitive ? row.Text : null;
                         text ??= $"statement {row.Ordinal + 1} ({row.Hash[..Math.Min(8, row.Hash.Length)]})";

@@ -1,7 +1,7 @@
 // Mirrors src/SqlHarness.Dashboard/DashboardModels.cs (JSON camelCase). Pinned by DashboardContractTests.
 export type Page<T> = { items: T[]; nextCursor: number | null; matching?: boolean }
 
-export type OperationStatus = "running" | "succeeded" | "failed" | "rejected" | "abandoned"
+export type OperationStatus = "running" | "succeeded" | "failed" | "rejected" | "cancelled" | "abandoned"
 
 export type WatchProgress = { polls: number; changedPolls: number; elapsedMs: number }
 
