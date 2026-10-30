@@ -359,9 +359,10 @@ public static class OptimizationComparer
                 (left[pair.index] is null && !ProvesAbsence(before.GetValueOrDefault(pair.id)))
                 || (right[pair.index] is null && !ProvesAbsence(after.GetValueOrDefault(pair.id))));
             var status = sharedEverywhere ? "shared"
+                : unprovedAbsence ? "unmatched"
                 : l.Length == 0 ? "only-candidate"
                 : r.Length == 0 ? "only-baseline"
-                : presentSome ? unprovedAbsence ? "unmatched" : "not-executed" : "different-work";
+                : presentSome ? "not-executed" : "different-work";
             var readsBefore = ReduceNullable(cases.Select((id, index) => StatementCounter(before.GetValueOrDefault(id), left[index], null,
                 static row => row.Reads, static _ => null)), aggregate);
             var readsAfter = ReduceNullable(cases.Select((id, index) => StatementCounter(after.GetValueOrDefault(id), right[index], null,
@@ -409,16 +410,17 @@ public static class OptimizationComparer
             var attribution = cases.All(id => caseComparisons.GetValueOrDefault(id).VerdictBasis == "changed statements") ? "confirmed" : "partial";
             var text = l.Concat(r).Select(row => row.Text).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
                 ?? $"statement {key.Key}";
+            var executionsBefore = singleCase && left[0]?.Status == "confirmed" ? left[0]!.Executions : null;
+            var executionsAfter = singleCase && right[0]?.Status == "confirmed" ? right[0]!.Executions : null;
             return new StatementRow(key.Key, text, status, readsBefore, readsAfter, scansBefore, scansAfter,
-                singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible && left[0]!.Executions == right[0]!.Executions
-                    ? left[0]!.Executions : null,
+                executionsBefore ?? executionsAfter,
                 Change(readsBefore, readsAfter), attribution,
                 l.Concat(r).SelectMany(row => row.HiddenWork).Distinct().ToArray(),
                 objects)
             {
                 Availability = new Dictionary<string, MetricAvailabilityPair>
                 {
-                    ["executions"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.Executions),
+                    ["executions"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.Executions, requireRuntimeEligibility: false),
                     ["reads"] = StatementAvailabilityPair(before, after, cases, left, right, row => row.Reads),
                     ["scans"] = StatementAvailabilityPair(before, after, cases, left, right, row => row.Scans),
                     ["cpu"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.CpuMs),
@@ -429,6 +431,8 @@ public static class OptimizationComparer
                     ["spill"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.HasSpillWarning),
                     ["planRepetition"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.PlanRepetition),
                 },
+                ExecutionsBefore = executionsBefore,
+                ExecutionsAfter = executionsAfter,
                 CpuBeforeMs = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible ? left[0]!.CpuMs : null,
                 CpuAfterMs = singleCase && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible ? right[0]!.CpuMs : null,
                 ElapsedBeforeMs = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible ? left[0]!.ElapsedMs : null,
@@ -495,17 +499,18 @@ public static class OptimizationComparer
     }
 
     private static MetricAvailabilityPair RuntimeAvailabilityPair<T>(CompareStatementEvidence?[] left,
-        CompareStatementEvidence?[] right, bool singleCase, Func<CompareStatementEvidence, T?> selector) where T : struct =>
-        new(RuntimeAvailability(left, singleCase, selector), RuntimeAvailability(right, singleCase, selector));
+        CompareStatementEvidence?[] right, bool singleCase, Func<CompareStatementEvidence, T?> selector,
+        bool requireRuntimeEligibility = true) where T : struct =>
+        new(RuntimeAvailability(left, singleCase, selector, requireRuntimeEligibility), RuntimeAvailability(right, singleCase, selector, requireRuntimeEligibility));
 
     private static MetricAvailability RuntimeAvailability<T>(CompareStatementEvidence?[] rows, bool singleCase,
-        Func<CompareStatementEvidence, T?> selector) where T : struct
+        Func<CompareStatementEvidence, T?> selector, bool requireRuntimeEligibility) where T : struct
     {
         if (!singleCase) return new("unavailable", "single case required", 0, rows.Length);
         var row = rows.FirstOrDefault();
         if (row is null) return new("unavailable", "omitted or unmatched statement", 0, rows.Length);
         if (row.Status != "confirmed") return new("unavailable", "ambiguous attribution", 0, rows.Length);
-        if (!row.RuntimeEvidenceEligible) return new("unavailable", "missing historical measurement", 0, rows.Length);
+        if (requireRuntimeEligibility && !row.RuntimeEvidenceEligible) return new("unavailable", "missing historical measurement", 0, rows.Length);
         return selector(row).HasValue ? new("available", null, 1, rows.Length, "recorded")
             : new("unavailable", "missing historical measurement", 0, rows.Length);
     }
@@ -528,7 +533,10 @@ public static class OptimizationComparer
             && !string.Equals(a[0].ObjectKind, b[0].ObjectKind, StringComparison.Ordinal));
     }
 
-    private static bool ProvesAbsence(CompareMetricEvidence? metric) => metric is { StatementAttribution: "confirmed", OmittedStatements: 0 };
+    private static bool ProvesAbsence(CompareMetricEvidence? metric) =>
+        metric is { StatementAttribution: "confirmed", OmittedStatements: 0 }
+        && metric.Statements.All(row => row.Status == "confirmed")
+        && !metric.Statements.GroupBy(row => (row.Key, row.Occurrence)).Any(group => group.Count() > 1);
 
     private static long? StatementCounter(CompareMetricEvidence? metric, CompareStatementEvidence? statement,
         string? objectName, Func<CompareStatementEvidence, long?> statementValue, Func<TableRow, long?> objectValue)

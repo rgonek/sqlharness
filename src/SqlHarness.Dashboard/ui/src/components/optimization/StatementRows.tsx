@@ -36,6 +36,15 @@ export function MetricReasons({ availability, measured = false }: { availability
   return <>{[...groups].map(([reason, metrics]) => <span key={reason} className="text-xs text-muted-foreground">{metrics.join(", ")}: {reason}</span>)}</>
 }
 
+export function executionLabel(row: StatementRow, measured = false): string | null {
+  if (row.executionsBefore === undefined && row.executionsAfter === undefined)
+    return row.executions == null ? null : `${number(row.executions)} ${row.executions === 1 ? "execution" : "executions"}`
+  const before = row.executionsBefore ?? null
+  const after = row.executionsAfter ?? null
+  if (measured) return after == null ? null : `${number(after)} ${after === 1 ? "execution" : "executions"}`
+  return before == null && after == null ? null : `${number(before)} → ${number(after)} executions`
+}
+
 export function StatementMetrics({ row, measured = false }: { row: StatementRow; measured?: boolean }) {
   const values = [row.cpuBeforeMs, row.cpuAfterMs, row.elapsedBeforeMs, row.elapsedAfterMs, row.grantRequestedKbBefore, row.grantRequestedKbAfter, row.grantGrantedKbBefore, row.grantGrantedKbAfter, row.grantMaxUsedKbBefore, row.grantMaxUsedKbAfter, row.hasSpillWarningBefore, row.hasSpillWarningAfter]
   if (values.every(value => value == null)) return <span>Additional statement metrics unavailable</span>
@@ -81,10 +90,10 @@ export function StatementRows({ rows, measured = false, postgres = false }: { ro
   const hasReadsBefore = ordered.some(row => row.readsBefore != null)
   const hasReadsAfter = ordered.some(row => row.readsAfter != null)
   const hasScansAfter = ordered.some(row => row.scansAfter != null)
-  const hasExecutions = ordered.some(row => row.executions != null)
+  const hasExecutions = ordered.some(row => executionLabel(row, measured) !== null)
   if (ordered.length > 0 && !hasIo) return <section aria-label="Statement IO" className="space-y-3">
     <p className="text-sm text-muted-foreground">Some IO cannot be attributed to individual statements. IO assessment uses the whole batch.</p>
-    {ordered.map(row => <div key={`${row.key}:${row.occurrence}`}><div>{row.text}</div><PlanLink href={row.planLinkBefore} hash={row.planHashBefore} label="Plan before" /> <PlanLink href={row.planLinkAfter} hash={row.planHashAfter} label="Plan after" /><MetricReasons availability={row.availability} measured={measured} /><StatementMetrics row={row} measured={measured} />{row.objects.map((item, index) => <div key={index}>{item.table} <MetricReasons availability={item.availability} measured={measured} /></div>)}</div>)}
+    {ordered.map(row => <div key={`${row.key}:${row.occurrence}`}><div>{row.text}</div><PlanLink href={row.planLinkBefore} hash={row.planHashBefore} label="Plan before" /> <PlanLink href={row.planLinkAfter} hash={row.planHashAfter} label="Plan after" /><MetricReasons availability={row.availability} measured={measured} />{executionLabel(row, measured) && <span>Executions: {executionLabel(row, measured)}</span>}<StatementMetrics row={row} measured={measured} />{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}{row.objects.map((item, index) => <div key={index}>{item.table} <MetricReasons availability={item.availability} measured={measured} /></div>)}</div>)}
   </section>
   return <section aria-label="Statement IO" className="space-y-3">
     {postgres && <p className="text-sm text-muted-foreground">per-statement IO not available for this engine</p>}
@@ -103,7 +112,7 @@ export function StatementRows({ rows, measured = false, postgres = false }: { ro
           <Objects row={row} measured={measured} />
         </TableCell>
         <TableCell className="whitespace-normal">{statusLabels[row.status] ?? row.status}<div className="flex flex-col"><MetricReasons availability={row.availability} measured={measured} /></div></TableCell>
-        {hasExecutions && <TableCell>{row.executions === null ? "—" : `${number(row.executions)} ${row.executions === 1 ? "execution" : "executions"}`}</TableCell>}
+        {hasExecutions && <TableCell>{executionLabel(row, measured) ?? "—"}</TableCell>}
         {measured ? <>{hasScansAfter && <TableCell>{number(row.scansAfter)}</TableCell>}{hasReadsAfter && <TableCell>{number(row.readsAfter)}</TableCell>}</>
           : <>{hasReadsBefore && <TableCell>{number(row.readsBefore)}</TableCell>}{hasReadsAfter && <TableCell>{number(row.readsAfter)}</TableCell>}{hasReadsBefore && hasReadsAfter && <TableCell className="whitespace-normal">{row.change}</TableCell>}</>}
       </TableRow>)}</TableBody>

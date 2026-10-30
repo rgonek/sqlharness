@@ -92,3 +92,12 @@ test("missing IO preserves statement text and plan without numeric grid", () => 
   expect(screen.getByText(/Some IO cannot be attributed/)).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan")
 })
+
+
+test("shows unequal execution counts and hidden work without IO", () => {
+  const statement = { ...row, executionsBefore: 2, executionsAfter: 7 }
+  const { rerender } = render(<StatementRows rows={[statement]} />)
+  expect(screen.getByText("2 → 7 executions")).toBeInTheDocument()
+  rerender(<StatementRows rows={[{ ...statement, readsBefore: null, readsAfter: null, scansBefore: null, scansAfter: null }]} />)
+  expect(screen.getByText("UDF time 15% of statement")).toBeInTheDocument()
+})

@@ -303,6 +303,41 @@ public sealed class OptimizationComparerTests
     }
 
     [Fact]
+    public void Duplicate_identity_does_not_prove_another_statement_absent()
+    {
+        var duplicate = Statement("dup", "SELECT duplicate", 10, "p");
+        var other = Statement("other", "SELECT other", 5, "q");
+        var compare = Evidence(203, "h1", "h2", (20, 5)) with
+        { Metrics = [StatementMetric("baseline", 0, 20, duplicate, duplicate), StatementMetric("candidate", 0, 5, other)] };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "0", "sum", "statements");
+        var row = Assert.Single(result.Statements, item => item.Key == "other");
+        Assert.Null(row.ReadsBefore);
+        Assert.Equal("unmatched", row.Status);
+        Assert.Equal("unavailable", row.Availability!["reads"].Before.Status);
+        Assert.Equal("whole batch", result.VerdictBasis);
+    }
+
+    [Fact]
+    public void Execution_counts_are_independent_per_side_and_survive_old_evidence()
+    {
+        var before = Statement("work", "SELECT work", 20, "a") with { Executions = 2, RuntimeEvidenceEligible = false };
+        var after = Statement("work", "SELECT work", 10, "b") with { Executions = 7 };
+        var compare = Evidence(203, "h1", "h2", (20, 10)) with
+        { Metrics = [StatementMetric("baseline", 0, 20, before), StatementMetric("candidate", 0, 10, after)] };
+        StatementRow Run() => Assert.Single(OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "0", "sum", "statements").Statements);
+        var row = Run();
+        Assert.Equal(2, row.ExecutionsBefore);
+        Assert.Equal(7, row.ExecutionsAfter);
+        Assert.Equal("available", row.Availability!["executions"].Before.Status);
+        Assert.Equal("available", row.Availability["executions"].After.Status);
+        compare = compare with { Metrics = [compare.Metrics[0], compare.Metrics[1] with { Statements = [after with { Executions = null }] }] };
+        row = Run();
+        Assert.Equal(2, row.ExecutionsBefore);
+        Assert.Null(row.ExecutionsAfter);
+        Assert.Equal("unavailable", row.Availability!["executions"].After.Status);
+    }
+
+    [Fact]
     public void Unknown_object_kind_is_not_matched_by_name()
     {
         var row = Statement("work", "SELECT work", 20, "p") with { Objects = [new TableRow("Thing", 1, 1, 20, 20, "")] };
@@ -430,7 +465,7 @@ public sealed class OptimizationComparerTests
         var result = Compare([compare], "v1", "v2");
 
         var branch = Assert.Single(result.Statements);
-        Assert.Equal("only-baseline", branch.Status);
+        Assert.Equal("unmatched", branch.Status);
         Assert.Null(branch.ReadsAfter);
         Assert.Equal("whole batch", result.VerdictBasis);
     }

@@ -585,6 +585,9 @@ public sealed class JournalReaderTests
         var caseKey = evidence[0].Cases[0].MeasurementFingerprint ?? evidence[0].Cases[0].CaseId;
         var result = OptimizationComparer.Compare(group, evidence, "v1", "v2", caseKey, "sum", "statements");
         var row = Assert.Single(result.Statements);
+        Assert.Equal(1, Assert.Single(reader.Operation(old.OperationId)!.Statements!).Executions);
+        Assert.Equal(1, row.ExecutionsBefore);
+        Assert.Equal(1, row.ExecutionsAfter);
         Assert.Equal(45, row.ReadsBefore);
         Assert.Equal(2, row.ScansBefore);
         Assert.Null(row.CpuBeforeMs);

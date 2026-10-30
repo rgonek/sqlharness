@@ -768,11 +768,12 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             IReadOnlyList<HiddenWork> hidden;
             try { hidden = JsonSerializer.Deserialize<HiddenWork[]>(row.HiddenWorkJson, ConditionsJsonOptions) ?? []; }
             catch (JsonException) { hidden = []; }
-            return new StatementRow(row.Key, text, "measured", null, reads, null, scans, completeSingleCase && status == "confirmed" && row.EvidenceEligible ? row.Executions : null,
+            return new StatementRow(row.Key, text, "measured", null, reads, null, scans, completeSingleCase && status == "confirmed" ? row.Executions : null,
                 string.Empty, status, hidden, objects)
             {
-                Availability = OperationAvailability(status, completeSingleCase, reads, scans, row.EvidenceEligible ? row.Executions : null, row.CpuMs, row.ElapsedMs,
+                Availability = OperationAvailability(status, completeSingleCase, reads, scans, row.Executions, row.CpuMs, row.ElapsedMs,
                     row.GrantRequestedKb, row.GrantGrantedKb, row.GrantMaxUsedKb, row.HasSpillWarning, row.EvidenceRepetition),
+                ExecutionsAfter = completeSingleCase && status == "confirmed" ? row.Executions : null,
                 CpuAfterMs = completeSingleCase && status == "confirmed" ? row.CpuMs : null,
                 ElapsedAfterMs = completeSingleCase && status == "confirmed" ? row.ElapsedMs : null,
                 GrantRequestedKbAfter = completeSingleCase && status == "confirmed" ? row.GrantRequestedKb : null,

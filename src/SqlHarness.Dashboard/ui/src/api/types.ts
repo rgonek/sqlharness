@@ -185,7 +185,7 @@ export type StatementRow = {
   key: string; occurrence: number; text: string
   status: "shared" | "different-work" | "only-baseline" | "only-candidate" | "not-executed" | "measured" | string
   readsBefore: number | null; readsAfter: number | null; scansBefore: number | null; scansAfter: number | null
-  executions: number | null; change: string; attribution: "confirmed" | "partial" | "unavailable" | string
+  executions: number | null; executionsBefore?: number | null; executionsAfter?: number | null; change: string; attribution: "confirmed" | "partial" | "unavailable" | string
   hiddenWork: HiddenWork[]; objects: { availability?: Record<string, MetricAvailabilityPair> | null; table: string; lobLogicalReadsBefore?: number | null; lobLogicalReadsAfter?: number | null; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
   planHashBefore: string | null; planHashAfter: string | null; planLinkBefore: string | null; planLinkAfter: string | null
   cpuBeforeMs?: number | null; cpuAfterMs?: number | null; elapsedBeforeMs?: number | null; elapsedAfterMs?: number | null

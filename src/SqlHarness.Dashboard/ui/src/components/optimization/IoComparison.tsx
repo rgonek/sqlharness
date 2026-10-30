@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { IoExtraMetric, IoExtras } from "@/lib/ioComparison"
 import { HiddenWorkFlag } from "./HiddenWorkFlag"
-import { MetricReasons, StatementMetrics } from "./StatementRows"
+import { executionLabel, MetricReasons, StatementMetrics } from "./StatementRows"
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 
@@ -49,7 +49,7 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
     <ComparisonPending pending={pending} announce>{byStatement && !hasIo ? <div className="space-y-2">
       <p className="text-sm text-muted-foreground">{comparison.tableIoUnavailable ? "Per-statement IO is not available for this engine." : "Some IO cannot be attributed to individual statements. IO assessment uses the whole batch."}</p>
       <Button variant="outline" size="sm" onClick={() => onViewChange("whole")}>View whole batch</Button>
-      {rows.map(row => <div key={`${row.key}:${row.occurrence}`} className="text-sm"><span>{row.text}</span><MetricReasons availability={row.availability} />{row.planLinkBefore && <> · <a href={row.planLinkBefore} className="underline">Plan before</a></>}{row.planLinkAfter && <> · <a href={row.planLinkAfter} className="underline">Plan after</a></>}{!comparison.statementMetricsUnavailableReason && <StatementMetrics row={row} />}{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}</div>)}
+      {rows.map(row => <div key={`${row.key}:${row.occurrence}`} className="text-sm"><span>{row.text}</span><MetricReasons availability={row.availability} />{row.planLinkBefore && <> · <a href={row.planLinkBefore} className="underline">Plan before</a></>}{row.planLinkAfter && <> · <a href={row.planLinkAfter} className="underline">Plan after</a></>}{executionLabel(row) && <span>Executions: {executionLabel(row)}</span>}{!comparison.statementMetricsUnavailableReason && <StatementMetrics row={row} />}{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}</div>)}
     </div> : comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <Table className="io-table" aria-label="IO before and after">
       <TableHeader><TableRow><TableHead>{byStatement ? "Statement / table" : "Table"}</TableHead>{showScans && <TableHead className="text-right">Scans</TableHead>}{showReads && <TableHead className="text-right">Logical reads</TableHead>}{visibleColumns.map(key => <TableHead key={key} className="text-right">{availableColumns.find(column => column.key === key)?.label}</TableHead>)}</TableRow></TableHeader>
       <TableBody>{byStatement ? rows.map(row => {
@@ -61,7 +61,7 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
         }}><TableHead scope="row" className="whitespace-normal">
           <Button variant="ghost" className="io-statement-disclosure w-full justify-start" aria-expanded={open} onClick={() => setClosed(current => open ? [...current, key] : current.filter(item => item !== key))}><HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} /><span className="truncate" title={row.text}>{row.text}</span></Button>
           <div className="mt-1 flex flex-wrap gap-2 pl-6 text-xs font-normal text-muted-foreground"><span>{row.status}</span><span>attribution: {row.attribution}</span><MetricReasons availability={row.availability} />{row.planLinkBefore && <a href={row.planLinkBefore} className="underline hover:text-foreground focus-visible:outline-ring">Plan before</a>}{row.planLinkAfter && <a href={row.planLinkAfter} className="underline hover:text-foreground focus-visible:outline-ring">Plan after</a>}{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}</div>
-          {open && <div className="statement-metrics">{row.executions !== null && <span>Executions <strong>{number(row.executions)}</strong></span>}{!comparison.statementMetricsUnavailableReason && <StatementMetrics row={row} />}</div>}
+          {open && <div className="statement-metrics">{executionLabel(row) && <span>Executions: {executionLabel(row)}</span>}{!comparison.statementMetricsUnavailableReason && <StatementMetrics row={row} />}</div>}
         </TableHead>{showScans && <TableCell><Pair before={row.scansBefore} after={row.scansAfter} /></TableCell>}{showReads && <TableCell><Pair before={row.readsBefore} after={row.readsAfter} change={row.change} /></TableCell>}{extraCells()}</TableRow>{open && row.objects.map((item, index) => renderRow(item, `${key}:${index}`))}</Fragment>
       }) : comparison.tables.map((row, index) => renderRow(row, `${row.table}:${index}`))}
         <TableRow className="bg-muted/40 font-medium"><TableHead scope="row">Total (whole batch)</TableHead>{showScans && <TableCell className="text-right">—</TableCell>}{showReads && <TableCell><Pair before={comparison.wholeBatch?.before ?? null} after={comparison.wholeBatch?.after ?? null} /></TableCell>}{extraCells()}</TableRow>

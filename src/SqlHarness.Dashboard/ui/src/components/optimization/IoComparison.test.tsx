@@ -160,3 +160,12 @@ test("mixed availability shows confirmed values and reason", () => {
   expect(screen.getByText(/ambiguous attribution/)).toBeInTheDocument()
   expect(screen.getAllByText("25").length).toBeGreaterThan(0)
 })
+
+
+test("shows unequal per-side execution counts", () => {
+  const statement = { ...comparison.statements![0], executionsBefore: 2, executionsAfter: 7 }
+  const { rerender } = render(<IoComparison comparison={{ ...comparison, statements: [statement] }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText(/Executions.*2 → 7/)).toBeInTheDocument()
+  rerender(<IoComparison comparison={{ ...comparison, statements: [{ ...statement, executionsAfter: null }] }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText(/Executions.*2 → —/)).toBeInTheDocument()
+})

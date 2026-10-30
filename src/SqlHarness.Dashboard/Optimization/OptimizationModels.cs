@@ -174,6 +174,8 @@ public sealed record StatementRow(string Key, string Text, string Status, long? 
     IReadOnlyList<HiddenWork> HiddenWork, IReadOnlyList<TableRow> Objects)
 {
     public IReadOnlyDictionary<string, MetricAvailabilityPair>? Availability { get; init; }
+    public long? ExecutionsBefore { get; init; }
+    public long? ExecutionsAfter { get; init; }
     public long? CpuBeforeMs { get; init; }
     public long? CpuAfterMs { get; init; }
     public long? ElapsedBeforeMs { get; init; }
