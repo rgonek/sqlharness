@@ -15,7 +15,8 @@ public sealed class AgentSessionsTests
         static JournalVariantMetrics Variant(string variant) => new(
             variant, null, null, 1, new CompareDistribution(10, 10, 10), new CompareDistribution(8, 8, 8),
             new CompareDistribution(100, 100, 100), null, null, null, null, null, null, 0, false, false, 0,
-            [], null, [], []) { CaseId = "0", CaseLabel = "Case 1 of 1" };
+            [], null, [], [])
+        { CaseId = "0", CaseLabel = "Case 1 of 1" };
         seed.CompareEvidence(handle, conditions ?? JournalSeed.ReproConditions(),
             """{"kind":"compare","cases":[{"caseId":"0","caseLabel":"Case 1 of 1"}]}""",
             new BenchmarkJournalRecord([Variant("baseline"), Variant("candidate")], []));
