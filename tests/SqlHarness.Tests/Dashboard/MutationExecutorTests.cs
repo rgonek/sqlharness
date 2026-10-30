@@ -36,7 +36,8 @@ public sealed class MutationExecutorTests
         var module = new FakeModule();
         var profile = Profile("yolo", new MutationWriter(SameAsReader: true)) with
         {
-            Environment = "production", Auth = "integrated",
+            Environment = "production",
+            Auth = "integrated",
             Mutations = new ProfileMutations("yolo", new MutationWriter(SameAsReader: true), true),
         };
         var result = await Executor(module, profile).ExecuteAsync(Request(), Context(origin: MutationExecutionOrigin.Automatic), default);
@@ -188,7 +189,8 @@ public sealed class MutationExecutorTests
         var request = Request();
         var prepared = await module.ExecuteAsync(new SqlHarnessMutationOperation(
             new SqlTargetRequest(request.Profile, request.Vars), request.Sql, request.Parameters,
-            request.TimeoutSeconds, request.MaxRows, request.Database) { SessionKey = request.SessionKey });
+            request.TimeoutSeconds, request.MaxRows, request.Database)
+        { SessionKey = request.SessionKey });
         var frozen = Assert.IsType<SqlHarnessMutationPrepared>(prepared.Report).Request;
         profiles["local"] = profiles["local"] with { Server = "different-server" };
         var executor = new MutationExecutor(module, () => profiles, () => new SqlHarnessConfig(),
