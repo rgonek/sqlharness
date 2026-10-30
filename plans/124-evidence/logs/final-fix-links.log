@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "<stdin>", line 6, in <module>
+  File "C:\Users\rgone\AppData\Local\Programs\Python\Python310\lib\pathlib.py", line 1133, in read_text
+    return f.read()
+  File "C:\Users\rgone\AppData\Local\Programs\Python\Python310\lib\codecs.py", line 322, in decode
+    (result, consumed) = self._buffer_decode(data, self.errors, final)
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0x96 in position 1711: invalid start byte

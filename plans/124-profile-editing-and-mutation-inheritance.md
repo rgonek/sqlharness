@@ -163,3 +163,6 @@ save, reopen and see the same choice without editing JSON or exposing a secret.
 **Acceptance:** Existing profiles remain compatible; synthetic end-to-end editing and guard tests
 pass; new policy semantics, activation limits and operator controls are documented.
 
+
+
+Final whole-branch review found a draft-loss refresh path and a browser assertion gap. Final fix retains the opening snapshot across refresh states; scoped Sol re-review remains pending. See [verification](124-evidence/verification.md) and [review archive](124-evidence/reviews-and-checks/whole-branch-review.md).

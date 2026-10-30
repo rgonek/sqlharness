@@ -16,7 +16,7 @@ Preflight:
 | 2,3 | revision, PUT DTO / typed client | use exact spec body |
 | 2,4 | guarded save / security tests and docs | no SQL execution |
 | 3,4 | form / synthetic UI verification | use synthetic fixtures only |
-Tasks: 1 pending; 2 pending; 3 pending; 4 pending.
+Historical initial snapshot (superseded by entries below): Tasks 1–4 pending.
 Task 1 BASE: 8d8d959f525b534e795c4def2bf00a2e7807d953.
 Task 1 implementer: /root/task1_impl; product 3bfa2fd9; focused 194 Core/dashboard,87 MCP passed; review /root/task1_review. Concern: baseline MCP canceled during local UI dependency setup; final gate pending Task4.
 Task 1: complete (commits 8d8d959..3bfa2fd, review clean). Task 2 BASE: 3bfa2fd9.

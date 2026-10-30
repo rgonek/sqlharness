@@ -1,0 +1,17 @@
+
+> ui@0.0.0 test
+> vitest run ProfilesPage.test.tsx client.test.ts
+
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/90b3/sqlharness/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  2 passed (2)
+      Tests  24 passed (24)
+   Start at  07:29:41
+   Duration  39.61s (import 60%, tests 23%, transform 7%, environment 7%, setup 3%)
+
+     Import  162 modules were evaluated 286 times · 23.32s total, 60% of tracked time
+             ~10.11s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+
