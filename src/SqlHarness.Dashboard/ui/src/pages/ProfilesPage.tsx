@@ -42,16 +42,16 @@ export function ProfilesPage() {
   const query = useProfiles()
   const [selected, setSelected] = useState<string | null>(null)
   const [search, setSearch] = useState("")
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState<{ profile: NonNullable<typeof query.data>["profiles"][number]; revision: string } | null>(null)
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   useBlocker({ shouldBlockFn: () => saving || (dirty && !window.confirm("Discard unsaved profile changes?")), enableBeforeUnload: saving || dirty })
   const discard = () => !dirty || window.confirm("Discard unsaved profile changes?")
-  const leaveEdit = () => { setEditing(false); setDirty(false) }
-  if (query.error) return <ErrorState error={query.error} />
-  if (query.isPending) return <Skeleton className="h-64 w-full" />
-  const { status, profiles, message } = query.data
+  const leaveEdit = () => { setEditing(null); setDirty(false) }
+  if (query.error && !editing) return <ErrorState error={query.error} />
+  if (query.isPending && !editing) return <Skeleton className="h-64 w-full" />
+  const { status, profiles, message } = query.data ?? { status: "missing", profiles: [], message: null }
   const filtered = profiles.filter(profile => [profile.name, profile.server, profile.database].some(value => value.toLowerCase().includes(search.toLowerCase())))
   const profile = filtered.find(item => item.name === selected) ?? filtered[0]
   const connection = profile ? [
@@ -72,13 +72,14 @@ export function ProfilesPage() {
     </aside>
     <div className="flex min-w-0 flex-col gap-5">
       <header className="flex flex-col gap-1"><h1>Profiles</h1><p className="text-sm text-muted-foreground">Edit existing targets.json profiles. Passwords stay in their environment variables and are never read.</p></header>
+      {query.error && <ErrorState error={query.error} />}
       {status === "missing" && <p className="text-sm text-muted-foreground">No targets.json in the SQLHarness home.</p>}
       {status === "invalid" && <Alert variant="destructive"><AlertTitle>targets.json is invalid</AlertTitle><AlertDescription>{message}</AlertDescription></Alert>}
       {saved && <p role="status">Profile saved. Restart or reconnect existing MCP clients to use the updated profile.</p>}
-      {status === "valid" && !query.data.editingSupported && query.data.editingUnavailableReason && <p>{query.data.editingUnavailableReason}</p>}
-      {status === "valid" && profile && editing && query.data.revision && <ProfileEditForm key={profile.name} profile={profile} revision={query.data.revision} onDirty={setDirty} onPending={setSaving} onCancel={() => { if (discard()) leaveEdit() }} onSaved={() => { leaveEdit(); setSaved(true) }} />}
+      {status === "valid" && !query.data?.editingSupported && query.data?.editingUnavailableReason && <p>{query.data?.editingUnavailableReason}</p>}
+      {editing && <ProfileEditForm key={editing.profile.name} profile={editing.profile} revision={editing.revision} onDirty={setDirty} onPending={setSaving} onCancel={() => { if (discard()) leaveEdit() }} onSaved={() => { leaveEdit(); setSaved(true) }} />}
       {status === "valid" && profile && !editing && <>
-        <header className="flex flex-col gap-2"><div className="flex flex-wrap items-center gap-3"><h2 className="min-w-0 max-w-full wrap-anywhere text-xl font-semibold">{profile.name}</h2><Badge variant="outline">{profile.environment ?? "no environment"}</Badge>{query.data.editingSupported && query.data.revision && profile.editableProfile && <Button onClick={() => { setSaved(false); setEditing(true) }}>Edit</Button>}<Link to="/stats" className="ml-auto text-sm underline">Usage overview →</Link></div><p className="break-all text-sm text-muted-foreground">{profile.engine} · {profile.server} / {profile.database}</p></header>
+        <header className="flex flex-col gap-2"><div className="flex flex-wrap items-center gap-3"><h2 className="min-w-0 max-w-full wrap-anywhere text-xl font-semibold">{profile.name}</h2><Badge variant="outline">{profile.environment ?? "no environment"}</Badge>{query.data?.editingSupported && query.data?.revision && profile.editableProfile && <Button onClick={() => { setSaved(false); setEditing({ profile, revision: query.data!.revision! }) }}>Edit</Button>}<Link to="/stats" className="ml-auto text-sm underline">Usage overview →</Link></div><p className="break-all text-sm text-muted-foreground">{profile.engine} · {profile.server} / {profile.database}</p></header>
         <Card className="profile-section" role="region" aria-label="Connection"><CardHeader><CardTitle><h3>Connection</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody>{connection.map(([label,value]) => <TableRow key={label}><TableHead scope="row" className="w-40">{label}</TableHead><TableCell className="whitespace-normal break-all">{label === "TLS" ? <ExplainedValue value={value} labels={tlsLabels} /> : <>{value}{label === "Password variable" && profile.passwordEnvVar && <p className="text-sm text-muted-foreground">Environment variable name only; its value is not read.</p>}</>}</TableCell></TableRow>)}</TableBody></Table>{profile.database.includes("{") && <p className="text-xs text-muted-foreground">Database template · resolved per operation from variables</p>}</CardContent></Card>
         <Card className="profile-section" role="region" aria-label="Mutations"><CardHeader><CardTitle><h3>Mutations</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody><TableRow><TableHead scope="row" className="w-40">Mode</TableHead><TableCell className="whitespace-normal wrap-anywhere"><ExplainedValue value={profile.mutationMode || "never"} labels={modeLabels} /></TableCell></TableRow><TableRow><TableHead scope="row">Policy source</TableHead><TableCell>{profile.configuredMode ?? "Inherited"} · effective {profile.effectiveMode ?? profile.mutationMode} · {profile.modeSource ?? "unknown"}</TableCell></TableRow><TableRow><TableHead scope="row">Writer</TableHead><TableCell className="whitespace-normal wrap-anywhere"><ExplainedValue value={profile.mutationWriterKind ?? "—"} labels={writerLabels} /></TableCell></TableRow></TableBody></Table>{profile.effectiveMode !== "never" && profile.writerConfigured === false && <p>Mutations cannot run until a writer is configured.</p>}{profile.productionAcknowledgementRequired && <p>Production YOLO requires acknowledgement before DML can execute.</p>}{profile.mutationMode === "yolo" && <Alert variant="destructive"><AlertTitle>YOLO DML runs without approval{profile.environment ? ` on ${profile.environment}` : ""}.</AlertTitle><AlertDescription>YOLO skips operator approval for DML; schema, privilege and opaque changes still require approval.</AlertDescription></Alert>}</CardContent></Card>
         <Card className="profile-section" role="region" aria-label="Variables"><CardHeader><CardTitle><h3>Variables</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3">{profile.vars.length ? <Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Rule</TableHead></TableRow></TableHeader><TableBody>{profile.vars.map(variable => <TableRow key={variable.name}><TableCell className="font-mono">{variable.name}</TableCell><TableCell>{variable.rule}</TableCell></TableRow>)}</TableBody></Table> : <p className="text-sm text-muted-foreground">No variables. Operations on this profile have no dimensions.</p>}</CardContent></Card>

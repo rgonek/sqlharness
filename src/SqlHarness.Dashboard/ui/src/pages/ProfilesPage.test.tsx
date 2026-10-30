@@ -232,3 +232,29 @@ test("shows validation errors even when their field is hidden or unknown", async
   expect(screen.getByRole("status", { name: "Other validation errors" })).toHaveTextContent("Unexpected field error.")
   expect(screen.getByLabelText("Authentication")).toHaveAccessibleDescription("Invalid authentication.")
 })
+
+test.each(["missing", "invalid", "removed", "error"])("preserves a dirty edit through %s refresh until explicit discard", async state => {
+  const user = userEvent.setup()
+  const response = editFixture()
+  let submitted: { expectedRevision: string } | undefined
+  stubFetch({ "/api/profiles": response, "PUT /api/profiles": (_url: URL, init?: RequestInit) => { submitted = JSON.parse(init!.body as string); return new Response(JSON.stringify({ error: "Profiles changed" }), { status: 409 }) } })
+  const { client } = renderApp("/profiles")
+  await user.click(await screen.findByRole("button", { name: "Edit" }))
+  await user.clear(screen.getByLabelText("Server")); await user.type(screen.getByLabelText("Server"), "draft")
+  if (state === "error") {
+    client.getQueryCache().find({ queryKey: ["profiles"] })!.setState({ error: new Error("refresh failed"), status: "error" })
+  } else {
+    client.setQueryData(["profiles"], state === "removed" ? { ...response, revision: "new", profiles: [] } : { ...response, status: state, message: "invalid refresh", profiles: [], revision: null })
+  }
+  const notice = state === "missing" ? /No targets.json/ : state === "invalid" ? /invalid refresh/ : state === "error" ? /refresh failed/ : /No profile matches/
+  expect(await screen.findByText(notice)).toBeInTheDocument()
+  expect(screen.getByLabelText("Server")).toHaveValue("draft")
+  await user.click(screen.getByRole("button", { name: "Save" }))
+  await waitFor(() => expect(submitted?.expectedRevision).toBe("old"))
+  const confirm = vi.fn().mockReturnValue(false); vi.stubGlobal("confirm", confirm)
+  await user.click(screen.getByRole("button", { name: "Cancel" }))
+  expect(confirm).toHaveBeenCalled(); expect(screen.getByLabelText("Server")).toHaveValue("draft")
+  confirm.mockReturnValue(true); await user.click(screen.getByRole("button", { name: "Cancel" }))
+  expect(screen.queryByLabelText("Server")).not.toBeInTheDocument()
+  vi.unstubAllGlobals()
+})
