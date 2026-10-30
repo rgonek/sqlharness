@@ -335,7 +335,7 @@ public sealed class JournalReaderTests
             Cases = [new ConditionsCase("0", 0, "case 0", null, [first], "case-fingerprint-0") { VaryingForFingerprint = [first] },
                 new ConditionsCase("1", 1, "case 1", null, [second], "case-fingerprint-1") { VaryingForFingerprint = [second] }],
         };
-        JournalVariantMetrics Case(string variant, string id, JournalTableIo table) =>
+        static JournalVariantMetrics Case(string variant, string id, JournalTableIo table) =>
             OptimizationMetric(variant, 100, 10, 1) with { MatrixCell = int.Parse(id), CaseId = id, CaseLabel = $"case {id}", TableIo = [table] };
         var metrics = new BenchmarkJournalRecord(
         [

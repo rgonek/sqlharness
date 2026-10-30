@@ -594,8 +594,13 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     var samples = metric.ToArray();
                     var tableRows = samples.Where(row => row.Table is not null)
                         .Select(row => new CompareTableIoEvidence(row.Table!, row.TableLogicalReads!.Value, row.TableLobLogicalReads, row.ScanCount)
-                        { PhysicalReads = row.PhysicalReads, PageServerReads = row.PageServerReads, ReadAheadReads = row.ReadAheadReads,
-                          LobPhysicalReads = row.LobPhysicalReads, LobReadAheadReads = row.LobReadAheadReads })
+                        {
+                            PhysicalReads = row.PhysicalReads,
+                            PageServerReads = row.PageServerReads,
+                            ReadAheadReads = row.ReadAheadReads,
+                            LobPhysicalReads = row.LobPhysicalReads,
+                            LobReadAheadReads = row.LobReadAheadReads
+                        })
                         .ToArray();
                     long? scans = tableRows.Length == 0 || tableRows.Any(row => row.Scans is null)
                         ? null
@@ -816,11 +821,15 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var eligible = status == "confirmed";
         return new Dictionary<string, MetricAvailabilityPair>
         {
-            ["reads"] = Pair(eligible && singleCase && reads.HasValue, true), ["scans"] = Pair(eligible && singleCase && scans.HasValue, true),
+            ["reads"] = Pair(eligible && singleCase && reads.HasValue, true),
+            ["scans"] = Pair(eligible && singleCase && scans.HasValue, true),
             ["executions"] = Pair(eligible && singleCase && executions.HasValue, true),
-            ["cpu"] = Pair(eligible && singleCase && cpu.HasValue, true), ["elapsed"] = Pair(eligible && singleCase && elapsed.HasValue, true),
-            ["grantRequested"] = Pair(eligible && singleCase && requested.HasValue, true), ["grantGranted"] = Pair(eligible && singleCase && granted.HasValue, true),
-            ["grantMaxUsed"] = Pair(eligible && singleCase && used.HasValue, true), ["spill"] = Pair(eligible && singleCase && spill.HasValue, true),
+            ["cpu"] = Pair(eligible && singleCase && cpu.HasValue, true),
+            ["elapsed"] = Pair(eligible && singleCase && elapsed.HasValue, true),
+            ["grantRequested"] = Pair(eligible && singleCase && requested.HasValue, true),
+            ["grantGranted"] = Pair(eligible && singleCase && granted.HasValue, true),
+            ["grantMaxUsed"] = Pair(eligible && singleCase && used.HasValue, true),
+            ["spill"] = Pair(eligible && singleCase && spill.HasValue, true),
             ["planRepetition"] = Pair(eligible && singleCase && repetition.HasValue, true),
         };
     }

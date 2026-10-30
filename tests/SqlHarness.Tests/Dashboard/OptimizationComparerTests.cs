@@ -37,7 +37,8 @@ public sealed class OptimizationComparerTests
     public void Outcomes_keep_missing_io_and_differing_results_and_never_invent_policy()
     {
         var evidence = Evidence(1, "h1", "h2", (0, 20), (100, 50));
-        evidence = evidence with {
+        evidence = evidence with
+        {
             Cases = [evidence.Cases[0] with { ResultsEquivalent = false }, evidence.Cases[1]],
             Metrics = evidence.Metrics.Select(m => m.CaseId == "1" && m.Variant == "candidate" ? m with { LogicalReadsMedian = null } : m).ToArray(),
         };
