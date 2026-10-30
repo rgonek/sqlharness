@@ -1,0 +1,73 @@
+CONSOLE debug [vite] connecting...
+CONSOLE debug [vite] connected.
+CONSOLE info %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BODY SQLHarness
+Activity
+Usage
+Profiles
+Settings
+Profiles
+pg
+production
+sqlserver · host
+Profiles
+
+Edit existing targets.json profiles. Passwords stay in their environment variables and are never read.
+
+Edit pg
+
+Profile name cannot be changed. Only environment variable names are saved; their values are never read.
+
+Engine
+SQL Server
+PostgreSQL
+Server
+Database or template
+Authentication
+SQL user
+Integrated
+Azure CLI
+AD default
+SQL user
+Password environment variable
+ Trust server certificate (legacy TLS setting for PostgreSQL)
+Environment
+Variables
+Add variable
+Mutation mode
+Inherit global
+Never
+Operator approval
+YOLO
+
+Global mode: yolo. Effective mode: operator. Source: profile.
+
+Writer
+Unconfigured
+Same as reader
+Separate writer
+Writer SQL user
+Writer password environment variable
+
+YOLO skips operator approval only for DML. Schema, privilege and opaque changes still require approval.
+
+ Acknowledge production YOLO
+Save
+Cancel
+ERRORS []
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.fill: Error: strict mode violation: getByLabel('Server') resolved to 2 elements:
+    1) <input value="host" data-slot="input" id="profile-server" aria-invalid="false" class="h-7 w-full min-w-0 rounded-md border border-input bg-input/20 px-2 py-0.5 text-sm transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-xs/relaxed file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 ar…/> aka getByRole('textbox', { name: 'Server' })
+    2) <input type="checkbox"/> aka getByRole('checkbox', { name: 'Trust server certificate (' })
+
+Call log:
+  - waiting for getByLabel('Server')
+
+    at C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\plans\124-evidence\browser-fixture.mjs:13:33 {
+  log: [ "  - waiting for getByLabel('Server')" ]
+}
+
+Node.js v24.18.0

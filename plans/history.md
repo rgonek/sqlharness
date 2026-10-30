@@ -495,3 +495,7 @@ Completed locally on dashboard-layout-polish; tested b3e921cd, runtime bbda23d2.
 ### Plan 121 layout-polish local integration — 2026-10-29
 
 Locally merged dashboard-layout-polish source268cc96c into main (previous939468bb). Both dated mock directories preserved and documentation reconciled; executable src/tests/scripts remain identical to the accepted branch and tested b3e921cd. Reused Windows gate PASS (UI436,Core4774/11 skips,MCP535/4 skips), branch format5 and browser104; no new integrated gate execution for documentation-only differences. Local uncommitted README/index work preserved. No push/publication/restart. [Evidence](121-evidence/layout-polish/screenshot-details/integration.md).
+
+## Plan 124 — implementation in progress (2026-10-30)
+
+Tasks 1–3 have task reviews archived under [Plan 124 evidence](124-evidence/reviews-and-checks/). Task 4 Windows gate and synthetic browser passed; independent whole-branch review remains pending. The gate revision and post-build EOF-only correction are recorded in [verification](124-evidence/verification.md). Profile saves are Windows-only; installed behavior and live activation have not been verified.

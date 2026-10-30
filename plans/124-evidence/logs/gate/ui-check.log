@@ -1,0 +1,32 @@
+
+> ui@0.0.0 check
+> node scripts/check.mjs
+
+
+> ui@0.0.0 lint
+> oxlint
+
+
+> ui@0.0.0 typecheck
+> tsc -b
+
+
+> ui@0.0.0 test
+> vitest run
+
+src/components/optimization/OptimizationSection.tsx:87:5: warning react-hooks(exhaustive-deps): React Hook useEffect has missing dependencies: 'update', 'aGroup.fingerprint', 'hasVersion', and 'search.a' help: Either include it or remove the dependency array.
+src/components/optimization/OptimizationSection.tsx:93:5: warning react-hooks(exhaustive-deps): React Hook useEffect has missing dependencies: 'update', 'matchesCard', 'search.b', 'aGroup.fingerprint', 'hasVersion', 'search.groupB', 'activeQueryRefetch', and 'search.a' help: Either include it or remove the dependency array.
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/90b3/sqlharness/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  71 passed (71)
+      Tests  458 passed (458)
+   Start at  07:06:26
+   Duration  744.73s (import 50%, tests 26%, environment 17%, setup 6%, transform 1%)
+
+     Import  357 modules were evaluated 3655 times · 359.92s total, 50% of tracked time
+             ~324.77s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+(node:7572) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)

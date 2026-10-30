@@ -8,7 +8,7 @@
 resolver, a guarded single-profile save, and a typed form on the existing Profiles page.
 **Tech stack:** C#/.NET, System.Text.Json, ASP.NET Core, React/TypeScript, TanStack Query, xUnit, Vitest.
 **Spec:** [Editable profiles design](../docs/superpowers/specs/2026-10-29-profile-editing-design.md).
-**Status:** Planned; not implemented. User requested the plan only.
+**Status:** Implementation in progress on `plan-124`; Task 4 verification and whole-branch review pending. Saving existing profiles is Windows-only; non-Windows refuses before file access.
 **Baseline:** `455adea0`, inspected 2026-10-29; working tree initially clean.
 **Owner coverage:** Extends the existing profile view and mutation approval design, not plans
 109/116 or a new mutation-execution transport. No existing open profile-editing owner found in index.
@@ -26,7 +26,7 @@ resolver, a guarded single-profile save, and a typed form on the existing Profil
   a new auth strategy or a connection-test action.
 - STOP on incompatible existing mode semantics, inability to preserve sibling configuration,
   unresolved auth/TLS validation gaps or security-guard bypass. Resolve the design before weakening it.
-- This plan does not authorize implementation, installation, restart, commit, push or publication.
+- The execution session authorized implementation and local commits; it did not authorize installation, restart, merge, push or publication.
 
 ## Review focus
 
@@ -145,19 +145,19 @@ save, reopen and see the same choice without editing JSON or exposing a secret.
 - Tests: existing mutation broker/executor and MCP mapping tests, dashboard security/API tests.
 - Update this plan and `plans/README.md` with actual evidence and status.
 
-- [ ] Add/extend synthetic tests for a pending approved request whose target changes before
+- [x] Add/extend synthetic tests for a pending approved request whose target changes before
   execution, inherited global-policy changes and an already-running MCP process retaining its
   startup view. Assert target mismatch fails closed and no query reaches a different target.
-- [ ] Document dashboard reload vs startup-frozen clients; Save success must not claim live MCP
+- [x] Document dashboard reload vs startup-frozen clients; Save success must not claim live MCP
   activation. Do not change lifecycle behavior to hide stale configuration.
-- [ ] Run focused tests via `dotnet test tests/SqlHarness.Tests --filter
+- [x] Run focused tests via `dotnet test tests/SqlHarness.Tests --filter
   "FullyQualifiedName~Profile|FullyQualifiedName~Mutation|FullyQualifiedName~Capabilities"`
   and corresponding MCP mapping tests. Resolve actual failures rather than weakening assertions.
-- [ ] Run `just verify` on final product tree and required scoped formatting checks.
-- [ ] Verify the UI with synthetic fixtures: inherited and explicit policy, missing writer,
+- [x] Run `just verify` and required scoped formatting checks; [evidence](124-evidence/verification.md) records the post-build EOF-only correction and exact gate boundary.
+- [x] Verify the UI with synthetic fixtures: inherited and explicit policy, missing writer,
   separate writer, production acknowledgement, conflict and keyboard-only Save/Cancel.
   No real profile writes, database access or restart.
-- [ ] Record results and unresolved limits, review complete scoped diff and privacy, then update
+- [x] Record results and unresolved limits, review complete scoped diff and privacy, then update
   plan/index status. Do not mark installed/live behavior verified from local tests alone.
 
 **Acceptance:** Existing profiles remain compatible; synthetic end-to-end editing and guard tests

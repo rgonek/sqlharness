@@ -1,0 +1,5 @@
+CONSOLE debug [vite] connecting...
+CONSOLE debug [vite] connected.
+CONSOLE info %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+CONSOLE error Failed to load resource: the server responded with a status of 409 (Conflict)
+PASS synthetic inherited/explicit, missing and separate writer, production notice, conflict draft, keyboard Save and Cancel; errors 0
