@@ -166,3 +166,69 @@ test("explains when profile editing is unavailable", async () => {
   expect(await screen.findByText("Editing is unavailable on this platform.")).toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument()
 })
+
+const editFixture = () => {
+  const editableProfile = { server: "host", database: "db", vars: {}, auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", engine: "sqlserver", trustServerCertificate: true, mutations: { mode: "never" } }
+  const view = { name: "pg", engine: "sqlserver", server: "host", database: "db", auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", sslMode: null, trustServerCertificate: true, tls: "trust server certificate", rootCertificate: null, vars: [], environment: null, mutationMode: "never", mutationWriterKind: null, acknowledgeProductionYolo: false, configuredMode: "never", effectiveMode: "never", modeSource: "profile", writerConfigured: false, productionAcknowledgementRequired: false, editableProfile }
+  return { status: "valid", message: null, revision: "old", editingSupported: true, editingUnavailableReason: null, profiles: [view] }
+}
+
+test("refresh during editing retains the original revision and conflict retains the draft", async () => {
+  const user = userEvent.setup()
+  const response = editFixture()
+  let submitted: { expectedRevision: string } | undefined
+  stubFetch({ "/api/profiles": response, "PUT /api/profiles": (_url: URL, init?: RequestInit) => { submitted = JSON.parse(init!.body as string); return new Response(JSON.stringify({ error: "Profiles changed" }), { status: 409 }) } })
+  const { client } = renderApp("/profiles")
+  await user.click(await screen.findByRole("button", { name: "Edit" }))
+  await user.clear(screen.getByLabelText("Server")); await user.type(screen.getByLabelText("Server"), "draft")
+  client.setQueryData(["profiles"], { ...response, revision: "new", profiles: [{ ...response.profiles[0], editableProfile: { ...response.profiles[0].editableProfile, server: "other" } }] })
+  await user.click(screen.getByRole("button", { name: "Save" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("Profiles changed")
+  expect(submitted?.expectedRevision).toBe("old")
+  expect(screen.getByLabelText("Server")).toHaveValue("draft")
+})
+
+test("engine transitions reset engine-specific TLS without disabling PostgreSQL TLS", async () => {
+  const user = userEvent.setup(); let submitted: { profile: { trustServerCertificate: boolean; sslMode: string | null; rootCertificate: string | null } } | undefined
+  stubFetch({ "/api/profiles": editFixture(), "PUT /api/profiles": (_url: URL, init?: RequestInit) => { submitted = JSON.parse(init!.body as string); return new Response("error", { status: 500 }) } })
+  renderApp("/profiles")
+  await user.click(await screen.findByRole("button", { name: "Edit" }))
+  await user.selectOptions(screen.getByLabelText("Engine"), "postgres")
+  expect(screen.getByLabelText(/Trust server certificate/)).not.toBeChecked()
+  await user.selectOptions(screen.getByLabelText("TLS mode"), "verify-full")
+  await user.type(screen.getByLabelText("Root certificate"), "ca.pem")
+  await user.click(screen.getByLabelText(/Trust server certificate/))
+  await user.selectOptions(screen.getByLabelText("Engine"), "sqlserver")
+  expect(screen.getByLabelText(/Trust server certificate/)).not.toBeChecked()
+  await user.click(screen.getByRole("button", { name: "Save" }))
+  await screen.findByRole("alert")
+  expect(submitted?.profile).toMatchObject({ trustServerCertificate: false, sslMode: null, rootCertificate: null })
+})
+
+test("freezes editable controls while a save is pending", async () => {
+  const user = userEvent.setup(); let resolve!: (response: Response) => void
+  const response = editFixture()
+  stubFetch({ "/api/profiles": response, "PUT /api/profiles": () => new Promise<Response>(done => { resolve = done }) })
+  renderApp("/profiles")
+  await user.click(await screen.findByRole("button", { name: "Edit" }))
+  await user.click(screen.getByRole("button", { name: "Save" }))
+  expect(screen.getByLabelText("Server")).toBeDisabled()
+  await user.type(screen.getByLabelText("Server"), "lost")
+  expect(screen.getByLabelText("Server")).toHaveValue("host")
+  expect(screen.getByLabelText("Search profiles")).toBeDisabled()
+  expect(screen.getByLabelText("Engine")).toBeDisabled()
+  expect(screen.getByRole("button", { name: "Add variable" })).toBeDisabled()
+  resolve(new Response(JSON.stringify(response), { headers: { "Content-Type": "application/json" } }))
+  await waitFor(() => expect(screen.queryByLabelText("Server")).not.toBeInTheDocument())
+})
+
+test("shows validation errors even when their field is hidden or unknown", async () => {
+  const user = userEvent.setup()
+  stubFetch({ "/api/profiles": editFixture(), "PUT /api/profiles": () => new Response(JSON.stringify({ errors: [{ field: "sslMode", message: "Invalid TLS settings." }, { field: "future", message: "Unexpected field error." }, { field: "auth", message: "Invalid authentication." }] }), { status: 400 }) })
+  renderApp("/profiles")
+  await user.click(await screen.findByRole("button", { name: "Edit" }))
+  await user.click(screen.getByRole("button", { name: "Save" }))
+  expect(await screen.findByRole("status", { name: "Other validation errors" })).toHaveTextContent("Invalid TLS settings.")
+  expect(screen.getByRole("status", { name: "Other validation errors" })).toHaveTextContent("Unexpected field error.")
+  expect(screen.getByLabelText("Authentication")).toHaveAccessibleDescription("Invalid authentication.")
+})

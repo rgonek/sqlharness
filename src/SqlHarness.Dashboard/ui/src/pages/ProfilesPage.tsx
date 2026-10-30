@@ -45,7 +45,8 @@ export function ProfilesPage() {
   const [editing, setEditing] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)
-  useBlocker({ shouldBlockFn: () => dirty && !window.confirm("Discard unsaved profile changes?"), enableBeforeUnload: dirty })
+  const [saving, setSaving] = useState(false)
+  useBlocker({ shouldBlockFn: () => saving || (dirty && !window.confirm("Discard unsaved profile changes?")), enableBeforeUnload: saving || dirty })
   const discard = () => !dirty || window.confirm("Discard unsaved profile changes?")
   const leaveEdit = () => { setEditing(false); setDirty(false) }
   if (query.error) return <ErrorState error={query.error} />
@@ -62,8 +63,8 @@ export function ProfilesPage() {
   return <div className="profiles-layout">
     <aside className="flex min-w-0 flex-col gap-3" aria-label="Profiles">
       <h2 className="text-sm font-medium">Profiles</h2>
-      <Input aria-label="Search profiles" placeholder="Search profiles" value={search} onChange={event => { if (!editing || discard()) { leaveEdit(); setSearch(event.target.value) } }} />
-      <div className="flex flex-col gap-1">{filtered.map(item => <Button key={item.name} variant={profile?.name === item.name ? "secondary" : "ghost"} className="h-auto min-w-0 flex-col items-stretch gap-1 px-3 py-2 text-left" aria-pressed={profile?.name === item.name} onClick={() => { if (!editing || item.name === profile?.name || discard()) { if (item.name !== profile?.name) leaveEdit(); setSelected(item.name) } }}>
+      <Input disabled={saving} aria-label="Search profiles" placeholder="Search profiles" value={search} onChange={event => { if (!editing || discard()) { leaveEdit(); setSearch(event.target.value) } }} />
+      <div className="flex flex-col gap-1">{filtered.map(item => <Button disabled={saving} key={item.name} variant={profile?.name === item.name ? "secondary" : "ghost"} className="h-auto min-w-0 flex-col items-stretch gap-1 px-3 py-2 text-left" aria-pressed={profile?.name === item.name} onClick={() => { if (!editing || item.name === profile?.name || discard()) { if (item.name !== profile?.name) leaveEdit(); setSelected(item.name) } }}>
         <span className="flex items-center justify-between gap-2"><span className="truncate">{item.name}</span><span className="text-muted-foreground">{item.environment ?? "—"}</span></span>
         <span className="truncate text-xs font-normal text-muted-foreground">{item.engine} · {item.server}</span>
       </Button>)}</div>
@@ -75,7 +76,7 @@ export function ProfilesPage() {
       {status === "invalid" && <Alert variant="destructive"><AlertTitle>targets.json is invalid</AlertTitle><AlertDescription>{message}</AlertDescription></Alert>}
       {saved && <p role="status">Profile saved. Restart or reconnect existing MCP clients to use the updated profile.</p>}
       {status === "valid" && !query.data.editingSupported && query.data.editingUnavailableReason && <p>{query.data.editingUnavailableReason}</p>}
-      {status === "valid" && profile && editing && query.data.revision && <ProfileEditForm key={profile.name} profile={profile} revision={query.data.revision} onDirty={setDirty} onCancel={() => { if (discard()) leaveEdit() }} onSaved={() => { leaveEdit(); setSaved(true) }} />}
+      {status === "valid" && profile && editing && query.data.revision && <ProfileEditForm key={profile.name} profile={profile} revision={query.data.revision} onDirty={setDirty} onPending={setSaving} onCancel={() => { if (discard()) leaveEdit() }} onSaved={() => { leaveEdit(); setSaved(true) }} />}
       {status === "valid" && profile && !editing && <>
         <header className="flex flex-col gap-2"><div className="flex flex-wrap items-center gap-3"><h2 className="min-w-0 max-w-full wrap-anywhere text-xl font-semibold">{profile.name}</h2><Badge variant="outline">{profile.environment ?? "no environment"}</Badge>{query.data.editingSupported && query.data.revision && profile.editableProfile && <Button onClick={() => { setSaved(false); setEditing(true) }}>Edit</Button>}<Link to="/stats" className="ml-auto text-sm underline">Usage overview →</Link></div><p className="break-all text-sm text-muted-foreground">{profile.engine} · {profile.server} / {profile.database}</p></header>
         <Card className="profile-section" role="region" aria-label="Connection"><CardHeader><CardTitle><h3>Connection</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody>{connection.map(([label,value]) => <TableRow key={label}><TableHead scope="row" className="w-40">{label}</TableHead><TableCell className="whitespace-normal break-all">{label === "TLS" ? <ExplainedValue value={value} labels={tlsLabels} /> : <>{value}{label === "Password variable" && profile.passwordEnvVar && <p className="text-sm text-muted-foreground">Environment variable name only; its value is not read.</p>}</>}</TableCell></TableRow>)}</TableBody></Table>{profile.database.includes("{") && <p className="text-xs text-muted-foreground">Database template · resolved per operation from variables</p>}</CardContent></Card>
