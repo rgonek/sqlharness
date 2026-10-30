@@ -540,6 +540,12 @@ export type FieldError = { field: string; message: string }
 export type TranscriptCoverage = { agentKind: string; transport: string; exact: number; inferred: number; unassigned: number }
 export type TranscriptStatus = { enabled: boolean; matched: number; unmatched: number; readErrors: number; lastCycleAt: string | null; coverage?: TranscriptCoverage[] }
 
+export type TargetProfile = {
+  server: string; database: string; vars: Record<string, string>; auth: string
+  sqlUser?: string | null; passwordEnvVar?: string | null; trustServerCertificate?: boolean
+  engine?: string | null; sslMode?: string | null; rootCertificate?: string | null; environment?: string | null
+  mutations?: { mode?: string | null; writer?: { sqlUser?: string | null; passwordEnvVar?: string | null; sameAsReader?: boolean } | null; acknowledgeProductionYolo?: boolean } | null
+}
 export type ProfileVariable = { name: string; rule: string }
 export type ProfileView = {
   name: string
@@ -558,8 +564,10 @@ export type ProfileView = {
   mutationMode: string
   mutationWriterKind: string | null
   acknowledgeProductionYolo: boolean
+  configuredMode: string | null; effectiveMode: string; modeSource: string; writerConfigured: boolean; productionAcknowledgementRequired: boolean
+  editableProfile: TargetProfile | null
 }
-export type ProfilesResponse = { status: "missing" | "valid" | "invalid"; profiles: ProfileView[]; message: string | null }
+export type ProfilesResponse = { status: "missing" | "valid" | "invalid"; profiles: ProfileView[]; message: string | null; revision: string | null; editingSupported: boolean; editingUnavailableReason: string | null }
 
 export type MutationRequestSummary = {
   id: number; requestId: string; sessionKey: string; profile: string; engine: string; server: string; database: string

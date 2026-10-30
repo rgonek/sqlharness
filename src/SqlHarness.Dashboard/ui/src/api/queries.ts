@@ -1,5 +1,5 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ConflictError, getJson, HttpStatusError, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
+import { ConflictError, getJson, HttpStatusError, NetworkError, NotFoundError, patchJson, postJson, putJson, updateProfile, UnauthorizedError } from "./client"
 import type { AgentSessionAnnotation, AgentSessionDetail, AgentSessionKey, AgentSessionOperation, AgentSessionSummary, AnnotationPatch, CompareAttemptSummary, DashboardStats, KeyCount, MutationRequestSummary, OperationAnnotation, OperationAnnotationPatch, OperationDetail, OperationPlanManifest, OperationSummary, OptimizationComparison, OptimizationSection, Page, PlanGraphBuildResult, PlanGraphPropertyResult, PlanSourceMapResponse, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string; hasCompare?: boolean }
@@ -438,5 +438,13 @@ export function useClearTranscripts() {
       void client.resetQueries({ queryKey: queryKeys.liveRunning })
       void client.resetQueries({ queryKey: queryKeys.liveSessions })
     },
+  })
+}
+
+export function useUpdateProfile() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (request: { name: string; expectedRevision: string; profile: import("./types").TargetProfile }) => updateProfile(request),
+    onSuccess: data => { client.setQueryData(queryKeys.profiles(), data); void client.invalidateQueries({ queryKey: queryKeys.profiles() }) },
   })
 }
