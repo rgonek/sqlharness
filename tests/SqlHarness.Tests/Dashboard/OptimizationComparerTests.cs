@@ -38,6 +38,8 @@ public sealed class OptimizationComparerTests
         };
         var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
         Assert.Equal(2, result.CaseOutcomes.Count);
+        Assert.Contains(result.Cases, c => c.Id == "1");
+        Assert.Equal("1", OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "1", "sum").SelectedCase);
         Assert.False(result.CaseOutcomes[0].ResultsEquivalent);
         Assert.Equal("worse", result.CaseOutcomes[0].IoOutcome);
         Assert.Equal("unavailable", result.CaseOutcomes[1].IoOutcome);
@@ -865,7 +867,7 @@ public sealed class OptimizationComparerTests
 
         var result = Compare([evidence], "v1", "v2");
 
-        Assert.Empty(result.Cases);
+        Assert.Equal("unavailable", Assert.Single(result.Cases).Outcome);
         Assert.Empty(result.Tables);
         Assert.Null(result.Elapsed.BeforeMs);
         Assert.Null(result.Elapsed.AfterMs);

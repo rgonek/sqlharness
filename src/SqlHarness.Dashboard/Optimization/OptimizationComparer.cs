@@ -73,8 +73,10 @@ public static class OptimizationComparer
                 grouping => grouping.Select(item => item.Label).LastOrDefault(label => !string.IsNullOrWhiteSpace(label)) ?? grouping.Key,
                 StringComparer.Ordinal);
         var postgresMetrics = IsPostgres(before.Engine ?? after.Engine);
-        var commonIds = before.Metrics.Keys.Intersect(after.Metrics.Keys, StringComparer.Ordinal)
-            .Where(id => postgresMetrics
+        var pairedIds = before.Metrics.Keys.Intersect(after.Metrics.Keys, StringComparer.Ordinal)
+            .OrderBy(id => CaseOrder(id, caseLabels), StringComparer.Ordinal)
+            .ThenBy(id => id, StringComparer.Ordinal).ToArray();
+        var commonIds = pairedIds.Where(id => postgresMetrics
                 ? HasComparablePostgresMetric(before.Metrics[id], after.Metrics[id])
                 : before.Metrics[id].LogicalReadsMedian.HasValue && after.Metrics[id].LogicalReadsMedian.HasValue)
             .OrderBy(id => CaseOrder(id, caseLabels), StringComparer.Ordinal)
@@ -82,14 +84,14 @@ public static class OptimizationComparer
             .ToArray();
         var differingCases = direct?.Cases.Where(item => item.ResultsEquivalent == false)
             .Select(CaseKey).ToHashSet(StringComparer.Ordinal) ?? [];
-        var caseComparisons = commonIds.ToDictionary(id => id, id => CompareCase(before.Metrics[id], after.Metrics[id]));
-        var caseOptions = commonIds.Select(id => new CaseOption(id, caseLabels.GetValueOrDefault(id, id),
+        var caseComparisons = pairedIds.ToDictionary(id => id, id => CompareCase(before.Metrics[id], after.Metrics[id]));
+        var caseOptions = pairedIds.Select(id => new CaseOption(id, caseLabels.GetValueOrDefault(id, id),
             differingCases.Contains(id) ? "results differ"
                 : caseComparisons[id].VerdictBasis == "changed statements"
                     ? Outcome(caseComparisons[id].ChangedBefore!.Value, caseComparisons[id].ChangedAfter!.Value)
                     : before.Metrics[id].LogicalReadsMedian is { } readsBefore && after.Metrics[id].LogicalReadsMedian is { } readsAfter
                         ? Outcome(readsBefore, readsAfter) : "unavailable")).ToArray();
-        var validSelection = selectedCase == "all" || commonIds.Contains(selectedCase, StringComparer.Ordinal);
+        var validSelection = selectedCase == "all" || pairedIds.Contains(selectedCase, StringComparer.Ordinal);
         var resolvedSelection = validSelection ? selectedCase : "all";
         var selectedIds = resolvedSelection == "all" ? commonIds : [resolvedSelection];
         var coverage = commonIds.Length < totalCaseIds.Length
