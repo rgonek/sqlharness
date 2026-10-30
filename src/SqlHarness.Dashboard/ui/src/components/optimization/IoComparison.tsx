@@ -1,3 +1,4 @@
+import { optimizationMetricRows } from "@/lib/optimizationMarkdown"
 import { ComparisonPending } from "./ComparisonPending"
 import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -53,10 +54,13 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
   const renderRow = (row: IoRow, key: string) => <TableRow key={key}><TableHead scope="row" className="whitespace-normal pl-8 font-mono text-[13px]">{row.table}<div className="flex flex-col"><MetricReasons availability={row.availability} /></div></TableHead>{showScans && <TableCell><Pair before={row.scansBefore} after={row.scansAfter} /></TableCell>}{showReads && <TableCell><Pair before={row.readsBefore} after={row.readsAfter} change={row.change} /></TableCell>}{extraCells(row.table, row)}</TableRow>
   return <section aria-label="IO comparison" className="io-comparison space-y-3">
     <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-muted-foreground">Verdict basis: {comparison.verdictBasis ?? "whole batch"}</span>
       <SegmentedRadioGroup label="IO view" value={byStatement ? "statements" : "whole"} options={[{ value: "statements", label: "By statement" }, { value: "whole", label: "Whole batch" }]} onValueChange={value => { if (value === "statements" || value === "whole") onViewChange(value) }} />
       <span className="ml-2 text-xs text-muted-foreground">Columns</span>{scansAvailable && <Button size="sm" variant={scans ? "secondary" : "outline"} aria-pressed={scans} onClick={() => setScans(!scans)}>Scans</Button>}
       {visibleOptions.length === 0 ? null : visibleOptions.length === 1 && visibleOptions[0].key === "lobLogicalReads" ? <Button size="sm" variant={columns.includes("lobLogicalReads") ? "secondary" : "outline"} aria-pressed={columns.includes("lobLogicalReads")} onClick={() => setColumns(current => current.includes("lobLogicalReads") ? current.filter(key => key !== "lobLogicalReads") : [...current, "lobLogicalReads"])}>LOB logical</Button> : <Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}>More columns</PopoverTrigger><PopoverContent align="start"><FieldSet><FieldLegend>Columns</FieldLegend><FieldGroup>{visibleOptions.map(column => <Field key={column.key} orientation="horizontal"><FieldLabel><Checkbox checked={columns.includes(column.key)} onCheckedChange={() => setColumns(current => current.includes(column.key) ? current.filter(item => item !== column.key) : [...current, column.key])} />{column.label}</FieldLabel></Field>)}</FieldGroup></FieldSet></PopoverContent></Popover>}
     </div>
+    {optimizationMetricRows(comparison).filter(row => row.label === "Buffers").map(row => <p key={row.label} className="text-xs text-muted-foreground">Buffers: {row.before} → {row.after}</p>)}
+    {comparison.fallbackNote && !byStatement && <p className="text-xs text-muted-foreground">Some IO cannot be attributed to individual statements. IO assessment uses the whole batch.</p>}
     <ComparisonPending pending={pending} announce>{byStatement && !hasIo ? <div className="space-y-2">
       <p className="text-sm text-muted-foreground">{comparison.tableIoUnavailable ? "Per-statement IO is not available for this engine." : "Some IO cannot be attributed to individual statements. IO assessment uses the whole batch."}</p>
       {comparison.tableIoUnavailable && <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p>}

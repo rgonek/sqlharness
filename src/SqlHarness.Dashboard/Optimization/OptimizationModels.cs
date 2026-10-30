@@ -47,10 +47,13 @@ public sealed record VersionRow(
     IReadOnlyList<long> MeasuredIn,
     long LatestOperationId)
 {
+    public IReadOnlyList<VersionCaseTiming> CaseTimings { get; init; } = [];
     public string VerdictBasis { get; init; } = "whole batch";
     public long? RowsReturnedSum { get; init; }
     public bool RowsReturnedVaries { get; init; }
 }
+
+public sealed record VersionCaseTiming(string Id, long? ElapsedMedianMs, double? CpuMedianMs);
 
 public sealed record UnassignedCompare(long OperationId, string StartedAt, string Status);
 

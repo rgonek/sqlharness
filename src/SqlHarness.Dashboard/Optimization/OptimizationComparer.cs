@@ -111,10 +111,11 @@ public static class OptimizationComparer
                 : BuildTableRows(before, after, selectedIds, normalizedAggregate);
         var collapsed = tableIoUnavailable ? null : Collapse(tableRows);
         var visibleTables = tableIoUnavailable ? tableRows : tableRows.Where(row => !IsCollapsed(row)).ToArray();
-        var elapsedBefore = Aggregate(before.Metrics, selectedIds, metric => metric.ElapsedMedianMs, normalizedAggregate);
-        var elapsedAfter = Aggregate(after.Metrics, selectedIds, metric => metric.ElapsedMedianMs, normalizedAggregate);
-        var cpuBefore = Aggregate(before.Metrics, selectedIds, metric => metric.CpuMedianMs, normalizedAggregate);
-        var cpuAfter = Aggregate(after.Metrics, selectedIds, metric => metric.CpuMedianMs, normalizedAggregate);
+        var timingIds = resolvedSelection == "all" ? (direct is null ? before.Metrics.Keys.Union(after.Metrics.Keys, StringComparer.Ordinal).ToArray() : direct.Cases.Select(CaseKey).ToArray()) : [resolvedSelection];
+        var elapsedBefore = Aggregate(before.Metrics, timingIds, metric => metric.ElapsedMedianMs, normalizedAggregate);
+        var elapsedAfter = Aggregate(after.Metrics, timingIds, metric => metric.ElapsedMedianMs, normalizedAggregate);
+        var cpuBefore = Aggregate(before.Metrics, timingIds, metric => metric.CpuMedianMs, normalizedAggregate);
+        var cpuAfter = Aggregate(after.Metrics, timingIds, metric => metric.CpuMedianMs, normalizedAggregate);
         var buffersBefore = AggregateBuffers(before.Metrics, selectedIds, normalizedAggregate);
         var buffersAfter = AggregateBuffers(after.Metrics, selectedIds, normalizedAggregate);
         var mixed = Mixed(caseOptions, before.Metrics, after.Metrics, caseComparisons);

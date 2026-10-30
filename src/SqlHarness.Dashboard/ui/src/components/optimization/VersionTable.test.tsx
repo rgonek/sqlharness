@@ -61,3 +61,34 @@ test("baseline coverage follows selected case and candidate uses the projected c
   expect(screen.getByText(/1 different/)).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "IO: 0 better, 0 same, 0 worse, 1 unavailable" })).toBeInTheDocument()
 })
+
+test("shows selected timing summaries and scans in the version table", () => {
+  const comparison = { a: "v0", b: "v1", basis: "MeasuredTogether", selectedCase: "all", aggregate: "sum", elapsed: { beforeMs: 40, afterMs: 30 }, cpuBeforeMs: 40, cpuAfterMs: 30 } as unknown as import("@/api/types").OptimizationComparison
+  render(<VersionTable subject="Timing" sessionId={1} sessionSearch={{}} versions={versions} selectedA="v0" selectedB="v1" comparison={comparison} onSelect={() => {}} />)
+  expect(screen.getByRole("columnheader", { name: "Elapsed (sum of case medians)" })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: "CPU (sum of case medians)" })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: "Scans" })).toBeInTheDocument()
+  expect(within(screen.getByRole("rowheader", { name: "v0" }).closest("tr")!).getAllByText("40 ms")).toHaveLength(2)
+})
+
+test("unpaired rows retain their own case timing while selection changes the active pair", () => {
+  const comparison = { a: "v0", b: "v1", basis: "ApproximateAcrossConditions", selectedCase: "chosen", aggregate: "mean", elapsed: { beforeMs: 12, afterMs: 14 }, cpuBeforeMs: 12, cpuAfterMs: 14 } as unknown as import("@/api/types").OptimizationComparison
+  const rows = versions.map((v, i) => ({ ...v, group: { fingerprint: i === 2 ? "other" : i === 1 ? "b" : "a", label: "condition", badge: String(i) }, caseTimings: [{ id: "foreign", elapsedMedianMs: 28, cpuMedianMs: 28 }] }))
+  render(<VersionTable subject="Selection" sessionId={1} sessionSearch={{}} versions={rows} selectedA="v0" selectedB="v1" groupA="a" groupB="b" comparison={comparison} onSelect={() => {}} />)
+  expect(screen.getByRole("columnheader", { name: "Elapsed (median)" })).toBeInTheDocument()
+  expect(within(screen.getByRole("rowheader", { name: "v0" }).closest("tr")!).getAllByText("12 ms")).toHaveLength(2)
+  const other = within(screen.getByRole("rowheader", { name: "v2" }).closest("tr")!)
+  expect(other.getAllByText("28 ms")).toHaveLength(2)
+  expect(other.getByText(/different conditions/)).toBeInTheDocument()
+})
+
+test("without a pair uses all cases and shows missing timing coverage in scrollable table", () => {
+  const row = { ...versions[0], caseTimings: [{ id: "a", elapsedMedianMs: 12, cpuMedianMs: 12 }, { id: "b", elapsedMedianMs: null, cpuMedianMs: null }] }
+  render(<VersionTable subject="Coverage" sessionId={1} sessionSearch={{ case: "a", agg: "mean" }} versions={[row]} selectedA="v0" selectedB={null} onSelect={() => {}} />)
+  expect(screen.getByRole("columnheader", { name: "Elapsed (sum of case medians)" })).toBeInTheDocument()
+  expect(screen.getAllByText("1/2 cases")).toHaveLength(2)
+  expect(screen.getByRole("table").parentElement).toHaveClass("overflow-x-auto")
+  expect(screen.getByRole("columnheader", { name: "Results" })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: "IO" })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: "Policy" })).toBeInTheDocument()
+})

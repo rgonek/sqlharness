@@ -201,6 +201,11 @@ public static class OptimizationSummaryBuilder
                     measurements.Select(item => item.Compare.OperationId).Distinct().Order().ToArray(),
                     latest.Compare.OperationId)
                 {
+                    CaseTimings = latest.Compare.Cases.Select(c =>
+                    {
+                        var metric = metrics.FirstOrDefault(m => m.CaseId == c.CaseId);
+                        return new VersionCaseTiming(c.MeasurementFingerprint ?? c.CaseId, metric?.ElapsedMedianMs, metric?.CpuMedianMs);
+                    }).ToArray(),
                     VerdictBasis = verdictBasis,
                     RowsReturnedSum = latest.Compare.Cases.Count == 0 || latest.Compare.Cases.Any(c =>
                         !metrics.Any(m => m.CaseId == c.CaseId && m.RowsReturned.HasValue))

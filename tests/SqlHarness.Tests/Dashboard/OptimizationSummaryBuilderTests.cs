@@ -323,6 +323,19 @@ public sealed class OptimizationSummaryBuilderTests
         Assert.True(row.RowsReturnedVaries);
     }
 
+    [Fact]
+    public void Version_timing_projection_preserves_case_identity_and_missing_values()
+    {
+        var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
+        {
+            Cases = [new("0", "a", null, true, null) { MeasurementFingerprint = "case-a" }, new("1", "b", null, true, null)],
+            Metrics = [Metric("baseline", "0", 1) with { ElapsedMedianMs = 12, CpuMedianMs = 12 }],
+        };
+        var row = Assert.Single(Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build([compare]).Subjects).Groups).Scopes).Versions.Single(v => v.Version == "v0");
+        Assert.Equal(new VersionCaseTiming("case-a", 12, 12), row.CaseTimings[0]);
+        Assert.Equal(new VersionCaseTiming("1", null, null), row.CaseTimings[1]);
+    }
+
     private static CompareEvidence Compare(long id, string? subject, string? scope, string database, string fingerprint,
         string baselineHash, string candidateHash, (long Baseline, long Candidate) reads = default,
         bool equivalent = true, string comparisonMode = "Ordered", string status = "succeeded") =>

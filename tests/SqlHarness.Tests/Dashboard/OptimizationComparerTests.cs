@@ -876,8 +876,8 @@ public sealed class OptimizationComparerTests
 
         Assert.Equal("unavailable", Assert.Single(result.Cases).Outcome);
         Assert.Empty(result.Tables);
-        Assert.Null(result.Elapsed.BeforeMs);
-        Assert.Null(result.Elapsed.AfterMs);
+        Assert.Equal(100, result.Elapsed.BeforeMs);
+        Assert.Equal(100, result.Elapsed.AfterMs);
     }
 
     [Fact]
@@ -1145,6 +1145,40 @@ public sealed class OptimizationComparerTests
         Assert.Null(row.ReadsAfter);
         Assert.Null(row.PhysicalReadsAfter);
         Assert.Equal(0, row.PageServerReadsAfter);
+    }
+
+    [Theory]
+    [InlineData("all", "sum", 40)]
+    [InlineData("all", "mean", 20)]
+    [InlineData("0", "sum", 12)]
+    public void Timing_uses_selected_case_medians(string selected, string mode, double expected)
+    {
+        var evidence = Evidence(214, "h1", "h2", (100, 90), (100, 90)) with
+        {
+            Metrics = [
+                Metric("baseline", "0", 100) with { ElapsedMedianMs = 12, CpuMedianMs = 12 },
+                Metric("baseline", "1", 100) with { ElapsedMedianMs = 28, CpuMedianMs = 28 },
+                Metric("candidate", "0", 90) with { ElapsedMedianMs = 12, CpuMedianMs = 12 },
+                Metric("candidate", "1", 90) with { ElapsedMedianMs = 28, CpuMedianMs = 28 },
+            ],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", selected, mode);
+        Assert.Equal(expected, result.Elapsed.BeforeMs);
+        Assert.Equal(expected, result.CpuBeforeMs);
+    }
+
+    [Fact]
+    public void Missing_timing_contributor_is_unavailable_even_when_reads_are_missing()
+    {
+        var evidence = Evidence(214, "h1", "h2", (100, 90), (100, 90)) with
+        {
+            Metrics = [Metric("baseline", "0", 100) with { ElapsedMedianMs = 12, CpuMedianMs = 12 },
+                Metric("baseline", "1", 100) with { LogicalReadsMedian = null, ElapsedMedianMs = null, CpuMedianMs = null },
+                Metric("candidate", "0", 90), Metric("candidate", "1", 90)],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
+        Assert.Null(result.Elapsed.BeforeMs);
+        Assert.Null(result.CpuBeforeMs);
     }
 
     private static OptimizationComparison Compare(IReadOnlyList<CompareEvidence> evidence, string a, string b) =>

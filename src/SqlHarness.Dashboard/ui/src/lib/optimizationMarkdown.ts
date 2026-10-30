@@ -43,7 +43,7 @@ function hiddenWorkLabel(item: NonNullable<OptimizationComparison["statements"]>
 export function optimizationMetricRows(comparison: OptimizationComparison): { label: string; before: string; after: string }[] {
   const rows: { label: string; before: string; after: string }[] = []
   if (comparison.cpuBeforeMs != null || comparison.cpuAfterMs != null)
-    rows.push({ label: "CPU (ms)", before: number(comparison.cpuBeforeMs ?? null), after: number(comparison.cpuAfterMs ?? null) })
+    rows.push({ label: `CPU (${comparison.selectedCase === "all" ? `${comparison.aggregate === "mean" ? "mean" : "sum"} of case medians` : "median"}, ms)`, before: number(comparison.cpuBeforeMs ?? null), after: number(comparison.cpuAfterMs ?? null) })
   if (comparison.buffersBefore || comparison.buffersAfter)
     rows.push({ label: "Buffers", before: comparison.buffersBefore ? bufferSummary(comparison.buffersBefore) : "—", after: comparison.buffersAfter ? bufferSummary(comparison.buffersAfter) : "—" })
   return rows
