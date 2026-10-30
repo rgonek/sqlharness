@@ -10,6 +10,7 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
+| [125](125-optimization-evidence-clarity.md) | Eligible optimization evidence, honest statement/table IO, separate IO/policy outcomes, one timing summary and consolidated actions | Existing 104/105 and 121/122/123 contracts | IMPLEMENTED AND VERIFIED on `b189a999`; Task 6 and final whole-branch reviews pending ([evidence](125-evidence/verification.md)) |
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 
@@ -18,7 +19,6 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
-| [125](125-optimization-evidence-clarity.md) | Eligible optimization evidence, honest statement/table IO, separate IO/policy outcomes, one timing summary and consolidated actions | Existing 104/105 and 121/122/123 contracts | PLANNED; approved direction, implementation not authorized |
 | [124](124-profile-editing-and-mutation-inheritance.md) | Edit existing dashboard profiles; inherited/explicit mutation mode, independent writer and guarded atomic save | Existing profile view and mutation approval | PLANNED; design and task plan only, implementation not authorized ([design](../docs/superpowers/specs/2026-10-29-profile-editing-design.md)) |
 
 Plan [122](122-dashboard-data-value-new-sessions.md): **DONE on `plan-122-backend`; final product `50a4ffb9` verified** — all six tasks including UI, rebased onto main `b7a820f5`; Terra high and Sol low reviews approved; Windows gate PASS (Core 4771, MCP 535, UI 406), branch format and 14 browser states PASS. New-session evidence only, no backfill; locally integrated into `main` at `4baefd17`, merge Windows gate PASS (Core 4771, MCP 535, UI 406); no push. [Integration](122-evidence/integration.md). [Evidence](122-evidence/verification.md). Requires Plan 121 product and mock-alignment corrections; see [spec](../docs/superpowers/specs/2026-10-26-dashboard-data-value.md).

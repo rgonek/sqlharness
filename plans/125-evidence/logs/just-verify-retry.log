@@ -1,0 +1,4 @@
+pwsh ./scripts/verify.ps1 
+==> ui-install ok 8m44s
+==> build ok 1m59s
+error: recipe `verify` failed on line 12 with exit code 1

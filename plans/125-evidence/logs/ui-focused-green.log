@@ -1,0 +1,139 @@
+
+> ui@0.0.0 test
+> vitest run --run src/pages/AgentSessionPage.test.tsx src/components/optimization/StatementRows.test.tsx src/components/optimization/IoComparison.test.tsx
+
+
+ RUN  v5.0.3 C:/Users/robert.gonek/.codex/worktrees/4b41/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ❯ src/components/optimization/IoComparison.test.tsx (17 tests | 1 failed) 3826ms
+   × shows unequal per-side execution counts 245ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/optimization/IoComparison.test.tsx > shows unequal per-side execution counts
+TestingLibraryElementError: Unable to find an element with the text: /Executions.*2 → —/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <section
+      aria-label="IO comparison"
+      class="io-comparison space-y-3"
+    >
+      <div
+        class="flex flex-wrap items-center gap-2"
+      >
+        <span
+          class="text-xs text-muted-foreground"
+        >
+          Verdict basis: 
+          whole batch
+        </span>
+        <div
+          aria-label="IO view"
+          class="flex w-fit max-w-full flex-wrap gap-0"
+          data-slot="radio-group"
+          role="radiogroup"
+        >
+          <div
+            class="relative min-w-0 max-w-full border border-input first:rounded-l-lg last:rounded-r-lg [&+div]:border-l-0 has-[[aria-checked=true]]:bg-muted has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50"
+          >
+            <span
+              aria-checked="true"
+              aria-labelledby="_r_44_-0-label"
+              class="group/radio-group-item peer flex shrink-0 rounded-full border border-input outline-none group-has-[:focus-visible]/field-label:ring-0 group-has-[:focus-visible]/field-label:not-data-checked:border-input after:absolute focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-[:focus-visible]/field-label:data-checked:border-primary dark:data-checked:bg-primary absolute inset-0 size-full aspect-auto opacity-0 after:inset-0"
+              data-checked=""
+              data-composite-item-active=""
+              data-slot="radio-group-item"
+              id="base-ui-_r_46_"
+              role="radio"
+              tabindex="0"
+            >
+              <span
+                class="flex size-4 items-center justify-center"
+                data-checked=""
+                data-slot="radio-group-indicator"
+              >
+                <span
+                  class="absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-foreground"
+                />
+              </span>
+            </span>
+            <input
+              aria-hidden="true"
+              checked=""
+              id="_r_44_-0"
+              style="clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: -1px; position: fixed; top: 0px; left: 0px;"
+              tabindex="-1"
+              type="radio"
+              value="statements"
+            />
+            <label
+              class="flex items-center gap-2 text-xs/relaxed leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 cursor-pointer break-words px-2.5 py-1.5"
+              data-slot="label"
+              for="_r_44_-0"
+              id="_r_44_-0-label"
+            >
+              By statement
+            </label>
+          </div>
+          <div
+            class="relative min-w-0 max-w-full border border-input first:rounded-l-lg last:rounded-r-lg [&+div]:border-l-0 has-[[aria-checked=true]]:bg-muted has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50"
+          >
+            <span
+              aria-checked="false"
+              aria-labelledby="_r_44_-1-label"
+              class="group/radio-group-item peer flex shrink-0 rounded-full border border-input outline-none group-has-[:focus-visible]/field-label:ring-0 group-has-[:focus-visible]/field-label:not-data-checked:border-input after:absolute focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-[:focus-visible]/field-label:data-checked:border-primary dark:data-checked:bg-primary absolute inset-0 size-full aspect-auto opacity-0 after:inset-0"
+              data-slot="radio-group-item"
+              data-unchecked=""
+              id="base-ui-_r_49_"
+              role="radio"
+              tabindex="-1"
+            />
+            <input
+              aria-hidden="true"
+              id="_r_44_-1"
+              style="clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: -1px; position: fixed; top: 0px; left: 0px;"
+              tabindex="-1"
+              type="radio"
+              value="whole"
+            />
+            <label
+              class="flex items-center gap-2 text-xs/relaxed leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 cursor-pointer break-words px-2.5 py-1.5"
+              data-slot="label"
+              for="_r_44_-1"
+              id="_r_44_-1-label"
+            >
+              Whole batch
+            </label>
+          </div>
+        </div>
+        <span
+          class="ml-2 text-xs text-muted-foreground"
+        >
+          Columns
+        </span>
+        <button...
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/optimization/IoComparison.test.tsx:170:17
+    168|   expect(screen.getByText(/Executions.*2 → 7/)).toBeInTheDocument()
+    169|   rerender(<IoComparison comparison={{ ...comparison, statements: [{ .…
+    170|   expect(screen.getByText(/Executions.*2 → —/)).toBeInTheDocument()
+       |                 ^
+    171| })
+    172|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 32 passed (33)
+   Start at  12:45:30
+   Duration  45.60s (import 47%, tests 33%, transform 8%, environment 8%, setup 4%)
+
+    Isolate  3 workers spawned · ~1.63s startup each (spawn + environment, per file)
+             at least ~3.26s faster with isolate: false — reuses workers across files instead of one per file
+
