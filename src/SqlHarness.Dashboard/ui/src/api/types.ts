@@ -172,7 +172,7 @@ export type ConditionsGroup = {
 export type ScopeVersions = { scope: string; versions: OptimizationVersion[]; defaultA: string | null; defaultB: string | null }
 export type OptimizationVersion = {
   version: string; hash: string; logicalReadsSum: number | null; logicalReadsMean: number | null; scansSum: number | null
-  caseTimings?: { id: string; elapsedMedianMs: number | null; cpuMedianMs: number | null }[]
+  caseTimings?: { id: string; varyingId?: string | null; elapsedMedianMs: number | null; cpuMedianMs: number | null }[]
   rowsReturnedSum?: number | null; rowsReturnedVaries?: boolean
   elapsedMedianMs: number | null; caseOutcome: string; measuredIn: number[]; latestOperationId: number; verdictBasis: string
 }
@@ -212,6 +212,7 @@ export type OptimizationComparison = {
   groupA?: string | null; groupB?: string | null; groupLabelA?: string | null; groupLabelB?: string | null
   outcomeCounts?: OutcomeCounts
   caseOutcomes?: CaseOutcome[]
+  timingContributors?: { id: string; elapsedBeforeMs: number | null; elapsedAfterMs: number | null; cpuBeforeMs: number | null; cpuAfterMs: number | null }[]
   caseRows?: { caseKey: string; labelA: string; labelB: string; rowsA: number | null; rowsB: number | null; rowsAVaries: boolean; rowsBVaries: boolean }[]
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]
   selectedCase: string; aggregate: string; coverageLabel: string; statementMetricsUnavailableReason?: string | null

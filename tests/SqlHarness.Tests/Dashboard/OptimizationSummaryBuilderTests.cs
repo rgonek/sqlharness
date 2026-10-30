@@ -328,11 +328,11 @@ public sealed class OptimizationSummaryBuilderTests
     {
         var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
         {
-            Cases = [new("0", "a", null, true, null) { MeasurementFingerprint = "case-a" }, new("1", "b", null, true, null)],
+            Cases = [new("0", "a", null, true, null) { MeasurementFingerprint = "case-a", VaryingFingerprint = "varying-a" }, new("1", "b", null, true, null)],
             Metrics = [Metric("baseline", "0", 1) with { ElapsedMedianMs = 12, CpuMedianMs = 12 }],
         };
         var row = Assert.Single(Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build([compare]).Subjects).Groups).Scopes).Versions.Single(v => v.Version == "v0");
-        Assert.Equal(new VersionCaseTiming("case-a", 12, 12), row.CaseTimings[0]);
+        Assert.Equal(new VersionCaseTiming("case-a", 12, 12) { VaryingId = "varying-a" }, row.CaseTimings[0]);
         Assert.Equal(new VersionCaseTiming("1", null, null), row.CaseTimings[1]);
     }
 

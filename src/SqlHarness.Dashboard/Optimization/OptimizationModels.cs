@@ -53,7 +53,10 @@ public sealed record VersionRow(
     public bool RowsReturnedVaries { get; init; }
 }
 
-public sealed record VersionCaseTiming(string Id, long? ElapsedMedianMs, double? CpuMedianMs);
+public sealed record VersionCaseTiming(string Id, long? ElapsedMedianMs, double? CpuMedianMs)
+{
+    public string? VaryingId { get; init; }
+}
 
 public sealed record UnassignedCompare(long OperationId, string StartedAt, string Status);
 
@@ -151,6 +154,7 @@ public sealed record OptimizationComparison(
     public string? GroupLabelB { get; init; }
     public IReadOnlyList<CaseRows> CaseRows { get; init; } = [];
     public IReadOnlyList<CaseOutcome> CaseOutcomes { get; init; } = [];
+    public IReadOnlyList<TimingContributor> TimingContributors { get; init; } = [];
     public OutcomeCounts OutcomeCounts
     {
         get
@@ -242,6 +246,9 @@ public sealed record CaseOutcome(string Id, string Label, bool? ResultsEquivalen
     long? ReadsBefore, long? ReadsAfter, long? ElapsedBeforeMs, long? ElapsedAfterMs,
     double? CpuBeforeMs, double? CpuAfterMs, string? PolicyVerdict, IReadOnlyList<string> PolicyReasons,
     string? PolicyUnavailableReason);
+
+public sealed record TimingContributor(string Id, long? ElapsedBeforeMs, long? ElapsedAfterMs,
+    double? CpuBeforeMs, double? CpuAfterMs);
 
 public sealed record CaseOption(string Id, string Label, string Outcome);
 public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);

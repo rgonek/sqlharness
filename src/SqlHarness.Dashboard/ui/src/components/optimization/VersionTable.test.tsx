@@ -92,3 +92,38 @@ test("without a pair uses all cases and shows missing timing coverage in scrolla
   expect(screen.getByRole("columnheader", { name: "IO" })).toBeInTheDocument()
   expect(screen.getByRole("columnheader", { name: "Policy" })).toBeInTheDocument()
 })
+
+test("uses full timing contributors for other rows and per-side metric coverage", () => {
+  const comparison = { a: "v0", b: "v1", basis: "MeasuredTogether", selectedCase: "all", aggregate: "sum", cases: [{ id: "a" }], caseOutcomes: [{ id: "a", elapsedBeforeMs: 12, elapsedAfterMs: 12, cpuBeforeMs: 12, cpuAfterMs: null }], elapsed: { beforeMs: 40, afterMs: null }, cpuBeforeMs: null, cpuAfterMs: null, timingContributors: [{ id: "a", elapsedBeforeMs: 12, elapsedAfterMs: 12, cpuBeforeMs: 12, cpuAfterMs: null }, { id: "b", elapsedBeforeMs: 28, elapsedAfterMs: null, cpuBeforeMs: null, cpuAfterMs: null }] } as unknown as import("@/api/types").OptimizationComparison
+  const rows = versions.map(v => ({ ...v, group: { fingerprint: "g", label: "same", badge: "A" }, caseTimings: [{ id: "a", elapsedMedianMs: 12, cpuMedianMs: 12 }, { id: "b", elapsedMedianMs: 28, cpuMedianMs: 28 }] }))
+  render(<VersionTable subject="Asymmetric" sessionId={1} sessionSearch={{}} versions={rows} selectedA="v0" selectedB="v1" groupA="g" groupB="g" comparison={comparison} onSelect={() => {}} />)
+  const other = within(screen.getByRole("rowheader", { name: "v2" }).closest("tr")!)
+  expect(other.getAllByText("40 ms")).toHaveLength(2)
+  const a = within(screen.getByRole("rowheader", { name: "v0" }).closest("tr")!)
+  const b = within(screen.getByRole("rowheader", { name: "v1" }).closest("tr")!)
+  expect(a.getByText("1/2 cases")).toBeInTheDocument()
+  expect(b.getByText("1/2 cases")).toBeInTheDocument()
+  expect(b.getByText("0/2 cases")).toBeInTheDocument()
+})
+
+test("cross-condition contributors use varying identities only for group A and preserve other groups", () => {
+  const comparison = { a: "v0", b: "v1", basis: "ApproximateAcrossConditions", selectedCase: "all", aggregate: "sum", elapsed: { beforeMs: 12, afterMs: 14 }, cpuBeforeMs: 12, cpuAfterMs: 14, timingContributors: [{ id: "matched", elapsedBeforeMs: 12, elapsedAfterMs: 14, cpuBeforeMs: 12, cpuAfterMs: 14 }] } as unknown as import("@/api/types").OptimizationComparison
+  const rows = [
+    { ...versions[0], group: { fingerprint: "a", label: "A", badge: "A" } },
+    { ...versions[1], group: { fingerprint: "b", label: "B", badge: "B" } },
+    { ...versions[2], group: { fingerprint: "a", label: "A", badge: "A" }, caseTimings: [{ id: "full-fingerprint", varyingId: "matched", elapsedMedianMs: 28, cpuMedianMs: 28 }, { id: "other", varyingId: "unmatched", elapsedMedianMs: 50, cpuMedianMs: 50 }] },
+    { ...versions[2], version: "v3", group: { fingerprint: "other", label: "Other", badge: "C" }, caseTimings: [{ id: "foreign", elapsedMedianMs: 9, cpuMedianMs: 9 }] },
+  ]
+  render(<VersionTable subject="Cross" sessionId={1} sessionSearch={{}} versions={rows} selectedA="v0" selectedB="v1" groupA="a" groupB="b" comparison={comparison} onSelect={() => {}} />)
+  expect(within(screen.getByRole("rowheader", { name: "v2" }).closest("tr")!).getAllByText("28 ms")).toHaveLength(2)
+  expect(within(screen.getByRole("rowheader", { name: "v3" }).closest("tr")!).getAllByText("9 ms")).toHaveLength(2)
+})
+
+test("an unpaired row missing a selected contributor is unavailable rather than a partial sum", () => {
+  const comparison = { a: "v0", b: "v1", basis: "MeasuredTogether", selectedCase: "all", aggregate: "sum", cases: [{ id: "a" }], elapsed: { beforeMs: 40, afterMs: null }, cpuBeforeMs: 40, cpuAfterMs: null, timingContributors: [{ id: "a", elapsedBeforeMs: 12, elapsedAfterMs: 12, cpuBeforeMs: 12, cpuAfterMs: 12 }, { id: "b", elapsedBeforeMs: 28, elapsedAfterMs: null, cpuBeforeMs: 28, cpuAfterMs: null }] } as unknown as import("@/api/types").OptimizationComparison
+  const rows = versions.map(v => ({ ...v, group: { fingerprint: "g", label: "same", badge: "A" }, caseTimings: [{ id: "a", elapsedMedianMs: 12, cpuMedianMs: 12 }] }))
+  render(<VersionTable subject="Missing" sessionId={1} sessionSearch={{}} versions={rows} selectedA="v0" selectedB="v1" groupA="g" groupB="g" comparison={comparison} onSelect={() => {}} />)
+  const row = within(screen.getByRole("rowheader", { name: "v2" }).closest("tr")!)
+  expect(row.getAllByText("1/2 cases")).toHaveLength(2)
+  expect(row.queryByText("12 ms")).not.toBeInTheDocument()
+})

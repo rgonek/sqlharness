@@ -144,6 +144,7 @@ public static class OptimizationComparer
             resolvedSelection, normalizedAggregate, coverage, mixed, visibleTables, collapsed,
             new ElapsedInfo(elapsedBefore, elapsedAfter, directForward ? direct?.RegressionVerdict : null, basis == PairBasis.DifferentRunsSameConditions))
         {
+            TimingContributors = TimingContributors(timingIds, before.Metrics, after.Metrics),
             CaseOutcomes = BuildOutcomes(direct is null ? before.Metrics.Keys.Union(after.Metrics.Keys, StringComparer.Ordinal) : direct.Cases.Select(CaseKey), caseLabels, before.Metrics, after.Metrics,
                 direct, directForward, postgresMetrics, direct is null ? "independently measured" : "reversed comparison"),
             CaseRows = commonIds.Select(id => new CaseRows(id, caseLabels.GetValueOrDefault(id, id), caseLabels.GetValueOrDefault(id, id),
@@ -232,6 +233,7 @@ public static class OptimizationComparer
             GroupB = groupB.Fingerprint,
             GroupLabelA = groupA.Label,
             GroupLabelB = groupB.Label,
+            TimingContributors = TimingContributors(selected, left.Metrics, right.Metrics),
             CaseOutcomes = BuildOutcomes(ids, before.Value.Labels, left.Metrics, right.Metrics, null, false, postgres, "different conditions"),
             CaseRows = rows,
             BeforeAction = ids.Length == 0 ? before.Value.FullAction : SnapshotAction(left),
@@ -692,6 +694,15 @@ public static class OptimizationComparer
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
         return new VersionSnapshot(compare.Engine, compare.OperationId, variant, metrics);
     }
+
+    private static IReadOnlyList<TimingContributor> TimingContributors(IEnumerable<string> ids,
+        IReadOnlyDictionary<string, CompareMetricEvidence> before, IReadOnlyDictionary<string, CompareMetricEvidence> after) =>
+        ids.Select(id =>
+        {
+            before.TryGetValue(id, out var a);
+            after.TryGetValue(id, out var b);
+            return new TimingContributor(id, a?.ElapsedMedianMs, b?.ElapsedMedianMs, a?.CpuMedianMs, b?.CpuMedianMs);
+        }).ToArray();
 
     private static IReadOnlyList<CaseOutcome> BuildOutcomes(IEnumerable<string> ids,
         IReadOnlyDictionary<string, string> labels, IReadOnlyDictionary<string, CompareMetricEvidence> before,

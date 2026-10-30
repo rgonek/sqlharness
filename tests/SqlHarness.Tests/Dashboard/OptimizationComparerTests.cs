@@ -1023,6 +1023,7 @@ public sealed class OptimizationComparerTests
         Assert.Equal("different conditions", outcome.PolicyUnavailableReason);
         Assert.Equal("Different conditions — approximate, not a verdict", result.EquivalenceLabel);
         Assert.Equal("1 of 2 cases paired", result.CoverageLabel);
+        Assert.Equal("key", Assert.Single(result.TimingContributors).Id);
         Assert.DoesNotContain(result.Cases, c => c.Outcome is "better" or "worse");
         var rows = Assert.Single(result.CaseRows);
         Assert.Equal(("A", "B", 1L, 1L, true), (rows.LabelA, rows.LabelB, rows.RowsA, rows.RowsB, rows.RowsAVaries));
@@ -1179,6 +1180,48 @@ public sealed class OptimizationComparerTests
         var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
         Assert.Null(result.Elapsed.BeforeMs);
         Assert.Null(result.CpuBeforeMs);
+    }
+
+    [Fact]
+    public void Timing_contributors_include_missing_metric_records_and_independent_side_availability()
+    {
+        var evidence = Evidence(214, "h1", "h2", (100, 90), (100, 90)) with
+        {
+            Metrics = [Metric("baseline", "0", 100) with { ElapsedMedianMs = 12, CpuMedianMs = 12 },
+                Metric("baseline", "1", 100) with { ElapsedMedianMs = 28, CpuMedianMs = null },
+                Metric("candidate", "0", 90) with { ElapsedMedianMs = 12, CpuMedianMs = null }],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
+        var json = System.Text.Json.JsonSerializer.SerializeToElement(result);
+        var contributors = json.GetProperty("TimingContributors");
+        Assert.Equal(2, contributors.GetArrayLength());
+        Assert.Equal("1", contributors[1].GetProperty("Id").GetString());
+        Assert.Equal(28, contributors[1].GetProperty("ElapsedBeforeMs").GetInt64());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, contributors[1].GetProperty("ElapsedAfterMs").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, contributors[1].GetProperty("CpuBeforeMs").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, contributors[0].GetProperty("CpuAfterMs").ValueKind);
+        Assert.Equal(40, result.Elapsed.BeforeMs);
+        Assert.Null(result.Elapsed.AfterMs);
+    }
+
+    [Fact]
+    public void Independent_timings_project_union_and_selected_case()
+    {
+        var before = MeasureEvidence(215, "h1", 100) with
+        {
+            Cases = [new("0", "a", null, null, null), new("1", "b", null, null, null)],
+            Metrics = [Metric("measure", "0", 100) with { CpuMedianMs = 12 }, Metric("measure", "1", 100) with { CpuMedianMs = 28 }],
+        };
+        var after = MeasureEvidence(216, "h2", 50) with { Metrics = [Metric("measure", "0", 50) with { CpuMedianMs = 5 }] };
+        var all = OptimizationComparer.Compare(Group("h1", "h2"), [before, after], "v1", "v2", "all", "sum");
+        Assert.Equal(["0", "1"], all.TimingContributors.Select(c => c.Id));
+        Assert.Null(all.TimingContributors[1].ElapsedAfterMs);
+        Assert.Equal(40, all.CpuBeforeMs);
+        Assert.Null(all.CpuAfterMs);
+        var single = OptimizationComparer.Compare(Group("h1", "h2"), [before, after], "v1", "v2", "0", "mean");
+        Assert.Equal("0", Assert.Single(single.TimingContributors).Id);
+        Assert.Equal(12, single.CpuBeforeMs);
+        Assert.Equal(5, single.CpuAfterMs);
     }
 
     private static OptimizationComparison Compare(IReadOnlyList<CompareEvidence> evidence, string a, string b) =>

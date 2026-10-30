@@ -204,7 +204,8 @@ public static class OptimizationSummaryBuilder
                     CaseTimings = latest.Compare.Cases.Select(c =>
                     {
                         var metric = metrics.FirstOrDefault(m => m.CaseId == c.CaseId);
-                        return new VersionCaseTiming(c.MeasurementFingerprint ?? c.CaseId, metric?.ElapsedMedianMs, metric?.CpuMedianMs);
+                        return new VersionCaseTiming(c.MeasurementFingerprint ?? c.CaseId, metric?.ElapsedMedianMs, metric?.CpuMedianMs)
+                        { VaryingId = c.VaryingFingerprint };
                     }).ToArray(),
                     VerdictBasis = verdictBasis,
                     RowsReturnedSum = latest.Compare.Cases.Count == 0 || latest.Compare.Cases.Any(c =>

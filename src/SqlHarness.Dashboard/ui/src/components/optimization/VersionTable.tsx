@@ -37,22 +37,28 @@ export function VersionTable({ subject, sessionId, agentSessionKey, sessionSearc
     }
     const sameGroup = !active || version.group?.fingerprint === groupA
     const cases = version.caseTimings ?? []
-    const ids = sameGroup && active ? (selection === "all" ? (comparison.cases ?? []).map(c => c.id) : [selection]) : cases.map(c => c.id)
-    const selected = ids.map(id => cases.find(c => c.id === id))
+    const ids = sameGroup && active ? (comparison.timingContributors ?? []).map(c => c.id) : cases.map(c => c.id)
+    const selected = ids.map(id => {
+      const matches = cases.filter(c => (sameGroup && active && comparison.basis === "ApproximateAcrossConditions" ? c.varyingId : c.id) === id)
+      return matches.length === 1 ? matches[0] : undefined
+    })
     if (!selected.length || selected.some(c => !c || c[field] == null)) return null
     const sum = selected.reduce((total, c) => total + c![field]!, 0)
     return sameGroup && mode === "mean" ? sum / selected.length : sum
   }
   function coverage(version: typeof versions[number], field: "elapsedMedianMs" | "cpuMedianMs") {
     if (active && (isA(version) || isB(version))) {
-      const cases = (comparison.caseOutcomes ?? []).filter(c => selection === "all" || c.id === selection)
+      const cases = comparison.timingContributors ?? []
       const key = field === "elapsedMedianMs" ? (isA(version) ? "elapsedBeforeMs" : "elapsedAfterMs") : (isA(version) ? "cpuBeforeMs" : "cpuAfterMs")
       return `${cases.filter(c => c[key] != null).length}/${cases.length} cases`
     }
     const cases = version.caseTimings ?? []
     const sameGroup = !active || version.group?.fingerprint === groupA
-    const ids = sameGroup && active ? (selection === "all" ? (comparison.cases ?? []).map(c => c.id) : [selection]) : cases.map(c => c.id)
-    return `${ids.filter(id => cases.find(c => c.id === id)?.[field] != null).length}/${ids.length} cases`
+    const ids = sameGroup && active ? (comparison.timingContributors ?? []).map(c => c.id) : cases.map(c => c.id)
+    return `${ids.filter(id => {
+      const matches = cases.filter(c => (sameGroup && active && comparison.basis === "ApproximateAcrossConditions" ? c.varyingId : c.id) === id)
+      return matches.length === 1 && matches[0][field] != null
+    }).length}/${ids.length} cases`
   }
   return <Table className="version-table" aria-label={`${subject} versions`}>
     <TableHeader><TableRow><TableHead>Version</TableHead><TableHead>Conditions</TableHead><TableHead className="text-right">Rows</TableHead><TableHead className="text-right">Logical reads</TableHead><TableHead className="text-right">vs A</TableHead><TableHead className="text-right">Scans</TableHead><TableHead className="text-right">Elapsed ({timingLabel})</TableHead><TableHead className="text-right">CPU ({timingLabel})</TableHead><TableHead>Results</TableHead><TableHead>IO</TableHead><TableHead>Policy</TableHead><TableHead id={`${groupId}-a-label`}><span aria-hidden="true">A</span><span className="sr-only">Baseline A</span></TableHead><TableHead id={`${groupId}-b-label`}><span aria-hidden="true">B</span><span className="sr-only">Candidate B</span></TableHead><TableHead className="w-10"><span className="sr-only">Observed in</span></TableHead></TableRow></TableHeader>
