@@ -57,6 +57,22 @@ public sealed class MutationExecutorTests
     }
 
     [Fact]
+    public async Task Inherited_policy_is_rechecked_after_global_change_before_approved_execution()
+    {
+        var module = new FakeModule();
+        var profile = Profile(null!, new MutationWriter(SameAsReader: true)) with { Auth = "integrated" };
+        var config = new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "operator" } };
+        var executor = new MutationExecutor(module, () => new Dictionary<string, TargetProfile> { ["local"] = profile },
+            () => config, new RecordingJournal(), TimeProvider.System);
+        config = new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "never" } };
+
+        var result = await executor.ExecuteAsync(Request(), Context(), default);
+
+        Assert.Equal(MutationStatus.Disabled, result.Status);
+        Assert.Empty(module.Operations);
+    }
+
+    [Fact]
     public async Task Changed_target_identity_is_rejected_before_database_access()
     {
         var module = new FakeModule();
@@ -161,6 +177,28 @@ public sealed class MutationExecutorTests
         Assert.Equal("[REDACTED]", resultReport.ResultSets[0].Rows[0][0]);
         Assert.Equal("[REDACTED]", resultReport.ResultSets[0].Rows[0][1]);
         Environment.SetEnvironmentVariable(variable, null);
+    }
+
+    [Fact]
+    public async Task Prepared_approved_request_rejects_target_changed_before_execution()
+    {
+        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal) { ["local"] = Profile("operator") };
+        var sessions = new RecordingMutationSessionFactory();
+        var module = new SqlHarnessModule(sessions, () => profiles);
+        var request = Request();
+        var prepared = await module.ExecuteAsync(new SqlHarnessMutationOperation(
+            new SqlTargetRequest(request.Profile, request.Vars), request.Sql, request.Parameters,
+            request.TimeoutSeconds, request.MaxRows, request.Database) { SessionKey = request.SessionKey });
+        var frozen = Assert.IsType<SqlHarnessMutationPrepared>(prepared.Report).Request;
+        profiles["local"] = profiles["local"] with { Server = "different-server" };
+        var executor = new MutationExecutor(module, () => profiles, () => new SqlHarnessConfig(),
+            new RecordingJournal(), TimeProvider.System);
+
+        var result = await executor.ExecuteAsync(frozen, Context("changed-target"), default);
+
+        Assert.Equal(MutationStatus.DatabaseMismatch, result.Status);
+        Assert.Null(sessions.Target);
+        Assert.Empty(sessions.Commands);
     }
 
     [Fact]
