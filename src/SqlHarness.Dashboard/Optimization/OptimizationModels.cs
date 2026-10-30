@@ -115,6 +115,7 @@ public sealed record CompareStatementEvidence(
     IReadOnlyList<TableRow> Objects)
 {
     public double? UdfElapsedMilliseconds { get; init; }
+    public bool RuntimeEvidenceEligible { get; init; }
     public long? CpuMs { get; init; }
     public long? ElapsedMs { get; init; }
     public long? GrantRequestedKb { get; init; }
@@ -165,10 +166,14 @@ public sealed record WholeBatchLine(long? Before, long? After, long? Shared, str
     public long? ChangedAfter { get; init; }
 }
 
+public sealed record MetricAvailability(string Status, string? Reason, int AvailableCases, int TotalCases, string? Provenance = null);
+public sealed record MetricAvailabilityPair(MetricAvailability Before, MetricAvailability After);
+
 public sealed record StatementRow(string Key, string Text, string Status, long? ReadsBefore, long? ReadsAfter,
     long? ScansBefore, long? ScansAfter, long? Executions, string Change, string Attribution,
     IReadOnlyList<HiddenWork> HiddenWork, IReadOnlyList<TableRow> Objects)
 {
+    public IReadOnlyDictionary<string, MetricAvailabilityPair>? Availability { get; init; }
     public long? CpuBeforeMs { get; init; }
     public long? CpuAfterMs { get; init; }
     public long? ElapsedBeforeMs { get; init; }
@@ -207,6 +212,7 @@ public sealed record CaseOption(string Id, string Label, string Outcome);
 public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);
 public sealed record TableRow(string Table, long? ScansBefore, long? ScansAfter, long? ReadsBefore, long? ReadsAfter, string Change)
 {
+    public IReadOnlyDictionary<string, MetricAvailabilityPair>? Availability { get; init; }
     [JsonIgnore]
     public string? ObjectKind { get; init; }
     public long? LobLogicalReadsBefore { get; init; }

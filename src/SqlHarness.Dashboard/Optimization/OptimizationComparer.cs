@@ -296,7 +296,9 @@ public static class OptimizationComparer
         if (before.StatementAttribution != "confirmed" || after.StatementAttribution != "confirmed"
             || before.OmittedStatements > 0 || after.OmittedStatements > 0
             || before.Statements.Count == 0 || after.Statements.Count == 0
-            || before.Statements.Any(row => row.Status != "confirmed") || after.Statements.Any(row => row.Status != "confirmed"))
+            || before.Statements.Any(row => row.Status != "confirmed") || after.Statements.Any(row => row.Status != "confirmed")
+            || before.Statements.GroupBy(row => (row.Key, row.Occurrence)).Any(group => group.Count() != 1)
+            || after.Statements.GroupBy(row => (row.Key, row.Occurrence)).Any(group => group.Count() != 1))
             return ("whole batch", null, null, null, null);
 
         var a = before.Statements.ToDictionary(row => (row.Key, row.Occurrence));
@@ -329,7 +331,7 @@ public static class OptimizationComparer
 
     private static bool IsShared(CompareStatementEvidence a, CompareStatementEvidence b)
     {
-        if (a.PlanHash is null || b.PlanHash is null || a.PlanHash != b.PlanHash || a.Scans != b.Scans
+        if (a.Status != "confirmed" || b.Status != "confirmed" || a.PlanHash is null || b.PlanHash is null || a.PlanHash != b.PlanHash || a.Scans != b.Scans
             || a.Reads is null || b.Reads is null) return false;
         var difference = Math.Abs((decimal)a.Reads.Value - b.Reads.Value);
         return difference < 10m || difference < Math.Max(a.Reads.Value, b.Reads.Value) * 0.01m;
@@ -346,17 +348,20 @@ public static class OptimizationComparer
             .Distinct().ToArray();
         return keys.Select(key =>
         {
-            var left = cases.Select(id => before.GetValueOrDefault(id)?.Statements.FirstOrDefault(row => (row.Key, row.Occurrence) == key)).ToArray();
-            var right = cases.Select(id => after.GetValueOrDefault(id)?.Statements.FirstOrDefault(row => (row.Key, row.Occurrence) == key)).ToArray();
+            var left = cases.Select(id => FindStatement(before.GetValueOrDefault(id), key)).ToArray();
+            var right = cases.Select(id => FindStatement(after.GetValueOrDefault(id), key)).ToArray();
             var l = left.Where(row => row is not null).Cast<CompareStatementEvidence>().ToArray();
             var r = right.Where(row => row is not null).Cast<CompareStatementEvidence>().ToArray();
             var sharedEverywhere = cases.Count > 0 && cases.Select((id, index) => (id, index))
                 .All(pair => left[pair.index] is { } x && right[pair.index] is { } y && IsShared(x, y));
             var presentSome = l.Length < cases.Count || r.Length < cases.Count;
+            var unprovedAbsence = cases.Select((id, index) => (id, index)).Any(pair =>
+                (left[pair.index] is null && !ProvesAbsence(before.GetValueOrDefault(pair.id)))
+                || (right[pair.index] is null && !ProvesAbsence(after.GetValueOrDefault(pair.id))));
             var status = sharedEverywhere ? "shared"
                 : l.Length == 0 ? "only-candidate"
                 : r.Length == 0 ? "only-baseline"
-                : presentSome ? "not-executed" : "different-work";
+                : presentSome ? unprovedAbsence ? "unmatched" : "not-executed" : "different-work";
             var readsBefore = ReduceNullable(cases.Select((id, index) => StatementCounter(before.GetValueOrDefault(id), left[index], null,
                 static row => row.Reads, static _ => null)), aggregate);
             var readsAfter = ReduceNullable(cases.Select((id, index) => StatementCounter(after.GetValueOrDefault(id), right[index], null,
@@ -369,46 +374,75 @@ public static class OptimizationComparer
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             var objects = objectNames.Select(name =>
             {
-                var objectReadsBefore = ReduceNullable(cases.Select((id, index) => StatementCounter(before.GetValueOrDefault(id), left[index], name,
-                    static _ => null, static row => row.ReadsAfter ?? row.ReadsBefore)), aggregate);
-                var objectReadsAfter = ReduceNullable(cases.Select((id, index) => StatementCounter(after.GetValueOrDefault(id), right[index], name,
-                    static _ => null, static row => row.ReadsAfter ?? row.ReadsBefore)), aggregate);
-                var objectScansBefore = ReduceNullable(cases.Select((id, index) => StatementCounter(before.GetValueOrDefault(id), left[index], name,
-                    static _ => null, static row => row.ScansAfter ?? row.ScansBefore)), aggregate);
-                var objectScansAfter = ReduceNullable(cases.Select((id, index) => StatementCounter(after.GetValueOrDefault(id), right[index], name,
-                    static _ => null, static row => row.ScansAfter ?? row.ScansBefore)), aggregate);
+                var kinds = left.Concat(right).Where(row => row is not null).SelectMany(row => row!.Objects)
+                    .Where(row => row.Table.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(row => row.ObjectKind).Distinct(StringComparer.Ordinal).ToArray();
+                var ambiguous = kinds.Any(kind => kind is null) || kinds.Length > 1 || cases.Select((id, index) => (Left: left[index], Right: right[index]))
+                    .Any(pair => ObjectIdentityAmbiguous(pair.Left, pair.Right, name));
+                long?[] ObjectValues(IReadOnlyDictionary<string, CompareMetricEvidence> metrics, CompareStatementEvidence?[] rows,
+                    Func<CompareStatementEvidence, long?> statementValue, Func<TableRow, long?> objectValue) =>
+                    cases.Select((id, index) => ambiguous ? null : StatementCounter(metrics.GetValueOrDefault(id), rows[index], name, statementValue, objectValue)).ToArray();
+                var readsA = ObjectValues(before, left, row => row.Reads, row => row.ReadsAfter ?? row.ReadsBefore);
+                var readsB = ObjectValues(after, right, row => row.Reads, row => row.ReadsAfter ?? row.ReadsBefore);
+                var scansA = ObjectValues(before, left, row => row.Scans, row => row.ScansAfter ?? row.ScansBefore);
+                var scansB = ObjectValues(after, right, row => row.Scans, row => row.ScansAfter ?? row.ScansBefore);
+                var objectReadsBefore = ReduceNullable(readsA, aggregate);
+                var objectReadsAfter = ReduceNullable(readsB, aggregate);
+                var objectScansBefore = ReduceNullable(scansA, aggregate);
+                var objectScansAfter = ReduceNullable(scansB, aggregate);
+                var lobA = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible && !ambiguous
+                    ? LobForObject(left[0]!, right[0], name, beforeSide: true) : null;
+                var lobB = singleCase && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible && !ambiguous
+                    ? LobForObject(right[0]!, left[0], name, beforeSide: false) : null;
                 return new TableRow(name, objectScansBefore, objectScansAfter, objectReadsBefore, objectReadsAfter,
                     Change(objectReadsBefore, objectReadsAfter))
                 {
-                    LobLogicalReadsBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed"
-                        ? LobForObject(left[0]!, right[0], name, beforeSide: true) : null,
-                    LobLogicalReadsAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed"
-                        ? LobForObject(right[0]!, left[0], name, beforeSide: false) : null,
+                    Availability = new Dictionary<string, MetricAvailabilityPair>
+                    {
+                        ["reads"] = AvailabilityPair(readsA, readsB, ambiguous ? "ambiguous attribution" : "missing measurement"),
+                        ["scans"] = AvailabilityPair(scansA, scansB, ambiguous ? "ambiguous attribution" : "missing measurement"),
+                        ["lobLogicalReads"] = AvailabilityPair(singleCase ? [lobA] : new long?[cases.Count], singleCase ? [lobB] : new long?[cases.Count], !singleCase ? "single case required" : ambiguous ? "ambiguous attribution" : "missing historical measurement"),
+                    },
+                    LobLogicalReadsBefore = lobA,
+                    LobLogicalReadsAfter = lobB,
                 };
             }).ToArray();
             var attribution = cases.All(id => caseComparisons.GetValueOrDefault(id).VerdictBasis == "changed statements") ? "confirmed" : "partial";
             var text = l.Concat(r).Select(row => row.Text).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
                 ?? $"statement {key.Key}";
             return new StatementRow(key.Key, text, status, readsBefore, readsAfter, scansBefore, scansAfter,
-                l.Concat(r).Select(row => row.Executions).FirstOrDefault(value => value.HasValue),
+                singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible && left[0]!.Executions == right[0]!.Executions
+                    ? left[0]!.Executions : null,
                 Change(readsBefore, readsAfter), attribution,
                 l.Concat(r).SelectMany(row => row.HiddenWork).Distinct().ToArray(),
                 objects)
             {
-                CpuBeforeMs = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.CpuMs : null,
-                CpuAfterMs = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.CpuMs : null,
-                ElapsedBeforeMs = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.ElapsedMs : null,
-                ElapsedAfterMs = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.ElapsedMs : null,
-                GrantRequestedKbBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.GrantRequestedKb : null,
-                GrantRequestedKbAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.GrantRequestedKb : null,
-                GrantGrantedKbBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.GrantGrantedKb : null,
-                GrantGrantedKbAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.GrantGrantedKb : null,
-                GrantMaxUsedKbBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.GrantMaxUsedKb : null,
-                GrantMaxUsedKbAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.GrantMaxUsedKb : null,
-                HasSpillWarningBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.HasSpillWarning : null,
-                HasSpillWarningAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.HasSpillWarning : null,
-                PlanRepetitionBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.PlanRepetition : null,
-                PlanRepetitionAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.PlanRepetition : null,
+                Availability = new Dictionary<string, MetricAvailabilityPair>
+                {
+                    ["executions"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.Executions),
+                    ["reads"] = StatementAvailabilityPair(before, after, cases, left, right, row => row.Reads),
+                    ["scans"] = StatementAvailabilityPair(before, after, cases, left, right, row => row.Scans),
+                    ["cpu"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.CpuMs),
+                    ["elapsed"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.ElapsedMs),
+                    ["grantRequested"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.GrantRequestedKb),
+                    ["grantGranted"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.GrantGrantedKb),
+                    ["grantMaxUsed"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.GrantMaxUsedKb),
+                    ["spill"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.HasSpillWarning),
+                    ["planRepetition"] = RuntimeAvailabilityPair(left, right, singleCase, row => row.PlanRepetition),
+                },
+                CpuBeforeMs = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible ? left[0]!.CpuMs : null,
+                CpuAfterMs = singleCase && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible ? right[0]!.CpuMs : null,
+                ElapsedBeforeMs = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible ? left[0]!.ElapsedMs : null,
+                ElapsedAfterMs = singleCase && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible ? right[0]!.ElapsedMs : null,
+                GrantRequestedKbBefore = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible ? left[0]!.GrantRequestedKb : null,
+                GrantRequestedKbAfter = singleCase && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible ? right[0]!.GrantRequestedKb : null,
+                GrantGrantedKbBefore = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible ? left[0]!.GrantGrantedKb : null,
+                GrantGrantedKbAfter = singleCase && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible ? right[0]!.GrantGrantedKb : null,
+                GrantMaxUsedKbBefore = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible ? left[0]!.GrantMaxUsedKb : null,
+                GrantMaxUsedKbAfter = singleCase && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible ? right[0]!.GrantMaxUsedKb : null,
+                HasSpillWarningBefore = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible ? left[0]!.HasSpillWarning : null,
+                HasSpillWarningAfter = singleCase && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible ? right[0]!.HasSpillWarning : null,
+                PlanRepetitionBefore = singleCase && left[0]?.Status == "confirmed" && left[0]!.RuntimeEvidenceEligible ? left[0]!.PlanRepetition : null,
+                PlanRepetitionAfter = singleCase && right[0]?.Status == "confirmed" && right[0]!.RuntimeEvidenceEligible ? right[0]!.PlanRepetition : null,
                 Occurrence = key.Occurrence,
                 PlanHashBefore = l.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
                 PlanHashAfter = r.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
@@ -430,15 +464,82 @@ public static class OptimizationComparer
         return beforeSide ? rows[0].LobLogicalReadsBefore : rows[0].LobLogicalReadsAfter;
     }
 
+    private static CompareStatementEvidence? FindStatement(CompareMetricEvidence? metric, (string Key, int Occurrence) key)
+    {
+        var matches = metric?.Statements.Where(row => (row.Key, row.Occurrence) == key).Take(2).ToArray() ?? [];
+        return matches.Length switch { 0 => null, 1 => matches[0], _ => matches[0] with { Status = "partial" } };
+    }
+
+    private static MetricAvailabilityPair StatementAvailabilityPair(
+        IReadOnlyDictionary<string, CompareMetricEvidence> before, IReadOnlyDictionary<string, CompareMetricEvidence> after,
+        IReadOnlyList<string> cases, CompareStatementEvidence?[] left, CompareStatementEvidence?[] right,
+        Func<CompareStatementEvidence, long?> selector) =>
+        new(StatementAvailability(before, cases, left, selector), StatementAvailability(after, cases, right, selector));
+
+    private static MetricAvailability StatementAvailability(IReadOnlyDictionary<string, CompareMetricEvidence> metrics,
+        IReadOnlyList<string> cases, CompareStatementEvidence?[] statements, Func<CompareStatementEvidence, long?> selector)
+    {
+        var available = 0;
+        string? reason = null;
+        for (var i = 0; i < cases.Count; i++)
+        {
+            var metric = metrics.GetValueOrDefault(cases[i]);
+            var statement = statements[i];
+            if (StatementCounter(metric, statement, null, selector, static _ => null).HasValue) { available++; continue; }
+            reason ??= metric is null ? "missing evidence"
+                : statement is null ? "omitted or unmatched statement"
+                : statement.Status != "confirmed" ? "ambiguous attribution" : "missing historical measurement";
+        }
+        return new(available == cases.Count && cases.Count > 0 ? "available" : "unavailable", reason, available, cases.Count,
+            available == cases.Count && available > 0 ? (statements.Any(row => row is null) ? "recorded and confirmed nonexecution" : "recorded") : null);
+    }
+
+    private static MetricAvailabilityPair RuntimeAvailabilityPair<T>(CompareStatementEvidence?[] left,
+        CompareStatementEvidence?[] right, bool singleCase, Func<CompareStatementEvidence, T?> selector) where T : struct =>
+        new(RuntimeAvailability(left, singleCase, selector), RuntimeAvailability(right, singleCase, selector));
+
+    private static MetricAvailability RuntimeAvailability<T>(CompareStatementEvidence?[] rows, bool singleCase,
+        Func<CompareStatementEvidence, T?> selector) where T : struct
+    {
+        if (!singleCase) return new("unavailable", "single case required", 0, rows.Length);
+        var row = rows.FirstOrDefault();
+        if (row is null) return new("unavailable", "omitted or unmatched statement", 0, rows.Length);
+        if (row.Status != "confirmed") return new("unavailable", "ambiguous attribution", 0, rows.Length);
+        if (!row.RuntimeEvidenceEligible) return new("unavailable", "missing historical measurement", 0, rows.Length);
+        return selector(row).HasValue ? new("available", null, 1, rows.Length, "recorded")
+            : new("unavailable", "missing historical measurement", 0, rows.Length);
+    }
+
+    private static MetricAvailabilityPair AvailabilityPair(long?[] before, long?[] after, string reason) =>
+        new(Availability(before, reason), Availability(after, reason));
+
+    private static MetricAvailability Availability(long?[] values, string reason)
+    {
+        var count = values.Count(value => value.HasValue);
+        return count == values.Length && count > 0 ? new("available", null, count, values.Length, "recorded")
+            : new("unavailable", reason, count, values.Length);
+    }
+
+    private static bool ObjectIdentityAmbiguous(CompareStatementEvidence? left, CompareStatementEvidence? right, string name)
+    {
+        var a = left?.Objects.Where(row => row.Table.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
+        var b = right?.Objects.Where(row => row.Table.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
+        return a.Length > 1 || b.Length > 1 || (a.Length == 1 && b.Length == 1
+            && !string.Equals(a[0].ObjectKind, b[0].ObjectKind, StringComparison.Ordinal));
+    }
+
+    private static bool ProvesAbsence(CompareMetricEvidence? metric) => metric is { StatementAttribution: "confirmed", OmittedStatements: 0 };
+
     private static long? StatementCounter(CompareMetricEvidence? metric, CompareStatementEvidence? statement,
         string? objectName, Func<CompareStatementEvidence, long?> statementValue, Func<TableRow, long?> objectValue)
     {
-        if (metric is null || !string.Equals(metric.StatementAttribution, "confirmed", StringComparison.Ordinal)) return null;
-        if (statement is null) return 0;
+        if (metric is null) return null;
+        if (statement is null) return ProvesAbsence(metric) ? 0 : null;
+        if (statement.Status != "confirmed") return null;
         if (objectName is null) return statement.Status == "confirmed" ? statementValue(statement) : null;
         var matchingObjects = statement.Objects.Where(row => row.Table.Equals(objectName, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (matchingObjects.Length == 0) return statement.Status == "confirmed" ? 0 : null;
-        if (matchingObjects.Any(row => objectValue(row) is null)) return null;
+        if (matchingObjects.Length == 0) return statementValue(statement).HasValue ? 0 : null;
+        if (matchingObjects.Length != 1 || matchingObjects.Any(row => objectValue(row) is null)) return null;
         return matchingObjects.Aggregate(0L, (sum, row) => SaturatingAdd(sum, objectValue(row)!.Value));
     }
 

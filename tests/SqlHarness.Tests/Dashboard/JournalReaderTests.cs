@@ -387,17 +387,18 @@ public sealed class JournalReaderTests
         Assert.Equal("measured", measuredStatement.Status);
         Assert.Equal("confirmed", measuredStatement.Attribution);
         Assert.Null(measuredStatement.ReadsBefore);
-        Assert.Equal(45, measuredStatement.ReadsAfter);
+        Assert.Null(measuredStatement.ReadsAfter);
+        Assert.Equal("single case required", measuredStatement.Availability!["reads"].After.Reason);
         Assert.Null(measuredStatement.PlanHashBefore);
         Assert.Equal("measure-plan", measuredStatement.PlanHashAfter);
         Assert.Null(measuredStatement.ScansBefore);
-        Assert.Equal(2, measuredStatement.ScansAfter);
+        Assert.Null(measuredStatement.ScansAfter);
         Assert.Equal(string.Empty, measuredStatement.Change);
         var measuredObject = Assert.Single(measuredStatement.Objects);
         Assert.Null(measuredObject.ReadsBefore);
-        Assert.Equal(45, measuredObject.ReadsAfter);
+        Assert.Null(measuredObject.ReadsAfter);
         Assert.Null(measuredObject.ScansBefore);
-        Assert.Equal(2, measuredObject.ScansAfter);
+        Assert.Null(measuredObject.ScansAfter);
         Assert.Equal(string.Empty, measuredObject.Change);
         var sensitiveStatements = Reader(home).Operation(measure.OperationId, storeSensitive: true)!.Statements!;
         Assert.Equal("/operations/" + measure.OperationId + "?planCase=s:0&planVariant=measure&planParameterSetNull=true&planRepetition=1&planDocument=0&planStatement=0",
@@ -496,14 +497,13 @@ public sealed class JournalReaderTests
             Statements = [statement, statement with { StatementKey = "other", StatementOrdinal = 1, Status = StatementStatus.Partial }],
         });
         var reader = Reader(home);
-        foreach (var id in new[] { multiple.OperationId, partial.OperationId, unconfirmed.OperationId })
-            foreach (var row in reader.Operation(id, storeSensitive: false)!.Statements!)
-            {
-                Assert.Null(row.CpuAfterMs);
-                Assert.Null(row.ElapsedAfterMs);
-                Assert.Null(row.PlanRepetitionAfter);
-                Assert.Null(Assert.Single(row.Objects).LobLogicalReadsAfter);
-            }
+        Assert.All(reader.Operation(multiple.OperationId)!.Statements!, row => { Assert.Null(row.CpuAfterMs); Assert.Null(row.ReadsAfter); });
+        var retained = Assert.Single(reader.Operation(partial.OperationId)!.Statements!);
+        Assert.Equal(7, retained.CpuAfterMs);
+        Assert.Equal(5, Assert.Single(retained.Objects).LobLogicalReadsAfter);
+        var rows = reader.Operation(unconfirmed.OperationId)!.Statements!;
+        Assert.Equal(7, Assert.Single(rows, row => row.Attribution == "confirmed").CpuAfterMs);
+        Assert.Null(Assert.Single(rows, row => row.Attribution == "partial").CpuAfterMs);
     }
 
     [Fact]
@@ -585,6 +585,8 @@ public sealed class JournalReaderTests
         var caseKey = evidence[0].Cases[0].MeasurementFingerprint ?? evidence[0].Cases[0].CaseId;
         var result = OptimizationComparer.Compare(group, evidence, "v1", "v2", caseKey, "sum", "statements");
         var row = Assert.Single(result.Statements);
+        Assert.Equal(45, row.ReadsBefore);
+        Assert.Equal(2, row.ScansBefore);
         Assert.Null(row.CpuBeforeMs);
         Assert.Null(row.ElapsedBeforeMs);
         Assert.Null(row.PlanRepetitionBefore);
@@ -614,7 +616,7 @@ public sealed class JournalReaderTests
         Assert.Equal(new[] { "index", "table" }, objects.Select(row => row.ObjectKind).Order().ToArray());
         var detail = Assert.Single(reader.Operation(handle.OperationId)!.Statements!);
         Assert.Equal(new[] { "index", "table" }, detail.Objects.Select(row => row.ObjectKind).Order().ToArray());
-        Assert.All(detail.Objects, row => Assert.Null(row.LobLogicalReadsAfter));
+        Assert.All(detail.Objects, row => { Assert.Null(row.LobLogicalReadsAfter); Assert.Null(row.ReadsAfter); });
         Assert.DoesNotContain("ObjectKind", JsonSerializer.Serialize(detail));
     }
 

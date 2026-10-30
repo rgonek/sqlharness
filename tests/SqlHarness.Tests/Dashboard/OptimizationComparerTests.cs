@@ -86,11 +86,11 @@ public sealed class OptimizationComparerTests
             GrantGrantedKb = 20,
             GrantMaxUsedKb = 10,
             HasSpillWarning = false,
-            Objects = [new TableRow("Orders", 1, 1, 45, 45, "0%") { LobLogicalReadsBefore = 5, LobLogicalReadsAfter = 5 }],
+            Objects = [new TableRow("Orders", 1, 1, 45, 45, "0%") { ObjectKind = "table", LobLogicalReadsBefore = 5, LobLogicalReadsAfter = 5 }],
         };
         var after = Statement("work", "SELECT work", 20, "new") with
         {
-            Objects = [new TableRow("Orders", 1, 1, 20, 20, "0%")],
+            Objects = [new TableRow("Orders", 1, 1, 20, 20, "0%") { ObjectKind = "table" }],
         };
         var evidence = Evidence(203, "h1", "h2", (45, 20)) with
         {
@@ -118,8 +118,8 @@ public sealed class OptimizationComparerTests
         Assert.Null(all.PlanRepetitionBefore);
         Assert.Null(Assert.Single(all.Objects).LobLogicalReadsBefore);
         evidence = evidence with { Metrics = [evidence.Metrics[0] with { StatementAttribution = "partial" }, evidence.Metrics[1]] };
-        Assert.Null(Assert.Single(Run("0").Statements).CpuBeforeMs);
-        Assert.Null(Assert.Single(Run("0").Statements).GrantRequestedKbBefore);
+        Assert.Equal(0, Assert.Single(Run("0").Statements).CpuBeforeMs);
+        Assert.Equal(30, Assert.Single(Run("0").Statements).GrantRequestedKbBefore);
     }
 
     [Fact]
@@ -211,7 +211,7 @@ public sealed class OptimizationComparerTests
         var compare = Evidence(203, "h1", "h2", (12010, 11960)) with
         {
             Metrics = [
-                StatementMetric("baseline", 0, 12010, Statement("prep", "SELECT prep", 11910, "p") with { Status = "partial" }, Statement("work", "SELECT work", 100, "old")),
+                StatementMetric("baseline", 0, 12010, Statement("prep", "SELECT prep", 11910, "p") with { Status = "partial" }, Statement("work", "SELECT work", 100, "old")) with { StatementAttribution = "partial" },
                 StatementMetric("candidate", 0, 11960, Statement("prep", "SELECT prep", 11910, "p"), Statement("work", "SELECT work", 50, "new")),
             ],
         };
@@ -222,11 +222,95 @@ public sealed class OptimizationComparerTests
         Assert.Equal("per-statement attribution incomplete", result.FallbackNote);
         Assert.Equal("whole", result.View);
         Assert.Contains(result.Statements, row => row.Key == "prep");
+        var work = Assert.Single(result.Statements, row => row.Key == "work");
+        Assert.Equal(100, work.ReadsBefore);
+        Assert.Equal(50, work.ReadsAfter);
+        Assert.Null(Assert.Single(result.Statements, row => row.Key == "prep").ReadsBefore);
         Assert.Equal("same", Assert.Single(result.Cases).Outcome);
 
         var defaultView = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "sum", "changed");
         Assert.Equal("whole", defaultView.View);
         Assert.Equal("whole batch", defaultView.VerdictBasis);
+    }
+
+    [Fact]
+    public void Partial_coverage_and_ambiguous_object_identity_do_not_invent_values()
+    {
+        var a = Statement("work", "SELECT work", 20, "p") with
+        { Objects = [new TableRow("Thing", 1, 1, 20, 20, "") { ObjectKind = "table" }] };
+        var b = a with { Objects = [new TableRow("Thing", 1, 1, 10, 10, "") { ObjectKind = "index" }] };
+        var compare = Evidence(203, "h1", "h2", (20, 10)) with
+        { Metrics = [StatementMetric("baseline", 0, 20, a), StatementMetric("candidate", 0, 10, b)] };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "0", "sum", "statements");
+        var obj = Assert.Single(Assert.Single(result.Statements).Objects);
+        Assert.Null(obj.ReadsBefore);
+        Assert.Null(obj.ReadsAfter);
+        Assert.Null(obj.ScansBefore);
+        Assert.Equal("ambiguous attribution", obj.Availability!["reads"].Before.Reason);
+    }
+
+    [Fact]
+    public void All_cases_report_partial_metric_coverage_without_aggregating_missing_evidence()
+    {
+        var compare = Evidence(203, "h1", "h2", (100, 90), (120, 110)) with
+        {
+            Metrics = [CaseMetric("baseline", "0", 100, Statement("work", "SELECT work", 10, "p")),
+                CaseMetric("candidate", "0", 90, Statement("work", "SELECT work", 9, "p")),
+                CaseMetric("baseline", "1", 120, Statement("work", "SELECT work", 12, "p") with { Status = "partial" }) with { StatementAttribution = "partial" },
+                CaseMetric("candidate", "1", 110, Statement("work", "SELECT work", 11, "p"))],
+        };
+        var row = Assert.Single(OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "sum", "statements").Statements);
+        Assert.Null(row.ReadsBefore);
+        Assert.Equal(20, row.ReadsAfter);
+        Assert.Equal(1, row.Availability!["reads"].Before.AvailableCases);
+        Assert.Equal(2, row.Availability["reads"].Before.TotalCases);
+        Assert.Equal("ambiguous attribution", row.Availability["reads"].Before.Reason);
+        Assert.Equal("single case required", row.Availability["cpu"].Before.Reason);
+    }
+
+    [Fact]
+    public void Omitted_statement_and_missing_object_evidence_are_not_zero()
+    {
+        var measured = Statement("work", "SELECT work", 20, "p") with
+        { Objects = [new TableRow("Thing", 1, 1, 20, 20, "") { ObjectKind = "table" }] };
+        var noObjects = measured with { Reads = null, Scans = null, Objects = [] };
+        var compare = Evidence(203, "h1", "h2", (20, 10), (0, 0)) with
+        {
+            Metrics = [CaseMetric("baseline", "0", 20, measured), CaseMetric("candidate", "0", 10, noObjects),
+                CaseMetric("baseline", "1", 0) with { OmittedStatements = 1, StatementAttribution = "partial" },
+                CaseMetric("candidate", "1", 0) with { StatementAttribution = "unavailable" }],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "all", "sum", "statements");
+        var row = Assert.Single(result.Statements);
+        Assert.Equal("unmatched", row.Status);
+        Assert.Null(row.ReadsBefore);
+        Assert.Null(row.ReadsAfter);
+        Assert.Null(Assert.Single(row.Objects).ReadsAfter);
+        Assert.Equal("whole batch", result.VerdictBasis);
+    }
+
+    [Fact]
+    public void Duplicate_occurrence_does_not_upgrade_verdict_or_show_counters()
+    {
+        var first = Statement("work", "SELECT work", 20, "p");
+        var compare = Evidence(203, "h1", "h2", (20, 10)) with
+        { Metrics = [StatementMetric("baseline", 0, 20, first, first), StatementMetric("candidate", 0, 10, first)] };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "0", "sum", "statements");
+        Assert.Equal("whole batch", result.VerdictBasis);
+        var row = Assert.Single(result.Statements);
+        Assert.Null(row.ReadsBefore);
+        Assert.Equal("ambiguous attribution", row.Availability!["reads"].Before.Reason);
+    }
+
+    [Fact]
+    public void Unknown_object_kind_is_not_matched_by_name()
+    {
+        var row = Statement("work", "SELECT work", 20, "p") with { Objects = [new TableRow("Thing", 1, 1, 20, 20, "")] };
+        var compare = Evidence(203, "h1", "h2", (20, 20)) with
+        { Metrics = [StatementMetric("baseline", 0, 20, row), StatementMetric("candidate", 0, 20, row)] };
+        var obj = Assert.Single(Assert.Single(OptimizationComparer.Compare(Group("h1", "h2"), [compare], "v1", "v2", "0", "sum", "statements").Statements).Objects);
+        Assert.Null(obj.ReadsBefore);
+        Assert.Equal("ambiguous attribution", obj.Availability!["reads"].Before.Reason);
     }
 
     [Fact]
@@ -270,15 +354,15 @@ public sealed class OptimizationComparerTests
         var before = Statement("work", "SELECT work", 20, "old-plan") with
         {
             Objects = [
-                new TableRow("dbo.T", 2, 2, 20, 20, "0%"),
-                new TableRow("dbo.OldOnly", 1, 1, 5, 5, "0%"),
+                new TableRow("dbo.T", 2, 2, 20, 20, "0%") { ObjectKind = "table" },
+                new TableRow("dbo.OldOnly", 1, 1, 5, 5, "0%") { ObjectKind = "table" },
             ],
         };
         var after = Statement("work", "SELECT work", 10, "new-plan") with
         {
             Objects = [
-                new TableRow("dbo.T", 1, 1, 10, 10, "0%"),
-                new TableRow("dbo.NewOnly", 1, 1, 7, 7, "0%"),
+                new TableRow("dbo.T", 1, 1, 10, 10, "0%") { ObjectKind = "table" },
+                new TableRow("dbo.NewOnly", 1, 1, 7, 7, "0%") { ObjectKind = "table" },
             ],
         };
         var compare = Evidence(203, "h1", "h2", (25, 17)) with
@@ -310,11 +394,11 @@ public sealed class OptimizationComparerTests
             Metrics = [
                 CaseMetric("baseline", "0", 20, Statement("branch", "SELECT branch", 20, "before") with
                 {
-                    Objects = [new TableRow("dbo.T", 1, 1, 20, 20, "0%")],
+                    Objects = [new TableRow("dbo.T", 1, 1, 20, 20, "0%") { ObjectKind = "table" }],
                 }),
                 CaseMetric("candidate", "0", 10, Statement("branch", "SELECT branch", 10, "after") with
                 {
-                    Objects = [new TableRow("dbo.T", 1, 1, 10, 10, "0%")],
+                    Objects = [new TableRow("dbo.T", 1, 1, 10, 10, "0%") { ObjectKind = "table" }],
                 }),
                 CaseMetric("baseline", "1", 0),
                 CaseMetric("candidate", "1", 0),
@@ -993,7 +1077,7 @@ public sealed class OptimizationComparerTests
         { Statements = statements, StatementReads = reads, StatementAttribution = "confirmed" };
 
     private static CompareStatementEvidence Statement(string key, string text, long reads, string planHash) =>
-        new(key, 0, text, planHash, "confirmed", reads, 1, 1, [], []);
+        new(key, 0, text, planHash, "confirmed", reads, 1, 1, [], []) { RuntimeEvidenceEligible = true };
 
     private static CompareMetricEvidence TableMetric(string variant, params (string Table, long Reads)[] tables) =>
         new(variant, "0", "@CustomerId = 9001", 100, 100, 1,

@@ -103,7 +103,7 @@ test("only exposes supported counters when switching IO views", async () => {
     expect(screen.queryByRole("columnheader", { name })).not.toBeInTheDocument()
     expect(screen.queryByRole("checkbox", { name })).not.toBeInTheDocument()
   }
-  expect(screen.getByRole("columnheader", { name: "LOB logical" })).toBeInTheDocument()
+  expect(screen.queryByRole("columnheader", { name: "LOB logical" })).not.toBeInTheDocument()
   rerender(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={extras} />)
   expect(screen.queryByRole("columnheader", { name: "Physical" })).not.toBeInTheDocument()
   expect(screen.getByRole("columnheader", { name: "LOB logical" })).toBeInTheDocument()
@@ -137,4 +137,26 @@ test("the statement's counter cells toggle expansion without swallowing its plan
   expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
   await userEvent.click(within(row).getByRole("link", { name: "Plan before" }))
   expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
+})
+
+
+test("no attributable IO keeps plan navigation and offers whole batch", async () => {
+  const onViewChange = vi.fn()
+  const statement = { ...comparison.statements![0], readsBefore: null, readsAfter: null, scansBefore: null, scansAfter: null, objects: [], planLinkAfter: "/plan", cpuAfterMs: 17 }
+  render(<IoComparison comparison={{ ...comparison, statements: [statement] }} byStatement onViewChange={onViewChange} />)
+  expect(screen.queryByRole("table", { name: "IO before and after" })).not.toBeInTheDocument()
+  expect(screen.getByText(/Some IO cannot be attributed/)).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan")
+  expect(screen.getByText(/CPU \(ms\).*17/)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "View whole batch" }))
+  expect(onViewChange).toHaveBeenCalledWith("whole")
+})
+
+test("mixed availability shows confirmed values and reason", () => {
+  const available = { status: "available" as const, reason: null, availableCases: 1, totalCases: 1 }
+  const unavailable = { status: "unavailable" as const, reason: "ambiguous attribution", availableCases: 0, totalCases: 1 }
+  const statement = { ...comparison.statements![0], readsBefore: null, availability: { reads: { before: unavailable, after: available } } }
+  render(<IoComparison comparison={{ ...comparison, statements: [statement] }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText(/ambiguous attribution/)).toBeInTheDocument()
+  expect(screen.getAllByText("25").length).toBeGreaterThan(0)
 })
