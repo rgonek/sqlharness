@@ -196,6 +196,11 @@ export type StatementRow = {
   planRepetitionBefore?: number | null; planRepetitionAfter?: number | null
   udfElapsedMilliseconds: number | null
 }
+export type OutcomeCounts = {
+  total: number; results: { equivalent: number; different: number; unavailable: number }
+  io: { better: number; same: number; worse: number; unavailable: number }
+  policy: { pass: number; fail: number; unavailable: number }
+}
 export type CaseOutcome = {
   id: string; label: string; resultsEquivalent: boolean | null; ioOutcome: string
   readsBefore: number | null; readsAfter: number | null; elapsedBeforeMs: number | null; elapsedAfterMs: number | null
@@ -204,6 +209,7 @@ export type CaseOutcome = {
 export type OptimizationComparison = {
   a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql" | "ApproximateAcrossConditions"
   groupA?: string | null; groupB?: string | null; groupLabelA?: string | null; groupLabelB?: string | null
+  outcomeCounts?: OutcomeCounts
   caseOutcomes?: CaseOutcome[]
   caseRows?: { caseKey: string; labelA: string; labelB: string; rowsA: number | null; rowsB: number | null; rowsAVaries: boolean; rowsBVaries: boolean }[]
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]

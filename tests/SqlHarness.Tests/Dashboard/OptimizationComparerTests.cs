@@ -17,6 +17,11 @@ public sealed class OptimizationComparerTests
         };
         var forward = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
         Assert.Equal(4, forward.CaseOutcomes.Count);
+        Assert.Equal(new OutcomeCounts(4, new ResultCounts(4, 0, 0), new IoCounts(3, 1, 0, 0), new PolicyCounts(3, 1, 0)), forward.OutcomeCounts);
+        var selected = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum");
+        Assert.Equal(new OutcomeCounts(1, new ResultCounts(1, 0, 0), new IoCounts(1, 0, 0, 0), new PolicyCounts(0, 1, 0)), selected.OutcomeCounts);
+        var json = JsonSerializer.SerializeToElement(selected, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(1, json.GetProperty("outcomeCounts").GetProperty("policy").GetProperty("fail").GetInt32());
         Assert.Equal(3, forward.CaseOutcomes.Count(c => c.IoOutcome == "better"));
         Assert.Equal(1, forward.CaseOutcomes.Count(c => c.IoOutcome == "same"));
         Assert.Equal(3, forward.CaseOutcomes.Count(c => c.PolicyVerdict == "pass"));
@@ -38,6 +43,7 @@ public sealed class OptimizationComparerTests
         };
         var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
         Assert.Equal(2, result.CaseOutcomes.Count);
+        Assert.Equal(new OutcomeCounts(2, new ResultCounts(1, 1, 0), new IoCounts(0, 0, 1, 1), new PolicyCounts(0, 0, 2)), result.OutcomeCounts);
         Assert.Contains(result.Cases, c => c.Id == "1");
         Assert.Equal("1", OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "1", "sum").SelectedCase);
         Assert.False(result.CaseOutcomes[0].ResultsEquivalent);
@@ -50,6 +56,7 @@ public sealed class OptimizationComparerTests
         var allUnavailable = OptimizationComparer.Compare(Group("h1", "h2"), [noReads], "v1", "v2", "all", "sum");
         Assert.Equal(2, allUnavailable.CaseOutcomes.Count);
         Assert.All(allUnavailable.CaseOutcomes, c => Assert.Equal("unavailable", c.IoOutcome));
+        Assert.Equal(2, allUnavailable.OutcomeCounts.Io.Unavailable);
     }
 
     [Theory]

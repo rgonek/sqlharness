@@ -148,6 +148,17 @@ public sealed record OptimizationComparison(
     public string? GroupLabelB { get; init; }
     public IReadOnlyList<CaseRows> CaseRows { get; init; } = [];
     public IReadOnlyList<CaseOutcome> CaseOutcomes { get; init; } = [];
+    public OutcomeCounts OutcomeCounts
+    {
+        get
+        {
+            var cases = SelectedCase == "all" ? CaseOutcomes : CaseOutcomes.Where(item => item.Id == SelectedCase).ToArray();
+            return new OutcomeCounts(cases.Count,
+                new ResultCounts(cases.Count(c => c.ResultsEquivalent == true), cases.Count(c => c.ResultsEquivalent == false), cases.Count(c => c.ResultsEquivalent is null)),
+                new IoCounts(cases.Count(c => c.IoOutcome == "better"), cases.Count(c => c.IoOutcome == "same"), cases.Count(c => c.IoOutcome == "worse"), cases.Count(c => c.IoOutcome == "unavailable")),
+                new PolicyCounts(cases.Count(c => c.PolicyVerdict == "pass"), cases.Count(c => c.PolicyVerdict == "fail"), cases.Count(c => c.PolicyVerdict is not ("pass" or "fail"))));
+        }
+    }
     public bool VersionLabelsProvisional { get; init; }
     public string? VersionLabelNote { get; init; }
     public string VerdictBasis { get; init; } = "whole batch";
@@ -218,6 +229,11 @@ public sealed record CaseRows(string CaseKey, string LabelA, string LabelB, long
     public bool RowsAVaries { get; init; }
     public bool RowsBVaries { get; init; }
 }
+
+public sealed record OutcomeCounts(int Total, ResultCounts Results, IoCounts Io, PolicyCounts Policy);
+public sealed record ResultCounts(int Equivalent, int Different, int Unavailable);
+public sealed record IoCounts(int Better, int Same, int Worse, int Unavailable);
+public sealed record PolicyCounts(int Pass, int Fail, int Unavailable);
 
 public sealed record CaseOutcome(string Id, string Label, bool? ResultsEquivalent, string IoOutcome,
     long? ReadsBefore, long? ReadsAfter, long? ElapsedBeforeMs, long? ElapsedAfterMs,

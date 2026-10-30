@@ -52,3 +52,12 @@ test("shows explicit row count variation separately from missing", () => {
   render(<VersionTable subject="Rows" sessionId={1} sessionSearch={{}} versions={[{ ...versions[0], rowsReturnedSum: null, rowsReturnedVaries: true }]} selectedA="v0" selectedB={null} onSelect={() => {}} />)
   expect(screen.getByText("varies")).toBeInTheDocument()
 })
+
+test("baseline coverage follows selected case and candidate uses the projected counts", () => {
+  const outcome = { id: "chosen", label: "Chosen", resultsEquivalent: false, ioOutcome: "unavailable", readsBefore: null, readsAfter: null, elapsedBeforeMs: null, elapsedAfterMs: null, cpuBeforeMs: null, cpuAfterMs: null, policyVerdict: null, policyReasons: [], policyUnavailableReason: "not recorded" }
+  const comparison = { a: "v0", b: "v1", basis: "MeasuredTogether", selectedCase: "chosen", caseOutcomes: [{ ...outcome, id: "other", readsBefore: 10 }, outcome], outcomeCounts: { total: 1, results: { equivalent: 0, different: 1, unavailable: 0 }, io: { better: 0, same: 0, worse: 0, unavailable: 1 }, policy: { pass: 0, fail: 0, unavailable: 1 } } } as unknown as import("@/api/types").OptimizationComparison
+  render(<VersionTable subject="Selected" sessionId={1} sessionSearch={{}} versions={versions} selectedA="v0" selectedB="v1" comparison={comparison} onSelect={() => {}} />)
+  expect(screen.getByText("Baseline · 0/1 measured")).toBeInTheDocument()
+  expect(screen.getByText(/1 different/)).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "IO: 0 better, 0 same, 0 worse, 1 unavailable" })).toBeInTheDocument()
+})
