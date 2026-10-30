@@ -496,6 +496,6 @@ Completed locally on dashboard-layout-polish; tested b3e921cd, runtime bbda23d2.
 
 Locally merged dashboard-layout-polish source268cc96c into main (previous939468bb). Both dated mock directories preserved and documentation reconciled; executable src/tests/scripts remain identical to the accepted branch and tested b3e921cd. Reused Windows gate PASS (UI436,Core4774/11 skips,MCP535/4 skips), branch format5 and browser104; no new integrated gate execution for documentation-only differences. Local uncommitted README/index work preserved. No push/publication/restart. [Evidence](121-evidence/layout-polish/screenshot-details/integration.md).
 
-## Plan 124 — implementation in progress (2026-10-30)
+## Plan 124 — DONE on plan-124 (2026-10-30)
 
-Tasks 1–3 have task reviews archived under [Plan 124 evidence](124-evidence/reviews-and-checks/). Task 4 Windows gate and synthetic browser passed; independent whole-branch review remains pending. The gate revision and post-build EOF-only correction are recorded in [verification](124-evidence/verification.md). Profile saves are Windows-only; installed behavior and live activation have not been verified.
+Profile editing and mutation inheritance are complete on `plan-124`; Save is Windows-only. Terra high task reviews and Sol low whole-branch and final scoped reviews approved. The final Windows gate passed on product `71a42d2a`: UI 462, Core 4834 passed/11 skipped, MCP 537 passed/4 skipped. Branch format covered 21 C# files. The full broker pending-approval lifecycle, installed/live activation and Linux remain unverified; no merge, push, restart or live writes. [Verification](124-evidence/verification.md), [review archive](124-evidence/reviews-and-checks/final-fix-review.md).

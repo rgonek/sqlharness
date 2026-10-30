@@ -1,6 +1,6 @@
 # Editable profiles and inherited mutation policy
 
-Status: implementation in progress for plan 124; final whole-branch review pending.
+Status: DONE on `plan-124`; Windows-only profile Save. Task, whole-branch and final scoped reviews approved; final Windows gate passed on product `71a42d2a`. No merge, push or live/Linux acceptance.
 Inspected SQLHarness HEAD: `455adea0` (2026-10-29).
 
 ## Goal and scope

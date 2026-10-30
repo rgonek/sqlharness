@@ -8,7 +8,7 @@
 resolver, a guarded single-profile save, and a typed form on the existing Profiles page.
 **Tech stack:** C#/.NET, System.Text.Json, ASP.NET Core, React/TypeScript, TanStack Query, xUnit, Vitest.
 **Spec:** [Editable profiles design](../docs/superpowers/specs/2026-10-29-profile-editing-design.md).
-**Status:** Implementation in progress on `plan-124`; Task 4 verification and whole-branch review pending. Saving existing profiles is Windows-only; non-Windows refuses before file access.
+**Status:** DONE on `plan-124`; Terra high task reviews and Sol low whole-branch and final scoped reviews approved. Windows `just verify` passed on product `71a42d2a`: UI 462, Core 4834/11 skipped, MCP 537/4 skipped. Profile Save is Windows-only; non-Windows refuses before file access. No merge, push, live acceptance or Linux gate.
 **Baseline:** `455adea0`, inspected 2026-10-29; working tree initially clean.
 **Owner coverage:** Extends the existing profile view and mutation approval design, not plans
 109/116 or a new mutation-execution transport. No existing open profile-editing owner found in index.
@@ -65,16 +65,16 @@ Any commit requires the execution session's authorization.
 It resolves metadata, never credentials or connections. Execution enforces readiness.
 Nullable `ProfileMutations.Mode` represents inheritance; old explicit strings retain meaning.
 
-- [ ] Test absent block, writer-only inherited block, explicit never/operator/yolo, all three global
+- [x] Test absent block, writer-only inherited block, explicit never/operator/yolo, all three global
   modes, missing writer, and global default changes with no profile rewrite.
-- [ ] Test inherited production/staging YOLO without acknowledgement cannot execute, while explicit
+- [x] Test inherited production/staging YOLO without acknowledgement cannot execute, while explicit
   acknowledged DML and click-only non-DML retain current behavior.
-- [ ] Run focused xUnit tests and confirm failures exercise the new contract.
-- [ ] Implement strict validation and resolver; route every effective-mode consumer through it.
+- [x] Run focused xUnit tests and confirm failures exercise the new contract.
+- [x] Implement strict validation and resolver; route every effective-mode consumer through it.
   Search all direct Mode fallbacks, including CLI, MCP and broker submission/execution.
-- [ ] Return configured/effective/source/readiness data to Profiles; keep existing response fields
+- [x] Return configured/effective/source/readiness data to Profiles; keep existing response fields
   compatible and derive mutationMode from effective mode.
-- [ ] Verify focused tests; no auth/environment values are read by policy resolution.
+- [x] Verify focused tests; no auth/environment values are read by policy resolution.
 
 **Acceptance:** One semantic source for mode resolution; global inheritance and writer choice work
 independently; UI/capabilities/execution agree on effective mode.
@@ -96,15 +96,15 @@ returns the new revision or a typed validation/conflict/not-found/I/O outcome.
 maps outcomes to the spec's HTTP statuses. PUT /api/profiles accepts the exact body in the spec.
 GET includes revision plus the complete editable configuration; no environment values.
 
-- [ ] Test successful one-profile round trip, preserved siblings, writer-only inheritance and
+- [x] Test successful one-profile round trip, preserved siblings, writer-only inheritance and
   existing auth/TLS/template/variable validations.
-- [ ] Test stale revision, deleted profile, invalid/missing document, duplicate/unknown JSON members,
+- [x] Test stale revision, deleted profile, invalid/missing document, duplicate/unknown JSON members,
   oversized body, cancelled request, write/replace failures and temp-file cleanup.
-- [ ] Test endpoint rejects missing write header, bad Origin/Host and unauthenticated access;
+- [x] Test endpoint rejects missing write header, bad Origin/Host and unauthenticated access;
   authorization occurs before file access. No path supplied by caller is accepted.
-- [ ] Run focused tests to demonstrate failures, implement the locked/rechecked atomic writer and
+- [x] Run focused tests to demonstrate failures, implement the locked/rechecked atomic writer and
   API, then rerun. Preserve unrelated fields and sibling profile content.
-- [ ] Verify successful save returns the new persisted profile/revision; no connection or mutation
+- [x] Verify successful save returns the new persisted profile/revision; no connection or mutation
   submission occurs and error output contains no secrets or raw file content.
 
 **Acceptance:** A stale or invalid request cannot overwrite another profile or damage targets.json.
@@ -123,15 +123,15 @@ client conventions. On success invalidate Profiles; retain form values on 400/40
 Mutation mode form values are inherit/never/operator/yolo; inherit serializes an absent mode,
 not the effective global string. Writer is separately unconfigured/sameAsReader/separate.
 
-- [ ] Add failing component tests for Edit/Save/Cancel, immutable name, all editable field groups,
+- [x] Add failing component tests for Edit/Save/Cancel, immutable name, all editable field groups,
   variable editing and field-specific errors.
-- [ ] Test inherited mode displays current global/effective mode, preserves writer on mode change,
+- [x] Test inherited mode displays current global/effective mode, preserves writer on mode change,
   shows missing-writer readiness and production-YOLO acknowledgement.
-- [ ] Test dirty navigation confirmation, unchanged state after Cancel, stale-save form retention,
+- [x] Test dirty navigation confirmation, unchanged state after Cancel, stale-save form retention,
   accessible labels/focus and inactive writer-field cleanup.
-- [ ] Implement the form using existing components and layout. State that YOLO skips approval only
+- [x] Implement the form using existing components and layout. State that YOLO skips approval only
   for DML; do not show the current overbroad no-approval description.
-- [ ] Run `npm test -- ProfilesPage.test.tsx client.test.ts` and `npm run typecheck` in the UI
+- [x] Run `npm test -- ProfilesPage.test.tsx client.test.ts` and `npm run typecheck` in the UI
   directory; include the new form tests if split into a separate test file.
 
 **Acceptance:** An operator can configure inherited operator mode plus explicit sameAsReader,
@@ -145,15 +145,15 @@ save, reopen and see the same choice without editing JSON or exposing a secret.
 - Tests: existing mutation broker/executor and MCP mapping tests, dashboard security/API tests.
 - Update this plan and `plans/README.md` with actual evidence and status.
 
-- [x] Add/extend synthetic tests for a pending approved request whose target changes before
-  execution, inherited global-policy changes and an already-running MCP process retaining its
-  startup view. Assert target mismatch fails closed and no query reaches a different target.
+- [x] Test a prepared request whose target changes before execution, inherited global-policy changes,
+  and the startup-frozen MCP capability projection. Target mismatch fails closed before dispatch;
+  full broker pending-approval lifecycle and live MCP transport remain unverified.
 - [x] Document dashboard reload vs startup-frozen clients; Save success must not claim live MCP
   activation. Do not change lifecycle behavior to hide stale configuration.
 - [x] Run focused tests via `dotnet test tests/SqlHarness.Tests --filter
   "FullyQualifiedName~Profile|FullyQualifiedName~Mutation|FullyQualifiedName~Capabilities"`
   and corresponding MCP mapping tests. Resolve actual failures rather than weakening assertions.
-- [x] Run `just verify` and required scoped formatting checks; [evidence](124-evidence/verification.md) records the post-build EOF-only correction and exact gate boundary.
+- [x] Run `just verify` and required scoped formatting checks; [evidence](124-evidence/verification.md) records the final exact product revision and earlier historical gate boundary.
 - [x] Verify the UI with synthetic fixtures: inherited and explicit policy, missing writer,
   separate writer, production acknowledgement, conflict and keyboard-only Save/Cancel.
   No real profile writes, database access or restart.
@@ -165,4 +165,4 @@ pass; new policy semantics, activation limits and operator controls are document
 
 
 
-Final whole-branch review found a draft-loss refresh path and a browser assertion gap. Final fix retains the opening snapshot across refresh states; scoped Sol re-review remains pending. See [verification](124-evidence/verification.md) and [review archive](124-evidence/reviews-and-checks/whole-branch-review.md).
+Final whole-branch review found a draft-loss refresh path and a browser assertion gap. Final fix retains the opening snapshot across refresh states; scoped Sol re-review approved both fixes without new findings. See [verification](124-evidence/verification.md) and [review archive](124-evidence/reviews-and-checks/whole-branch-review.md).

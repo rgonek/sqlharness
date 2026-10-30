@@ -2,6 +2,8 @@
 
 Read the selected plan and its spec before executing. A queue entry is not approval for implementation, publication or a live DB. We execute each assigned plan in full; general work and SQL Server take priority over PostgreSQL-only work.
 
+Plan [124](124-profile-editing-and-mutation-inheritance.md): **DONE on `plan-124`** — Windows-only profile Save; Terra high task and Sol low whole-branch/final scoped reviews approved. Final Windows gate PASS on product `71a42d2a` (UI 462, Core 4834/11 skipped, MCP 537/4 skipped). No merge, push or live/Linux acceptance. [Evidence](124-evidence/verification.md), [history](history.md#plan-124--done-on-plan-124-2026-10-30).
+
 Plan [123](123-shared-version-table-across-conditions.md): **DONE; locally integrated into `main` at `7ca0cfbd`** — shared version table and approximate cross-group comparison; Terra high task and Sol low whole-branch/final scoped reviews approved. Final Windows gate PASS on `6aa51e26` (UI 448, Core 4792/11 skips, MCP 535/4 skips), branch format 29 files and synthetic browser PASS. Verified product unchanged by fast-forward; no push, installation or live acceptance. [Integration](123-evidence/integration.md), [evidence](123-evidence/verification.md), [history](history.md#plan-123-locally-integrated--2026-10-29).
 
 Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrated into `main` at `56f3dae4` (2026-10-24)** — Luna xhigh and Sol low integration reviews approved; combined Windows gate passed on `d2f2b060` (Core 4717, MCP 524, UI 372 passed), branch format 21 files passed. Earlier timeout and retry logs retained. No push/install; Linux/live UAT unverified. See [integration evidence](104-evidence/integration/verification.md).
@@ -15,10 +17,6 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 
 ## Pending
-
-| Plan | Scope | Dependencies | Status |
-|---|---|---|---|
-| [124](124-profile-editing-and-mutation-inheritance.md) | Edit existing dashboard profiles; inherited/explicit mutation mode, independent writer and guarded atomic save | Existing profile view and mutation approval | IN PROGRESS on `plan-124`; Windows-only profile Save; whole-branch findings fixed, Windows gate PASS on `71a42d2a`, final scoped Sol re-review pending ([evidence](124-evidence/verification.md), [design](../docs/superpowers/specs/2026-10-29-profile-editing-design.md)) |
 
 Plan [122](122-dashboard-data-value-new-sessions.md): **DONE on `plan-122-backend`; final product `50a4ffb9` verified** — all six tasks including UI, rebased onto main `b7a820f5`; Terra high and Sol low reviews approved; Windows gate PASS (Core 4771, MCP 535, UI 406), branch format and 14 browser states PASS. New-session evidence only, no backfill; locally integrated into `main` at `4baefd17`, merge Windows gate PASS (Core 4771, MCP 535, UI 406); no push. [Integration](122-evidence/integration.md). [Evidence](122-evidence/verification.md). Requires Plan 121 product and mock-alignment corrections; see [spec](../docs/superpowers/specs/2026-10-26-dashboard-data-value.md).
 
