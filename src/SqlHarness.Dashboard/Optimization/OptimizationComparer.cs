@@ -28,7 +28,7 @@ public static class OptimizationComparer
         var versionB = versionsB[0];
         var hashA = versionA.Hash;
         var hashB = versionB.Hash;
-        var scopeCompares = compares.Where(compare =>
+        var scopeCompares = compares.Where(compare => OptimizationEvidenceEligibility.HasAny(compare) &&
                 string.Equals(compare.Fingerprint ?? string.Empty, group.Fingerprint, StringComparison.Ordinal)
                 && string.Equals(NormalizeScope(compare.Scope), versionA.Scope, StringComparison.Ordinal))
             .OrderBy(compare => compare.StartedAt, StringComparer.Ordinal)
@@ -40,7 +40,8 @@ public static class OptimizationComparer
         var groupCompares = scopeCompares.Where(compare => compare.Subject == subject
                 && string.Equals(compare.Database ?? string.Empty, database, StringComparison.Ordinal))
             .ToArray();
-        var direct = groupCompares.Where(compare => !compare.IsMeasure && Connects(compare, hashA, hashB))
+        var direct = groupCompares.Where(compare => !compare.IsMeasure && OptimizationEvidenceEligibility.HasVariant(compare, "baseline")
+                && OptimizationEvidenceEligibility.HasVariant(compare, "candidate") && Connects(compare, hashA, hashB))
             .LastOrDefault();
 
         var path = EquivalentPath(groupCompares, hashA, hashB);
@@ -181,9 +182,9 @@ public static class OptimizationComparer
         if (va.Count != 1 || vb.Count != 1 || va[0].Scope != vb[0].Scope)
             return Empty(a, b, PairBasis.ConditionsDiffer, "conditions differ", selectedCase, aggregate);
         var scope = va[0].Scope;
-        var ea = compares.Where(c => c.Fingerprint == groupA.Fingerprint && NormalizeScope(c.Scope) == scope)
+        var ea = compares.Where(c => OptimizationEvidenceEligibility.HasAny(c) && c.Fingerprint == groupA.Fingerprint && NormalizeScope(c.Scope) == scope)
             .OrderBy(c => c.StartedAt, StringComparer.Ordinal).ThenBy(c => c.OperationId).ToArray();
-        var eb = compares.Where(c => c.Fingerprint == groupB.Fingerprint && NormalizeScope(c.Scope) == scope)
+        var eb = compares.Where(c => OptimizationEvidenceEligibility.HasAny(c) && c.Fingerprint == groupB.Fingerprint && NormalizeScope(c.Scope) == scope)
             .OrderBy(c => c.StartedAt, StringComparer.Ordinal).ThenBy(c => c.OperationId).ToArray();
         if (!TryResolveIdentity(groupA, ea, out var sa, out var da) || !TryResolveIdentity(groupB, eb, out var sb, out var db)
             || sa != sb || da != db)
@@ -258,7 +259,7 @@ public static class OptimizationComparer
         {
             var variant = compare.IsMeasure && compare.BaselineHash == hash ? "measure"
                 : compare.BaselineHash == hash ? "baseline" : compare.CandidateHash == hash ? "candidate" : null;
-            if (variant is null) continue;
+            if (variant is null || !OptimizationEvidenceEligibility.HasVariant(compare, variant)) continue;
             var uniqueCases = compare.Cases.Where(c => !string.IsNullOrEmpty(c.VaryingFingerprint))
                 .GroupBy(c => c.VaryingFingerprint!, StringComparer.Ordinal).Where(g => g.Count() == 1)
                 .Select(g => g.Single()).ToArray();
@@ -548,7 +549,8 @@ public static class OptimizationComparer
             ? $"v{number.ToString(CultureInfo.InvariantCulture)}" : hash;
 
     private static bool IsEquivalent(CompareEvidence compare) =>
-        compare.Status == "succeeded"
+        OptimizationEvidenceEligibility.HasVariant(compare, "baseline")
+        && OptimizationEvidenceEligibility.HasVariant(compare, "candidate")
         && !string.Equals(compare.ComparisonMode, "Off", StringComparison.OrdinalIgnoreCase)
         && compare.ResultsEquivalent == true
         && compare.Cases.Count > 0
@@ -561,7 +563,7 @@ public static class OptimizationComparer
             var variant = compare.IsMeasure && compare.BaselineHash == hash ? "measure"
                 : compare.BaselineHash == hash ? "baseline"
                 : compare.CandidateHash == hash ? "candidate" : null;
-            if (variant is not null)
+            if (variant is not null && OptimizationEvidenceEligibility.HasVariant(compare, variant))
                 return Snapshot(compare, variant);
         }
         return null;

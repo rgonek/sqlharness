@@ -23,6 +23,26 @@ const stubOperationFetch = (routes: Record<string, unknown | ((url: URL, init?: 
   ...routes,
 })
 
+test.each([
+  ["client", "Cancelled by the client."],
+  ["deadline", "Cancelled when the call time budget ran out."],
+  [null, "The operation was cancelled before it finished."],
+])("shows cancellation explanation for %s without opening the status dialog", async (reason, explanation) => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, status: "failed", exitCode: -1, errorKind: "cancelled", cancelReason: reason }) }) })
+  renderApp("/operations/10")
+  expect(await screen.findByText(explanation)).toBeVisible()
+})
+
+test("shows the stored error as text and keeps interrupted compare measurements available", async () => {
+  const message = "<img src=x onerror=alert(1)>"
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, operation: "compare", status: "failed", errorKind: "unknown", errorMessage: message }), variants: [variant({ variant: "baseline" })] }) })
+  const { container } = renderApp("/operations/10")
+  expect(await screen.findByText("The operation failed.")).toBeVisible()
+  expect(screen.getByText(message)).toBeVisible()
+  expect(container.querySelector("img")).toBeNull()
+  expect(screen.getByText("Baseline", { exact: false })).toBeInTheDocument()
+})
+
 test("compare operation returns to its session with the originating subject and scope", async () => {
   stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
   renderApp("/operations/10?returnSession=7&returnSubject=orders&returnScope=history")

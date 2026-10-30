@@ -7,6 +7,22 @@ namespace SqlHarness.Tests.Dashboard;
 public sealed class OptimizationComparerTests
 {
     [Theory]
+    [InlineData("failed")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
+    [InlineData("running")]
+    [InlineData("abandoned")]
+    public void Ineligible_attempt_does_not_override_successful_pair(string status)
+    {
+        var good = Evidence(1, "h1", "h2", (100, 50));
+        var interrupted = Evidence(2, "h1", "h2", (999, 888)) with { Status = status };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [good, interrupted], "v1", "v2", "all", "sum");
+        Assert.Equal(1, result.OperationId);
+        Assert.Equal(100, result.WholeBatch!.Before);
+        Assert.Equal(50, result.WholeBatch.After);
+    }
+
+    [Theory]
     [InlineData(PairBasis.MeasuredTogether, "MeasuredTogether")]
     [InlineData(PairBasis.DifferentRunsSameConditions, "DifferentRunsSameConditions")]
     [InlineData(PairBasis.ConditionsDiffer, "ConditionsDiffer")]
@@ -815,8 +831,8 @@ public sealed class OptimizationComparerTests
     [Fact]
     public void Across_groups_without_pair_keys_retains_snapshots_and_unknown_rows()
     {
-        var left = MeasureEvidence(215, "h0", 100) with { Cases = [new CompareCaseEvidence("0", "same label", null, null, null) { MeasurementFingerprint = "left-key" }], Metrics = [] };
-        var right = MeasureEvidence(216, "h1", 50) with { Fingerprint = "other", Cases = [new CompareCaseEvidence("1", "same label", null, null, null) { MeasurementFingerprint = "right-key" }], Metrics = [] };
+        var left = MeasureEvidence(215, "h0", 100) with { Cases = [new CompareCaseEvidence("0", "same label", null, null, null) { MeasurementFingerprint = "left-key" }] };
+        var right = MeasureEvidence(216, "h1", 50) with { Fingerprint = "other", Cases = [new CompareCaseEvidence("1", "same label", null, null, null) { MeasurementFingerprint = "right-key" }], Metrics = [Metric("measure", "1", 50)] };
         var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" }, [left, right], "v0", "v1", "all", "sum");
         Assert.Empty(result.Cases);
         Assert.Empty(result.Tables);
@@ -838,7 +854,7 @@ public sealed class OptimizationComparerTests
             Cases = [new CompareCaseEvidence("0", "A", null, null, null) { VaryingFingerprint = "duplicate" },
                 new CompareCaseEvidence("1", "B", null, null, null) { VaryingFingerprint = "duplicate" },
                 new CompareCaseEvidence("2", "C", null, null, null) { VaryingFingerprint = "unique" }],
-            Metrics = []
+            Metrics = [Metric("measure", "0", 100)]
         };
         var right = MeasureEvidence(216, "h1", 50) with
         {
@@ -846,7 +862,7 @@ public sealed class OptimizationComparerTests
             Cases = [
             new CompareCaseEvidence("0", "A", null, null, null) { VaryingFingerprint = "duplicate" },
             new CompareCaseEvidence("2", "C", null, null, null) { VaryingFingerprint = "unique" }],
-            Metrics = []
+            Metrics = [Metric("measure", "0", 50)]
         };
         var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" }, [left, right], "v0", "v1", "all", "sum");
         var row = Assert.Single(result.CaseRows);

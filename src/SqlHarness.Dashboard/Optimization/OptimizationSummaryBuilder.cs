@@ -29,9 +29,9 @@ public static class OptimizationSummaryBuilder
             foreach (var group in frozenLabels.GroupBy(pair => (pair.Key.Subject, pair.Key.Scope)))
                 nextVersion[group.Key] = group.Select(pair => FrozenVersionOrdinal(pair.Value) + 1).DefaultIfEmpty(0).Max();
         }
-        var versioned = ordered.Select(compare => new VersionedCompare(compare,
-            Version(compare.Subject, compare.Scope, compare.BaselineHash),
-            Version(compare.Subject, compare.Scope, compare.CandidateHash))).ToArray();
+        var versioned = ordered.Where(OptimizationEvidenceEligibility.HasAny).Select(compare => new VersionedCompare(compare,
+            OptimizationEvidenceEligibility.HasVariant(compare, compare.IsMeasure ? "measure" : "baseline") ? Version(compare.Subject, compare.Scope, compare.BaselineHash) : null,
+            OptimizationEvidenceEligibility.HasVariant(compare, "candidate") ? Version(compare.Subject, compare.Scope, compare.CandidateHash) : null)).ToArray();
 
         var subjects = versioned.Where(item => IsAssigned(item.Compare) && (!item.Compare.IsMeasure || item.Compare.BaselineHash is not null))
             .GroupBy(item => (item.Compare.Subject!, Database: item.Compare.Database ?? string.Empty))
@@ -276,7 +276,8 @@ public static class OptimizationSummaryBuilder
     }
 
     private static bool Equivalent(CompareEvidence compare) =>
-        compare.Status == "succeeded"
+        OptimizationEvidenceEligibility.HasVariant(compare, "baseline")
+        && OptimizationEvidenceEligibility.HasVariant(compare, "candidate")
         && !string.Equals(compare.ComparisonMode, "Off", StringComparison.OrdinalIgnoreCase)
         && compare.ResultsEquivalent == true
         && compare.Cases.Count > 0

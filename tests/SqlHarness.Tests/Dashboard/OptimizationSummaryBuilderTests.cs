@@ -4,6 +4,42 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class OptimizationSummaryBuilderTests
 {
+    [Theory]
+    [InlineData("failed")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
+    [InlineData("running")]
+    [InlineData("abandoned")]
+    public void Ineligible_attempts_do_not_create_versions(string status)
+    {
+        var failed = Compare(1, "orders", "whole", "db", "f", "bad0", "bad1", status: status);
+        var good = Compare(2, "orders", "whole", "db", "f", "h0", "h1");
+        var section = OptimizationSummaryBuilder.Build([failed, good]);
+        var versions = Assert.Single(Assert.Single(Assert.Single(section.Subjects).Groups).Scopes).Versions;
+        Assert.Equal(new[] { ("h0", "v0"), ("h1", "v1") }, versions.Select(v => (v.Hash, v.Version)));
+    }
+
+    [Fact]
+    public void Policy_failure_remains_eligible_and_frozen_labels_are_not_renumbered()
+    {
+        var frozen = new Dictionary<(string Subject, string Scope, string Hash), string>
+        {
+            [("orders", "whole", "h0")] = "v2",
+            [("orders", "whole", "h1")] = "v4",
+        };
+        var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with { RegressionVerdict = "fail" };
+        var section = OptimizationSummaryBuilder.Build([compare], ContextKey.AgentSession("test", "synthetic"), frozen, false);
+        var versions = Assert.Single(Assert.Single(Assert.Single(section.Subjects).Groups).Scopes).Versions;
+        Assert.Equal(new[] { "v2", "v4" }, versions.Select(v => v.Version));
+    }
+
+    [Fact]
+    public void Successful_attempt_without_measurements_does_not_create_versions()
+    {
+        var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with { Metrics = [] };
+        Assert.Empty(OptimizationSummaryBuilder.Build([compare]).Subjects);
+    }
+
     [Fact]
     public void Groups_by_subject_database_and_fingerprint()
     {
