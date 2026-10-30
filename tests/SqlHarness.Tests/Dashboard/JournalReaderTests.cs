@@ -315,6 +315,70 @@ public sealed class JournalReaderTests
         Assert.Single(section.Subjects);
     }
 
+    [Theory]
+    [InlineData("sum", 30, 3, 5, 7, 9, 11, 13, 15, 41)]
+    [InlineData("mean", 15, 2, 3, 4, 5, 6, 7, 8, 21)]
+    public void Stored_table_io_flows_from_journal_to_case_aggregate_once_per_representative(
+        string mode, long data, long scans, long physical, long pageServer, long readAhead,
+        long lob, long lobPhysical, long lobReadAhead, long total)
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:table-io-aggregate"), "orders", "whole", "h1", "h2");
+        var first = new ConditionsParameter("@id", "int", JsonDocument.Parse("1").RootElement.Clone());
+        var second = new ConditionsParameter("@id", "int", JsonDocument.Parse("2").RootElement.Clone());
+        var template = JournalSeed.ReproConditions();
+        var conditions = template with
+        {
+            Execution = template.Execution with { Repeat = 3 },
+            Cases = [new ConditionsCase("0", 0, "case 0", null, [first], "case-fingerprint-0") { VaryingForFingerprint = [first] },
+                new ConditionsCase("1", 1, "case 1", null, [second], "case-fingerprint-1") { VaryingForFingerprint = [second] }],
+        };
+        JournalVariantMetrics Case(string variant, string id, JournalTableIo table) =>
+            OptimizationMetric(variant, 100, 10, 1) with { MatrixCell = int.Parse(id), CaseId = id, CaseLabel = $"case {id}", TableIo = [table] };
+        var metrics = new BenchmarkJournalRecord(
+        [
+            Case("baseline", "0", new JournalTableIo("Orders", 10, 1, 2, 3, 4, 5, 6, 7, 0)),
+            Case("baseline", "1", new JournalTableIo("Orders", 20, 2, 3, 4, 5, 6, 7, 8, 0)),
+            Case("candidate", "0", new JournalTableIo("Orders", 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+            Case("candidate", "1", new JournalTableIo("Orders", 1, null, null, 0, null, null, 0, null, 0)),
+        ], []);
+        Assert.All(metrics.Variants, metric => Assert.Equal(3, metric.Runs));
+        seed.CompareEvidence(handle, conditions,
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"case 0","equivalence":{"equivalent":true}},{"caseId":"1","caseLabel":"case 1","equivalence":{"equivalent":true}}]}""", metrics);
+
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+        var evidence = Assert.Single(reader.OptimizationEvidence(sessionId));
+        Assert.Equal(4, evidence.Metrics.Count);
+        var versions = new[] {
+            new VersionRow("v1", "h1", null, null, null, null, "incomplete", [], 0),
+            new VersionRow("v2", "h2", null, null, null, null, "incomplete", [], 0),
+        };
+        var group = new ConditionsGroup(evidence.Fingerprint!, "cases", [new ScopeVersions("whole", versions)], "v1", "v2");
+        var comparison = OptimizationComparer.Compare(group, [evidence], "v1", "v2", "all", mode, "whole");
+        var row = Assert.Single(comparison.Tables);
+        Assert.Equal(2, comparison.Cases.Count);
+        Assert.Equal(data, row.DataLogicalReadsBefore);
+        Assert.Equal(scans, row.ScansBefore);
+        Assert.Equal(physical, row.PhysicalReadsBefore);
+        Assert.Equal(pageServer, row.PageServerReadsBefore);
+        Assert.Equal(readAhead, row.ReadAheadReadsBefore);
+        Assert.Equal(lob, row.LobLogicalReadsBefore);
+        Assert.Equal(lobPhysical, row.LobPhysicalReadsBefore);
+        Assert.Equal(lobReadAhead, row.LobReadAheadReadsBefore);
+        Assert.Equal(total, row.ReadsBefore);
+        Assert.Equal(1, row.DataLogicalReadsAfter);
+        Assert.Null(row.ScansAfter);
+        Assert.Null(row.PhysicalReadsAfter);
+        Assert.Equal(0, row.PageServerReadsAfter);
+        Assert.Null(row.ReadAheadReadsAfter);
+        Assert.Null(row.LobLogicalReadsAfter);
+        Assert.Equal(0, row.LobPhysicalReadsAfter);
+        Assert.Null(row.LobReadAheadReadsAfter);
+        Assert.Null(row.ReadsAfter);
+    }
+
     [Fact]
     public void Statement_reader_uses_current_sensitivity_and_preserves_omission_and_no_plan_states()
     {
