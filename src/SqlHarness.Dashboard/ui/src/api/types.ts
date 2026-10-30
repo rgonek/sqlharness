@@ -196,9 +196,15 @@ export type StatementRow = {
   planRepetitionBefore?: number | null; planRepetitionAfter?: number | null
   udfElapsedMilliseconds: number | null
 }
+export type CaseOutcome = {
+  id: string; label: string; resultsEquivalent: boolean | null; ioOutcome: string
+  readsBefore: number | null; readsAfter: number | null; elapsedBeforeMs: number | null; elapsedAfterMs: number | null
+  cpuBeforeMs: number | null; cpuAfterMs: number | null; policyVerdict: string | null; policyReasons: string[]; policyUnavailableReason: string | null
+}
 export type OptimizationComparison = {
   a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql" | "ApproximateAcrossConditions"
   groupA?: string | null; groupB?: string | null; groupLabelA?: string | null; groupLabelB?: string | null
+  caseOutcomes?: CaseOutcome[]
   caseRows?: { caseKey: string; labelA: string; labelB: string; rowsA: number | null; rowsB: number | null; rowsAVaries: boolean; rowsBVaries: boolean }[]
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]
   selectedCase: string; aggregate: string; coverageLabel: string; statementMetricsUnavailableReason?: string | null

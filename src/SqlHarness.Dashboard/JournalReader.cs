@@ -2061,6 +2061,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     Label = StringProperty(item, "caseLabel") ?? current.Label,
                     ResultsEquivalent = BooleanProperty(equivalence, "equivalent"),
                     RegressionVerdict = StringProperty(Property(item, "regression"), "verdict"),
+                    RegressionReasons = RegressionReasons(Property(item, "regression")),
                 };
             }
         }
@@ -2071,6 +2072,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             {
                 ResultsEquivalent = BooleanProperty(summary, "resultsEquivalent"),
                 RegressionVerdict = StringProperty(Property(summary, "regression"), "verdict"),
+                RegressionReasons = RegressionReasons(Property(summary, "regression")),
             };
         }
 
@@ -2080,6 +2082,14 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 { MeasurementFingerprint = metric.MeasurementFingerprint });
         return cases.Values.OrderBy(item => conditions?.Cases?.FirstOrDefault(value => value.Id == item.CaseId)?.Index ?? int.MaxValue)
             .ThenBy(item => item.CaseId, StringComparer.Ordinal).ToArray();
+    }
+
+    private static IReadOnlyList<string> RegressionReasons(JsonElement? regression)
+    {
+        var reasons = Property(regression, "reasons");
+        return reasons is { ValueKind: JsonValueKind.Array } array
+            ? array.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!).ToArray()
+            : [];
     }
 
     private static bool? AggregateEquivalence(IReadOnlyList<CompareCaseEvidence> cases)

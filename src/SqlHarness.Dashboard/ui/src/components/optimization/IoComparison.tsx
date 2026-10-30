@@ -59,6 +59,7 @@ export function IoComparison({ pending = false, comparison, byStatement, onViewC
     </div>
     <ComparisonPending pending={pending} announce>{byStatement && !hasIo ? <div className="space-y-2">
       <p className="text-sm text-muted-foreground">{comparison.tableIoUnavailable ? "Per-statement IO is not available for this engine." : "Some IO cannot be attributed to individual statements. IO assessment uses the whole batch."}</p>
+      {comparison.tableIoUnavailable && <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p>}
       <Button variant="outline" size="sm" onClick={() => onViewChange("whole")}>View whole batch</Button>
       {rows.map(row => <div key={`${row.key}:${row.occurrence}`} className="text-sm"><span>{row.text}</span><MetricReasons availability={row.availability} />{row.planLinkBefore && <> · <a href={row.planLinkBefore} className="underline">Plan before</a></>}{row.planLinkAfter && <> · <a href={row.planLinkAfter} className="underline">Plan after</a></>}{executionLabel(row) && <span>Executions: {executionLabel(row)}</span>}{!comparison.statementMetricsUnavailableReason && <StatementMetrics row={row} />}{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}</div>)}
     </div> : comparison.tableIoUnavailable ? <p className="text-sm text-muted-foreground">per-table IO not available for this engine</p> : <Table className="io-table" aria-label="IO before and after">

@@ -82,6 +82,7 @@ public sealed record CompareCaseEvidence(
     bool? ResultsEquivalent,
     string? RegressionVerdict)
 {
+    public IReadOnlyList<string> RegressionReasons { get; init; } = [];
     public string? MeasurementFingerprint { get; init; }
     public string? VaryingFingerprint { get; init; }
 }
@@ -146,6 +147,7 @@ public sealed record OptimizationComparison(
     public string? GroupLabelA { get; init; }
     public string? GroupLabelB { get; init; }
     public IReadOnlyList<CaseRows> CaseRows { get; init; } = [];
+    public IReadOnlyList<CaseOutcome> CaseOutcomes { get; init; } = [];
     public bool VersionLabelsProvisional { get; init; }
     public string? VersionLabelNote { get; init; }
     public string VerdictBasis { get; init; } = "whole batch";
@@ -216,6 +218,11 @@ public sealed record CaseRows(string CaseKey, string LabelA, string LabelB, long
     public bool RowsAVaries { get; init; }
     public bool RowsBVaries { get; init; }
 }
+
+public sealed record CaseOutcome(string Id, string Label, bool? ResultsEquivalent, string IoOutcome,
+    long? ReadsBefore, long? ReadsAfter, long? ElapsedBeforeMs, long? ElapsedAfterMs,
+    double? CpuBeforeMs, double? CpuAfterMs, string? PolicyVerdict, IReadOnlyList<string> PolicyReasons,
+    string? PolicyUnavailableReason);
 
 public sealed record CaseOption(string Id, string Label, string Outcome);
 public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);

@@ -6,6 +6,50 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class OptimizationComparerTests
 {
+    [Fact]
+    public void Independent_case_outcomes_keep_policy_and_metrics_separate_and_directional()
+    {
+        var evidence = Evidence(1, "h1", "h2", (100, 50), (100, 50), (100, 50), (100, 100));
+        evidence = evidence with
+        {
+            Cases = evidence.Cases.Select((c, i) => c with { RegressionVerdict = i == 0 ? "fail" : "pass", RegressionReasons = i == 0 ? ["elapsed-regressed"] : [] }).ToArray(),
+            Metrics = evidence.Metrics.Select(m => m.CaseId == "0" ? m with { ElapsedMedianMs = m.Variant == "baseline" ? 10 : 30 } : m).ToArray(),
+        };
+        var forward = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
+        Assert.Equal(4, forward.CaseOutcomes.Count);
+        Assert.Equal(3, forward.CaseOutcomes.Count(c => c.IoOutcome == "better"));
+        Assert.Equal(1, forward.CaseOutcomes.Count(c => c.IoOutcome == "same"));
+        Assert.Equal(3, forward.CaseOutcomes.Count(c => c.PolicyVerdict == "pass"));
+        var failure = Assert.Single(forward.CaseOutcomes, c => c.PolicyVerdict == "fail");
+        Assert.Equal("elapsed-regressed", Assert.Single(failure.PolicyReasons));
+        Assert.Equal(10, failure.ElapsedBeforeMs);
+        Assert.Equal(30, failure.ElapsedAfterMs);
+        var reversed = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v2", "v1", "all", "sum");
+        Assert.All(reversed.CaseOutcomes, c => Assert.Null(c.PolicyVerdict));
+    }
+
+    [Fact]
+    public void Outcomes_keep_missing_io_and_differing_results_and_never_invent_policy()
+    {
+        var evidence = Evidence(1, "h1", "h2", (0, 20), (100, 50));
+        evidence = evidence with {
+            Cases = [evidence.Cases[0] with { ResultsEquivalent = false }, evidence.Cases[1]],
+            Metrics = evidence.Metrics.Select(m => m.CaseId == "1" && m.Variant == "candidate" ? m with { LogicalReadsMedian = null } : m).ToArray(),
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
+        Assert.Equal(2, result.CaseOutcomes.Count);
+        Assert.False(result.CaseOutcomes[0].ResultsEquivalent);
+        Assert.Equal("worse", result.CaseOutcomes[0].IoOutcome);
+        Assert.Equal("unavailable", result.CaseOutcomes[1].IoOutcome);
+        Assert.All(result.CaseOutcomes, c => Assert.Null(c.PolicyVerdict));
+        var unsupported = OptimizationComparer.Compare(Group("h1", "h2"), [evidence with { Engine = "postgres" }], "v1", "v2", "all", "sum");
+        Assert.All(unsupported.CaseOutcomes, c => Assert.Equal("unavailable", c.IoOutcome));
+        var noReads = evidence with { Metrics = evidence.Metrics.Select(m => m with { LogicalReadsMedian = null }).ToArray() };
+        var allUnavailable = OptimizationComparer.Compare(Group("h1", "h2"), [noReads], "v1", "v2", "all", "sum");
+        Assert.Equal(2, allUnavailable.CaseOutcomes.Count);
+        Assert.All(allUnavailable.CaseOutcomes, c => Assert.Equal("unavailable", c.IoOutcome));
+    }
+
     [Theory]
     [InlineData("failed")]
     [InlineData("cancelled")]
@@ -545,6 +589,10 @@ public sealed class OptimizationComparerTests
 
         Assert.Equal(PairBasis.DifferentRunsSameConditions, result.Basis);
         Assert.Null(result.OperationId);
+        var independent = Assert.Single(result.CaseOutcomes);
+        Assert.Equal("better", independent.IoOutcome);
+        Assert.Null(independent.PolicyVerdict);
+        Assert.Equal("independently measured", independent.PolicyUnavailableReason);
         AssertAction(result.BeforeAction, 201, "candidate", "0");
         AssertAction(result.AfterAction, 214, "baseline", "0");
     }
@@ -960,6 +1008,10 @@ public sealed class OptimizationComparerTests
         };
         var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" }, [left, right], "v0", "v1", "all", "sum");
         Assert.Equal(PairBasis.ApproximateAcrossConditions, result.Basis);
+        var outcome = Assert.Single(result.CaseOutcomes);
+        Assert.Equal("better", outcome.IoOutcome);
+        Assert.Null(outcome.PolicyVerdict);
+        Assert.Equal("different conditions", outcome.PolicyUnavailableReason);
         Assert.Equal("Different conditions — approximate, not a verdict", result.EquivalenceLabel);
         Assert.Equal("1 of 2 cases paired", result.CoverageLabel);
         Assert.DoesNotContain(result.Cases, c => c.Outcome is "better" or "worse");

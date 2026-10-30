@@ -139,8 +139,10 @@ public static class OptimizationComparer
 
         return new OptimizationComparison(a, b, basis, direct?.OperationId, equivalence, caseOptions,
             resolvedSelection, normalizedAggregate, coverage, mixed, visibleTables, collapsed,
-            new ElapsedInfo(elapsedBefore, elapsedAfter, direct?.RegressionVerdict, basis == PairBasis.DifferentRunsSameConditions))
+            new ElapsedInfo(elapsedBefore, elapsedAfter, directForward ? direct?.RegressionVerdict : null, basis == PairBasis.DifferentRunsSameConditions))
         {
+            CaseOutcomes = BuildOutcomes(direct is null ? before.Metrics.Keys.Union(after.Metrics.Keys, StringComparer.Ordinal) : direct.Cases.Select(CaseKey), caseLabels, before.Metrics, after.Metrics,
+                direct, directForward, postgresMetrics, direct is null ? "independently measured" : "reversed comparison"),
             CaseRows = commonIds.Select(id => new CaseRows(id, caseLabels.GetValueOrDefault(id, id), caseLabels.GetValueOrDefault(id, id),
                 before.Metrics[id].RowsReturned, after.Metrics[id].RowsReturned)
             { RowsAVaries = before.Metrics[id].RowsReturnedVaries, RowsBVaries = after.Metrics[id].RowsReturnedVaries }).ToArray(),
@@ -227,6 +229,7 @@ public static class OptimizationComparer
             GroupB = groupB.Fingerprint,
             GroupLabelA = groupA.Label,
             GroupLabelB = groupB.Label,
+            CaseOutcomes = BuildOutcomes(ids, before.Value.Labels, left.Metrics, right.Metrics, null, false, postgres, "different conditions"),
             CaseRows = rows,
             BeforeAction = ids.Length == 0 ? before.Value.FullAction : SnapshotAction(left),
             AfterAction = ids.Length == 0 ? after.Value.FullAction : SnapshotAction(right),
@@ -685,6 +688,29 @@ public static class OptimizationComparer
             .GroupBy(metric => cases.GetValueOrDefault(metric.CaseId, metric.MeasurementFingerprint ?? metric.CaseId), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
         return new VersionSnapshot(compare.Engine, compare.OperationId, variant, metrics);
+    }
+
+    private static IReadOnlyList<CaseOutcome> BuildOutcomes(IEnumerable<string> ids,
+        IReadOnlyDictionary<string, string> labels, IReadOnlyDictionary<string, CompareMetricEvidence> before,
+        IReadOnlyDictionary<string, CompareMetricEvidence> after, CompareEvidence? direct, bool directForward, bool unsupportedIo, string unavailableReason)
+    {
+        var recorded = direct?.Cases.GroupBy(CaseKey, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
+        return ids.Select(id =>
+        {
+            before.TryGetValue(id, out var a);
+            after.TryGetValue(id, out var b);
+            var evidence = recorded?.GetValueOrDefault(id);
+            var comparison = a is not null && b is not null ? CompareCase(a, b) : default;
+            long? readsA = comparison.VerdictBasis == "changed statements" ? comparison.ChangedBefore : a?.LogicalReadsMedian;
+            long? readsB = comparison.VerdictBasis == "changed statements" ? comparison.ChangedAfter : b?.LogicalReadsMedian;
+            var verdict = directForward && evidence?.RegressionVerdict is ("pass" or "fail") ? evidence.RegressionVerdict : null;
+            return new CaseOutcome(id, evidence?.Label ?? labels.GetValueOrDefault(id, id), string.Equals(direct?.ComparisonMode, "Off", StringComparison.OrdinalIgnoreCase) ? null : evidence?.ResultsEquivalent,
+                !unsupportedIo && readsA.HasValue && readsB.HasValue ? Outcome(readsA.Value, readsB.Value) : "unavailable",
+                readsA, readsB, a?.ElapsedMedianMs, b?.ElapsedMedianMs, a?.CpuMedianMs, b?.CpuMedianMs,
+                verdict, directForward ? evidence?.RegressionReasons ?? [] : [],
+                verdict is null ? !directForward ? unavailableReason : "not recorded" : null);
+        }).ToArray();
     }
 
     private static string Outcome(long before, long after)

@@ -114,7 +114,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations, 
     {group && scope ? <>
 
       {versions.length > 0 ? <VersionTable subject={`${subject.subject}-${subject.database}`} sessionId={sessionId} agentSessionKey={agentSessionKey} sessionSearch={selectedSearch}
-        versions={versions} operations={operations} selectedA={selectedA} selectedB={selectedB || null} groupA={aGroup?.fingerprint} groupB={bGroup?.fingerprint}
+        versions={versions} comparison={activeCompareQuery.isPlaceholderData ? undefined : activeCompareQuery.data} operations={operations} selectedA={selectedA} selectedB={selectedB || null} groupA={aGroup?.fingerprint} groupB={bGroup?.fingerprint}
         onSelect={(side, version, fingerprint) => side === "a"
           ? update({ group: fingerprint, groupB: selectedB && bGroup?.fingerprint !== fingerprint ? bGroup?.fingerprint : undefined, a: version, b: selectedB || undefined })
           : update({ group: aGroup?.fingerprint, groupB: fingerprint !== aGroup?.fingerprint ? fingerprint : undefined, a: selectedA, b: version })} /> : <p className="text-sm text-muted-foreground">No retained versions for this scope.</p>}

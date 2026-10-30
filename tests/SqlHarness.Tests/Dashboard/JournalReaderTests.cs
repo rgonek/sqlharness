@@ -280,7 +280,7 @@ public sealed class JournalReaderTests
             OptimizationMetric("candidate", 80, 8, 1) with { Postgres = new PostgresBufferCounters(5, 1, 0, 0, 0, 1) },
         ], []);
         seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
-            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"regression":{"verdict":"pass"},"cases":[{"caseId":"0","caseLabel":"@CustomerId = 1","equivalence":{"mode":"Ordered","equivalent":true},"regression":{"verdict":"pass"}}]}""",
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"regression":{"verdict":"pass"},"cases":[{"caseId":"0","caseLabel":"@CustomerId = 1","equivalence":{"mode":"Ordered","equivalent":true},"regression":{"verdict":"pass","reasons":["elapsed-regressed"]}}]}""",
             metrics);
 
         var sessionId = Assert.Single(Reader(home).Sessions(new SessionQuery()).Items).Id;
@@ -296,6 +296,7 @@ public sealed class JournalReaderTests
         Assert.Equal("succeeded", evidence.Status);
         Assert.Equal("pass", evidence.RegressionVerdict);
         Assert.Equal((true, "pass"), (Assert.Single(evidence.Cases).ResultsEquivalent, evidence.Cases[0].RegressionVerdict));
+        Assert.Equal("elapsed-regressed", Assert.Single(evidence.Cases[0].RegressionReasons));
         var baseline = Assert.Single(evidence.Metrics, metric => metric.Variant == "baseline");
         Assert.Equal(100, baseline.LogicalReadsMedian);
         Assert.Equal(10, baseline.ElapsedMedianMs);
