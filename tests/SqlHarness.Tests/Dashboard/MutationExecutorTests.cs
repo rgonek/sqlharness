@@ -11,11 +11,61 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class MutationExecutorTests
 {
+    [Theory]
+    [InlineData("prod")]
+    [InlineData("production")]
+    [InlineData("staging")]
+    public async Task Inherited_yolo_without_acknowledgement_never_executes_dml(string environment)
+    {
+        var module = new FakeModule();
+        var profile = Profile(null!, new MutationWriter(SameAsReader: true)) with { Environment = environment, Auth = "integrated" };
+        var executor = new MutationExecutor(module,
+            () => new Dictionary<string, TargetProfile> { ["local"] = profile },
+            () => new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "yolo" } },
+            new RecordingJournal(), TimeProvider.System);
+
+        var result = await executor.ExecuteAsync(Request(), new MutationExecutionContext("id", MutationExecutionOrigin.Automatic), default);
+
+        Assert.Equal(MutationStatus.Failed, result.Status);
+        Assert.Empty(module.Operations);
+    }
+
+    [Fact]
+    public async Task Acknowledged_production_yolo_dml_can_execute()
+    {
+        var module = new FakeModule();
+        var profile = Profile("yolo", new MutationWriter(SameAsReader: true)) with
+        {
+            Environment = "production",
+            Auth = "integrated",
+            Mutations = new ProfileMutations("yolo", new MutationWriter(SameAsReader: true), true),
+        };
+        var result = await Executor(module, profile).ExecuteAsync(Request(), Context(origin: MutationExecutionOrigin.Automatic), default);
+        Assert.Equal(MutationStatus.Success, result.Status);
+        Assert.Single(module.Operations);
+    }
+
     [Fact]
     public async Task Mode_changed_to_never_rejects_without_module_execution()
     {
         var module = new FakeModule();
         var executor = Executor(module, Profile("never"));
+
+        var result = await executor.ExecuteAsync(Request(), Context(), default);
+
+        Assert.Equal(MutationStatus.Disabled, result.Status);
+        Assert.Empty(module.Operations);
+    }
+
+    [Fact]
+    public async Task Inherited_policy_is_rechecked_after_global_change_before_approved_execution()
+    {
+        var module = new FakeModule();
+        var profile = Profile(null!, new MutationWriter(SameAsReader: true)) with { Auth = "integrated" };
+        var config = new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "operator" } };
+        var executor = new MutationExecutor(module, () => new Dictionary<string, TargetProfile> { ["local"] = profile },
+            () => config, new RecordingJournal(), TimeProvider.System);
+        config = new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "never" } };
 
         var result = await executor.ExecuteAsync(Request(), Context(), default);
 
@@ -128,6 +178,29 @@ public sealed class MutationExecutorTests
         Assert.Equal("[REDACTED]", resultReport.ResultSets[0].Rows[0][0]);
         Assert.Equal("[REDACTED]", resultReport.ResultSets[0].Rows[0][1]);
         Environment.SetEnvironmentVariable(variable, null);
+    }
+
+    [Fact]
+    public async Task Prepared_approved_request_rejects_target_changed_before_execution()
+    {
+        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal) { ["local"] = Profile("operator") };
+        var sessions = new RecordingMutationSessionFactory();
+        var module = new SqlHarnessModule(sessions, () => profiles);
+        var request = Request();
+        var prepared = await module.ExecuteAsync(new SqlHarnessMutationOperation(
+            new SqlTargetRequest(request.Profile, request.Vars), request.Sql, request.Parameters,
+            request.TimeoutSeconds, request.MaxRows, request.Database)
+        { SessionKey = request.SessionKey });
+        var frozen = Assert.IsType<SqlHarnessMutationPrepared>(prepared.Report).Request;
+        profiles["local"] = profiles["local"] with { Server = "different-server" };
+        var executor = new MutationExecutor(module, () => profiles, () => new SqlHarnessConfig(),
+            new RecordingJournal(), TimeProvider.System);
+
+        var result = await executor.ExecuteAsync(frozen, Context("changed-target"), default);
+
+        Assert.Equal(MutationStatus.DatabaseMismatch, result.Status);
+        Assert.Null(sessions.Target);
+        Assert.Empty(sessions.Commands);
     }
 
     [Fact]

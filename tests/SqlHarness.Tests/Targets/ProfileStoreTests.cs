@@ -372,6 +372,17 @@ public sealed class ProfileStoreTests
         Assert.False(remote.TrustServerCertificate);
     }
 
+    [Fact]
+    public void Writer_only_mutation_block_inherits_mode()
+    {
+        var profiles = LoadProfiles("""
+            { "local": { "server": "localhost", "database": "db", "vars": {}, "auth": "integrated",
+              "mutations": { "writer": { "sameAsReader": true } } } }
+            """);
+        Assert.Null(profiles["local"].Mutations!.Mode);
+        Assert.True(profiles["local"].Mutations!.Writer!.SameAsReader);
+    }
+
     private static string FindRepositoryFile(params string[] path)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)

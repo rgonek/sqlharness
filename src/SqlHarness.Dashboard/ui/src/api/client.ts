@@ -1,5 +1,5 @@
 import { connection } from "./connection"
-import type { FieldError } from "./types"
+import type { FieldError, ProfilesResponse, TargetProfile } from "./types"
 
 export class NetworkError extends Error {
   constructor(message: string) {
@@ -164,4 +164,8 @@ export async function patchJson<T>(path: string, body: unknown): Promise<T> {
     throw new RequestError(error ?? `Request failed with ${response.status}: ${path}`)
   }
   return (await response.json()) as T
+}
+
+export function updateProfile(request: { name: string; expectedRevision: string; profile: TargetProfile }): Promise<ProfilesResponse> {
+  return putJson<ProfilesResponse>("/api/profiles", request)
 }

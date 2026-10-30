@@ -1,0 +1,3 @@
+pwsh ./scripts/verify.ps1 -LogDirectory plans/124-evidence/logs/final-gate
+==> ui-install skipped (lockfile unchanged)
+==> build ok 1m03s

@@ -1,6 +1,6 @@
 # Editable profiles and inherited mutation policy
 
-Status: design for plan 124; implementation not started.
+Status: DONE on `plan-124`; Windows-only profile Save. Task, whole-branch and final scoped reviews approved; final Windows gate passed on product `71a42d2a`. No merge, push or live/Linux acceptance.
 Inspected SQLHarness HEAD: `455adea0` (2026-10-29).
 
 ## Goal and scope
@@ -61,6 +61,8 @@ execute; fail closed without it, including when the global default changes after
 YOLO bypasses the operator click only for DML; schema, privilege and opaque tiers still require it.
 
 ### Save and concurrency
+
+Saving existing profiles is supported on Windows only, where replacement preserves required security metadata. Other platforms refuse saves before file access and report editing availability through GET.
 
 GET /api/profiles keeps its existing fields and adds revision and editable profile data.
 Add a guarded PUT /api/profiles accepting

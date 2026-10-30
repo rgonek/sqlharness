@@ -18,6 +18,7 @@ internal static class DashboardSecurity
     internal const string WriteHeader = "X-SqlHarness-Dashboard";
     internal const string ShutdownProcessIdHeader = "X-SqlHarness-Dashboard-Pid";
     internal const string ShutdownStartedAtTicksHeader = "X-SqlHarness-Dashboard-StartedAtTicks";
+    internal const string ProfilesPath = "/api/profiles";
     internal const string SettingsPath = "/api/settings";
     internal const string PricesRefreshPath = "/api/prices/refresh";
     internal const string ShutdownPath = "/api/shutdown";
@@ -100,7 +101,9 @@ internal static class DashboardSecurity
         var isMutationDecision = HttpMethods.IsPost(context.Request.Method)
             && System.Text.RegularExpressions.Regex.IsMatch(context.Request.Path.Value ?? string.Empty,
                 @"^/api/mutations/[a-f0-9]{32}/(?:approve|deny)\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
-        var isWrite = isSettingsWrite || isPricesRefresh || isAnnotationWrite || isTranscriptsClear || isShutdown || isMutationDecision;
+        var isProfilesWrite = HttpMethods.IsPut(context.Request.Method)
+            && string.Equals(context.Request.Path.Value, ProfilesPath, StringComparison.Ordinal);
+        var isWrite = isProfilesWrite || isSettingsWrite || isPricesRefresh || isAnnotationWrite || isTranscriptsClear || isShutdown || isMutationDecision;
         if (!isRead && !isWrite && !isMutationSubmit)
         {
             context.Response.Headers.Allow = "GET, HEAD";

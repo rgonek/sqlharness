@@ -1,0 +1,4 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  npm warn reify Removing non-directory C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\src\SqlHarness.Dashboard\ui\node_modules
+  SqlHarness.Core -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\90b3\sqlharness\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll

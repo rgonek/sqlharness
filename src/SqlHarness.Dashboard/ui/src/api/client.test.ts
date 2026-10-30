@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { stubFetch } from "@/test/render"
-import { ConflictError, FieldErrorsError, getJson, HttpStatusError, NotFoundError, putJson, UnauthorizedError, withQuery } from "./client"
+import { ConflictError, FieldErrorsError, getJson, HttpStatusError, NotFoundError, putJson, updateProfile, UnauthorizedError, withQuery } from "./client"
 
 describe("client", () => {
   test("withQuery skips empty values", () => {
@@ -52,4 +52,13 @@ describe("client", () => {
     globalThis.fetch = (async () => new Response(JSON.stringify({ error: "invalid" }), { status: 409 })) as typeof fetch
     expect(await putJson("/api/settings", {}).catch(e => e)).toBeInstanceOf(ConflictError)
   })
+})
+
+test("updateProfile sends a guarded revision and editable profile", async () => {
+  let seen: RequestInit | undefined
+  globalThis.fetch = (async (_: RequestInfo | URL, init?: RequestInit) => { seen = init; return new Response(JSON.stringify({ status: "valid" })) }) as typeof fetch
+  await updateProfile({ name: "pg", expectedRevision: "rev", profile: { server: "host", database: "db", vars: {}, auth: "sql" } })
+  expect(seen?.method).toBe("PUT")
+  expect(new Headers(seen?.headers).get("X-SqlHarness-Dashboard")).toBe("1")
+  expect(JSON.parse(seen!.body as string)).toMatchObject({ name: "pg", expectedRevision: "rev", profile: { server: "host" } })
 })

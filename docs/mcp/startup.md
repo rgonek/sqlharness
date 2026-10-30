@@ -59,6 +59,8 @@ Connection secrets stay in the process environment and the operator's profile st
 
 ## Scope lifetime
 
+Dashboard profile Save updates the file on Windows; existing MCP processes retain their startup profile and configuration view. Restart the MCP server and reconnect its client to refresh that view. Dashboard mutation execution separately reloads and rechecks current target and policy. Profile editing is unavailable on non-Windows platforms.
+
 In fixed mode, the operator supplies the profile and vars once at process start. The server resolves and freezes one immutable scope for all calls; a different profile, variables, or target requires a restart.
 
 In request-scoped mode, each target-dependent call supplies a nested `target`, for example `{"target":{"profile":"sample-country","vars":{"tenant":"example","env":"test"}}}`. The target is required for `query`, `mutation`, `measure`, `compare`, `watch`, `snapshot`, and `artifact`. Each call resolves the selected allowlisted profile against the immutable startup snapshot and builds a fresh scoped handler/module. The other two tools (`capabilities` and `plan`) remain target-free; in particular, offline plan distillation does not invent a target. Fixed mode retains its existing schemas and rejects the request-only `target` argument. Matrix and parameter-set values are execution parameters and cannot change the target.

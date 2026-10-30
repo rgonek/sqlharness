@@ -1,0 +1,8 @@
+pwsh ./scripts/verify.ps1 -LogDirectory plans/124-evidence/logs/final-gate-71a42d2a
+==> ui-install skipped (lockfile unchanged)
+==> build ok 1m50s
+==> ui-check ok 12m04s
+==> test ok 3m20s
+format: skipped (0 changed C# files)
+==> format skipped (0 changed C# files)
+verify: OK  stages=5  15m25s

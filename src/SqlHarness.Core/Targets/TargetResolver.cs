@@ -55,6 +55,14 @@ public static class TargetResolver
         return ResolveDirect(request);
     }
 
+    internal static Regex CompileVariableRule(string pattern)
+    {
+        var anchored = pattern.StartsWith('^') && pattern.EndsWith('$') ? pattern : $"^(?:{pattern})$";
+        return new Regex(anchored, RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
+    }
+
+    internal static bool HasUnresolvedPlaceholder(string database) => Placeholder.IsMatch(database);
+
     private static ResolvedTarget ResolveProfile(
         SqlTargetRequest request,
         IReadOnlyDictionary<string, TargetProfile> profiles)
@@ -81,10 +89,7 @@ public static class TargetResolver
             Regex validator;
             try
             {
-                var anchored = pattern.StartsWith('^') && pattern.EndsWith('$')
-                    ? pattern
-                    : $"^(?:{pattern})$";
-                validator = new Regex(anchored, RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
+                validator = CompileVariableRule(pattern);
             }
             catch (ArgumentException)
             {

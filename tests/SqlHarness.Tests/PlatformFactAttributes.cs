@@ -19,3 +19,12 @@ public sealed class UnixFactAttribute : FactAttribute
             Skip = "Requires Unix.";
     }
 }
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class WindowsTheoryAttribute : TheoryAttribute
+{
+    public WindowsTheoryAttribute()
+    {
+        if (!OperatingSystem.IsWindows())
+            Skip = "Requires Windows.";
+    }
+}

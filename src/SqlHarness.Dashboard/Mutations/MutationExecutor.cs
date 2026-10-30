@@ -45,9 +45,15 @@ internal sealed class MutationExecutor(
             return Result(MutationStatus.Failed, SecretRedactor.Redact(exception, []));
         }
 
-        var modeText = profile.Mutations?.Mode ?? loadConfig().Mutations.DefaultMode;
-        if (!Enum.TryParse<MutationMode>(modeText, true, out var mode))
+        EffectiveMutationPolicy policy;
+        try { policy = MutationPolicyResolver.Resolve(profile, loadConfig().Mutations); }
+        catch (SqlHarnessSafetyException)
+        {
             return Result(MutationStatus.Failed, "The mutation mode is invalid.");
+        }
+        var mode = Enum.Parse<MutationMode>(policy.EffectiveMode, true);
+        if (policy.ProductionAcknowledgementRequired && string.Equals(request.Tier, "dml", StringComparison.OrdinalIgnoreCase))
+            return Result(MutationStatus.Failed, "Production YOLO acknowledgement is required.");
         if (mode == MutationMode.Never ||
             (context.Origin == MutationExecutionOrigin.Automatic &&
              (mode != MutationMode.Yolo || !string.Equals(request.Tier, "dml", StringComparison.OrdinalIgnoreCase))))

@@ -22,50 +22,7 @@ public static class ProfileStore
 
         try
         {
-            using var stream = File.OpenRead(path);
-            using var document = JsonDocument.Parse(stream);
-            RejectDuplicateProperties(document.RootElement);
-            var profiles = document.RootElement.Deserialize<Dictionary<string, TargetProfile>>(Options)
-                ?? throw new JsonException("The profile document was null.");
-
-            foreach (var (name, profile) in profiles)
-            {
-                if (string.IsNullOrWhiteSpace(name) || profile is null ||
-                    string.IsNullOrWhiteSpace(profile.Server) ||
-                    string.IsNullOrWhiteSpace(profile.Database) ||
-                    string.IsNullOrWhiteSpace(profile.Auth) || profile.Vars is null)
-                {
-                    throw new JsonException("A profile is incomplete.");
-                }
-
-                if (profile.Vars.Any(variable =>
-                        string.IsNullOrWhiteSpace(variable.Key) || variable.Value is null))
-                {
-                    throw new JsonException("A profile variable rule is invalid.");
-                }
-
-                ValidateMutations(profile);
-
-                if (!string.IsNullOrWhiteSpace(profile.Engine))
-                {
-                    try
-                    {
-                        SqlEngineNames.Parse(profile.Engine);
-                    }
-                    catch (SqlHarnessSafetyException)
-                    {
-                        throw new JsonException("A profile engine is invalid.");
-                    }
-                }
-
-                PostgresTransportPolicy.Resolve(
-                    SqlEngineNames.Parse(profile.Engine),
-                    profile.TrustServerCertificate,
-                    profile.SslMode,
-                    profile.RootCertificate);
-            }
-
-            return profiles;
+            return Parse(File.ReadAllBytes(path));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
@@ -80,15 +37,71 @@ public static class ProfileStore
         }
     }
 
-    private static void ValidateMutations(TargetProfile profile)
+    public static IReadOnlyDictionary<string, TargetProfile> Parse(ReadOnlyMemory<byte> bytes)
+    {
+        using var document = JsonDocument.Parse(bytes);
+        RejectDuplicateProperties(document.RootElement);
+        var profiles = document.RootElement.Deserialize<Dictionary<string, TargetProfile>>(Options)
+            ?? throw new JsonException("The profile document was null.");
+
+        foreach (var (name, profile) in profiles)
+        {
+            if (string.IsNullOrWhiteSpace(name) || profile is null ||
+                string.IsNullOrWhiteSpace(profile.Server) ||
+                string.IsNullOrWhiteSpace(profile.Database) ||
+                string.IsNullOrWhiteSpace(profile.Auth) || profile.Vars is null)
+            {
+                throw new JsonException("A profile is incomplete.");
+            }
+
+            if (profile.Vars.Any(variable =>
+                    string.IsNullOrWhiteSpace(variable.Key) || variable.Value is null))
+            {
+                throw new JsonException("A profile variable rule is invalid.");
+            }
+
+            ValidateMutations(profile);
+
+            if (!string.IsNullOrWhiteSpace(profile.Engine))
+            {
+                try
+                {
+                    SqlEngineNames.Parse(profile.Engine);
+                }
+                catch (SqlHarnessSafetyException)
+                {
+                    throw new JsonException("A profile engine is invalid.");
+                }
+            }
+
+            PostgresTransportPolicy.Resolve(
+                SqlEngineNames.Parse(profile.Engine),
+                profile.TrustServerCertificate,
+                profile.SslMode,
+                profile.RootCertificate);
+        }
+
+        return profiles;
+    }
+
+    public static IReadOnlyDictionary<string, TargetProfile> ParseForEditing(ReadOnlyMemory<byte> bytes)
+    {
+        var profiles = Parse(bytes);
+        foreach (var profile in profiles.Values)
+            if (ProfileWriter.ValidateProfile(profile) is not null)
+                throw new JsonException("The profile document is invalid.");
+        return profiles;
+    }
+
+    internal static void ValidateMutations(TargetProfile profile)
     {
         if (profile.Mutations is not { } mutations)
             return;
 
-        if (!TryParseMutationMode(mutations.Mode, out var mode))
+        if (mutations.Mode is not null && !TryParseMutationMode(mutations.Mode, out _))
             throw new JsonException("A profile mutation mode is invalid.");
 
-        if (mode != MutationMode.Never && mutations.Writer is null)
+        if (mutations.Mode is not null && TryParseMutationMode(mutations.Mode, out var mode) && mode != MutationMode.Never && mutations.Writer is null)
             throw new JsonException("A profile that allows mutations needs mutations.writer.");
 
         if (mutations.Writer is { } writer)
@@ -100,7 +113,7 @@ public static class ProfileStore
                 throw new JsonException("mutations.writer needs sqlUser and passwordEnvVar, or sameAsReader.");
         }
 
-        if (mode == MutationMode.Yolo &&
+        if (string.Equals(mutations.Mode, "yolo", StringComparison.OrdinalIgnoreCase) &&
             profile.Environment is { } environment &&
             (environment.Equals("prod", StringComparison.OrdinalIgnoreCase) ||
              environment.Equals("production", StringComparison.OrdinalIgnoreCase) ||
@@ -133,7 +146,7 @@ public static class ProfileStore
         return false;
     }
 
-    private static void RejectDuplicateProperties(JsonElement element)
+    public static void RejectDuplicateProperties(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.Object)
         {

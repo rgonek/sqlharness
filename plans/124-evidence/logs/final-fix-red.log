@@ -1,0 +1,124 @@
+
+> ui@0.0.0 test
+> vitest run ProfilesPage.test.tsx
+
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/90b3/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ❯ src/pages/ProfilesPage.test.tsx (18 tests | 4 failed) 7243ms
+   × preserves a dirty edit through missing refresh until explicit discard 329ms
+   × preserves a dirty edit through invalid refresh until explicit discard 346ms
+   × preserves a dirty edit through removed refresh until explicit discard 358ms
+   × preserves a dirty edit through error refresh until explicit discard 328ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/ProfilesPage.test.tsx > preserves a dirty edit through missing refresh until explicit discard
+ FAIL  src/pages/ProfilesPage.test.tsx > preserves a dirty edit through invalid refresh until explicit discard
+ FAIL  src/pages/ProfilesPage.test.tsx > preserves a dirty edit through removed refresh until explicit discard
+ FAIL  src/pages/ProfilesPage.test.tsx > preserves a dirty edit through error refresh until explicit discard
+TestingLibraryElementError: Unable to find a label with the text of: Server
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="min-h-screen"
+    >
+      <header
+        class="app-header flex items-center gap-3 p-4"
+      >
+        <a
+          aria-label="SQLHarness home"
+          class="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          href="/"
+        >
+          <span
+            class="inline-flex items-center gap-2 whitespace-nowrap"
+          >
+            <svg
+              aria-hidden="true"
+              class="size-8 shrink-0"
+              viewBox="205 205 268 254"
+            >
+              <path
+                d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"
+                fill="#10AC61"
+              />
+              <path
+                class="fill-[#0B203B] dark:fill-white"
+                d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"
+              />
+            </svg>
+            <span
+              class="hidden text-lg font-semibold tracking-tight md:inline"
+            >
+              <span
+                class="text-[#0B203B] dark:text-white"
+              >
+                SQL
+              </span>
+              <span
+                class="text-[#10AC61]"
+              >
+                Harness
+              </span>
+            </span>
+          </span>
+        </a>
+        <nav
+          aria-label="Main navigation"
+          class="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+        >
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/"
+          >
+            Activity
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/stats"
+          >
+            Usage
+          </a>
+          <a
+            aria-current="page"
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3 active"
+            data-status="active"
+            href="/profiles"
+          >
+            Profiles
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/settings"
+          >
+            Settings
+          </a>
+        </nav>
+        <div
+          class="shrink-0"
+        >
+          <button
+            aria-expanded="fals...
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getAllByLabelText node_modules/@testing-library/dom/dist/queries/label-text.js:111:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/ProfilesPage.test.tsx:251:17
+    249|   const notice = state === "missing" ? /No targets.json/ : state === "…
+    250|   expect(await screen.findByText(notice)).toBeInTheDocument()
+    251|   expect(screen.getByLabelText("Server")).toHaveValue("draft")
+       |                 ^
+    252|   await user.click(screen.getByRole("button", { name: "Save" }))
+    253|   await waitFor(() => expect(submitted?.expectedRevision).toBe("old"))
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 14 passed (18)
+   Start at  07:28:55
+   Duration  25.62s (import 51%, tests 29%, transform 10%, environment 7%, setup 3%)
+
