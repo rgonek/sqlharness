@@ -58,4 +58,3 @@ export function ProfileEditForm({ profile, revision, onDirty, onCancel, onSaved,
     </FieldGroup></fieldset><div className="flex gap-2"><Button type="submit" disabled={save.isPending}>Save</Button><Button type="button" variant="outline" onClick={onCancel} disabled={save.isPending}>Cancel</Button></div>
   </form>
 }
-
