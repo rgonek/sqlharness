@@ -8,7 +8,7 @@
 resolver, a guarded single-profile save, and a typed form on the existing Profiles page.
 **Tech stack:** C#/.NET, System.Text.Json, ASP.NET Core, React/TypeScript, TanStack Query, xUnit, Vitest.
 **Spec:** [Editable profiles design](../docs/superpowers/specs/2026-10-29-profile-editing-design.md).
-**Status:** DONE on `plan-124`; Terra high task reviews and Sol low whole-branch and final scoped reviews approved. Windows `just verify` passed on product `71a42d2a`: UI 462, Core 4834/11 skipped, MCP 537/4 skipped. Profile Save is Windows-only; non-Windows refuses before file access. No merge, push, live acceptance or Linux gate.
+**Status:** DONE; locally integrated into `main` by fast-forward to `1adc4030`. Terra high task reviews and Sol low whole-branch and final scoped reviews approved. Windows `just verify` passed on unchanged product `71a42d2a`: UI 462, Core 4834/11 skipped, MCP 537/4 skipped. Profile Save is Windows-only; non-Windows refuses before file access. No push, live acceptance or Linux gate. [Integration](124-evidence/integration.md).
 **Baseline:** `455adea0`, inspected 2026-10-29; working tree initially clean.
 **Owner coverage:** Extends the existing profile view and mutation approval design, not plans
 109/116 or a new mutation-execution transport. No existing open profile-editing owner found in index.

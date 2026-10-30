@@ -1,5 +1,7 @@
 # Plan 124 verification — DONE on plan-124
 
+Locally integrated into `main` by fast-forward to `1adc4030` on 2026-10-30. Executable and test content is identical to verified `71a42d2a`; no redundant gate or push. [Integration evidence](integration.md). The following completion record describes the pre-integration branch evidence.
+
 Final Windows `just verify` PASS on exact product revision `71a42d2a` (15m25s): UI 462 passed, Core 4834 passed/11 skipped, MCP 537 passed/4 skipped. Branch formatting against `8d8d959f` passed for 21 C# files. Terra high task reviews and Sol low whole-branch and [final scoped re-review](reviews-and-checks/final-fix-review.md) approved; both whole-branch findings were fixed. Profile Save is Windows-only. No merge, push, live profile/database writes, installed-client acceptance or Linux gate; the full broker pending-approval lifecycle remains unverified. [Final fix report](reviews-and-checks/final-fix-report.md); [raw gate logs](logs/final-gate-71a42d2a/).
 
 ## Historical verification before final fix
