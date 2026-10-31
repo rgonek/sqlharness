@@ -24,7 +24,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         long? MetricId, string? Variant, string? CaseId, string? CaseLabel, long? LogicalReadsMedian, long? ElapsedMedianMs,
         long? CpuMedianMs, long? PgSharedHit, long? PgSharedRead, long? PgSharedDirtied, long? PgSharedWritten,
         long? PgTempRead, long? PgTempWritten,
-        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, int OmittedStatements, int? ResultSets, long? RowsReturned);
+        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, long? PhysicalReads, long? PageServerReads, long? ReadAheadReads, long? LobPhysicalReads, long? LobReadAheadReads, int OmittedStatements, int? ResultSets, long? RowsReturned);
 
     private sealed record StoredStatement(long Id, long OperationId, string Variant, string? ParameterSet, string CaseId, int Ordinal, string Key,
         int Occurrence, string Hash, string? Text, long? Executions, string? PlanHash, string Status,
@@ -557,7 +557,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                    m.id, m.variant, m.case_id, m.case_label, m.logical_reads_median, m.elapsed_ms_median,
                    m.cpu_ms_median, m.pg_shared_hit, m.pg_shared_read, m.pg_shared_dirtied,
                    m.pg_shared_written, m.pg_temp_read, m.pg_temp_written,
-                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, COALESCE(m.omitted_statements, 0), m.result_sets, m.rows_returned
+                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, t.physical_reads, t.page_server_reads, t.read_ahead_reads, t.lob_physical_reads, t.lob_read_ahead_reads, COALESCE(m.omitted_statements, 0), m.result_sets, m.rows_returned
             FROM operations o JOIN sessions s ON s.id = o.session_id
             LEFT JOIN operation_metrics m ON m.operation_id = o.id
             LEFT JOIN operation_table_io t ON t.metric_id = m.id
@@ -576,8 +576,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             r.IsDBNull(16) ? null : r.GetInt64(16), NullableString(r, 17), NullableString(r, 18), NullableString(r, 19),
             NullableLong(r, 20), NullableLong(r, 21), NullableLong(r, 22), NullableLong(r, 23), NullableLong(r, 24),
             NullableLong(r, 25), NullableLong(r, 26), NullableLong(r, 27), NullableLong(r, 28), NullableString(r, 29),
-            NullableLong(r, 30), NullableLong(r, 31), NullableLong(r, 32), r.GetInt32(33),
-            r.IsDBNull(34) ? null : r.GetInt32(34), NullableLong(r, 35)));
+            NullableLong(r, 30), NullableLong(r, 31), NullableLong(r, 32), NullableLong(r, 33), NullableLong(r, 34), NullableLong(r, 35), NullableLong(r, 36), NullableLong(r, 37), r.GetInt32(38),
+            r.IsDBNull(39) ? null : r.GetInt32(39), NullableLong(r, 40)));
 
         var statementsByMetric = LoadStoredStatements(connection, rows.Select(row => row.OperationId).Distinct(), storeSensitive)
             .GroupBy(row => (row.OperationId, row.Variant, row.CaseId))
@@ -593,7 +593,14 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 {
                     var samples = metric.ToArray();
                     var tableRows = samples.Where(row => row.Table is not null)
-                        .Select(row => new CompareTableIoEvidence(row.Table!, row.TableLogicalReads!.Value, row.TableLobLogicalReads, row.ScanCount))
+                        .Select(row => new CompareTableIoEvidence(row.Table!, row.TableLogicalReads!.Value, row.TableLobLogicalReads, row.ScanCount)
+                        {
+                            PhysicalReads = row.PhysicalReads,
+                            PageServerReads = row.PageServerReads,
+                            ReadAheadReads = row.ReadAheadReads,
+                            LobPhysicalReads = row.LobPhysicalReads,
+                            LobReadAheadReads = row.LobReadAheadReads
+                        })
                         .ToArray();
                     long? scans = tableRows.Length == 0 || tableRows.Any(row => row.Scans is null)
                         ? null
@@ -618,9 +625,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                                 LobLogicalReadsBefore = item.EvidenceEligible ? item.ObjectLobReads : null,
                                 LobLogicalReadsAfter = item.EvidenceEligible ? item.ObjectLobReads : null
                             }).ToArray();
-                        var reads = objectRows.All(item => item.ReadsBefore.HasValue)
+                        var reads = objectRows.Length > 0 && objectRows.All(item => item.ReadsBefore.HasValue)
                             ? objectRows.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsBefore!.Value)) : (long?)null;
-                        var scansForStatement = objectRows.All(item => item.ScansBefore.HasValue)
+                        var scansForStatement = objectRows.Length > 0 && objectRows.All(item => item.ScansBefore.HasValue)
                             ? objectRows.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ScansBefore!.Value)) : (long?)null;
                         var text = storeSensitive ? row.Text : null;
                         text ??= $"statement {row.Ordinal + 1} ({row.Hash[..Math.Min(8, row.Hash.Length)]})";
@@ -630,7 +637,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                         return new CompareStatementEvidence(row.Key, row.Occurrence, text, row.PlanHash,
                             row.Status, reads, scansForStatement,
                             row.Executions, hiddenWork, objectRows)
-                        { UdfElapsedMilliseconds = row.UdfElapsedMs, PlanLink = PlanLink(row), CpuMs = row.CpuMs, ElapsedMs = row.ElapsedMs, PlanRepetition = row.EvidenceRepetition, GrantRequestedKb = row.GrantRequestedKb, GrantGrantedKb = row.GrantGrantedKb, GrantMaxUsedKb = row.GrantMaxUsedKb, HasSpillWarning = row.HasSpillWarning };
+                        { UdfElapsedMilliseconds = row.UdfElapsedMs, RuntimeEvidenceEligible = row.EvidenceEligible, PlanLink = PlanLink(row), CpuMs = row.CpuMs, ElapsedMs = row.ElapsedMs, PlanRepetition = row.EvidenceRepetition, GrantRequestedKb = row.GrantRequestedKb, GrantGrantedKb = row.GrantGrantedKb, GrantMaxUsedKb = row.GrantMaxUsedKb, HasSpillWarning = row.HasSpillWarning };
                     }).ToArray();
                     var omittedStatements = samples.Select(row => row.OmittedStatements).DefaultIfEmpty(0).Max();
                     var attribution = statements.Length > 0 && omittedStatements == 0 && statements.All(row => row.Status == "confirmed")
@@ -737,20 +744,29 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             WHERE m.operation_id = $id;
             """, [("$id", (object?)operationId)], row => (Omitted: row.GetInt32(0), Count: row.GetInt32(1), Unconfirmed: row.GetInt32(2), Cases: row.GetInt32(3), Variants: row.GetInt32(4))).FirstOrDefault();
         var omitted = coverage.Omitted;
-        var completeSingleCase = coverage.Cases == 1 && coverage.Variants == 1 && coverage.Count > 0 && omitted == 0 && coverage.Unconfirmed == 0
+        var completeSingleCase = coverage.Cases == 1 && coverage.Variants == 1 && coverage.Count > 0
             && statements.Select(row => (row.CaseId, row.ParameterSet)).Distinct().Count() == 1
             && statements.Select(row => row.Variant).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
+        var identities = statements.GroupBy(row => row.Id).Select(group => group.First())
+            .GroupBy(row => (row.Variant, row.CaseId, row.ParameterSet, row.Key, row.Occurrence))
+            .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet();
         var rows = statements.GroupBy(row => row.Id).Select(group =>
         {
             var row = group.First();
+            var status = identities.Contains((row.Variant, row.CaseId, row.ParameterSet, row.Key, row.Occurrence)) ? "partial" : row.Status;
             var ambiguousNames = group.Where(item => item.ObjectName is not null)
                 .GroupBy(item => item.ObjectName!, StringComparer.OrdinalIgnoreCase)
                 .Where(items => items.Count() > 1).Select(items => items.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var objects = group.Where(item => item.ObjectName is not null).Select(item => new TableRow(
-                item.ObjectName!, null, item.ObjectScans, null,
-                item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null,
+                item.ObjectName!, null, completeSingleCase && status == "confirmed" && !ambiguousNames.Contains(item.ObjectName!) ? item.ObjectScans : null, null,
+                completeSingleCase && status == "confirmed" && !ambiguousNames.Contains(item.ObjectName!) && item.ObjectReads is { } afterReads ? SaturatingAdd(afterReads, item.ObjectLobReads ?? 0) : null,
                 string.Empty)
-            { ObjectKind = item.ObjectKind, LobLogicalReadsAfter = completeSingleCase && item.EvidenceEligible && !ambiguousNames.Contains(item.ObjectName!) ? item.ObjectLobReads : null }).ToArray();
+            {
+                ObjectKind = item.ObjectKind,
+                LobLogicalReadsAfter = completeSingleCase && status == "confirmed" && item.EvidenceEligible && !ambiguousNames.Contains(item.ObjectName!) ? item.ObjectLobReads : null,
+                Availability = OperationObjectAvailability(status, completeSingleCase, ambiguousNames.Contains(item.ObjectName!),
+                    item.ObjectReads, item.ObjectScans, completeSingleCase && item.EvidenceEligible ? item.ObjectLobReads : null),
+            }).ToArray();
             var reads = objects.Length > 0 && objects.All(item => item.ReadsAfter.HasValue)
                 ? objects.Aggregate(0L, (sum, item) => SaturatingAdd(sum, item.ReadsAfter!.Value)) : (long?)null;
             var scans = objects.Length > 0 && objects.All(item => item.ScansAfter.HasValue)
@@ -759,25 +775,63 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             IReadOnlyList<HiddenWork> hidden;
             try { hidden = JsonSerializer.Deserialize<HiddenWork[]>(row.HiddenWorkJson, ConditionsJsonOptions) ?? []; }
             catch (JsonException) { hidden = []; }
-            return new StatementRow(row.Key, text, "measured", null, reads, null, scans, row.Executions,
-                string.Empty, row.Status, hidden, objects)
+            return new StatementRow(row.Key, text, "measured", null, reads, null, scans, completeSingleCase && status == "confirmed" ? row.Executions : null,
+                string.Empty, status, hidden, objects)
             {
-                CpuAfterMs = completeSingleCase ? row.CpuMs : null,
-                ElapsedAfterMs = completeSingleCase ? row.ElapsedMs : null,
-                GrantRequestedKbAfter = completeSingleCase ? row.GrantRequestedKb : null,
-                GrantGrantedKbAfter = completeSingleCase ? row.GrantGrantedKb : null,
-                GrantMaxUsedKbAfter = completeSingleCase ? row.GrantMaxUsedKb : null,
-                HasSpillWarningAfter = completeSingleCase ? row.HasSpillWarning : null,
-                PlanRepetitionAfter = completeSingleCase ? row.EvidenceRepetition : null,
+                Availability = OperationAvailability(status, completeSingleCase, reads, scans, row.Executions, row.CpuMs, row.ElapsedMs,
+                    row.GrantRequestedKb, row.GrantGrantedKb, row.GrantMaxUsedKb, row.HasSpillWarning, row.EvidenceRepetition),
+                ExecutionsAfter = completeSingleCase && status == "confirmed" ? row.Executions : null,
+                CpuAfterMs = completeSingleCase && status == "confirmed" ? row.CpuMs : null,
+                ElapsedAfterMs = completeSingleCase && status == "confirmed" ? row.ElapsedMs : null,
+                GrantRequestedKbAfter = completeSingleCase && status == "confirmed" ? row.GrantRequestedKb : null,
+                GrantGrantedKbAfter = completeSingleCase && status == "confirmed" ? row.GrantGrantedKb : null,
+                GrantMaxUsedKbAfter = completeSingleCase && status == "confirmed" ? row.GrantMaxUsedKb : null,
+                HasSpillWarningAfter = completeSingleCase && status == "confirmed" ? row.HasSpillWarning : null,
+                PlanRepetitionAfter = completeSingleCase && status == "confirmed" ? row.EvidenceRepetition : null,
                 Occurrence = row.Occurrence,
                 PlanHashAfter = row.PlanHash,
                 PlanLinkAfter = PlanLink(row),
                 UdfElapsedMilliseconds = row.UdfElapsedMs,
             };
         }).ToArray();
-        var attribution = coverage.Count > 0 && omitted == 0 && coverage.Unconfirmed == 0
+        var attribution = coverage.Count > 0 && omitted == 0 && coverage.Unconfirmed == 0 && identities.Count == 0
             ? "confirmed" : coverage.Count == 0 && omitted == 0 ? "unavailable" : "partial";
         return new OperationStatementEvidenceResult(rows, omitted, attribution);
+    }
+
+    private static IReadOnlyDictionary<string, MetricAvailabilityPair> OperationObjectAvailability(string status, bool singleCase, bool ambiguous,
+        long? reads, long? scans, long? lob)
+    {
+        MetricAvailabilityPair Pair(long? value)
+        {
+            var available = status == "confirmed" && singleCase && !ambiguous && value.HasValue;
+            return new(new("unavailable", "no before side", 0, 1), available ? new("available", null, 1, 1, "recorded")
+                : new("unavailable", ambiguous || status != "confirmed" ? "ambiguous attribution" : !singleCase ? "single case required" : "missing historical measurement", 0, 1));
+        }
+        return new Dictionary<string, MetricAvailabilityPair>
+        { ["reads"] = Pair(reads), ["scans"] = Pair(scans), ["lobLogicalReads"] = Pair(lob) };
+    }
+
+    private static IReadOnlyDictionary<string, MetricAvailabilityPair> OperationAvailability(string status, bool singleCase,
+        long? reads, long? scans, long? executions, long? cpu, long? elapsed, long? requested, long? granted, long? used, bool? spill, int? repetition)
+    {
+        MetricAvailability Side(bool available, bool runtime) => available ? new("available", null, 1, 1, "recorded")
+            : new("unavailable", status != "confirmed" ? "ambiguous attribution" : runtime && !singleCase ? "single case required" : "missing historical measurement", 0, 1);
+        MetricAvailabilityPair Pair(bool available, bool runtime = false) => new(new("unavailable", "no before side", 0, 1), Side(available, runtime));
+        var eligible = status == "confirmed";
+        return new Dictionary<string, MetricAvailabilityPair>
+        {
+            ["reads"] = Pair(eligible && singleCase && reads.HasValue, true),
+            ["scans"] = Pair(eligible && singleCase && scans.HasValue, true),
+            ["executions"] = Pair(eligible && singleCase && executions.HasValue, true),
+            ["cpu"] = Pair(eligible && singleCase && cpu.HasValue, true),
+            ["elapsed"] = Pair(eligible && singleCase && elapsed.HasValue, true),
+            ["grantRequested"] = Pair(eligible && singleCase && requested.HasValue, true),
+            ["grantGranted"] = Pair(eligible && singleCase && granted.HasValue, true),
+            ["grantMaxUsed"] = Pair(eligible && singleCase && used.HasValue, true),
+            ["spill"] = Pair(eligible && singleCase && spill.HasValue, true),
+            ["planRepetition"] = Pair(eligible && singleCase && repetition.HasValue, true),
+        };
     }
 
     private static string? PlanLink(StoredStatement statement) =>
@@ -2016,6 +2070,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     Label = StringProperty(item, "caseLabel") ?? current.Label,
                     ResultsEquivalent = BooleanProperty(equivalence, "equivalent"),
                     RegressionVerdict = StringProperty(Property(item, "regression"), "verdict"),
+                    RegressionReasons = RegressionReasons(Property(item, "regression")),
                 };
             }
         }
@@ -2026,6 +2081,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             {
                 ResultsEquivalent = BooleanProperty(summary, "resultsEquivalent"),
                 RegressionVerdict = StringProperty(Property(summary, "regression"), "verdict"),
+                RegressionReasons = RegressionReasons(Property(summary, "regression")),
             };
         }
 
@@ -2035,6 +2091,14 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 { MeasurementFingerprint = metric.MeasurementFingerprint });
         return cases.Values.OrderBy(item => conditions?.Cases?.FirstOrDefault(value => value.Id == item.CaseId)?.Index ?? int.MaxValue)
             .ThenBy(item => item.CaseId, StringComparer.Ordinal).ToArray();
+    }
+
+    private static IReadOnlyList<string> RegressionReasons(JsonElement? regression)
+    {
+        var reasons = Property(regression, "reasons");
+        return reasons is { ValueKind: JsonValueKind.Array } array
+            ? array.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!).ToArray()
+            : [];
     }
 
     private static bool? AggregateEquivalence(IReadOnlyList<CompareCaseEvidence> cases)

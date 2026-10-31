@@ -1,0 +1,11 @@
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+API /api/sessions/8/optimization/compare
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+API /api/sessions/8/optimization/compare
+PASS: one shared table v0–v3, A/B group badges, Rows column, cross-group banner, A/B labels and copied group identities; page errors 0

@@ -47,9 +47,15 @@ public sealed record VersionRow(
     IReadOnlyList<long> MeasuredIn,
     long LatestOperationId)
 {
+    public IReadOnlyList<VersionCaseTiming> CaseTimings { get; init; } = [];
     public string VerdictBasis { get; init; } = "whole batch";
     public long? RowsReturnedSum { get; init; }
     public bool RowsReturnedVaries { get; init; }
+}
+
+public sealed record VersionCaseTiming(string Id, long? ElapsedMedianMs, double? CpuMedianMs)
+{
+    public string? VaryingId { get; init; }
 }
 
 public sealed record UnassignedCompare(long OperationId, string StartedAt, string Status);
@@ -82,6 +88,7 @@ public sealed record CompareCaseEvidence(
     bool? ResultsEquivalent,
     string? RegressionVerdict)
 {
+    public IReadOnlyList<string> RegressionReasons { get; init; } = [];
     public string? MeasurementFingerprint { get; init; }
     public string? VaryingFingerprint { get; init; }
 }
@@ -108,13 +115,21 @@ public sealed record CompareMetricEvidence(
     public string StatementAttribution { get; init; } = "unavailable";
 }
 
-public sealed record CompareTableIoEvidence(string Table, long LogicalReads, long? LobLogicalReads, long? Scans);
+public sealed record CompareTableIoEvidence(string Table, long LogicalReads, long? LobLogicalReads, long? Scans)
+{
+    public long? PhysicalReads { get; init; }
+    public long? PageServerReads { get; init; }
+    public long? ReadAheadReads { get; init; }
+    public long? LobPhysicalReads { get; init; }
+    public long? LobReadAheadReads { get; init; }
+}
 public sealed record CompareStatementEvidence(
     string Key, int Occurrence, string? Text, string? PlanHash, string Status, long? Reads,
     long? Scans, long? Executions, IReadOnlyList<HiddenWork> HiddenWork,
     IReadOnlyList<TableRow> Objects)
 {
     public double? UdfElapsedMilliseconds { get; init; }
+    public bool RuntimeEvidenceEligible { get; init; }
     public long? CpuMs { get; init; }
     public long? ElapsedMs { get; init; }
     public long? GrantRequestedKb { get; init; }
@@ -138,6 +153,19 @@ public sealed record OptimizationComparison(
     public string? GroupLabelA { get; init; }
     public string? GroupLabelB { get; init; }
     public IReadOnlyList<CaseRows> CaseRows { get; init; } = [];
+    public IReadOnlyList<CaseOutcome> CaseOutcomes { get; init; } = [];
+    public IReadOnlyList<TimingContributor> TimingContributors { get; init; } = [];
+    public OutcomeCounts OutcomeCounts
+    {
+        get
+        {
+            var cases = SelectedCase == "all" ? CaseOutcomes : CaseOutcomes.Where(item => item.Id == SelectedCase).ToArray();
+            return new OutcomeCounts(cases.Count,
+                new ResultCounts(cases.Count(c => c.ResultsEquivalent == true), cases.Count(c => c.ResultsEquivalent == false), cases.Count(c => c.ResultsEquivalent is null)),
+                new IoCounts(cases.Count(c => c.IoOutcome == "better"), cases.Count(c => c.IoOutcome == "same"), cases.Count(c => c.IoOutcome == "worse"), cases.Count(c => c.IoOutcome == "unavailable")),
+                new PolicyCounts(cases.Count(c => c.PolicyVerdict == "pass"), cases.Count(c => c.PolicyVerdict == "fail"), cases.Count(c => c.PolicyVerdict is not ("pass" or "fail"))));
+        }
+    }
     public bool VersionLabelsProvisional { get; init; }
     public string? VersionLabelNote { get; init; }
     public string VerdictBasis { get; init; } = "whole batch";
@@ -165,10 +193,16 @@ public sealed record WholeBatchLine(long? Before, long? After, long? Shared, str
     public long? ChangedAfter { get; init; }
 }
 
+public sealed record MetricAvailability(string Status, string? Reason, int AvailableCases, int TotalCases, string? Provenance = null);
+public sealed record MetricAvailabilityPair(MetricAvailability Before, MetricAvailability After);
+
 public sealed record StatementRow(string Key, string Text, string Status, long? ReadsBefore, long? ReadsAfter,
     long? ScansBefore, long? ScansAfter, long? Executions, string Change, string Attribution,
     IReadOnlyList<HiddenWork> HiddenWork, IReadOnlyList<TableRow> Objects)
 {
+    public IReadOnlyDictionary<string, MetricAvailabilityPair>? Availability { get; init; }
+    public long? ExecutionsBefore { get; init; }
+    public long? ExecutionsAfter { get; init; }
     public long? CpuBeforeMs { get; init; }
     public long? CpuAfterMs { get; init; }
     public long? ElapsedBeforeMs { get; init; }
@@ -203,12 +237,38 @@ public sealed record CaseRows(string CaseKey, string LabelA, string LabelB, long
     public bool RowsBVaries { get; init; }
 }
 
+public sealed record OutcomeCounts(int Total, ResultCounts Results, IoCounts Io, PolicyCounts Policy);
+public sealed record ResultCounts(int Equivalent, int Different, int Unavailable);
+public sealed record IoCounts(int Better, int Same, int Worse, int Unavailable);
+public sealed record PolicyCounts(int Pass, int Fail, int Unavailable);
+
+public sealed record CaseOutcome(string Id, string Label, bool? ResultsEquivalent, string IoOutcome,
+    long? ReadsBefore, long? ReadsAfter, long? ElapsedBeforeMs, long? ElapsedAfterMs,
+    double? CpuBeforeMs, double? CpuAfterMs, string? PolicyVerdict, IReadOnlyList<string> PolicyReasons,
+    string? PolicyUnavailableReason);
+
+public sealed record TimingContributor(string Id, long? ElapsedBeforeMs, long? ElapsedAfterMs,
+    double? CpuBeforeMs, double? CpuAfterMs);
+
 public sealed record CaseOption(string Id, string Label, string Outcome);
 public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);
 public sealed record TableRow(string Table, long? ScansBefore, long? ScansAfter, long? ReadsBefore, long? ReadsAfter, string Change)
 {
+    public IReadOnlyDictionary<string, MetricAvailabilityPair>? Availability { get; init; }
     [JsonIgnore]
     public string? ObjectKind { get; init; }
+    public long? DataLogicalReadsBefore { get; init; }
+    public long? DataLogicalReadsAfter { get; init; }
+    public long? PhysicalReadsBefore { get; init; }
+    public long? PhysicalReadsAfter { get; init; }
+    public long? PageServerReadsBefore { get; init; }
+    public long? PageServerReadsAfter { get; init; }
+    public long? ReadAheadReadsBefore { get; init; }
+    public long? ReadAheadReadsAfter { get; init; }
+    public long? LobPhysicalReadsBefore { get; init; }
+    public long? LobPhysicalReadsAfter { get; init; }
+    public long? LobReadAheadReadsBefore { get; init; }
+    public long? LobReadAheadReadsAfter { get; init; }
     public long? LobLogicalReadsBefore { get; init; }
     public long? LobLogicalReadsAfter { get; init; }
 }

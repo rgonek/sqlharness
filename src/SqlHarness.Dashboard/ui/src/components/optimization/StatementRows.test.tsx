@@ -76,3 +76,28 @@ test("shows selected-run metrics and LOB values in statement details", async () 
   expect(cells.at(-2)).toHaveTextContent("0")
   expect(cells.at(-1)).toHaveTextContent("—")
 })
+
+
+test("measured statement shows unavailable reason while retaining plan", () => {
+  const unavailable = { status: "unavailable" as const, reason: "ambiguous attribution", availableCases: 0, totalCases: 1 }
+  render(<StatementRows measured rows={[{ ...row, readsAfter: null, availability: { reads: { before: unavailable, after: unavailable } }, planLinkAfter: "/plan" }]} />)
+  expect(screen.getByText(/ambiguous attribution/)).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan")
+})
+
+
+test("missing IO preserves statement text and plan without numeric grid", () => {
+  render(<StatementRows measured rows={[{ ...row, readsBefore: null, readsAfter: null, scansBefore: null, scansAfter: null, objects: [], planLinkAfter: "/plan" }]} />)
+  expect(screen.queryByRole("table", { name: "Statement IO rows" })).not.toBeInTheDocument()
+  expect(screen.getByText(/Some IO cannot be attributed/)).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan")
+})
+
+
+test("shows unequal execution counts and hidden work without IO", () => {
+  const statement = { ...row, executionsBefore: 2, executionsAfter: 7 }
+  const { rerender } = render(<StatementRows rows={[statement]} />)
+  expect(screen.getByText("2 → 7 executions")).toBeInTheDocument()
+  rerender(<StatementRows rows={[{ ...statement, readsBefore: null, readsAfter: null, scansBefore: null, scansAfter: null }]} />)
+  expect(screen.getByText("UDF time 15% of statement")).toBeInTheDocument()
+})

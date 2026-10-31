@@ -10,12 +10,12 @@ type StatusFields = Pick<OperationSummary, "status" | "exitCode" | "errorKind" |
 export function StatusBadge({ operation }: { operation: StatusFields }) {
   if (badgeTier(operation.status) === "info" && operation.status !== "running") return <span className="text-sm text-muted-foreground">{operation.status}</span>
   const badge = <Badge data-tier={badgeTier(operation.status)} variant={statusVariant(operation.status)}>{operation.status}</Badge>
-  if (operation.status !== "failed" && operation.status !== "rejected") return badge
+  if (operation.status !== "failed" && operation.status !== "rejected" && operation.status !== "cancelled") return badge
 
   const heading = [operation.errorKind ?? "error", operation.exitCode !== null ? `exit ${operation.exitCode}` : null]
     .filter(Boolean)
     .join(" · ")
-  const sentence = describeError(operation.exitCode, operation.errorKind, operation.cancelReason)
+  const sentence = describeError(operation.exitCode, operation.errorKind ?? (operation.status === "cancelled" ? "cancelled" : null), operation.cancelReason)
   return (
     <Dialog>
       <Tooltip>

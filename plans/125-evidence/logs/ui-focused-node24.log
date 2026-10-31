@@ -1,0 +1,16 @@
+
+> ui@0.0.0 test
+> vitest run --run src/pages/AgentSessionPage.test.tsx src/components/optimization/StatementRows.test.tsx src/components/optimization/IoComparison.test.tsx
+
+
+ RUN  v5.0.3 C:/Users/robert.gonek/.codex/worktrees/4b41/sqlharness/src/SqlHarness.Dashboard/ui
+
+
+ Test Files  3 passed (3)
+      Tests  33 passed (33)
+   Start at  12:47:48
+   Duration  50.85s (import 48%, tests 32%, environment 8%, transform 8%, setup 4%)
+
+    Isolate  3 workers spawned · ~1.82s startup each (spawn + environment, per file)
+             at least ~3.63s faster with isolate: false — reuses workers across files instead of one per file
+

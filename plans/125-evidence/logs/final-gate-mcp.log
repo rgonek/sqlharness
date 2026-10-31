@@ -1,0 +1,50 @@
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+Test run for C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:05.84]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [SKIP]
+[xUnit.net 00:00:05.85]     SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [SKIP]
+[xUnit.net 00:00:05.86]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [SKIP]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_postgres_stdio_drive [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioLiveTests.Live_sqlserver_stdio_drive [1 ms]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_linux_x64 [1 ms]
+[xUnit.net 00:00:06.07]     SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [SKIP]
+  Skipped SqlHarness.Mcp.Tests.McpStdioProcessTests.Published_single_file_server_passes_the_stdio_smoke_on_osx_arm64 [1 ms]
+  Failed SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_error_with_several_roots_lists_each_of_them [12 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "The input path is outside every configure"···
+Not found: "C:\\Users\\robert.gonek\\AppData\\Local\\Temp\\"···
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_error_with_several_roots_lists_each_of_them() in C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs:line 200
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Mcp.Tests.McpInputReaderTests.Rejection_reasons_are_distinct_and_echo_the_caller_path [13 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "The input path was rejected: the file can"···
+Not found: "C:\\Users\\robert.gonek\\AppData\\Local\\Temp\\"···
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpInputReaderTests.Rejection_reasons_are_distinct_and_echo_the_caller_path() in C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs:line 257
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_message_preserves_the_caller_path_for_diagnostics [13 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "The input path is outside every configure"···
+Not found: "Password=hunter2;outside.sql"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_message_preserves_the_caller_path_for_diagnostics() in C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs:line 320
+--- End of stack trace from previous location ---
+  Failed SqlHarness.Mcp.Tests.McpInputReaderTests.Echoed_path_preserves_caller_supplied_diagnostics [55 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    "The input path was rejected: the file can"···
+Not found: "Password=hunter2;x.sql"
+  Stack Trace:
+     at SqlHarness.Mcp.Tests.McpInputReaderTests.Echoed_path_preserves_caller_supplied_diagnostics() in C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\tests\SqlHarness.Mcp.Tests\McpInputReaderTests.cs:line 274
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     4, Passed:   531, Skipped:     4, Total:   539, Duration: 6 m 25 s - SqlHarness.Mcp.Tests.dll (net10.0)
+[xUnit.net 00:06:22.01]     SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_error_with_several_roots_lists_each_of_them [FAIL]
+[xUnit.net 00:06:22.03]     SqlHarness.Mcp.Tests.McpInputReaderTests.Rejection_reasons_are_distinct_and_echo_the_caller_path [FAIL]
+[xUnit.net 00:06:22.53]     SqlHarness.Mcp.Tests.McpInputReaderTests.Outside_root_message_preserves_the_caller_path_for_diagnostics [FAIL]
+[xUnit.net 00:06:24.65]     SqlHarness.Mcp.Tests.McpInputReaderTests.Echoed_path_preserves_caller_supplied_diagnostics [FAIL]
+==> test project: tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj exit 1

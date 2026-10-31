@@ -16,7 +16,7 @@ export type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
 export type BadgeKind = OperationStatus | Flag["key"] | "regression" | "results-differ" | "mixed"
 
 export function badgeTier(kind: BadgeKind): "outcome" | "warning" | "info" {
-  if (kind === "succeeded" || kind === "failed" || kind === "rejected") return "outcome"
+  if (kind === "succeeded" || kind === "failed" || kind === "rejected" || kind === "cancelled") return "outcome"
   if (kind === "regression" || kind === "results-differ" || kind === "mixed" || kind === "mutation") return "warning"
   return "info"
 }
@@ -29,6 +29,7 @@ export function statusVariant(status: OperationStatus): BadgeVariant {
       return "secondary"
     case "failed":
     case "rejected":
+    case "cancelled":
       return "destructive"
     default:
       return "outline"

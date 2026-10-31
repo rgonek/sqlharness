@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IoDetails } from "./IoDetails"
 import { VersionPlan } from "./VersionPlan"
-import { conditionsDifferMessage, optimizationBasisLabel, optimizationMarkdown, optimizationMetricRows } from "@/lib/optimizationMarkdown"
+import { conditionsDifferMessage, optimizationBasisLabel, optimizationMarkdown } from "@/lib/optimizationMarkdown"
 import { badgeTier } from "@/lib/flags"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SqlVersionOption } from "@/lib/compare"
@@ -26,18 +26,17 @@ function actionCase(action: OptimizationActionReference | null | undefined, sele
   if (!action?.caseIds.length) return null
   const mappedCaseId = action.caseIdsByFingerprint?.[selectedCase]
   if (mappedCaseId) return mappedCaseId
-  return action.caseIds.includes(selectedCase) ? selectedCase : action.caseIds[0]
+  return action.caseIds.includes(selectedCase) ? selectedCase : selectedCase === "all" ? action.caseIds[0] : null
 }
 
-function VersionAction({ label, action, selectedCase, sessionId, sessionSearch, agentSessionKey }: {
-  label: string; action: OptimizationActionReference | null | undefined; selectedCase: string; sessionId: number; sessionSearch: SessionSearch; agentSessionKey?: AgentSessionKey
+function VersionAction({ label, action, selectedCase }: {
+  label: string; action: OptimizationActionReference | null | undefined; selectedCase: string
 }) {
   const caseId = actionCase(action, selectedCase)
   if (!action || !caseId) return null
   return <section className="space-y-1" aria-label={`${label} actions`}>
     <h3 className="text-sm font-medium">{label} · {action.side}</h3>
     <div className="flex flex-wrap items-center gap-2">
-      <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="text-sm underline">{action.side === "measure" ? `Measure for ${label}` : `Plans for ${label}`}</Link>
       <ReproScriptButtons operationId={action.operationId} side={action.side === "measure" ? "query" : action.side} caseId={caseId} />
     </div>
   </section>
@@ -93,8 +92,7 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
     {!navigation && (toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar)}
 
 
-    <ComparisonPending pending={pending} className="comparison-notices"><StatementHiddenWork rows={comparison.statements ?? []} />
-    {comparison.fallbackNote && <p className="text-sm text-muted-foreground">{comparison.fallbackNote}</p>}
+    <ComparisonPending pending={pending} className="comparison-notices"><div className="flex flex-wrap gap-3">{comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="text-sm underline">Operation #{comparison.operationId}</Link> : <><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></>}</div><StatementHiddenWork rows={comparison.statements ?? []} />
     {((comparison.omittedStatementsBefore ?? 0) > 0 || (comparison.omittedStatementsAfter ?? 0) > 0) && <div className="space-y-1 text-sm text-muted-foreground">
       {(comparison.omittedStatementsBefore ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsBefore} (their reads remain in the batch total)</p>}
       {(comparison.omittedStatementsAfter ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsAfter} (their reads remain in the batch total)</p>}
@@ -113,21 +111,13 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
         <div className="comparison-tab-header"><TabsList variant="line"><TabsTrigger value="diff">SQL diff</TabsTrigger><TabsTrigger value="io">IO</TabsTrigger><TabsTrigger value="plan">Plan</TabsTrigger>{timing && <TabsTrigger value="timing">Timing</TabsTrigger>}{details && <TabsTrigger value="details">Details</TabsTrigger>}</TabsList>{navigation ?? <ComparisonPending pending={pending}>{context}</ComparisonPending>}</div><Separator />
         {headerContent && <div className="comparison-header-content">{headerContent}</div>}
         {navigation && <div className="comparison-operation-context"><ComparisonPending pending={pending}>{context}</ComparisonPending><div className="comparison-operation-actions">{selectors}{copy}</div></div>}
-        <TabsContent value="diff"><ComparisonPending pending={pending} announce>{diff ?? (sqlOptions.length > 1 ? <SessionVersionDiff key={`${comparison.a}:${comparison.groupA}:${comparison.b}:${comparison.groupB}:${sqlOptions.map(option => option.hash).join(":")}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} selectionControls={false} /> : <p className="text-sm text-muted-foreground">SQL diff requires two retained SQL versions.</p>)}</ComparisonPending></TabsContent>
+        <TabsContent value="diff"><ComparisonPending pending={pending} announce><div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} /></div>{diff ?? (sqlOptions.length > 1 ? <SessionVersionDiff key={`${comparison.a}:${comparison.groupA}:${comparison.b}:${comparison.groupB}:${sqlOptions.map(option => option.hash).join(":")}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} selectionControls={false} /> : <p className="text-sm text-muted-foreground">SQL diff requires two retained SQL versions.</p>)}</ComparisonPending></TabsContent>
         <TabsContent value="io">{approximate && !comparison.caseRows?.length ? <p className="text-sm text-muted-foreground">No paired cases for metric comparison.</p> : comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <IoDetails pending={pending} comparison={comparison} byStatement={activeView !== "whole"} onViewChange={view => updateSearch({ view })} />}</TabsContent>
         <TabsContent value="plan"><ComparisonPending pending={pending} announce><VersionPlan a={comparison.a} b={comparison.b} before={comparison.beforeAction} after={comparison.afterAction} engine={engine} selectedCase={scriptCase} /></ComparisonPending></TabsContent>
         {timing && <TabsContent value="timing">{timing}</TabsContent>}
         {details && <TabsContent value="details">{details}</TabsContent>}
       </Tabs>
-      <ComparisonPending pending={pending}><details className="comparison-evidence"><summary>Comparison evidence and scripts</summary><div className="space-y-3 pt-3"><p className="text-sm">basis: {comparison.verdictBasis ?? "whole batch"}</p>{(!approximate || (comparison.caseRows?.length ?? 0) > 0) && comparison.wholeBatch?.label && <p className="text-sm">{comparison.wholeBatch.label}</p>}
-      {comparison.basis !== "ConditionsDiffer" && (!approximate || (comparison.caseRows?.length ?? 0) > 0) && <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><dt className="font-medium">Elapsed (median)</dt><dd>{comparison.elapsed.beforeMs ?? "—"} ms → {comparison.elapsed.afterMs ?? "—"} ms</dd>{comparison.elapsed.policyVerdict && <dd title="Policy v2">{comparison.elapsed.policyVerdict}</dd>}
-        {optimizationMetricRows(comparison).map(row => <Fragment key={row.label}><dt className="font-medium">{row.label}</dt><dd>{row.before} → {row.after}</dd></Fragment>)}
-      </dl>}
-    {comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="text-sm underline">Operation #{comparison.operationId}</Link>
-      : <div className="flex flex-wrap gap-3"><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></div>}
-    <div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></div>
 
-    </div></details></ComparisonPending>
   </section>
 }
 

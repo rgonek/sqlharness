@@ -1,0 +1,119 @@
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+API /api/sessions/8/optimization/compare
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+page errors: [] body: SQLHarness
+Activity
+Usage
+Profiles
+Settings
+Activity
+Session 8 fixture
+Session 8 fixture
+Claude Code via cli
+·
+3 operations
+·
+Details
+Add note
+Optimization
+Optimization
+
+orders · ShopDb · SqlServer · whole query
+
+All cases · Sum
+Version	Conditions	Rows	Logical reads	vs A	Scans	Elapsed (sum of case medians)	CPU (sum of case medians)	Results	IO	Policy	A
+Baseline A
+	B
+Candidate B
+	
+Observed in
+
+
+v0
+	A	10	100	—	1	10 ms	—
+0/0 cases
+	Baseline · 1/1 measured	—	—	
+A
+	
+B
+	
+
+
+v1
+	A	11	90	-10%	1	12 ms	—
+0/0 cases
+	Results 1/1	IO ↑1	Policy ⚠1	
+A
+	
+B
+	
+
+
+v2
+	B	—	80	—	1	—
+0/0 cases
+different conditions · all cases, sum
+	—
+0/0 cases
+	—	—	—	
+A
+	
+B
+	
+
+
+v3
+	B	13	70	—	1	—
+0/0 cases
+different conditions · all cases, sum
+	—
+0/0 cases
+	—	—	—	
+A
+	
+B
+	
+Operation #30
+
+1 paired case
+
+SQL diff
+IO
+Plan
+v0 → v2 · measured together in #30
+v0 · baseline
+Copy script (as executed)
+Copy script (local variables)
+v2 · candidate
+Copy script (as executed)
+Copy script (local variables)
+
+SQL text for v0 is not stored (journal.storeSensitive was off).
+
+SQL text for v1 is not stored (journal.storeSensitive was off).
+
+Operations (0)
+Newest first. Loaded 0 of 3 operations.
+Show internal operations
+ID	Time	Type	Description	Status	Duration	Reads
+Case outcome details
+Case	Results	Reads before → after (delta)	Elapsed ms before → after (delta)	CPU ms before → after (delta)	Policy and recorded reasons
+Synthetic case	equivalent	100 → 50 (-50%)	10 → 30 (200%)	4 → 8 (100%)	fail: elapsed-regressed
+Close
+file:///C:/Users/robert.gonek/.codex/worktrees/4b41/sqlharness/plans/125-evidence/browser-mixed-fixture.mjs:37
+ await page.keyboard.press('Escape'); if(!(await io.evaluate(e=>e===document.activeElement))) throw Error('focus not returned');
+                                                                                                    ^
+
+Error: focus not returned
+    at file:///C:/Users/robert.gonek/.codex/worktrees/4b41/sqlharness/plans/125-evidence/browser-mixed-fixture.mjs:37:101
+
+Node.js v24.18.0

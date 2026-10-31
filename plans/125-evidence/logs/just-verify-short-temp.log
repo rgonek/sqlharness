@@ -1,0 +1,8 @@
+pwsh ./scripts/verify.ps1 -LogDirectory plans/125-evidence/logs/gate-short-temp
+[6 q==> ui-install skipped (lockfile unchanged)
+==> build ok 1m09s
+==> ui-check ok 13m15s
+==> test ok 5m54s
+format: skipped (0 changed C# files)
+==> format skipped (0 changed C# files)
+verify: OK  stages=5  19m12s

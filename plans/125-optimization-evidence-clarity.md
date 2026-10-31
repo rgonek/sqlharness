@@ -9,7 +9,7 @@
 projection, expose metric-level availability, and simplify the existing comparison components.
 **Tech stack:** C#/.NET, SQLite, ASP.NET Core, React/TypeScript, xUnit, Vitest.
 **Spec:** The approved direction is recorded in [Design contract](#design-contract) below.
-**Status:** PLANNED; user requested a plan, not implementation.
+**Status:** DONE / VERIFIED on `502f12ed`; all six Terra high task reviews and Sol low whole-branch/final scoped reviews approved. Local branch only; no merge or push. See [verification evidence](125-evidence/verification.md).
 **Baseline:** `8d8d959f`, inspected 2026-10-29; working tree initially clean.
 **Related work:** Builds on 104/105 statement evidence and 121/122/123 dashboard work.
 Read those contracts when changing their invariants; do not duplicate their collectors or version-label machinery.
@@ -138,11 +138,11 @@ Use the existing test classes and helpers; add fixture builders only when their 
 **Interface:** One shared internal eligibility predicate consumed by summary and comparison paths;
 recorded operation status stays authoritative. Reuse the current failure-description contract.
 
-- [ ] Test every ineligible status with SQL hashes/conditions present; none creates summary versions or pair evidence.
-- [ ] Test successful compare execution with a failed policy remains eligible, frozen labels do not renumber,
+- [x] Test every ineligible status with SQL hashes/conditions present; none creates summary versions or pair evidence.
+- [x] Test successful compare execution with a failed policy remains eligible, frozen labels do not renumber,
   and interrupted retained metrics/history remain inspectable.
-- [ ] Test visible client-cancel/timeout/unknown explanations and plain-text rendering of stored error messages.
-- [ ] Run focused tests, confirm intended failures, implement eligibility and visible diagnostics, rerun to PASS.
+- [x] Test visible client-cancel/timeout/unknown explanations and plain-text rendering of stored error messages.
+- [x] Run focused tests, confirm intended failures, implement eligibility and visible diagnostics, rerun to PASS.
 
 ### Task 2: Per-statement availability without weakening verdicts
 
@@ -152,12 +152,12 @@ recorded operation status stays authoritative. Reuse the current failure-descrip
 **Interface:** Add a typed availability/provenance result for each displayed metric/side at the DTO boundary,
 derived from existing stored eligibility and identity. Keep numeric nulls and existing fields compatible.
 
-- [ ] Test partial batch with one individually eligible statement and one ambiguous statement; show only confirmed counters.
-- [ ] Test asymmetric sides, repeated statement occurrences, ambiguous object identities, omitted statements,
+- [x] Test partial batch with one individually eligible statement and one ambiguous statement; show only confirmed counters.
+- [x] Test asymmetric sides, repeated statement occurrences, ambiguous object identities, omitted statements,
   absent evidence versus proved nonexecution, and all-case partial coverage.
-- [ ] Test no-IO empty state, Whole batch navigation, usable plan links, and mixed availability presentation.
-- [ ] Confirm failures, implement the projection and per-metric checks, rerun focused tests to PASS.
-- [ ] Assert changed-statements verdict stays unavailable for the partial batch even when some rows now show numbers.
+- [x] Test no-IO empty state, Whole batch navigation, usable plan links, and mixed availability presentation.
+- [x] Confirm failures, implement the projection and per-metric checks, rerun focused tests to PASS.
+- [x] Assert changed-statements verdict stays unavailable for the partial batch even when some rows now show numbers.
 
 ### Task 3: Preserve stored table IO end-to-end
 
@@ -166,11 +166,11 @@ derived from existing stored eligibility and identity. Keep numeric nulls and ex
 **Tests:** `JournalReaderTests.cs`, `OptimizationComparerTests.cs`, `IoComparison.test.tsx`.
 **Interface:** Extend existing nullable table-IO fields through reader, DTO and UI; no schema migration expected.
 
-- [ ] Seed distinct synthetic nonzero values for each stored IO field plus zero and null contributors.
+- [x] Seed distinct synthetic nonzero values for each stored IO field plus zero and null contributors.
   Assert reader and comparison retain each field in sum and mean modes; repetitions are not multiplied.
-- [ ] Test label with batch totals but unknown shared totals, totals including LOB, and legacy null fields.
-- [ ] Confirm failures, implement full projection/aggregation and available-column controls, rerun to PASS.
-- [ ] Verify PostgreSQL unsupported table counters stay unavailable rather than fabricated SQL Server fields.
+- [x] Test label with batch totals but unknown shared totals, totals including LOB, and legacy null fields.
+- [x] Confirm failures, implement full projection/aggregation and available-column controls, rerun to PASS.
+- [x] Verify PostgreSQL unsupported table counters stay unavailable rather than fabricated SQL Server fields.
 
 ### Task 4: Separate IO, results and policy with case drill-down
 
@@ -182,13 +182,13 @@ new `CaseOutcomeDetails.test.tsx` if extracted.
 **Interface:** Structured outcome counts plus per-case verdict/reason/metric evidence from the exact direct
 pair; consume the same case records for badges and detail table. Preserve compatibility of existing DTO fields.
 
-- [ ] Use synthetic four-case fixture: three lower-read cases, one equal; one lower-read case has elapsed
+- [x] Use synthetic four-case fixture: three lower-read cases, one equal; one lower-read case has elapsed
   10 -> 30 ms and recorded elapsed-regressed fail. Assert IO ↑3 · =1 and Policy ✓3 · ⚠1 independently.
-- [ ] Test unavailable policy, differing results, unsupported IO, all-unavailable, zero baseline percentage,
+- [x] Test unavailable policy, differing results, unsupported IO, all-unavailable, zero baseline percentage,
   reversed A/B and approximate pairs; reversed policy must not be presented as a newly evaluated verdict.
-- [ ] Test deterministic failure-first sort, exact recorded reasons, accessible labels, keyboard opening/closing
+- [x] Test deterministic failure-first sort, exact recorded reasons, accessible labels, keyboard opening/closing
   and a long case label. Retain all metrics in details even when IO improves.
-- [ ] Confirm failures, implement structured projection and shared drill-down, rerun to PASS.
+- [x] Confirm failures, implement structured projection and shared drill-down, rerun to PASS.
 
 ### Task 5: One summary and consolidated actions
 
@@ -200,28 +200,28 @@ pair; consume the same case records for badges and detail table. Preserve compat
 **Interface:** Reuse the existing case/aggregate selection as the source for visible summary metrics.
 Add optional summary projection fields where needed; never relabel old median-of-medians as a sum.
 
-- [ ] Test medians [12, 28] -> sum 40/mean 20, single-case selection -> 12, missing contributor -> unavailable;
+- [x] Test medians [12, 28] -> sum 40/mean 20, single-case selection -> 12, missing contributor -> unavailable;
   CPU and elapsed use identical selection semantics. Assert only one aggregate elapsed/CPU location exists.
-- [ ] Test shared version table across conditions, matched-case coverage, no active pair, and selection changes.
-- [ ] Test visible Scans column and independent Results/IO/Policy columns with usable narrow-screen overflow.
-- [ ] Test executed/local-variable script actions in SQL diff retain correct side/case; Plan retains downloads;
+- [x] Test shared version table across conditions, matched-case coverage, no active pair, and selection changes.
+- [x] Test visible Scans column and independent Results/IO/Policy columns with usable narrow-screen overflow.
+- [x] Test executed/local-variable script actions in SQL diff retain correct side/case; Plan retains downloads;
   provenance links remain in the heading; removed drawer/repeated fallback text does not render.
-- [ ] Confirm failures, implement layout and aggregation, rerun focused tests to PASS.
+- [x] Confirm failures, implement layout and aggregation, rerun focused tests to PASS.
 
 ### Task 6: Integrated verification and documentation
 
-- [ ] Run focused backend tests with `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Dashboard"`
+- [x] Run focused backend tests with `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Dashboard"`
   using the repository SDK/environment and established build recipes.
-- [ ] Run `npm run check` in `src/SqlHarness.Dashboard/ui`; inspect failing-stage output before changes.
-- [ ] Browser-verify a synthetic seeded local dashboard: failed attempt, mixed policy/IO, partial statement
+- [x] Run `npm run check` in `src/SqlHarness.Dashboard/ui`; inspect failing-stage output before changes.
+- [x] Browser-verify a synthetic seeded local dashboard: failed attempt, mixed policy/IO, partial statement
   evidence, no statement IO, zero/missing table counters, case/aggregate switching, approximate comparison,
   script copy actions, plan navigation and keyboard drill-down. Use the browser-verification workflow
   applicable to SQLHarness; do not start a real database workload. Record actual checks and limitations.
-- [ ] Run `just verify` on the final product tree as required by docs/agents/verification.md.
+- [x] Run `just verify` on the final product tree as required by docs/agents/verification.md.
   Report revision and actual results; installation/live acceptance remain separate.
-- [ ] Check README/dashboard guidance and affected interface descriptions; update only changed human-facing
+- [x] Check README/dashboard guidance and affected interface descriptions; update only changed human-facing
   meanings and DTO contracts. Do not duplicate interface details into installed skills.
-- [ ] Update this plan and plans/README.md with actual status/evidence when implementation lands.
+- [x] Update this plan and plans/README.md with actual status/evidence when implementation lands.
 
 ## Planning self-review
 

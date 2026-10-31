@@ -93,7 +93,7 @@ test("does not turn unknown spill into no warning or sum metrics across cases", 
 
 test("only exposes supported counters when switching IO views", async () => {
   const onViewChange = vi.fn()
-  const extras = { before: { Orders: { physicalReads: 8, readAheadReads: 9, lobPhysicalReads: 10, lobReadAheadReads: 11 } }, after: { Orders: { physicalReads: 0, readAheadReads: 1, lobPhysicalReads: 2, lobReadAheadReads: 3 } } }
+  const extras = { before: { Orders: { physicalReads: 8, readAheadReads: 9, lobLogicalReads: 4, lobPhysicalReads: 10, lobReadAheadReads: 11 } }, after: { Orders: { physicalReads: 0, readAheadReads: 1, lobLogicalReads: 0, lobPhysicalReads: 2, lobReadAheadReads: 3 } } }
   const { rerender } = render(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={extras} />)
   await userEvent.click(screen.getByText("More columns"))
   for (const name of ["Physical", "Read-ahead", "LOB physical", "LOB read-ahead", "LOB logical"]) await userEvent.click(screen.getByRole("checkbox", { name }))
@@ -103,7 +103,7 @@ test("only exposes supported counters when switching IO views", async () => {
     expect(screen.queryByRole("columnheader", { name })).not.toBeInTheDocument()
     expect(screen.queryByRole("checkbox", { name })).not.toBeInTheDocument()
   }
-  expect(screen.getByRole("columnheader", { name: "LOB logical" })).toBeInTheDocument()
+  expect(screen.queryByRole("columnheader", { name: "LOB logical" })).not.toBeInTheDocument()
   rerender(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={extras} />)
   expect(screen.queryByRole("columnheader", { name: "Physical" })).not.toBeInTheDocument()
   expect(screen.getByRole("columnheader", { name: "LOB logical" })).toBeInTheDocument()
@@ -137,4 +137,55 @@ test("the statement's counter cells toggle expansion without swallowing its plan
   expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
   await userEvent.click(within(row).getByRole("link", { name: "Plan before" }))
   expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
+})
+
+
+test("no attributable IO keeps plan navigation and offers whole batch", async () => {
+  const onViewChange = vi.fn()
+  const statement = { ...comparison.statements![0], readsBefore: null, readsAfter: null, scansBefore: null, scansAfter: null, objects: [], planLinkAfter: "/plan", cpuAfterMs: 17 }
+  render(<IoComparison comparison={{ ...comparison, statements: [statement] }} byStatement onViewChange={onViewChange} />)
+  expect(screen.queryByRole("table", { name: "IO before and after" })).not.toBeInTheDocument()
+  expect(screen.getByText(/Some IO cannot be attributed/)).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan")
+  expect(screen.getByText(/CPU \(ms\).*17/)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "View whole batch" }))
+  expect(onViewChange).toHaveBeenCalledWith("whole")
+})
+
+test("mixed availability shows confirmed values and reason", () => {
+  const available = { status: "available" as const, reason: null, availableCases: 1, totalCases: 1 }
+  const unavailable = { status: "unavailable" as const, reason: "ambiguous attribution", availableCases: 0, totalCases: 1 }
+  const statement = { ...comparison.statements![0], readsBefore: null, availability: { reads: { before: unavailable, after: available } } }
+  render(<IoComparison comparison={{ ...comparison, statements: [statement] }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText(/ambiguous attribution/)).toBeInTheDocument()
+  expect(screen.getAllByText("25").length).toBeGreaterThan(0)
+})
+
+
+test("shows unequal per-side execution counts", () => {
+  const statement = { ...comparison.statements![0], executionsBefore: 2, executionsAfter: 7 }
+  const { rerender } = render(<IoComparison comparison={{ ...comparison, statements: [statement] }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText(/Executions.*2 → 7/)).toBeInTheDocument()
+  rerender(<IoComparison comparison={{ ...comparison, statements: [{ ...statement, executionsAfter: null }] }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText(/Executions.*2 → —/)).toBeInTheDocument()
+})
+
+
+test("whole batch exposes recorded counters and hides unavailable ones", async () => {
+  const row = { ...comparison.tables[0], physicalReadsBefore: 8, physicalReadsAfter: 0, pageServerReadsBefore: 9, pageServerReadsAfter: null }
+  render(<IoComparison comparison={{ ...comparison, tables: [row] }} byStatement={false} onViewChange={vi.fn()} />)
+  await userEvent.click(screen.getByText("More columns"))
+  expect(screen.getByRole("checkbox", { name: "Physical" })).toBeInTheDocument()
+  expect(screen.getByRole("checkbox", { name: "Page server" })).toBeInTheDocument()
+  expect(screen.queryByRole("checkbox", { name: "Read-ahead" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("checkbox", { name: "Physical" }))
+  expect(within(screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!).getByText("8 →")).toBeInTheDocument()
+})
+
+
+test("PostgreSQL does not offer unavailable SQL Server counters", () => {
+  render(<IoComparison comparison={{ ...comparison, tableIoUnavailable: true, tables: [], statements: [] }} byStatement={false} onViewChange={vi.fn()} />)
+  expect(screen.getByText("per-table IO not available for this engine")).toBeInTheDocument()
+  expect(screen.queryByText("More columns")).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Scans" })).not.toBeInTheDocument()
 })

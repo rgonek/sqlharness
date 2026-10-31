@@ -2,6 +2,7 @@ import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import { agentCall, operation, operationDetail, session, variant } from "@/test/fixtures"
+import type { OperationStatus } from "@/api/types"
 import { renderApp, stubFetch } from "@/test/render"
 
 const defaultOptimization = {
@@ -21,6 +22,37 @@ const stubOperationFetch = (routes: Record<string, unknown | ((url: URL, init?: 
   "/api/operations/10/optimization?case=all&aggregate=sum": defaultOptimization,
   "/api/operations/10/optimization": defaultOptimization,
   ...routes,
+})
+
+test.each([
+  ["client", "Cancelled by the client."],
+  ["deadline", "Cancelled when the call time budget ran out."],
+  [null, "The operation was cancelled before it finished."],
+])("shows cancellation explanation for %s without opening the status dialog", async (reason, explanation) => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, status: "failed", exitCode: -1, errorKind: "cancelled", cancelReason: reason }) }) })
+  renderApp("/operations/10")
+  expect(await screen.findByText(explanation)).toBeVisible()
+})
+
+test("shows the stored error as text and keeps interrupted compare measurements available", async () => {
+  const message = "<img src=x onerror=alert(1)>"
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, operation: "compare", status: "failed", errorKind: "unknown", errorMessage: message }), variants: [variant({ variant: "baseline" })] }) })
+  const { container } = renderApp("/operations/10")
+  expect(await screen.findByText("The operation failed.")).toBeVisible()
+  expect(screen.getByText(message)).toBeVisible()
+  expect(container.querySelector("img")).toBeNull()
+  expect(screen.getByText("Baseline", { exact: false })).toBeInTheDocument()
+})
+
+test.each([
+  ["cancelled", "cancelled", "client", "Cancelled by the client."],
+  ["rejected", "safety_rejected", null, "SQLHarness rejected the request before running it (validation or safety rule)."],
+])("shows %s reason and missing message in operation detail", async (status, kind, reason, sentence) => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, status: status as OperationStatus, errorKind: kind, cancelReason: reason, errorMessage: null }) }) })
+  renderApp("/operations/10")
+  const alert = await screen.findByRole("alert")
+  expect(alert).toHaveTextContent(sentence)
+  expect(alert).toHaveTextContent("No error message is available for this operation.")
 })
 
 test("compare operation returns to its session with the originating subject and scope", async () => {

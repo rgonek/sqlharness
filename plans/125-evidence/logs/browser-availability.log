@@ -1,0 +1,155 @@
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+API /api/sessions/8/optimization/compare
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+API /api/sessions/8/optimization/compare
+API /api/sessions/8/optimization/compare
+API /api/operations/30
+API /api/sessions/8/optimization/compare
+PASS mixed IO/policy, keyboard focus, case/mean selection, partial statement, zero counter, both script copies, Plan tab
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+API /api/sessions/8/optimization/compare
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+API /api/operations/30
+API /api/sessions/8/optimization/compare
+page errors: [] body: SQLHarness
+Activity
+Usage
+Profiles
+Settings
+Activity
+Session 8 fixture
+Session 8 fixture
+Claude Code via cli
+·
+3 operations
+·
+Details
+Add note
+Optimization
+Optimization
+
+orders · ShopDb · SqlServer · whole query
+
+case 1 · Mean
+Version	Conditions	Rows	Logical reads	vs A	Scans	Elapsed (sum of case medians)	CPU (sum of case medians)	Results	IO	Policy	A
+Baseline A
+	B
+Candidate B
+	
+Observed in
+
+
+v0
+	A	10	100	—	1	10 ms	—
+0/0 cases
+	Baseline · 1/1 measured	—	—	
+A
+	
+B
+	
+
+
+v1
+	A	11	90	-10%	1	12 ms	—
+0/0 cases
+	Results 1/1	IO ↑1	Policy ⚠1	
+A
+	
+B
+	
+
+
+v2
+	B	—	80	—	1	—
+0/0 cases
+different conditions · all cases, sum
+	—
+0/0 cases
+	—	—	—	
+A
+	
+B
+	
+
+
+v3
+	B	13	70	—	1	—
+0/0 cases
+different conditions · all cases, sum
+	—
+0/0 cases
+	—	—	—	
+A
+	
+B
+	
+Operation #30
+
+1 paired case
+
+SQL diff
+IO
+Plan
+v0 → v1 · measured together in #30
+Verdict basis: whole batch
+By statement
+Whole batch
+Columns
+
+Some IO cannot be attributed to individual statements. IO assessment uses the whole batch.
+
+View whole batch
+SELECT synthetic
+Executions: 1 execution
+Additional statement metrics unavailable
+SELECT ambiguous
+reads before: ambiguous attribution (0/1 cases)
+reads after: omitted evidence (0/1 cases)
+Executions: 1 execution
+Additional statement metrics unavailable
+
+IO from recorded STATISTICS IO / BUFFERS. Unavailable measurements are shown as —.
+
+Memory (sum of selected case medians)
+Grant — → — KB
+Max used — → — KB
+Operations (0)
+Newest first. Loaded 0 of 3 operations.
+Show internal operations
+ID	Time	Type	Description	Status	Duration	Reads
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.boundingBox: Error: strict mode violation: getByText('Executions: 1 execution', { exact: true }) resolved to 2 elements:
+    1) <span>Executions: 1 execution</span> aka getByText('Executions: 1 execution').first()
+    2) <span>Executions: 1 execution</span> aka getByText('Executions: 1 execution').nth(1)
+
+Call log:
+  - waiting for getByText('Executions: 1 execution', { exact: true })
+
+    at C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\plans\125-evidence\browser-mixed-fixture.mjs:70:83 {
+  log: [
+    "  - waiting for getByText('Executions: 1 execution', { exact: true })"
+  ]
+}
+
+Node.js v24.18.0

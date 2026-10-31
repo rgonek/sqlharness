@@ -16,6 +16,51 @@ public sealed class JournalReaderTests
         new(home.DatabasePath, processes ?? new FakeProcesses());
 
     [Fact]
+    public void Interrupted_compare_retains_history_and_measurements_without_optimization_versions()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:interrupted"), "orders", "whole", "h0", "h1");
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
+            """{"kind":"compare","cases":[{"caseId":"0","caseLabel":"case"}]}""",
+            new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2)], []));
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE operations SET status = 'failed' WHERE id = $id";
+            command.Parameters.AddWithValue("$id", handle.OperationId);
+            command.ExecuteNonQuery();
+        }
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+        Assert.Equal("failed", Assert.Single(reader.CompareAttempts(sessionId).Items).Status);
+        Assert.Equal(100, Assert.Single(Assert.Single(reader.OptimizationEvidence(sessionId)).Metrics).LogicalReadsMedian);
+        var detail = reader.Operation(handle.OperationId)!;
+        Assert.Equal("failed", detail.Operation.Status);
+        Assert.NotEmpty(detail.Variants);
+        Assert.Empty(reader.Optimization(sessionId).Subjects);
+    }
+
+    [Fact]
+    public void Statement_without_object_counters_does_not_invent_zero_reads()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:metadata"), "orders", "whole", "h0", "h1");
+        var benchmark = new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2)], [])
+        {
+            Statements = [StoredStatement("baseline", "SELECT 1", "plan") with { Executions = null, Objects = [] }],
+        };
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(), "{}", benchmark);
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+        var metric = Assert.Single(Assert.Single(reader.OptimizationEvidence(sessionId)).Metrics);
+        var statement = Assert.Single(metric.Statements);
+        Assert.Null(statement.Reads);
+        Assert.Null(statement.Scans);
+    }
+
+    [Fact]
     public void Mutation_requester_uses_only_the_retained_operation_link()
     {
         using var home = new TempHome();
@@ -231,11 +276,11 @@ public sealed class JournalReaderTests
         var handle = seed.Compare(JournalSeed.Session("cli:optimization"), "orders", "whole", "baseline-hash", "candidate-hash");
         var metrics = new BenchmarkJournalRecord(
         [
-            OptimizationMetric("baseline", 100, 10, 2) with { Postgres = new PostgresBufferCounters(7, 2, 1, 0, 0, 3) },
+            OptimizationMetric("baseline", 100, 10, 2) with { TableIo = [new JournalTableIo("Orders", 90, 2, 3, 4, 5, 10, 6, 7, 0)], Postgres = new PostgresBufferCounters(7, 2, 1, 0, 0, 3) },
             OptimizationMetric("candidate", 80, 8, 1) with { Postgres = new PostgresBufferCounters(5, 1, 0, 0, 0, 1) },
         ], []);
         seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
-            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"regression":{"verdict":"pass"},"cases":[{"caseId":"0","caseLabel":"@CustomerId = 1","equivalence":{"mode":"Ordered","equivalent":true},"regression":{"verdict":"pass"}}]}""",
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"regression":{"verdict":"pass"},"cases":[{"caseId":"0","caseLabel":"@CustomerId = 1","equivalence":{"mode":"Ordered","equivalent":true},"regression":{"verdict":"pass","reasons":["elapsed-regressed"]}}]}""",
             metrics);
 
         var sessionId = Assert.Single(Reader(home).Sessions(new SessionQuery()).Items).Id;
@@ -251,16 +296,88 @@ public sealed class JournalReaderTests
         Assert.Equal("succeeded", evidence.Status);
         Assert.Equal("pass", evidence.RegressionVerdict);
         Assert.Equal((true, "pass"), (Assert.Single(evidence.Cases).ResultsEquivalent, evidence.Cases[0].RegressionVerdict));
+        Assert.Equal("elapsed-regressed", Assert.Single(evidence.Cases[0].RegressionReasons));
         var baseline = Assert.Single(evidence.Metrics, metric => metric.Variant == "baseline");
         Assert.Equal(100, baseline.LogicalReadsMedian);
         Assert.Equal(10, baseline.ElapsedMedianMs);
         Assert.Equal(10, baseline.CpuMedianMs);
         Assert.Equal(new PostgresBuffers(7, 2, 1, 0, 0, 3), baseline.Postgres);
         Assert.Equal(2, baseline.ScansSum);
-        Assert.Equal(new CompareTableIoEvidence("Orders", 90, 10, 2), Assert.Single(baseline.TableRows));
+        Assert.Equal(new CompareTableIoEvidence("Orders", 90, 10, 2) { PhysicalReads = 3, PageServerReads = 4, ReadAheadReads = 5, LobPhysicalReads = 6, LobReadAheadReads = 7 }, Assert.Single(baseline.TableRows));
+
+        var candidateTable = Assert.Single(Assert.Single(evidence.Metrics, metric => metric.Variant == "candidate").TableRows);
+        Assert.Equal(0, candidateTable.PhysicalReads);
+        Assert.Null(candidateTable.PageServerReads);
+        Assert.Null(candidateTable.ReadAheadReads);
+        Assert.Null(candidateTable.LobPhysicalReads);
+        Assert.Null(candidateTable.LobReadAheadReads);
 
         var section = OptimizationSummaryBuilder.Build([evidence]);
         Assert.Single(section.Subjects);
+    }
+
+    [Theory]
+    [InlineData("sum", 30, 3, 5, 7, 9, 11, 13, 15, 41)]
+    [InlineData("mean", 15, 2, 3, 4, 5, 6, 7, 8, 21)]
+    public void Stored_table_io_flows_from_journal_to_case_aggregate_once_per_representative(
+        string mode, long data, long scans, long physical, long pageServer, long readAhead,
+        long lob, long lobPhysical, long lobReadAhead, long total)
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:table-io-aggregate"), "orders", "whole", "h1", "h2");
+        var first = new ConditionsParameter("@id", "int", JsonDocument.Parse("1").RootElement.Clone());
+        var second = new ConditionsParameter("@id", "int", JsonDocument.Parse("2").RootElement.Clone());
+        var template = JournalSeed.ReproConditions();
+        var conditions = template with
+        {
+            Execution = template.Execution with { Repeat = 3 },
+            Cases = [new ConditionsCase("0", 0, "case 0", null, [first], "case-fingerprint-0") { VaryingForFingerprint = [first] },
+                new ConditionsCase("1", 1, "case 1", null, [second], "case-fingerprint-1") { VaryingForFingerprint = [second] }],
+        };
+        static JournalVariantMetrics Case(string variant, string id, JournalTableIo table) =>
+            OptimizationMetric(variant, 100, 10, 1) with { MatrixCell = int.Parse(id), CaseId = id, CaseLabel = $"case {id}", TableIo = [table] };
+        var metrics = new BenchmarkJournalRecord(
+        [
+            Case("baseline", "0", new JournalTableIo("Orders", 10, 1, 2, 3, 4, 5, 6, 7, 0)),
+            Case("baseline", "1", new JournalTableIo("Orders", 20, 2, 3, 4, 5, 6, 7, 8, 0)),
+            Case("candidate", "0", new JournalTableIo("Orders", 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+            Case("candidate", "1", new JournalTableIo("Orders", 1, null, null, 0, null, null, 0, null, 0)),
+        ], []);
+        Assert.All(metrics.Variants, metric => Assert.Equal(3, metric.Runs));
+        seed.CompareEvidence(handle, conditions,
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","caseLabel":"case 0","equivalence":{"equivalent":true}},{"caseId":"1","caseLabel":"case 1","equivalence":{"equivalent":true}}]}""", metrics);
+
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+        var evidence = Assert.Single(reader.OptimizationEvidence(sessionId));
+        Assert.Equal(4, evidence.Metrics.Count);
+        var versions = new[] {
+            new VersionRow("v1", "h1", null, null, null, null, "incomplete", [], 0),
+            new VersionRow("v2", "h2", null, null, null, null, "incomplete", [], 0),
+        };
+        var group = new ConditionsGroup(evidence.Fingerprint!, "cases", [new ScopeVersions("whole", versions)], "v1", "v2");
+        var comparison = OptimizationComparer.Compare(group, [evidence], "v1", "v2", "all", mode, "whole");
+        var row = Assert.Single(comparison.Tables);
+        Assert.Equal(2, comparison.Cases.Count);
+        Assert.Equal(data, row.DataLogicalReadsBefore);
+        Assert.Equal(scans, row.ScansBefore);
+        Assert.Equal(physical, row.PhysicalReadsBefore);
+        Assert.Equal(pageServer, row.PageServerReadsBefore);
+        Assert.Equal(readAhead, row.ReadAheadReadsBefore);
+        Assert.Equal(lob, row.LobLogicalReadsBefore);
+        Assert.Equal(lobPhysical, row.LobPhysicalReadsBefore);
+        Assert.Equal(lobReadAhead, row.LobReadAheadReadsBefore);
+        Assert.Equal(total, row.ReadsBefore);
+        Assert.Equal(1, row.DataLogicalReadsAfter);
+        Assert.Null(row.ScansAfter);
+        Assert.Null(row.PhysicalReadsAfter);
+        Assert.Equal(0, row.PageServerReadsAfter);
+        Assert.Null(row.ReadAheadReadsAfter);
+        Assert.Null(row.LobLogicalReadsAfter);
+        Assert.Equal(0, row.LobPhysicalReadsAfter);
+        Assert.Null(row.LobReadAheadReadsAfter);
+        Assert.Null(row.ReadsAfter);
     }
 
     [Fact]
@@ -342,17 +459,18 @@ public sealed class JournalReaderTests
         Assert.Equal("measured", measuredStatement.Status);
         Assert.Equal("confirmed", measuredStatement.Attribution);
         Assert.Null(measuredStatement.ReadsBefore);
-        Assert.Equal(45, measuredStatement.ReadsAfter);
+        Assert.Null(measuredStatement.ReadsAfter);
+        Assert.Equal("single case required", measuredStatement.Availability!["reads"].After.Reason);
         Assert.Null(measuredStatement.PlanHashBefore);
         Assert.Equal("measure-plan", measuredStatement.PlanHashAfter);
         Assert.Null(measuredStatement.ScansBefore);
-        Assert.Equal(2, measuredStatement.ScansAfter);
+        Assert.Null(measuredStatement.ScansAfter);
         Assert.Equal(string.Empty, measuredStatement.Change);
         var measuredObject = Assert.Single(measuredStatement.Objects);
         Assert.Null(measuredObject.ReadsBefore);
-        Assert.Equal(45, measuredObject.ReadsAfter);
+        Assert.Null(measuredObject.ReadsAfter);
         Assert.Null(measuredObject.ScansBefore);
-        Assert.Equal(2, measuredObject.ScansAfter);
+        Assert.Null(measuredObject.ScansAfter);
         Assert.Equal(string.Empty, measuredObject.Change);
         var sensitiveStatements = Reader(home).Operation(measure.OperationId, storeSensitive: true)!.Statements!;
         Assert.Equal("/operations/" + measure.OperationId + "?planCase=s:0&planVariant=measure&planParameterSetNull=true&planRepetition=1&planDocument=0&planStatement=0",
@@ -451,14 +569,13 @@ public sealed class JournalReaderTests
             Statements = [statement, statement with { StatementKey = "other", StatementOrdinal = 1, Status = StatementStatus.Partial }],
         });
         var reader = Reader(home);
-        foreach (var id in new[] { multiple.OperationId, partial.OperationId, unconfirmed.OperationId })
-            foreach (var row in reader.Operation(id, storeSensitive: false)!.Statements!)
-            {
-                Assert.Null(row.CpuAfterMs);
-                Assert.Null(row.ElapsedAfterMs);
-                Assert.Null(row.PlanRepetitionAfter);
-                Assert.Null(Assert.Single(row.Objects).LobLogicalReadsAfter);
-            }
+        Assert.All(reader.Operation(multiple.OperationId)!.Statements!, row => { Assert.Null(row.CpuAfterMs); Assert.Null(row.ReadsAfter); });
+        var retained = Assert.Single(reader.Operation(partial.OperationId)!.Statements!);
+        Assert.Equal(7, retained.CpuAfterMs);
+        Assert.Equal(5, Assert.Single(retained.Objects).LobLogicalReadsAfter);
+        var rows = reader.Operation(unconfirmed.OperationId)!.Statements!;
+        Assert.Equal(7, Assert.Single(rows, row => row.Attribution == "confirmed").CpuAfterMs);
+        Assert.Null(Assert.Single(rows, row => row.Attribution == "partial").CpuAfterMs);
     }
 
     [Fact]
@@ -540,6 +657,11 @@ public sealed class JournalReaderTests
         var caseKey = evidence[0].Cases[0].MeasurementFingerprint ?? evidence[0].Cases[0].CaseId;
         var result = OptimizationComparer.Compare(group, evidence, "v1", "v2", caseKey, "sum", "statements");
         var row = Assert.Single(result.Statements);
+        Assert.Equal(1, Assert.Single(reader.Operation(old.OperationId)!.Statements!).Executions);
+        Assert.Equal(1, row.ExecutionsBefore);
+        Assert.Equal(1, row.ExecutionsAfter);
+        Assert.Equal(45, row.ReadsBefore);
+        Assert.Equal(2, row.ScansBefore);
         Assert.Null(row.CpuBeforeMs);
         Assert.Null(row.ElapsedBeforeMs);
         Assert.Null(row.PlanRepetitionBefore);
@@ -569,7 +691,7 @@ public sealed class JournalReaderTests
         Assert.Equal(new[] { "index", "table" }, objects.Select(row => row.ObjectKind).Order().ToArray());
         var detail = Assert.Single(reader.Operation(handle.OperationId)!.Statements!);
         Assert.Equal(new[] { "index", "table" }, detail.Objects.Select(row => row.ObjectKind).Order().ToArray());
-        Assert.All(detail.Objects, row => Assert.Null(row.LobLogicalReadsAfter));
+        Assert.All(detail.Objects, row => { Assert.Null(row.LobLogicalReadsAfter); Assert.Null(row.ReadsAfter); });
         Assert.DoesNotContain("ObjectKind", JsonSerializer.Serialize(detail));
     }
 

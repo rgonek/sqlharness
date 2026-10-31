@@ -1,0 +1,26 @@
+
+> ui@0.0.0 check
+> node scripts/check.mjs
+
+(node:51360) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+> ui@0.0.0 typecheck
+> tsc -b
+
+
+> ui@0.0.0 lint
+> oxlint
+
+
+> ui@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/robert.gonek/.codex/worktrees/4b41/sqlharness/src/SqlHarness.Dashboard/ui
+
+src/components/optimization/StatementRows.tsx:39:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/optimization/OptimizationSection.tsx:87:5: warning react-hooks(exhaustive-deps): React Hook useEffect has missing dependencies: 'update', 'aGroup.fingerprint', 'hasVersion', and 'search.a' help: Either include it or remove the dependency array.
+src/components/optimization/OptimizationSection.tsx:93:5: warning react-hooks(exhaustive-deps): React Hook useEffect has missing dependencies: 'update', 'matchesCard', 'search.b', 'aGroup.fingerprint', 'hasVersion', 'search.groupB', 'activeQueryRefetch', and 'search.a' help: Either include it or remove the dependency array.
+ ❯ src/pages/AgentSessionPage.test.tsx (8 tests | 1 failed) 17482ms
+   × aggregate measure from a second MCP child keeps the agent-session return route 5034ms

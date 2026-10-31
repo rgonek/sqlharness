@@ -5,6 +5,55 @@ namespace SqlHarness.Tests.Dashboard;
 public sealed class OptimizationSummaryBuilderTests
 {
     [Fact]
+    public void Statement_metadata_alone_is_not_measurement_but_confirmed_zero_is()
+    {
+        var statement = new CompareStatementEvidence("key", 0, "SELECT 1", "plan", "confirmed", null, null, null, [], []);
+        var metric = new CompareMetricEvidence("baseline", "0", "case", null, null, null, []) { Statements = [statement] };
+        var evidence = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with { Metrics = [metric] };
+        Assert.Empty(OptimizationSummaryBuilder.Build([evidence]).Subjects);
+        var zero = evidence with { Metrics = [metric with { Statements = [statement with { Reads = 0 }] }] };
+        Assert.Single(OptimizationSummaryBuilder.Build([zero]).Subjects);
+        var ambiguous = evidence with { Metrics = [metric with { Statements = [statement with { Reads = 0, Status = "ambiguous" }] }] };
+        Assert.Empty(OptimizationSummaryBuilder.Build([ambiguous]).Subjects);
+    }
+
+    [Theory]
+    [InlineData("failed")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
+    [InlineData("running")]
+    [InlineData("abandoned")]
+    public void Ineligible_attempts_do_not_create_versions(string status)
+    {
+        var failed = Compare(1, "orders", "whole", "db", "f", "bad0", "bad1", status: status);
+        var good = Compare(2, "orders", "whole", "db", "f", "h0", "h1");
+        var section = OptimizationSummaryBuilder.Build([failed, good]);
+        var versions = Assert.Single(Assert.Single(Assert.Single(section.Subjects).Groups).Scopes).Versions;
+        Assert.Equal(new[] { ("h0", "v0"), ("h1", "v1") }, versions.Select(v => (v.Hash, v.Version)));
+    }
+
+    [Fact]
+    public void Policy_failure_remains_eligible_and_frozen_labels_are_not_renumbered()
+    {
+        var frozen = new Dictionary<(string Subject, string Scope, string Hash), string>
+        {
+            [("orders", "whole", "h0")] = "v2",
+            [("orders", "whole", "h1")] = "v4",
+        };
+        var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with { RegressionVerdict = "fail" };
+        var section = OptimizationSummaryBuilder.Build([compare], ContextKey.AgentSession("test", "synthetic"), frozen, false);
+        var versions = Assert.Single(Assert.Single(Assert.Single(section.Subjects).Groups).Scopes).Versions;
+        Assert.Equal(new[] { "v2", "v4" }, versions.Select(v => v.Version));
+    }
+
+    [Fact]
+    public void Successful_attempt_without_measurements_does_not_create_versions()
+    {
+        var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with { Metrics = [] };
+        Assert.Empty(OptimizationSummaryBuilder.Build([compare]).Subjects);
+    }
+
+    [Fact]
     public void Groups_by_subject_database_and_fingerprint()
     {
         var section = OptimizationSummaryBuilder.Build([
@@ -272,6 +321,19 @@ public sealed class OptimizationSummaryBuilderTests
             .Versions.Single(v => v.Version == "v0");
         Assert.Null(row.RowsReturnedSum);
         Assert.True(row.RowsReturnedVaries);
+    }
+
+    [Fact]
+    public void Version_timing_projection_preserves_case_identity_and_missing_values()
+    {
+        var compare = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
+        {
+            Cases = [new("0", "a", null, true, null) { MeasurementFingerprint = "case-a", VaryingFingerprint = "varying-a" }, new("1", "b", null, true, null)],
+            Metrics = [Metric("baseline", "0", 1) with { ElapsedMedianMs = 12, CpuMedianMs = 12 }],
+        };
+        var row = Assert.Single(Assert.Single(Assert.Single(OptimizationSummaryBuilder.Build([compare]).Subjects).Groups).Scopes).Versions.Single(v => v.Version == "v0");
+        Assert.Equal(new VersionCaseTiming("case-a", 12, 12) { VaryingId = "varying-a" }, row.CaseTimings[0]);
+        Assert.Equal(new VersionCaseTiming("1", null, null), row.CaseTimings[1]);
     }
 
     private static CompareEvidence Compare(long id, string? subject, string? scope, string database, string fingerprint,

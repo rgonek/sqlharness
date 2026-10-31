@@ -1,4 +1,5 @@
-import type { StatementRow } from "@/api/types"
+import type { MetricAvailabilityPair, StatementRow } from "@/api/types"
+import { executionLabel } from "./statementLabels"
 import { HiddenWorkFlag } from "./HiddenWorkFlag"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -9,6 +10,7 @@ const statusLabels: Record<string, string> = {
   "only-baseline": "only in baseline",
   "only-candidate": "only in candidate",
   "not-executed": "not executed in this case",
+  unmatched: "unmatched or omitted",
   measured: "measured",
 }
 
@@ -19,6 +21,20 @@ function number(value: number | null): string {
 function changeMagnitude(row: StatementRow, measured: boolean): number {
   if (row.readsBefore !== null && row.readsAfter !== null) return Math.abs(row.readsAfter - row.readsBefore)
   return measured ? Math.abs(row.readsAfter ?? 0) : -1
+}
+
+export function MetricReasons({ availability, measured = false }: { availability?: Record<string, MetricAvailabilityPair> | null; measured?: boolean }) {
+  if (!availability) return null
+  const groups = new Map<string, string[]>()
+  for (const [metric, pair] of Object.entries(availability)) {
+    const sides = measured ? [["after", pair.after] as const] : [["before", pair.before] as const, ["after", pair.after] as const]
+    for (const [side, item] of sides) {
+      if (item.status !== "unavailable") continue
+      const explanation = `${item.reason} (${item.availableCases}/${item.totalCases} cases)`
+      groups.set(explanation, [...(groups.get(explanation) ?? []), `${metric} ${side}`])
+    }
+  }
+  return <>{[...groups].map(([reason, metrics]) => <span key={reason} className="text-xs text-muted-foreground">{metrics.join(", ")}: {reason}</span>)}</>
 }
 
 export function StatementMetrics({ row, measured = false }: { row: StatementRow; measured?: boolean }) {
@@ -33,17 +49,21 @@ export function StatementMetrics({ row, measured = false }: { row: StatementRow;
 function Objects({ row, measured }: { row: StatementRow; measured: boolean }) {
   if (row.objects.length === 0) return null
   const hasLob = row.objects.some(item => item.lobLogicalReadsBefore != null || item.lobLogicalReadsAfter != null)
+  const hasReadsBefore = row.objects.some(item => item.readsBefore != null)
+  const hasReadsAfter = row.objects.some(item => item.readsAfter != null)
+  const hasScansBefore = row.objects.some(item => item.scansBefore != null)
+  const hasScansAfter = row.objects.some(item => item.scansAfter != null)
   return <Collapsible className="mt-2">
     <CollapsibleTrigger className="cursor-pointer text-sm">Objects ({row.objects.length})</CollapsibleTrigger>
     <CollapsibleContent keepMounted><div className="mt-2">
       <Table aria-label={`${row.text} object IO`}>
         <TableHeader><TableRow><TableHead>Object</TableHead>{measured
-          ? <><TableHead>Scans</TableHead><TableHead>Logical reads</TableHead></>
-          : <><TableHead>Scans before</TableHead><TableHead>Scans after</TableHead><TableHead>Logical reads before</TableHead><TableHead>Logical reads after</TableHead><TableHead>Change</TableHead></>}{hasLob && (measured ? <TableHead>LOB logical</TableHead> : <><TableHead>LOB logical before</TableHead><TableHead>LOB logical after</TableHead></>)}</TableRow></TableHeader>
+          ? <>{hasScansAfter && <TableHead>Scans</TableHead>}{hasReadsAfter && <TableHead>Logical reads</TableHead>}</>
+          : <>{hasScansBefore && <TableHead>Scans before</TableHead>}{hasScansAfter && <TableHead>Scans after</TableHead>}{hasReadsBefore && <TableHead>Logical reads before</TableHead>}{hasReadsAfter && <TableHead>Logical reads after</TableHead>}{hasReadsBefore && hasReadsAfter && <TableHead>Change</TableHead>}</>}{hasLob && (measured ? <TableHead>LOB logical</TableHead> : <><TableHead>LOB logical before</TableHead><TableHead>LOB logical after</TableHead></>)}</TableRow></TableHeader>
         <TableBody>{row.objects.map(item => <TableRow key={item.table}>
-          <TableHead scope="row" className="whitespace-normal">{item.table}</TableHead>{measured
-            ? <><TableCell>{number(item.scansAfter)}</TableCell><TableCell>{number(item.readsAfter)}</TableCell></>
-            : <><TableCell>{number(item.scansBefore)}</TableCell><TableCell>{number(item.scansAfter)}</TableCell><TableCell>{number(item.readsBefore)}</TableCell><TableCell>{number(item.readsAfter)}</TableCell><TableCell className="whitespace-normal">{item.change}</TableCell></>}{hasLob && (measured ? <TableCell>{number(item.lobLogicalReadsAfter ?? null)}</TableCell> : <><TableCell>{number(item.lobLogicalReadsBefore ?? null)}</TableCell><TableCell>{number(item.lobLogicalReadsAfter ?? null)}</TableCell></>)}
+          <TableHead scope="row" className="whitespace-normal">{item.table}<div className="flex flex-col"><MetricReasons availability={item.availability} measured={measured} /></div></TableHead>{measured
+            ? <>{hasScansAfter && <TableCell>{number(item.scansAfter)}</TableCell>}{hasReadsAfter && <TableCell>{number(item.readsAfter)}</TableCell>}</>
+            : <>{hasScansBefore && <TableCell>{number(item.scansBefore)}</TableCell>}{hasScansAfter && <TableCell>{number(item.scansAfter)}</TableCell>}{hasReadsBefore && <TableCell>{number(item.readsBefore)}</TableCell>}{hasReadsAfter && <TableCell>{number(item.readsAfter)}</TableCell>}{hasReadsBefore && hasReadsAfter && <TableCell className="whitespace-normal">{item.change}</TableCell>}</>}{hasLob && (measured ? <TableCell>{number(item.lobLogicalReadsAfter ?? null)}</TableCell> : <><TableCell>{number(item.lobLogicalReadsBefore ?? null)}</TableCell><TableCell>{number(item.lobLogicalReadsAfter ?? null)}</TableCell></>)}
         </TableRow>)}</TableBody>
       </Table>
     </div></CollapsibleContent>
@@ -58,12 +78,21 @@ function PlanLink({ href, hash, label }: { href: string | null; hash: string | n
 export function StatementRows({ rows, measured = false, postgres = false }: { rows: StatementRow[]; measured?: boolean; postgres?: boolean }) {
   const ordered = [...rows].sort((left, right) => changeMagnitude(right, measured) - changeMagnitude(left, measured)
     || left.text.localeCompare(right.text) || left.occurrence - right.occurrence)
+  const hasIo = ordered.some(row => row.readsBefore != null || row.readsAfter != null || row.scansBefore != null || row.scansAfter != null)
+  const hasReadsBefore = ordered.some(row => row.readsBefore != null)
+  const hasReadsAfter = ordered.some(row => row.readsAfter != null)
+  const hasScansAfter = ordered.some(row => row.scansAfter != null)
+  const hasExecutions = ordered.some(row => executionLabel(row, measured) !== null)
+  if (ordered.length > 0 && !hasIo) return <section aria-label="Statement IO" className="space-y-3">
+    <p className="text-sm text-muted-foreground">Some IO cannot be attributed to individual statements. IO assessment uses the whole batch.</p>
+    {ordered.map(row => <div key={`${row.key}:${row.occurrence}`}><div>{row.text}</div><PlanLink href={row.planLinkBefore} hash={row.planHashBefore} label="Plan before" /> <PlanLink href={row.planLinkAfter} hash={row.planHashAfter} label="Plan after" /><MetricReasons availability={row.availability} measured={measured} />{executionLabel(row, measured) && <span>Executions: {executionLabel(row, measured)}</span>}<StatementMetrics row={row} measured={measured} />{row.hiddenWork.map((item, index) => <HiddenWorkFlag key={index} item={item} />)}{row.objects.map((item, index) => <div key={index}>{item.table} <MetricReasons availability={item.availability} measured={measured} /></div>)}</div>)}
+  </section>
   return <section aria-label="Statement IO" className="space-y-3">
     {postgres && <p className="text-sm text-muted-foreground">per-statement IO not available for this engine</p>}
     {ordered.length > 0 && <Table aria-label="Statement IO rows">
       <TableHeader><TableRow><TableHead>Statement</TableHead><TableHead>Status</TableHead>{measured
-        ? <><TableHead>Executions</TableHead><TableHead>Scans</TableHead><TableHead>Logical reads</TableHead></>
-        : <><TableHead>Executions</TableHead><TableHead>Reads before</TableHead><TableHead>Reads after</TableHead><TableHead>Change</TableHead></>}</TableRow></TableHeader>
+        ? <>{hasExecutions && <TableHead>Executions</TableHead>}{hasScansAfter && <TableHead>Scans</TableHead>}{hasReadsAfter && <TableHead>Logical reads</TableHead>}</>
+        : <>{hasExecutions && <TableHead>Executions</TableHead>}{hasReadsBefore && <TableHead>Reads before</TableHead>}{hasReadsAfter && <TableHead>Reads after</TableHead>}{hasReadsBefore && hasReadsAfter && <TableHead>Change</TableHead>}</>}</TableRow></TableHeader>
       <TableBody>{ordered.map((row, index) => <TableRow key={`${row.key}:${row.occurrence}`} className="align-top">
         <TableCell className="whitespace-normal"><div className="max-w-2xl whitespace-pre-wrap break-words">{row.text}</div>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">{!measured && <><PlanLink href={row.planLinkBefore} hash={row.planHashBefore} label="Plan before" /><PlanLink href={row.planLinkAfter} hash={row.planHashAfter} label="Plan after" /></>}
@@ -74,10 +103,10 @@ export function StatementRows({ rows, measured = false, postgres = false }: { ro
           <StatementMetrics row={row} measured={measured} />
           <Objects row={row} measured={measured} />
         </TableCell>
-        <TableCell className="whitespace-normal">{statusLabels[row.status] ?? row.status}</TableCell>
-        <TableCell>{row.executions === null ? "—" : `${number(row.executions)} ${row.executions === 1 ? "execution" : "executions"}`}</TableCell>
-        {measured ? <><TableCell>{number(row.scansAfter)}</TableCell><TableCell>{number(row.readsAfter)}</TableCell></>
-          : <><TableCell>{number(row.readsBefore)}</TableCell><TableCell>{number(row.readsAfter)}</TableCell><TableCell className="whitespace-normal">{row.change}</TableCell></>}
+        <TableCell className="whitespace-normal">{statusLabels[row.status] ?? row.status}<div className="flex flex-col"><MetricReasons availability={row.availability} measured={measured} /></div></TableCell>
+        {hasExecutions && <TableCell>{executionLabel(row, measured) ?? "—"}</TableCell>}
+        {measured ? <>{hasScansAfter && <TableCell>{number(row.scansAfter)}</TableCell>}{hasReadsAfter && <TableCell>{number(row.readsAfter)}</TableCell>}</>
+          : <>{hasReadsBefore && <TableCell>{number(row.readsBefore)}</TableCell>}{hasReadsAfter && <TableCell>{number(row.readsAfter)}</TableCell>}{hasReadsBefore && hasReadsAfter && <TableCell className="whitespace-normal">{row.change}</TableCell>}</>}
       </TableRow>)}</TableBody>
     </Table>}
   </section>

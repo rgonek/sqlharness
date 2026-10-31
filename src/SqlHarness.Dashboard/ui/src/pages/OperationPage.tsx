@@ -17,6 +17,7 @@ import { CompareDetail } from "@/components/CompareDetail"
 import { ConditionsList } from "@/components/ConditionsList"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { displayCaseLabel } from "@/lib/caseLabel"
+import { describeError } from "@/lib/errors"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -46,6 +47,11 @@ function OperationHeading({ detail, returnSearch, metadata }: { detail: Operatio
     <div className="operation-breadcrumb"><Link to="/">Activity</Link><span>/</span>{returnAgent ? <Link to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)}>Back to agent session</Link> : <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSearch.returnSession === op.sessionId ? sessionSearchFromOperation(returnSearch) : undefined}>{detail.session.title ?? detail.session.sessionKey}</Link>}<span>/</span><span>#{op.id}</span></div>
     <div className="flex items-center gap-2"><h1 aria-label={title} className="min-w-0 flex-1">{op.operation === "compare" ? <>{detail.compareSubject ?? "Unassigned compare"} · <span className="heading-version-pair">{detail.baselineVersion ?? "?"} → {detail.candidateVersion ?? "?"}</span></> : title}{op.agentKeep && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="ml-2 inline size-4 text-violet-600" aria-label="Kept by agent" />}</h1><Button variant="ghost" size="icon-sm" aria-label={op.ownerStarred ? "★ Owner starred" : "☆ Star operation"} aria-pressed={op.ownerStarred} disabled={update.isPending} onClick={() => update.mutate({ starred: !op.ownerStarred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={op.ownerStarred ? "fill-amber-400 text-amber-500" : ""} /></Button>{detail.sqlText && <CopyButton label="Copy stored SQL" getText={() => detail.sqlText!} />}<details className="operation-owner-menu"><summary aria-label="Operation actions"><HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} className="size-4" /></summary><div><OperationOwnerAnnotations key={op.id} operation={op} /></div></details></div>
     <div className="operation-subtitle"><StatusBadge operation={op} /><span className="capitalize">{op.operation} #{op.id}</span>{op.operation === "compare" && <><span>·</span><span>{detail.compareScope === "whole" ? "whole query" : detail.compareScope ?? "Unassigned scope"}</span></>}<span>·</span><span>{agentLabel(op.agentKind)}</span><code>{detail.session.transport}</code><span>·</span><time title={op.startedAt}>{formatTimestamp(op.startedAt)}</time><span>·</span><span>{formatDuration(op.durationMs)}</span><span>·</span><span>{op.profile && <>{op.profile} / </>}<span>{op.database ?? "—"}</span></span><FlagBadges operation={op} />{metadata && <><span>·</span>{metadata}</>}</div>
+    {(op.status === "failed" || op.status === "rejected" || op.status === "cancelled") && <div role="alert" className="mt-2 rounded-md border p-3 text-sm">
+      <p>{describeError(op.exitCode, op.errorKind ?? (op.status === "cancelled" ? "cancelled" : null), op.cancelReason)}</p>
+      {op.errorMessage !== null ? <pre className="mt-1 max-h-96 overflow-auto whitespace-pre-wrap break-words">{op.errorMessage}</pre>
+        : <p>No error message is available for this operation.</p>}
+    </div>}
     {update.error && <p role="alert" className="text-sm text-destructive">Could not save operation annotations: {update.error.message}</p>}
   </div>
 }
@@ -178,7 +184,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
 
   const detail = query.data
   const op = detail.operation
-  if (op.operation === "compare") return <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
+  if (op.operation === "compare" && op.status === "succeeded") return <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
   const hasPlanParameterSet = returnSearch.planParameterSetNull === true || returnSearch.planParameterSet !== undefined
   const planTarget = hasPlanParameterSet && returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
     && returnSearch.planDocument !== undefined && returnSearch.planStatement !== undefined
