@@ -10,7 +10,7 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
-| [125](125-optimization-evidence-clarity.md) | Eligible optimization evidence, honest statement/table IO, separate IO/policy outcomes, one timing summary and consolidated actions | Existing 104/105 and 121/122/123 contracts | IMPLEMENTED AND VERIFIED on `b189a999`; Task 6 and final whole-branch reviews pending ([evidence](125-evidence/verification.md)) |
+| [125](125-optimization-evidence-clarity.md) | Eligible optimization evidence, honest statement/table IO, separate IO/policy outcomes, one timing summary and consolidated actions | Existing 104/105 and 121/122/123 contracts | IMPLEMENTED AND VERIFIED on `502f12ed`; final scoped re-review pending ([evidence](125-evidence/verification.md)) |
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 

@@ -1,6 +1,6 @@
 # Plan 125 integrated verification
 
-Product revision under verification: `b189a999e9171deb634a5bbd8d3372d4156ea952`. Final whole-branch review remains pending. No live database, installed dashboard, publication, service restart, merge or push.
+Final product revision: `502f12ed0c9c767d41d080255f4d683d713d432e`. Whole-branch review identified one Important issue; its correction awaits final scoped re-review. No live database, installed dashboard, publication, service restart, merge or push.
 
 - Initial focused Dashboard suite on `f424d94e`: 576 passed, 3 skipped, 4 failed ([log](logs/dashboard-tests.log)). Three session tests seeded no measurements; added synthetic baseline and candidate metrics while preserving session-route assertions. The fourth failure expected manual-shutdown guidance but observed an unconfirmed-shutdown message. Focused rerun of those scenarios passed 5/5 ([log](logs/focused-retry.log)).
 - Initial branch format failed because pinned SDK was absent from PATH ([log](logs/branch-format-sdk-failure.log)); after SDK correction it exposed formatting and IDE0062 ([log](logs/branch-format.log)). Formatter corrected branch files. A subsequent check caught formatting in the newly added fixture ([log](logs/branch-format-final.log)); second fix succeeded ([log](logs/branch-format-second-fix.log)). Independent final branch check passed for 9 C# files at `b189a999` ([log](logs/branch-format-verified.log)).
@@ -11,11 +11,17 @@ Product revision under verification: `b189a999e9171deb634a5bbd8d3372d4156ea952`.
 
 - The initial UI lint reported a newly exported non-component helper and two effect dependency warnings. The helper was moved to a plain TypeScript module; the two effect dependency warnings are present in baseline `672e6265` and are not suppressed or altered. The completed UI stage retained those two warnings and a Node shell deprecation warning.
 
+## Final-review correction
+
+The [whole-branch review](reviews-and-checks/whole-branch-review.md) found all-case statement and table projections excluded cases without batch read medians. The correction and self-review are recorded in the [final-fix report](reviews-and-checks/final-fix-report.md); focused RED failed all three new cases ([log](logs/final-fix-red.log)), then all 80 OptimizationComparer tests passed ([log](logs/final-fix-green.log)).
+
+On `502f12ed`, `just verify` passed with Node 24.18.0, SDK 10.0.303 and process-local `TEMP`/`TMP=C:\s125`: build passed, UI 473/473, Core 4838 passed / 11 skipped, MCP 535 passed / 4 skipped. UI install was skipped because the lockfile was unchanged; working-tree format was skipped because the product files were committed. [Summary](logs/final-fix-gate-summary.log), [UI](logs/final-fix-gate/ui-check.log), [Core](logs/final-fix-gate/test-SqlHarness.Tests.log), [MCP](logs/final-fix-gate/test-SqlHarness.Mcp.Tests.log). The independent `pwsh ./scripts/format-changed.ps1 -Mode branch -BaseRef 672e6265` passed for 9 C# files ([log](logs/final-fix-branch-format.log)). The earlier synthetic browser fixture serves static API responses and does not verify backend recalculation; no new browser claim is made for this backend-only correction.
+
 ## Reproduction notes
 
 The browser fixtures use a local Vite server on `127.0.0.1:48139` and intercept `/api` with anonymous in-memory responses. Install Playwright in an isolated test-tool directory and set `PLAYWRIGHT_MODULE` to its `playwright/package.json`; set `PLAYWRIGHT_CHROMIUM` to an existing compatible Chromium executable. From `src/SqlHarness.Dashboard/ui`, run `npm run dev -- --host 127.0.0.1 --port 48139 --strictPort`; from the repository root run `node plans/125-evidence/browser-fixture.mjs` and `node plans/125-evidence/browser-mixed-fixture.mjs`, then stop that Vite process. This run used local Node 24.18.0 and the cached Chromium headless shell 1247. The Plan tab was navigated with no retained plan in the fixture; actual plan download was not verified. The fixtures do not connect to a SQL server or a real journal.
 
-The final gate used the private Node 24.18.0 and SDK 10.0.303 and a short per-process TEMP/TMP; no global toolchain setting changed. The final product revision is `b189a999e9171deb634a5bbd8d3372d4156ea952`. Final Task 6 and whole-branch reviews remain pending. No Linux gate, live database, installation or live acceptance was performed.
+The final gate used the private Node 24.18.0 and SDK 10.0.303 and a short per-process TEMP/TMP; no global toolchain setting changed. The earlier final product revision was `b189a999e9171deb634a5bbd8d3372d4156ea952`; the final-review correction is `502f12ed0c9c767d41d080255f4d683d713d432e`, pending scoped re-review. No Linux gate, live database, installation or live acceptance was performed.
 
 Commands used for the final checks (PowerShell; paths are relative to the worktree):
 
