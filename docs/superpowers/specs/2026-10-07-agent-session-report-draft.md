@@ -62,6 +62,7 @@ the tool. Keep workload values out.
 | 2026-10-23 multi-scope read-batch candidate (unmapped) | optimization | partial | 5 | scope x outcome table, exception list, metric trade-offs, equivalence, limits, evidence links | not recorded (derived metrics; exact statement audit not recorded) | yes (source applicability, sampling limits, adoption decision) | not recorded; parameter correction and coverage-driven outcome revisions identified | preserve outcome history and evidence scope; no API decision |
 | 2026-10-29 current-source ranking candidate (unmapped) | optimization | partial | 1 | source context, case x variant table, equivalence, IO-memory trade-off, rejected alternative, limits, evidence links | not recorded (approximate source counts below) | yes (source applicability, trade-off interpretation, deferred implementation) | 1 retro clarification | external context and explicit review coverage; no API decision |
 | 2026-10-29 multi-statement count candidate (unmapped) | optimization | partial | 1 | source context, case x variant table, equivalence, plan explanation, limits, evidence link, later recommendation correction | not recorded (approximate source counts below) | yes (source applicability, duplicate-call finding, acceptance judgment) | 1 delivered recommendation correction; 1 internal case-label correction | external context and policy/decision separation; no API decision |
+| 2026-10-31 current-source grouped aggregate (unmapped) | optimization | adopt | 1 | pre-measurement source context, outcome, cause, change, case x metric table, equivalence, test result, limits, later corrections | ~8 / ~11 (approximate) | yes (source applicability, callers, applied change, test result, index hypothesis) | 5 retro corrections | external context and post-delivery corrections; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -1024,3 +1025,49 @@ Kind: optimization · Outcome: partial · Scopes: 1 · System label: unmapped.
 - **Operator decision:** Record the two accepted observations, then commit and push only those
   documentation changes. No plan, implementation, skill change or private-evidence publication
   is authorized.
+
+## 2026-10-31 - current-source grouped aggregate, applied branch for a missing setting
+
+Kind: optimization · Outcome: adopt · Scopes: 1 · System label: unmapped.
+
+- **Inspected state:** Repository HEAD `e4e4ecf4`. Status: collecting observations, not approved for
+  implementation. Actual interim messages, final chat report and retro corrections were available;
+  this is observed reporting.
+- **Actual report:** Pre-measurement source context was given before any compare. The final report
+  stated the outcome, the cause, the applied source change, a case x metric table, equivalence, test
+  results and limits. The change was applied to the working tree without a commit.
+- **Report blocks:** Pre-measurement source context; outcome; cause; change description; case x metric
+  table; equivalence; test result; limits; later corrections. No question for a human or follow-up offer.
+- **Evidence and interpretation:** Compare supplied metrics, multiset equivalence and verdicts. Query
+  rows supplied schema, cardinality, case selection and the absent setting. Artifacts supplied the
+  repeated-lookup and spool evidence for one case. Application code supplied the caller, conditions
+  and parameters. Test output came from the local recipe. Query Store text was used only as a hint
+  and was found not to match current source.
+- **Content provenance:** Approximate overlapping statements in the final report: 8 compare-backed,
+  3 query-backed, 3 artifact-backed, 5 application-code-backed, 1 test-output-backed and 5 agent
+  interpretations. Table metrics were transcribed manually. Calling conditions, the applied change,
+  test result and unmeasured index hypothesis have no journal operation.
+- **Corrections:** 5 retro corrections after delivery: warning attributed to both variants although
+  the response does not separate them (unlabeled inference); residual lookups on another table omitted
+  and plans read only for one case of an earlier SQL revision (overgeneralization); final timing
+  run alongside local tests without disclosure (agent slip); parameter type parity inferred, not
+  observed (unlabeled inference); narrow candidate selection not disclosed (omission).
+- **Dashboard usefulness:** Retain the case table, equivalence, plan-review coverage, the source
+  applicability finding and the corrections. Actual dashboard use and reconstruction benefit: not recorded.
+- **Observed workflow cost:** 11 MCP calls: capabilities, five queries, two compares and three
+  artifact reads. All returned success. No comparison cases were omitted. One statements page
+  continuation was left unread; the necessary/avoidable split is not recorded.
+- **Cost coverage:** Output bytes, actual tokens, input/discovery overhead, source reads, orchestration
+  and final prose were not measured. Retro source reads are separate; their cost is not recorded. No
+  diagnostic journal reads, live rerun, modeled workflow or token-saving claim occurred.
+- **Diagnostic qualification:** Plans were reviewed for one large case only. The branch used when the
+  setting exists was not measured in this scope, only exercised by a local test. No phase records were
+  inspected; routine success is not evidence of zero overhead.
+- **Optional API implications:** External source context, test results and post-delivery corrections
+  again fall outside the journal. A per-variant warning attribution is a separate question. No API decision.
+- **Related coverage and cheapest next check:** See the
+  [implicit-conversion observation](../../observations/implicit-conversion-attribution.md) and the
+  [workflow-cost follow-up](../../observations/artifact-review-workflow-cost.md#follow-up-2026-10-31---hand-copied-sql-in-comparisons).
+  Compare with earlier current-source entries; no new benchmark.
+- **Operator decision:** Record this entry and the two linked observations only. No commit, plan,
+  implementation or skill change is authorized.

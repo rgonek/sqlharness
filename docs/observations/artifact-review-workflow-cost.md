@@ -107,3 +107,30 @@ and a complete selected plan have been inspected? The cheapest useful check is a
 saved-artifact task comparing emitted bytes and evidence completeness with accurate existing
 selectors. This is a research question, not an approved implementation or a claim of token savings.
 See the [report observation](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-29---current-source-ranking-candidate-with-an-io-memory-trade-off).
+
+## Follow-up 2026-10-31 - hand-copied SQL in comparisons
+
+Inspected repository HEAD `e4e4ecf4`. Status: collecting observations, not approved for implementation.
+The earlier observations remain unchanged. The system label is unmapped.
+
+A current-source optimization investigation made 11 MCP calls: one capabilities discovery, five
+queries, two comparisons and three artifact reads. All succeeded. The two comparisons carried four
+long inline SQL texts, hand-copied by the agent from an application source file. The first candidate
+was then changed in the source file, so the second comparison repeated the baseline text and copied
+the new candidate again.
+
+No check tied the compared text to the source file; correspondence rests on the agent's copying. The
+visible comparison responses showed no `queryHash`, which the query tool documents on success. Saved
+evidence may hold a statement or SQL identity (statement hashes were visible in the artifact), but
+comparing it with a source file was neither attempted nor shown to be possible.
+
+Provisional classification: ux gap, low confidence. Capabilities listed an input root and comparison
+sources accept `file`, yet the agent chose inline SQL, so this may be agent choice alone. Files would
+remove repeated input but not prove that a file matches the application source. No copying error was
+observed, and input cost was not measured.
+
+Question for later synthesis: does whole-text comparison input need a source-identity check, or is
+this recurring cost small enough to leave to the agent? The cheapest useful check is offline: hash a
+synthetic SQL file and compare it with the identity a saved comparison exposes. No API change, skill
+prose or plan is selected by this record.
+See the [report observation](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-31---current-source-grouped-aggregate-applied-branch-for-a-missing-setting).
