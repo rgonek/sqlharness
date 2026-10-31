@@ -9,7 +9,7 @@
 projection, expose metric-level availability, and simplify the existing comparison components.
 **Tech stack:** C#/.NET, SQLite, ASP.NET Core, React/TypeScript, xUnit, Vitest.
 **Spec:** The approved direction is recorded in [Design contract](#design-contract) below.
-**Status:** IMPLEMENTED AND VERIFIED on `502f12ed`; final scoped re-review of the whole-branch fix pending. See [verification evidence](125-evidence/verification.md).
+**Status:** DONE / VERIFIED on `502f12ed`; all six Terra high task reviews and Sol low whole-branch/final scoped reviews approved. Local branch only; no merge or push. See [verification evidence](125-evidence/verification.md).
 **Baseline:** `8d8d959f`, inspected 2026-10-29; working tree initially clean.
 **Related work:** Builds on 104/105 statement evidence and 121/122/123 dashboard work.
 Read those contracts when changing their invariants; do not duplicate their collectors or version-label machinery.

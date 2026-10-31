@@ -2,6 +2,8 @@
 
 Read the selected plan and its spec before executing. A queue entry is not approval for implementation, publication or a live DB. We execute each assigned plan in full; general work and SQL Server take priority over PostgreSQL-only work.
 
+Plan [125](125-optimization-evidence-clarity.md): **DONE / VERIFIED on `502f12ed`** — eligible attempts, honest statement/table IO, independent result/IO/policy outcomes and selected-case timing summaries. All six Terra high task reviews and Sol low whole-branch/final scoped reviews approved. Final Windows gate PASS (UI 473, Core 4838/11 skips, MCP 535/4 skips), branch format 9 files and synthetic browser PASS with recorded limits. Local `plan-125-evidence-clarity` only; no merge, push, installation or live acceptance. [Evidence](125-evidence/verification.md), [final review](125-evidence/reviews-and-checks/final-scoped-review.md).
+
 Plan [123](123-shared-version-table-across-conditions.md): **DONE; locally integrated into `main` at `7ca0cfbd`** — shared version table and approximate cross-group comparison; Terra high task and Sol low whole-branch/final scoped reviews approved. Final Windows gate PASS on `6aa51e26` (UI 448, Core 4792/11 skips, MCP 535/4 skips), branch format 29 files and synthetic browser PASS. Verified product unchanged by fast-forward; no push, installation or live acceptance. [Integration](123-evidence/integration.md), [evidence](123-evidence/verification.md), [history](history.md#plan-123-locally-integrated--2026-10-29).
 
 Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrated into `main` at `56f3dae4` (2026-10-24)** — Luna xhigh and Sol low integration reviews approved; combined Windows gate passed on `d2f2b060` (Core 4717, MCP 524, UI 372 passed), branch format 21 files passed. Earlier timeout and retry logs retained. No push/install; Linux/live UAT unverified. See [integration evidence](104-evidence/integration/verification.md).
@@ -10,7 +12,6 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
-| [125](125-optimization-evidence-clarity.md) | Eligible optimization evidence, honest statement/table IO, separate IO/policy outcomes, one timing summary and consolidated actions | Existing 104/105 and 121/122/123 contracts | IMPLEMENTED AND VERIFIED on `502f12ed`; final scoped re-review pending ([evidence](125-evidence/verification.md)) |
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
 | [086](086-windows-gate-speedup.md) | Shortening the Windows gate: restore built into the build, `ui-check` in parallel with the build, parallel test projects, faster journal seeding in read tests, diagnosable flaky housekeeping, removal of the xunit attributes test | 076 DONE | IMPLEMENTED on `opt-windows-gate` — see [evidence](086-verification-evidence.md) |
 
