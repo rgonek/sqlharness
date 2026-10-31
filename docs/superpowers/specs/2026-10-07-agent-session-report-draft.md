@@ -62,6 +62,7 @@ the tool. Keep workload values out.
 | 2026-10-23 multi-scope read-batch candidate (unmapped) | optimization | partial | 5 | scope x outcome table, exception list, metric trade-offs, equivalence, limits, evidence links | not recorded (derived metrics; exact statement audit not recorded) | yes (source applicability, sampling limits, adoption decision) | not recorded; parameter correction and coverage-driven outcome revisions identified | preserve outcome history and evidence scope; no API decision |
 | 2026-10-29 current-source ranking candidate (unmapped) | optimization | partial | 1 | source context, case x variant table, equivalence, IO-memory trade-off, rejected alternative, limits, evidence links | not recorded (approximate source counts below) | yes (source applicability, trade-off interpretation, deferred implementation) | 1 retro clarification | external context and explicit review coverage; no API decision |
 | 2026-10-29 multi-statement count candidate (unmapped) | optimization | partial | 1 | source context, case x variant table, equivalence, plan explanation, limits, evidence link, later recommendation correction | not recorded (approximate source counts below) | yes (source applicability, duplicate-call finding, acceptance judgment) | 1 delivered recommendation correction; 1 internal case-label correction | external context and policy/decision separation; no API decision |
+| 2026-10-31 current-source aggregation (unmapped) | optimization | reject | 1 | source identity, variant x case table, equivalence, plan interpretation, decision, evidence link, later coverage clarification | not recorded (approximate source counts below) | yes (source applicability, SQL construction, adoption judgment) | 1 retro clarification; 0 metric corrections | external context and separate hierarchy/text coverage; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -1024,3 +1025,69 @@ Kind: optimization · Outcome: partial · Scopes: 1 · System label: unmapped.
 - **Operator decision:** Record the two accepted observations, then commit and push only those
   documentation changes. No plan, implementation, skill change or private-evidence publication
   is authorized.
+
+## 2026-10-31 - current-source aggregation with mixed candidate outcomes
+
+Kind: optimization · Outcome: reject · Scopes: 1 · System label: unmapped.
+
+- **Inspected state:** Repository HEAD `e4e4ecf4`. Status: collecting observations, not approved
+  for implementation. Actual interim messages, final chat report and retrospective clarification
+  were available. This entry describes observed reporting, not a reconstructed report.
+- **Actual report:** A query selected from current application code was compared with two alternative
+  shapes. The final report retained the original SQL after broader cases showed unfavorable
+  trade-offs. A variant x case table summarized reads and elapsed time; results were described
+  as equivalent for the measured cases. No application or persistent database change followed.
+- **Report blocks:** Source/method identity; variant x case table; result comparison; plan
+  interpretation; decision; evidence link. Caller and parameter construction were delivered in
+  pre-measurement commentary and referenced in the final report. No human question or follow-up
+  offer appeared in the investigation's final report. Detailed limits were in the linked private
+  note, with a later chat clarification of review coverage.
+- **Evidence and interpretation:** Compare supplied repeated metrics, multiset equivalence,
+  nullability comparison and stability. Query supplied target/schema context and a nonempty result
+  check. Artifacts supplied operator hierarchies and selected memory/compilation evidence.
+  Application code supplied caller authorization, final SQL composition and parameter construction.
+  Candidate rationale, stopping decision and adoption judgment were agent-authored.
+- **Content provenance:** Approximate overlapping statement/clause counts in the final report:
+  6 compare-backed, 1 query-backed, 1 artifact-backed, 2 application-code-backed and 2 agent
+  interpretations/actions. Exact journal-backed/total numeric-statement ratio: not recorded.
+  Table values were transcribed manually. Source applicability, SQL construction and the decision
+  to retain the original have no journal operation proving them; journal-only rendering would
+  lose this context.
+- **Corrections:** Zero delivered metric-value corrections. One retrospective clarification
+  bounded equality to measured cases and distinguished selected complete operator trees from
+  complete predicate-text review. Cause: incomplete agent coverage wording, qualified by a
+  producer-text limitation; not an incorrect metric. Interim changes in candidate assessment
+  followed additional cases and were investigation progress, not corrections of previous metrics.
+- **Dashboard usefulness:** Retain mixed case outcomes, comparison semantics, external source
+  context, authored decision and explicit plan-review coverage. Actual dashboard use and
+  reconstruction benefit: not recorded. Evidence references do not establish completed review.
+- **Observed workflow cost:** 15 MCP calls: one capabilities discovery, four query calls, five
+  compare calls and five artifact reads (four plans and one metrics). All succeeded. The retained
+  journal covered 14 operations; capabilities is not journaled. No comparison cases or required
+  node pages were left outstanding. Necessary versus avoidable follow-up cost: not recorded.
+- **Cost coverage:** Retained operations emitted 65,632 bytes and 16,413 byte-derived estimated
+  tokens; artifact reads emitted 42,052 bytes, about 64 percent of recorded output. These are
+  output counters, not actual model tokenization or business-workload measurements. Inputs,
+  discovery, source reads, orchestration and final prose are outside measured coverage. Do not
+  assume every MCP representation reached model context. Retrospective journal access comprised
+  three successful read-only invocations plus one failed shell-quoting attempt; retro output
+  cost was not measured. No live SQL rerun, modeled replacement workflow or savings claim occurred.
+- **Diagnostic qualification:** Bounded phase aggregates were inspected for the identified
+  investigation operations, with event-kind/outcome coverage. Initial connection establishment
+  dominated the first operation; its event recorded success without identifying a cause.
+  Later comparisons included noticeable residual other-phase work. These aggregates do not
+  identify authentication, network, server or a specific internal activity as the cause.
+  Current configuration was not used to infer historical capture settings. Complete selected
+  operator hierarchies were reviewed, but not every measured case received an individual plan
+  review; broad domain equivalence, ordering-boundary coverage and order/cache sensitivity remain
+  unverified. Full predicate text was unavailable through the saved distilled representation.
+- **Optional API implications:** Preserve external context and authored judgment beside metrics.
+  A useful persisted report and token savings remain separate hypotheses. No API change,
+  completeness verdict, readiness claim or implementation is selected by this entry.
+- **Related coverage and cheapest next check:** See the
+  [predicate-shortening observation](../../observations/distilled-predicate-truncation.md).
+  Plan 109 already owns equivalent-evidence retrieval cost research. An offline synthetic report
+  comparison can assess whether the journal plus external context preserves the mixed decision
+  and explicit evidence limits without imposing a new reporting API.
+- **Operator decision:** Record O1 and O2, then commit and push only these documentation changes.
+  No implementation, plan, skill edit, runtime restart or private-evidence publication is authorized.
