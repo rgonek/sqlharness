@@ -1,0 +1,1815 @@
+diff --git a/src/SqlHarness.Core/Capabilities.cs b/src/SqlHarness.Core/Capabilities.cs
+index 5359d547..5b71ec2a 100644
+--- a/src/SqlHarness.Core/Capabilities.cs
++++ b/src/SqlHarness.Core/Capabilities.cs
+@@ -1,6 +1,7 @@
+ using System.Reflection;
+ using System.Text.Json.Serialization;
+ 
++using SqlHarness.Core.Mutations;
+ using SqlHarness.Core.Targets;
+ 
+ namespace SqlHarness.Core;
+@@ -152,7 +153,8 @@ public static class SqlHarnessCapabilitiesProvider
+         return Build(
+             [new SqlHarnessEngineSummary(detail.Name, detail.Summary)],
+             new SqlHarnessProfileCapability(profileName, detail.Name,
+-                targetProfile?.Mutations?.Mode ?? mutationsConfig?.DefaultMode ?? "never", targetProfile?.Mutations?.Writer is not null),
++                targetProfile is null ? (mutationsConfig ?? new MutationsConfig()).DefaultMode : ProfileMutationCapability(targetProfile, mutationsConfig).Mode,
++                targetProfile is not null && ProfileMutationCapability(targetProfile, mutationsConfig).WriterConfigured),
+             detail.ParameterTypes,
+             detail.EngineLimits,
+             detail.SessionTempStatements,
+@@ -173,8 +175,11 @@ public static class SqlHarnessCapabilitiesProvider
+     public static SqlHarnessMutationCapability MutationCapability(MutationsConfig? config, bool dashboardReachable) =>
+         new(config?.DefaultMode ?? "never", config?.Verification ?? "click", config?.ApprovalTimeoutSeconds ?? 120, dashboardReachable);
+ 
+-    public static (string Mode, bool WriterConfigured) ProfileMutationCapability(TargetProfile profile, MutationsConfig? config = null) =>
+-        (profile.Mutations?.Mode ?? config?.DefaultMode ?? "never", profile.Mutations?.Writer is not null);
++    public static (string Mode, bool WriterConfigured) ProfileMutationCapability(TargetProfile profile, MutationsConfig? config = null)
++    {
++        var policy = MutationPolicyResolver.Resolve(profile, config ?? new MutationsConfig());
++        return (policy.EffectiveMode, policy.WriterConfigured);
++    }
+ 
+     private sealed record EngineDetail(
+         SqlEngine Engine,
+diff --git a/src/SqlHarness.Core/Mutations/MutationPolicyResolver.cs b/src/SqlHarness.Core/Mutations/MutationPolicyResolver.cs
+new file mode 100644
+index 00000000..26a8d799
+--- /dev/null
++++ b/src/SqlHarness.Core/Mutations/MutationPolicyResolver.cs
+@@ -0,0 +1,26 @@
++using SqlHarness.Core.Targets;
++
++namespace SqlHarness.Core.Mutations;
++
++public sealed record EffectiveMutationPolicy(string? ConfiguredMode, string EffectiveMode, string ModeSource,
++    bool WriterConfigured, bool ProductionAcknowledgementRequired);
++
++public static class MutationPolicyResolver
++{
++    public static EffectiveMutationPolicy Resolve(TargetProfile profile, MutationsConfig global)
++    {
++        var configured = profile.Mutations?.Mode;
++        var mode = configured ?? global.DefaultMode;
++        if (!string.Equals(mode, "never", StringComparison.OrdinalIgnoreCase) &&
++            !string.Equals(mode, "operator", StringComparison.OrdinalIgnoreCase) &&
++            !string.Equals(mode, "yolo", StringComparison.OrdinalIgnoreCase))
++            throw new SqlHarnessSafetyException("The mutation mode is invalid.");
++        var production = string.Equals(profile.Environment, "prod", StringComparison.OrdinalIgnoreCase) ||
++            string.Equals(profile.Environment, "production", StringComparison.OrdinalIgnoreCase) ||
++            string.Equals(profile.Environment, "staging", StringComparison.OrdinalIgnoreCase);
++        return new(configured, mode.ToLowerInvariant(), configured is null ? "global" : "profile",
++            profile.Mutations?.Writer is not null,
++            production && string.Equals(mode, "yolo", StringComparison.OrdinalIgnoreCase) &&
++            !(profile.Mutations?.AcknowledgeProductionYolo ?? false));
++    }
++}
+\ No newline at end of file
+diff --git a/src/SqlHarness.Core/Targets/ProfileStore.cs b/src/SqlHarness.Core/Targets/ProfileStore.cs
+index 0921255a..4a082622 100644
+--- a/src/SqlHarness.Core/Targets/ProfileStore.cs
++++ b/src/SqlHarness.Core/Targets/ProfileStore.cs
+@@ -22,50 +22,7 @@ public static class ProfileStore
+ 
+         try
+         {
+-            using var stream = File.OpenRead(path);
+-            using var document = JsonDocument.Parse(stream);
+-            RejectDuplicateProperties(document.RootElement);
+-            var profiles = document.RootElement.Deserialize<Dictionary<string, TargetProfile>>(Options)
+-                ?? throw new JsonException("The profile document was null.");
+-
+-            foreach (var (name, profile) in profiles)
+-            {
+-                if (string.IsNullOrWhiteSpace(name) || profile is null ||
+-                    string.IsNullOrWhiteSpace(profile.Server) ||
+-                    string.IsNullOrWhiteSpace(profile.Database) ||
+-                    string.IsNullOrWhiteSpace(profile.Auth) || profile.Vars is null)
+-                {
+-                    throw new JsonException("A profile is incomplete.");
+-                }
+-
+-                if (profile.Vars.Any(variable =>
+-                        string.IsNullOrWhiteSpace(variable.Key) || variable.Value is null))
+-                {
+-                    throw new JsonException("A profile variable rule is invalid.");
+-                }
+-
+-                ValidateMutations(profile);
+-
+-                if (!string.IsNullOrWhiteSpace(profile.Engine))
+-                {
+-                    try
+-                    {
+-                        SqlEngineNames.Parse(profile.Engine);
+-                    }
+-                    catch (SqlHarnessSafetyException)
+-                    {
+-                        throw new JsonException("A profile engine is invalid.");
+-                    }
+-                }
+-
+-                PostgresTransportPolicy.Resolve(
+-                    SqlEngineNames.Parse(profile.Engine),
+-                    profile.TrustServerCertificate,
+-                    profile.SslMode,
+-                    profile.RootCertificate);
+-            }
+-
+-            return profiles;
++            return Parse(File.ReadAllBytes(path));
+         }
+         catch (Exception exception) when (exception is JsonException or NotSupportedException)
+         {
+@@ -80,15 +37,71 @@ public static class ProfileStore
+         }
+     }
+ 
+-    private static void ValidateMutations(TargetProfile profile)
++    public static IReadOnlyDictionary<string, TargetProfile> Parse(ReadOnlyMemory<byte> bytes)
++    {
++        using var document = JsonDocument.Parse(bytes);
++        RejectDuplicateProperties(document.RootElement);
++        var profiles = document.RootElement.Deserialize<Dictionary<string, TargetProfile>>(Options)
++            ?? throw new JsonException("The profile document was null.");
++
++        foreach (var (name, profile) in profiles)
++        {
++            if (string.IsNullOrWhiteSpace(name) || profile is null ||
++                string.IsNullOrWhiteSpace(profile.Server) ||
++                string.IsNullOrWhiteSpace(profile.Database) ||
++                string.IsNullOrWhiteSpace(profile.Auth) || profile.Vars is null)
++            {
++                throw new JsonException("A profile is incomplete.");
++            }
++
++            if (profile.Vars.Any(variable =>
++                    string.IsNullOrWhiteSpace(variable.Key) || variable.Value is null))
++            {
++                throw new JsonException("A profile variable rule is invalid.");
++            }
++
++            ValidateMutations(profile);
++
++            if (!string.IsNullOrWhiteSpace(profile.Engine))
++            {
++                try
++                {
++                    SqlEngineNames.Parse(profile.Engine);
++                }
++                catch (SqlHarnessSafetyException)
++                {
++                    throw new JsonException("A profile engine is invalid.");
++                }
++            }
++
++            PostgresTransportPolicy.Resolve(
++                SqlEngineNames.Parse(profile.Engine),
++                profile.TrustServerCertificate,
++                profile.SslMode,
++                profile.RootCertificate);
++        }
++
++        return profiles;
++    }
++
++    public static IReadOnlyDictionary<string, TargetProfile> ParseForEditing(ReadOnlyMemory<byte> bytes)
++    {
++        var profiles = Parse(bytes);
++        foreach (var profile in profiles.Values)
++            if (ProfileWriter.ValidateProfile(profile) is not null)
++                throw new JsonException("The profile document is invalid.");
++        return profiles;
++    }
++
++    internal static void ValidateMutations(TargetProfile profile)
+     {
+         if (profile.Mutations is not { } mutations)
+             return;
+ 
+-        if (!TryParseMutationMode(mutations.Mode, out var mode))
++        if (mutations.Mode is not null && !TryParseMutationMode(mutations.Mode, out _))
+             throw new JsonException("A profile mutation mode is invalid.");
+ 
+-        if (mode != MutationMode.Never && mutations.Writer is null)
++        if (mutations.Mode is not null && TryParseMutationMode(mutations.Mode, out var mode) && mode != MutationMode.Never && mutations.Writer is null)
+             throw new JsonException("A profile that allows mutations needs mutations.writer.");
+ 
+         if (mutations.Writer is { } writer)
+@@ -100,7 +113,7 @@ public static class ProfileStore
+                 throw new JsonException("mutations.writer needs sqlUser and passwordEnvVar, or sameAsReader.");
+         }
+ 
+-        if (mode == MutationMode.Yolo &&
++        if (string.Equals(mutations.Mode, "yolo", StringComparison.OrdinalIgnoreCase) &&
+             profile.Environment is { } environment &&
+             (environment.Equals("prod", StringComparison.OrdinalIgnoreCase) ||
+              environment.Equals("production", StringComparison.OrdinalIgnoreCase) ||
+@@ -133,7 +146,7 @@ public static class ProfileStore
+         return false;
+     }
+ 
+-    private static void RejectDuplicateProperties(JsonElement element)
++    public static void RejectDuplicateProperties(JsonElement element)
+     {
+         if (element.ValueKind == JsonValueKind.Object)
+         {
+@@ -151,4 +164,4 @@ public static class ProfileStore
+                 RejectDuplicateProperties(item);
+         }
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/src/SqlHarness.Core/Targets/ProfileWriter.cs b/src/SqlHarness.Core/Targets/ProfileWriter.cs
+new file mode 100644
+index 00000000..6dde649c
+--- /dev/null
++++ b/src/SqlHarness.Core/Targets/ProfileWriter.cs
+@@ -0,0 +1,118 @@
++using System.Security.AccessControl;
++using System.Security.Cryptography;
++using System.Text.Json;
++
++using SqlHarness.Core.Auth;
++using SqlHarness.Core.Postgres;
++
++namespace SqlHarness.Core.Targets;
++
++public enum ProfileWriteStatus { Success, Invalid, Conflict, NotFound, IoError, SecurityMetadata }
++public sealed record ProfileFieldError(string Field, string Message);
++public sealed record ProfileWriteResult(ProfileWriteStatus Status, string? Revision = null, IReadOnlyDictionary<string, TargetProfile>? Profiles = null, ProfileFieldError? Error = null);
++
++public static class ProfileWriter
++{
++    public static bool EditingSupported => OperatingSystem.IsWindows();
++    public const string EditingUnavailableReason = "Profile editing is available only on Windows.";
++    private static readonly object Gate = new();
++    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
++    public static string Revision(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
++
++    public static ProfileWriteResult Update(string path, string name, string expectedRevision, TargetProfile profile)
++        => UpdateCore(path, name, expectedRevision, profile, CancellationToken.None, null, EditingSupported);
++
++    public static ProfileWriteResult Update(string path, string name, string expectedRevision, TargetProfile profile, CancellationToken cancellationToken)
++        => UpdateCore(path, name, expectedRevision, profile, cancellationToken, null, EditingSupported);
++
++    internal static ProfileWriteResult UpdateWithTestHook(string path, string name, string expectedRevision, TargetProfile profile, Action onTempCreated, CancellationToken cancellationToken = default, bool? editingSupported = null)
++        => UpdateCore(path, name, expectedRevision, profile, cancellationToken, onTempCreated, editingSupported ?? EditingSupported);
++
++    private static ProfileWriteResult UpdateCore(string path, string name, string expectedRevision, TargetProfile profile, CancellationToken cancellationToken, Action? onTempCreated, bool editingSupported)
++    {
++        if (!editingSupported) return new(ProfileWriteStatus.SecurityMetadata);
++        lock (Gate)
++        {
++            cancellationToken.ThrowIfCancellationRequested();
++            string? temp = null;
++            try
++            {
++                byte[] original;
++                try { original = File.ReadAllBytes(path); }
++                catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { return new(ProfileWriteStatus.Invalid); }
++                IReadOnlyDictionary<string, TargetProfile> current;
++                try { current = ProfileStore.ParseForEditing(original); }
++                catch (Exception e) when (e is JsonException or NotSupportedException or SqlHarnessSafetyException) { return new(ProfileWriteStatus.Invalid); }
++                if (Revision(original) != expectedRevision) return new(ProfileWriteStatus.Conflict);
++                if (!current.ContainsKey(name)) return new(ProfileWriteStatus.NotFound);
++                var validationError = ValidateProfile(profile);
++                if (validationError is not null) return new(ProfileWriteStatus.Invalid, Error: validationError);
++                var reader = new Utf8JsonReader(original);
++                reader.Read();
++                long start = 0, end = 0;
++                while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
++                {
++                    var property = reader.GetString();
++                    reader.Read();
++                    var position = reader.TokenStartIndex;
++                    reader.Skip();
++                    if (property == name) { start = position; end = reader.BytesConsumed; break; }
++                }
++                if (end == 0) return new(ProfileWriteStatus.NotFound);
++                var replacement = JsonSerializer.SerializeToUtf8Bytes(profile, Options);
++                var candidate = new byte[checked((int)(original.Length - (end - start) + replacement.Length))];
++                original.AsSpan(0, (int)start).CopyTo(candidate);
++                replacement.CopyTo(candidate.AsSpan((int)start));
++                original.AsSpan((int)end).CopyTo(candidate.AsSpan((int)start + replacement.Length));
++                IReadOnlyDictionary<string, TargetProfile> savedProfiles;
++                try { savedProfiles = ProfileStore.ParseForEditing(candidate); }
++                catch (Exception e) when (e is JsonException or NotSupportedException or SqlHarnessSafetyException) { return new(ProfileWriteStatus.Invalid); }
++                temp = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, $".sqlharness-{Guid.NewGuid():N}.tmp");
++                using (var stream = CreateProtectedTemp(path, temp)) { onTempCreated?.Invoke(); stream.Write(candidate); stream.Flush(true); }
++                if (Revision(File.ReadAllBytes(path)) != expectedRevision) return new(ProfileWriteStatus.Conflict);
++                cancellationToken.ThrowIfCancellationRequested();
++                File.Replace(temp, path, null);
++                temp = null;
++                return new(ProfileWriteStatus.Success, Revision(candidate), savedProfiles);
++            }
++            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { return new(ProfileWriteStatus.IoError); }
++            finally { if (temp is not null) { try { File.Delete(temp); } catch (IOException) { } catch (UnauthorizedAccessException) { } } }
++        }
++    }
++
++    private static FileStream CreateProtectedTemp(string path, string temp)
++    {
++        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
++        var security = new FileInfo(path).GetAccessControl(AccessControlSections.Access);
++        return new FileInfo(temp).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None, 4096, FileOptions.None, security);
++    }
++
++    internal static ProfileFieldError? ValidateProfile(TargetProfile profile)
++    {
++        if (profile is null) return new("profile", "Profile is required.");
++        if (string.IsNullOrWhiteSpace(profile.Server)) return new("server", "Server is required.");
++        if (string.IsNullOrWhiteSpace(profile.Database)) return new("database", "Database is required.");
++        SqlEngine engine;
++        try { engine = SqlEngineNames.Parse(profile.Engine); }
++        catch (SqlHarnessSafetyException) { return new("engine", "Invalid engine."); }
++        AuthSpec auth;
++        try { auth = AuthSpec.Parse(profile.Auth, profile.SqlUser, profile.PasswordEnvVar, profile.TrustServerCertificate); }
++        catch (SqlHarnessSafetyException) { return new("auth", "Invalid authentication settings."); }
++        if (engine == SqlEngine.Postgres && auth.Strategy != AuthStrategy.Sql) return new("auth", "Postgres requires SQL authentication.");
++        try { PostgresTransportPolicy.Resolve(engine, profile.TrustServerCertificate, profile.SslMode, profile.RootCertificate); }
++        catch (SqlHarnessSafetyException) { return new("sslMode", "Invalid TLS settings."); }
++        try { ProfileStore.ValidateMutations(profile); }
++        catch (JsonException) { return new("mutations", "Invalid mutation settings."); }
++        if (profile.Vars is null) return new("vars", "Variable rules are required.");
++        var template = profile.Database;
++        foreach (var (key, pattern) in profile.Vars)
++        {
++            if (string.IsNullOrWhiteSpace(key) || pattern is null) return new("vars", "Invalid variable rule.");
++            try { _ = TargetResolver.CompileVariableRule(pattern); }
++            catch (ArgumentException) { return new("vars", "Invalid variable rule."); }
++            template = template.Replace($"{{{key}}}", "", StringComparison.Ordinal);
++        }
++        if (TargetResolver.HasUnresolvedPlaceholder(template)) return new("database", "Database contains an unresolved placeholder.");
++        return null;
++    }
++}
+\ No newline at end of file
+diff --git a/src/SqlHarness.Core/Targets/TargetProfile.cs b/src/SqlHarness.Core/Targets/TargetProfile.cs
+index a944dff5..a43efcb9 100644
+--- a/src/SqlHarness.Core/Targets/TargetProfile.cs
++++ b/src/SqlHarness.Core/Targets/TargetProfile.cs
+@@ -15,4 +15,4 @@ public sealed record TargetProfile(
+     ProfileMutations? Mutations = null);
+ 
+ public sealed record MutationWriter(string? SqlUser = null, string? PasswordEnvVar = null, bool SameAsReader = false);
+-public sealed record ProfileMutations(string Mode, MutationWriter? Writer = null, bool AcknowledgeProductionYolo = false);
++public sealed record ProfileMutations(string? Mode = null, MutationWriter? Writer = null, bool AcknowledgeProductionYolo = false);
+\ No newline at end of file
+diff --git a/src/SqlHarness.Core/Targets/TargetResolver.cs b/src/SqlHarness.Core/Targets/TargetResolver.cs
+index 13b4392e..09e9340f 100644
+--- a/src/SqlHarness.Core/Targets/TargetResolver.cs
++++ b/src/SqlHarness.Core/Targets/TargetResolver.cs
+@@ -55,6 +55,14 @@ public static class TargetResolver
+         return ResolveDirect(request);
+     }
+ 
++    internal static Regex CompileVariableRule(string pattern)
++    {
++        var anchored = pattern.StartsWith('^') && pattern.EndsWith('$') ? pattern : $"^(?:{pattern})$";
++        return new Regex(anchored, RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
++    }
++
++    internal static bool HasUnresolvedPlaceholder(string database) => Placeholder.IsMatch(database);
++
+     private static ResolvedTarget ResolveProfile(
+         SqlTargetRequest request,
+         IReadOnlyDictionary<string, TargetProfile> profiles)
+@@ -81,10 +89,7 @@ public static class TargetResolver
+             Regex validator;
+             try
+             {
+-                var anchored = pattern.StartsWith('^') && pattern.EndsWith('$')
+-                    ? pattern
+-                    : $"^(?:{pattern})$";
+-                validator = new Regex(anchored, RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
++                validator = CompileVariableRule(pattern);
+             }
+             catch (ArgumentException)
+             {
+diff --git a/src/SqlHarness.Dashboard/DashboardProfiles.cs b/src/SqlHarness.Dashboard/DashboardProfiles.cs
+index 6b9b7adf..750dd1a4 100644
+--- a/src/SqlHarness.Dashboard/DashboardProfiles.cs
++++ b/src/SqlHarness.Dashboard/DashboardProfiles.cs
+@@ -1,4 +1,10 @@
++using System.Text.Json;
++using System.Text.Json.Serialization;
++
++using Microsoft.AspNetCore.Http;
++
+ using SqlHarness.Core;
++using SqlHarness.Core.Mutations;
+ using SqlHarness.Core.Targets;
+ 
+ namespace SqlHarness.Dashboard;
+@@ -8,9 +14,15 @@ public sealed record ProfileVariable(string Name, string Rule);
+ public sealed record ProfileView(
+     string Name, string Engine, string Server, string Database, string Auth, string? SqlUser, string? PasswordEnvVar,
+     string? SslMode, bool TrustServerCertificate, string? RootCertificate, string Tls, IReadOnlyList<ProfileVariable> Vars,
+-    string? Environment, string MutationMode, string? MutationWriterKind, bool AcknowledgeProductionYolo);
++    string? Environment, string MutationMode, string? MutationWriterKind, bool AcknowledgeProductionYolo,
++    string? ConfiguredMode, string EffectiveMode, string ModeSource, bool WriterConfigured, bool ProductionAcknowledgementRequired,
++    TargetProfile? EditableProfile = null);
+ 
+-public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message);
++public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message, string? Revision = null)
++{
++    public bool EditingSupported { get; init; } = ProfileWriter.EditingSupported;
++    public string? EditingUnavailableReason { get; init; } = ProfileWriter.EditingSupported ? null : ProfileWriter.EditingUnavailableReason;
++}
+ 
+ /// <summary>
+ /// Read-only view of targets.json. It never reads environment variables: a profile's
+@@ -20,25 +32,77 @@ internal static class DashboardProfiles
+ {
+     internal const string InvalidMessage = "targets.json could not be read. Run `sqlharness doctor` for details.";
+ 
+-    internal static ProfilesResponse Read(string path)
++    internal static ProfilesResponse Read(string path, MutationsConfig? config = null)
+     {
+         if (!File.Exists(path))
+             return new ProfilesResponse("missing", [], null);
+         IReadOnlyDictionary<string, TargetProfile> profiles;
++        byte[] bytes;
+         try
+         {
+-            profiles = ProfileStore.Load(path);
++            bytes = File.ReadAllBytes(path);
++            profiles = ProfileStore.ParseForEditing(bytes);
+         }
+-        catch (Exception exception) when (exception is SqlHarnessSafetyException or IOException or UnauthorizedAccessException)
++        catch (Exception exception) when (exception is SqlHarnessSafetyException or IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
+         {
+             // The loader's message names the path; the page gets a fixed sentence instead.
+             return new ProfilesResponse("invalid", [], InvalidMessage);
+         }
+ 
++        return FromSnapshot(profiles, ProfileWriter.Revision(bytes), config);
++    }
++
++    private static ProfilesResponse FromSnapshot(IReadOnlyDictionary<string, TargetProfile> profiles, string revision, MutationsConfig? config)
++    {
+         return new ProfilesResponse("valid", profiles
+             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+-            .Select(pair => View(pair.Key, pair.Value))
+-            .ToArray(), null);
++            .Select(pair => View(pair.Key, pair.Value, config ?? new MutationsConfig()))
++            .ToArray(), null, revision);
++    }
++
++
++    private sealed record PutRequest(string Name, string ExpectedRevision, TargetProfile Profile);
++    private static readonly JsonSerializerOptions StrictJson = new(JsonSerializerDefaults.Web)
++    {
++        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
++    };
++
++    internal static async Task<IResult> PutAsync(HttpContext context, string path, JsonSerializerOptions json, MutationsConfig? config = null)
++    {
++        const int limit = 1024 * 1024;
++        if (context.Request.ContentLength > limit) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
++        using var buffer = new MemoryStream();
++        var chunk = new byte[8192];
++        int count;
++        while ((count = await context.Request.Body.ReadAsync(chunk, context.RequestAborted)) > 0)
++        {
++            if (buffer.Length + count > limit) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
++            buffer.Write(chunk, 0, count);
++        }
++        PutRequest? request;
++        try
++        {
++            using var document = JsonDocument.Parse(buffer.ToArray());
++            ProfileStore.RejectDuplicateProperties(document.RootElement);
++            request = document.RootElement.Deserialize<PutRequest>(StrictJson);
++            if (request is null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.ExpectedRevision) || request.Profile is null)
++                throw new JsonException();
++        }
++        catch (Exception e) when (e is JsonException or NotSupportedException)
++        {
++            return Results.Json(new { errors = new[] { new { field = "$", message = "Invalid profile request." } } }, json, statusCode: 400);
++        }
++        context.RequestAborted.ThrowIfCancellationRequested();
++        var result = ProfileWriter.Update(path, request.Name, request.ExpectedRevision, request.Profile, context.RequestAborted);
++        return result.Status switch
++        {
++            ProfileWriteStatus.Success => Results.Json(FromSnapshot(result.Profiles!, result.Revision!, config), json),
++            ProfileWriteStatus.Conflict => Results.Json(new { error = "Profiles changed; reload before saving." }, json, statusCode: 409),
++            ProfileWriteStatus.NotFound => Results.Json(new { error = "Profile not found." }, json, statusCode: 404),
++            ProfileWriteStatus.Invalid => Results.Json(new { errors = new[] { result.Error ?? new ProfileFieldError("$", "Invalid profile or profiles document.") } }, json, statusCode: 400),
++            ProfileWriteStatus.SecurityMetadata => Results.Json(new { error = ProfileWriter.EditingUnavailableReason }, json, statusCode: 500),
++            _ => Results.Json(new { error = "Could not save profiles." }, json, statusCode: 500),
++        };
+     }
+ 
+     /// <summary>Reads only profile names and variable definitions for Statistics aggregation.</summary>
+@@ -67,21 +131,26 @@ internal static class DashboardProfiles
+             ? profile.SslMode ?? (profile.TrustServerCertificate ? "disable (legacy)" : "require (legacy)")
+             : profile.TrustServerCertificate ? "trust server certificate" : "verify";
+ 
+-    private static ProfileView View(string name, TargetProfile profile) => new(
+-        name,
+-        EngineOf(profile),
+-        profile.Server,
+-        profile.Database,
+-        profile.Auth,
+-        profile.SqlUser,
+-        profile.PasswordEnvVar,
+-        profile.SslMode,
+-        profile.TrustServerCertificate,
+-        profile.RootCertificate,
+-        Tls(profile),
+-        profile.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new ProfileVariable(pair.Key, pair.Value)).ToArray(),
+-        profile.Environment,
+-        profile.Mutations?.Mode ?? "never",
+-        profile.Mutations?.Writer is { } writer ? writer.SameAsReader ? "sameAsReader" : "separate" : null,
+-        profile.Mutations?.AcknowledgeProductionYolo ?? false);
+-}
++    private static ProfileView View(string name, TargetProfile profile, MutationsConfig config)
++    {
++        var policy = MutationPolicyResolver.Resolve(profile, config);
++        return new(
++            name,
++            EngineOf(profile),
++            profile.Server,
++            profile.Database,
++            profile.Auth,
++            profile.SqlUser,
++            profile.PasswordEnvVar,
++            profile.SslMode,
++            profile.TrustServerCertificate,
++            profile.RootCertificate,
++            Tls(profile),
++            profile.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new ProfileVariable(pair.Key, pair.Value)).ToArray(),
++            profile.Environment,
++            policy.EffectiveMode,
++            profile.Mutations?.Writer is { } writer ? writer.SameAsReader ? "sameAsReader" : "separate" : null,
++            profile.Mutations?.AcknowledgeProductionYolo ?? false,
++            policy.ConfiguredMode, policy.EffectiveMode, policy.ModeSource, policy.WriterConfigured, policy.ProductionAcknowledgementRequired, profile);
++    }
++}
+\ No newline at end of file
+diff --git a/src/SqlHarness.Dashboard/DashboardSecurity.cs b/src/SqlHarness.Dashboard/DashboardSecurity.cs
+index 3e7baa51..3a64bea1 100644
+--- a/src/SqlHarness.Dashboard/DashboardSecurity.cs
++++ b/src/SqlHarness.Dashboard/DashboardSecurity.cs
+@@ -18,6 +18,7 @@ internal static class DashboardSecurity
+     internal const string WriteHeader = "X-SqlHarness-Dashboard";
+     internal const string ShutdownProcessIdHeader = "X-SqlHarness-Dashboard-Pid";
+     internal const string ShutdownStartedAtTicksHeader = "X-SqlHarness-Dashboard-StartedAtTicks";
++    internal const string ProfilesPath = "/api/profiles";
+     internal const string SettingsPath = "/api/settings";
+     internal const string PricesRefreshPath = "/api/prices/refresh";
+     internal const string ShutdownPath = "/api/shutdown";
+@@ -100,7 +101,9 @@ internal static class DashboardSecurity
+         var isMutationDecision = HttpMethods.IsPost(context.Request.Method)
+             && System.Text.RegularExpressions.Regex.IsMatch(context.Request.Path.Value ?? string.Empty,
+                 @"^/api/mutations/[a-f0-9]{32}/(?:approve|deny)\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+-        var isWrite = isSettingsWrite || isPricesRefresh || isAnnotationWrite || isTranscriptsClear || isShutdown || isMutationDecision;
++        var isProfilesWrite = HttpMethods.IsPut(context.Request.Method)
++            && string.Equals(context.Request.Path.Value, ProfilesPath, StringComparison.Ordinal);
++        var isWrite = isProfilesWrite || isSettingsWrite || isPricesRefresh || isAnnotationWrite || isTranscriptsClear || isShutdown || isMutationDecision;
+         if (!isRead && !isWrite && !isMutationSubmit)
+         {
+             context.Response.Headers.Allow = "GET, HEAD";
+diff --git a/src/SqlHarness.Dashboard/DashboardServer.cs b/src/SqlHarness.Dashboard/DashboardServer.cs
+index 252b3730..a90bdcc6 100644
+--- a/src/SqlHarness.Dashboard/DashboardServer.cs
++++ b/src/SqlHarness.Dashboard/DashboardServer.cs
+@@ -374,7 +374,8 @@ public static partial class DashboardServer
+             }
+         });
+         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
+-        MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
++        MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath, loadConfig().Mutations), Json));
++        api.MapMethods("/profiles", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardProfiles.PutAsync(context, options.TargetsPath, Json, loadConfig().Mutations)));
+         MapRead(api, "/transcripts", () => Results.Json(matcher.Status(TranscriptsEnabled(options.ConfigPath)) with
+         {
+             Coverage = reader.AgentSessionCoverage(),
+diff --git a/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs b/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs
+index 4edb9f5a..a0a1116e 100644
+--- a/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs
++++ b/src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs
+@@ -118,8 +118,15 @@ internal static class MutationEndpoints
+         var operationRef = request.OperationRef;
+         request = prepared.Request;
+ 
+-        if (!Enum.TryParse<MutationMode>(profile.Mutations?.Mode ?? config.Mutations.DefaultMode, true, out var mode))
++        EffectiveMutationPolicy policy;
++        try { policy = MutationPolicyResolver.Resolve(profile, config.Mutations); }
++        catch (SqlHarnessSafetyException)
++        {
+             return Error(StatusCodes.Status400BadRequest, "invalid_mutation_mode");
++        }
++        if (policy.ProductionAcknowledgementRequired && string.Equals(report.Tier, "dml", StringComparison.OrdinalIgnoreCase))
++            return Error(StatusCodes.Status400BadRequest, "production_yolo_acknowledgement_required");
++        var mode = Enum.Parse<MutationMode>(policy.EffectiveMode, true);
+ 
+         var decision = MutationPolicy.Decide(mode, ParseTier(report.Tier));
+         var id = Guid.NewGuid().ToString("N");
+diff --git a/src/SqlHarness.Dashboard/Mutations/MutationExecutor.cs b/src/SqlHarness.Dashboard/Mutations/MutationExecutor.cs
+index 94493831..58342828 100644
+--- a/src/SqlHarness.Dashboard/Mutations/MutationExecutor.cs
++++ b/src/SqlHarness.Dashboard/Mutations/MutationExecutor.cs
+@@ -45,9 +45,15 @@ internal sealed class MutationExecutor(
+             return Result(MutationStatus.Failed, SecretRedactor.Redact(exception, []));
+         }
+ 
+-        var modeText = profile.Mutations?.Mode ?? loadConfig().Mutations.DefaultMode;
+-        if (!Enum.TryParse<MutationMode>(modeText, true, out var mode))
++        EffectiveMutationPolicy policy;
++        try { policy = MutationPolicyResolver.Resolve(profile, loadConfig().Mutations); }
++        catch (SqlHarnessSafetyException)
++        {
+             return Result(MutationStatus.Failed, "The mutation mode is invalid.");
++        }
++        var mode = Enum.Parse<MutationMode>(policy.EffectiveMode, true);
++        if (policy.ProductionAcknowledgementRequired && string.Equals(request.Tier, "dml", StringComparison.OrdinalIgnoreCase))
++            return Result(MutationStatus.Failed, "Production YOLO acknowledgement is required.");
+         if (mode == MutationMode.Never ||
+             (context.Origin == MutationExecutionOrigin.Automatic &&
+              (mode != MutationMode.Yolo || !string.Equals(request.Tier, "dml", StringComparison.OrdinalIgnoreCase))))
+diff --git a/src/SqlHarness.Dashboard/ui/src/api/client.test.ts b/src/SqlHarness.Dashboard/ui/src/api/client.test.ts
+index 7f5e988e..29b5feaa 100644
+--- a/src/SqlHarness.Dashboard/ui/src/api/client.test.ts
++++ b/src/SqlHarness.Dashboard/ui/src/api/client.test.ts
+@@ -1,6 +1,6 @@
+ import { describe, expect, test } from "vitest"
+ import { stubFetch } from "@/test/render"
+-import { ConflictError, FieldErrorsError, getJson, HttpStatusError, NotFoundError, putJson, UnauthorizedError, withQuery } from "./client"
++import { ConflictError, FieldErrorsError, getJson, HttpStatusError, NotFoundError, putJson, updateProfile, UnauthorizedError, withQuery } from "./client"
+ 
+ describe("client", () => {
+   test("withQuery skips empty values", () => {
+@@ -53,3 +53,12 @@ describe("client", () => {
+     expect(await putJson("/api/settings", {}).catch(e => e)).toBeInstanceOf(ConflictError)
+   })
+ })
++
++test("updateProfile sends a guarded revision and editable profile", async () => {
++  let seen: RequestInit | undefined
++  globalThis.fetch = (async (_: RequestInfo | URL, init?: RequestInit) => { seen = init; return new Response(JSON.stringify({ status: "valid" })) }) as typeof fetch
++  await updateProfile({ name: "pg", expectedRevision: "rev", profile: { server: "host", database: "db", vars: {}, auth: "sql" } })
++  expect(seen?.method).toBe("PUT")
++  expect(new Headers(seen?.headers).get("X-SqlHarness-Dashboard")).toBe("1")
++  expect(JSON.parse(seen!.body as string)).toMatchObject({ name: "pg", expectedRevision: "rev", profile: { server: "host" } })
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/api/client.ts b/src/SqlHarness.Dashboard/ui/src/api/client.ts
+index cc91596f..dbe9459b 100644
+--- a/src/SqlHarness.Dashboard/ui/src/api/client.ts
++++ b/src/SqlHarness.Dashboard/ui/src/api/client.ts
+@@ -1,5 +1,5 @@
+ import { connection } from "./connection"
+-import type { FieldError } from "./types"
++import type { FieldError, ProfilesResponse, TargetProfile } from "./types"
+ 
+ export class NetworkError extends Error {
+   constructor(message: string) {
+@@ -165,3 +165,7 @@ export async function patchJson<T>(path: string, body: unknown): Promise<T> {
+   }
+   return (await response.json()) as T
+ }
++
++export function updateProfile(request: { name: string; expectedRevision: string; profile: TargetProfile }): Promise<ProfilesResponse> {
++  return putJson<ProfilesResponse>("/api/profiles", request)
++}
+diff --git a/src/SqlHarness.Dashboard/ui/src/api/queries.ts b/src/SqlHarness.Dashboard/ui/src/api/queries.ts
+index 5913cb93..8a0cd205 100644
+--- a/src/SqlHarness.Dashboard/ui/src/api/queries.ts
++++ b/src/SqlHarness.Dashboard/ui/src/api/queries.ts
+@@ -1,5 +1,5 @@
+ import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+-import { ConflictError, getJson, HttpStatusError, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
++import { ConflictError, getJson, HttpStatusError, NetworkError, NotFoundError, patchJson, postJson, putJson, updateProfile, UnauthorizedError } from "./client"
+ import type { AgentSessionAnnotation, AgentSessionDetail, AgentSessionKey, AgentSessionOperation, AgentSessionSummary, AnnotationPatch, CompareAttemptSummary, DashboardStats, KeyCount, MutationRequestSummary, OperationAnnotation, OperationAnnotationPatch, OperationDetail, OperationPlanManifest, OperationSummary, OptimizationComparison, OptimizationSection, Page, PlanGraphBuildResult, PlanGraphPropertyResult, PlanSourceMapResponse, PricesInfo, ProfilesResponse, ReproScript, ReproScriptForm, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
+ 
+ export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string; hasCompare?: boolean }
+@@ -440,3 +440,11 @@ export function useClearTranscripts() {
+     },
+   })
+ }
++
++export function useUpdateProfile() {
++  const client = useQueryClient()
++  return useMutation({
++    mutationFn: (request: { name: string; expectedRevision: string; profile: import("./types").TargetProfile }) => updateProfile(request),
++    onSuccess: data => { client.setQueryData(queryKeys.profiles(), data); void client.invalidateQueries({ queryKey: queryKeys.profiles() }) },
++  })
++}
+diff --git a/src/SqlHarness.Dashboard/ui/src/api/types.ts b/src/SqlHarness.Dashboard/ui/src/api/types.ts
+index d45327af..355730ca 100644
+--- a/src/SqlHarness.Dashboard/ui/src/api/types.ts
++++ b/src/SqlHarness.Dashboard/ui/src/api/types.ts
+@@ -557,6 +557,12 @@ export type FieldError = { field: string; message: string }
+ export type TranscriptCoverage = { agentKind: string; transport: string; exact: number; inferred: number; unassigned: number }
+ export type TranscriptStatus = { enabled: boolean; matched: number; unmatched: number; readErrors: number; lastCycleAt: string | null; coverage?: TranscriptCoverage[] }
+ 
++export type TargetProfile = {
++  server: string; database: string; vars: Record<string, string>; auth: string
++  sqlUser?: string | null; passwordEnvVar?: string | null; trustServerCertificate?: boolean
++  engine?: string | null; sslMode?: string | null; rootCertificate?: string | null; environment?: string | null
++  mutations?: { mode?: string | null; writer?: { sqlUser?: string | null; passwordEnvVar?: string | null; sameAsReader?: boolean } | null; acknowledgeProductionYolo?: boolean } | null
++}
+ export type ProfileVariable = { name: string; rule: string }
+ export type ProfileView = {
+   name: string
+@@ -575,8 +581,10 @@ export type ProfileView = {
+   mutationMode: string
+   mutationWriterKind: string | null
+   acknowledgeProductionYolo: boolean
++  configuredMode: string | null; effectiveMode: string; modeSource: string; writerConfigured: boolean; productionAcknowledgementRequired: boolean
++  editableProfile: TargetProfile | null
+ }
+-export type ProfilesResponse = { status: "missing" | "valid" | "invalid"; profiles: ProfileView[]; message: string | null }
++export type ProfilesResponse = { status: "missing" | "valid" | "invalid"; profiles: ProfileView[]; message: string | null; revision: string | null; editingSupported: boolean; editingUnavailableReason: string | null }
+ 
+ export type MutationRequestSummary = {
+   id: number; requestId: string; sessionKey: string; profile: string; engine: string; server: string; database: string
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/ProfileEditForm.tsx b/src/SqlHarness.Dashboard/ui/src/pages/ProfileEditForm.tsx
+new file mode 100644
+index 00000000..3c61dd42
+--- /dev/null
++++ b/src/SqlHarness.Dashboard/ui/src/pages/ProfileEditForm.tsx
+@@ -0,0 +1,60 @@
++import { useState } from "react"
++import { FieldErrorsError } from "@/api/client"
++import { useSettings, useUpdateProfile } from "@/api/queries"
++import type { ProfileView, TargetProfile } from "@/api/types"
++import { Button } from "@/components/ui/button"
++import { Input } from "@/components/ui/input"
++import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
++
++export function ProfileEditForm({ profile, revision, onDirty, onCancel, onSaved, onPending }: { profile: ProfileView; revision: string; onDirty: (dirty: boolean) => void; onCancel: () => void; onSaved: () => void; onPending: (pending: boolean) => void }) {
++  const [original] = useState(() => structuredClone(profile.editableProfile!))
++  const [originalRevision] = useState(revision)
++  const [draft, setDraft] = useState<TargetProfile>(() => structuredClone(original))
++  const [variables, setVariables] = useState(() => Object.entries(original.vars).map(([name, rule]) => ({ name, rule })))
++  const [separateWriter, setSeparateWriter] = useState(() => ({ sqlUser: original.mutations?.writer?.sqlUser ?? "", passwordEnvVar: original.mutations?.writer?.passwordEnvVar ?? "" }))
++  const [errors, setErrors] = useState<Record<string, string>>({})
++  const [error, setError] = useState("")
++  const save = useUpdateProfile()
++  const settings = useSettings()
++  const mode = draft.mutations?.mode ?? "inherit"
++  const writer = draft.mutations?.writer
++  const writerKind = !writer ? "unconfigured" : writer.sameAsReader ? "sameAsReader" : "separate"
++  const globalMode = settings.data?.settings?.mutations?.defaultMode ?? (profile.modeSource === "global" ? profile.effectiveMode : undefined)
++  const effective = mode === "inherit" ? globalMode : mode
++  const change = (next: TargetProfile, nextVars = variables) => { setDraft(next); setVariables(nextVars); onDirty(JSON.stringify(next) !== JSON.stringify(original) || JSON.stringify(nextVars) !== JSON.stringify(Object.entries(original.vars).map(([name, rule]) => ({ name, rule })))) }
++  const mutation = (patch: NonNullable<TargetProfile["mutations"]>) => change({ ...draft, mutations: { ...draft.mutations, ...patch } })
++  const input = (key: keyof TargetProfile, label: string) => <Field data-invalid={!!errors[key]}><FieldLabel htmlFor={`profile-${key}`}>{label}</FieldLabel><Input autoFocus={key === "server"} id={`profile-${key}`} value={String(draft[key] ?? "")} aria-invalid={!!errors[key]} aria-describedby={errors[key] ? `error-${key}` : undefined} onChange={e => change({ ...draft, [key]: e.target.value })} />{errors[key] && <FieldError id={`error-${key}`}>{errors[key]}</FieldError>}</Field>
++  const renderedErrorFields = new Set(["engine", "server", "database", "auth", "sqlUser", "passwordEnvVar", "environment", "mutations", "vars", ...(draft.engine === "postgres" ? ["sslMode", "rootCertificate"] : [])])
++  const otherErrors = Object.entries(errors).filter(([field]) => !renderedErrorFields.has(field))
++  const select = (id: string, label: string, value: string, options: [string, string][], onChange: (value: string) => void, field = id) => <Field data-invalid={!!errors[field]}><FieldLabel htmlFor={`profile-${id}`}>{label}</FieldLabel><select id={`profile-${id}`} value={value} aria-invalid={!!errors[field]} aria-describedby={errors[field] ? `error-${id}` : undefined} onChange={e => onChange(e.target.value)}>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>{errors[field] && <FieldError id={`error-${id}`}>{errors[field]}</FieldError>}</Field>
++  async function submit(e: React.FormEvent) {
++    e.preventDefault(); setError(""); setErrors({})
++    if (variables.some(v => !v.name) || new Set(variables.map(v => v.name)).size !== variables.length) { setErrors({ vars: "Variable names must be non-empty and unique." }); return }
++    const mutations = { ...draft.mutations, mode: mode === "inherit" ? undefined : mode, writer: writerKind === "unconfigured" ? undefined : writerKind === "sameAsReader" ? { sameAsReader: true } : { sqlUser: writer?.sqlUser ?? "", passwordEnvVar: writer?.passwordEnvVar ?? "", sameAsReader: false } }
++    onPending(true)
++    try { await save.mutateAsync({ name: profile.name, expectedRevision: originalRevision, profile: { ...draft, vars: Object.fromEntries(variables.map(v => [v.name, v.rule])), mutations } }); onDirty(false); onSaved() }
++    catch (e) { if (e instanceof FieldErrorsError) setErrors(Object.fromEntries(e.errors.map(item => [item.field.replace(/^profile\./, ""), item.message]))); else setError(e instanceof Error ? e.message : "Could not save profiles.") }
++    finally { onPending(false) }
++  }
++  return <form onSubmit={submit} className="flex flex-col gap-4"><h3>Edit {profile.name}</h3><p>Profile name cannot be changed. Only environment variable names are saved; their values are never read.</p>
++    <fieldset disabled={save.isPending}><FieldGroup>
++      {select("engine", "Engine", draft.engine || "sqlserver", [["sqlserver", "SQL Server"], ["postgres", "PostgreSQL"]], v => change({ ...draft, engine: v, trustServerCertificate: false, sslMode: null, rootCertificate: null }))}
++      {input("server", "Server")}{input("database", "Database or template")}
++      {select("auth", "Authentication", draft.auth, [["sql", "SQL user"], ["integrated", "Integrated"], ["azure-cli", "Azure CLI"], ["ad-default", "AD default"]], v => change({ ...draft, auth: v, ...(v !== "sql" ? { sqlUser: null, passwordEnvVar: null } : {}) }))}
++      {input("sqlUser", "SQL user")}{input("passwordEnvVar", "Password environment variable")}
++      {draft.engine === "postgres" && <>{select("sslMode", "TLS mode", draft.sslMode ?? "", [["", "Legacy default"], ["disable", "Disable"], ["allow", "Allow"], ["prefer", "Prefer"], ["require", "Require"], ["verify-ca", "Verify CA"], ["verify-full", "Verify full"]], v => change({ ...draft, sslMode: v || null }))}{input("rootCertificate", "Root certificate")}</>}
++      <Field><label><input type="checkbox" checked={draft.trustServerCertificate ?? false} onChange={e => change({ ...draft, trustServerCertificate: e.target.checked })} /> Trust server certificate (legacy TLS setting for PostgreSQL)</label></Field>
++      {input("environment", "Environment")}
++      <fieldset><legend>Variables</legend>{variables.map((v, i) => <div key={i} className="flex gap-2"><Input aria-label={`Variable ${i + 1} name`} value={v.name} onChange={e => change(draft, variables.map((item, n) => n === i ? { ...item, name: e.target.value } : item))} /><Input aria-label={`Variable ${i + 1} rule`} value={v.rule} onChange={e => change(draft, variables.map((item, n) => n === i ? { ...item, rule: e.target.value } : item))} /><Button type="button" variant="outline" onClick={() => change(draft, variables.filter((_, n) => n !== i))}>Remove variable {i + 1}</Button></div>)}<Button type="button" variant="outline" onClick={() => change(draft, [...variables, { name: "", rule: "" }])}>Add variable</Button>{errors.vars && <FieldError>{errors.vars}</FieldError>}</fieldset>
++      {select("mode", "Mutation mode", mode, [["inherit", "Inherit global"], ["never", "Never"], ["operator", "Operator approval"], ["yolo", "YOLO"]], v => mutation({ mode: v === "inherit" ? null : v }), "mutations")}
++      <p>Global mode: {globalMode ?? "unavailable"}. Effective mode: {effective ?? "unavailable"}. Source: {mode === "inherit" ? "global" : "profile"}.</p>
++      {select("writer", "Writer", writerKind, [["unconfigured", "Unconfigured"], ["sameAsReader", "Same as reader"], ["separate", "Separate writer"]], v => mutation({ writer: v === "unconfigured" ? null : v === "sameAsReader" ? { sameAsReader: true } : { sameAsReader: false, ...separateWriter } }), "mutations")}
++      {writerKind === "separate" && <><Field><FieldLabel htmlFor="writer-user">Writer SQL user</FieldLabel><Input id="writer-user" value={writer?.sqlUser ?? ""} onChange={e => { setSeparateWriter({ ...separateWriter, sqlUser: e.target.value }); mutation({ writer: { ...writer, sqlUser: e.target.value } }) }} /></Field><Field><FieldLabel htmlFor="writer-password">Writer password environment variable</FieldLabel><Input id="writer-password" value={writer?.passwordEnvVar ?? ""} onChange={e => { setSeparateWriter({ ...separateWriter, passwordEnvVar: e.target.value }); mutation({ writer: { ...writer, passwordEnvVar: e.target.value } }) }} /></Field></>}
++      {effective !== "never" && writerKind === "unconfigured" && <p role="status">Mutations cannot run until a writer is configured.</p>}
++      <p>YOLO skips operator approval only for DML. Schema, privilege and opaque changes still require approval.</p>
++      <Field><label><input type="checkbox" checked={draft.mutations?.acknowledgeProductionYolo ?? false} onChange={e => mutation({ acknowledgeProductionYolo: e.target.checked })} /> Acknowledge production YOLO</label></Field>
++      {effective === "yolo" && /^(prod|production|staging)$/i.test(draft.environment ?? "") && !draft.mutations?.acknowledgeProductionYolo && <p role="status">Production YOLO requires acknowledgement before DML can execute.</p>}
++      {otherErrors.length > 0 && <div role="status" aria-label="Other validation errors"><p>Other validation errors:</p><ul>{otherErrors.map(([field, message]) => <li key={field}>{field}: {message}</li>)}</ul></div>}{error && <p role="alert">{error}</p>}
++    </FieldGroup></fieldset><div className="flex gap-2"><Button type="submit" disabled={save.isPending}>Save</Button><Button type="button" variant="outline" onClick={onCancel} disabled={save.isPending}>Cancel</Button></div>
++  </form>
++}
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/ProfilesPage.test.tsx b/src/SqlHarness.Dashboard/ui/src/pages/ProfilesPage.test.tsx
+index 91e3f140..b166abf7 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/ProfilesPage.test.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/ProfilesPage.test.tsx
+@@ -1,5 +1,6 @@
+-import { screen } from "@testing-library/react"
+-import { expect, test } from "vitest"
++import { screen, waitFor } from "@testing-library/react"
++import userEvent from "@testing-library/user-event"
++import { expect, test, vi } from "vitest"
+ import { renderApp, stubFetch } from "@/test/render"
+ 
+ test("lists profiles with the password variable name only", async () => {
+@@ -49,6 +50,211 @@ test.each(["yolo", "future-mode"])("keeps unknown profile values readable: %s",
+   renderApp("/profiles")
+   expect(await screen.findByText("future-tls")).toBeInTheDocument()
+   expect(screen.getByText("future-writer")).toBeInTheDocument()
+-  if (mode === "yolo") expect(screen.getByRole("alert")).toHaveTextContent("Mutations run without approval")
++  if (mode === "yolo") expect(screen.getByRole("alert")).toHaveTextContent("YOLO DML runs without approval")
+   else expect(screen.getByText(mode)).toBeInTheDocument()
+ })
++
++test("edits an existing profile while retaining inherited mode and writer", async () => {
++  const user = userEvent.setup()
++  const editableProfile = { server: "localhost", database: "app", vars: {}, auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", engine: "postgres", mutations: { mode: null, writer: { sameAsReader: true }, acknowledgeProductionYolo: false } }
++  const response = { status: "valid", message: null, revision: "rev1", editingSupported: true, editingUnavailableReason: null, profiles: [{ name: "pg", engine: "postgres", server: "localhost", database: "app", auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", sslMode: null, trustServerCertificate: false, tls: "require", rootCertificate: null, vars: [], environment: null, mutationMode: "operator", mutationWriterKind: "sameAsReader", acknowledgeProductionYolo: false, configuredMode: null, effectiveMode: "operator", modeSource: "global", writerConfigured: true, productionAcknowledgementRequired: false, editableProfile }] }
++  let body: unknown
++  stubFetch({ "/api/profiles": response, "PUT /api/profiles": (_url: URL, init?: RequestInit) => {
++    body = JSON.parse(init?.body as string)
++    return new Response(JSON.stringify(response), { headers: { "Content-Type": "application/json" } })
++  } })
++  renderApp("/profiles")
++  await user.click(await screen.findByRole("button", { name: "Edit" }))
++  expect(screen.getByLabelText("Mutation mode")).toHaveValue("inherit")
++  expect(screen.getByLabelText("Writer")).toHaveValue("sameAsReader")
++  await user.clear(screen.getByLabelText("Server"))
++  await user.type(screen.getByLabelText("Server"), "newhost")
++  await user.click(screen.getByRole("button", { name: "Save" }))
++  await waitFor(() => expect(body).toMatchObject({ name: "pg", expectedRevision: "rev1", profile: { server: "newhost", mutations: { writer: { sameAsReader: true } } } }))
++  expect((body as { profile: { mutations: { mode?: string } } }).profile.mutations.mode).toBeUndefined()
++})
++
++
++test("retains edits after conflict and protects dirty selection", async () => {
++  const user = userEvent.setup()
++  const editableProfile = { server: "host", database: "db", vars: { env: "test|uat" }, auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", engine: "postgres", environment: "production", mutations: { mode: null, writer: null, acknowledgeProductionYolo: false } }
++  const view = { name: "pg", engine: "postgres", server: "host", database: "db", auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", sslMode: null, trustServerCertificate: false, tls: "require", rootCertificate: null, vars: [{ name: "env", rule: "test|uat" }], environment: "production", mutationMode: "yolo", mutationWriterKind: null, acknowledgeProductionYolo: false, configuredMode: null, effectiveMode: "yolo", modeSource: "global", writerConfigured: false, productionAcknowledgementRequired: true, editableProfile }
++  stubFetch({ "/api/profiles": { status: "valid", message: null, revision: "r", editingSupported: true, profiles: [view, { ...view, name: "other" }] }, "PUT /api/profiles": () => new Response(JSON.stringify({ error: "Profiles changed; reload before saving." }), { status: 409 }) })
++  const { router } = renderApp("/profiles")
++  await user.click(await screen.findByRole("button", { name: "Edit" }))
++  expect(screen.getByText(/Mutations cannot run until/)).toBeInTheDocument()
++  expect(screen.getByText(/Production YOLO requires acknowledgement/)).toBeInTheDocument()
++  expect(screen.getByLabelText("Variable 1 rule")).toHaveValue("test|uat")
++  await user.clear(screen.getByLabelText("Server"))
++  await user.type(screen.getByLabelText("Server"), "modified")
++  const confirm = vi.fn().mockReturnValue(false)
++  vi.stubGlobal("confirm", confirm)
++  await user.click(screen.getByRole("button", { name: /other/ }))
++  expect(confirm).toHaveBeenCalled()
++  void router.navigate({ to: "/stats" })
++  await waitFor(() => expect(confirm).toHaveBeenCalledTimes(2))
++  expect(router.state.location.pathname).toBe("/profiles")
++  expect(screen.getByLabelText("Server")).toHaveValue("modified")
++  await user.click(screen.getByRole("button", { name: "Save" }))
++  expect(await screen.findByRole("alert")).toHaveTextContent("Profiles changed")
++  expect(screen.getByLabelText("Server")).toHaveValue("modified")
++  confirm.mockReturnValue(true)
++  await user.click(screen.getByRole("button", { name: "Cancel" }))
++  expect(screen.queryByLabelText("Server")).not.toBeInTheDocument()
++  vi.unstubAllGlobals()
++})
++
++
++test("shows field validation and removes inactive writer credentials on save", async () => {
++  const user = userEvent.setup()
++  const editableProfile = { server: "host", database: "db", vars: {}, auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", engine: "sqlserver", mutations: { mode: "operator", writer: { sqlUser: "writer", passwordEnvVar: "WRITER_PASS", sameAsReader: false }, acknowledgeProductionYolo: false } }
++  const view = { name: "pg", engine: "sqlserver", server: "host", database: "db", auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", sslMode: null, trustServerCertificate: false, tls: "verify", rootCertificate: null, vars: [], environment: null, mutationMode: "operator", mutationWriterKind: "separate", acknowledgeProductionYolo: false, configuredMode: "operator", effectiveMode: "operator", modeSource: "profile", writerConfigured: true, productionAcknowledgementRequired: false, editableProfile }
++  let submitted: { profile: { mutations: { writer: unknown } } } | undefined
++  stubFetch({ "/api/profiles": { status: "valid", message: null, revision: "r", editingSupported: true, profiles: [view] }, "PUT /api/profiles": (_url: URL, init?: RequestInit) => { submitted = JSON.parse(init!.body as string); return new Response(JSON.stringify({ errors: [{ field: "server", message: "Server is required." }] }), { status: 400 }) } })
++  renderApp("/profiles")
++  await user.click(await screen.findByRole("button", { name: "Edit" }))
++  expect(screen.getByLabelText("Server")).toHaveFocus()
++  expect(screen.getByLabelText("Writer SQL user")).toHaveValue("writer")
++  await user.selectOptions(screen.getByLabelText("Writer"), "sameAsReader")
++  expect(screen.queryByLabelText("Writer SQL user")).not.toBeInTheDocument()
++  await user.selectOptions(screen.getByLabelText("Writer"), "separate")
++  expect(screen.getByLabelText("Writer SQL user")).toHaveValue("writer")
++  await user.selectOptions(screen.getByLabelText("Writer"), "sameAsReader")
++  await user.click(screen.getByRole("button", { name: "Save" }))
++  expect(await screen.findByText("Server is required.")).toBeInTheDocument()
++  expect(screen.getByLabelText("Server")).toHaveAttribute("aria-invalid", "true")
++  expect(submitted?.profile.mutations.writer).toEqual({ sameAsReader: true })
++})
++
++test("edits connection, TLS and variable rules and retains them on server failure", async () => {
++  const user = userEvent.setup()
++  const editableProfile = { server: "host", database: "db", vars: {}, auth: "integrated", engine: "sqlserver", mutations: { mode: "never", writer: { sameAsReader: true } } }
++  const view = { name: "pg", engine: "sqlserver", server: "host", database: "db", auth: "integrated", sqlUser: null, passwordEnvVar: null, sslMode: null, trustServerCertificate: false, tls: "verify", rootCertificate: null, vars: [], environment: null, mutationMode: "never", mutationWriterKind: "sameAsReader", acknowledgeProductionYolo: false, configuredMode: "never", effectiveMode: "never", modeSource: "profile", writerConfigured: true, productionAcknowledgementRequired: false, editableProfile }
++  let submitted: { profile: { vars: Record<string, string>; mutations: { mode?: string; writer: unknown } } } | undefined
++  stubFetch({ "/api/profiles": { status: "valid", message: null, revision: "r", editingSupported: true, profiles: [view] }, "PUT /api/profiles": (_url: URL, init?: RequestInit) => { submitted = JSON.parse(init!.body as string); return new Response("failed", { status: 500 }) } })
++  renderApp("/profiles")
++  await user.click(await screen.findByRole("button", { name: "Edit" }))
++  await user.selectOptions(screen.getByLabelText("Engine"), "postgres")
++  await user.selectOptions(screen.getByLabelText("Authentication"), "sql")
++  await user.selectOptions(screen.getByLabelText("TLS mode"), "verify-full")
++  await user.type(screen.getByLabelText("Root certificate"), "old.pem")
++  await user.selectOptions(screen.getByLabelText("Engine"), "sqlserver")
++  await user.selectOptions(screen.getByLabelText("Engine"), "postgres")
++  expect(screen.getByLabelText("Root certificate")).toHaveValue("")
++  expect(screen.getByLabelText("TLS mode")).toHaveValue("")
++  await user.selectOptions(screen.getByLabelText("TLS mode"), "verify-full")
++  await user.type(screen.getByLabelText("Root certificate"), "ca.pem")
++  await user.selectOptions(screen.getByLabelText("Mutation mode"), "inherit")
++  expect(screen.getByLabelText("Writer")).toHaveValue("sameAsReader")
++  await user.click(screen.getByRole("button", { name: "Add variable" }))
++  await user.type(screen.getByLabelText("Variable 1 name"), "env")
++  await user.type(screen.getByLabelText("Variable 1 rule"), "test|uat")
++  await user.click(screen.getByRole("button", { name: "Save" }))
++  expect(await screen.findByRole("alert")).toHaveTextContent("500")
++  expect(screen.getByLabelText("TLS mode")).toHaveValue("verify-full")
++  expect(screen.getByLabelText("Authentication")).toHaveValue("sql")
++  expect(screen.getByLabelText("Root certificate")).toHaveValue("ca.pem")
++  expect(screen.getByLabelText("Variable 1 rule")).toHaveValue("test|uat")
++  expect(submitted?.profile.vars).toEqual({ env: "test|uat" })
++  expect(submitted?.profile.mutations).toEqual({ writer: { sameAsReader: true } })
++})
++
++
++test("explains when profile editing is unavailable", async () => {
++  stubFetch({ "/api/profiles": { status: "valid", message: null, revision: "r", editingSupported: false, editingUnavailableReason: "Editing is unavailable on this platform.", profiles: [{ name: "pg", engine: "postgres", server: "host", database: "db", auth: "sql", sqlUser: null, passwordEnvVar: null, sslMode: null, trustServerCertificate: false, tls: "require", rootCertificate: null, vars: [], environment: null, mutationMode: "never", mutationWriterKind: null, acknowledgeProductionYolo: false }] } })
++  renderApp("/profiles")
++  expect(await screen.findByText("Editing is unavailable on this platform.")).toBeInTheDocument()
++  expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument()
++})
++
++const editFixture = () => {
++  const editableProfile = { server: "host", database: "db", vars: {}, auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", engine: "sqlserver", trustServerCertificate: true, mutations: { mode: "never" } }
++  const view = { name: "pg", engine: "sqlserver", server: "host", database: "db", auth: "sql", sqlUser: "reader", passwordEnvVar: "PASS", sslMode: null, trustServerCertificate: true, tls: "trust server certificate", rootCertificate: null, vars: [], environment: null, mutationMode: "never", mutationWriterKind: null, acknowledgeProductionYolo: false, configuredMode: "never", effectiveMode: "never", modeSource: "profile", writerConfigured: false, productionAcknowledgementRequired: false, editableProfile }
++  return { status: "valid", message: null, revision: "old", editingSupported: true, editingUnavailableReason: null, profiles: [view] }
++}
++
++test("refresh during editing retains the original revision and conflict retains the draft", async () => {
++  const user = userEvent.setup()
++  const response = editFixture()
++  let submitted: { expectedRevision: string } | undefined
++  stubFetch({ "/api/profiles": response, "PUT /api/profiles": (_url: URL, init?: RequestInit) => { submitted = JSON.parse(init!.body as string); return new Response(JSON.stringify({ error: "Profiles changed" }), { status: 409 }) } })
++  const { client } = renderApp("/profiles")
++  await user.click(await screen.findByRole("button", { name: "Edit" }))
++  await user.clear(screen.getByLabelText("Server")); await user.type(screen.getByLabelText("Server"), "draft")
++  client.setQueryData(["profiles"], { ...response, revision: "new", profiles: [{ ...response.profiles[0], editableProfile: { ...response.profiles[0].editableProfile, server: "other" } }] })
++  await user.click(screen.getByRole("button", { name: "Save" }))
++  expect(await screen.findByRole("alert")).toHaveTextContent("Profiles changed")
++  expect(submitted?.expectedRevision).toBe("old")
++  expect(screen.getByLabelText("Server")).toHaveValue("draft")
++})
++
++test("engine transitions reset engine-specific TLS without disabling PostgreSQL TLS", async () => {
++  const user = userEvent.setup(); let submitted: { profile: { trustServerCertificate: boolean; sslMode: string | null; rootCertificate: string | null } } | undefined
++  stubFetch({ "/api/profiles": editFixture(), "PUT /api/profiles": (_url: URL, init?: RequestInit) => { submitted = JSON.parse(init!.body as string); return new Response("error", { status: 500 }) } })
++  renderApp("/profiles")
++  await user.click(await screen.findByRole("button", { name: "Edit" }))
++  await user.selectOptions(screen.getByLabelText("Engine"), "postgres")
++  expect(screen.getByLabelText(/Trust server certificate/)).not.toBeChecked()
++  await user.selectOptions(screen.getByLabelText("TLS mode"), "verify-full")
++  await user.type(screen.getByLabelText("Root certificate"), "ca.pem")
++  await user.click(screen.getByLabelText(/Trust server certificate/))
++  await user.selectOptions(screen.getByLabelText("Engine"), "sqlserver")
++  expect(screen.getByLabelText(/Trust server certificate/)).not.toBeChecked()
++  await user.click(screen.getByRole("button", { name: "Save" }))
++  await screen.findByRole("alert")
++  expect(submitted?.profile).toMatchObject({ trustServerCertificate: false, sslMode: null, rootCertificate: null })
++})
++
++test("freezes editable controls while a save is pending", async () => {
++  const user = userEvent.setup(); let resolve!: (response: Response) => void
++  const response = editFixture()
++  stubFetch({ "/api/profiles": response, "PUT /api/profiles": () => new Promise<Response>(done => { resolve = done }) })
++  renderApp("/profiles")
++  await user.click(await screen.findByRole("button", { name: "Edit" }))
++  await user.click(screen.getByRole("button", { name: "Save" }))
++  expect(screen.getByLabelText("Server")).toBeDisabled()
++  await user.type(screen.getByLabelText("Server"), "lost")
++  expect(screen.getByLabelText("Server")).toHaveValue("host")
++  expect(screen.getByLabelText("Search profiles")).toBeDisabled()
++  expect(screen.getByLabelText("Engine")).toBeDisabled()
++  expect(screen.getByRole("button", { name: "Add variable" })).toBeDisabled()
++  resolve(new Response(JSON.stringify(response), { headers: { "Content-Type": "application/json" } }))
++  await waitFor(() => expect(screen.queryByLabelText("Server")).not.toBeInTheDocument())
++})
++
++test("shows validation errors even when their field is hidden or unknown", async () => {
++  const user = userEvent.setup()
++  stubFetch({ "/api/profiles": editFixture(), "PUT /api/profiles": () => new Response(JSON.stringify({ errors: [{ field: "sslMode", message: "Invalid TLS settings." }, { field: "future", message: "Unexpected field error." }, { field: "auth", message: "Invalid authentication." }] }), { status: 400 }) })
++  renderApp("/profiles")
++  await user.click(await screen.findByRole("button", { name: "Edit" }))
++  await user.click(screen.getByRole("button", { name: "Save" }))
++  expect(await screen.findByRole("status", { name: "Other validation errors" })).toHaveTextContent("Invalid TLS settings.")
++  expect(screen.getByRole("status", { name: "Other validation errors" })).toHaveTextContent("Unexpected field error.")
++  expect(screen.getByLabelText("Authentication")).toHaveAccessibleDescription("Invalid authentication.")
++})
++
++test.each(["missing", "invalid", "removed", "error"])("preserves a dirty edit through %s refresh until explicit discard", async state => {
++  const user = userEvent.setup()
++  const response = editFixture()
++  let submitted: { expectedRevision: string } | undefined
++  stubFetch({ "/api/profiles": response, "PUT /api/profiles": (_url: URL, init?: RequestInit) => { submitted = JSON.parse(init!.body as string); return new Response(JSON.stringify({ error: "Profiles changed" }), { status: 409 }) } })
++  const { client } = renderApp("/profiles")
++  await user.click(await screen.findByRole("button", { name: "Edit" }))
++  await user.clear(screen.getByLabelText("Server")); await user.type(screen.getByLabelText("Server"), "draft")
++  if (state === "error") {
++    client.getQueryCache().find({ queryKey: ["profiles"] })!.setState({ error: new Error("refresh failed"), status: "error" })
++  } else {
++    client.setQueryData(["profiles"], state === "removed" ? { ...response, revision: "new", profiles: [] } : { ...response, status: state, message: "invalid refresh", profiles: [], revision: null })
++  }
++  const notice = state === "missing" ? /No targets.json/ : state === "invalid" ? /invalid refresh/ : state === "error" ? /refresh failed/ : /No profile matches/
++  expect(await screen.findByText(notice)).toBeInTheDocument()
++  expect(screen.getByLabelText("Server")).toHaveValue("draft")
++  await user.click(screen.getByRole("button", { name: "Save" }))
++  await waitFor(() => expect(submitted?.expectedRevision).toBe("old"))
++  const confirm = vi.fn().mockReturnValue(false); vi.stubGlobal("confirm", confirm)
++  await user.click(screen.getByRole("button", { name: "Cancel" }))
++  expect(confirm).toHaveBeenCalled(); expect(screen.getByLabelText("Server")).toHaveValue("draft")
++  confirm.mockReturnValue(true); await user.click(screen.getByRole("button", { name: "Cancel" }))
++  expect(screen.queryByLabelText("Server")).not.toBeInTheDocument()
++  vi.unstubAllGlobals()
++})
+diff --git a/src/SqlHarness.Dashboard/ui/src/pages/ProfilesPage.tsx b/src/SqlHarness.Dashboard/ui/src/pages/ProfilesPage.tsx
+index 250aa575..155b4172 100644
+--- a/src/SqlHarness.Dashboard/ui/src/pages/ProfilesPage.tsx
++++ b/src/SqlHarness.Dashboard/ui/src/pages/ProfilesPage.tsx
+@@ -1,5 +1,6 @@
+ import { useState } from "react"
+-import { Link } from "@tanstack/react-router"
++import { Link, useBlocker } from "@tanstack/react-router"
++import { ProfileEditForm } from "./ProfileEditForm"
+ import { useProfiles } from "@/api/queries"
+ import { ErrorState } from "@/components/ErrorState"
+ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+@@ -26,7 +27,7 @@ const tlsLabels: Record<string, [string, string]> = {
+ const modeLabels: Record<string, [string, string]> = {
+   never: ["Never", "Persistent mutations are disabled."],
+   operator: ["Operator approval", "Persistent mutations require the operator's dashboard approval."],
+-  yolo: ["YOLO", "Persistent mutations run without operator approval."],
++  yolo: ["YOLO", "YOLO skips operator approval for DML; other mutation tiers still require approval."],
+ }
+ const writerLabels: Record<string, [string, string]> = {
+   sameAsReader: ["Same as reader", "Uses the reader connection identity for mutations."],
+@@ -41,9 +42,16 @@ export function ProfilesPage() {
+   const query = useProfiles()
+   const [selected, setSelected] = useState<string | null>(null)
+   const [search, setSearch] = useState("")
+-  if (query.error) return <ErrorState error={query.error} />
+-  if (query.isPending) return <Skeleton className="h-64 w-full" />
+-  const { status, profiles, message } = query.data
++  const [editing, setEditing] = useState<{ profile: NonNullable<typeof query.data>["profiles"][number]; revision: string } | null>(null)
++  const [dirty, setDirty] = useState(false)
++  const [saved, setSaved] = useState(false)
++  const [saving, setSaving] = useState(false)
++  useBlocker({ shouldBlockFn: () => saving || (dirty && !window.confirm("Discard unsaved profile changes?")), enableBeforeUnload: saving || dirty })
++  const discard = () => !dirty || window.confirm("Discard unsaved profile changes?")
++  const leaveEdit = () => { setEditing(null); setDirty(false) }
++  if (query.error && !editing) return <ErrorState error={query.error} />
++  if (query.isPending && !editing) return <Skeleton className="h-64 w-full" />
++  const { status, profiles, message } = query.data ?? { status: "missing", profiles: [], message: null }
+   const filtered = profiles.filter(profile => [profile.name, profile.server, profile.database].some(value => value.toLowerCase().includes(search.toLowerCase())))
+   const profile = filtered.find(item => item.name === selected) ?? filtered[0]
+   const connection = profile ? [
+@@ -55,21 +63,25 @@ export function ProfilesPage() {
+   return <div className="profiles-layout">
+     <aside className="flex min-w-0 flex-col gap-3" aria-label="Profiles">
+       <h2 className="text-sm font-medium">Profiles</h2>
+-      <Input aria-label="Search profiles" placeholder="Search profiles" value={search} onChange={event => setSearch(event.target.value)} />
+-      <div className="flex flex-col gap-1">{filtered.map(item => <Button key={item.name} variant={profile?.name === item.name ? "secondary" : "ghost"} className="h-auto min-w-0 flex-col items-stretch gap-1 px-3 py-2 text-left" aria-pressed={profile?.name === item.name} onClick={() => setSelected(item.name)}>
++      <Input disabled={saving} aria-label="Search profiles" placeholder="Search profiles" value={search} onChange={event => { if (!editing || discard()) { leaveEdit(); setSearch(event.target.value) } }} />
++      <div className="flex flex-col gap-1">{filtered.map(item => <Button disabled={saving} key={item.name} variant={profile?.name === item.name ? "secondary" : "ghost"} className="h-auto min-w-0 flex-col items-stretch gap-1 px-3 py-2 text-left" aria-pressed={profile?.name === item.name} onClick={() => { if (!editing || item.name === editing.profile.name || discard()) { if (item.name !== editing?.profile.name) leaveEdit(); setSelected(item.name) } }}>
+         <span className="flex items-center justify-between gap-2"><span className="truncate">{item.name}</span><span className="text-muted-foreground">{item.environment ?? "—"}</span></span>
+         <span className="truncate text-xs font-normal text-muted-foreground">{item.engine} · {item.server}</span>
+       </Button>)}</div>
+       {status === "valid" && !filtered.length && <p className="text-sm text-muted-foreground">No profile matches.</p>}
+     </aside>
+     <div className="flex min-w-0 flex-col gap-5">
+-      <header className="flex flex-col gap-1"><h1>Profiles</h1><p className="text-sm text-muted-foreground">Read-only view of targets.json. Passwords stay in their environment variables and are never read.</p></header>
++      <header className="flex flex-col gap-1"><h1>Profiles</h1><p className="text-sm text-muted-foreground">Edit existing targets.json profiles. Passwords stay in their environment variables and are never read.</p></header>
++      {query.error && <ErrorState error={query.error} />}
+       {status === "missing" && <p className="text-sm text-muted-foreground">No targets.json in the SQLHarness home.</p>}
+       {status === "invalid" && <Alert variant="destructive"><AlertTitle>targets.json is invalid</AlertTitle><AlertDescription>{message}</AlertDescription></Alert>}
+-      {status === "valid" && profile && <>
+-        <header className="flex flex-col gap-2"><div className="flex flex-wrap items-center gap-3"><h2 className="min-w-0 max-w-full wrap-anywhere text-xl font-semibold">{profile.name}</h2><Badge variant="outline">{profile.environment ?? "no environment"}</Badge><Link to="/stats" className="ml-auto text-sm underline">Usage overview →</Link></div><p className="break-all text-sm text-muted-foreground">{profile.engine} · {profile.server} / {profile.database}</p></header>
++      {saved && <p role="status">Profile saved. Restart or reconnect existing MCP clients to use the updated profile.</p>}
++      {status === "valid" && !query.data?.editingSupported && query.data?.editingUnavailableReason && <p>{query.data?.editingUnavailableReason}</p>}
++      {editing && <ProfileEditForm key={editing.profile.name} profile={editing.profile} revision={editing.revision} onDirty={setDirty} onPending={setSaving} onCancel={() => { if (discard()) leaveEdit() }} onSaved={() => { leaveEdit(); setSaved(true) }} />}
++      {status === "valid" && profile && !editing && <>
++        <header className="flex flex-col gap-2"><div className="flex flex-wrap items-center gap-3"><h2 className="min-w-0 max-w-full wrap-anywhere text-xl font-semibold">{profile.name}</h2><Badge variant="outline">{profile.environment ?? "no environment"}</Badge>{query.data?.editingSupported && query.data?.revision && profile.editableProfile && <Button onClick={() => { setSaved(false); setEditing({ profile, revision: query.data!.revision! }) }}>Edit</Button>}<Link to="/stats" className="ml-auto text-sm underline">Usage overview →</Link></div><p className="break-all text-sm text-muted-foreground">{profile.engine} · {profile.server} / {profile.database}</p></header>
+         <Card className="profile-section" role="region" aria-label="Connection"><CardHeader><CardTitle><h3>Connection</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody>{connection.map(([label,value]) => <TableRow key={label}><TableHead scope="row" className="w-40">{label}</TableHead><TableCell className="whitespace-normal break-all">{label === "TLS" ? <ExplainedValue value={value} labels={tlsLabels} /> : <>{value}{label === "Password variable" && profile.passwordEnvVar && <p className="text-sm text-muted-foreground">Environment variable name only; its value is not read.</p>}</>}</TableCell></TableRow>)}</TableBody></Table>{profile.database.includes("{") && <p className="text-xs text-muted-foreground">Database template · resolved per operation from variables</p>}</CardContent></Card>
+-        <Card className="profile-section" role="region" aria-label="Mutations"><CardHeader><CardTitle><h3>Mutations</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody><TableRow><TableHead scope="row" className="w-40">Mode</TableHead><TableCell className="whitespace-normal wrap-anywhere"><ExplainedValue value={profile.mutationMode || "never"} labels={modeLabels} /></TableCell></TableRow><TableRow><TableHead scope="row">Writer</TableHead><TableCell className="whitespace-normal wrap-anywhere"><ExplainedValue value={profile.mutationWriterKind ?? "—"} labels={writerLabels} /></TableCell></TableRow></TableBody></Table>{profile.mutationMode === "yolo" && <Alert variant="destructive"><AlertTitle>Mutations run without approval{profile.environment ? ` on ${profile.environment}` : ""}.</AlertTitle><AlertDescription>YOLO mode does not ask the operator to approve persistent changes.</AlertDescription></Alert>}</CardContent></Card>
++        <Card className="profile-section" role="region" aria-label="Mutations"><CardHeader><CardTitle><h3>Mutations</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><Table><TableBody><TableRow><TableHead scope="row" className="w-40">Mode</TableHead><TableCell className="whitespace-normal wrap-anywhere"><ExplainedValue value={profile.mutationMode || "never"} labels={modeLabels} /></TableCell></TableRow><TableRow><TableHead scope="row">Policy source</TableHead><TableCell>{profile.configuredMode ?? "Inherited"} · effective {profile.effectiveMode ?? profile.mutationMode} · {profile.modeSource ?? "unknown"}</TableCell></TableRow><TableRow><TableHead scope="row">Writer</TableHead><TableCell className="whitespace-normal wrap-anywhere"><ExplainedValue value={profile.mutationWriterKind ?? "—"} labels={writerLabels} /></TableCell></TableRow></TableBody></Table>{profile.effectiveMode !== "never" && profile.writerConfigured === false && <p>Mutations cannot run until a writer is configured.</p>}{profile.productionAcknowledgementRequired && <p>Production YOLO requires acknowledgement before DML can execute.</p>}{profile.mutationMode === "yolo" && <Alert variant="destructive"><AlertTitle>YOLO DML runs without approval{profile.environment ? ` on ${profile.environment}` : ""}.</AlertTitle><AlertDescription>YOLO skips operator approval for DML; schema, privilege and opaque changes still require approval.</AlertDescription></Alert>}</CardContent></Card>
+         <Card className="profile-section" role="region" aria-label="Variables"><CardHeader><CardTitle><h3>Variables</h3></CardTitle></CardHeader><CardContent className="flex flex-col gap-3">{profile.vars.length ? <Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Rule</TableHead></TableRow></TableHeader><TableBody>{profile.vars.map(variable => <TableRow key={variable.name}><TableCell className="font-mono">{variable.name}</TableCell><TableCell>{variable.rule}</TableCell></TableRow>)}</TableBody></Table> : <p className="text-sm text-muted-foreground">No variables. Operations on this profile have no dimensions.</p>}</CardContent></Card>
+       </>}
+     </div>
+diff --git a/tests/SqlHarness.Mcp.Tests/McpMappingTests.cs b/tests/SqlHarness.Mcp.Tests/McpMappingTests.cs
+index 9ca7ce36..d045559b 100644
+--- a/tests/SqlHarness.Mcp.Tests/McpMappingTests.cs
++++ b/tests/SqlHarness.Mcp.Tests/McpMappingTests.cs
+@@ -155,6 +155,34 @@ public sealed class McpMappingTests : IDisposable
+         Assert.False(activeProfile.GetProperty("writerConfigured").GetBoolean());
+     }
+ 
++    [Fact]
++    public void Capabilities_inherit_global_mode_with_writer_only_profile()
++    {
++        var profiles = ProfileStore.Load(_targetsFile).ToDictionary(pair => pair.Key, pair => pair.Value);
++        profiles[ProfileName] = profiles[ProfileName] with { Mutations = new ProfileMutations(null, new MutationWriter(SameAsReader: true)) };
++        var process = McpProcessContext.Create(new McpServerOptions { RequestScope = true, AllowedProfiles = [ProfileName] },
++            () => profiles, config: new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "yolo" } });
++        var document = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(process, includeDiagnostics: false), new JsonSerializerOptions(JsonSerializerDefaults.Web));
++        var profile = Assert.Single(document.GetProperty("allowedProfileMutations").EnumerateArray());
++        Assert.Equal("yolo", profile.GetProperty("mode").GetString());
++        Assert.True(profile.GetProperty("writerConfigured").GetBoolean());
++    }
++
++    [Fact]
++    public void Running_process_keeps_inherited_policy_and_writer_from_startup()
++    {
++        var profiles = ProfileStore.Load(_targetsFile).ToDictionary(pair => pair.Key, pair => pair.Value);
++        profiles[ProfileName] = profiles[ProfileName] with { Mutations = new ProfileMutations(null, new MutationWriter(SameAsReader: true)) };
++        var process = McpProcessContext.Create(new McpServerOptions { RequestScope = true, AllowedProfiles = [ProfileName] },
++            () => profiles, config: new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "operator" } });
++        profiles[ProfileName] = profiles[ProfileName] with { Mutations = new ProfileMutations("never", null) };
++
++        var document = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(process, includeDiagnostics: false), new JsonSerializerOptions(JsonSerializerDefaults.Web));
++        var profile = Assert.Single(document.GetProperty("allowedProfileMutations").EnumerateArray());
++        Assert.Equal("operator", profile.GetProperty("mode").GetString());
++        Assert.True(profile.GetProperty("writerConfigured").GetBoolean());
++    }
++
+     private static readonly string[] BroadFieldNames =
+     [
+         "tools", "supportedProtocolVersions", "protocolVersion", "server", "serverVersion",
+diff --git a/tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs b/tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs
+index 67e320eb..94552ef1 100644
+--- a/tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs
++++ b/tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs
+@@ -154,6 +154,11 @@ public sealed class CapabilitiesCommandTests
+         Assert.Equal("operator", scoped.RootElement.GetProperty("profile").GetProperty("mutationMode").GetString());
+         Assert.False(scoped.RootElement.GetProperty("profile").GetProperty("writerConfigured").GetBoolean());
+ 
++        var inherited = profile with { Mutations = new ProfileMutations(null, new MutationWriter(SameAsReader: true)) };
++        using var inheritedDocument = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p", targetProfile: inherited, mutationsConfig: config.Mutations)));
++        Assert.Equal("operator", inheritedDocument.RootElement.GetProperty("profile").GetProperty("mutationMode").GetString());
++        Assert.True(inheritedDocument.RootElement.GetProperty("profile").GetProperty("writerConfigured").GetBoolean());
++
+         using var enabled = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p", targetProfile: enabledProfile, mutationsConfig: config.Mutations)));
+         Assert.Equal("yolo", enabled.RootElement.GetProperty("profile").GetProperty("mutationMode").GetString());
+         Assert.True(enabled.RootElement.GetProperty("profile").GetProperty("writerConfigured").GetBoolean());
+diff --git a/tests/SqlHarness.Tests/Dashboard/DashboardProfilesTests.cs b/tests/SqlHarness.Tests/Dashboard/DashboardProfilesTests.cs
+index 5b50d058..2a2c2e24 100644
+--- a/tests/SqlHarness.Tests/Dashboard/DashboardProfilesTests.cs
++++ b/tests/SqlHarness.Tests/Dashboard/DashboardProfilesTests.cs
+@@ -1,3 +1,5 @@
++using System.Net;
++using System.Text;
+ using System.Text.Json;
+ 
+ namespace SqlHarness.Tests.Dashboard;
+@@ -6,6 +8,97 @@ public sealed class DashboardProfilesTests
+ {
+     private static string TargetsPath(TempHome home) => Path.Combine(home.Path, "targets.json");
+ 
++    [WindowsFact]
++    public async Task Put_requires_guard_and_rejects_duplicate_members_and_stale_revision()
++    {
++        using var home = new TempHome();
++        var path = TargetsPath(home);
++        File.WriteAllText(path, "{\"p\":{\"server\":\"s\",\"database\":\"d\",\"auth\":\"integrated\",\"vars\":{}}}");
++        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
++        var (server, client) = dashboard;
++        var revision = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement.GetProperty("revision").GetString();
++        using var noHeader = new HttpRequestMessage(HttpMethod.Put, "/api/profiles") { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
++        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(noHeader)).StatusCode);
++        using var anonymous = new HttpClient { BaseAddress = server.BaseUri };
++        using var noCookie = Request("{}");
++        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.SendAsync(noCookie)).StatusCode);
++        using var foreign = Request("{}");
++        foreign.Headers.Add("Origin", "http://attacker.example");
++        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(foreign)).StatusCode);
++        using var badHost = Request("{}");
++        badHost.Headers.Host = $"attacker.example:{server.Port}";
++        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(badHost)).StatusCode);
++        using var oversized = Request(new string('x', 1024 * 1024 + 1));
++        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await client.SendAsync(oversized)).StatusCode);
++        using var unknown = Request("{\"name\":\"p\",\"expectedRevision\":\"x\",\"profile\":{},\"path\":\"elsewhere\"}");
++        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(unknown)).StatusCode);
++        using var nestedDuplicate = Request("{\"name\":\"p\",\"expectedRevision\":\"x\",\"profile\":{\"server\":\"s\",\"SERVER\":\"t\"}}");
++        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(nestedDuplicate)).StatusCode);
++        using var duplicate = Request("{\"name\":\"p\",\"name\":\"p\"}");
++        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(duplicate)).StatusCode);
++        var body = JsonSerializer.Serialize(new { name = "p", expectedRevision = revision, profile = new { server = "new", database = "d", auth = "integrated", vars = new Dictionary<string, string>() } });
++        var invalidAuth = JsonSerializer.Serialize(new { name = "p", expectedRevision = revision, profile = new { server = "s", database = "d", auth = "sql", vars = new Dictionary<string, string>() } });
++        using var invalid = Request(invalidAuth);
++        var invalidResponse = await client.SendAsync(invalid);
++        Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
++        Assert.Equal("auth", JsonDocument.Parse(await invalidResponse.Content.ReadAsStringAsync()).RootElement.GetProperty("errors")[0].GetProperty("field").GetString());
++        using var valid = Request(body);
++        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(valid)).StatusCode);
++        using var stale = Request(body);
++        Assert.Equal(HttpStatusCode.Conflict, (await client.SendAsync(stale)).StatusCode);
++        Assert.Contains("new", File.ReadAllText(path));
++    }
++
++    [Fact]
++    public async Task Guard_rejects_before_attempting_to_read_locked_file()
++    {
++        using var home = new TempHome();
++        var path = TargetsPath(home);
++        File.WriteAllText(path, "secret marker");
++        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
++        var (server, client) = dashboard;
++        using var locked = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
++        using var anonymous = new HttpClient { BaseAddress = server.BaseUri };
++        using var rejected = Request("{}");
++        var response = await anonymous.SendAsync(rejected);
++        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
++        Assert.DoesNotContain("secret marker", await response.Content.ReadAsStringAsync());
++        using var guarded = Request("{\"name\":\"p\",\"expectedRevision\":\"x\",\"profile\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++        var failure = await client.SendAsync(guarded);
++        Assert.Equal(HttpStatusCode.InternalServerError, failure.StatusCode);
++        Assert.DoesNotContain("secret marker", await failure.Content.ReadAsStringAsync());
++    }
++
++    private static HttpRequestMessage Request(string body)
++    {
++        var request = new HttpRequestMessage(HttpMethod.Put, "/api/profiles") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
++        request.Headers.Add("X-SqlHarness-Dashboard", "1");
++        return request;
++    }
++
++    [Fact]
++    public async Task Profiles_report_inherited_policy_and_follow_global_changes()
++    {
++        using var home = new TempHome();
++        File.WriteAllText(TargetsPath(home), """
++            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {}, "environment": "staging",
++              "mutations": { "writer": { "sameAsReader": true } } } }
++            """);
++        var config = Path.Combine(home.Path, "config.json");
++        File.WriteAllText(config, """{ "mutations": { "defaultMode": "operator" } }""");
++        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
++        var (_, client) = dashboard;
++        var profile = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement.GetProperty("profiles")[0];
++        Assert.Equal("operator", profile.GetProperty("mutationMode").GetString());
++        Assert.Equal(JsonValueKind.Null, profile.GetProperty("configuredMode").ValueKind);
++        Assert.Equal("global", profile.GetProperty("modeSource").GetString());
++        Assert.True(profile.GetProperty("writerConfigured").GetBoolean());
++        File.WriteAllText(config, """{ "mutations": { "defaultMode": "yolo" } }""");
++        profile = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement.GetProperty("profiles")[0];
++        Assert.Equal("yolo", profile.GetProperty("effectiveMode").GetString());
++        Assert.True(profile.GetProperty("productionAcknowledgementRequired").GetBoolean());
++    }
++
+     [Fact]
+     public async Task Profiles_list_names_templates_and_auth_metadata()
+     {
+@@ -24,6 +117,8 @@ public sealed class DashboardProfilesTests
+         var body = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement;
+ 
+         Assert.Equal("valid", body.GetProperty("status").GetString());
++        Assert.Equal(OperatingSystem.IsWindows(), body.GetProperty("editingSupported").GetBoolean());
++        Assert.Equal(OperatingSystem.IsWindows() ? JsonValueKind.Null : JsonValueKind.String, body.GetProperty("editingUnavailableReason").ValueKind);
+         var profiles = body.GetProperty("profiles").EnumerateArray().ToArray();
+         Assert.Equal(["pg", "zeta"], profiles.Select(p => p.GetProperty("name").GetString()));
+         Assert.Equal("postgres", profiles[0].GetProperty("engine").GetString());
+@@ -74,7 +169,7 @@ public sealed class DashboardProfilesTests
+         Assert.Equal("yolo", profile.GetProperty("mutationMode").GetString());
+         Assert.Equal("separate", profile.GetProperty("mutationWriterKind").GetString());
+         Assert.True(profile.GetProperty("acknowledgeProductionYolo").GetBoolean());
+-        Assert.DoesNotContain("SQLH_WRITER_PASSWORD", text);
++        Assert.Equal("SQLH_WRITER_PASSWORD", profile.GetProperty("editableProfile").GetProperty("mutations").GetProperty("writer").GetProperty("passwordEnvVar").GetString());
+     }
+ 
+     [Fact]
+@@ -102,6 +197,19 @@ public sealed class DashboardProfilesTests
+         }
+     }
+ 
++    [Fact]
++    public async Task Invalid_sibling_is_not_offered_for_editing()
++    {
++        using var home = new TempHome();
++        File.WriteAllText(TargetsPath(home), "{\"p\":{\"server\":\"s\",\"database\":\"d\",\"auth\":\"bogus\",\"vars\":{}}}");
++        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
++        var (_, client) = dashboard;
++        var response = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement;
++        Assert.Equal("invalid", response.GetProperty("status").GetString());
++        Assert.Equal(JsonValueKind.Null, response.GetProperty("revision").ValueKind);
++        Assert.Empty(response.GetProperty("profiles").EnumerateArray());
++    }
++
+     [Fact]
+     public async Task Missing_and_invalid_files_return_empty_lists_without_file_content()
+     {
+@@ -119,4 +227,4 @@ public sealed class DashboardProfilesTests
+         Assert.DoesNotContain("SQLH_TARGET_MARKER", text);
+         Assert.DoesNotContain(home.Path.Replace("\\", "\\\\"), text);
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/tests/SqlHarness.Tests/Dashboard/DashboardServerTests.cs b/tests/SqlHarness.Tests/Dashboard/DashboardServerTests.cs
+index 65d027ea..00ad28ee 100644
+--- a/tests/SqlHarness.Tests/Dashboard/DashboardServerTests.cs
++++ b/tests/SqlHarness.Tests/Dashboard/DashboardServerTests.cs
+@@ -412,7 +412,8 @@ public sealed class DashboardServerTests
+         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
+         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
+         var writes = server.Endpoints.Where(endpoint => endpoint.Methods.Any(method => method is not "GET" and not "HEAD")).ToArray();
+-        Assert.Equal(10, writes.Length);
++        Assert.Equal(11, writes.Length);
++        Assert.Equal(["PUT"], Assert.Single(writes, endpoint => endpoint.Route == "/api/profiles").Methods);
+         var settingsPut = Assert.Single(writes, endpoint => endpoint.Route == "/api/settings");
+         Assert.Equal(["PUT"], settingsPut.Methods);
+         var pricesRefresh = Assert.Single(writes, endpoint => endpoint.Route == "/api/prices/refresh");
+diff --git a/tests/SqlHarness.Tests/Dashboard/MutationEndpointsTests.cs b/tests/SqlHarness.Tests/Dashboard/MutationEndpointsTests.cs
+index 1901d8a0..db9c983c 100644
+--- a/tests/SqlHarness.Tests/Dashboard/MutationEndpointsTests.cs
++++ b/tests/SqlHarness.Tests/Dashboard/MutationEndpointsTests.cs
+@@ -28,6 +28,23 @@ public sealed class MutationEndpointsTests
+             MutationPreparationDigest: request.Digest, MutationPreparationTokenHash: Convert.ToHexString(
+                 System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(PreparationToken))))));
+ 
++    [Fact]
++    public async Task Inherited_production_yolo_without_acknowledgement_is_rejected_at_submission()
++    {
++        using var home = new TempHome();
++        ConfigureHome(home);
++        File.WriteAllText(Path.Combine(home.Path, "config.json"), """{ "mutations": { "defaultMode": "yolo" } }""");
++        File.WriteAllText(Path.Combine(home.Path, "targets.json"), """
++            {"app":{"server":"srv","database":"db","auth":"integrated","engine":"sqlserver","vars":{},"environment":"production","mutations":{"writer":{"sameAsReader":true}}}}
++            """);
++        await using var dashboard = await StartMutationDashboard(home);
++        var (server, client) = dashboard;
++        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
++        using var response = await client.PostAsJsonAsync("/api/mutations", Wire(Request()));
++        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
++        Assert.Contains("production_yolo_acknowledgement_required", await response.Content.ReadAsStringAsync());
++    }
++
+     [Fact]
+     public async Task Http_broker_transports_token_while_normal_serialization_omits_it()
+     {
+diff --git a/tests/SqlHarness.Tests/Dashboard/MutationExecutorTests.cs b/tests/SqlHarness.Tests/Dashboard/MutationExecutorTests.cs
+index adf9ae70..1fd8c955 100644
+--- a/tests/SqlHarness.Tests/Dashboard/MutationExecutorTests.cs
++++ b/tests/SqlHarness.Tests/Dashboard/MutationExecutorTests.cs
+@@ -11,6 +11,40 @@ namespace SqlHarness.Tests.Dashboard;
+ 
+ public sealed class MutationExecutorTests
+ {
++    [Theory]
++    [InlineData("prod")]
++    [InlineData("production")]
++    [InlineData("staging")]
++    public async Task Inherited_yolo_without_acknowledgement_never_executes_dml(string environment)
++    {
++        var module = new FakeModule();
++        var profile = Profile(null!, new MutationWriter(SameAsReader: true)) with { Environment = environment, Auth = "integrated" };
++        var executor = new MutationExecutor(module,
++            () => new Dictionary<string, TargetProfile> { ["local"] = profile },
++            () => new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "yolo" } },
++            new RecordingJournal(), TimeProvider.System);
++
++        var result = await executor.ExecuteAsync(Request(), new MutationExecutionContext("id", MutationExecutionOrigin.Automatic), default);
++
++        Assert.Equal(MutationStatus.Failed, result.Status);
++        Assert.Empty(module.Operations);
++    }
++
++    [Fact]
++    public async Task Acknowledged_production_yolo_dml_can_execute()
++    {
++        var module = new FakeModule();
++        var profile = Profile("yolo", new MutationWriter(SameAsReader: true)) with
++        {
++            Environment = "production",
++            Auth = "integrated",
++            Mutations = new ProfileMutations("yolo", new MutationWriter(SameAsReader: true), true),
++        };
++        var result = await Executor(module, profile).ExecuteAsync(Request(), Context(origin: MutationExecutionOrigin.Automatic), default);
++        Assert.Equal(MutationStatus.Success, result.Status);
++        Assert.Single(module.Operations);
++    }
++
+     [Fact]
+     public async Task Mode_changed_to_never_rejects_without_module_execution()
+     {
+@@ -23,6 +57,22 @@ public sealed class MutationExecutorTests
+         Assert.Empty(module.Operations);
+     }
+ 
++    [Fact]
++    public async Task Inherited_policy_is_rechecked_after_global_change_before_approved_execution()
++    {
++        var module = new FakeModule();
++        var profile = Profile(null!, new MutationWriter(SameAsReader: true)) with { Auth = "integrated" };
++        var config = new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "operator" } };
++        var executor = new MutationExecutor(module, () => new Dictionary<string, TargetProfile> { ["local"] = profile },
++            () => config, new RecordingJournal(), TimeProvider.System);
++        config = new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "never" } };
++
++        var result = await executor.ExecuteAsync(Request(), Context(), default);
++
++        Assert.Equal(MutationStatus.Disabled, result.Status);
++        Assert.Empty(module.Operations);
++    }
++
+     [Fact]
+     public async Task Changed_target_identity_is_rejected_before_database_access()
+     {
+@@ -130,6 +180,29 @@ public sealed class MutationExecutorTests
+         Environment.SetEnvironmentVariable(variable, null);
+     }
+ 
++    [Fact]
++    public async Task Prepared_approved_request_rejects_target_changed_before_execution()
++    {
++        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal) { ["local"] = Profile("operator") };
++        var sessions = new RecordingMutationSessionFactory();
++        var module = new SqlHarnessModule(sessions, () => profiles);
++        var request = Request();
++        var prepared = await module.ExecuteAsync(new SqlHarnessMutationOperation(
++            new SqlTargetRequest(request.Profile, request.Vars), request.Sql, request.Parameters,
++            request.TimeoutSeconds, request.MaxRows, request.Database)
++        { SessionKey = request.SessionKey });
++        var frozen = Assert.IsType<SqlHarnessMutationPrepared>(prepared.Report).Request;
++        profiles["local"] = profiles["local"] with { Server = "different-server" };
++        var executor = new MutationExecutor(module, () => profiles, () => new SqlHarnessConfig(),
++            new RecordingJournal(), TimeProvider.System);
++
++        var result = await executor.ExecuteAsync(frozen, Context("changed-target"), default);
++
++        Assert.Equal(MutationStatus.DatabaseMismatch, result.Status);
++        Assert.Null(sessions.Target);
++        Assert.Empty(sessions.Commands);
++    }
++
+     [Fact]
+     public async Task Matching_prepared_digest_executes_frozen_sql_through_core_with_writer_target()
+     {
+diff --git a/tests/SqlHarness.Tests/PlatformFactAttributes.cs b/tests/SqlHarness.Tests/PlatformFactAttributes.cs
+index 970d2bef..d7468627 100644
+--- a/tests/SqlHarness.Tests/PlatformFactAttributes.cs
++++ b/tests/SqlHarness.Tests/PlatformFactAttributes.cs
+@@ -18,4 +18,13 @@ public sealed class UnixFactAttribute : FactAttribute
+         if (OperatingSystem.IsWindows())
+             Skip = "Requires Unix.";
+     }
++}
++[AttributeUsage(AttributeTargets.Method)]
++public sealed class WindowsTheoryAttribute : TheoryAttribute
++{
++    public WindowsTheoryAttribute()
++    {
++        if (!OperatingSystem.IsWindows())
++            Skip = "Requires Windows.";
++    }
+ }
+\ No newline at end of file
+diff --git a/tests/SqlHarness.Tests/Targets/MutationPolicyResolverTests.cs b/tests/SqlHarness.Tests/Targets/MutationPolicyResolverTests.cs
+new file mode 100644
+index 00000000..4cfb1195
+--- /dev/null
++++ b/tests/SqlHarness.Tests/Targets/MutationPolicyResolverTests.cs
+@@ -0,0 +1,48 @@
++using SqlHarness.Core;
++using SqlHarness.Core.Mutations;
++using SqlHarness.Core.Targets;
++
++namespace SqlHarness.Tests.Targets;
++
++public sealed class MutationPolicyResolverTests
++{
++    [Theory]
++    [InlineData(null, "never", "never", "global")]
++    [InlineData(null, "operator", "operator", "global")]
++    [InlineData(null, "yolo", "yolo", "global")]
++    [InlineData("never", "yolo", "never", "profile")]
++    [InlineData("operator", "never", "operator", "profile")]
++    [InlineData("yolo", "operator", "yolo", "profile")]
++    public void Profile_choice_and_global_default_resolve_independently(string? configured, string global, string effective, string source)
++    {
++        var profile = new TargetProfile("s", "d", new Dictionary<string, string>(), "integrated",
++            Mutations: new ProfileMutations(configured, new MutationWriter(SameAsReader: true)));
++        var policy = MutationPolicyResolver.Resolve(profile, new MutationsConfig { DefaultMode = global });
++        Assert.Equal(configured, policy.ConfiguredMode);
++        Assert.Equal(effective, policy.EffectiveMode);
++        Assert.Equal(source, policy.ModeSource);
++        Assert.True(policy.WriterConfigured);
++    }
++
++    [Fact]
++    public void Absent_block_tracks_global_changes_without_configuring_a_writer()
++    {
++        var profile = new TargetProfile("s", "d", new Dictionary<string, string>(), "integrated", Environment: "staging");
++        Assert.Equal("never", MutationPolicyResolver.Resolve(profile, new MutationsConfig()).EffectiveMode);
++        var changed = MutationPolicyResolver.Resolve(profile, new MutationsConfig { DefaultMode = "yolo" });
++        Assert.Equal("yolo", changed.EffectiveMode);
++        Assert.False(changed.WriterConfigured);
++        Assert.True(changed.ProductionAcknowledgementRequired);
++        Assert.Null(profile.Mutations);
++    }
++
++    [Theory]
++    [InlineData("")]
++    [InlineData("1")]
++    [InlineData("invalid")]
++    public void Invalid_mode_is_rejected(string mode)
++    {
++        var profile = new TargetProfile("s", "d", new Dictionary<string, string>(), "integrated", Mutations: new ProfileMutations(mode));
++        Assert.Throws<SqlHarnessSafetyException>(() => MutationPolicyResolver.Resolve(profile, new MutationsConfig()));
++    }
++}
+\ No newline at end of file
+diff --git a/tests/SqlHarness.Tests/Targets/ProfileStoreTests.cs b/tests/SqlHarness.Tests/Targets/ProfileStoreTests.cs
+index cad56206..e4bc6b69 100644
+--- a/tests/SqlHarness.Tests/Targets/ProfileStoreTests.cs
++++ b/tests/SqlHarness.Tests/Targets/ProfileStoreTests.cs
+@@ -372,6 +372,17 @@ public sealed class ProfileStoreTests
+         Assert.False(remote.TrustServerCertificate);
+     }
+ 
++    [Fact]
++    public void Writer_only_mutation_block_inherits_mode()
++    {
++        var profiles = LoadProfiles("""
++            { "local": { "server": "localhost", "database": "db", "vars": {}, "auth": "integrated",
++              "mutations": { "writer": { "sameAsReader": true } } } }
++            """);
++        Assert.Null(profiles["local"].Mutations!.Mode);
++        Assert.True(profiles["local"].Mutations!.Writer!.SameAsReader);
++    }
++
+     private static string FindRepositoryFile(params string[] path)
+     {
+         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+@@ -413,4 +424,4 @@ public sealed class ProfileStoreTests
+ 
+     private static object? ProfileProperty(object target, string name) =>
+         target.GetType().GetProperty(name)?.GetValue(target);
+-}
++}
+\ No newline at end of file
+diff --git a/tests/SqlHarness.Tests/Targets/ProfileWriterTests.cs b/tests/SqlHarness.Tests/Targets/ProfileWriterTests.cs
+new file mode 100644
+index 00000000..b1355f22
+--- /dev/null
++++ b/tests/SqlHarness.Tests/Targets/ProfileWriterTests.cs
+@@ -0,0 +1,262 @@
++using System.Security.AccessControl;
++using System.Text;
++
++using SqlHarness.Core.Targets;
++
++namespace SqlHarness.Tests.Targets;
++
++public sealed class ProfileWriterTests
++{
++    [WindowsFact]
++    public void Update_preserves_sibling_and_rejects_stale_revision()
++    {
++        var path = Path.GetTempFileName();
++        const string original = "{\"a\":{\"server\":\"old\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"},  \"b\": { \"server\":\"sibling\", \"database\":\"d\",\"vars\":{},\"auth\":\"integrated\" }}";
++        try
++        {
++            File.WriteAllText(path, original, new UTF8Encoding(false));
++            var revision = ProfileWriter.Revision(File.ReadAllBytes(path));
++            var profile = new TargetProfile("new", "d", new Dictionary<string, string>(), "integrated", Mutations: new(Writer: new(SameAsReader: true)));
++            var saved = ProfileWriter.Update(path, "a", revision, profile);
++            Assert.Equal(ProfileWriteStatus.Success, saved.Status);
++            Assert.Equal("new", ProfileStore.Load(path)["a"].Server);
++            Assert.Contains("  \"b\": { \"server\":\"sibling\", \"database\":\"d\",\"vars\":{},\"auth\":\"integrated\" }", File.ReadAllText(path));
++            Assert.Equal(ProfileWriteStatus.Conflict, ProfileWriter.Update(path, "a", revision, profile).Status);
++            Assert.Equal(saved.Revision, ProfileWriter.Revision(File.ReadAllBytes(path)));
++            File.WriteAllText(path, "{}");
++            Assert.Equal("new", saved.Profiles!["a"].Server);
++        }
++        finally { File.Delete(path); }
++    }
++
++    [WindowsFact]
++    public void Invalid_original_and_invalid_auth_do_not_write()
++    {
++        var path = Path.GetTempFileName();
++        try
++        {
++            File.WriteAllText(path, "{broken");
++            var profile = new TargetProfile("s", "d", new Dictionary<string, string>(), "sql");
++            Assert.Equal(ProfileWriteStatus.Invalid, ProfileWriter.Update(path, "a", ProfileWriter.Revision(File.ReadAllBytes(path)), profile).Status);
++            Assert.Equal("{broken", File.ReadAllText(path));
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            var before = File.ReadAllText(path);
++            Assert.Equal(ProfileWriteStatus.Invalid, ProfileWriter.Update(path, "a", ProfileWriter.Revision(File.ReadAllBytes(path)), profile).Status);
++            Assert.Equal(before, File.ReadAllText(path));
++        }
++        finally { File.Delete(path); }
++    }
++
++    [WindowsFact]
++    public void Missing_document_and_missing_profile_leave_document_untouched()
++    {
++        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
++        var profile = new TargetProfile("s", "d", new Dictionary<string, string>(), "integrated");
++        Assert.Equal(ProfileWriteStatus.Invalid, ProfileWriter.Update(path, "a", "revision", profile).Status);
++        try
++        {
++            File.WriteAllText(path, "{\"b\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            var bytes = File.ReadAllBytes(path);
++            Assert.Equal(ProfileWriteStatus.NotFound, ProfileWriter.Update(path, "a", ProfileWriter.Revision(bytes), profile).Status);
++            Assert.Equal(bytes, File.ReadAllBytes(path));
++        }
++        finally { File.Delete(path); }
++    }
++
++    [WindowsFact]
++    public void Cancelled_save_does_not_change_original()
++    {
++        var path = Path.GetTempFileName();
++        try
++        {
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            var before = File.ReadAllBytes(path);
++            using var cancellation = new CancellationTokenSource();
++            cancellation.Cancel();
++            Assert.Throws<OperationCanceledException>(() => ProfileWriter.Update(path, "a", ProfileWriter.Revision(before), new("new", "d", new Dictionary<string, string>(), "integrated"), cancellation.Token));
++            Assert.Equal(before, File.ReadAllBytes(path));
++        }
++        finally { File.Delete(path); }
++    }
++
++    [WindowsFact]
++    public void Locked_destination_preserves_original_and_cleans_temp_file()
++    {
++        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
++        Directory.CreateDirectory(directory);
++        var path = Path.Combine(directory, "targets.json");
++        try
++        {
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            var before = File.ReadAllBytes(path);
++            using var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
++            var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(before), new("new", "d", new Dictionary<string, string>(), "integrated"));
++            Assert.Equal(ProfileWriteStatus.IoError, result.Status);
++            Assert.Equal(before, File.ReadAllBytes(path));
++            Assert.Single(Directory.GetFiles(directory));
++        }
++        finally { Directory.Delete(directory, true); }
++    }
++
++    [WindowsTheory]
++    [InlineData("sql", "d", "[", "integrated", null, "vars")]
++    [InlineData("sql", "d_{missing}", "x", "integrated", null, "database")]
++    [InlineData("postgres", "d", "x", "integrated", null, "auth")]
++    [InlineData("sqlserver", "d", "x", "integrated", "require", "sslMode")]
++    public void Invalid_configuration_reports_the_field(string engine, string database, string rule, string auth, string? sslMode, string field)
++    {
++        var path = Path.GetTempFileName();
++        try
++        {
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            var before = File.ReadAllBytes(path);
++            var profile = new TargetProfile("s", database, new Dictionary<string, string> { ["v"] = rule }, auth, Engine: engine == "sql" ? "sqlserver" : engine, SslMode: sslMode);
++            var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(before), profile);
++            Assert.Equal(ProfileWriteStatus.Invalid, result.Status);
++            Assert.Equal(field, result.Error?.Field);
++            Assert.Equal(before, File.ReadAllBytes(path));
++        }
++        finally { File.Delete(path); }
++    }
++
++    [WindowsFact]
++    public void Failure_after_temp_creation_keeps_original_and_cleans_up()
++    {
++        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
++        Directory.CreateDirectory(directory);
++        var path = Path.Combine(directory, "targets.json");
++        try
++        {
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            var before = File.ReadAllBytes(path);
++            var profile = new TargetProfile("new", "d", new Dictionary<string, string>(), "integrated");
++            var result = ProfileWriter.UpdateWithTestHook(path, "a", ProfileWriter.Revision(before), profile, () => throw new IOException("private marker"));
++            Assert.Equal(ProfileWriteStatus.IoError, result.Status);
++            Assert.Equal(before, File.ReadAllBytes(path));
++            Assert.Single(Directory.GetFiles(directory));
++        }
++        finally { Directory.Delete(directory, true); }
++    }
++
++    [WindowsFact]
++    public void Cancellation_after_temp_creation_cleans_up()
++    {
++        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
++        Directory.CreateDirectory(directory);
++        var path = Path.Combine(directory, "targets.json");
++        try
++        {
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            var before = File.ReadAllBytes(path);
++            using var cancellation = new CancellationTokenSource();
++            Assert.Throws<OperationCanceledException>(() => ProfileWriter.UpdateWithTestHook(path, "a", ProfileWriter.Revision(before), new("new", "d", new Dictionary<string, string>(), "integrated"), cancellation.Cancel, cancellation.Token));
++            Assert.Equal(before, File.ReadAllBytes(path));
++            Assert.Single(Directory.GetFiles(directory));
++        }
++        finally { Directory.Delete(directory, true); }
++    }
++
++    [WindowsTheory]
++    [InlineData("{\"a\":{\"server\":\"s\",\"server\":\"t\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}")]
++    [InlineData("{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\",\"unknown\":1}}")]
++    public void Invalid_source_document_cannot_be_repaired_by_save(string source)
++    {
++        var path = Path.GetTempFileName();
++        try
++        {
++            File.WriteAllText(path, source);
++            var before = File.ReadAllBytes(path);
++            var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(before), new("s", "d", new Dictionary<string, string>(), "integrated"));
++            Assert.Equal(ProfileWriteStatus.Invalid, result.Status);
++            Assert.Equal(before, File.ReadAllBytes(path));
++        }
++        finally { File.Delete(path); }
++    }
++
++    [WindowsFact]
++    public void Invalid_mutation_configuration_reports_mutations_and_never_writes()
++    {
++        var path = Path.GetTempFileName();
++        try
++        {
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            var before = File.ReadAllBytes(path);
++            var profile = new TargetProfile("s", "d", new Dictionary<string, string>(), "integrated", Mutations: new(Mode: "operator"));
++            var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(before), profile);
++            Assert.Equal(ProfileWriteStatus.Invalid, result.Status);
++            Assert.Equal("mutations", result.Error?.Field);
++            Assert.Equal(before, File.ReadAllBytes(path));
++        }
++        finally { File.Delete(path); }
++    }
++
++    [WindowsTheory]
++    [InlineData("\"auth\":\"bogus\",\"database\":\"d\",\"vars\":{}")]
++    [InlineData("\"auth\":\"integrated\",\"database\":\"d\",\"vars\":{},\"sslMode\":\"require\"")]
++    [InlineData("\"auth\":\"integrated\",\"database\":\"d\",\"vars\":{\"v\":\"[\"}")]
++    [InlineData("\"auth\":\"integrated\",\"database\":\"d_{missing}\",\"vars\":{}")]
++    public void Invalid_sibling_blocks_save_and_preserves_bytes(string invalidFields)
++    {
++        var path = Path.GetTempFileName();
++        try
++        {
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"},\"b\":{\"server\":\"s\"," + invalidFields + "}}");
++            var before = File.ReadAllBytes(path);
++            var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(before), new("new", "d", new Dictionary<string, string>(), "integrated"));
++            Assert.Equal(ProfileWriteStatus.Invalid, result.Status);
++            Assert.Equal(before, File.ReadAllBytes(path));
++        }
++        finally { File.Delete(path); }
++    }
++
++    [Fact]
++    public void Save_preserves_restricted_file_permissions()
++    {
++        var path = Path.GetTempFileName();
++        try
++        {
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            if (OperatingSystem.IsWindows())
++            {
++                var info = new FileInfo(path);
++                var security = info.GetAccessControl();
++                security.SetAccessRuleProtection(true, false);
++                var identity = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
++                security.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(identity, System.Security.AccessControl.FileSystemRights.FullControl, System.Security.AccessControl.AccessControlType.Allow));
++                info.SetAccessControl(security);
++                var original = info.GetAccessControl().GetSecurityDescriptorSddlForm(System.Security.AccessControl.AccessControlSections.Access);
++                var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(File.ReadAllBytes(path)), new("new", "d", new Dictionary<string, string>(), "integrated"));
++                Assert.Equal(ProfileWriteStatus.Success, result.Status);
++                Assert.Equal(original, info.GetAccessControl().GetSecurityDescriptorSddlForm(System.Security.AccessControl.AccessControlSections.Access));
++            }
++            else
++            {
++                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
++                var result = ProfileWriter.Update(path, "a", ProfileWriter.Revision(File.ReadAllBytes(path)), new("new", "d", new Dictionary<string, string>(), "integrated"));
++                Assert.Equal(ProfileWriteStatus.SecurityMetadata, result.Status);
++                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
++            }
++        }
++        finally { File.Delete(path); }
++    }
++
++    [Fact]
++    public void Unsupported_platform_refuses_before_access_or_temp_creation()
++    {
++        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
++        Directory.CreateDirectory(directory);
++        var path = Path.Combine(directory, "targets.json");
++        try
++        {
++            File.WriteAllText(path, "{\"a\":{\"server\":\"s\",\"database\":\"d\",\"vars\":{},\"auth\":\"integrated\"}}");
++            var before = File.ReadAllBytes(path);
++            var called = false;
++            var result = ProfileWriter.UpdateWithTestHook(path, "a", ProfileWriter.Revision(before), new("new", "d", new Dictionary<string, string>(), "integrated"), () => called = true, editingSupported: false);
++            Assert.Equal(ProfileWriteStatus.SecurityMetadata, result.Status);
++            Assert.False(called);
++            Assert.Equal(before, File.ReadAllBytes(path));
++            Assert.Single(Directory.GetFiles(directory));
++        }
++        finally { Directory.Delete(directory, true); }
++    }
++}
+\ No newline at end of file

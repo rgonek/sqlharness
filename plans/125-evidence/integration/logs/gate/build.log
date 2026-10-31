@@ -1,0 +1,65 @@
+  Determining projects to restore...
+  Restored C:\BSI\Tools\sqlharness\src\SqlHarness.Cli\SqlHarness.Cli.csproj (in 3,07 sec).
+  Restored C:\BSI\Tools\sqlharness\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj (in 3,07 sec).
+  Restored C:\BSI\Tools\sqlharness\tests\SqlHarness.Mcp.WorkflowHost\SqlHarness.Mcp.WorkflowHost.csproj (in 3,07 sec).
+  Restored C:\BSI\Tools\sqlharness\src\SqlHarness.Core\SqlHarness.Core.csproj (in 3,07 sec).
+  Restored C:\BSI\Tools\sqlharness\tests\SqlHarness.Mcp.Tests\SqlHarness.Mcp.Tests.csproj (in 3,2 sec).
+  Restored C:\BSI\Tools\sqlharness\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj (in 3,07 sec).
+  Restored C:\BSI\Tools\sqlharness\tests\SqlHarness.Tests\SqlHarness.Tests.csproj (in 3,21 sec).
+  
+  > ui@0.0.0 build
+  > vite build
+  
+  vite v8.3.3 building client environment for production...
+  transforming...
+  SqlHarness.Core -> C:\BSI\Tools\sqlharness\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\BSI\Tools\sqlharness\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Mcp.WorkflowHost -> C:\BSI\Tools\sqlharness\tests\SqlHarness.Mcp.WorkflowHost\bin\Debug\net10.0\SqlHarness.Mcp.WorkflowHost.dll
+  Ôťô 7715 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                                                     0.48 kB Ôöé gzip:   0.31 kB
+  dist/assets/geist-mono-symbols2-wght-normal-CO5SzqOn.woff2          5.81 kB
+  dist/assets/geist-mono-cyrillic-ext-wght-normal-X_5orZeX.woff2      6.17 kB
+  dist/assets/geist-mono-vietnamese-wght-normal-DadHysG0.woff2        7.69 kB
+  dist/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2            10.25 kB
+  dist/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2             11.23 kB
+  dist/assets/geist-mono-cyrillic-wght-normal-DiZS0aHC.woff2         12.94 kB
+  dist/assets/geist-mono-latin-ext-wght-normal-Bwz-egvJ.woff2        14.69 kB
+  dist/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2              18.74 kB
+  dist/assets/inter-greek-wght-normal-CkhJZR-_.woff2                 18.99 kB
+  dist/assets/geist-mono-latin-wght-normal-XN7g48iV.woff2            23.12 kB
+  dist/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2          25.96 kB
+  dist/assets/inter-latin-wght-normal-Dx4kXJAl.woff2                 48.25 kB
+  dist/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2             85.06 kB
+  dist/assets/editor.worker-DWPaKKV_.js                             303.93 kB
+  dist/assets/PlanGraphView-DLioOiRN.css                             15.41 kB Ôöé gzip:   2.56 kB
+  dist/assets/monaco-DjpsE8to.css                                    99.09 kB Ôöé gzip:  14.20 kB
+  dist/assets/index-Ba3COtOV.css                                    125.96 kB Ôöé gzip:  21.57 kB
+  dist/assets/PlanGraphView-C3Qc0ujw.js                             184.21 kB Ôöé gzip:  59.61 kB
+  dist/assets/index-Djay2NYL.js                                   1,260.75 kB Ôöé gzip: 377.21 kB
+  dist/assets/monaco-C9cTQKZb.js                                  2,724.57 kB Ôöé gzip: 700.61 kB
+  
+  [plugin builtin:vite-reporter] 
+  (!) Some chunks are larger than 500 kB after minification. Consider:
+  - Using dynamic import() to code-split the application
+  - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+  - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+  Ôťô built in 1m 23s
+  [33m[PLUGIN_TIMINGS] [0mJavaScript callbacks ran for 80.8s of this 82.9s build (97%).
+  The slowest callbacks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+    - plugin vite:worker load (92%, 76.6s, 1 call)
+    - plugin vite:css transform (3%, 2.5s, 58 calls)
+    - plugin @tailwindcss/vite:generate:build transform (2%, 1.6s, 58 calls)
+  See https://rolldown.rs/reference/InputOptions.checks#bundlertimings for more details.
+  
+  SqlHarness.Dashboard -> C:\BSI\Tools\sqlharness\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> C:\BSI\Tools\sqlharness\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Mcp.Tests -> C:\BSI\Tools\sqlharness\tests\SqlHarness.Mcp.Tests\bin\Debug\net10.0\SqlHarness.Mcp.Tests.dll
+  SqlHarness.Tests -> C:\BSI\Tools\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:02:20.43
