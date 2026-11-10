@@ -149,9 +149,30 @@ function sqlHeight(...documents: string[]): number {
   return Math.max(88, Math.min(480, lines * 22 + 18))
 }
 
+const sqlViewerHeightKey = "sqlharness.sqlViewer.height"
+
+function readManualHeight(): number | null {
+  try {
+    const stored = sessionStorage.getItem(sqlViewerHeightKey)
+    if (stored === null || stored.trim() === "") return null
+    const height = Number(stored)
+    return Number.isFinite(height) && height >= 88 && height <= 1200 ? height : null
+  } catch {
+    return null
+  }
+}
+
+function rememberManualHeight(height: number) {
+  try {
+    sessionStorage.setItem(sqlViewerHeightKey, String(height))
+  } catch {
+    // Storage can be unavailable; the mounted frame still retains the manual choice.
+  }
+}
+
 function ResizableSqlFrame({ height, children }: { height: number; children: ReactNode }) {
   const frame = useRef<HTMLDivElement>(null)
-  const [manualHeight, setManualHeight] = useState<number | null>(null)
+  const [manualHeight, setManualHeight] = useState<number | null>(readManualHeight)
   const displayedHeight = manualHeight ?? height
   useEffect(() => {
     const element = frame.current
@@ -159,7 +180,9 @@ function ResizableSqlFrame({ height, children }: { height: number; children: Rea
     const observer = new ResizeObserver(() => {
       const measured = element.getBoundingClientRect().height
       if (measured > 0 && Math.abs(measured - displayedHeight) > 2) {
-        setManualHeight(Math.max(88, Math.min(1200, measured)))
+        const resized = Math.max(88, Math.min(1200, measured))
+        setManualHeight(resized)
+        rememberManualHeight(resized)
       }
     })
     observer.observe(element)
@@ -171,7 +194,9 @@ function ResizableSqlFrame({ height, children }: { height: number; children: Rea
     style={{ height: displayedHeight }} onKeyDown={event => {
       if (event.target !== event.currentTarget || !event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return
       event.preventDefault()
-      setManualHeight(Math.max(88, Math.min(1200, displayedHeight + (event.key === "ArrowDown" ? 44 : -44))))
+      const resized = Math.max(88, Math.min(1200, displayedHeight + (event.key === "ArrowDown" ? 44 : -44)))
+      setManualHeight(resized)
+      rememberManualHeight(resized)
     }}>{children}</div>
 }
 
@@ -211,6 +236,8 @@ export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeVie
       automaticLayout: true,
       renderSideBySide: modeRef.current === "side-by-side",
       originalEditable: false,
+      originalAriaLabel: "Baseline SQL",
+      modifiedAriaLabel: "Candidate SQL",
       diffCodeLens: false,
       enableSplitViewResizing: false,
     })

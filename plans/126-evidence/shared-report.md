@@ -65,3 +65,27 @@ script/case round trips, clipboard denial and dialog focus return. The broader s
 performance matrix and final Windows `just verify` belong to the coordinator's subsequent acceptance.
 No full gate, Linux gate, database workload, mutation approval, install/restart, merge, push or publication
 was performed by this task.
+
+## Browser-driven supplement
+
+The coordinator's real-browser interaction iteration reproduced that keyboard/native drag resizing
+worked on a mounted viewer, but changing version remounted the viewer and lost that choice. Its initial
+axe pass on an older static build also identified unnamed Monaco native input contexts. The coordinator
+added two focused regressions and observed them fail before assigning this supplement.
+
+- SQL frames now restore only an explicit manual resize from the single sessionStorage preference
+  `sqlharness.sqlViewer.height`. Reads accept finite heights from 88 through 1200; invalid entries are
+  ignored. Keyboard and native drag resize save bounded values. Automatic content sizing writes no
+  preference, so it stays active until the user resizes. Storage denial leaves the mounted viewer usable.
+- The diff constructor now supplies `originalAriaLabel: "Baseline SQL"` and
+  `modifiedAriaLabel: "Candidate SQL"`, supported by the installed Monaco `monaco.d.ts` lines 6285/6289.
+  The shared single-editor `ariaLabel: "Read-only SQL"` remains present.
+- Added invalid/out-of-range storage, valid boundary restoration, storage denial and native observer
+  persistence coverage. Ran `npm.cmd test -- src/components/sql-editor/monaco.test.tsx` before the fix:
+  exit 1, 4 intended failures and 13 passes, 2.30s. After the fix: exit 0, 17/17, 3.50s. Tightened
+  no-automatic-write and restored-height assertions: final exit 0, 17/17, 3.83s.
+- Supplemental `npm.cmd run typecheck`: exit 0. Scoped oxlint on `monaco.tsx` and `monaco.test.tsx`
+  and `git diff --check`: exit 0, no diagnostics.
+
+These component tests mock Monaco. The coordinator must rebuild and repeat the real-browser
+version-change/native-input-label checks before treating those browser observations as fixed.
