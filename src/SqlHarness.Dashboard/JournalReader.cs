@@ -24,7 +24,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         long? MetricId, string? Variant, string? CaseId, string? CaseLabel, long? LogicalReadsMedian, long? ElapsedMedianMs,
         long? CpuMedianMs, long? PgSharedHit, long? PgSharedRead, long? PgSharedDirtied, long? PgSharedWritten,
         long? PgTempRead, long? PgTempWritten,
-        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, int OmittedStatements, int? ResultSets, long? RowsReturned);
+        string? Table, long? TableLogicalReads, long? TableLobLogicalReads, long? ScanCount, int OmittedStatements, int? ResultSets, long? RowsReturned,
+        long? PhysicalReads, long? ReadAheadReads, long? LobPhysicalReads, long? LobReadAheadReads);
 
     private sealed record StoredStatement(long Id, long OperationId, string Variant, string? ParameterSet, string CaseId, int Ordinal, string Key,
         int Occurrence, string Hash, string? Text, long? Executions, string? PlanHash, string Status,
@@ -517,7 +518,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var evidence = OptimizationEvidenceForAgentSession(key, storeSensitive);
         var context = ContextKey.AgentSession(key.AgentKind, key.ConversationId);
         var labels = CompareVersionLabels(context);
-        var hashes = evidence.Where(item => item.Subject is not null && item.Scope is not null)
+        var hashes = evidence.Where(item => OptimizationEligibility.IsEligible(item) && item.Subject is not null && item.Scope is not null)
             .SelectMany(item => new[] { item.BaselineHash, item.CandidateHash }.Where(hash => hash is not null)
                 .Select(hash => (item.Subject!, item.Scope!, hash!))).Distinct().ToArray();
         var provisional = hashes.Any(hash => !labels.ContainsKey(hash));
@@ -557,7 +558,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                    m.id, m.variant, m.case_id, m.case_label, m.logical_reads_median, m.elapsed_ms_median,
                    m.cpu_ms_median, m.pg_shared_hit, m.pg_shared_read, m.pg_shared_dirtied,
                    m.pg_shared_written, m.pg_temp_read, m.pg_temp_written,
-                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, COALESCE(m.omitted_statements, 0), m.result_sets, m.rows_returned
+                   t.table_name, t.logical_reads, t.lob_logical_reads, t.scan_count, COALESCE(m.omitted_statements, 0), m.result_sets, m.rows_returned,
+                   t.physical_reads, t.read_ahead_reads, t.lob_physical_reads, t.lob_read_ahead_reads
             FROM operations o JOIN sessions s ON s.id = o.session_id
             LEFT JOIN operation_metrics m ON m.operation_id = o.id
             LEFT JOIN operation_table_io t ON t.metric_id = m.id
@@ -577,7 +579,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             NullableLong(r, 20), NullableLong(r, 21), NullableLong(r, 22), NullableLong(r, 23), NullableLong(r, 24),
             NullableLong(r, 25), NullableLong(r, 26), NullableLong(r, 27), NullableLong(r, 28), NullableString(r, 29),
             NullableLong(r, 30), NullableLong(r, 31), NullableLong(r, 32), r.GetInt32(33),
-            r.IsDBNull(34) ? null : r.GetInt32(34), NullableLong(r, 35)));
+            r.IsDBNull(34) ? null : r.GetInt32(34), NullableLong(r, 35),
+            NullableLong(r, 36), NullableLong(r, 37), NullableLong(r, 38), NullableLong(r, 39)));
 
         var statementsByMetric = LoadStoredStatements(connection, rows.Select(row => row.OperationId).Distinct(), storeSensitive)
             .GroupBy(row => (row.OperationId, row.Variant, row.CaseId))
@@ -593,7 +596,13 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 {
                     var samples = metric.ToArray();
                     var tableRows = samples.Where(row => row.Table is not null)
-                        .Select(row => new CompareTableIoEvidence(row.Table!, row.TableLogicalReads!.Value, row.TableLobLogicalReads, row.ScanCount))
+                        .Select(row => new CompareTableIoEvidence(row.Table!, row.TableLogicalReads!.Value, row.TableLobLogicalReads, row.ScanCount)
+                        {
+                            PhysicalReads = row.PhysicalReads,
+                            ReadAheadReads = row.ReadAheadReads,
+                            LobPhysicalReads = row.LobPhysicalReads,
+                            LobReadAheadReads = row.LobReadAheadReads
+                        })
                         .ToArray();
                     long? scans = tableRows.Length == 0 || tableRows.Any(row => row.Scans is null)
                         ? null
@@ -630,7 +639,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                         return new CompareStatementEvidence(row.Key, row.Occurrence, text, row.PlanHash,
                             row.Status, reads, scansForStatement,
                             row.Executions, hiddenWork, objectRows)
-                        { UdfElapsedMilliseconds = row.UdfElapsedMs, PlanLink = PlanLink(row), CpuMs = row.CpuMs, ElapsedMs = row.ElapsedMs, PlanRepetition = row.EvidenceRepetition, GrantRequestedKb = row.GrantRequestedKb, GrantGrantedKb = row.GrantGrantedKb, GrantMaxUsedKb = row.GrantMaxUsedKb, HasSpillWarning = row.HasSpillWarning };
+                        { EvidenceEligible = row.Status == "confirmed", UdfElapsedMilliseconds = row.UdfElapsedMs, PlanLink = PlanLink(row), CpuMs = row.CpuMs, ElapsedMs = row.ElapsedMs, PlanRepetition = row.EvidenceRepetition, GrantRequestedKb = row.GrantRequestedKb, GrantGrantedKb = row.GrantGrantedKb, GrantMaxUsedKb = row.GrantMaxUsedKb, HasSpillWarning = row.HasSpillWarning };
                     }).ToArray();
                     var omittedStatements = samples.Select(row => row.OmittedStatements).DefaultIfEmpty(0).Max();
                     var attribution = statements.Length > 0 && omittedStatements == 0 && statements.All(row => row.Status == "confirmed")
@@ -2016,6 +2025,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     Label = StringProperty(item, "caseLabel") ?? current.Label,
                     ResultsEquivalent = BooleanProperty(equivalence, "equivalent"),
                     RegressionVerdict = StringProperty(Property(item, "regression"), "verdict"),
+                    PolicyReasons = ReadPolicyReasons(Property(item, "regression")),
                 };
             }
         }
@@ -2026,6 +2036,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             {
                 ResultsEquivalent = BooleanProperty(summary, "resultsEquivalent"),
                 RegressionVerdict = StringProperty(Property(summary, "regression"), "verdict"),
+                PolicyReasons = ReadPolicyReasons(Property(summary, "regression")),
             };
         }
 
@@ -2036,6 +2047,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         return cases.Values.OrderBy(item => conditions?.Cases?.FirstOrDefault(value => value.Id == item.CaseId)?.Index ?? int.MaxValue)
             .ThenBy(item => item.CaseId, StringComparer.Ordinal).ToArray();
     }
+
+    private static IReadOnlyList<string> ReadPolicyReasons(JsonElement? regression) =>
+        Property(regression, "reasons") is { ValueKind: JsonValueKind.Array } reasons
+            ? reasons.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString()!).ToArray() : [];
 
     private static bool? AggregateEquivalence(IReadOnlyList<CompareCaseEvidence> cases)
     {

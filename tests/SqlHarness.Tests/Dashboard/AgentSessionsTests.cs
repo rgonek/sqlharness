@@ -26,6 +26,19 @@ public sealed class AgentSessionsTests
         return request;
     }
 
+    // These routing/version-label fixtures need completed measured comparisons, not metadata-only attempts.
+    private static JournalHandle MeasuredCompare(JournalSeed seed, SessionIdentity session, string subject,
+        string scope, string baseline, string candidate, AgentCallMetadata? agent = null)
+    {
+        var handle = seed.Compare(session, subject, scope, baseline, candidate, agent: agent);
+        var template = JournalSeed.Benchmark().Variants[0];
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
+            """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","equivalence":{"equivalent":true}}]}""",
+            new BenchmarkJournalRecord([template with { Variant = "baseline", CaseId = "0" },
+                template with { Variant = "candidate", CaseId = "0" }], []));
+        return handle;
+    }
+
     [Fact]
     public async Task Agent_session_list_includes_children_counts_and_title_precedence()
     {
@@ -422,11 +435,11 @@ public sealed class AgentSessionsTests
         var seed = new JournalSeed(home.DatabasePath);
         var child = JournalSeed.Session("claude:optimization", "claude") with { Transport = JournalTransport.Mcp };
         seed.Operation(child, agent: new AgentCallMetadata("tool-pending", null, null, null, null, null, null));
-        var compare = seed.Compare(child, "orders", "whole", "sha256:h0", "sha256:h1",
+        var compare = MeasuredCompare(seed, child, "orders", "whole", "sha256:h0", "sha256:h1",
             agent: new AgentCallMetadata("tool-linked", null, null, null, null, null, null));
         seed.RecordConditions(compare);
         JournalSeed.Link(home.DatabasePath, compare.OperationId, "claude", "conversation-1", "Conversation");
-        var other = seed.Compare(child, "orders", "whole", "sha256:h2", "sha256:h3",
+        var other = MeasuredCompare(seed, child, "orders", "whole", "sha256:h2", "sha256:h3",
             agent: new AgentCallMetadata("tool-linked-2", null, null, null, null, null, null));
         seed.RecordConditions(other, JournalSeed.ReproConditions() with { FixedForFingerprint = [new ConditionsParameter("@fixed", "int", JsonSerializer.SerializeToElement(2))] });
         JournalSeed.Link(home.DatabasePath, other.OperationId, "claude", "conversation-1", "Conversation");
@@ -470,11 +483,11 @@ public sealed class AgentSessionsTests
         var firstSession = JournalSeed.Session("codex:first", "codex") with { Transport = JournalTransport.Mcp };
         var secondSession = JournalSeed.Session("codex:second", "codex") with { Transport = JournalTransport.Mcp };
         var cliSession = JournalSeed.Session("codex:cli", "codex");
-        var first = seed.Compare(firstSession, "orders", "whole", "sha256:h0", "sha256:h1",
+        var first = MeasuredCompare(seed, firstSession, "orders", "whole", "sha256:h0", "sha256:h1",
             agent: new AgentCallMetadata(null, null, null, "thread-1", null, null, null));
-        seed.Compare(secondSession, "orders", "whole", "sha256:h1", "sha256:h2",
+        MeasuredCompare(seed, secondSession, "orders", "whole", "sha256:h1", "sha256:h2",
             agent: new AgentCallMetadata(null, null, null, "thread-1", null, null, null));
-        seed.Compare(cliSession, "orders", "whole", "sha256:h2", "sha256:h3",
+        MeasuredCompare(seed, cliSession, "orders", "whole", "sha256:h2", "sha256:h3",
             agent: new AgentCallMetadata(null, null, null, "thread-1", null, null, null));
         await using var dashboard = await StartEnabled(home);
         var (_, client) = dashboard;
@@ -508,10 +521,10 @@ public sealed class AgentSessionsTests
         using var home = new TempHome();
         var seed = new JournalSeed(home.DatabasePath);
         var session = JournalSeed.Session("claude:inferred", "claude") with { Transport = JournalTransport.Mcp };
-        var first = seed.Compare(session, "orders", "whole", "sha256:h0", "sha256:h1",
+        var first = MeasuredCompare(seed, session, "orders", "whole", "sha256:h0", "sha256:h1",
             agent: new AgentCallMetadata("tool-first", null, null, null, null, null, null));
-        var inferred = seed.Compare(session, "orders", "whole", "sha256:h1", "sha256:h3");
-        var last = seed.Compare(session, "orders", "whole", "sha256:h1", "sha256:h2",
+        var inferred = MeasuredCompare(seed, session, "orders", "whole", "sha256:h1", "sha256:h3");
+        var last = MeasuredCompare(seed, session, "orders", "whole", "sha256:h1", "sha256:h2",
             agent: new AgentCallMetadata("tool-last", null, null, null, null, null, null));
         JournalSeed.Link(home.DatabasePath, first.OperationId, "claude", "conversation-inferred", null);
         JournalSeed.Link(home.DatabasePath, last.OperationId, "claude", "conversation-inferred", null);

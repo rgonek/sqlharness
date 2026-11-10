@@ -28,8 +28,8 @@ public static class OptimizationComparer
         var versionB = versionsB[0];
         var hashA = versionA.Hash;
         var hashB = versionB.Hash;
-        var scopeCompares = compares.Where(compare =>
-                string.Equals(compare.Fingerprint ?? string.Empty, group.Fingerprint, StringComparison.Ordinal)
+        var scopeCompares = compares.Where(compare => OptimizationEligibility.IsEligible(compare)
+                && string.Equals(compare.Fingerprint ?? string.Empty, group.Fingerprint, StringComparison.Ordinal)
                 && string.Equals(NormalizeScope(compare.Scope), versionA.Scope, StringComparison.Ordinal))
             .OrderBy(compare => compare.StartedAt, StringComparer.Ordinal)
             .ThenBy(compare => compare.OperationId)
@@ -73,9 +73,6 @@ public static class OptimizationComparer
                 StringComparer.Ordinal);
         var postgresMetrics = IsPostgres(before.Engine ?? after.Engine);
         var commonIds = before.Metrics.Keys.Intersect(after.Metrics.Keys, StringComparer.Ordinal)
-            .Where(id => postgresMetrics
-                ? HasComparablePostgresMetric(before.Metrics[id], after.Metrics[id])
-                : before.Metrics[id].LogicalReadsMedian.HasValue && after.Metrics[id].LogicalReadsMedian.HasValue)
             .OrderBy(id => CaseOrder(id, caseLabels), StringComparer.Ordinal)
             .ThenBy(id => id, StringComparer.Ordinal)
             .ToArray();
@@ -91,8 +88,11 @@ public static class OptimizationComparer
         var validSelection = selectedCase == "all" || commonIds.Contains(selectedCase, StringComparer.Ordinal);
         var resolvedSelection = validSelection ? selectedCase : "all";
         var selectedIds = resolvedSelection == "all" ? commonIds : [resolvedSelection];
-        var coverage = commonIds.Length < totalCaseIds.Length
-            ? $"{commonIds.Length.ToString(CultureInfo.InvariantCulture)} of {totalCaseIds.Length.ToString(CultureInfo.InvariantCulture)} cases"
+        var measuredCount = commonIds.Count(id => postgresMetrics
+            ? HasComparablePostgresMetric(before.Metrics[id], after.Metrics[id])
+            : before.Metrics[id].LogicalReadsMedian.HasValue && after.Metrics[id].LogicalReadsMedian.HasValue);
+        var coverage = measuredCount < totalCaseIds.Length
+            ? $"{measuredCount.ToString(CultureInfo.InvariantCulture)} of {totalCaseIds.Length.ToString(CultureInfo.InvariantCulture)} cases"
             : string.Empty;
         var normalizedAggregate = aggregate.Equals("mean", StringComparison.OrdinalIgnoreCase) ? "mean" : "sum";
         var allCasesConfirmed = selectedIds.Length > 0 && selectedIds.All(id => caseComparisons.TryGetValue(id, out var item)
@@ -126,7 +126,7 @@ public static class OptimizationComparer
         var wholeBatch = new WholeBatchLine(batchBefore, batchAfter, sharedBefore,
             batchBefore is { } wb && batchAfter is { } wa && sharedBefore is { } sh
                 ? $"whole batch: {wb.ToString(CultureInfo.InvariantCulture)} → {wa.ToString(CultureInfo.InvariantCulture)} reads (shared statements: {sh.ToString(CultureInfo.InvariantCulture)})"
-                : "whole batch: reads unavailable")
+                : batchBefore.HasValue && batchAfter.HasValue ? $"whole batch: {batchBefore} → {batchAfter} reads" : "whole batch: reads unavailable")
         { SharedBefore = sharedBefore, SharedAfter = sharedAfter };
         wholeBatch = wholeBatch with
         {
@@ -136,10 +136,15 @@ public static class OptimizationComparer
                 ? batchAfter.Value - sharedAfter.Value : null,
         };
 
+        var outcomeIds = (direct?.Cases.Select(CaseKey) ?? selectedIds).Where(id => selectedIds.Contains(id, StringComparer.Ordinal))
+            .Concat(selectedIds).Distinct(StringComparer.Ordinal);
+        var outcomeRows = OptimizationOutcomes.Build(direct, before.Metrics, after.Metrics, outcomeIds, caseLabels, directForward);
         return new OptimizationComparison(a, b, basis, direct?.OperationId, equivalence, caseOptions,
             resolvedSelection, normalizedAggregate, coverage, mixed, visibleTables, collapsed,
-            new ElapsedInfo(elapsedBefore, elapsedAfter, direct?.RegressionVerdict, basis == PairBasis.DifferentRunsSameConditions))
+            new ElapsedInfo(elapsedBefore, elapsedAfter, directForward ? direct?.RegressionVerdict : null, basis == PairBasis.DifferentRunsSameConditions))
         {
+            Outcomes = OptimizationOutcomes.Count(outcomeRows),
+            CaseOutcomes = outcomeRows,
             CaseRows = commonIds.Select(id => new CaseRows(id, caseLabels.GetValueOrDefault(id, id), caseLabels.GetValueOrDefault(id, id),
                 before.Metrics[id].RowsReturned, after.Metrics[id].RowsReturned)
             { RowsAVaries = before.Metrics[id].RowsReturnedVaries, RowsBVaries = after.Metrics[id].RowsReturnedVaries }).ToArray(),
@@ -181,9 +186,10 @@ public static class OptimizationComparer
         if (va.Count != 1 || vb.Count != 1 || va[0].Scope != vb[0].Scope)
             return Empty(a, b, PairBasis.ConditionsDiffer, "conditions differ", selectedCase, aggregate);
         var scope = va[0].Scope;
-        var ea = compares.Where(c => c.Fingerprint == groupA.Fingerprint && NormalizeScope(c.Scope) == scope)
+        // Completed legacy observations without metrics retain SQL/plan navigation only.
+        var ea = compares.Where(c => (OptimizationEligibility.IsEligible(c) || c.Status == "succeeded" && c.Metrics.Count == 0) && c.Fingerprint == groupA.Fingerprint && NormalizeScope(c.Scope) == scope)
             .OrderBy(c => c.StartedAt, StringComparer.Ordinal).ThenBy(c => c.OperationId).ToArray();
-        var eb = compares.Where(c => c.Fingerprint == groupB.Fingerprint && NormalizeScope(c.Scope) == scope)
+        var eb = compares.Where(c => (OptimizationEligibility.IsEligible(c) || c.Status == "succeeded" && c.Metrics.Count == 0) && c.Fingerprint == groupB.Fingerprint && NormalizeScope(c.Scope) == scope)
             .OrderBy(c => c.StartedAt, StringComparer.Ordinal).ThenBy(c => c.OperationId).ToArray();
         if (!TryResolveIdentity(groupA, ea, out var sa, out var da) || !TryResolveIdentity(groupB, eb, out var sb, out var db)
             || sa != sb || da != db)
@@ -215,6 +221,7 @@ public static class OptimizationComparer
         var batchB = AggregateReads(right.Metrics, selected, mode);
         var sharedA = ReduceNullable(selected.Select(id => comparisons[id].SharedBefore), mode);
         var sharedB = ReduceNullable(selected.Select(id => comparisons[id].SharedAfter), mode);
+        var outcomeRows = OptimizationOutcomes.Build(null, left.Metrics, right.Metrics, selected, before.Value.Labels, false, approximate: true);
         return new OptimizationComparison(a, b, PairBasis.ApproximateAcrossConditions, null,
             "Different conditions — approximate, not a verdict", options, selection, mode,
             $"{ids.Length} of {before.Value.Count + after.Value.Count - ids.Length} cases paired", null,
@@ -222,6 +229,8 @@ public static class OptimizationComparer
             new ElapsedInfo(Aggregate(left.Metrics, selected, m => m.ElapsedMedianMs, mode),
                 Aggregate(right.Metrics, selected, m => m.ElapsedMedianMs, mode), null, true))
         {
+            Outcomes = OptimizationOutcomes.Count(outcomeRows),
+            CaseOutcomes = outcomeRows,
             GroupA = groupA.Fingerprint,
             GroupB = groupB.Fingerprint,
             GroupLabelA = groupA.Label,
@@ -295,7 +304,10 @@ public static class OptimizationComparer
         if (before.StatementAttribution != "confirmed" || after.StatementAttribution != "confirmed"
             || before.OmittedStatements > 0 || after.OmittedStatements > 0
             || before.Statements.Count == 0 || after.Statements.Count == 0
-            || before.Statements.Any(row => row.Status != "confirmed") || after.Statements.Any(row => row.Status != "confirmed"))
+            || before.Statements.GroupBy(row => (row.Key, row.Occurrence)).Any(g => g.Count() != 1)
+            || after.Statements.GroupBy(row => (row.Key, row.Occurrence)).Any(g => g.Count() != 1)
+            || before.Statements.Any(row => row.Status != "confirmed" || row.EvidenceEligible == false)
+            || after.Statements.Any(row => row.Status != "confirmed" || row.EvidenceEligible == false))
             return ("whole batch", null, null, null, null);
 
         var a = before.Statements.ToDictionary(row => (row.Key, row.Occurrence));
@@ -350,7 +362,8 @@ public static class OptimizationComparer
             var l = left.Where(row => row is not null).Cast<CompareStatementEvidence>().ToArray();
             var r = right.Where(row => row is not null).Cast<CompareStatementEvidence>().ToArray();
             var sharedEverywhere = cases.Count > 0 && cases.Select((id, index) => (id, index))
-                .All(pair => left[pair.index] is { } x && right[pair.index] is { } y && IsShared(x, y));
+                .All(pair => left[pair.index] is { } x && right[pair.index] is { } y
+                    && StatementEligible(before[pair.id], x) && StatementEligible(after[pair.id], y) && IsShared(x, y));
             var presentSome = l.Length < cases.Count || r.Length < cases.Count;
             var status = sharedEverywhere ? "shared"
                 : l.Length == 0 ? "only-candidate"
@@ -379,9 +392,9 @@ public static class OptimizationComparer
                 return new TableRow(name, objectScansBefore, objectScansAfter, objectReadsBefore, objectReadsAfter,
                     Change(objectReadsBefore, objectReadsAfter))
                 {
-                    LobLogicalReadsBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed"
+                    LobLogicalReadsBefore = singleCase && StatementEligible(before[cases[0]], left[0])
                         ? LobForObject(left[0]!, right[0], name, beforeSide: true) : null,
-                    LobLogicalReadsAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed"
+                    LobLogicalReadsAfter = singleCase && StatementEligible(after[cases[0]], right[0])
                         ? LobForObject(right[0]!, left[0], name, beforeSide: false) : null,
                 };
             }).ToArray();
@@ -394,29 +407,65 @@ public static class OptimizationComparer
                 l.Concat(r).SelectMany(row => row.HiddenWork).Distinct().ToArray(),
                 objects)
             {
-                CpuBeforeMs = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.CpuMs : null,
-                CpuAfterMs = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.CpuMs : null,
-                ElapsedBeforeMs = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.ElapsedMs : null,
-                ElapsedAfterMs = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.ElapsedMs : null,
-                GrantRequestedKbBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.GrantRequestedKb : null,
-                GrantRequestedKbAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.GrantRequestedKb : null,
-                GrantGrantedKbBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.GrantGrantedKb : null,
-                GrantGrantedKbAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.GrantGrantedKb : null,
-                GrantMaxUsedKbBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.GrantMaxUsedKb : null,
-                GrantMaxUsedKbAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.GrantMaxUsedKb : null,
-                HasSpillWarningBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.HasSpillWarning : null,
-                HasSpillWarningAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.HasSpillWarning : null,
-                PlanRepetitionBefore = singleCase && left[0]?.Status == "confirmed" && before[cases[0]].StatementAttribution == "confirmed" ? left[0]!.PlanRepetition : null,
-                PlanRepetitionAfter = singleCase && right[0]?.Status == "confirmed" && after[cases[0]].StatementAttribution == "confirmed" ? right[0]!.PlanRepetition : null,
+                CpuBeforeMs = singleCase && StatementEligible(before[cases[0]], left[0]) ? left[0]!.CpuMs : null,
+                CpuAfterMs = singleCase && StatementEligible(after[cases[0]], right[0]) ? right[0]!.CpuMs : null,
+                ElapsedBeforeMs = singleCase && StatementEligible(before[cases[0]], left[0]) ? left[0]!.ElapsedMs : null,
+                ElapsedAfterMs = singleCase && StatementEligible(after[cases[0]], right[0]) ? right[0]!.ElapsedMs : null,
+                GrantRequestedKbBefore = singleCase && StatementEligible(before[cases[0]], left[0]) ? left[0]!.GrantRequestedKb : null,
+                GrantRequestedKbAfter = singleCase && StatementEligible(after[cases[0]], right[0]) ? right[0]!.GrantRequestedKb : null,
+                GrantGrantedKbBefore = singleCase && StatementEligible(before[cases[0]], left[0]) ? left[0]!.GrantGrantedKb : null,
+                GrantGrantedKbAfter = singleCase && StatementEligible(after[cases[0]], right[0]) ? right[0]!.GrantGrantedKb : null,
+                GrantMaxUsedKbBefore = singleCase && StatementEligible(before[cases[0]], left[0]) ? left[0]!.GrantMaxUsedKb : null,
+                GrantMaxUsedKbAfter = singleCase && StatementEligible(after[cases[0]], right[0]) ? right[0]!.GrantMaxUsedKb : null,
+                HasSpillWarningBefore = singleCase && StatementEligible(before[cases[0]], left[0]) ? left[0]!.HasSpillWarning : null,
+                HasSpillWarningAfter = singleCase && StatementEligible(after[cases[0]], right[0]) ? right[0]!.HasSpillWarning : null,
+                PlanRepetitionBefore = singleCase && StatementEligible(before[cases[0]], left[0]) ? left[0]!.PlanRepetition : null,
+                PlanRepetitionAfter = singleCase && StatementEligible(after[cases[0]], right[0]) ? right[0]!.PlanRepetition : null,
                 Occurrence = key.Occurrence,
                 PlanHashBefore = l.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
                 PlanHashAfter = r.Select(row => row.PlanHash).FirstOrDefault(value => value is not null),
                 PlanLinkBefore = l.Select(row => row.PlanLink).FirstOrDefault(value => value is not null),
                 PlanLinkAfter = r.Select(row => row.PlanLink).FirstOrDefault(value => value is not null),
                 UdfElapsedMilliseconds = l.Concat(r).Select(row => row.UdfElapsedMilliseconds).FirstOrDefault(value => value.HasValue),
+                MetricAvailabilityBefore = Availability(before, left, cases, singleCase, readsBefore, scansBefore, objects, true),
+                MetricAvailabilityAfter = Availability(after, right, cases, singleCase, readsAfter, scansAfter, objects, false),
             };
         }).OrderBy(row => row.Status == "shared" ? 1 : 0)
             .ThenByDescending(row => AbsoluteChange(row.ReadsBefore, row.ReadsAfter)).ToArray();
+    }
+
+    private static IReadOnlyDictionary<string, MetricAvailability> Availability(
+        IReadOnlyDictionary<string, CompareMetricEvidence> metrics, CompareStatementEvidence?[] statements,
+        IReadOnlyList<string> cases, bool singleCase, long? reads, long? scans, IReadOnlyList<TableRow> objects, bool before)
+    {
+        var result = new Dictionary<string, MetricAvailability>(StringComparer.Ordinal);
+        Add("logicalReads", reads.HasValue, row => row.Reads.HasValue);
+        Add("scans", scans.HasValue, row => row.Scans.HasValue);
+        Add("lobLogicalReads", singleCase && objects.Count > 0 && objects.All(o => (before ? o.LobLogicalReadsBefore : o.LobLogicalReadsAfter).HasValue),
+            row => row.Objects.Count > 0 && row.Objects.All(o => (before ? o.LobLogicalReadsBefore : o.LobLogicalReadsAfter).HasValue), true);
+        Add("cpuMs", Runtime(row => row.CpuMs.HasValue), row => row.CpuMs.HasValue, true);
+        Add("elapsedMs", Runtime(row => row.ElapsedMs.HasValue), row => row.ElapsedMs.HasValue, true);
+        Add("grantRequestedKb", Runtime(row => row.GrantRequestedKb.HasValue), row => row.GrantRequestedKb.HasValue, true);
+        Add("grantGrantedKb", Runtime(row => row.GrantGrantedKb.HasValue), row => row.GrantGrantedKb.HasValue, true);
+        Add("grantMaxUsedKb", Runtime(row => row.GrantMaxUsedKb.HasValue), row => row.GrantMaxUsedKb.HasValue, true);
+        Add("hasSpillWarning", Runtime(row => row.HasSpillWarning.HasValue), row => row.HasSpillWarning.HasValue, true);
+        return result;
+
+        bool Runtime(Func<CompareStatementEvidence, bool> hasValue) => singleCase && cases.Count == 1
+            && metrics.TryGetValue(cases[0], out var metric) && StatementEligible(metric, statements[0]) && hasValue(statements[0]!);
+        void Add(string name, bool available, Func<CompareStatementEvidence, bool> hasValue, bool singleOnly = false)
+        {
+            var contributors = cases.Select((id, i) => metrics.TryGetValue(id, out var metric)
+                && (statements[i] is { } row ? StatementEligible(metric, row) && hasValue(row)
+                    : !singleOnly && metric.StatementAttribution == "confirmed" && metric.OmittedStatements == 0)).Count(v => v);
+            var reason = available ? null : singleOnly && !singleCase ? "Select a single case for this metric."
+                : statements.Any(row => row is not null && row.Status != "confirmed") ? "Ambiguous statement attribution."
+                : cases.Select((id, i) => statements[i] is null && metrics.GetValueOrDefault(id)?.OmittedStatements > 0).Any(v => v)
+                    ? "Statement evidence was omitted."
+                : contributors > 0 && contributors < cases.Count ? "Incomplete case coverage."
+                : "No eligible recorded measurement for this metric.";
+            result[name] = new MetricAvailability(available ? "available" : "unavailable", reason, contributors, cases.Count);
+        }
     }
 
     private static long? LobForObject(CompareStatementEvidence statement, CompareStatementEvidence? other, string name, bool beforeSide)
@@ -429,11 +478,17 @@ public static class OptimizationComparer
         return beforeSide ? rows[0].LobLogicalReadsBefore : rows[0].LobLogicalReadsAfter;
     }
 
+    private static bool StatementEligible(CompareMetricEvidence metric, CompareStatementEvidence? statement) =>
+        statement is not null && statement.Status == "confirmed" && statement.EvidenceEligible != false
+        && metric.StatementAttribution is "confirmed" or "partial"
+        && metric.Statements.Count(row => row.Key == statement.Key && row.Occurrence == statement.Occurrence) == 1;
+
     private static long? StatementCounter(CompareMetricEvidence? metric, CompareStatementEvidence? statement,
         string? objectName, Func<CompareStatementEvidence, long?> statementValue, Func<TableRow, long?> objectValue)
     {
-        if (metric is null || !string.Equals(metric.StatementAttribution, "confirmed", StringComparison.Ordinal)) return null;
-        if (statement is null) return 0;
+        if (metric is null) return null;
+        if (statement is null) return metric.StatementAttribution == "confirmed" && metric.OmittedStatements == 0 ? 0 : null;
+        if (!StatementEligible(metric, statement)) return null;
         if (objectName is null) return statement.Status == "confirmed" ? statementValue(statement) : null;
         var matchingObjects = statement.Objects.Where(row => row.Table.Equals(objectName, StringComparison.OrdinalIgnoreCase)).ToArray();
         if (matchingObjects.Length == 0) return statement.Status == "confirmed" ? 0 : null;
@@ -573,10 +628,15 @@ public static class OptimizationComparer
         var metrics = compare.Metrics.Where(metric => metric.Variant.Equals(variant, StringComparison.OrdinalIgnoreCase))
             .GroupBy(metric => cases.GetValueOrDefault(metric.CaseId, metric.MeasurementFingerprint ?? metric.CaseId), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
+        foreach (var item in compare.Cases)
+        {
+            var key = CaseKey(item);
+            metrics.TryAdd(key, new CompareMetricEvidence(variant, item.CaseId, item.Label, null, null, null, []));
+        }
         return new VersionSnapshot(compare.Engine, compare.OperationId, variant, metrics);
     }
 
-    private static string Outcome(long before, long after)
+    internal static string Outcome(long before, long after)
     {
         var difference = (decimal)before - after;
         var threshold = Math.Max(10m, before * 0.01m);
@@ -600,7 +660,21 @@ public static class OptimizationComparer
             var scansBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, Scans);
             var scansAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, Scans);
             return new TableRow(table, scansBefore, scansAfter, readsBefore, readsAfter,
-                Change(readsBefore, readsAfter));
+                Change(readsBefore, readsAfter))
+            {
+                DataLogicalReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.LogicalReads),
+                DataLogicalReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.LogicalReads),
+                LobLogicalReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.LobLogicalReads),
+                LobLogicalReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.LobLogicalReads),
+                PhysicalReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.PhysicalReads),
+                PhysicalReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.PhysicalReads),
+                ReadAheadReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.ReadAheadReads),
+                ReadAheadReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.ReadAheadReads),
+                LobPhysicalReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.LobPhysicalReads),
+                LobPhysicalReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.LobPhysicalReads),
+                LobReadAheadReadsBefore = AggregateTable(before.Metrics, caseIds, table, aggregate, row => row.LobReadAheadReads),
+                LobReadAheadReadsAfter = AggregateTable(after.Metrics, caseIds, table, aggregate, row => row.LobReadAheadReads),
+            };
         })
         .OrderByDescending(row => AbsoluteChange(row.ReadsBefore, row.ReadsAfter))
         .ThenBy(row => row.Table, StringComparer.OrdinalIgnoreCase).ToArray();
@@ -666,7 +740,7 @@ public static class OptimizationComparer
             var rows = metric.TableRows.Where(row => row.Table.Equals(table, StringComparison.OrdinalIgnoreCase)).ToArray();
             if (rows.Length == 0)
             {
-                if (metric.TableRows.Count == 0) return null;
+                if (metric.TableRows.Count == 0 || metric.TableRows.Any(row => !value(row).HasValue)) return null;
                 values.Add(0);
                 continue;
             }
@@ -711,7 +785,12 @@ public static class OptimizationComparer
     }
 
     private static bool IsCollapsed(TableRow row) =>
-        IsTemporaryName(row.Table) || row.ReadsBefore == 0 && row.ReadsAfter == 0;
+        !HasDetailedIo(row) && (IsTemporaryName(row.Table) || row.ReadsBefore == 0 && row.ReadsAfter == 0);
+
+    private static bool HasDetailedIo(TableRow row) => row.PhysicalReadsBefore.HasValue || row.PhysicalReadsAfter.HasValue
+        || row.ReadAheadReadsBefore.HasValue || row.ReadAheadReadsAfter.HasValue
+        || row.LobPhysicalReadsBefore.HasValue || row.LobPhysicalReadsAfter.HasValue
+        || row.LobReadAheadReadsBefore.HasValue || row.LobReadAheadReadsAfter.HasValue;
 
     private static bool IsTemporaryName(string table)
     {

@@ -257,10 +257,64 @@ public sealed class JournalReaderTests
         Assert.Equal(10, baseline.CpuMedianMs);
         Assert.Equal(new PostgresBuffers(7, 2, 1, 0, 0, 3), baseline.Postgres);
         Assert.Equal(2, baseline.ScansSum);
-        Assert.Equal(new CompareTableIoEvidence("Orders", 90, 10, 2), Assert.Single(baseline.TableRows));
+        Assert.Equal(new CompareTableIoEvidence("Orders", 90, 10, 2) { PhysicalReads = 0 }, Assert.Single(baseline.TableRows));
 
         var section = OptimizationSummaryBuilder.Build([evidence]);
         Assert.Single(section.Subjects);
+    }
+
+    [Fact]
+    public void Optimization_reader_preserves_all_stored_table_counters_and_recorded_policy_reasons()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:full-io"), "orders", "whole", "h0", "h1");
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
+            """{"kind":"compare","resultsEquivalent":true,"cases":[{"caseId":"0","equivalence":{"equivalent":true},"regression":{"verdict":"fail","reasons":["elapsed-regressed"]}}]}""",
+            new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2) with
+            { TableIo = [new JournalTableIo("Orders", 90, 2, 3, null, 4, 10, 5, 6, 0)] }, OptimizationMetric("candidate", 80, 30, 1)], []));
+        var session = Reader(home).Sessions(new SessionQuery()).Items.Single().Id;
+        var evidence = Reader(home).OptimizationEvidence(session).Single();
+        var json = JsonSerializer.SerializeToElement(evidence, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var table = json.GetProperty("metrics")[0].GetProperty("tableRows")[0];
+        Assert.True(table.TryGetProperty("physicalReads", out var physical), "Stored physical reads must survive the optimization reader.");
+        Assert.Equal(3, physical.GetInt64());
+        Assert.Equal(4, table.GetProperty("readAheadReads").GetInt64());
+        Assert.Equal(5, table.GetProperty("lobPhysicalReads").GetInt64());
+        Assert.Equal(6, table.GetProperty("lobReadAheadReads").GetInt64());
+        Assert.Equal("elapsed-regressed", json.GetProperty("cases")[0].GetProperty("policyReasons")[0].GetString());
+    }
+
+    [Theory]
+    [InlineData("failed")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
+    public void Interrupted_compare_retains_diagnostics_metrics_and_history_without_creating_versions(string status)
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:interrupted"), "orders", "whole", "h0", "h1", status);
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(), """{"kind":"compare","cases":[{"caseId":"0"}]}""",
+            new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2)], []));
+        using (var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE operations SET error_message = 'Retained synthetic failure', cancel_reason = 'client' WHERE id = $id;";
+            update.Parameters.AddWithValue("$id", handle.OperationId);
+            Assert.Equal(1, update.ExecuteNonQuery());
+        }
+        var reader = Reader(home);
+        var session = reader.Sessions(new SessionQuery()).Items.Single().Id;
+        var evidence = Assert.Single(reader.OptimizationEvidence(session));
+        Assert.Equal(status, evidence.Status);
+        Assert.Equal(100, Assert.Single(evidence.Metrics).LogicalReadsMedian);
+        Assert.Empty(reader.Optimization(session).Subjects);
+        var detail = reader.Operation(handle.OperationId)!;
+        Assert.Equal("Retained synthetic failure", detail.Operation.ErrorMessage);
+        Assert.Equal("client", detail.Operation.CancelReason);
+        Assert.Single(detail.Variants);
+        Assert.Equal("orders", detail.CompareSubject);
     }
 
     [Fact]
