@@ -32,7 +32,11 @@ window.scrollTo = (() => {}) as typeof window.scrollTo
 // The Linux gate's jsdom renders the stats page slower than findBy's 1s default.
 configure({ asyncUtilTimeout: 5_000 })
 
-beforeEach(() => installNetworkIsolation())
+beforeEach(() => {
+  sessionStorage.removeItem("sqlharness.activity.filters")
+  sessionStorage.removeItem("sqlharness.activity.view")
+  installNetworkIsolation()
+})
 
 afterEach(async () => {
   try {

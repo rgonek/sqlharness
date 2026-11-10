@@ -12,6 +12,7 @@ import { SessionsPage } from "@/pages/SessionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { StatsPage } from "@/pages/StatsPage"
 import { NamedOperationsPage } from "@/pages/NamedOperationsPage"
+import { validateActivitySearch } from "@/lib/activitySearch"
 
 export type OptimizationView = "changed" | "whole" | "statements"
 export type SessionSearch = { subject?: string; db?: string; group?: string; groupB?: string; scope?: string; a?: string; b?: string; case?: string; agg?: string; view?: OptimizationView; unassigned?: boolean }
@@ -19,7 +20,7 @@ export type OperationDetailSearch = { case?: string; agg?: string; view?: Optimi
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
-const liveRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: LivePage })
+const liveRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: LivePage, validateSearch: validateActivitySearch })
 const sessionsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions", component: SessionsPage })
 const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$id", component: SessionPage,
   validateSearch: (search: Record<string, unknown>): SessionSearch => ({
@@ -101,7 +102,7 @@ export const routeTree = rootRoute.addChildren([liveRoute, sessionsRoute, sessio
 
 /** Browser history in the app; tests pass a memory history. */
 export function createAppRouter(history?: RouterHistory) {
-  return createRouter({ routeTree, history, defaultPreload: false })
+  return createRouter({ routeTree, history, defaultPreload: false, scrollRestoration: true })
 }
 
 declare module "@tanstack/react-router" {

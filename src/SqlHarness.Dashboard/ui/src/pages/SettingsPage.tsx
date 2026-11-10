@@ -194,7 +194,7 @@ export function SettingsPage() {
   // mutateAsync keeps a stable identity, so one queue per page instance is safe.
   const [queue] = useState(() => createSaveQueue((settings: Settings) => save.mutateAsync({ settings })))
 
-  if (query.error) return <ErrorState error={query.error} />
+  if (query.error) return <ErrorState error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
   if (query.isPending) return <Skeleton className="h-64 w-full" />
 
   const draft = edited ?? query.data.settings

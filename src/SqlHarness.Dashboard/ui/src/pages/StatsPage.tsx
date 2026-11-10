@@ -139,11 +139,11 @@ function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
         </Tabs>
       </div>
       {overview.error ? (
-        <ErrorState error={overview.error} />
+        <ErrorState error={overview.error} onRetry={() => void overview.refetch()} retrying={overview.isFetching} />
       ) : dimensionOptions.error ? (
-        <ErrorState error={dimensionOptions.error} />
+        <ErrorState error={dimensionOptions.error} onRetry={() => void dimensionOptions.refetch()} retrying={dimensionOptions.isFetching} />
       ) : query.error ? (
-        <ErrorState error={query.error} />
+        <ErrorState error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       ) : overview.isPending || dimensionOptions.isPending || !dimensionOptions.data ? (
         <Skeleton className="h-64 w-full" />
       ) : (

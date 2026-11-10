@@ -49,7 +49,7 @@ export function ProfilesPage() {
   useBlocker({ shouldBlockFn: () => saving || (dirty && !window.confirm("Discard unsaved profile changes?")), enableBeforeUnload: saving || dirty })
   const discard = () => !dirty || window.confirm("Discard unsaved profile changes?")
   const leaveEdit = () => { setEditing(null); setDirty(false) }
-  if (query.error && !editing) return <ErrorState error={query.error} />
+  if (query.error && !editing) return <ErrorState error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
   if (query.isPending && !editing) return <Skeleton className="h-64 w-full" />
   const { status, profiles, message } = query.data ?? { status: "missing", profiles: [], message: null }
   const filtered = profiles.filter(profile => [profile.name, profile.server, profile.database].some(value => value.toLowerCase().includes(search.toLowerCase())))
@@ -72,7 +72,7 @@ export function ProfilesPage() {
     </aside>
     <div className="flex min-w-0 flex-col gap-5">
       <header className="flex flex-col gap-1"><h1>Profiles</h1><p className="text-sm text-muted-foreground">Edit existing targets.json profiles. Passwords stay in their environment variables and are never read.</p></header>
-      {query.error && <ErrorState error={query.error} />}
+      {query.error && <ErrorState error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />}
       {status === "missing" && <p className="text-sm text-muted-foreground">No targets.json in the SQLHarness home.</p>}
       {status === "invalid" && <Alert variant="destructive"><AlertTitle>targets.json is invalid</AlertTitle><AlertDescription>{message}</AlertDescription></Alert>}
       {saved && <p role="status">Profile saved. Restart or reconnect existing MCP clients to use the updated profile.</p>}
