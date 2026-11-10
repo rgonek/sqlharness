@@ -1,16 +1,14 @@
 import { useQuery } from "@tanstack/react-query"
-import { useState } from "react"
 import { fetchReproScript } from "@/api/queries"
 import type { ReproScriptForm } from "@/api/types"
-import { Button } from "@/components/ui/button"
+import { CopyButton } from "@/components/CopyButton"
 
 const forms: { form: ReproScriptForm; text: string }[] = [
   { form: "as-executed", text: "Copy script (as executed)" },
   { form: "local-variables", text: "Copy script (local variables)" },
 ]
 
-export function ReproScriptButtons({ operationId, side, caseId }: { operationId: number; side: string; caseId: string }) {
-  const [warning, setWarning] = useState<string | null>(null)
+export function ReproScriptButtons({ operationId, side, caseId, labelPrefix }: { operationId: number; side: string; caseId: string; labelPrefix?: string }) {
   const asExecuted = useQuery({
     queryKey: ["repro-script", operationId, side, caseId, "as-executed"],
     queryFn: () => fetchReproScript(operationId, side, caseId, "as-executed"), staleTime: Infinity,
@@ -28,11 +26,9 @@ export function ReproScriptButtons({ operationId, side, caseId }: { operationId:
       const script = query.data
       const disabled = !script || (script.completeness !== "Complete" && script.completeness !== "ValuesMissing") || !script.text
       const title = script?.label ?? (query.error ? "Script not available" : "Loading reproduction script")
-      return <Button key={form} type="button" variant="outline" disabled={disabled} title={title} onClick={() => {
-        if (!script?.text) return
-        void navigator.clipboard.writeText(script.text).then(() => setWarning(script.completeness === "ValuesMissing" ? script.label : null))
-      }}>{text}</Button>
+      const label = labelPrefix ? text.replace(/^Copy /, `Copy ${labelPrefix} `) : text
+      return <CopyButton key={form} label={label} scopeKey={JSON.stringify([operationId, side, caseId, form])} showLabel variant="outline" disabled={disabled} title={title} getText={() => script?.text ?? ""} />
     })}
-    {(warning ?? incomplete?.label) && <span role="status" className="text-sm text-amber-700 dark:text-amber-300">{warning ?? incomplete?.label}</span>}
+    {incomplete?.label && <span role="status" className="text-sm text-amber-700 dark:text-amber-300">{incomplete.label}</span>}
   </div>
 }

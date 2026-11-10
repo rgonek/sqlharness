@@ -111,8 +111,9 @@ const editorOptions: MonacoEditorApi.IStandaloneEditorConstructionOptions = {
   automaticLayout: true,
   padding: { top: 8, bottom: 8 },
   fontFamily: "Geist Mono Variable, monospace",
-  fontSize: 12,
-  lineHeight: 19,
+  fontSize: 14,
+  lineHeight: 22,
+  ariaLabel: "Read-only SQL",
 }
 
 function useSqlTheme(): string {
@@ -135,14 +136,49 @@ function languageFor(dialect: SqlViewerProps["dialect"]): string {
   return dialect === "postgres" ? postgresLanguage : tsqlLanguage
 }
 
+function sqlHeight(...documents: string[]): number {
+  // Count only enough lines to reach the initial height cap; never split a large batch.
+  let lines = 1
+  for (const sql of documents) {
+    let count = 1
+    for (let index = 0; index < sql.length && count < 22; index++) {
+      if (sql[index] === "\n") count++
+    }
+    lines = Math.max(lines, count)
+  }
+  return Math.max(88, Math.min(480, lines * 22 + 18))
+}
+
 function ResizableSqlFrame({ height, children }: { height: number; children: ReactNode }) {
-  return <div data-slot="sql-editor-frame" className="min-h-32 min-w-0 max-h-[1200px] resize-y overflow-hidden rounded border" style={{ height }}>{children}</div>
+  const frame = useRef<HTMLDivElement>(null)
+  const [manualHeight, setManualHeight] = useState<number | null>(null)
+  const displayedHeight = manualHeight ?? height
+  useEffect(() => {
+    const element = frame.current
+    if (!element) return
+    const observer = new ResizeObserver(() => {
+      const measured = element.getBoundingClientRect().height
+      if (measured > 0 && Math.abs(measured - displayedHeight) > 2) {
+        setManualHeight(Math.max(88, Math.min(1200, measured)))
+      }
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [displayedHeight])
+  return <div ref={frame} data-slot="sql-editor-frame" role="group" tabIndex={0}
+    aria-label="SQL viewer. Use Alt and Up or Down arrow to resize."
+    className="min-h-[88px] min-w-0 max-h-[1200px] resize-y overflow-hidden rounded border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    style={{ height: displayedHeight }} onKeyDown={event => {
+      if (event.target !== event.currentTarget || !event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return
+      event.preventDefault()
+      setManualHeight(Math.max(88, Math.min(1200, displayedHeight + (event.key === "ArrowDown" ? 44 : -44))))
+    }}>{children}</div>
 }
 
 export function SqlViewer({ sql, dialect }: SqlViewerProps) {
   const theme = useSqlTheme()
   return (
-    <ResizableSqlFrame height={320}>
+    <ResizableSqlFrame height={sqlHeight(sql)}>
       <Editor
         height="100%"
         language={languageFor(dialect)}
@@ -213,7 +249,7 @@ export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeVie
   }, [theme])
 
   return (
-    <ResizableSqlFrame height={320}>
+    <ResizableSqlFrame height={sqlHeight(baseline, candidate)}>
       <div ref={container} className="size-full" />
     </ResizableSqlFrame>
   )
@@ -258,7 +294,7 @@ export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSe
     })
     decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, decorations)
     const revealRange = revealSpan ? sourceRange(model, revealSpan) : null
-    if (revealRange) editor.revealRangeInCenter(revealRange, monaco.editor.ScrollType.Smooth)
+    if (revealRange) editor.revealRangeInCenter(revealRange, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? monaco.editor.ScrollType.Immediate : monaco.editor.ScrollType.Smooth)
   }, [highlightedSpans, ready, revealSpan, sql])
 
   useEffect(() => {
@@ -287,7 +323,7 @@ export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSe
   return (
     <section aria-label="Executed SQL" className="space-y-2">
       <h3 className="sr-only">Executed SQL batch</h3>
-      <ResizableSqlFrame height={height}>
+      <ResizableSqlFrame height={Math.min(height, sqlHeight(sql))}>
         <Editor
           height="100%"
           language={languageFor(dialect)}

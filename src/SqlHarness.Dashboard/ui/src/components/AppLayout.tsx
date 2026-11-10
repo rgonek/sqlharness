@@ -40,6 +40,10 @@ export function AppLayout() {
   const productionYoloProfiles = profiles?.profiles.filter(profile => profile.mutationMode?.toLowerCase() === "yolo" && profile.acknowledgeProductionYolo && /^(prod|production|staging)$/i.test(profile.environment ?? "")) ?? []
   return (
     <TooltipProvider><div className="min-h-screen">
+      <a href="#main-content" className="sr-only rounded bg-background px-3 py-2 text-sm font-medium text-foreground focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:outline-2 focus:outline-offset-2 focus:outline-ring" onClick={event => {
+        event.preventDefault()
+        document.getElementById("main-content")?.focus()
+      }}>Skip to main content</a>
       <ConnectionBanner />
       {productionYoloProfiles.map(profile => <div key={profile.name} role="alert" className="border-b border-destructive/40 bg-destructive/10 px-4 py-3 text-center font-semibold text-destructive">YOLO is on for production profile {profile.name}</div>)}
       <ApprovalToast />
@@ -53,7 +57,7 @@ export function AppLayout() {
           {links.map(link => {
             const active = link.exact ? pathname === link.to || /^\/(sessions|agent-sessions|operations|named-operations|mutations)(\/|$)/.test(pathname) : pathname === link.to || pathname.startsWith(`${link.to}/`)
             return (
-              <Link key={link.to} to={link.to} className={buttonVariants({ variant: active ? "secondary" : "ghost", size: "sm" })}>
+              <Link key={link.to} to={link.to} aria-current={active ? "page" : undefined} className={buttonVariants({ variant: active ? "secondary" : "ghost", size: "sm" })}>
                 {link.label}
               </Link>
             )
@@ -62,7 +66,7 @@ export function AppLayout() {
         <div className="shrink-0"><ThemeMenu /></div>
       </header>
       <Separator />
-      <main className="app-main mx-auto min-w-0 space-y-4 p-4" data-page={pathname === "/" ? "activity" : pathname.split("/")[1]}>
+      <main id="main-content" tabIndex={-1} className="app-main mx-auto min-w-0 space-y-4 p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" data-page={pathname === "/" ? "activity" : pathname.split("/")[1]}>
         <Outlet />
       </main>
     </div></TooltipProvider>
