@@ -1,6 +1,7 @@
 # Backend Task 1 evidence
 
-Status: backend implementation ready for task review; no full verification claim.
+Status: backend implementation committed at `9dba583c`, ready for task review;
+no full verification claim.
 
 Ownership: JournalReader, Optimization C# projections, associated Dashboard C# tests.
 The comparison implementer agreed additive DTO names before consuming them.
@@ -57,6 +58,9 @@ The comparison implementer agreed additive DTO names before consuming them.
   subsequent builds/tests were serialized. No lock retry was treated as a pass.
 - `pwsh -NoProfile ./scripts/format-changed.ps1 -Fix`: **10 owned C# files**, exit 0,
   `format: OK`. [Output](backend-format-working.log).
+- On committed `9dba583c`, `pwsh -NoProfile ./scripts/format-changed.ps1
+  -Mode branch -BaseRef a274b0ec`: **10 C# files**, exit 0, `format: OK`.
+  [Output](backend-format-branch.log).
 - No collectors, database execution, policy thresholds, schemas or UI files changed
   by this task. Constructors remain compatible; additions are in DTO properties.
 
