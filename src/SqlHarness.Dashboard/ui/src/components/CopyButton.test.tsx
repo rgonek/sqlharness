@@ -16,6 +16,27 @@ test("copies text and confirms", async () => {
   expect(await screen.findByRole("status")).toHaveTextContent("Copied")
 })
 
+test("keyboard copy retains focus while busy and after success without submitting twice", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  setClipboard(writeText)
+  let finish!: (text: string) => void
+  const getText = vi.fn(() => new Promise<string>(resolve => { finish = resolve }))
+  render(<><CopyButton label="Copy baseline SQL" getText={getText} /><button>Next action</button></>)
+  const button = screen.getByRole("button", { name: "Copy baseline SQL" })
+  button.focus()
+  await userEvent.keyboard("{Enter}")
+  expect(button).toHaveFocus()
+  expect(button).not.toBeDisabled()
+  expect(button).toHaveAttribute("aria-disabled", "true")
+  await userEvent.keyboard("{Enter}")
+  expect(getText).toHaveBeenCalledTimes(1)
+  await act(async () => finish("SELECT 1"))
+  expect(writeText).toHaveBeenCalledWith("SELECT 1")
+  expect(button).toHaveFocus()
+  await userEvent.tab()
+  expect(screen.getByRole("button", { name: "Next action" })).toHaveFocus()
+})
+
 test("falls back to a manual copy dialog", async () => {
   setClipboard(vi.fn().mockRejectedValue(new Error("denied")))
   vi.useFakeTimers()

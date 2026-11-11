@@ -75,7 +75,7 @@ export function CopyButton({ label, getText, showLabel = false, disabled = false
   }
 
   return <>
-    <Button ref={trigger} type="button" variant={variant} size={showLabel ? "sm" : "icon"} className={showLabel ? "h-auto min-h-6 max-w-full whitespace-normal text-left" : undefined} disabled={disabled || pending} aria-busy={pending || undefined} aria-label={label} title={title ?? label} onClick={() => void copy()}>
+    <Button ref={trigger} type="button" variant={variant} size={showLabel ? "sm" : "icon"} className={showLabel ? "h-auto min-h-6 max-w-full whitespace-normal text-left data-disabled:opacity-50" : "data-disabled:opacity-50"} disabled={disabled || pending} focusableWhenDisabled={pending && !disabled} aria-busy={pending || undefined} aria-label={label} title={title ?? label} onClick={() => void copy()}>
       {copied ? <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} aria-hidden="true" /> : <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} aria-hidden="true" />}
       {showLabel && <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>}
     </Button>
