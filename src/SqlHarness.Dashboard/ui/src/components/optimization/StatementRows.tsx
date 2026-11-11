@@ -21,6 +21,20 @@ function changeMagnitude(row: StatementRow, measured: boolean): number {
   return measured ? Math.abs(row.readsAfter ?? 0) : -1
 }
 
+export function StatementAvailability({ row }: { row: StatementRow }) {
+  const labels: Record<string, string> = { logicalReads: "logical reads", scans: "scans", lobLogicalReads: "LOB logical reads", cpuMs: "CPU", elapsedMs: "elapsed", grantRequestedKb: "requested grant", grantGrantedKb: "granted memory", grantMaxUsedKb: "max used memory", hasSpillWarning: "spill warnings" }
+  return <div className="text-xs font-normal text-muted-foreground">{(["Before", "After"] as const).map(side => {
+    const metrics = row[side === "Before" ? "metricAvailabilityBefore" : "metricAvailabilityAfter"]
+    const unavailable = Object.entries(metrics ?? {}).filter(([, availability]) => availability.status !== "available")
+    const groups = new Map<string, string[]>()
+    for (const [name, availability] of unavailable) {
+      const reason = `${availability.reason ?? "unavailable"} (${availability.contributingCases}/${availability.selectedCases} cases)`
+      groups.set(reason, [...groups.get(reason) ?? [], labels[name] ?? name])
+    }
+    return [...groups].map(([reason, names]) => <p key={`${side}:${reason}`}>{side}: {names.join(", ")} — {reason}</p>)
+  })}</div>
+}
+
 export function StatementMetrics({ row, measured = false }: { row: StatementRow; measured?: boolean }) {
   const values = [row.cpuBeforeMs, row.cpuAfterMs, row.elapsedBeforeMs, row.elapsedAfterMs, row.grantRequestedKbBefore, row.grantRequestedKbAfter, row.grantGrantedKbBefore, row.grantGrantedKbAfter, row.grantMaxUsedKbBefore, row.grantMaxUsedKbAfter, row.hasSpillWarningBefore, row.hasSpillWarningAfter]
   if (values.every(value => value == null)) return <span>Additional statement metrics unavailable</span>
@@ -71,6 +85,7 @@ export function StatementRows({ rows, measured = false, postgres = false }: { ro
           {row.hiddenWork.length > 0 && <div className="mt-2 flex flex-wrap gap-1" aria-label={`Hidden work for statement ${index + 1}`}>
             {row.hiddenWork.map((item, itemIndex) => <HiddenWorkFlag key={`${item.kind}:${item.name}:${itemIndex}`} item={item} />)}
           </div>}
+          <StatementAvailability row={row} />
           <StatementMetrics row={row} measured={measured} />
           <Objects row={row} measured={measured} />
         </TableCell>

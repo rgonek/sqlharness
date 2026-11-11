@@ -96,17 +96,17 @@ test("only exposes supported counters when switching IO views", async () => {
   const extras = { before: { Orders: { physicalReads: 8, readAheadReads: 9, lobPhysicalReads: 10, lobReadAheadReads: 11 } }, after: { Orders: { physicalReads: 0, readAheadReads: 1, lobPhysicalReads: 2, lobReadAheadReads: 3 } } }
   const { rerender } = render(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={extras} />)
   await userEvent.click(screen.getByText("More columns"))
-  for (const name of ["Physical", "Read-ahead", "LOB physical", "LOB read-ahead", "LOB logical"]) await userEvent.click(screen.getByRole("checkbox", { name }))
+  for (const name of ["Physical", "Read-ahead", "LOB physical", "LOB read-ahead"]) await userEvent.click(screen.getByRole("checkbox", { name }))
   expect(within(screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!).getByText("8 →")).toBeInTheDocument()
   rerender(<IoComparison comparison={comparison} byStatement onViewChange={onViewChange} extras={extras} />)
   for (const name of ["Physical", "Read-ahead", "LOB physical", "LOB read-ahead"]) {
     expect(screen.queryByRole("columnheader", { name })).not.toBeInTheDocument()
     expect(screen.queryByRole("checkbox", { name })).not.toBeInTheDocument()
   }
-  expect(screen.getByRole("columnheader", { name: "LOB logical" })).toBeInTheDocument()
+  expect(screen.queryByRole("columnheader", { name: "LOB logical" })).not.toBeInTheDocument()
   rerender(<IoComparison comparison={comparison} byStatement={false} onViewChange={onViewChange} extras={extras} />)
-  expect(screen.queryByRole("columnheader", { name: "Physical" })).not.toBeInTheDocument()
-  expect(screen.getByRole("columnheader", { name: "LOB logical" })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: "Physical" })).toBeInTheDocument()
+  expect(screen.queryByRole("columnheader", { name: "LOB logical" })).not.toBeInTheDocument()
 })
 
 
@@ -137,4 +137,44 @@ test("the statement's counter cells toggle expansion without swallowing its plan
   expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
   await userEvent.click(within(row).getByRole("link", { name: "Plan before" }))
   expect(screen.getByRole("rowheader", { name: "Orders" })).toBeInTheDocument()
+})
+
+
+test("no statement IO replaces the empty numeric grid with navigation and preserves plan links", async () => {
+  const onViewChange = vi.fn()
+  const row = { ...comparison.statements![0], readsBefore: null, readsAfter: null, scansBefore: null, scansAfter: null, objects: [], planLinkBefore: "/plan/before", metricAvailabilityBefore: { logicalReads: { status: "unavailable", reason: "ambiguous attribution", contributingCases: 0, selectedCases: 1 } } }
+  render(<IoComparison comparison={{ ...comparison, statements: [row] }} byStatement onViewChange={onViewChange} />)
+  expect(screen.getByText(/No trustworthy statement IO/)).toBeInTheDocument()
+  expect(screen.queryByRole("table", { name: "IO before and after" })).not.toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Plan before" })).toHaveAttribute("href", "/plan/before")
+  expect(screen.getByText(/ambiguous attribution/)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "View whole batch IO" }))
+  expect(onViewChange).toHaveBeenCalledWith("whole")
+})
+
+test("whole batch offers only supported recorded optional columns and preserves zero", async () => {
+  render(<IoComparison comparison={{ ...comparison, tables: [{ ...comparison.tables[0], physicalReadsBefore: 8, physicalReadsAfter: 0 }] }} byStatement={false} onViewChange={vi.fn()} />)
+  await userEvent.click(screen.getByRole("button", { name: "More columns" }))
+  expect(screen.queryByRole("checkbox", { name: "LOB physical" })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("checkbox", { name: "Physical" }))
+  const row = screen.getByRole("rowheader", { name: "Orders" }).closest("tr")!
+  expect(within(row).getByText("8 →")).toBeInTheDocument()
+  expect(within(row).getByText("0")).toBeInTheDocument()
+})
+
+
+test("does not offer scan columns when no selected statement records scans", () => {
+  const statements = comparison.statements!.map(row => ({ ...row, scansBefore: null, scansAfter: null, objects: [] }))
+  render(<IoComparison comparison={{ ...comparison, statements }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.queryByRole("button", { name: "Scans" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("columnheader", { name: "Scans" })).not.toBeInTheDocument()
+})
+
+
+test("objects remain inspectable when statement IO cannot be attributed", () => {
+  const objects = [{ table: "dbo.RetainedObject", readsBefore: null, readsAfter: null, scansBefore: null, scansAfter: null, change: "unavailable" }]
+  const statements = comparison.statements!.map(row => ({ ...row, readsBefore: null, readsAfter: null, scansBefore: null, scansAfter: null, objects }))
+  render(<IoComparison comparison={{ ...comparison, statements }} byStatement onViewChange={vi.fn()} />)
+  expect(screen.getByText(/dbo.RetainedObject/)).toBeInTheDocument()
+  expect(screen.queryByRole("table", { name: "IO before and after" })).not.toBeInTheDocument()
 })

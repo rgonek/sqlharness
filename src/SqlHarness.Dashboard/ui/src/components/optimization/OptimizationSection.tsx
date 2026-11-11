@@ -53,7 +53,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations, 
   const scopes = [...new Map(groups.flatMap(item => item.scopes).map(item => [item.scope, item])).values()].sort((left, right) => scopeOrder(left) - scopeOrder(right) || left.scope.localeCompare(right.scope))
   const scope = (matchesSubject && scopes.find(item => item.scope === search.scope)) || group?.scopes.slice().sort((left, right) => scopeOrder(left) - scopeOrder(right) || left.scope.localeCompare(right.scope))[0] || scopes[0]
   const scopeOf = (item: typeof groups[number]) => item.scopes.find(value => value.scope === scope?.scope)
-  const versions = groups.flatMap((item, index) => (scopeOf(item)?.versions ?? []).map(row => ({ ...row, group: { fingerprint: item.fingerprint, label: item.label, badge: String.fromCharCode(65 + index) } }))).sort((left, right) => left.version.localeCompare(right.version, undefined, { numeric: true }))
+  const versions = groups.flatMap((item, index) => (scopeOf(item)?.versions ?? []).map(row => ({ ...row, group: { fingerprint: item.fingerprint, label: item.label, badge: String(index + 1) } }))).sort((left, right) => left.version.localeCompare(right.version, undefined, { numeric: true }))
   const matchesCard = matchesSubject && (!search.group || search.group === group?.fingerprint) && (!search.scope || search.scope === scope?.scope)
   const groupScope = group && scopeOf(group)
   const aGroup = group && groupScope ? group : groups.find(item => scopeOf(item)?.versions.length)
@@ -114,13 +114,13 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations, 
     {group && scope ? <>
 
       {versions.length > 0 ? <VersionTable subject={`${subject.subject}-${subject.database}`} sessionId={sessionId} agentSessionKey={agentSessionKey} sessionSearch={selectedSearch}
-        versions={versions} operations={operations} selectedA={selectedA} selectedB={selectedB || null} groupA={aGroup?.fingerprint} groupB={bGroup?.fingerprint}
+        comparison={activeCompareQuery.data} versions={versions} operations={operations} selectedA={selectedA} selectedB={selectedB || null} groupA={aGroup?.fingerprint} groupB={bGroup?.fingerprint}
         onSelect={(side, version, fingerprint) => side === "a"
           ? update({ group: fingerprint, groupB: selectedB && bGroup?.fingerprint !== fingerprint ? bGroup?.fingerprint : undefined, a: version, b: selectedB || undefined })
           : update({ group: aGroup?.fingerprint, groupB: fingerprint !== aGroup?.fingerprint ? fingerprint : undefined, a: selectedA, b: version })} /> : <p className="text-sm text-muted-foreground">No retained versions for this scope.</p>}
       {!selectedB && <p className="text-sm text-muted-foreground">Select a version for B to compare it with {selectedA}.</p>}
       {activeCompareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
-      {activeCompareQuery.error && <p role="alert" className="mt-3">Could not load comparison: {activeCompareQuery.error.message}</p>}
+      {activeCompareQuery.error && <div role="alert" className="mt-3 flex flex-wrap items-center gap-3"><span>Could not load comparison: {activeCompareQuery.error.message}</span><Button variant="outline" onClick={() => void activeCompareQuery.refetch()} disabled={activeCompareQuery.isFetching}>{activeCompareQuery.isFetching ? "Retrying…" : "Retry"}</Button></div>}
       {activeCompareQuery.data && <div className="optimization-comparison"><ComparisonPanel toolbarTarget={toolbarTarget} pending={activeCompareQuery.isPlaceholderData} activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={[versions.find(item => item.group.fingerprint === aGroup?.fingerprint && item.version === selectedA), versions.find(item => item.group.fingerprint === bGroup?.fingerprint && item.version === selectedB)].filter((item): item is typeof versions[number] => !!item)} engine={subject.engine}
         sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={patch => update(patch)} /></div>}
     </> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
