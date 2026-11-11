@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import { expect, test, vi } from "vitest"
 import { SqlMergeView, SqlViewer } from "./monaco"
+import * as monacoApi from "monaco-editor/editor/editor.api"
 
 const editorMocks = vi.hoisted(() => ({ createDiffEditor: vi.fn(() => ({
   setModel: vi.fn(), updateOptions: vi.fn(), dispose: vi.fn(),
@@ -57,6 +58,16 @@ test("unrelated root classes do not recalculate editor colours", async () => {
   } finally {
     styles.mockRestore()
     document.documentElement.classList.remove("theme-changing")
+  }
+})
+
+test("an editor mounted after a theme change defines its current theme", () => {
+  document.documentElement.classList.add("dark")
+  try {
+    render(<SqlMergeView baseline="SELECT 1" candidate="SELECT 2" dialect="tsql" mode="side-by-side" />)
+    expect(monacoApi.editor.defineTheme).toHaveBeenCalledWith("sqlharness-dark", expect.anything())
+  } finally {
+    document.documentElement.classList.remove("dark")
   }
 })
 

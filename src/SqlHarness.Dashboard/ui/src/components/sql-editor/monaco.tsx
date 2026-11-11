@@ -125,7 +125,7 @@ function useSqlTheme(): string {
   const [theme, setTheme] = useState(() => document.documentElement.classList.contains("dark") ? "sqlharness-dark" : "sqlharness-light")
   useEffect(() => {
     const root = document.documentElement
-    let currentDark = root.classList.contains("dark")
+    let currentDark: boolean | undefined
     const update = () => {
       const dark = root.classList.contains("dark")
       if (dark === currentDark) return
@@ -133,6 +133,7 @@ function useSqlTheme(): string {
       defineSqlTheme(dark)
       setTheme(dark ? "sqlharness-dark" : "sqlharness-light")
     }
+    update()
     const observer = new MutationObserver(update)
     observer.observe(root, { attributes: true, attributeFilter: ["class"] })
     return () => observer.disconnect()
