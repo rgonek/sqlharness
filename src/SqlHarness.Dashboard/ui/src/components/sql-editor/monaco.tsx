@@ -125,8 +125,11 @@ function useSqlTheme(): string {
   const [theme, setTheme] = useState(() => document.documentElement.classList.contains("dark") ? "sqlharness-dark" : "sqlharness-light")
   useEffect(() => {
     const root = document.documentElement
+    let currentDark = root.classList.contains("dark")
     const update = () => {
       const dark = root.classList.contains("dark")
+      if (dark === currentDark) return
+      currentDark = dark
       defineSqlTheme(dark)
       setTheme(dark ? "sqlharness-dark" : "sqlharness-light")
     }

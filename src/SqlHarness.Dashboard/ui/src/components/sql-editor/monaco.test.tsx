@@ -48,6 +48,18 @@ test("diff frame follows content density and uses readable editor text", () => {
   expect(editorMocks.createDiffEditor).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ fontSize: 14 }))
 })
 
+test("unrelated root classes do not recalculate editor colours", async () => {
+  render(<SqlMergeView baseline="SELECT 1" candidate="SELECT 2" dialect="tsql" mode="side-by-side" />)
+  const styles = vi.spyOn(window, "getComputedStyle")
+  try {
+    await act(async () => { document.documentElement.classList.add("theme-changing") })
+    expect(styles).not.toHaveBeenCalled()
+  } finally {
+    styles.mockRestore()
+    document.documentElement.classList.remove("theme-changing")
+  }
+})
+
 test("manual SQL frame height survives a version-driven editor remount", () => {
   const first = render(<SqlMergeView baseline="SELECT 1" candidate="SELECT 2" dialect="tsql" mode="side-by-side" />)
   const frame = first.container.querySelector<HTMLElement>('[data-slot="sql-editor-frame"]')!
