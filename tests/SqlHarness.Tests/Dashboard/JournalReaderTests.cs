@@ -12,6 +12,45 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class JournalReaderTests
 {
+    [Fact]
+    public void Failed_attempt_does_not_shift_operation_detail_or_history_labels_away_from_eligible_optimization_versions()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:eligible-labels");
+        var failed = seed.Compare(session, "orders", "whole", "h0", "failed-hash", status: "failed");
+        var success = seed.Compare(session, "orders", "whole", "h0", "h1");
+        foreach (var handle in new[] { failed, success })
+            seed.CompareEvidence(handle, JournalSeed.ReproConditions(), """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","equivalence":{"equivalent":true}}]}""",
+                new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 1), OptimizationMetric("candidate", 80, 8, 1)], []));
+        var reader = Reader(home);
+        var detail = reader.Operation(success.OperationId)!;
+        var versions = reader.Optimization(detail.Operation.SessionId).Subjects.Single().Groups.Single().Scopes.Single().Versions;
+        Assert.Equal(["v0", "v1"], versions.Select(v => v.Version));
+        Assert.Equal(("v0", "v1"), (detail.BaselineVersion, detail.CandidateVersion));
+        var history = reader.CompareAttempts(detail.Operation.SessionId).Items;
+        Assert.Equal("v1", history.Single(a => a.OperationId == success.OperationId).CandidateVersion);
+        Assert.Null(history.Single(a => a.OperationId == failed.OperationId).CandidateVersion);
+        Assert.DoesNotContain(reader.Session(detail.Operation.SessionId)!.CompareSubjects.SelectMany(s => s.ScopeVersions).SelectMany(s => s.Versions), v => v.Hash == "failed-hash");
+        using (var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var frozen = connection.CreateCommand();
+            frozen.CommandText = """
+                INSERT INTO compare_version_labels(context_kind, context_key, subject, scope, sql_hash, label)
+                VALUES ('mcp', $session, 'orders', 'whole', 'h0', 'v4'),
+                       ('mcp', $session, 'orders', 'whole', 'failed-hash', 'v5'),
+                       ('mcp', $session, 'orders', 'whole', 'h1', 'v6');
+                """;
+            frozen.Parameters.AddWithValue("$session", detail.Operation.SessionId.ToString(CultureInfo.InvariantCulture));
+            frozen.ExecuteNonQuery();
+        }
+        detail = reader.Operation(success.OperationId)!;
+        Assert.Equal(("v4", "v6"), (detail.BaselineVersion, detail.CandidateVersion));
+        Assert.Equal(["v4", "v6"], reader.Optimization(detail.Operation.SessionId).Subjects.Single().Groups.Single().Scopes.Single().Versions.Select(v => v.Version));
+        Assert.Equal("v5", reader.CompareAttempts(detail.Operation.SessionId).Items.Single(a => a.OperationId == failed.OperationId).CandidateVersion);
+    }
+
     private static JournalReader Reader(TempHome home, FakeProcesses? processes = null) =>
         new(home.DatabasePath, processes ?? new FakeProcesses());
 

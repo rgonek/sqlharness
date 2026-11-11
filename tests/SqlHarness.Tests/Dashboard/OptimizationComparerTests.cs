@@ -7,6 +7,147 @@ namespace SqlHarness.Tests.Dashboard;
 public sealed class OptimizationComparerTests
 {
     [Theory]
+    [InlineData(false, "all")]
+    [InlineData(false, "repeat")]
+    [InlineData(true, "all")]
+    [InlineData(true, "repeat")]
+    public void Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(bool independent, string selection)
+    {
+        var evidence = CollisionEvidence(independent);
+        var section = OptimizationSummaryBuilder.Build(evidence);
+        var group = section.Subjects.Single().Groups.Single();
+        Assert.Equal(40, group.Scopes.Single().Versions.Single(v => v.Version == "v0").ElapsedMedianMs);
+        Assert.Equal(30, group.Scopes.Single().Versions.Single(v => v.Version == "v1").ElapsedMedianMs);
+        var result = OptimizationComparer.Compare(group, evidence, "v0", "v1", selection, "sum", "whole");
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Null(result.WholeBatch.After);
+        Assert.Null(result.Elapsed.BeforeMs);
+        Assert.Null(result.Elapsed.AfterMs);
+        Assert.Null(result.Elapsed.PolicyVerdict);
+        Assert.Equal("unavailable", Assert.Single(result.Cases).Outcome);
+        Assert.Equal(0, result.Outcomes.IoBetter + result.Outcomes.IoSame + result.Outcomes.IoWorse);
+        Assert.Equal(2, result.Outcomes.IoUnavailable);
+        Assert.Equal(2, result.Outcomes.PolicyUnavailable);
+        Assert.Equal(0, result.Outcomes.PolicyPass + result.Outcomes.PolicyFail);
+        Assert.Contains("0 of 2", result.CoverageLabel);
+        Assert.Contains("ambiguous", result.CoverageLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ambiguous", result.FallbackNote, StringComparison.OrdinalIgnoreCase);
+        if (selection == "all")
+        {
+            Assert.Equal(["0", "1"], result.BeforeAction?.CaseIds);
+            Assert.Equal(["0", "1"], result.AfterAction?.CaseIds);
+            Assert.False(result.BeforeAction!.CaseIdsByFingerprint.ContainsKey("repeat"));
+            Assert.False(result.AfterAction!.CaseIdsByFingerprint.ContainsKey("repeat"));
+        }
+        else
+        {
+            Assert.Null(result.BeforeAction);
+            Assert.Null(result.AfterAction);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Unique_case_remains_selectable_beside_an_ambiguous_case_identity(bool independent)
+    {
+        var evidence = CollisionEvidence(independent).Select(e => e with
+        {
+            Cases = e.Cases.Concat([new CompareCaseEvidence("2", "unique", null, independent ? null : true, independent ? null : "pass")
+            { MeasurementFingerprint = "unique" }]).ToArray(),
+            Metrics = e.Metrics.Concat(e.IsMeasure
+                ? [Metric("measure", "2", e.BaselineHash == "h0" ? 300 : 200)]
+                : [Metric("baseline", "2", 300), Metric("candidate", "2", 200)]).ToArray(),
+        }).ToArray();
+        var group = OptimizationSummaryBuilder.Build(evidence).Subjects.Single().Groups.Single();
+        var result = OptimizationComparer.Compare(group, evidence, "v0", "v1", "unique", "sum", "whole");
+        Assert.Equal(300, result.WholeBatch.Before);
+        Assert.Equal(200, result.WholeBatch.After);
+        Assert.Equal(1, result.Outcomes.IoBetter);
+        Assert.Equal("2", result.BeforeAction?.CaseIdsByFingerprint["unique"]);
+        Assert.Contains("1 of 3", result.CoverageLabel);
+    }
+
+    [Fact]
+    public void Duplicate_case_metric_rows_do_not_choose_an_arbitrary_representative_in_any_projection()
+    {
+        var evidence = Evidence(1, "h0", "h1", (100, 900));
+        evidence = evidence with { Metrics = evidence.Metrics.Concat([Metric("baseline", "0", 500), Metric("candidate", "0", 50)]).ToArray() };
+        var group = OptimizationSummaryBuilder.Build([evidence]).Subjects.Single().Groups.Single();
+        Assert.All(group.Scopes.Single().Versions, row => { Assert.Null(row.ElapsedMedianMs); Assert.Null(row.LogicalReadsSum); });
+        var result = OptimizationComparer.Compare(group, [evidence], "v0", "v1", "0", "sum");
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Null(result.WholeBatch.After);
+        Assert.Equal("unavailable", Assert.Single(result.Cases).Outcome);
+        Assert.Null(result.BeforeAction);
+    }
+
+    [Fact]
+    public void Metric_only_case_identity_collision_keeps_original_script_ids_and_truthful_coverage()
+    {
+        var source = CollisionEvidence(true).Select(e => e with
+        { Cases = [], Metrics = e.Metrics.Select(m => m with { MeasurementFingerprint = "repeat" }).ToArray() }).ToArray();
+        var result = OptimizationComparer.Compare(Group("h0", "h1"), source, "v0", "v1", "all", "sum");
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Contains("0 of 2", result.CoverageLabel);
+        Assert.Equal(["0", "1"], result.BeforeAction?.CaseIds);
+    }
+
+    private static CompareEvidence[] CollisionEvidence(bool independent)
+    {
+        var source = Evidence(1, "h0", "h1", (100, 900), (500, 50)) with
+        {
+            RegressionVerdict = "fail",
+            Cases = [new("0", "first", null, true, "pass") { MeasurementFingerprint = "repeat" },
+                new("1", "second", null, true, "fail") { MeasurementFingerprint = "repeat" }],
+            Metrics = [Metric("baseline", "0", 100) with { ElapsedMedianMs = 12 }, Metric("baseline", "1", 500) with { ElapsedMedianMs = 28 },
+                Metric("candidate", "0", 900) with { ElapsedMedianMs = 10 }, Metric("candidate", "1", 50) with { ElapsedMedianMs = 20 }],
+        };
+        return !independent ? [source] : new[] { ("h0", "baseline"), ("h1", "candidate") }.Select((pair, i) => source with
+        {
+            OperationId = i + 2,
+            BaselineHash = pair.Item1,
+            CandidateHash = null,
+            IsMeasure = true,
+            RegressionVerdict = null,
+            Cases = source.Cases.Select(c => c with { ResultsEquivalent = null, RegressionVerdict = null }).ToArray(),
+            Metrics = source.Metrics.Where(m => m.Variant == pair.Item2).Select(m => m with { Variant = "measure" }).ToArray(),
+        }).ToArray();
+    }
+
+    [Fact]
+    public void Active_pair_scan_summary_uses_its_exact_direct_operation_and_selected_case_aggregate()
+    {
+        var direct = Evidence(1, "h0", "h1", (100, 80), (100, 80));
+        direct = direct with { Metrics = direct.Metrics.Select(m => m with { ScansSum = m.Variant == "baseline" ? 12 : 28 }).ToArray() };
+        var later = MeasureEvidence(2, "h1", 70) with { Metrics = [Metric("measure", "0", 70) with { ScansSum = 999 }] };
+        var result = OptimizationComparer.Compare(Group("h0", "h1"), [direct, later], "v0", "v1", "all", "sum");
+        Assert.Equal(24, result.ScansBefore);
+        Assert.Equal(56, result.ScansAfter);
+        result = OptimizationComparer.Compare(Group("h0", "h1"), [direct, later], "v0", "v1", "0", "mean");
+        Assert.Equal(12, result.ScansBefore);
+        Assert.Equal(28, result.ScansAfter);
+    }
+
+    [Fact]
+    public void Across_conditions_duplicate_metric_representatives_keep_policy_metrics_and_selected_scripts_unavailable()
+    {
+        var left = MeasureEvidence(2, "h0", 100) with
+        {
+            Cases = [new("0", "first", null, null, null) { VaryingFingerprint = "0" }],
+            Metrics = [Metric("measure", "0", 100), Metric("measure", "0", 500)]
+        };
+        var right = MeasureEvidence(3, "h1", 900) with
+        { Fingerprint = "other", Cases = left.Cases, Metrics = [Metric("measure", "0", 900), Metric("measure", "0", 50)] };
+        var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" },
+            [left, right], "v0", "v1", "0", "sum");
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Null(result.Elapsed.BeforeMs);
+        Assert.Null(result.BeforeAction);
+        Assert.Contains("ambiguous", result.FallbackNote, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
     [InlineData("failed")]
     [InlineData("cancelled")]
     [InlineData("rejected")]

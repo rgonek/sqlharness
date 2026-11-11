@@ -103,6 +103,7 @@ public sealed record CompareMetricEvidence(
     long? ScansSum,
     IReadOnlyList<CompareTableIoEvidence> TableRows)
 {
+    internal bool CaseIdentityAmbiguous { get; init; }
     public long? RowsReturned { get; init; }
     public int? ResultSets { get; init; }
     public bool RowsReturnedVaries { get; init; }
@@ -167,6 +168,8 @@ public sealed record OptimizationComparison(
     public bool TableIoUnavailable { get; init; }
     public double? CpuBeforeMs { get; init; }
     public double? CpuAfterMs { get; init; }
+    public double? ScansBefore { get; init; }
+    public double? ScansAfter { get; init; }
     public PostgresBuffers? BuffersBefore { get; init; }
     public PostgresBuffers? BuffersAfter { get; init; }
     public OutcomeCounts Outcomes { get; init; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -254,4 +257,7 @@ public sealed record OutcomeCounts(int ResultsEquivalent, int ResultsDifferent, 
 public sealed record CaseOutcomeDetail(string CaseKey, string Label, bool? ResultsEquivalent, string IoOutcome,
     string? PolicyVerdict, string? PolicyUnavailableReason, IReadOnlyList<string> PolicyReasons,
     long? ReadsBefore, long? ReadsAfter, double? ElapsedBeforeMs, double? ElapsedAfterMs,
-    double? CpuBeforeMs, double? CpuAfterMs);
+    double? CpuBeforeMs, double? CpuAfterMs)
+{
+    public int CaseCount { get; init; } = 1;
+}

@@ -209,7 +209,9 @@ public static class OptimizationSummaryBuilder
                 var labels = expectedCases.GroupBy(c => c.MeasurementFingerprint ?? c.CaseId, StringComparer.Ordinal)
                     .ToDictionary(g => g.Key, g => g.First().Label, StringComparer.Ordinal);
                 var outcomeRows = OptimizationOutcomes.Build(direct, directBefore, directAfter, labels.Keys, labels,
-                    forward: true, baseline: latest.Variant == "baseline" || latest.Compare.IsMeasure);
+                    forward: true, baseline: latest.Variant == "baseline" || latest.Compare.IsMeasure,
+                    caseCounts: expectedCases.GroupBy(c => c.MeasurementFingerprint ?? c.CaseId, StringComparer.Ordinal)
+                        .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal));
                 return new VersionRow(
                     group.Key.Version,
                     group.Key.Hash,
@@ -239,7 +241,9 @@ public static class OptimizationSummaryBuilder
     private static IReadOnlyList<CompareMetricEvidence> MetricsFor(CompareEvidence compare, string variant) =>
         compare.Metrics.Where(metric => metric.Variant.Equals(variant, StringComparison.OrdinalIgnoreCase))
             .GroupBy(metric => metric.CaseId, StringComparer.Ordinal)
-            .Select(group => group.Last())
+            .Select(group => group.Count() == 1 ? group.Single()
+                : new CompareMetricEvidence(variant, group.Key, "Ambiguous case identity", null, null, null, [])
+                { CaseIdentityAmbiguous = true })
             .OrderBy(metric => metric.CaseId, StringComparer.Ordinal)
             .ToArray();
 
