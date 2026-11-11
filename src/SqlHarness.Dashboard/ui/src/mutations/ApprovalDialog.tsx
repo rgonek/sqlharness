@@ -15,7 +15,9 @@ import { mutationStore, usePendingMutations } from "./mutationStore"
 
 export function ApprovalDialog({ requestId }: { requestId: string | null }) {
   const reviewedRequest = useRef(requestId)
-  if (requestId !== null) reviewedRequest.current = requestId
+  useEffect(() => {
+    if (requestId !== null) reviewedRequest.current = requestId
+  }, [requestId])
   const pending = usePendingMutations()
   const item = pending.find(request => request.requestId === requestId)
   const [openedAtState, setOpenedAtState] = useState<{ requestId: string | null; time: number | null }>({ requestId: null, time: null })
