@@ -53,3 +53,11 @@ test("pending selection hides stale outcomes and closes old case details while A
   expect(a).toHaveFocus()
   expect(screen.getByRole("button", { name: /IO: 1 better/ })).toBeInTheDocument()
 })
+
+test.each([false, true])("baseline IO coverage weights ambiguous case groups: selected only=$0", selectedOnly => {
+  const valid = pair().caseOutcomes![0]!
+  const ambiguous = { ...valid, caseKey: "ambiguous", label: "Ambiguous case identity (2 cases)", caseCount: 2, readsBefore: null, readsAfter: null, resultsEquivalent: null, ioOutcome: "unavailable", policyVerdict: null }
+  const details = selectedOnly ? [ambiguous] : [ambiguous, valid]
+  render(table(pair({ caseOutcomes: details })))
+  expect(within(screen.getByRole("rowheader", { name: "A" }).closest("tr")!).getByText(selectedOnly ? "IO 0/2 measured" : "IO 1/3 measured")).toBeInTheDocument()
+})

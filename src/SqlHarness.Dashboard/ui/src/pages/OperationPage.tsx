@@ -380,7 +380,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
       </CardContent></Card>}
     </div></CollapsibleContent></Collapsible></>} diff={<SqlDiff embedded baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={op.engine} />} timing={<OperationTimings detail={detail} />}
         searchState={{ case: selectedCase, agg: aggregate, view }} sessionSearch={sessionSearchFromOperation(returnSearch)}
-        onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }), resetScroll: false }) }} />
+        onSelectionChange={(patch, options) => { void navigate({ search: previous => ({ ...previous, ...patch }), replace: options?.replace, resetScroll: false }) }} />
 
     </> : null}
     <StoredSqlReuse detail={detail} />

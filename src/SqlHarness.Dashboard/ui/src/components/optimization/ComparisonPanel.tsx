@@ -3,7 +3,7 @@ import { ComparisonPending } from "./ComparisonPending"
 import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
 import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
-import { Fragment, useState, cloneElement, isValidElement, type ReactElement, type ReactNode } from "react"
+import { Fragment, useEffect, useState, cloneElement, isValidElement, type ReactElement, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { Link } from "@tanstack/react-router"
 import type { AgentSessionKey, OptimizationActionReference, OptimizationComparison, ScopeVersions } from "@/api/types"
@@ -62,12 +62,17 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
   engine?: string | null
   sessionSearch?: SessionSearch
   searchState?: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }
-  onSelectionChange?: (patch: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }) => void
+  onSelectionChange?: (patch: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }, options?: { replace?: boolean }) => void
   hideCaseSelector?: boolean
 }) {
   const approximate = comparison.basis === "ApproximateAcrossConditions"
   const [selectorsOpen, setSelectorsOpen] = useState(false)
-  const activeCase = searchState?.case ?? comparison.selectedCase
+  const requestedCase = searchState?.case
+  const staleCase = !pending && requestedCase != null && requestedCase !== "all" && requestedCase !== comparison.selectedCase && !comparison.cases.some(item => item.id === requestedCase)
+  const activeCase = staleCase ? comparison.selectedCase : requestedCase ?? comparison.selectedCase
+  useEffect(() => {
+    if (staleCase) onSelectionChange?.({ case: comparison.selectedCase }, { replace: true })
+  }, [staleCase, comparison.selectedCase, onSelectionChange])
   const activeAggregate = searchState?.agg ?? comparison.aggregate
   const activeView = searchState?.view ?? comparison.view ?? "statements"
   const scriptCase = activeCase === "all" ? comparison.cases[0]?.id ?? "all" : activeCase
@@ -122,7 +127,7 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
         {headerContent && <div className="comparison-header-content">{headerContent}</div>}
         {navigation && <div className="comparison-operation-context"><ComparisonPending pending={pending}>{context}</ComparisonPending><div className="comparison-operation-actions">{selectors}{copy}</div></div>}
         <TabsContent value="diff"><ComparisonPending pending={pending} announce>{suppliedDiff ?? (sqlOptions.length > 1 ? <SessionVersionDiff key={`${comparison.a}:${comparison.groupA}:${comparison.b}:${comparison.groupB}:${sqlOptions.map(option => option.hash).join(":")}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} selectionControls={false} baselineActions={baselineActions} candidateActions={candidateActions} /> : <p className="text-sm text-muted-foreground">SQL diff requires two retained SQL versions.</p>)}</ComparisonPending></TabsContent>
-        <TabsContent value="io">{comparison.basis !== "ConditionsDiffer" && (!approximate || !!comparison.caseRows?.length) && optimizationMetricRows(comparison).filter(row => row.label !== "CPU (ms)").map(row => <p key={row.label} className="text-sm">{row.label}: {row.before} → {row.after}</p>)}{approximate && !comparison.caseRows?.length ? <p className="text-sm text-muted-foreground">No paired cases for metric comparison.</p> : comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <IoDetails pending={pending} comparison={comparison} byStatement={activeView !== "whole"} onViewChange={view => updateSearch({ view })} />}</TabsContent>
+        <TabsContent value="io"><ComparisonPending pending={pending} announce>{comparison.basis !== "ConditionsDiffer" && (!approximate || !!comparison.caseRows?.length) && optimizationMetricRows(comparison).filter(row => row.label !== "CPU (ms)").map(row => <p key={row.label} className="text-sm">{row.label}: {row.before} → {row.after}</p>)}{approximate && !comparison.caseRows?.length ? <p className="text-sm text-muted-foreground">No paired cases for metric comparison.</p> : comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <IoDetails pending={pending} comparison={comparison} byStatement={activeView !== "whole"} onViewChange={view => updateSearch({ view })} />}</ComparisonPending></TabsContent>
         <TabsContent value="plan"><ComparisonPending pending={pending} announce><VersionPlan a={comparison.a} b={comparison.b} before={comparison.beforeAction} after={comparison.afterAction} engine={engine} selectedCase={scriptCase} /></ComparisonPending></TabsContent>
         {timing && <TabsContent value="timing">{timing}</TabsContent>}
         {details && <TabsContent value="details">{details}</TabsContent>}

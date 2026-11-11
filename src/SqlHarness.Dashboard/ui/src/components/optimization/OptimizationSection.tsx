@@ -77,9 +77,9 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations, 
   const activeCompareQuery = agentSessionKey ? agentCompareQuery : compareQuery
   const activeQueryRefetch = refetchOptimization
 
-  function update(patch: Record<string, string | undefined>, reset = false) {
+  function update(patch: Record<string, string | undefined>, reset = false, replace = false) {
     void navigate({ to: agentSessionKey ? "/agent-sessions/$kind/$id" : "/sessions/$id", params: agentSessionKey ? { kind: agentSessionKey.agentKind, id: agentSessionKey.conversationId } : { id: String(sessionId) }, search: (current: Record<string, unknown>) => ({ ...current, subject: subject.subject, db: subject.database, group: aGroup?.fingerprint, groupB: selectedSearch.groupB,
-      scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, groupB: undefined, case: undefined, agg: undefined, view: undefined } : {}), ...patch }), replace: false, resetScroll: false })
+      scope: scope?.scope, ...(reset ? { a: undefined, b: undefined, groupB: undefined, case: undefined, agg: undefined, view: undefined } : {}), ...patch }), replace, resetScroll: false })
   }
 
   useEffect(() => {
@@ -122,7 +122,7 @@ function SubjectCard({ sessionId, agentSessionKey, search, subject, operations, 
       {activeCompareQuery.isPending && <p role="status" className="mt-3">Loading comparison…</p>}
       {activeCompareQuery.error && <div role="alert" className="mt-3 flex flex-wrap items-center gap-3"><span>Could not load comparison: {activeCompareQuery.error.message}</span><Button variant="outline" onClick={() => void activeCompareQuery.refetch()} disabled={activeCompareQuery.isFetching}>{activeCompareQuery.isFetching ? "Retrying…" : "Retry"}</Button></div>}
       {activeCompareQuery.data && <div className="optimization-comparison"><ComparisonPanel toolbarTarget={toolbarTarget} pending={activeCompareQuery.isPlaceholderData} activeTab={comparisonTab} onTabChange={setComparisonTab} comparison={activeCompareQuery.data} sessionId={sessionId} agentSessionKey={agentSessionKey} subject={subject.subject} scope={scope.scope} versions={[versions.find(item => item.group.fingerprint === aGroup?.fingerprint && item.version === selectedA), versions.find(item => item.group.fingerprint === bGroup?.fingerprint && item.version === selectedB)].filter((item): item is typeof versions[number] => !!item)} engine={subject.engine}
-        sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={patch => update(patch)} /></div>}
+        sessionSearch={selectedSearch} searchState={{ case: caseId, agg: aggregate, view }} onSelectionChange={(patch, options) => update(patch, false, options?.replace)} /></div>}
     </> : <p className="text-sm text-muted-foreground">No assigned optimization compares in this session.</p>}
   </article>
 }

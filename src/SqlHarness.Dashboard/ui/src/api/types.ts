@@ -176,6 +176,7 @@ export type OutcomeCounts = {
   policyPass: number; policyFail: number; policyUnavailable: number
 }
 export type CaseOutcomeDetail = {
+  caseCount?: number
   caseKey: string; label: string; resultsEquivalent: boolean | null; ioOutcome: string
   policyVerdict: string | null; policyUnavailableReason: string | null; policyReasons: string[]
   readsBefore: number | null; readsAfter: number | null
