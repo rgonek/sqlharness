@@ -2,7 +2,7 @@
 
 Focused Plan 126 evidence. This does not establish a category score, a complete accessibility audit or a full verification gate.
 
-## Screen reader: pending
+## Screen reader: initial blocked attempt (resolved)
 
 Actual portable NVDA 2026.3.1 AMD64 started with a dedicated temporary configuration and the silence synthesizer. Its speech pipeline logged `Secure Desktop`; the foreground was `LockScreenControllerProxyWindow`, rather than the owned synthetic browser. The locked Windows session prevented a reliable screen-reader workflow. Native input and the owned NVDA instance were stopped. No unlock or bypass was attempted.
 
@@ -49,10 +49,16 @@ $env:SQLHARNESS_VISUAL_ROOT = (Get-Location).Path
 node plans/126-evidence/harness/native-accessibility.mjs plans/126-evidence/browser/native-accessibility/current-static
 ```
 
-The harness uses the existing Playwright toolkit and temporary extension/fixture helper under `D:/temp/sqlharness-dashboard-audit`. Each JSON records timestamps, browser version, Git revision, current source-diff SHA256 and loaded compiled asset hashes. The hashes identify the actual UI exercised. This evidence does not replace final release integration or Windows `just verify`. Screen-reader acceptance remains pending.
+The harness uses the existing Playwright toolkit and temporary extension/fixture helper under `D:/temp/sqlharness-dashboard-audit`. Each JSON records timestamps, browser version, Git revision, current source-diff SHA256 and loaded compiled asset hashes. The hashes identify the actual UI exercised. This evidence does not replace final release integration or Windows `just verify`. Post-unlock screen-reader acceptance subsequently passed; see the current result below.
 
 ## Final Release repetition
 
 The final isolated Release `5f05ca07` repeats the control measurements (eight checks), graph samples (two checks) and actual browser zoom200% (four routes). All three runs have no harness/forwarding errors and an empty source diff. [Current controls](final-5f05ca07/contrast.json), [current graph](final-5f05ca07/graph.json) and [current zoom](final-5f05ca07/zoom.json) are the current evidence; current-static is a historical iteration.
 
 Activity, session comparison, operation comparison and Settings all report nativeZoom=true and reflow=true. Focus outline measurements repeat19.90:1 light/19.06:1 dark. The main final browser matrix additionally passes twelve axe scans across six views and both themes, including the actual SQL diff. This closes the native-zoom requirement in the browser report's generic limitations; it does not close the separate NVDA requirement or establish a universal accessibility certification.
+
+## Current screen-reader acceptance
+
+The operator reported Windows unlocked. [Actual NVDA acceptance](nvda-acceptance.md) passes17 steps on final product85c75cb2, including retained focus after ordinary copy. The reader announced selections, table headers, policy Fail/elapsed-regressed, read-only SQL and copy success; native keyboard focus transitions passed. This resolves the initial Secure Desktop blocker. Measurement/study limitations remain explicit in the native report.
+
+The final85c75cb2 run supersedes the preliminary post-unlock run8. Its normal-copy focus loss was fixed, regression-tested and rechecked through NVDA plus five focused browser scenarios; the final Windows gate passes on85c75cb2. See the native acceptance report for the exact evidence boundary.

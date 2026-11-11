@@ -8,9 +8,10 @@ Plan [123](123-shared-version-table-across-conditions.md): **DONE; locally integ
 
 Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrated into `main` at `56f3dae4` (2026-10-24)** — Luna xhigh and Sol low integration reviews approved; combined Windows gate passed on `d2f2b060` (Core 4717, MCP 524, UI 372 passed), branch format 21 files passed. Earlier timeout and retry logs retained. No push/install; Linux/live UAT unverified. See [integration evidence](104-evidence/integration/verification.md).
 
+Plan [126](126-dashboard-quality-iteration.md): **COMPLETE on `dashboard-quality-9`** — all14 categories9.0-9.2. Actual NVDA17/17 and copy-focus browser5/5; broader matrix72/72. Final Windows gate PASS on85c75cb2 (UI544, Core4873/11skips, MCP537/4skips). [Scorecard](126-evidence/scorecard.md), [NVDA](126-evidence/browser/native-accessibility/nvda-acceptance.md), [verification](126-evidence/verification.md). No main integration or publication.
+
 ## In progress
 
-Plan [126](126-dashboard-quality-iteration.md): **IN PROGRESS on `dashboard-quality-9`** — approved dashboard quality programme across the operator's 14 categories. All Plan125 tasks delivered; Activity/session/Usage context, shared SQL/copy/accessibility improvements and real synthetic backend acceptance72/72. Windows gate PASS on5f05ca07 (UI543, Core4873/11skips, MCP537/4skips). [Scorecard](126-evidence/scorecard.md):13 categories>=9; category15 provisionally8.5 pending unlocked-desktop NVDA. [Verification](126-evidence/verification.md). The all-category goal remains open.
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|

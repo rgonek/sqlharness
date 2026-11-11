@@ -9,7 +9,7 @@ Plan 125, preserve operator context, and verify actual rendered workflows with s
 **Tech stack:** .NET/C#, SQLite, React/TypeScript, Vitest, Playwright, Windows PowerShell.
 **Spec:** [Approved design](../docs/superpowers/specs/2026-11-10-dashboard-quality-design.md).
 **Baseline:** a274b0ecca09bd447c875849799194aea724bcd7.
-**Status:** IN PROGRESS on dashboard-quality-9; no completion or 9.0 claims yet.
+**Status:** COMPLETE on `dashboard-quality-9`; all14 categories9.0-9.2 after actual NVDA and copy-focus acceptance. Final product85c75cb2 passes Windows verification (UI544, Core4873/11skips, MCP537/4skips); no main integration. [Scorecard](126-evidence/scorecard.md), [native NVDA](126-evidence/browser/native-accessibility/nvda-acceptance.md).
 
 ## Global constraints
 
@@ -86,7 +86,7 @@ Depends on Tasks 1-4. Files: plans/126-evidence browser harness, screenshots/met
 synthetic seed helper if needed. Use actual backend for evidence projections, interception for transient errors.
 
 - [x] Build current UI and serve a synthetic seeded journal through actual dashboard.
-- [ ] Exercise all approved matrix states, including Usage, Profiles, synthetic approval, dark/light,
+- [x] Exercise all approved matrix states, including Usage, Profiles, synthetic approval, dark/light,
   keyboard/focus return, 200% zoom and 390/768/1440/1920px; measure applicable contrast and accessibility.
 - [x] Seed 500 sessions/10000 operations, 1000-operation session, 50 versions/20 cases. Preserve paging/caps.
   Record 20 samples per action and the frozen 200ms/500ms responsiveness thresholds and 2s settlement.
@@ -115,3 +115,13 @@ Implementation and scoped reviews for Tasks 1-4 are recorded in [backend report]
 Final product checkpoint: `5f05ca07`. [Browser acceptance](126-evidence/browser/acceptance-5f05ca07/report.md):72/72, zero runtime errors, twelve axe scans without violations, all five twenty-sample performance series within frozen limits. Native browser zoom200%:four/four routes with reflow. Final contrast samples repeated in both themes. Branch format13 C# files PASS. [Final Windows gate PASS](126-evidence/verification.md): UI543, Core4873/11skips, MCP537/4skips; exit0. Native NVDA remains pending operator-unlocked Windows desktop.
 
 [Current category scorecard](126-evidence/scorecard.md):13 categories9.0-9.2; category15 provisionally8.5 pending native NVDA. Plan126 and the operator goal remain IN PROGRESS. Native zoom and contrast have current supplemental evidence; unlocking Windows and then completing native screen-reader workflows is the remaining acceptance dependency.
+
+## Post-unlock completion
+
+The operator explicitly confirmed Windows unlocked. Actual native NVDA acceptance passes17 steps, including spoken recorded-policy failure and original SQL, case/A-B changes, copy status and focus return. Category15 now9.0; all14 categories meet9.0-9.2. All source remains unchanged from Windows-verified5f05ca07, so no repeated gate is required. Earlier pending checkpoints above are historical. Plan126 is COMPLETE on the feature branch; no merge, push or installed-dashboard replacement.
+
+Late native-test finding: ordinary CopyButton temporarily disabled the focused element. Commit85c75cb2 fixes focus preservation without allowing duplicate activation. Regression RED ->11 focused tests GREEN; five actual-browser copy checks PASS; full17-step NVDA repeat PASS including copy focus. Windows gate is being repeated on85c75cb2. Earlier completion/checkpoints are superseded until this gate passes.
+
+## Final acceptance on85c75cb2
+
+Repeated Windows just verify PASS, exit0,11m48s: UI544/544; Core4873/11skipped; MCP537/4skipped. Actual NVDA17/17 and five focused browser copy checks PASS, including retained focus after copy. Earlier pending/completion checkpoints above are historical and superseded. [Verification](126-evidence/verification.md), [scorecard](126-evidence/scorecard.md), [native acceptance](126-evidence/browser/native-accessibility/nvda-acceptance.md). Plan126 and the all-category goal are complete on this feature branch.

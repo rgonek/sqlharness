@@ -17,3 +17,9 @@ Final transition fix verified on actual Release: Light725ms, Dark788ms, Light705
 Subsequent full browser pass on fbad429a exposed a real editor initialization race: a newly mounted editor could request a theme that had not been defined (default Monaco green comment/light background even in dark mode). New regression failed with no dark-theme definition on mount. The hook now synchronizes/defines the current theme on mount and still ignores unrelated class changes. Theme/editor suites26/26 pass. This is not a contrast-threshold relaxation.
 
 The no-animation popover closes immediately; Playwright check() expected an unmounted radio to remain checked. Harness now clicks, verifies selected case in URL, and waits for requested evidence; original failed artifact retained. Branch formatting explicitly PASS:13 changed C# files, exit0.
+
+## Post-unlock final acceptance and copy-focus correction
+
+Native run8 completed its configured17steps, but terminal focus metadata exposed ordinary copy moving focus to BODY. The initial pass was therefore preliminary, not final acceptance. A regression then failed on native disabling of the pending copy action. Product85c75cb2 uses Base UI focusableWhenDisabled only while pending, retaining disabled semantics/appearance, duplicate-submit protection and explicit unavailable-state behavior.
+
+Focused components11/11 PASS; actual Release browser copy5/5 PASS (busy/success focus, duplicate Enter, Tab/Shift+Tab, manual fallback, candidate payload, full6000-line SQL). Actual NVDA repeat17/17 PASS with strict retained-copy-focus, spoken failure reason and copy-success assertions. Final Windows just verify on85c75cb2 exits0: UI544, Core4873/11skips, MCP537/4skips. All14 current category ratings are9.0-9.2; scope and native-study limitations are retained in scorecard/native report. No merge, publication or real SQL workload.

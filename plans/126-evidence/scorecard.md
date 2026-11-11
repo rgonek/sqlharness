@@ -1,8 +1,8 @@
 # Dashboard quality scorecard
 
-Assessed product: `5f05ca073887c58ecc22a567782124438baca07c` on `dashboard-quality-9`, 2026-11-11.
+Assessed product: `85c75cb2f2219ac36c0c4e89ea362e99968f0c71` on `dashboard-quality-9`, 2026-11-11.
 
-These expert ratings describe the approved representative workflows and synthetic datasets. The complete goal remains open: native NVDA acceptance is pending an unlocked Windows desktop, while the [final Windows gate passes](verification.md). A usability study and production-scale performance are outside the evidence collected here.
+These expert ratings describe the approved representative workflows and synthetic datasets. All14 categories meet the frozen >=9.0 threshold on the verified feature branch. [Native NVDA acceptance](browser/native-accessibility/nvda-acceptance.md) and the [final Windows gate](verification.md) pass. A usability study and production-scale performance are outside the evidence collected here.
 
 | Category | Current rating /10 | Evidence and assessment |
 |---|---:|---|
@@ -19,15 +19,17 @@ These expert ratings describe the approved representative workflows and syntheti
 | 11. Interpretation and trust | 9.2 | Strict eligible measurements, direct/independent/approximate provenance, honest partial attribution, weighted ambiguous coverage and separate policy/IO outcomes. Actual journal-to-DTO-to-UI checks pass. |
 | 12. System states and feedback | 9.0 | Delayed comparison, rejection, empty Activity, disconnect/reconnect, HTTP401/408/500, save/clipboard failure and synthetic approval states exercised. |
 | 13. Language and microcopy | 9.0 | Consistent English actions and case/aggregation/provenance labels; contextual explanations for missing/approximate evidence and retained error reasons. |
-| 15. Accessibility and resilience | 8.5 — pending | Browser keyboard/focus checks, twelve axe scans, reduced motion, actual200% zoom/reflow and large fixtures pass. Required native NVDA workflows could not run on Secure Desktop. |
+| 15. Accessibility and resilience | 9.0 | Browser keyboard/focus, twelve axe scans, reduced motion, actual200% zoom/reflow and large fixtures pass. Actual NVDA17-step acceptance confirms names/selections, case-table failure, read-only SQL, copy feedback and retained focus after copying. |
 
-**All-category >=9.0 acceptance: not achieved.** Category15 remains open. The pending native workflow must include Activity navigation, A/B/case selection, outcome details, SQL reading/copy and focus return. No password is needed by the agent; the operator must unlock their own Windows session.
+**All-category >=9.0 acceptance: achieved on `dashboard-quality-9`, final product85c75cb2.** The post-unlock NVDA run closes category15. Ratings describe the approved representative scope; the native report records targeted focus setup and the absence of an audible/braille or blind-user study.
 
 ## Evidence
 
 - [72/72 browser checks and raw performance](browser/acceptance-5f05ca07/report.md), [exact assertions/data](browser/acceptance-5f05ca07/acceptance.json.gz).
 - [Native accessibility report](browser/native-accessibility/report.md), [current control contrast](browser/native-accessibility/final-5f05ca07/contrast.json), [graph samples](browser/native-accessibility/final-5f05ca07/graph.json), [native zoom](browser/native-accessibility/final-5f05ca07/zoom.json), [NVDA blocker](browser/native-accessibility/screenreader-blocked.json).
 - [Whole-branch review](final-branch-review.md), [review resolution](final-review-resolution.md), [browser defects and fixes](browser-iteration.md).
-- Backend, comparison, shared and Activity implementation reports alongside this scorecard. Explicit branch formatting:13 C# files PASS. Full Windows verification passes: UI543, Core4873/11skips, MCP537/4skips; see [verification](verification.md).
+- Backend, comparison, shared and Activity implementation reports alongside this scorecard. Explicit branch formatting:13 C# files PASS. Full Windows verification passes: UI544, Core4873/11skips, MCP537/4skips; see [verification](verification.md).
 
 Native/automated checks describe sampled states. Approximate comparison and plan graph rendering use clearly identified intercepted DTOs; direct and non-adjacent independent comparisons use the real isolated backend. No live SQL workload, mutation approval, installed dashboard replacement, merge, push or publication occurred.
+
+The broad72-check browser matrix, contrast, zoom and responsiveness evidence is from5f05ca07. The only subsequent product change is CopyButton pending-focus handling (85c75cb2), verified by five focused actual-browser checks and the full17-step NVDA repeat. No unchanged performance series is promoted to a new run.

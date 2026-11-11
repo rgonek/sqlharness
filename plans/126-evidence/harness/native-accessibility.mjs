@@ -17,7 +17,7 @@ const origin=process.env.NATIVE_ORIGIN??backendOrigin;
 const report={startedAt:new Date().toISOString(),mode,origin:origin.replace(/:\d+$/,':<isolated>'),revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),workingDiffSha256:execFileSync('git',['diff','--','src'],{encoding:'utf8',maxBuffer:10e6}),checks:[],limitations:[]};
 report.workingDiffSha256=(await import('node:crypto')).createHash('sha256').update(report.workingDiffSha256).digest('hex');
 const headed=mode==='screenreader'||mode==='zoom';
-const args=['--window-position=-2000,-2000','--window-size=1440,1000','--force-renderer-accessibility'];
+const args=[mode==='screenreader'?'--window-position=100,100':'--window-position=-2000,-2000','--window-size=1440,1000','--force-renderer-accessibility'];
 if(mode==='zoom')args.push('--disable-extensions-except=D:/temp/sqlharness-dashboard-audit/zoom-extension','--load-extension=D:/temp/sqlharness-dashboard-audit/zoom-extension');
 const profile=`D:/temp/sqlharness-dashboard-audit/native-profile-${Date.now()}`;
 const context=await chromium.launchPersistentContext(profile,{headless:!headed,viewport:headed?null:{width:1440,height:1000},args,reducedMotion:'reduce'});
@@ -29,8 +29,9 @@ if(mode!=='screenreader')await page.addInitScript(()=>{class AuditEvents extends
 const wait=ms=>page.waitForTimeout(ms);
 const goto=async route=>{await page.goto(origin+route);await page.locator('main').waitFor();await wait(500);};
 const active=()=>page.evaluate(()=>{const e=document.activeElement;return {tag:e?.tagName,role:e?.getAttribute('role'),name:e?.getAttribute('aria-label'),text:e?.textContent?.slice(0,160)};});
-const foreground=async()=>{await page.evaluate(()=>document.title='SQLHarness native accessibility audit');execFileSync('powershell.exe',['-NoProfile','-Command',"$s=New-Object -ComObject WScript.Shell; if(-not $s.AppActivate('SQLHarness native accessibility audit')){throw 'Owned audit browser not found'}"],{windowsHide:true});};
-const nativeKey=async key=>{await foreground();execFileSync('powershell.exe',['-NoProfile','-Command',`Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public class AuditNativeFocus { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder text, int count); }'; $s=New-Object -ComObject WScript.Shell; if(-not $s.AppActivate('SQLHarness native accessibility audit')){throw 'Owned audit browser not active'}; $auditTitle=New-Object System.Text.StringBuilder 256; [void][AuditNativeFocus]::GetWindowText([AuditNativeFocus]::GetForegroundWindow(),$auditTitle,256); if(-not $auditTitle.ToString().StartsWith('SQLHarness native accessibility audit')){throw 'Owned browser is not native foreground; no key sent'}; $s.SendKeys('${key}')`],{windowsHide:true});};
+const nativeInput=(key)=>execFileSync('powershell.exe',['-NoProfile','-File',path.resolve('plans/126-evidence/harness/native-input.ps1'),'-Title','SQLHarness native accessibility audit','-ProfilePath',profile,...(key?['-Keys',key]:[])],{windowsHide:true});
+const foreground=async()=>{await page.evaluate(()=>{if(document.title!=='SQLHarness native accessibility audit')document.title='SQLHarness native accessibility audit';});nativeInput();};
+const nativeKey=async key=>{await page.evaluate(()=>{if(document.title!=='SQLHarness native accessibility audit')document.title='SQLHarness native accessibility audit';});nativeInput(key);};
 const api=async route=>{const response=await context.request.get(backendOrigin+route);if(!response.ok())throw new Error('Synthetic API unavailable: '+response.status());return response.json();};
 const section=await api('/api/sessions/1/optimization');
 const group=section.subjects[0].groups[0],scope=group.scopes[0];
@@ -83,29 +84,46 @@ try{
   report.limitations.push('Live EventSource locally held open for this style/zoom audit; disconnection/reconnection is outside its scope. Page-only CDP capture avoids Playwright native-zoom clipping.');
  }
  if(mode==='screenreader'){
-  await goto('/');await page.bringToFront();
+  await goto('/');await page.bringToFront();await foreground();
   // NVDA only runs while this dedicated synthetic browser owns foreground focus.
   const nvda=spawn(process.env.NATIVE_NVDA_EXE,['--no-sr-flag','--minimal','--disable-addons','-c',process.env.NATIVE_NVDA_CONFIG,'-f',process.env.NATIVE_NVDA_LOG,'--log-level','10'],{windowsHide:true,stdio:'ignore'});
   report.nvdaPid=nvda.pid;
   for(let i=0;i<60;i++){await wait(1000);if(fs.existsSync(process.env.NATIVE_NVDA_LOG)&&fs.readFileSync(process.env.NATIVE_NVDA_LOG,'utf8').includes('NVDA initialized'))break;if(i===59)throw new Error('NVDA startup timed out');}
   await foreground();await wait(1500);
-  const step=async(name,action)=>{const offset=fs.existsSync(process.env.NATIVE_NVDA_LOG)?fs.statSync(process.env.NATIVE_NVDA_LOG).size:0;await action();await wait(1500);const raw=fs.readFileSync(process.env.NATIVE_NVDA_LOG).subarray(offset).toString();const speech=raw.split(/\r?\n/).filter(line=>line.startsWith('Speaking ')&&/Skip to main|SQLHarness native|Activity|Search activity|A v48|B v49|B v48|Case outcomes|Policy:|SQL editor|CustomerId|read only|main landmark|readonly|SELECT|Copy baseline/.test(line));report.checks.push({name,active:await active(),speech,rawBytes:raw.length});};
+  const step=async(name,action)=>{const offset=fs.existsSync(process.env.NATIVE_NVDA_LOG)?fs.statSync(process.env.NATIVE_NVDA_LOG).size:0;await action();await wait(1500);const raw=fs.readFileSync(process.env.NATIVE_NVDA_LOG).subarray(offset).toString();const speech=raw.split(/(?=^(?:IO|DEBUG|INFO|WARNING|ERROR|DEBUGWARNING) -)/m).flatMap(block=>{const at=block.indexOf('Speaking ');if(at<0)return [];const spoken=block.slice(at).trim();return /Skip to main|SQLHarness native|Activity|Search activity|A v48|B v49|B v48|Case outcomes|Policy:|SQL editor|Baseline SQL|Candidate SQL|CustomerId|read only|main landmark|readonly|SELECT|Copy baseline|Copied baseline|Case outcome details|Recorded policy|Logical reads|Elapsed|Equivalent|elapsed-regressed|Fail/.test(spoken)?[spoken]:[];});report.checks.push({name,active:await active(),speech,rawBytes:raw.length});};
   try{
-   await step('first Tab exposes skip link',()=>nativeKey('{TAB}'));
+   await step('skip link reachable from initial reader focus',async()=>{const initial=await active();if(initial.text?.trim()!=='Skip to main content')await nativeKey(initial.name==='SQLHarness home'?'+{TAB}':'{TAB}');if((await active()).name==='SQLHarness home')await nativeKey('+{TAB}');});
+   if((await active()).text?.trim()!=='Skip to main content')throw new Error('Skip link is not keyboard reachable');
    await step('skip link Enter reaches main',()=>nativeKey('{ENTER}'));
+   if(await page.locator('main').evaluate(e=>e!==document.activeElement))throw new Error('Skip link did not focus main');
    await step('next Tab leaves main via dashboard control',()=>nativeKey('{TAB}'));
    await goto(sessionRoute);await page.locator('section[aria-label="Version comparison"][aria-busy="false"]').waitFor();
    await step('baseline A radio name',()=>page.getByRole('radio',{name:'A v48',exact:true}).focus());
    await step('candidate B radio name',()=>page.getByRole('radio',{name:'B v49',exact:true}).focus());
    await step('B radio keyboard change',()=>nativeKey('{LEFT}'));
+   await page.waitForFunction(()=>new URL(location.href).searchParams.get('b')==='v48');
+   await goto(sessionRoute);await page.locator('section[aria-label="Version comparison"][aria-busy="false"]').waitFor();await foreground();
+   await step('comparison case options',async()=>{await page.getByRole('button',{name:/^All cases.*Sum$/}).focus();await nativeKey('{ENTER}');});
+   await step('selected case radio',async()=>{await page.getByRole('radio',{name:'@CustomerId = 2',exact:true}).focus();await nativeKey(' ');});
+   await page.waitForFunction(()=>new URL(location.href).searchParams.get('case')==='synthetic-case-1');
    await goto(sessionRoute);await page.locator('section[aria-label="Version comparison"][aria-busy="false"]').waitFor();await foreground();
    await step('case outcome dialog open',async()=>{const trigger=page.locator('section[aria-label="Version comparison"]').getByRole('button',{name:/^Policy:/}).first();await trigger.focus();await page.keyboard.press('Enter');await page.getByRole('dialog',{name:'Case outcomes',exact:true}).waitFor();});
    await step('case outcome dialog first Tab',()=>nativeKey('{TAB}'));
+   await step('read case table and recorded failure',async()=>{await nativeKey('+t');for(let i=0;i<18;i++)await nativeKey('{DOWN}');});
    await step('case outcome Escape returns focus',()=>nativeKey('{ESC}'));
+   if(!(await active()).name?.startsWith('Policy:'))throw new Error('Outcome dialog did not return focus to Policy');
    await goto('/operations/10000');
-   await step('SQL read-only editor focused',()=>page.getByRole('textbox',{name:/SQL editor/}).first().focus());
+   await step('SQL read-only editor focused',()=>page.getByRole('textbox',{name:/Baseline SQL/}).first().focus());
+   await step('read SQL first line',()=>nativeKey('^{HOME}'));
    await foreground();await step('SQL Tab navigation',()=>nativeKey('{TAB}'));
+   if((await active()).name!=='Candidate SQL')throw new Error('Tab did not leave baseline for candidate SQL');
    await step('SQL Shift+Tab return',()=>nativeKey('+{TAB}'));
+   if((await active()).name!=='Baseline SQL')throw new Error('Shift+Tab did not return to baseline SQL');
+   await step('copy baseline SQL',async()=>{await page.getByRole('button',{name:'Copy baseline SQL',exact:true}).focus();await nativeKey('{ENTER}');await page.getByText('Copied baseline SQL',{exact:true}).waitFor();});
+  if((await active()).name!=='Copy baseline SQL')throw new Error('Copy completion lost keyboard focus');
+  const caseSpeech=report.checks.find(c=>c.name==='read case table and recorded failure')?.speech.join(' ')??'';
+   if(!/elapsed-regressed/.test(caseSpeech)||!/Fail/.test(caseSpeech))throw new Error('NVDA did not announce the recorded case failure');
+   if(!report.checks.find(c=>c.name==='copy baseline SQL')?.speech.some(s=>s.includes('Copied baseline SQL')))throw new Error('NVDA did not announce copy success');
   }finally{nvda.kill();execFileSync('powershell.exe',['-NoProfile','-Command',"Get-Process | Where-Object Path -like 'D:\\temp\\sqlharness-dashboard-audit\\nvda-portable-clean-20261111\\*' | ForEach-Object {Stop-Process -Id $_.Id -Force}"],{windowsHide:true});await wait(800);}
   report.limitations.push('NVDA actual speech pipeline IO logs with silence synthesizer; no audible listening, braille or blind-user study. Targeted focus setup is explicit; entire workflow is not claimed keyboard-only.');
  }
