@@ -1,0 +1,84 @@
+{
+  "startedAt": "2026-11-11T13:27:23.113Z",
+  "mode": "zoom",
+  "origin": "http://127.0.0.1:<isolated>",
+  "revision": "794a1e0e1073e45790d097e65d8300837b980366",
+  "workingDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "checks": [
+    {
+      "route": "/",
+      "before": {
+        "width": 1440,
+        "dpr": 1
+      },
+      "after": {
+        "width": 720,
+        "dpr": 2,
+        "scrollWidth": 712,
+        "zoom": 1
+      },
+      "nativeZoom": true,
+      "reflow": true
+    },
+    {
+      "route": "/sessions/1",
+      "before": {
+        "width": 1440,
+        "dpr": 1
+      },
+      "after": {
+        "width": 720,
+        "dpr": 2,
+        "scrollWidth": 712,
+        "zoom": 1
+      },
+      "nativeZoom": true,
+      "reflow": true
+    },
+    {
+      "route": "/operations/10000",
+      "before": {
+        "width": 1440,
+        "dpr": 1
+      },
+      "after": {
+        "width": 720,
+        "dpr": 2,
+        "scrollWidth": 712,
+        "zoom": 1
+      },
+      "nativeZoom": true,
+      "reflow": true
+    },
+    {
+      "route": "/settings",
+      "before": {
+        "width": 1440,
+        "dpr": 1
+      },
+      "after": {
+        "width": 720,
+        "dpr": 2,
+        "scrollWidth": 712,
+        "zoom": 1
+      },
+      "nativeZoom": true,
+      "reflow": true
+    }
+  ],
+  "limitations": [
+    "Live EventSource locally held open for this style/zoom audit; disconnection/reconnection is outside its scope. Page-only CDP capture avoids Playwright native-zoom clipping."
+  ],
+  "browser": "156.0.8078.4",
+  "assets": [
+    {
+      "path": "/assets/index-BwoDqUhq.js",
+      "sha256": "fd267ba23c0e5209d95f5532d62b656a2dddc645df49cd2c5e52b1cae428d9e8"
+    },
+    {
+      "path": "/assets/index-bdHgNW9F.css",
+      "sha256": "40bba186d1d135916c63e5164c046122021ab5d11989cc6046b3ddefc0c09b0f"
+    }
+  ],
+  "finishedAt": "2026-11-11T13:27:41.078Z"
+}

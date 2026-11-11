@@ -10,7 +10,7 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 ## In progress
 
-Plan [126](126-dashboard-quality-iteration.md): **IN PROGRESS on `dashboard-quality-9`** — approved dashboard quality programme across the operator's 14 categories. Includes all Plan 125 tasks, Activity/session/Usage context preservation, shared SQL/copy/accessibility improvements, synthetic browser/integration evidence and the required final Windows gate. [Approved design](../docs/superpowers/specs/2026-11-10-dashboard-quality-design.md). No final grade or completion claim yet.
+Plan [126](126-dashboard-quality-iteration.md): **IN PROGRESS on `dashboard-quality-9`** — approved dashboard quality programme across the operator's 14 categories. All Plan125 tasks delivered; Activity/session/Usage context, shared SQL/copy/accessibility improvements and real synthetic backend acceptance72/72. Windows gate PASS on5f05ca07 (UI543, Core4873/11skips, MCP537/4skips). [Scorecard](126-evidence/scorecard.md):13 categories>=9; category15 provisionally8.5 pending unlocked-desktop NVDA. [Verification](126-evidence/verification.md). The all-category goal remains open.
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
@@ -22,7 +22,7 @@ Plan [126](126-dashboard-quality-iteration.md): **IN PROGRESS on `dashboard-qual
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
-| [125](125-optimization-evidence-clarity.md) | Eligible optimization evidence, honest statement/table IO, separate IO/policy outcomes, one timing summary and consolidated actions | Existing 104/105 and 121/122/123 contracts | IN PROGRESS within approved Plan 126; final review and gate pending |
+| [125](125-optimization-evidence-clarity.md) | Eligible optimization evidence, honest statement/table IO, separate IO/policy outcomes, one timing summary and consolidated actions | Existing 104/105 and 121/122/123 contracts | IMPLEMENTED AND WINDOWS-VERIFIED within Plan126 on5f05ca07; all six tasks delivered; no main integration |
 
 Plan [122](122-dashboard-data-value-new-sessions.md): **DONE on `plan-122-backend`; final product `50a4ffb9` verified** — all six tasks including UI, rebased onto main `b7a820f5`; Terra high and Sol low reviews approved; Windows gate PASS (Core 4771, MCP 535, UI 406), branch format and 14 browser states PASS. New-session evidence only, no backfill; locally integrated into `main` at `4baefd17`, merge Windows gate PASS (Core 4771, MCP 535, UI 406); no push. [Integration](122-evidence/integration.md). [Evidence](122-evidence/verification.md). Requires Plan 121 product and mock-alignment corrections; see [spec](../docs/superpowers/specs/2026-10-26-dashboard-data-value.md).
 

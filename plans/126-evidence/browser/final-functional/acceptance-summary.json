@@ -1,0 +1,599 @@
+{
+  "startedAt": "2026-11-11T14:55:04.940Z",
+  "source": "actual release dashboard, synthetic local journal",
+  "revision": "ae0d79d322dcd657035d216c6a0d18764066c994",
+  "dirtyPaths": [
+    "M plans/126-dashboard-quality-iteration.md",
+    "?? plans/126-evidence/browser/",
+    "?? plans/126-evidence/harness/acceptance.mjs",
+    "?? plans/126-evidence/harness/native-accessibility.mjs"
+  ],
+  "fixture": {
+    "sessions": 500,
+    "operations": 10000,
+    "primarySessionOperations": 1000,
+    "versions": 50,
+    "cases": 20,
+    "seededAt": "2026-11-11T14:40:02.007Z",
+    "schemaVersion": 26
+  },
+  "performanceSkipped": true,
+  "scope": "functional/browser checks; performance intentionally excluded",
+  "fullMatrixAcceptanceComplete": false,
+  "host": {
+    "hostname": "RobertG",
+    "platform": "win32",
+    "release": "10.0.19045",
+    "architecture": "x64",
+    "cpus": 8,
+    "cpu": "Intel(R) Core(TM) i7-4700MQ CPU @ 2.40GHz",
+    "memoryGiB": 16,
+    "browser": "156.0.8078.4"
+  },
+  "errors": [],
+  "performance": [],
+  "limitations": [
+    "Automated browser evidence is not a screen-reader or usability study; screen-reader acceptance remains pending.",
+    "Local synthetic journal measurements do not establish production performance.",
+    "axe colour contrast covers text where determinable; a complete manual non-text contrast audit remains pending.",
+    "Browser zoom is approximated by equivalent 720 CSS-pixel reflow at a 1440 physical-pixel viewport; native browser 200% zoom remains pending."
+  ],
+  "finishedAt": "2026-11-11T14:59:23.445Z",
+  "passed": false,
+  "rawArchive": "acceptance.json.gz",
+  "rawSha256": "3b4616915608d1670839cf943d53e9d06ae53143312c42800c99039a12901ce2",
+  "checks": [
+    {
+      "name": "fixture counts frozen",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 0
+    },
+    {
+      "name": "actual DTO mixed IO/policy, zero/missing counters, sum/mean and case timing",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4959
+    },
+    {
+      "name": "actual optimization has 50 versions and failed attempt excluded",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 744
+    },
+    {
+      "name": "independent non-adjacent pair keeps policy unavailable in actual DTO/UI",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4497
+    },
+    {
+      "name": "activity readable and keyboard skip link",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1314
+    },
+    {
+      "name": "activity search and facet survive detail round trip and browser back/forward",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3128
+    },
+    {
+      "name": "comparison pair and independent dimensions visible through actual UI",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3720
+    },
+    {
+      "name": "selected aggregate updates table and source timing",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4892
+    },
+    {
+      "name": "history successive pages stay bounded",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 45
+    },
+    {
+      "name": "failed compare reason retained in actual detail",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1534
+    },
+    {
+      "name": "actual operation header agrees with comparison pair",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1173
+    },
+    {
+      "name": "activity light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3187
+    },
+    {
+      "name": "activity dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3538
+    },
+    {
+      "name": "activity initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1122
+    },
+    {
+      "name": "activity 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1280
+    },
+    {
+      "name": "activity 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1323
+    },
+    {
+      "name": "activity 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1408
+    },
+    {
+      "name": "activity 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1258
+    },
+    {
+      "name": "comparison light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 16710,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('menuitemradio', { name: 'Light', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <div tabindex=\"-1\" data-unchecked=\"\" id=\"base-ui-_r_4t_\" role=\"menuitemradio\" aria-checked=\"false\" data-slot=\"dropdown-menu-radio-item\" class=\"relative flex min-h-7 cursor-default items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-xs outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-7.5 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5\">\u2026</div>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n"
+    },
+    {
+      "name": "comparison dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 20738,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('menuitemradio', { name: 'Dark', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <div tabindex=\"-1\" data-unchecked=\"\" id=\"base-ui-_r_4u_\" role=\"menuitemradio\" aria-checked=\"false\" data-slot=\"dropdown-menu-radio-item\" class=\"relative flex min-h-7 cursor-default items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-xs outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-7.5 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5\">\u2026</div>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n"
+    },
+    {
+      "name": "comparison initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 5387
+    },
+    {
+      "name": "comparison 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 6308
+    },
+    {
+      "name": "comparison 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 7319
+    },
+    {
+      "name": "comparison 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 7215
+    },
+    {
+      "name": "comparison 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 7672
+    },
+    {
+      "name": "operation light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 8315
+    },
+    {
+      "name": "operation dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 7522
+    },
+    {
+      "name": "operation initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2297
+    },
+    {
+      "name": "operation 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2194
+    },
+    {
+      "name": "operation 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2105
+    },
+    {
+      "name": "operation 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2285
+    },
+    {
+      "name": "operation 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2648
+    },
+    {
+      "name": "usage light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 5787
+    },
+    {
+      "name": "usage dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 5284
+    },
+    {
+      "name": "usage initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2102
+    },
+    {
+      "name": "usage 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2103
+    },
+    {
+      "name": "usage 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2298
+    },
+    {
+      "name": "usage 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1720
+    },
+    {
+      "name": "usage 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1320
+    },
+    {
+      "name": "profiles light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1587
+    },
+    {
+      "name": "profiles dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1503
+    },
+    {
+      "name": "profiles initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 308
+    },
+    {
+      "name": "profiles 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 412
+    },
+    {
+      "name": "profiles 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 390
+    },
+    {
+      "name": "profiles 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 490
+    },
+    {
+      "name": "profiles 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 492
+    },
+    {
+      "name": "settings light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2847
+    },
+    {
+      "name": "settings dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2352
+    },
+    {
+      "name": "settings initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 383
+    },
+    {
+      "name": "settings 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 484
+    },
+    {
+      "name": "settings 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 483
+    },
+    {
+      "name": "settings 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 508
+    },
+    {
+      "name": "settings 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 559
+    },
+    {
+      "name": "200% equivalent CSS reflow and reduced motion",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 6088
+    },
+    {
+      "name": "actual case outcome dialog explains lower reads with policy failure; keyboard focus return",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 8557
+    },
+    {
+      "name": "approximate comparison caveat remains prominent",
+      "source": "intercepted approximate DTO based on actual comparison; not journal-derived cross-condition proof",
+      "passed": true,
+      "milliseconds": 5362
+    },
+    {
+      "name": "copy baseline/candidate preserves actual stored SQL and manual fallback focus",
+      "source": "actual stored SQL; intercepted Clipboard write failure for manual-copy branch",
+      "passed": true,
+      "milliseconds": 4067
+    },
+    {
+      "name": "large SQL and long subject stay bounded and preserve original copy",
+      "source": "intercepted large SQL and long subject in actual detail DTO",
+      "passed": true,
+      "milliseconds": 1892
+    },
+    {
+      "name": "rejected operation shows reason without fabricating successful evidence",
+      "source": "intercepted rejected operation based on actual failed detail",
+      "passed": true,
+      "milliseconds": 956
+    },
+    {
+      "name": "delayed comparison has local loading feedback then settles",
+      "source": "actual backend comparison with 1200ms intercepted delay, excluded from CPU timings",
+      "passed": true,
+      "milliseconds": 4427
+    },
+    {
+      "name": "empty Activity journal view has usable filter/search next step",
+      "source": "intercepted empty journal pages; actual shell and UI",
+      "passed": true,
+      "milliseconds": 698
+    },
+    {
+      "name": "disconnect feedback and reconnect restore actual route",
+      "source": "intercepted transport outage and removal; actual backend on retry",
+      "passed": true,
+      "milliseconds": 1706
+    },
+    {
+      "name": "profile editor and intercepted save failure retain next step",
+      "source": "intercepted PUT failure; actual GET profile, no persistent write",
+      "passed": true,
+      "milliseconds": 546
+    },
+    {
+      "name": "intercepted operation HTTP 401 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 275
+    },
+    {
+      "name": "intercepted operation HTTP 408 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 252
+    },
+    {
+      "name": "intercepted operation HTTP 500 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 3626
+    },
+    {
+      "name": "intercepted approval request keyboard focus return; no decision sent",
+      "source": "intercepted SSE snapshot; no approval/denial sent",
+      "passed": true,
+      "milliseconds": 1674
+    }
+  ],
+  "accessibility": [
+    {
+      "name": "activity-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 2
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 449
+    },
+    {
+      "name": "activity-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 2
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 449
+    },
+    {
+      "name": "operation-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "color-contrast",
+          "count": 2
+        }
+      ],
+      "measuredContrastTotal": 78
+    },
+    {
+      "name": "operation-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "color-contrast",
+          "count": 2
+        }
+      ],
+      "measuredContrastTotal": 78
+    },
+    {
+      "name": "usage-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 1
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 21
+        },
+        {
+          "id": "th-has-data-cells",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 209
+    },
+    {
+      "name": "usage-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 1
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 21
+        },
+        {
+          "id": "th-has-data-cells",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 209
+    },
+    {
+      "name": "profiles-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [],
+      "measuredContrastTotal": 40
+    },
+    {
+      "name": "profiles-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [],
+      "measuredContrastTotal": 40
+    },
+    {
+      "name": "settings-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [],
+      "measuredContrastTotal": 120
+    },
+    {
+      "name": "settings-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [],
+      "measuredContrastTotal": 120
+    },
+    {
+      "name": "synthetic-approval",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 3
+        }
+      ],
+      "measuredContrastTotal": 37
+    }
+  ],
+  "requestCount": 6,
+  "screenshotCount": 54
+}

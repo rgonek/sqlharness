@@ -1,0 +1,14 @@
+[
+  {
+    "file": "acceptance.json.gz",
+    "uncompressedBytes": 1220457,
+    "uncompressedSha256": "727c47d4bdea0475e7e2f15b71d7d0d4470f0fc21e98cbe42b9c2f2abb4b604c",
+    "gzipSha256": "9b29a7f35f84c29d98fe3ae11683c7ff34b0e738df24bc133a1b82526820fd85"
+  },
+  {
+    "file": "actual-optimization-section.json.gz",
+    "uncompressedBytes": 1219738,
+    "uncompressedSha256": "a1cb706b8c370b5cbb70746e4e44ec20c28c7c85291244c3de0ef586fe2ba57c",
+    "gzipSha256": "5811b3507e8ecabab34bf0bb62a1e5457d4432501984b14098923214174f32f4"
+  }
+]

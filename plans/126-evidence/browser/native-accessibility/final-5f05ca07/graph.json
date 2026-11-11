@@ -1,0 +1,462 @@
+{
+  "startedAt": "2026-11-11T15:29:35.210Z",
+  "mode": "graph",
+  "origin": "http://127.0.0.1:<isolated>",
+  "revision": "5f05ca073887c58ecc22a567782124438baca07c",
+  "workingDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "checks": [
+    {
+      "label": "intercepted synthetic plan graph",
+      "theme": "",
+      "rows": [
+        {
+          "selector": "button[aria-label*=\"tar\"] svg",
+          "tag": "svg",
+          "name": "☆ Star operation",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "none",
+          "stroke": "oklch(0.141 0.005 285.823)",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "borderInnerRatio": 1.2688774649087908,
+          "backgroundRatio": 1,
+          "fillRatio": null,
+          "strokeRatio": 19.895357656776593,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.45 0.00415141 -0.0144141 / 0.5) none 3px",
+          "outlineRatio": 2.3357370064276672
+        },
+        {
+          "selector": ".react-flow__edge-path",
+          "tag": "path",
+          "name": "",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "none",
+          "stroke": "oklch(0.49 0.016 285.938)",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "borderInnerRatio": 1.2688774649087908,
+          "backgroundRatio": 1,
+          "fillRatio": null,
+          "strokeRatio": 6.311144871290155,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.45 0.00415141 -0.0144141 / 0.5) none 3px",
+          "outlineRatio": 2.3357370064276672
+        },
+        {
+          "selector": ".react-flow__edge-path",
+          "tag": "path",
+          "name": "",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "none",
+          "stroke": "oklch(0.49 0.016 285.938)",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "borderInnerRatio": 1.2688774649087908,
+          "backgroundRatio": 1,
+          "fillRatio": null,
+          "strokeRatio": 6.311144871290155,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.45 0.00415141 -0.0144141 / 0.5) none 3px",
+          "outlineRatio": 2.3357370064276672
+        },
+        {
+          "selector": ".plan-graph article",
+          "tag": "ARTICLE",
+          "name": "SELECTEst. 124Act. 118Cost 0%exactCollapse",
+          "checked": null,
+          "border": "oklch(0.596 0.145 163.225)",
+          "background": "oklch(1 0 0)",
+          "fill": null,
+          "stroke": null,
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 3.653219070031898,
+          "borderInnerRatio": 3.653219070031898,
+          "backgroundRatio": 1,
+          "fillRatio": null,
+          "strokeRatio": null,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.45 0.00415141 -0.0144141 / 0.5) none 3px",
+          "outlineRatio": 2.3357370064276672
+        },
+        {
+          "selector": ".plan-graph article",
+          "tag": "ARTICLE",
+          "name": "SortEst. 124Act. 118Cost 10%inferredCollapse",
+          "checked": null,
+          "border": "oklch(0.588 0.158 241.966)",
+          "background": "oklab(0.685 -0.0912435 -0.142252 / 0.05)",
+          "fill": null,
+          "stroke": null,
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 4.022067328939422,
+          "borderInnerRatio": 3.8077638365332187,
+          "backgroundRatio": 1.0562806680262282,
+          "fillRatio": null,
+          "strokeRatio": null,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.45 0.00415141 -0.0144141 / 0.5) none 3px",
+          "outlineRatio": 2.3357370064276672
+        },
+        {
+          "selector": ".plan-graph article",
+          "tag": "ARTICLE",
+          "name": "Index Seekdbo.Orders · IX_Orders_CustomerId (o)Est",
+          "checked": null,
+          "border": "oklch(0.666 0.179 58.318)",
+          "background": "oklab(0.769 0.0640531 0.176752 / 0.05)",
+          "fill": null,
+          "stroke": null,
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 3.199482614587377,
+          "borderInnerRatio": 3.078952205456816,
+          "backgroundRatio": 1.03914656710713,
+          "fillRatio": null,
+          "strokeRatio": null,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.45 0.00415141 -0.0144141 / 0.5) none 3px",
+          "outlineRatio": 2.3357370064276672
+        }
+      ],
+      "tokens": {
+        "--input": {
+          "color": "oklch(60% .016 285.938)",
+          "ratio": 3.9584180930789734,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--ring": {
+          "color": "oklch(45% .015 286.067)",
+          "ratio": 7.491556562293943,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-1": {
+          "color": "oklch(64% .006 286.286)",
+          "ratio": 3.349791701354496,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-2": {
+          "color": "oklch(56% .016 285.938)",
+          "ratio": 4.684851484374569,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-3": {
+          "color": "oklch(48% .017 285.786)",
+          "ratio": 6.600089102003307,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-4": {
+          "color": "oklch(40% .013 285.805)",
+          "ratio": 9.201984111279808,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-5": {
+          "color": "oklch(32% .006 286.033)",
+          "ratio": 12.764939696366312,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        }
+      }
+    },
+    {
+      "label": "intercepted synthetic plan graph",
+      "theme": "dark",
+      "rows": [
+        {
+          "selector": "button[aria-label*=\"tar\"] svg",
+          "tag": "svg",
+          "name": "☆ Star operation",
+          "checked": null,
+          "border": "oklch(1 0 0 / 0.1)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "none",
+          "stroke": "oklch(0.985 0 0)",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.2505220587072858,
+          "borderInnerRatio": 1.2505220587072858,
+          "backgroundRatio": 1,
+          "fillRatio": null,
+          "strokeRatio": 19.061142529601344,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.8 0.00439355 -0.015385 / 0.5) none 3px",
+          "outlineRatio": 3.3053714928116062
+        },
+        {
+          "selector": ".react-flow__edge-path",
+          "tag": "path",
+          "name": "",
+          "checked": null,
+          "border": "oklch(1 0 0 / 0.1)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "none",
+          "stroke": "oklch(0.705 0.015 286.067)",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.2505220587072858,
+          "borderInnerRatio": 1.2505220587072858,
+          "backgroundRatio": 1,
+          "fillRatio": null,
+          "strokeRatio": 7.585204605121942,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.8 0.00439355 -0.015385 / 0.5) none 3px",
+          "outlineRatio": 3.3053714928116062
+        },
+        {
+          "selector": ".react-flow__edge-path",
+          "tag": "path",
+          "name": "",
+          "checked": null,
+          "border": "oklch(1 0 0 / 0.1)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "none",
+          "stroke": "oklch(0.705 0.015 286.067)",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.2505220587072858,
+          "borderInnerRatio": 1.2505220587072858,
+          "backgroundRatio": 1,
+          "fillRatio": null,
+          "strokeRatio": 7.585204605121942,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.8 0.00439355 -0.015385 / 0.5) none 3px",
+          "outlineRatio": 3.3053714928116062
+        },
+        {
+          "selector": ".plan-graph article",
+          "tag": "ARTICLE",
+          "name": "SELECTEst. 124Act. 118Cost 0%exactCollapse",
+          "checked": null,
+          "border": "oklch(0.596 0.145 163.225)",
+          "background": "oklch(0.21 0.006 285.885)",
+          "fill": null,
+          "stroke": null,
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 5.4459799085092575,
+          "borderInnerRatio": 4.849631171422588,
+          "backgroundRatio": 1.122967853844386,
+          "fillRatio": null,
+          "strokeRatio": null,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.8 0.00439355 -0.015385 / 0.5) none 3px",
+          "outlineRatio": 3.3053714928116062
+        },
+        {
+          "selector": ".plan-graph article",
+          "tag": "ARTICLE",
+          "name": "SortEst. 124Act. 118Cost 10%inferredCollapse",
+          "checked": null,
+          "border": "oklch(0.588 0.158 241.966)",
+          "background": "oklab(0.685 -0.0912435 -0.142252 / 0.05)",
+          "fill": null,
+          "stroke": null,
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 4.9465501270021734,
+          "borderInnerRatio": 4.745151779988083,
+          "backgroundRatio": 1.042442972607,
+          "fillRatio": null,
+          "strokeRatio": null,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.8 0.00439355 -0.015385 / 0.5) none 3px",
+          "outlineRatio": 3.3053714928116062
+        },
+        {
+          "selector": ".plan-graph article",
+          "tag": "ARTICLE",
+          "name": "Index Seekdbo.Orders · IX_Orders_CustomerId (o)Est",
+          "checked": null,
+          "border": "oklch(0.666 0.179 58.318)",
+          "background": "oklab(0.769 0.0640531 0.176752 / 0.05)",
+          "fill": null,
+          "stroke": null,
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 6.21830466153116,
+          "borderInnerRatio": 5.886366510972164,
+          "backgroundRatio": 1.0563910096220248,
+          "fillRatio": null,
+          "strokeRatio": null,
+          "focusVisible": false,
+          "boxShadow": "none",
+          "outline": "oklab(0.8 0.00439355 -0.015385 / 0.5) none 3px",
+          "outlineRatio": 3.3053714928116062
+        }
+      ],
+      "tokens": {
+        "--input": {
+          "color": "oklch(66% .016 285.938)",
+          "ratio": 6.379937228289184,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--ring": {
+          "color": "oklch(80% .016 285.938)",
+          "ratio": 10.578254867101332,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-1": {
+          "color": "oklch(88% .006 286.286)",
+          "ratio": 13.862786493718263,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-2": {
+          "color": "oklch(80% .016 285.938)",
+          "ratio": 10.578254867101332,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-3": {
+          "color": "oklch(72% .017 285.786)",
+          "ratio": 7.9725551092012354,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-4": {
+          "color": "oklch(66% .013 285.805)",
+          "ratio": 6.367203039276537,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-5": {
+          "color": "oklch(60% .006 286.033)",
+          "ratio": 5.057869892243428,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Plan graph uses intercepted synthetic graph/source-map API responses. Only rendered edges and nodes sampled; no retained execution-plan backend contract is claimed."
+  ],
+  "browser": "156.0.8078.4",
+  "assets": [
+    {
+      "path": "/assets/index-BjVrJ4lA.js",
+      "sha256": "1a311497f0531ae3dd4120710d01428d7ec223d25c9f3689b65ad9d680a881fe"
+    },
+    {
+      "path": "/assets/index-DBQ2y8xw.css",
+      "sha256": "c966a401419a9dff037b616ccafa01aade3f6e8db5bc4ad36ec780124081cdba"
+    },
+    {
+      "path": "/assets/monaco-DjpsE8to.css",
+      "sha256": "797aa85d5570a0ebbb047093f58e9adc13945078495425b27133073e5b15a9da"
+    },
+    {
+      "path": "/assets/PlanGraphView-DLioOiRN.css",
+      "sha256": "b0cb7bd6fec5951c9c8f5808821438206604b1629a912c96009ac427f38e7d69"
+    }
+  ],
+  "finishedAt": "2026-11-11T15:29:40.798Z"
+}

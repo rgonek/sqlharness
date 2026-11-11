@@ -1,0 +1,3509 @@
+{
+  "startedAt": "2026-11-10T19:28:32.463Z",
+  "source": "actual release dashboard, synthetic local journal",
+  "revision": "45a7e54c13a75b3d492c2867bd1640a59f333a4e",
+  "dirtyPaths": [
+    "M src/SqlHarness.Dashboard/ui/src/api/types.ts",
+    " M src/SqlHarness.Dashboard/ui/src/components/ActivityFeed.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/BrandLogo.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/SessionVersionDiff.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/optimization/ComparisonPanel.test.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/optimization/ComparisonPanel.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.test.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/optimization/IoComparison.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/optimization/OptimizationSection.test.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/optimization/OptimizationSection.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/optimization/StatementRows.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.test.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/optimization/VersionTable.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/sql-editor/monaco.test.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/components/sql-editor/monaco.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/index.css",
+    " M src/SqlHarness.Dashboard/ui/src/lib/activitySearch.ts",
+    " M src/SqlHarness.Dashboard/ui/src/lib/useActivityFilters.ts",
+    " M src/SqlHarness.Dashboard/ui/src/pages/ActivityContext.test.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/pages/OperationPage.test.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/pages/OperationPage.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/router.test.tsx",
+    " M src/SqlHarness.Dashboard/ui/src/test/setup.ts",
+    "?? plans/126-evidence/comparison-report.md",
+    "?? plans/126-evidence/harness/",
+    "?? plans/126-evidence/task-review-activity-shared.md",
+    "?? src/SqlHarness.Dashboard/ui/src/components/optimization/CaseOutcomeDetails.test.tsx",
+    "?? src/SqlHarness.Dashboard/ui/src/components/optimization/CaseOutcomeDetails.tsx",
+    "?? src/SqlHarness.Dashboard/ui/src/components/optimization/versionMetrics.test.ts",
+    "?? src/SqlHarness.Dashboard/ui/src/components/optimization/versionMetrics.ts",
+    "?? src/SqlHarness.Dashboard/ui/src/lib/activitySearch.test.ts",
+    "?? src/SqlHarness.Dashboard/ui/src/lib/useActivityExpansion.ts",
+    "?? src/SqlHarness.Dashboard/ui/src/lib/useActivityScroll.ts",
+    "?? src/SqlHarness.Dashboard/ui/src/pages/OperationFailure.test.tsx"
+  ],
+  "fixture": {
+    "sessions": 500,
+    "operations": 10000,
+    "primarySessionOperations": 1000,
+    "versions": 50,
+    "cases": 20,
+    "seededAt": "2026-11-10T19:08:16.922Z",
+    "schemaVersion": 26
+  },
+  "host": {
+    "hostname": "RobertG",
+    "platform": "win32",
+    "release": "10.0.19045",
+    "architecture": "x64",
+    "cpus": 8,
+    "cpu": "Intel(R) Core(TM) i7-4700MQ CPU @ 2.40GHz",
+    "memoryGiB": 16,
+    "browser": "156.0.8078.4"
+  },
+  "checks": [
+    {
+      "name": "fixture counts frozen",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 0,
+      "detail": {
+        "sessions": 500,
+        "operations": 10000,
+        "primarySessionOperations": 1000,
+        "versions": 50,
+        "cases": 20,
+        "seededAt": "2026-11-10T19:08:16.922Z",
+        "schemaVersion": 26
+      }
+    },
+    {
+      "name": "actual DTO mixed IO/policy, zero/missing counters, sum/mean and case timing",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 874,
+      "error": "GET /api/operations/10000/optimization?case=0&aggregate=sum&view=whole returned 404"
+    },
+    {
+      "name": "actual optimization has 50 versions and failed attempt excluded",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 454,
+      "detail": {
+        "versionCount": 50,
+        "defaultA": "v0",
+        "defaultB": "v49",
+        "group": "synthetic-conditions"
+      }
+    },
+    {
+      "name": "independent non-adjacent pair keeps policy unavailable in actual DTO/UI",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3565,
+      "detail": {
+        "basis": "DifferentRunsSameConditions",
+        "outcomes": {
+          "resultsEquivalent": 0,
+          "resultsDifferent": 0,
+          "resultsUnavailable": 20,
+          "ioBetter": 20,
+          "ioSame": 0,
+          "ioWorse": 0,
+          "ioUnavailable": 0,
+          "policyPass": 0,
+          "policyFail": 0,
+          "policyUnavailable": 20
+        }
+      }
+    },
+    {
+      "name": "activity readable and keyboard skip link",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2396,
+      "detail": {
+        "firstFocus": "Skip to main content"
+      }
+    },
+    {
+      "name": "activity search and facet survive detail round trip and browser back/forward",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4748,
+      "detail": {
+        "search": "?time=%22604800000%22&text=Orders&starred=true"
+      }
+    },
+    {
+      "name": "performance search typing: 20 samples",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3431,
+      "detail": {
+        "name": "search",
+        "sampleCount": 20,
+        "warmupCount": 3,
+        "thresholdMs": 200,
+        "p95Ms": 102.10000002384186,
+        "maxLongTaskMs": 60,
+        "samples": [
+          {
+            "inputToPaintMs": 103.39999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 52
+          },
+          {
+            "inputToPaintMs": 63,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 83.19999992847443,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 70.90000009536743,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 86.69999992847443,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 68.89999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 92.39999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 64.20000004768372,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 86.69999992847443,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 70.60000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 87.30000007152557,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 52
+          },
+          {
+            "inputToPaintMs": 69.10000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 102.10000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 60
+          },
+          {
+            "inputToPaintMs": 69.59999990463257,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 87.60000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 69.10000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 87.60000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 53.5,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 87.10000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 55.299999952316284,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          }
+        ],
+        "note": "Input event capture to second animation frame after asserted state."
+      }
+    },
+    {
+      "name": "performance facet toggle: 20 samples",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 3544,
+      "error": "p95 200.6ms (limit 200); max long task 153.0ms (limit 200)"
+    },
+    {
+      "name": "performance session expand: 20 samples",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4203,
+      "detail": {
+        "name": "session expansion",
+        "sampleCount": 20,
+        "warmupCount": 3,
+        "thresholdMs": 200,
+        "p95Ms": 109.89999997615814,
+        "maxLongTaskMs": 72,
+        "samples": [
+          {
+            "inputToPaintMs": 59.60000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 89.60000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 55
+          },
+          {
+            "inputToPaintMs": 72.80000007152557,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 123.09999990463257,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 59
+          },
+          {
+            "inputToPaintMs": 86.80000007152557,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 107.20000004768372,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 65
+          },
+          {
+            "inputToPaintMs": 88.5,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 105.10000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 72
+          },
+          {
+            "inputToPaintMs": 75.5,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 91.20000004768372,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 51
+          },
+          {
+            "inputToPaintMs": 54.700000047683716,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 109.89999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 56
+          },
+          {
+            "inputToPaintMs": 57.299999952316284,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 74.89999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 73.10000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 92.19999992847443,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 58.299999952316284,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 92.80000007152557,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 41.89999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 77.39999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 0
+          }
+        ],
+        "note": "Input event capture to second animation frame after asserted state."
+      }
+    },
+    {
+      "name": "comparison pair and independent dimensions visible through actual UI",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2123,
+      "detail": {
+        "text": "Operation #9952\nOperation #10000\nResults 0/20\nIO ↑20\nPolicy ?20\n\nomitted statements: 1 (their reads remain in the batch total)\n\nomitted statements: 1 (their reads remain in the batch total)\n\nSQL diff\nIO\nPlan\nv0 → v49 · different runs, same conditions · results equivalent via v1\nBaseline v0 · @CustomerId = 1\nPlans for v0\nCopy Baseline v0 case @CustomerId = 1 script (as executed)\nCopy Baseline v0 case @CustomerId = 1 script (local variables)\nCandidate v49 · @CustomerId = 1\nPlans for v49\nCopy Candidate v49 case @CustomerId = 1 script (as executed)\nCopy Candidate v49 case @CustomerId = 1 script (local variables)\n\nCould not load SQL for v0: Request failed with 400: /api/sessions/1/sql?hash=5d80d65845ac855e0b01c34a7fdf2678ef48f522365ca6669da19a2ba7a47469\n\nCould not load SQL for v49: Request failed with 400: /api/sessions/1/sql?hash=f7ce1e87fe0280d462d334f3aa3a475b3369cf505dea5bfb485485439824a6b5"
+      }
+    },
+    {
+      "name": "performance A/B selection: 20 samples",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 6859,
+      "detail": {
+        "name": "A/B selection",
+        "sampleCount": 20,
+        "warmupCount": 3,
+        "thresholdMs": 500,
+        "p95Ms": 93.80000007152557,
+        "maxLongTaskMs": 109,
+        "samples": [
+          {
+            "inputToPaintMs": 130,
+            "settlementAfterResponseMs": 72.10000002384186,
+            "responseObserved": true,
+            "maxLongTaskMs": 64
+          },
+          {
+            "inputToPaintMs": 115.69999992847443,
+            "settlementAfterResponseMs": 70.19999992847443,
+            "responseObserved": true,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 120.60000002384186,
+            "settlementAfterResponseMs": 66.79999995231628,
+            "responseObserved": true,
+            "maxLongTaskMs": 56
+          },
+          {
+            "inputToPaintMs": 119.60000002384186,
+            "settlementAfterResponseMs": 75,
+            "responseObserved": true,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 117.70000004768372,
+            "settlementAfterResponseMs": 70.70000004768372,
+            "responseObserved": true,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 155.39999997615814,
+            "settlementAfterResponseMs": 95.89999997615814,
+            "responseObserved": true,
+            "maxLongTaskMs": 64
+          },
+          {
+            "inputToPaintMs": 121.39999997615814,
+            "settlementAfterResponseMs": 73.80000007152557,
+            "responseObserved": true,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 122,
+            "settlementAfterResponseMs": 77.79999995231628,
+            "responseObserved": true,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 136.10000002384186,
+            "settlementAfterResponseMs": 81.40000009536743,
+            "responseObserved": true,
+            "maxLongTaskMs": 52
+          },
+          {
+            "inputToPaintMs": 154.10000002384186,
+            "settlementAfterResponseMs": 80,
+            "responseObserved": true,
+            "maxLongTaskMs": 75
+          },
+          {
+            "inputToPaintMs": 139.10000002384186,
+            "settlementAfterResponseMs": 92,
+            "responseObserved": true,
+            "maxLongTaskMs": 0
+          },
+          {
+            "inputToPaintMs": 118.29999995231628,
+            "settlementAfterResponseMs": 64.19999992847443,
+            "responseObserved": true,
+            "maxLongTaskMs": 53
+          },
+          {
+            "inputToPaintMs": 125.79999995231628,
+            "settlementAfterResponseMs": 74,
+            "responseObserved": true,
+            "maxLongTaskMs": 51
+          },
+          {
+            "inputToPaintMs": 135.20000004768372,
+            "settlementAfterResponseMs": 81.10000002384186,
+            "responseObserved": true,
+            "maxLongTaskMs": 54
+          },
+          {
+            "inputToPaintMs": 134.79999995231628,
+            "settlementAfterResponseMs": 82.09999990463257,
+            "responseObserved": true,
+            "maxLongTaskMs": 59
+          },
+          {
+            "inputToPaintMs": 154.10000002384186,
+            "settlementAfterResponseMs": 93.80000007152557,
+            "responseObserved": true,
+            "maxLongTaskMs": 64
+          },
+          {
+            "inputToPaintMs": 129.79999995231628,
+            "settlementAfterResponseMs": 74.5,
+            "responseObserved": true,
+            "maxLongTaskMs": 54
+          },
+          {
+            "inputToPaintMs": 151,
+            "settlementAfterResponseMs": 69.60000002384186,
+            "responseObserved": true,
+            "maxLongTaskMs": 83
+          },
+          {
+            "inputToPaintMs": 164.29999995231628,
+            "settlementAfterResponseMs": 81.79999995231628,
+            "responseObserved": true,
+            "maxLongTaskMs": 77
+          },
+          {
+            "inputToPaintMs": 207.89999997615814,
+            "settlementAfterResponseMs": 91,
+            "responseObserved": true,
+            "maxLongTaskMs": 109
+          }
+        ],
+        "note": "Response-to-paint when fetched; input-to-paint for cached data. Warm-up excluded."
+      }
+    },
+    {
+      "name": "performance case selection: 20 samples",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 19247,
+      "detail": {
+        "name": "case change",
+        "sampleCount": 20,
+        "warmupCount": 3,
+        "thresholdMs": 500,
+        "p95Ms": 310.40000009536743,
+        "maxLongTaskMs": 160,
+        "samples": [
+          {
+            "inputToPaintMs": 237.79999995231628,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 130
+          },
+          {
+            "inputToPaintMs": 240.09999990463257,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 125
+          },
+          {
+            "inputToPaintMs": 310.40000009536743,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 132
+          },
+          {
+            "inputToPaintMs": 293.89999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 139
+          },
+          {
+            "inputToPaintMs": 294.6999999284744,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 160
+          },
+          {
+            "inputToPaintMs": 300.89999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 155
+          },
+          {
+            "inputToPaintMs": 259.10000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 154
+          },
+          {
+            "inputToPaintMs": 248,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 120
+          },
+          {
+            "inputToPaintMs": 359.7999999523163,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 130
+          },
+          {
+            "inputToPaintMs": 263.7999999523163,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 128
+          },
+          {
+            "inputToPaintMs": 220.30000007152557,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 144
+          },
+          {
+            "inputToPaintMs": 782.2999999523163,
+            "settlementAfterResponseMs": 71.5,
+            "responseObserved": true,
+            "maxLongTaskMs": 121
+          },
+          {
+            "inputToPaintMs": 264.90000009536743,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 110
+          },
+          {
+            "inputToPaintMs": 165.10000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 75
+          },
+          {
+            "inputToPaintMs": 551.2999999523163,
+            "settlementAfterResponseMs": 80.39999997615814,
+            "responseObserved": true,
+            "maxLongTaskMs": 74
+          },
+          {
+            "inputToPaintMs": 151.29999995231628,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 71
+          },
+          {
+            "inputToPaintMs": 192.10000002384186,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 71
+          },
+          {
+            "inputToPaintMs": 197.89999997615814,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 87
+          },
+          {
+            "inputToPaintMs": 180.79999995231628,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 89
+          },
+          {
+            "inputToPaintMs": 248.80000007152557,
+            "settlementAfterResponseMs": null,
+            "responseObserved": false,
+            "maxLongTaskMs": 127
+          }
+        ],
+        "note": "Response-to-paint when fetched; input-to-paint for cached data. Warm-up excluded."
+      }
+    },
+    {
+      "name": "selected aggregate updates table and source timing",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3774
+    },
+    {
+      "name": "history successive pages stay bounded",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 91,
+      "detail": {
+        "sizes": [
+          500,
+          500
+        ],
+        "count": 1000
+      }
+    },
+    {
+      "name": "failed compare reason retained in actual detail",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1002
+    },
+    {
+      "name": "activity light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 8882,
+      "detail": {
+        "name": "activity-light",
+        "violations": [],
+        "incomplete": [
+          {
+            "id": "aria-prohibited-attr",
+            "count": 3
+          },
+          {
+            "id": "aria-valid-attr-value",
+            "count": 1
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "form-field-multiple-labels",
+          "html-has-lang",
+          "html-lang-valid",
+          "label",
+          "link-name",
+          "meta-viewport",
+          "nested-interactive"
+        ]
+      }
+    },
+    {
+      "name": "activity dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 12613,
+      "detail": {
+        "name": "activity-dark",
+        "violations": [],
+        "incomplete": [
+          {
+            "id": "aria-prohibited-attr",
+            "count": 3
+          },
+          {
+            "id": "aria-valid-attr-value",
+            "count": 1
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "form-field-multiple-labels",
+          "html-has-lang",
+          "html-lang-valid",
+          "label",
+          "link-name",
+          "meta-viewport",
+          "nested-interactive"
+        ]
+      }
+    },
+    {
+      "name": "activity initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1463,
+      "detail": {
+        "navigationToSettledMs": 1454.5,
+        "lastRequiredResponseMs": 1021.5,
+        "responseToSettledMs": 433,
+        "longTasks": [
+          {
+            "start": 1025.6000000238419,
+            "duration": 276
+          },
+          {
+            "start": 1303.1000000238419,
+            "duration": 65
+          }
+        ]
+      }
+    },
+    {
+      "name": "activity 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1658,
+      "detail": {
+        "width": 390,
+        "scrollWidth": 390,
+        "overflow": []
+      }
+    },
+    {
+      "name": "activity 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1488,
+      "detail": {
+        "width": 768,
+        "scrollWidth": 768,
+        "overflow": []
+      }
+    },
+    {
+      "name": "activity 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1347,
+      "detail": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "overflow": []
+      }
+    },
+    {
+      "name": "activity 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1410,
+      "detail": {
+        "width": 1920,
+        "scrollWidth": 1920,
+        "overflow": []
+      }
+    },
+    {
+      "name": "comparison light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 18718,
+      "detail": {
+        "name": "comparison-light",
+        "violations": [],
+        "incomplete": [
+          {
+            "id": "aria-prohibited-attr",
+            "count": 150
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-command-name",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-required-children",
+          "aria-required-parent",
+          "aria-roles",
+          "aria-toggle-field-name",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "form-field-multiple-labels",
+          "html-has-lang",
+          "html-lang-valid",
+          "label",
+          "link-name",
+          "list",
+          "listitem",
+          "meta-viewport",
+          "nested-interactive",
+          "scrollable-region-focusable",
+          "td-headers-attr",
+          "th-has-data-cells"
+        ]
+      }
+    },
+    {
+      "name": "comparison dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 27772,
+      "detail": {
+        "name": "comparison-dark",
+        "violations": [],
+        "incomplete": [
+          {
+            "id": "aria-prohibited-attr",
+            "count": 150
+          }
+        ],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-command-name",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-required-children",
+          "aria-required-parent",
+          "aria-roles",
+          "aria-toggle-field-name",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "form-field-multiple-labels",
+          "html-has-lang",
+          "html-lang-valid",
+          "label",
+          "link-name",
+          "list",
+          "listitem",
+          "meta-viewport",
+          "nested-interactive",
+          "scrollable-region-focusable",
+          "td-headers-attr",
+          "th-has-data-cells"
+        ]
+      }
+    },
+    {
+      "name": "comparison initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2026,
+      "detail": {
+        "navigationToSettledMs": 2021,
+        "lastRequiredResponseMs": 1942.7000000476837,
+        "responseToSettledMs": 78.29999995231628,
+        "longTasks": [
+          {
+            "start": 575.1000000238419,
+            "duration": 344
+          },
+          {
+            "start": 1406.5,
+            "duration": 74
+          },
+          {
+            "start": 1480.9000000953674,
+            "duration": 132
+          }
+        ]
+      }
+    },
+    {
+      "name": "comparison 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2444,
+      "detail": {
+        "width": 390,
+        "scrollWidth": 390,
+        "overflow": []
+      }
+    },
+    {
+      "name": "comparison 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2577,
+      "detail": {
+        "width": 768,
+        "scrollWidth": 768,
+        "overflow": []
+      }
+    },
+    {
+      "name": "comparison 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2287,
+      "detail": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "overflow": []
+      }
+    },
+    {
+      "name": "comparison 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2261,
+      "detail": {
+        "width": 1920,
+        "scrollWidth": 1920,
+        "overflow": []
+      }
+    },
+    {
+      "name": "operation light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 2456,
+      "error": "1 axe violations: label"
+    },
+    {
+      "name": "operation dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 2037,
+      "error": "1 axe violations: label"
+    },
+    {
+      "name": "operation initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 677,
+      "detail": {
+        "navigationToSettledMs": 671.7999999523163,
+        "lastRequiredResponseMs": 590,
+        "responseToSettledMs": 81.79999995231628,
+        "longTasks": []
+      }
+    },
+    {
+      "name": "operation 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 703,
+      "detail": {
+        "width": 390,
+        "scrollWidth": 390,
+        "overflow": []
+      }
+    },
+    {
+      "name": "operation 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 688,
+      "detail": {
+        "width": 768,
+        "scrollWidth": 768,
+        "overflow": []
+      }
+    },
+    {
+      "name": "operation 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1012,
+      "detail": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "overflow": []
+      }
+    },
+    {
+      "name": "operation 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 893,
+      "detail": {
+        "width": 1920,
+        "scrollWidth": 1920,
+        "overflow": []
+      }
+    },
+    {
+      "name": "usage light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1152,
+      "detail": {
+        "name": "usage-light",
+        "violations": [],
+        "incomplete": [],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-required-children",
+          "aria-required-parent",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "html-has-lang",
+          "html-lang-valid",
+          "link-name",
+          "meta-viewport",
+          "nested-interactive"
+        ]
+      }
+    },
+    {
+      "name": "usage dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1043,
+      "detail": {
+        "name": "usage-dark",
+        "violations": [],
+        "incomplete": [],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-required-children",
+          "aria-required-parent",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "html-has-lang",
+          "html-lang-valid",
+          "link-name",
+          "meta-viewport",
+          "nested-interactive"
+        ]
+      }
+    },
+    {
+      "name": "usage initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 284,
+      "detail": {
+        "navigationToSettledMs": 277.60000002384186,
+        "lastRequiredResponseMs": 162.70000004768372,
+        "responseToSettledMs": 114.89999997615814,
+        "longTasks": []
+      }
+    },
+    {
+      "name": "usage 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 333,
+      "detail": {
+        "width": 390,
+        "scrollWidth": 390,
+        "overflow": []
+      }
+    },
+    {
+      "name": "usage 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 362,
+      "detail": {
+        "width": 768,
+        "scrollWidth": 768,
+        "overflow": []
+      }
+    },
+    {
+      "name": "usage 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 392,
+      "detail": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "overflow": []
+      }
+    },
+    {
+      "name": "usage 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 430,
+      "detail": {
+        "width": 1920,
+        "scrollWidth": 1920,
+        "overflow": []
+      }
+    },
+    {
+      "name": "profiles light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1021,
+      "detail": {
+        "name": "profiles-light",
+        "violations": [],
+        "incomplete": [],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "form-field-multiple-labels",
+          "html-has-lang",
+          "html-lang-valid",
+          "label",
+          "link-name",
+          "meta-viewport",
+          "nested-interactive",
+          "td-headers-attr",
+          "th-has-data-cells"
+        ]
+      }
+    },
+    {
+      "name": "profiles dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 920,
+      "detail": {
+        "name": "profiles-dark",
+        "violations": [],
+        "incomplete": [],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "form-field-multiple-labels",
+          "html-has-lang",
+          "html-lang-valid",
+          "label",
+          "link-name",
+          "meta-viewport",
+          "nested-interactive",
+          "td-headers-attr",
+          "th-has-data-cells"
+        ]
+      }
+    },
+    {
+      "name": "profiles initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 261,
+      "detail": {
+        "navigationToSettledMs": 256,
+        "lastRequiredResponseMs": 137.69999992847443,
+        "responseToSettledMs": 118.30000007152557,
+        "longTasks": []
+      }
+    },
+    {
+      "name": "profiles 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 289,
+      "detail": {
+        "width": 390,
+        "scrollWidth": 390,
+        "overflow": []
+      }
+    },
+    {
+      "name": "profiles 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 311,
+      "detail": {
+        "width": 768,
+        "scrollWidth": 768,
+        "overflow": []
+      }
+    },
+    {
+      "name": "profiles 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 328,
+      "detail": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "overflow": []
+      }
+    },
+    {
+      "name": "profiles 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 323,
+      "detail": {
+        "width": 1920,
+        "scrollWidth": 1920,
+        "overflow": []
+      }
+    },
+    {
+      "name": "settings light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1569,
+      "detail": {
+        "name": "settings-light",
+        "violations": [],
+        "incomplete": [],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-toggle-field-name",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "form-field-multiple-labels",
+          "html-has-lang",
+          "html-lang-valid",
+          "label",
+          "link-name",
+          "meta-viewport",
+          "nested-interactive",
+          "td-headers-attr",
+          "th-has-data-cells"
+        ]
+      }
+    },
+    {
+      "name": "settings dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1662,
+      "detail": {
+        "name": "settings-dark",
+        "violations": [],
+        "incomplete": [],
+        "passes": [
+          "aria-allowed-attr",
+          "aria-conditional-attr",
+          "aria-deprecated-role",
+          "aria-hidden-body",
+          "aria-hidden-focus",
+          "aria-prohibited-attr",
+          "aria-required-attr",
+          "aria-roles",
+          "aria-toggle-field-name",
+          "aria-valid-attr-value",
+          "aria-valid-attr",
+          "button-name",
+          "bypass",
+          "color-contrast",
+          "document-title",
+          "duplicate-id-aria",
+          "form-field-multiple-labels",
+          "html-has-lang",
+          "html-lang-valid",
+          "label",
+          "link-name",
+          "meta-viewport",
+          "nested-interactive",
+          "td-headers-attr",
+          "th-has-data-cells"
+        ]
+      }
+    },
+    {
+      "name": "settings initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 342,
+      "detail": {
+        "navigationToSettledMs": 337,
+        "lastRequiredResponseMs": 296.60000002384186,
+        "responseToSettledMs": 40.39999997615814,
+        "longTasks": []
+      }
+    },
+    {
+      "name": "settings 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 376,
+      "detail": {
+        "width": 390,
+        "scrollWidth": 390,
+        "overflow": []
+      }
+    },
+    {
+      "name": "settings 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 431,
+      "detail": {
+        "width": 768,
+        "scrollWidth": 768,
+        "overflow": []
+      }
+    },
+    {
+      "name": "settings 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 471,
+      "detail": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "overflow": []
+      }
+    },
+    {
+      "name": "settings 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 419,
+      "detail": {
+        "width": 1920,
+        "scrollWidth": 1920,
+        "overflow": []
+      }
+    },
+    {
+      "name": "200% equivalent CSS reflow and reduced motion",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1566,
+      "detail": {
+        "width": 720,
+        "scrollWidth": 720,
+        "overflow": []
+      }
+    },
+    {
+      "name": "actual case outcome dialog explains lower reads with policy failure; keyboard focus return",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 2296,
+      "error": "Mixed case reason absent or wrong ordering"
+    },
+    {
+      "name": "approximate comparison caveat remains prominent",
+      "source": "intercepted approximate DTO based on actual comparison; not journal-derived cross-condition proof",
+      "passed": true,
+      "milliseconds": 1406
+    },
+    {
+      "name": "profile editor and intercepted save failure retain next step",
+      "source": "intercepted PUT failure; actual GET profile, no persistent write",
+      "passed": true,
+      "milliseconds": 513
+    },
+    {
+      "name": "intercepted operation HTTP 401 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 288,
+      "detail": {
+        "text": "Dashboard session expired\nRun sqlharness dashboard again to open a new session."
+      }
+    },
+    {
+      "name": "intercepted operation HTTP 408 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 274,
+      "detail": {
+        "text": "Request failed\nSynthetic request failed; retry this view.\nTry again"
+      }
+    },
+    {
+      "name": "intercepted operation HTTP 500 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 3601,
+      "detail": {
+        "text": "Request failed\nSynthetic request failed; retry this view.\nTry again"
+      }
+    },
+    {
+      "name": "intercepted approval request keyboard focus return; no decision sent",
+      "source": "intercepted SSE snapshot; no approval/denial sent",
+      "passed": false,
+      "milliseconds": 15617,
+      "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('dialog') to be hidden\u001b[22m\n\u001b[2m    27 × locator resolved to visible <div tabindex=\"0\" role=\"dialog\" data-expanded=\"\" data-slot=\"toast\" aria-modal=\"false\" aria-labelledby=\"_r_7u_\" aria-describedby=\"_r_7v_\" class=\"group/toast pointer-events-auto absolute right-0 bottom-0 z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-md border bg-popover text-popover-foreground shadow-lg will-change-transform outline-none select-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [--gap:0.75rem] [--height:var(--toast-frontmost-height,var…>…</div>\u001b[22m\n"
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/sessions/1/sql",
+      "status": 400
+    },
+    {
+      "path": "/api/profiles",
+      "status": 409
+    },
+    {
+      "path": "/api/operations/9949",
+      "status": 401
+    },
+    {
+      "path": "/api/operations/9949",
+      "status": 408
+    },
+    {
+      "path": "/api/operations/9949",
+      "status": 500
+    },
+    {
+      "path": "/api/operations/9949",
+      "status": 500
+    },
+    {
+      "path": "/api/operations/9949",
+      "status": 500
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "independent-evidence.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "activity-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/"
+    },
+    {
+      "file": "session-comparison-io.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "selected-mean.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "failed-compare.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/operations/9951"
+    },
+    {
+      "file": "activity-light.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/"
+    },
+    {
+      "file": "activity-dark.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/"
+    },
+    {
+      "file": "activity-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "route": "/"
+    },
+    {
+      "file": "activity-768.png",
+      "viewport": {
+        "width": 768,
+        "height": 1000
+      },
+      "route": "/"
+    },
+    {
+      "file": "activity-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/"
+    },
+    {
+      "file": "activity-1920.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1000
+      },
+      "route": "/"
+    },
+    {
+      "file": "comparison-light.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "comparison-dark.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "comparison-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "comparison-768.png",
+      "viewport": {
+        "width": 768,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "comparison-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "comparison-1920.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "operation-light.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/operations/10000"
+    },
+    {
+      "file": "operation-dark.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/operations/10000"
+    },
+    {
+      "file": "operation-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "route": "/operations/10000"
+    },
+    {
+      "file": "operation-768.png",
+      "viewport": {
+        "width": 768,
+        "height": 1000
+      },
+      "route": "/operations/10000"
+    },
+    {
+      "file": "operation-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/operations/10000"
+    },
+    {
+      "file": "operation-1920.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1000
+      },
+      "route": "/operations/10000"
+    },
+    {
+      "file": "usage-light.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/stats"
+    },
+    {
+      "file": "usage-dark.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/stats"
+    },
+    {
+      "file": "usage-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "route": "/stats"
+    },
+    {
+      "file": "usage-768.png",
+      "viewport": {
+        "width": 768,
+        "height": 1000
+      },
+      "route": "/stats"
+    },
+    {
+      "file": "usage-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/stats"
+    },
+    {
+      "file": "usage-1920.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1000
+      },
+      "route": "/stats"
+    },
+    {
+      "file": "profiles-light.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/profiles"
+    },
+    {
+      "file": "profiles-dark.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/profiles"
+    },
+    {
+      "file": "profiles-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "route": "/profiles"
+    },
+    {
+      "file": "profiles-768.png",
+      "viewport": {
+        "width": 768,
+        "height": 1000
+      },
+      "route": "/profiles"
+    },
+    {
+      "file": "profiles-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/profiles"
+    },
+    {
+      "file": "profiles-1920.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1000
+      },
+      "route": "/profiles"
+    },
+    {
+      "file": "settings-light.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/settings"
+    },
+    {
+      "file": "settings-dark.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/settings"
+    },
+    {
+      "file": "settings-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "route": "/settings"
+    },
+    {
+      "file": "settings-768.png",
+      "viewport": {
+        "width": 768,
+        "height": 1000
+      },
+      "route": "/settings"
+    },
+    {
+      "file": "settings-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/settings"
+    },
+    {
+      "file": "settings-1920.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1000
+      },
+      "route": "/settings"
+    },
+    {
+      "file": "comparison-200percent-equivalent.png",
+      "viewport": {
+        "width": 720,
+        "height": 500
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "approximate-intercepted.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/sessions/1"
+    },
+    {
+      "file": "profile-save-failure.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/profiles"
+    },
+    {
+      "file": "operation-http-401.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/operations/9949"
+    },
+    {
+      "file": "operation-http-408.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/operations/9949"
+    },
+    {
+      "file": "operation-http-500.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/operations/9949"
+    },
+    {
+      "file": "synthetic-approval.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "route": "/"
+    }
+  ],
+  "accessibility": [
+    {
+      "name": "activity-light",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-roles",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "label",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive"
+      ]
+    },
+    {
+      "name": "activity-dark",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-roles",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "label",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive"
+      ]
+    },
+    {
+      "name": "comparison-light",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 150
+        }
+      ],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-command-name",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-required-children",
+        "aria-required-parent",
+        "aria-roles",
+        "aria-toggle-field-name",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "label",
+        "link-name",
+        "list",
+        "listitem",
+        "meta-viewport",
+        "nested-interactive",
+        "scrollable-region-focusable",
+        "td-headers-attr",
+        "th-has-data-cells"
+      ]
+    },
+    {
+      "name": "comparison-dark",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 150
+        }
+      ],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-command-name",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-required-children",
+        "aria-required-parent",
+        "aria-roles",
+        "aria-toggle-field-name",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "label",
+        "link-name",
+        "list",
+        "listitem",
+        "meta-viewport",
+        "nested-interactive",
+        "scrollable-region-focusable",
+        "td-headers-attr",
+        "th-has-data-cells"
+      ]
+    },
+    {
+      "name": "operation-light",
+      "violations": [
+        {
+          "id": "label",
+          "impact": "critical",
+          "description": "Ensure every form element has a label",
+          "nodes": [
+            {
+              "target": [
+                ".original-in-monaco-diff-editor > .overflow-guard[data-mprt=\"3\"] > textarea"
+              ],
+              "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element has no placeholder attribute\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\"",
+              "contrast": []
+            },
+            {
+              "target": [
+                ".modified-in-monaco-diff-editor > .overflow-guard[data-mprt=\"3\"] > textarea"
+              ],
+              "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element has no placeholder attribute\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\"",
+              "contrast": []
+            }
+          ]
+        }
+      ],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "color-contrast",
+          "count": 2
+        }
+      ],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-required-children",
+        "aria-required-parent",
+        "aria-roles",
+        "aria-toggle-field-name",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "avoid-inline-spacing",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive",
+        "summary-name"
+      ]
+    },
+    {
+      "name": "operation-dark",
+      "violations": [
+        {
+          "id": "label",
+          "impact": "critical",
+          "description": "Ensure every form element has a label",
+          "nodes": [
+            {
+              "target": [
+                ".original-in-monaco-diff-editor > .overflow-guard[data-mprt=\"3\"] > textarea"
+              ],
+              "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element has no placeholder attribute\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\"",
+              "contrast": []
+            },
+            {
+              "target": [
+                ".modified-in-monaco-diff-editor > .overflow-guard[data-mprt=\"3\"] > textarea"
+              ],
+              "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element has no placeholder attribute\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\"",
+              "contrast": []
+            }
+          ]
+        }
+      ],
+      "incomplete": [
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "color-contrast",
+          "count": 2
+        }
+      ],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-required-children",
+        "aria-required-parent",
+        "aria-roles",
+        "aria-toggle-field-name",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "avoid-inline-spacing",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive",
+        "summary-name"
+      ]
+    },
+    {
+      "name": "usage-light",
+      "violations": [],
+      "incomplete": [],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-required-children",
+        "aria-required-parent",
+        "aria-roles",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "html-has-lang",
+        "html-lang-valid",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive"
+      ]
+    },
+    {
+      "name": "usage-dark",
+      "violations": [],
+      "incomplete": [],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-required-children",
+        "aria-required-parent",
+        "aria-roles",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "html-has-lang",
+        "html-lang-valid",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive"
+      ]
+    },
+    {
+      "name": "profiles-light",
+      "violations": [],
+      "incomplete": [],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-roles",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "label",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive",
+        "td-headers-attr",
+        "th-has-data-cells"
+      ]
+    },
+    {
+      "name": "profiles-dark",
+      "violations": [],
+      "incomplete": [],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-roles",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "label",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive",
+        "td-headers-attr",
+        "th-has-data-cells"
+      ]
+    },
+    {
+      "name": "settings-light",
+      "violations": [],
+      "incomplete": [],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-roles",
+        "aria-toggle-field-name",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "label",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive",
+        "td-headers-attr",
+        "th-has-data-cells"
+      ]
+    },
+    {
+      "name": "settings-dark",
+      "violations": [],
+      "incomplete": [],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-roles",
+        "aria-toggle-field-name",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "form-field-multiple-labels",
+        "html-has-lang",
+        "html-lang-valid",
+        "label",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive",
+        "td-headers-attr",
+        "th-has-data-cells"
+      ]
+    },
+    {
+      "name": "synthetic-approval",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 3
+        },
+        {
+          "id": "color-contrast",
+          "count": 2
+        }
+      ],
+      "passes": [
+        "aria-allowed-attr",
+        "aria-conditional-attr",
+        "aria-deprecated-role",
+        "aria-hidden-body",
+        "aria-hidden-focus",
+        "aria-prohibited-attr",
+        "aria-required-attr",
+        "aria-roles",
+        "aria-toggle-field-name",
+        "aria-valid-attr-value",
+        "aria-valid-attr",
+        "avoid-inline-spacing",
+        "button-name",
+        "bypass",
+        "color-contrast",
+        "document-title",
+        "duplicate-id-aria",
+        "html-has-lang",
+        "html-lang-valid",
+        "link-in-text-block",
+        "link-name",
+        "meta-viewport",
+        "nested-interactive",
+        "td-headers-attr",
+        "th-has-data-cells"
+      ]
+    }
+  ],
+  "performance": [
+    {
+      "name": "search",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 200,
+      "p95Ms": 102.10000002384186,
+      "maxLongTaskMs": 60,
+      "samples": [
+        {
+          "inputToPaintMs": 103.39999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 52
+        },
+        {
+          "inputToPaintMs": 63,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 83.19999992847443,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 70.90000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 86.69999992847443,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 68.89999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 92.39999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 64.20000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 86.69999992847443,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 70.60000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 87.30000007152557,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 52
+        },
+        {
+          "inputToPaintMs": 69.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 102.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 60
+        },
+        {
+          "inputToPaintMs": 69.59999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 87.60000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 69.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 87.60000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 53.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 87.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 55.299999952316284,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        }
+      ],
+      "note": "Input event capture to second animation frame after asserted state."
+    },
+    {
+      "name": "facet",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 200,
+      "p95Ms": 200.60000002384186,
+      "maxLongTaskMs": 153,
+      "samples": [
+        {
+          "inputToPaintMs": 42.40000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 144.19999992847443,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 103
+        },
+        {
+          "inputToPaintMs": 42.299999952316284,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 194.19999992847443,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 141
+        },
+        {
+          "inputToPaintMs": 50.40000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 209.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 153
+        },
+        {
+          "inputToPaintMs": 58.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 195.69999992847443,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 139
+        },
+        {
+          "inputToPaintMs": 52.299999952316284,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 177.39999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 118
+        },
+        {
+          "inputToPaintMs": 42.700000047683716,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 159.39999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 109
+        },
+        {
+          "inputToPaintMs": 41.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 110.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 80
+        },
+        {
+          "inputToPaintMs": 42.699999928474426,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 111.80000007152557,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 71
+        },
+        {
+          "inputToPaintMs": 42,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 144.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 85
+        },
+        {
+          "inputToPaintMs": 41.799999952316284,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 200.60000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 82
+        }
+      ],
+      "note": "Input event capture to second animation frame after asserted state."
+    },
+    {
+      "name": "session expansion",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 200,
+      "p95Ms": 109.89999997615814,
+      "maxLongTaskMs": 72,
+      "samples": [
+        {
+          "inputToPaintMs": 59.60000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 89.60000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 55
+        },
+        {
+          "inputToPaintMs": 72.80000007152557,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 123.09999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 59
+        },
+        {
+          "inputToPaintMs": 86.80000007152557,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 107.20000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 65
+        },
+        {
+          "inputToPaintMs": 88.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 105.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 72
+        },
+        {
+          "inputToPaintMs": 75.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 91.20000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 51
+        },
+        {
+          "inputToPaintMs": 54.700000047683716,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 109.89999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 56
+        },
+        {
+          "inputToPaintMs": 57.299999952316284,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 74.89999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 73.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 92.19999992847443,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 58.299999952316284,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 92.80000007152557,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 41.89999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 77.39999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        }
+      ],
+      "note": "Input event capture to second animation frame after asserted state."
+    },
+    {
+      "name": "A/B selection",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 500,
+      "p95Ms": 93.80000007152557,
+      "maxLongTaskMs": 109,
+      "samples": [
+        {
+          "inputToPaintMs": 130,
+          "settlementAfterResponseMs": 72.10000002384186,
+          "responseObserved": true,
+          "maxLongTaskMs": 64
+        },
+        {
+          "inputToPaintMs": 115.69999992847443,
+          "settlementAfterResponseMs": 70.19999992847443,
+          "responseObserved": true,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 120.60000002384186,
+          "settlementAfterResponseMs": 66.79999995231628,
+          "responseObserved": true,
+          "maxLongTaskMs": 56
+        },
+        {
+          "inputToPaintMs": 119.60000002384186,
+          "settlementAfterResponseMs": 75,
+          "responseObserved": true,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 117.70000004768372,
+          "settlementAfterResponseMs": 70.70000004768372,
+          "responseObserved": true,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 155.39999997615814,
+          "settlementAfterResponseMs": 95.89999997615814,
+          "responseObserved": true,
+          "maxLongTaskMs": 64
+        },
+        {
+          "inputToPaintMs": 121.39999997615814,
+          "settlementAfterResponseMs": 73.80000007152557,
+          "responseObserved": true,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 122,
+          "settlementAfterResponseMs": 77.79999995231628,
+          "responseObserved": true,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 136.10000002384186,
+          "settlementAfterResponseMs": 81.40000009536743,
+          "responseObserved": true,
+          "maxLongTaskMs": 52
+        },
+        {
+          "inputToPaintMs": 154.10000002384186,
+          "settlementAfterResponseMs": 80,
+          "responseObserved": true,
+          "maxLongTaskMs": 75
+        },
+        {
+          "inputToPaintMs": 139.10000002384186,
+          "settlementAfterResponseMs": 92,
+          "responseObserved": true,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 118.29999995231628,
+          "settlementAfterResponseMs": 64.19999992847443,
+          "responseObserved": true,
+          "maxLongTaskMs": 53
+        },
+        {
+          "inputToPaintMs": 125.79999995231628,
+          "settlementAfterResponseMs": 74,
+          "responseObserved": true,
+          "maxLongTaskMs": 51
+        },
+        {
+          "inputToPaintMs": 135.20000004768372,
+          "settlementAfterResponseMs": 81.10000002384186,
+          "responseObserved": true,
+          "maxLongTaskMs": 54
+        },
+        {
+          "inputToPaintMs": 134.79999995231628,
+          "settlementAfterResponseMs": 82.09999990463257,
+          "responseObserved": true,
+          "maxLongTaskMs": 59
+        },
+        {
+          "inputToPaintMs": 154.10000002384186,
+          "settlementAfterResponseMs": 93.80000007152557,
+          "responseObserved": true,
+          "maxLongTaskMs": 64
+        },
+        {
+          "inputToPaintMs": 129.79999995231628,
+          "settlementAfterResponseMs": 74.5,
+          "responseObserved": true,
+          "maxLongTaskMs": 54
+        },
+        {
+          "inputToPaintMs": 151,
+          "settlementAfterResponseMs": 69.60000002384186,
+          "responseObserved": true,
+          "maxLongTaskMs": 83
+        },
+        {
+          "inputToPaintMs": 164.29999995231628,
+          "settlementAfterResponseMs": 81.79999995231628,
+          "responseObserved": true,
+          "maxLongTaskMs": 77
+        },
+        {
+          "inputToPaintMs": 207.89999997615814,
+          "settlementAfterResponseMs": 91,
+          "responseObserved": true,
+          "maxLongTaskMs": 109
+        }
+      ],
+      "note": "Response-to-paint when fetched; input-to-paint for cached data. Warm-up excluded."
+    },
+    {
+      "name": "case change",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 500,
+      "p95Ms": 310.40000009536743,
+      "maxLongTaskMs": 160,
+      "samples": [
+        {
+          "inputToPaintMs": 237.79999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 130
+        },
+        {
+          "inputToPaintMs": 240.09999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 125
+        },
+        {
+          "inputToPaintMs": 310.40000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 132
+        },
+        {
+          "inputToPaintMs": 293.89999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 139
+        },
+        {
+          "inputToPaintMs": 294.6999999284744,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 160
+        },
+        {
+          "inputToPaintMs": 300.89999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 155
+        },
+        {
+          "inputToPaintMs": 259.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 154
+        },
+        {
+          "inputToPaintMs": 248,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 120
+        },
+        {
+          "inputToPaintMs": 359.7999999523163,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 130
+        },
+        {
+          "inputToPaintMs": 263.7999999523163,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 128
+        },
+        {
+          "inputToPaintMs": 220.30000007152557,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 144
+        },
+        {
+          "inputToPaintMs": 782.2999999523163,
+          "settlementAfterResponseMs": 71.5,
+          "responseObserved": true,
+          "maxLongTaskMs": 121
+        },
+        {
+          "inputToPaintMs": 264.90000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 110
+        },
+        {
+          "inputToPaintMs": 165.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 75
+        },
+        {
+          "inputToPaintMs": 551.2999999523163,
+          "settlementAfterResponseMs": 80.39999997615814,
+          "responseObserved": true,
+          "maxLongTaskMs": 74
+        },
+        {
+          "inputToPaintMs": 151.29999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 71
+        },
+        {
+          "inputToPaintMs": 192.10000002384186,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 71
+        },
+        {
+          "inputToPaintMs": 197.89999997615814,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 87
+        },
+        {
+          "inputToPaintMs": 180.79999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 89
+        },
+        {
+          "inputToPaintMs": 248.80000007152557,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 127
+        }
+      ],
+      "note": "Response-to-paint when fetched; input-to-paint for cached data. Warm-up excluded."
+    }
+  ],
+  "limitations": [
+    "Automated browser evidence is not a screen-reader or usability study; screen-reader acceptance remains pending.",
+    "Local synthetic journal measurements do not establish production performance.",
+    "axe colour contrast covers text where determinable; a complete manual non-text contrast audit remains pending.",
+    "Browser zoom is approximated by equivalent 720 CSS-pixel reflow at a 1440 physical-pixel viewport; native browser 200% zoom remains pending."
+  ],
+  "finishedAt": "2026-11-10T19:31:43.019Z",
+  "passed": false
+}
