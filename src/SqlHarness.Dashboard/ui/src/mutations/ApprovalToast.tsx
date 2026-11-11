@@ -22,7 +22,7 @@ function ToastDecision({ item, expired }: { item: PendingMutation; expired: bool
   }
   return <div className="flex flex-col gap-2">
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    <div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={busy || expired} onClick={() => void deny()}>{busy ? "Denying..." : "Deny"}</Button><Button size="sm" onClick={() => mutationStore.open(item.requestId)}>Review</Button></div>
+    <div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={busy || expired} onClick={() => void deny()}>{busy ? "Denying..." : "Deny"}</Button><Button size="sm" data-mutation-review={item.requestId} onClick={() => mutationStore.open(item.requestId)}>Review</Button></div>
   </div>
 }
 

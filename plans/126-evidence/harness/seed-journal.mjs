@@ -22,7 +22,7 @@ const insert = (table, values) => {
   db.prepare('INSERT INTO ' + table + '(' + keys.join(',') + ') VALUES(' + keys.map(() => '?').join(',') + ')').run(...Object.values(values));
 };
 const sql = version => 'SELECT @CustomerId AS CustomerId; -- version ' + version;
-const hash = version => createHash('sha256').update(sql(version)).digest('hex');
+const hash = version => 'sha256:' + createHash('sha256').update(sql(version)).digest('hex');
 const cases = Array.from({ length: 20 }, (_, i) => ({
   id: String(i), index: i, label: '@CustomerId = ' + (i + 1), setName: 'customer-' + (i + 1),
   varying: [{ name: 'CustomerId', effectiveType: 'int', value: i + 1 }],

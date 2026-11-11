@@ -71,7 +71,7 @@ function defineSqlTheme(dark: boolean) {
       { token: "keyword", foreground: editorTokenColor("--sql-keyword", dark ? "C4B5FD" : "6D28D9"), fontStyle: "bold" },
       { token: "string", foreground: editorTokenColor("--sql-string", dark ? "86EFAC" : "15803D") },
       { token: "number", foreground: editorTokenColor("--sql-number", dark ? "FDBA74" : "C2410C") },
-      { token: "comment", foreground: editorTokenColor("--muted-foreground", dark ? "A1A1AA" : "71717A"), fontStyle: "italic" },
+      { token: "comment", foreground: editorTokenColor("--sql-comment", dark ? "C0C0C8" : "50505A"), fontStyle: "italic" },
     ],
     colors: {
       "editor.background": editorTokenColor("--background", dark ? "252526" : "FFFFFF"),

@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { expect, test, vi } from "vitest"
 import { renderApp, stubFetch } from "@/test/render"
 import * as sound from "./sound"
@@ -74,6 +75,17 @@ test("live added event shows a safe toast and the default sound; snapshots and d
   await waitFor(() => expect(play).toHaveBeenCalledTimes(1))
   act(() => source().emit("added", { ...request, requestId: "r-3", request: { ...request.request, digest: "b".repeat(64) } }))
   expect(play).toHaveBeenCalledTimes(1)
+})
+
+test("closing approval review returns keyboard focus to the retained Review button without a decision", async () => {
+  const { source } = await setup()
+  act(() => source().emit("snapshot", [request]))
+  const review = await screen.findByRole("button", { name: "Review" })
+  review.focus()
+  await userEvent.keyboard("{Enter}")
+  await screen.findByRole("dialog")
+  await userEvent.keyboard("{Escape}")
+  await waitFor(() => expect(screen.getByRole("button", { name: "Review" })).toHaveFocus())
 })
 
 test("approval dialog renders SQL and parameter values as literal text and waits before approval", async () => {
