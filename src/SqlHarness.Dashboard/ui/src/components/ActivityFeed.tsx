@@ -35,14 +35,15 @@ function TimeFilter({ label, value, values, onChange }: { label: string; value: 
 
 function Facet({ label, selected, values, onChange }: { label: string; selected: string[]; values: { value: string; label: string; count?: number }[]; onChange: (values: string[]) => void }) {
   const id = useId()
+  const available = [...values, ...selected.filter(value => !values.some(item => item.value === value)).map(value => ({ value, label: value, count: 0 }))]
   return <Popover>
-    <PopoverTrigger render={<Button variant="outline" />} aria-label={label}>
-      <span className="text-muted-foreground">{label}</span><span>{selected.length ? selected.length === 1 ? values.find(item => item.value === selected[0])?.label : `${selected.length} selected` : "Any"}</span><HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" />
+    <PopoverTrigger render={<Button variant="outline" className="max-w-full min-w-0" />} aria-label={label}>
+      <span className="shrink-0 text-muted-foreground">{label}</span><span className="min-w-0 truncate" title={selected.join(", ")}>{selected.length ? selected.length === 1 ? available.find(item => item.value === selected[0])?.label : `${selected.length} selected` : "Any"}</span><HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" />
     </PopoverTrigger>
     <PopoverContent align="start" className="max-h-72 max-w-[85vw] overflow-y-auto">
       <Button size="sm" variant="ghost" onClick={() => onChange([])}>Clear {label.toLowerCase()}</Button>
       <FieldSet><FieldLegend className="sr-only">{label}</FieldLegend><FieldGroup>
-      {values.map((item, index) => <Field key={item.value} orientation="horizontal"><Checkbox id={`${id}-${index}`} checked={selected.includes(item.value)} onCheckedChange={() => onChange(selected.includes(item.value) ? selected.filter(value => value !== item.value) : [...selected, item.value])} /><FieldLabel htmlFor={`${id}-${index}`} className="min-w-0 flex-1 break-all">{item.label}</FieldLabel><span aria-hidden="true" className="text-muted-foreground tabular-nums">{item.count}</span></Field>)}
+      {available.map((item, index) => <Field key={item.value} orientation="horizontal"><Checkbox id={`${id}-${index}`} checked={selected.includes(item.value)} onCheckedChange={() => onChange(selected.includes(item.value) ? selected.filter(value => value !== item.value) : [...selected, item.value])} /><FieldLabel htmlFor={`${id}-${index}`} className="min-w-0 flex-1 break-all">{item.label}</FieldLabel><span aria-hidden="true" className="text-muted-foreground tabular-nums">{item.count}</span></Field>)}
       </FieldGroup></FieldSet>
     </PopoverContent>
   </Popover>
@@ -62,7 +63,7 @@ function SessionGroup({ session, operations, now, expanded, onExpand }: { sessio
         <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className={open ? "rotate-90 transition-transform" : "transition-transform"} />
       </Button>
       <Toggle className="session-star" size="sm" disabled={update.isPending} aria-label={`${session.starred ? "Unstar" : "Star"} session ${sessionDisplayName(session)}`} pressed={session.starred} onPressedChange={starred => update.mutate({ starred })}>
-        <HugeiconsIcon icon={StarIcon} strokeWidth={2} className={session.starred ? "fill-current text-amber-500" : "text-muted-foreground"} />
+        <HugeiconsIcon icon={StarIcon} strokeWidth={2} className={session.starred ? "fill-current text-star" : "text-muted-foreground"} />
       </Toggle>
       <div className="min-w-0">
         <div className="flex items-center gap-2"><Link to="/sessions/$id" params={{ id: String(session.id) }} className="block truncate font-medium underline">{sessionDisplayName(session)}</Link>{session.archived && <Badge variant="outline">Archived</Badge>}</div>
@@ -128,7 +129,7 @@ export function ActivityFeed({ sessions, operations, now }: { sessions: SessionS
   return <section aria-label="Activity feed" className="flex flex-col gap-3">
     <div className="activity-filterbar" aria-label="Activity filters">
       <h1>Activity</h1>
-      <InputGroup className="activity-search"><InputGroupAddon><HugeiconsIcon icon={SearchIcon} strokeWidth={2} /></InputGroupAddon><InputGroupInput aria-label="Search activity" placeholder="Search label, session, target" value={text} onChange={event => { setText(event.target.value); setExpansion({}) }} /></InputGroup>
+      <InputGroup className="activity-search"><InputGroupAddon><HugeiconsIcon icon={SearchIcon} strokeWidth={2} /></InputGroupAddon><InputGroupInput maxLength={256} aria-label="Search activity" placeholder="Search label, session, target" value={text} onChange={event => { setText(event.target.value); setExpansion({}) }} /></InputGroup>
       <Button className="activity-filter-toggle" variant="outline" aria-expanded={filtersOpen} aria-controls={filterPanelId} onClick={() => setFiltersOpen(value => !value)}>Filters{activeFilterCount > 0 && <Badge variant="secondary">{activeFilterCount}</Badge>}<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} /></Button>
     </div>
     <div id={filterPanelId} className="activity-advanced-filters" data-open={filtersOpen}>

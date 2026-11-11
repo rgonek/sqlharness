@@ -56,7 +56,7 @@ export function AgentSessionPage() {
             : <><Input aria-label="Agent session title" maxLength={200} value={titleDraft} onChange={event => setTitleDraft(event.target.value)} />
               <Button size="sm" disabled={update.isPending} onClick={() => update.mutate({ title: titleDraft.trim() || null }, { onSuccess: () => setTitleDraft(null) })}>Save title</Button>
               <Button size="sm" variant="ghost" onClick={() => setTitleDraft(null)}>Cancel</Button></>}
-          <Button size="icon" variant="ghost" aria-label={agentSession.starred ? "Unstar" : "Star"} aria-pressed={agentSession.starred} onClick={() => update.mutate({ starred: !agentSession.starred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={agentSession.starred ? "fill-amber-400 text-amber-500" : ""} /></Button>
+          <Button size="icon" variant="ghost" aria-label={agentSession.starred ? "Unstar" : "Star"} aria-pressed={agentSession.starred} onClick={() => update.mutate({ starred: !agentSession.starred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={agentSession.starred ? "fill-current text-star" : ""} /></Button>
           <Button size="icon" variant="ghost" aria-label={agentSession.archived ? "Unarchive" : "Archive"} onClick={() => update.mutate({ archived: !agentSession.archived })}>{agentSession.archived ? <HugeiconsIcon icon={ArchiveRestoreIcon} strokeWidth={2} /> : <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />}</Button>
         </div></CardTitle>
         <CardDescription>{kind} agent session · {id}</CardDescription>

@@ -44,3 +44,20 @@ does not provide the explicitly managed context axe requires. This is a harness 
 
 No category score is established solely by these scoped checks. Final source identity, real backend
 evidence, performance, screen-reader/manual contrast checks, whole-branch review and Windows gate remain open.
+
+## Final control contrast and remembered-facet follow-up
+
+Native style sampling reproduced unchecked borders at 1.27:1 light / 1.46:1 dark and selected
+star fill at 1.72:1 light. Shared input/ring roles and the neutral chart palette were strengthened;
+current sampled inputs, unchecked checkbox/switch tracks and all five chart roles exceed 3:1.
+Selected stars now use a theme-aware semantic role and filled shape; a focused remeasurement is pending.
+Plan graph edge labels use 13px rather than 10px.
+
+A saved facet outside the loaded activity page initially rendered an empty value and could not be
+individually unchecked. The new regression failed on the missing retained label; its fix preserves
+selected zero-count options, bounds the trigger width and keeps the full label in the popover.
+Activity context/validation scope: 8/8 passed. Typecheck and UI build exited successfully afterwards.
+
+NVDA portable startup was verified, but native navigation found the Windows Secure Desktop lock screen.
+No dashboard screen-reader workflow is claimed. The operator has been asked to unlock the session;
+all other verification continues independently.

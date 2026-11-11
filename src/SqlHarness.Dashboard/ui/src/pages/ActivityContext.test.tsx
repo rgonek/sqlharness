@@ -78,3 +78,12 @@ test("Activity records resolved default filters in its history entry", async () 
   await screen.findByRole("textbox", { name: "Search activity" })
   await waitFor(() => expect(router.state.location.search).toMatchObject({ time: "604800000" }))
 })
+
+test("a remembered facet absent from the loaded page remains readable and removable", async () => {
+  fixture()
+  renderApp("/?agent=retired-agent")
+  const agent = await screen.findByRole("button", { name: "Agent" })
+  expect(agent).toHaveTextContent("retired-agent")
+  await userEvent.click(agent)
+  expect(await screen.findByRole("checkbox", { name: "retired-agent" })).toBeChecked()
+})
