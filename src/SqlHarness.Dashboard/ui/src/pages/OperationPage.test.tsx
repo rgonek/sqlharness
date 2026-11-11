@@ -65,14 +65,14 @@ test("compare operation returns to the unassigned group without inventing subjec
 })
 
 test("compare opens on the Optimization panel and carries selected case and aggregate in its URL", async () => {
-  const comparison = { ...defaultOptimization, b: "v3", selectedCase: "0" }
+  const comparison = { ...defaultOptimization, b: "v3", selectedCase: "0", cases: [...defaultOptimization.cases, { id: "1", label: "@tenant = N'other'", outcome: "same" }] }
   const calls = stubOperationFetch({
     "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare", database: "shop" }), session: session({ id: 7, title: "Tuning orders" }), compareSubject: "orders", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v3", vars: { tenant: "acme" }, phases: [{ phase: "execute", count: 1, totalMs: 12, maxMs: 12 }], variants: [
       variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0 }),
       variant({ ordinal: 2, variant: "baseline", caseId: "1", caseLabel: "@tenant = N'other'", matrixCell: 1 }), variant({ ordinal: 3, variant: "candidate", caseId: "1", caseLabel: "@tenant = N'other'", matrixCell: 1 }),
     ], compareCases: [{ index: 0 }, { index: 1 }] }),
-    "/api/operations/10/optimization?case=0&aggregate=sum": comparison,
-    "/api/operations/10/optimization?case=1&aggregate=sum": { ...comparison, selectedCase: "1" },
+    "/api/operations/10/optimization?case=0&aggregate=sum&view=changed": comparison,
+    "/api/operations/10/optimization?case=1&aggregate=sum&view=changed": { ...comparison, selectedCase: "1" },
   })
   const { router, container } = renderApp("/operations/10?returnSession=7&returnSubject=orders&returnDb=shop&returnGroup=fp&returnScope=whole&returnA=v0&returnB=v3&returnCase=0&returnAgg=sum&case=0&agg=sum")
   expect(router.state.location.search).toMatchObject({ case: "0", agg: "sum" })
