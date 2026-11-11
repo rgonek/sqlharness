@@ -1,4 +1,5 @@
-import { useId, useState } from "react"
+import { useId } from "react"
+import { isDimensionSelection, isViewRecord, isViewString, useViewPreference } from "@/lib/viewPreferences"
 import { useNavigate } from "@tanstack/react-router"
 import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
 import type { DashboardStats, ProfileView, SqlHashStat } from "@/api/types"
@@ -23,6 +24,13 @@ const ranges: { value: StatsRange; label: string }[] = [
   { value: "30d", label: "30 days" },
   { value: "all", label: "All time" },
 ]
+const isStatsRange = (value: unknown): value is StatsRange => ranges.some(item => item.value === value)
+const isStatsWindow = (value: unknown): value is StatsWindow => isViewRecord(value)
+  && ["from", "to"].every(key => value[key] === undefined || (typeof value[key] === "string" && value[key].length <= 40 && Number.isFinite(Date.parse(value[key]))))
+  && (typeof value.from !== "string" || typeof value.to !== "string" || value.from <= value.to)
+const isProfileChoice = (value: unknown): value is { value: string | null } | undefined => isViewRecord(value) && (value.value === null || isViewString(value.value))
+const isAxesChoice = (value: unknown): value is DimensionAxes | null => value === null || (isViewRecord(value) && isViewString(value.row) && isViewString(value.column))
+const isSqlOrder = (value: unknown): value is string => value === "duration" || value === "runs" || value === "reads"
 
 function SqlHash({ value }: { value: string }) {
   const id = useId()
@@ -73,11 +81,11 @@ function StatsPageRoute() {
 }
 
 function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
-  const [range, setRange] = useState<StatsRange>("7d")
-  const [window, setWindow] = useState<StatsWindow>(() => rangeWindow("7d", Date.now()))
-  const [manualProfile, setManualProfile] = useState<{ value: string | null } | undefined>()
-  const [dimensionFilters, setDimensionFilters] = useState<Record<string, string | null>>({})
-  const [axisChoice, setAxisChoice] = useState<DimensionAxes | null>(null)
+  const [range, setRange] = useViewPreference<StatsRange>("usage.range", "7d", isStatsRange)
+  const [window, setWindow] = useViewPreference<StatsWindow>("usage.window", () => rangeWindow(range, Date.now()), isStatsWindow)
+  const [manualProfile, setManualProfile] = useViewPreference<{ value: string | null } | undefined>("usage.profile", undefined, isProfileChoice)
+  const [dimensionFilters, setDimensionFilters] = useViewPreference<Record<string, string | null>>("usage.dimensions", {}, isDimensionSelection)
+  const [axisChoice, setAxisChoice] = useViewPreference<DimensionAxes | null>("usage.axes", null, isAxesChoice)
   const overview = useStats(range, window)
   const profilesQuery = useProfiles()
   const profiles = profilesQuery.data?.profiles ?? []
@@ -182,7 +190,7 @@ function StatsContent({
   onAxisChoiceChange: (axes: DimensionAxes | null) => void
   onDimensionCellSelect?: (scope: DimensionCellScope) => void
 }) {
-  const [sqlSort, setSqlSort] = useState("duration")
+  const [sqlSort, setSqlSort] = useViewPreference("usage.sqlOrder", "duration", isSqlOrder)
   const topSql = sqlSort === "reads" ? stats.topSqlByLogicalReads ?? [] : sqlSort === "runs" ? stats.topSqlByCount : stats.topSqlByDuration
   const perDay = pivotPerDay(stats.operationsPerDay)
   const total = stats.operations.reduce((sum, row) => sum + row.count, 0)

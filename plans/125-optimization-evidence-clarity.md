@@ -9,7 +9,7 @@
 projection, expose metric-level availability, and simplify the existing comparison components.
 **Tech stack:** C#/.NET, SQLite, ASP.NET Core, React/TypeScript, xUnit, Vitest.
 **Spec:** The approved direction is recorded in [Design contract](#design-contract) below.
-**Status:** PLANNED; user requested a plan, not implementation.
+**Status:** IN PROGRESS within [Plan 126](126-dashboard-quality-iteration.md), following operator approval of the quality design on 2026-11-10. Completion/review/gate evidence remains pending.
 **Baseline:** `8d8d959f`, inspected 2026-10-29; working tree initially clean.
 **Related work:** Builds on 104/105 statement evidence and 121/122/123 dashboard work.
 Read those contracts when changing their invariants; do not duplicate their collectors or version-label machinery.

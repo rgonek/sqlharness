@@ -71,3 +71,10 @@ test("Activity offers an explicit retry after a failed read", async () => {
   expect(await screen.findByRole("region", { name: "Activity feed" })).toBeInTheDocument()
   expect(calls).toBeGreaterThan(before)
 })
+
+test("Activity records resolved default filters in its history entry", async () => {
+  fixture()
+  const { router } = renderApp("/")
+  await screen.findByRole("textbox", { name: "Search activity" })
+  await waitFor(() => expect(router.state.location.search).toMatchObject({ time: "604800000" }))
+})

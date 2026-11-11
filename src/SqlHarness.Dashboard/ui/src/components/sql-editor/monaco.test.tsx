@@ -65,6 +65,22 @@ test("diff gives both native input contexts meaningful accessible names", () => 
   }))
 })
 
+test("read-only diff uses the labelled textarea accessibility path and lets Tab leave", () => {
+  render(<SqlMergeView baseline="SELECT 1" candidate="SELECT 2" dialect="tsql" mode="side-by-side" />)
+  expect(editorMocks.createDiffEditor).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    editContext: false, accessibilitySupport: "on", tabFocusMode: true,
+  }))
+})
+
+test("changing diff mode keeps both side labels in the options update", () => {
+  const { rerender } = render(<SqlMergeView baseline="SELECT 1" candidate="SELECT 2" dialect="tsql" mode="side-by-side" />)
+  const editor = editorMocks.createDiffEditor.mock.results.at(-1)!.value
+  rerender(<SqlMergeView baseline="SELECT 1" candidate="SELECT 2" dialect="tsql" mode="unified" />)
+  expect(editor.updateOptions).toHaveBeenLastCalledWith(expect.objectContaining({
+    renderSideBySide: false, originalAriaLabel: "Baseline SQL", modifiedAriaLabel: "Candidate SQL",
+  }))
+})
+
 test.each(["88", "1200"])("restores a valid bounded manual height %s", stored => {
   sessionStorage.setItem("sqlharness.sqlViewer.height", stored)
   const { container, rerender } = render(<SqlViewer sql="SELECT 1" dialect="tsql" />)

@@ -50,16 +50,35 @@ export function rememberActivityFilters(filters: ActivityFilters) {
   try { sessionStorage.setItem(ACTIVITY_FILTER_KEY, JSON.stringify(compactActivitySearch(filters))) } catch { /* Browsing remains usable when storage is unavailable. */ }
 }
 
-export function readActivityExpansion(): Record<number, boolean> {
+export type ActivityExpansionEntries = [number, boolean][]
+export function readActivityExpansionEntries(): ActivityExpansionEntries {
   try {
     const raw = sessionStorage.getItem(ACTIVITY_VIEW_KEY)
-    if (!raw || raw.length > 8192) return {}
+    if (!raw || raw.length > 8192) return []
     const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
-    return Object.fromEntries(Object.entries(parsed).filter(([key, value]) => /^[1-9]\d{0,14}$/.test(key) && typeof value === "boolean").slice(-200))
-  } catch { return {} }
+    if (!parsed || typeof parsed !== "object") return []
+    const entries = Array.isArray(parsed) ? parsed : Object.entries(parsed)
+    return entries.filter((entry): entry is [number | string, boolean] => Array.isArray(entry) && entry.length === 2 && Number.isSafeInteger(Number(entry[0])) && Number(entry[0]) > 0 && typeof entry[1] === "boolean")
+      .map(([key, value]): [number, boolean] => [Number(key), value]).slice(-200)
+  } catch { return [] }
 }
 
+export function boundActivityExpansion(previous: ActivityExpansionEntries, next: Record<number, boolean>): ActivityExpansionEntries {
+  const retained = new Map(previous.filter(([id]) => Object.hasOwn(next, id)))
+  for (const [key, value] of Object.entries(next)) {
+    const id = Number(key)
+    if (!Number.isSafeInteger(id) || id <= 0 || typeof value !== "boolean") continue
+    if (!retained.has(id) || retained.get(id) !== value) {
+      retained.delete(id)
+      retained.set(id, value)
+    }
+  }
+  return [...retained].slice(-200)
+}
+export function readActivityExpansion(): Record<number, boolean> {
+  return Object.fromEntries(readActivityExpansionEntries())
+}
 export function rememberActivityExpansion(expansion: Record<number, boolean>) {
-  try { sessionStorage.setItem(ACTIVITY_VIEW_KEY, JSON.stringify(Object.fromEntries(Object.entries(expansion).slice(-200)))) } catch { /* Optional view memory. */ }
+  const entries = boundActivityExpansion(readActivityExpansionEntries(), expansion)
+  try { sessionStorage.setItem(ACTIVITY_VIEW_KEY, JSON.stringify(entries)) } catch { /* Optional view memory. */ }
 }

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { isViewString, useViewPreference } from "@/lib/viewPreferences"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
@@ -40,8 +41,8 @@ function ExplainedValue({ value, labels }: { value: string; labels: Record<strin
 
 export function ProfilesPage() {
   const query = useProfiles()
-  const [selected, setSelected] = useState<string | null>(null)
-  const [search, setSearch] = useState("")
+  const [selected, setSelected] = useViewPreference<string | null>("profiles.selected", null, (value): value is string | null => value === null || isViewString(value))
+  const [search, setSearch] = useViewPreference("profiles.search", "", isViewString)
   const [editing, setEditing] = useState<{ profile: NonNullable<typeof query.data>["profiles"][number]; revision: string } | null>(null)
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)

@@ -1,7 +1,9 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { useEffect, useId, useState } from "react"
+import { useId, useState } from "react"
 import { useActivityFilters } from "@/lib/useActivityFilters"
-import { defaultActivityFilters, readActivityExpansion, rememberActivityExpansion } from "@/lib/activitySearch"
+import { useActivityExpansion } from "@/lib/useActivityExpansion"
+import { useActivityScroll } from "@/lib/useActivityScroll"
+import { defaultActivityFilters } from "@/lib/activitySearch"
 import { Link } from "@tanstack/react-router"
 import type { OperationSummary, SessionSummary } from "@/api/types"
 import { useUpdateSessionAnnotation } from "@/api/queries"
@@ -78,11 +80,11 @@ function SessionGroup({ session, operations, now, expanded, onExpand }: { sessio
 }
 
 export function ActivityFeed({ sessions, operations, now }: { sessions: SessionSummary[]; operations: OperationSummary[]; now: number }) {
-  const [expansion, setExpansion] = useState<Record<number, boolean>>(readActivityExpansion)
+  const [expansion, setExpansion] = useActivityExpansion()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const filterPanelId = useId()
-  useEffect(() => { rememberActivityExpansion(expansion) }, [expansion])
   const { filters, change } = useActivityFilters()
+  useActivityScroll(filters)
   const { time, agent, cwd, target, status, kind, text, starred, archived, named } = filters
   const setTime = (value: string) => change({ time: value })
   const setAgent = (value: string[]) => change({ agent: value })

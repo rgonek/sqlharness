@@ -10,6 +10,8 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 ## In progress
 
+Plan [126](126-dashboard-quality-iteration.md): **IN PROGRESS on `dashboard-quality-9`** — approved dashboard quality programme across the operator's 14 categories. Includes all Plan 125 tasks, Activity/session/Usage context preservation, shared SQL/copy/accessibility improvements, synthetic browser/integration evidence and the required final Windows gate. [Approved design](../docs/superpowers/specs/2026-11-10-dashboard-quality-design.md). No final grade or completion claim yet.
+
 | Plan | Scope | Dependencies | Status |
 |---|---|---|
 | [095](095-budget-aware-artifact-pages.md) | Explicit bounded saved-artifact budgets and source pages | DONE; all reviews approved, Windows gate and branch format green on `419f32a`; locally integrated into `main` at `55f06a5`; verified product/test tree unchanged; not pushed ([evidence](095-verification-evidence.md)) |---|
@@ -20,7 +22,7 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
-| [125](125-optimization-evidence-clarity.md) | Eligible optimization evidence, honest statement/table IO, separate IO/policy outcomes, one timing summary and consolidated actions | Existing 104/105 and 121/122/123 contracts | PLANNED; approved direction, implementation not authorized |
+| [125](125-optimization-evidence-clarity.md) | Eligible optimization evidence, honest statement/table IO, separate IO/policy outcomes, one timing summary and consolidated actions | Existing 104/105 and 121/122/123 contracts | IN PROGRESS within approved Plan 126; final review and gate pending |
 
 Plan [122](122-dashboard-data-value-new-sessions.md): **DONE on `plan-122-backend`; final product `50a4ffb9` verified** — all six tasks including UI, rebased onto main `b7a820f5`; Terra high and Sol low reviews approved; Windows gate PASS (Core 4771, MCP 535, UI 406), branch format and 14 browser states PASS. New-session evidence only, no backfill; locally integrated into `main` at `4baefd17`, merge Windows gate PASS (Core 4771, MCP 535, UI 406); no push. [Integration](122-evidence/integration.md). [Evidence](122-evidence/verification.md). Requires Plan 121 product and mock-alignment corrections; see [spec](../docs/superpowers/specs/2026-10-26-dashboard-data-value.md).
 

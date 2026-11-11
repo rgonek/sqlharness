@@ -6,7 +6,7 @@ export function BrandLogo() {
         <path className="fill-[#0B203B] dark:fill-white" d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z" />
       </svg>
       <span className="hidden text-lg font-semibold tracking-tight md:inline">
-        <span className="text-[#0B203B] dark:text-white">SQL</span><span className="text-[#10AC61]">Harness</span>
+        <span className="text-[#0B203B] dark:text-white">SQL</span><span className="text-brand">Harness</span>
       </span>
     </span>
   )

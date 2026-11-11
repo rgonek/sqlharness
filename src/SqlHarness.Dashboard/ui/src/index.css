@@ -22,6 +22,7 @@
     --font-heading: var(--font-sans);
     --font-mono: 'Geist Mono Variable', monospace;
     --font-sans: 'Inter Variable', sans-serif;
+    --color-brand: var(--brand-foreground);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -63,6 +64,7 @@
 }
 
 :root {
+    --brand-foreground: #087b43;
     --background: oklch(1 0 0);
     --foreground: oklch(0.141 0.005 285.823);
     --card: oklch(1 0 0);
@@ -77,7 +79,7 @@
     --muted-foreground: oklch(0.49 0.016 285.938);
     --accent: oklch(0.967 0.001 286.375);
     --accent-foreground: oklch(0.21 0.006 285.885);
-    --destructive: oklch(0.577 0.245 27.325);
+    --destructive: oklch(0.50 0.20 27.325);
     --border: oklch(0.92 0.004 286.32);
     --input: oklch(0.92 0.004 286.32);
     --ring: oklch(0.705 0.015 286.067);
@@ -102,6 +104,7 @@
 }
 
 .dark {
+    --brand-foreground: #4ade80;
     --background: oklch(0.141 0.005 285.823);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.21 0.006 285.885);
@@ -246,7 +249,7 @@
 .operation-metrics > div { padding:12px 16px; border-right:1px solid var(--border) }
 .operation-metrics > div:last-child { border-right:0 }
 .operation-metrics > div > div:first-child { font-size:13px; color:var(--muted-foreground) }
-.operation-metrics > div > div:last-child { font-size:18px; line-height:26px; font-weight:500 }
+.operation-metrics > div > div:last-child { font-size:18px; line-height:26px; font-weight:500; white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere }
 .operation-tabs { border:1px solid var(--border); border-radius:16px; gap:0; overflow:clip }
 .operation-tabs > [data-slot="tabs-list"] { width:100%; padding:0 16px; gap:20px; justify-content:flex-start; height:44px; border-bottom:1px solid var(--border) }
 .operation-tabs > [data-slot="tabs-content"] { padding:16px }
@@ -403,6 +406,24 @@
 .activity-operations { min-width:0 }
 .activity-session-counts { font-variant-numeric:tabular-nums }
 .activity-directory { overflow-wrap:anywhere }
+.optimization-card > [data-slot="table-container"]:has(> .version-table) {
+  max-height:360px;
+  overscroll-behavior:contain;
+  border-block:1px solid var(--border);
+}
+.version-table { border-collapse:separate; border-spacing:0 }
+.version-table thead { position:sticky; top:0; z-index:2; background:var(--card) }
+.version-table :is(th,td):first-child { position:sticky; left:0; z-index:1; background:var(--card); min-width:140px; max-width:240px }
+.version-table :is(th,td):nth-last-child(-n+3) { position:sticky; z-index:1; background:var(--card); min-width:36px; width:36px; padding-inline:4px }
+.version-table :is(th,td):nth-last-child(3) { right:72px }
+.version-table :is(th,td):nth-last-child(2) { right:36px }
+.version-table :is(th,td):last-child { right:0 }
+.version-table thead th:first-child,.version-table thead th:nth-last-child(-n+3) { z-index:3 }
+.version-table tbody tr:has(input:checked) > :is(th,td):is(:first-child,:nth-last-child(-n+3)) { background:var(--muted) }
+.version-table thead th:nth-child(7),.version-table thead th:nth-child(8) { white-space:normal; min-width:140px; max-width:180px }
+.dark .version-table [data-delta="better"],
+.dark .io-pair [data-change^="−"],
+.dark .io-pair [data-change^="-"] { color:oklch(0.80 0.12 160) }
 @media(min-width:1100px) {
   [aria-label="Activity feed"] { display:grid; grid-template-columns:auto 1fr; align-items:start }
   .activity-filterbar { min-height:30px }

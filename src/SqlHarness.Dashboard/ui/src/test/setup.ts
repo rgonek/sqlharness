@@ -35,6 +35,9 @@ configure({ asyncUtilTimeout: 5_000 })
 beforeEach(() => {
   sessionStorage.removeItem("sqlharness.activity.filters")
   sessionStorage.removeItem("sqlharness.activity.view")
+  sessionStorage.removeItem("sqlharness.activity.scroll")
+  sessionStorage.removeItem("sqlharness.sqlViewer.height")
+  for (const key of Object.keys(sessionStorage)) if (key.startsWith("sqlharness.view.")) sessionStorage.removeItem(key)
   installNetworkIsolation()
 })
 

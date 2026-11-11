@@ -114,6 +114,11 @@ const editorOptions: MonacoEditorApi.IStandaloneEditorConstructionOptions = {
   fontSize: 14,
   lineHeight: 22,
   ariaLabel: "Read-only SQL",
+  // The experimental EditContext path omits native input names in current Chromium.
+  // These viewers are read-only: use Monaco's labelled textarea and normal Tab navigation.
+  editContext: false,
+  accessibilitySupport: "on",
+  tabFocusMode: true,
 }
 
 function useSqlTheme(): string {
@@ -268,7 +273,12 @@ export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeVie
   }, [dialect])
 
   useEffect(() => {
-    diffEditor.current?.updateOptions({ renderSideBySide: mode === "side-by-side" })
+    const options: MonacoEditorApi.IStandaloneDiffEditorConstructionOptions = {
+      renderSideBySide: mode === "side-by-side",
+      originalAriaLabel: "Baseline SQL",
+      modifiedAriaLabel: "Candidate SQL",
+    }
+    diffEditor.current?.updateOptions(options)
   }, [mode])
 
   useEffect(() => {
