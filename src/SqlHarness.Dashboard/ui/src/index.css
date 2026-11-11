@@ -469,3 +469,7 @@
 @media(prefers-reduced-motion:reduce) {
   *,*::before,*::after { animation-duration:0.01ms!important; transition-duration:0.01ms!important; scroll-behavior:auto!important }
 }
+@media(max-width:760px) {
+  .version-table :is(th,td):first-child { min-width:96px; width:96px; max-width:116px; white-space:normal; overflow-wrap:anywhere }
+  .version-table tbody th:first-child > div { flex-wrap:wrap; gap:2px 6px }
+}
