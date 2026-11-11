@@ -232,7 +232,7 @@ export type OptimizationComparison = {
   tables: ComparisonTableRow[]
   collapsed: { count: number; label: string } | null
   elapsed: { beforeMs: number | null; afterMs: number | null; policyVerdict: string | null; differentRun: boolean }
-  tableIoUnavailable?: boolean; cpuBeforeMs?: number | null; cpuAfterMs?: number | null
+  tableIoUnavailable?: boolean; cpuBeforeMs?: number | null; cpuAfterMs?: number | null; scansBefore?: number | null; scansAfter?: number | null
   buffersBefore?: PostgresBuffers | null; buffersAfter?: PostgresBuffers | null
   beforeAction?: OptimizationActionReference | null; afterAction?: OptimizationActionReference | null
   verdictBasis?: "changed statements" | "whole batch"

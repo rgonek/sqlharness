@@ -1,8 +1,9 @@
+import { ComparisonPending } from "./ComparisonPending"
 import { versionMetrics } from "./versionMetrics"
 import { OutcomeDimensions } from "./CaseOutcomeDetails"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { useId } from "react"
+import { useId, type ReactNode } from "react"
 import { buttonVariants, Button } from "@/components/ui/button"
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
 import type { AgentSessionKey, OperationSummary, OptimizationVersion, OptimizationComparison } from "@/api/types"
@@ -17,20 +18,38 @@ function metric(value: number | null): string {
   return value === null ? "—" : value.toLocaleString("en-US")
 }
 
-export function VersionTable({ subject, sessionId, agentSessionKey, sessionSearch, versions, selectedA, selectedB, onSelect, operations = [], groupA, groupB, comparison }: {
-  comparison?: OptimizationComparison; operations?: OperationSummary[]; subject: string; sessionId: number; agentSessionKey?: AgentSessionKey; sessionSearch: SessionSearch; versions: (OptimizationVersion & { group?: { fingerprint: string; label: string; badge: string } })[]; groupA?: string; groupB?: string; selectedA: string; selectedB: string | null; onSelect: (side: "a" | "b", version: string, group?: string) => void
+export function VersionTable({ subject, sessionId, agentSessionKey, sessionSearch, versions, selectedA, selectedB, onSelect, operations = [], groupA, groupB, comparison, pending = false }: {
+  comparison?: OptimizationComparison; pending?: boolean; operations?: OperationSummary[]; subject: string; sessionId: number; agentSessionKey?: AgentSessionKey; sessionSearch: SessionSearch; versions: (OptimizationVersion & { group?: { fingerprint: string; label: string; badge: string } })[]; groupA?: string; groupB?: string; selectedA: string; selectedB: string | null; onSelect: (side: "a" | "b", version: string, group?: string) => void
 }) {
   const groupId = useId()
   const isA = (version: typeof versions[number]) => version.version === selectedA && (!groupA || version.group?.fingerprint === groupA)
   const isB = (version: typeof versions[number]) => version.version === selectedB && (!groupB || version.group?.fingerprint === groupB)
   const accessibleName = (side: string, version: typeof versions[number]) => `${side} ${version.version}${versions.filter(item => item.version === version.version).length > 1 ? ` (${version.group?.badge}: ${version.group?.label})` : ""}`
-  const cross = !!groupA && !!groupB && groupA !== groupB
   const selectedCase = selectedB ? sessionSearch.case ?? "all" : "all"
   const aggregate = selectedB ? sessionSearch.agg ?? "sum" : "sum"
   const timing = selectedCase === "all" ? `${aggregate === "mean" ? "mean" : "sum"} of case medians` : "median"
+  const matchingComparison = !!comparison && comparison.a === selectedA && comparison.b === selectedB
+    && (!comparison.groupA || comparison.groupA === groupA) && (!comparison.groupB || comparison.groupB === groupB)
+    && comparison.selectedCase === selectedCase && comparison.aggregate === aggregate
+  const updating = pending || (!!comparison && !matchingComparison)
+  const activeComparison = matchingComparison && !updating ? comparison : undefined
   const metricsFor = (version: typeof versions[number]) => {
-    const otherConditions = !!groupA && version.group?.fingerprint !== groupA && !(cross && isB(version))
-    return versionMetrics(version, otherConditions ? "all" : selectedCase, otherConditions ? "sum" : aggregate, cross && (isA(version) || isB(version)) ? comparison?.caseRows?.map(row => row.caseKey) ?? [] : undefined, cross && (isA(version) || isB(version)))
+    if (selectedB && (isA(version) || isB(version))) {
+      const before = isA(version)
+      const selectedKeys = activeComparison ? activeComparison.selectedCase === "all" ? activeComparison.cases.filter(item => item.id !== "all").map(item => item.id) : [activeComparison.selectedCase] : []
+      const caseRows = (activeComparison?.caseRows ?? []).filter(row => selectedKeys.includes(row.caseKey))
+      const complete = selectedKeys.length > 0 && selectedKeys.every(key => caseRows.filter(row => row.caseKey === key).length === 1)
+      const rowsVaries = complete && caseRows.some(row => before ? row.rowsAVaries : row.rowsBVaries)
+      const rowValues = caseRows.map(row => before ? row.rowsA : row.rowsB)
+      const rows = !complete || rowsVaries || rowValues.some(value => value == null) ? null : rowValues.reduce<number>((sum, value) => sum + value!, 0) / (aggregate === "mean" ? caseRows.length : 1)
+      return { reads: (before ? activeComparison?.wholeBatch?.before : activeComparison?.wholeBatch?.after) ?? null, scans: (before ? activeComparison?.scansBefore : activeComparison?.scansAfter) ?? null,
+        elapsed: (before ? activeComparison?.elapsed.beforeMs : activeComparison?.elapsed.afterMs) ?? null, cpu: (before ? activeComparison?.cpuBeforeMs : activeComparison?.cpuAfterMs) ?? null,
+        rows, rowsVaries, coverage: activeComparison ? `Selected pair${activeComparison.operationId != null ? ` #${activeComparison.operationId}` : " · separate observations"}${activeComparison.coverageLabel ? ` · ${activeComparison.coverageLabel}` : ""}` : updating ? "Updating comparison…" : "Pair evidence unavailable" }
+    }
+    const otherConditions = !!groupA && version.group?.fingerprint !== groupA
+    const own = versionMetrics(version, otherConditions ? "all" : selectedCase, otherConditions ? "sum" : aggregate)
+    return { ...own, rows: selectedCase === "all" || otherConditions ? version.rowsReturnedSum ?? null : null, rowsVaries: (selectedCase === "all" || otherConditions) && !!version.rowsReturnedVaries,
+      coverage: `Latest own observation #${version.latestOperationId} · ${own.coverage}` }
   }
   const baseline = versions.find(isA)
   const baselineMetrics = baseline ? metricsFor(baseline) : undefined
@@ -40,16 +59,20 @@ export function VersionTable({ subject, sessionId, agentSessionKey, sessionSearc
     <TableBody>{versions.map(version => {
       const values = metricsFor(version)
       const differentConditions = !!groupA && version.group?.fingerprint !== groupA
-      const activePair = isB(version) && !!comparison && comparison.a === selectedA && comparison.b === selectedB && (!comparison.groupA || comparison.groupA === groupA) && (!comparison.groupB || comparison.groupB === groupB)
-      const activeBaseline = isA(version) && !!comparison && comparison.a === selectedA && comparison.b === selectedB && (!comparison.groupA || comparison.groupA === groupA) && (!comparison.groupB || comparison.groupB === groupB)
-      const outcomes = activePair || activeBaseline ? comparison!.outcomes : version.outcomes
-      const caseOutcomes = activePair ? comparison!.caseOutcomes : []
+      const pairRow = !!selectedB && (isA(version) || isB(version))
+      const rowPending = pairRow && updating
+      const activePair = isB(version) && !!activeComparison
+      const outcomes = pairRow ? activeComparison?.outcomes : version.outcomes
+      const caseOutcomes = activePair ? activeComparison?.caseOutcomes : []
+      const coverageCases = pairRow ? activeComparison?.caseOutcomes : undefined
+      const coverage = pairRow ? coverageCases ? { available: coverageCases.filter(row => (isA(version) ? row.readsBefore : row.readsAfter) != null).length, total: coverageCases.length } : undefined : version.metricCases ? { available: version.metricCases.filter(row => row.logicalReads != null).length, total: version.metricCases.length } : undefined
+      const evidence = (children: ReactNode, announce = false) => <ComparisonPending pending={rowPending} announce={announce}>{children}</ComparisonPending>
       return <TableRow key={`${version.group?.fingerprint ?? ""}:${version.version}`} className={isA(version) || isB(version) ? "bg-muted/40" : undefined}>
       <TableHead scope="row" className="max-w-80"><div className="flex items-center gap-2">{version.version}{operations.some(operation => version.measuredIn.includes(operation.id) && operation.agentKeep) && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-3.5 text-muted-foreground" aria-label="Kept by agent" />}{operations.filter(operation => version.measuredIn.includes(operation.id) && operation.agentLabel).map(operation => <span key={operation.id} className="truncate text-xs font-normal text-muted-foreground" title={operation.agentLabel ?? undefined}>{operation.agentLabel}</span>)}</div></TableHead>
       <TableCell><Badge variant="secondary" title={version.group?.label}>Conditions {version.group?.badge ?? "1"}</Badge>{differentConditions && <span className="block text-xs text-muted-foreground">Different conditions{!isB(version) && "; own cases (sum)"}</span>}<span className="block text-xs text-muted-foreground">{values.coverage}</span></TableCell>
-      <TableCell className="text-right tabular-nums">{version.rowsReturnedVaries ? "varies" : metric(version.rowsReturnedSum ?? null)}</TableCell><TableCell className="text-right tabular-nums">{metric(values.reads)}</TableCell><TableCell className="text-right tabular-nums" title="↓ fewer reads; ↑ in IO outcomes means improvement">{isA(version) || differentConditions ? "—" : delta(values.reads, baselineMetrics?.reads) ?? "—"}</TableCell>
-      <TableCell className="text-right tabular-nums">{metric(values.scans)}</TableCell><TableCell className="text-right tabular-nums">{metric(values.elapsed)}{values.elapsed !== null && " ms"}</TableCell><TableCell className="text-right tabular-nums">{metric(values.cpu)}{values.cpu !== null && " ms"}</TableCell>
-      {(["results", "io", "policy"] as const).map(dimension => <TableCell key={dimension}><OutcomeDimensions outcomes={outcomes} cases={caseOutcomes} baseline={isA(version)} coverageOnly={!activePair} coverage={version.metricCases ? { available: version.metricCases.filter(row => row.logicalReads != null).length, total: version.metricCases.length } : undefined} dimension={dimension} /></TableCell>)}
+      <TableCell className="text-right tabular-nums">{evidence(values.rowsVaries ? "varies" : metric(values.rows), true)}</TableCell><TableCell className="text-right tabular-nums">{evidence(metric(values.reads))}</TableCell><TableCell className="text-right tabular-nums" title="↓ fewer reads; ↑ in IO outcomes means improvement">{evidence(!activePair || differentConditions ? "—" : delta(values.reads, baselineMetrics?.reads) ?? "—")}</TableCell>
+      <TableCell className="text-right tabular-nums">{evidence(metric(values.scans))}</TableCell><TableCell className="text-right tabular-nums">{evidence(<>{metric(values.elapsed)}{values.elapsed !== null && " ms"}</>)}</TableCell><TableCell className="text-right tabular-nums">{evidence(<>{metric(values.cpu)}{values.cpu !== null && " ms"}</>)}</TableCell>
+      {(["results", "io", "policy"] as const).map(dimension => <TableCell key={dimension}>{evidence(<OutcomeDimensions outcomes={rowPending ? undefined : outcomes} cases={rowPending ? [] : caseOutcomes} baseline={isA(version)} coverageOnly={!activePair} coverage={rowPending ? undefined : coverage} dimension={dimension} />)}</TableCell>)}
 
       <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-a`} aria-describedby={`${groupId}-a-label`} aria-label={accessibleName("A", version)} checked={isA(version)} onChange={() => onSelect("a", version.version, version.group?.fingerprint)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: isA(version) ? "secondary" : "outline", size: "icon-sm" }), "rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>A</span></label></TableCell>
       <TableCell><label className="relative inline-flex"><input type="radio" className="peer sr-only" value={version.version} name={`${groupId}-b`} aria-describedby={`${groupId}-b-label`} aria-label={accessibleName("B", version)} checked={isB(version)} onChange={() => onSelect("b", version.version, version.group?.fingerprint)} /><span aria-hidden="true" className={cn(buttonVariants({ variant: isB(version) ? "default" : "outline", size: "icon-sm" }), "rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-ring")}>B</span></label></TableCell>

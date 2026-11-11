@@ -249,3 +249,13 @@ test("provenance remains visible and the duplicate evidence drawer is removed", 
   expect(within(panel).getByRole("region", { name: "Baseline v0 scripts" })).toBeInTheDocument()
   expect(within(panel).getByRole("region", { name: "Candidate v3 scripts" })).toBeInTheDocument()
 })
+
+
+test("scripts do not bind a raw case ID omitted from a modern fingerprint map", async () => {
+  const payload: OptimizationComparison = { ...comparison, cases: [{ id: "selected", label: "Ambiguous", outcome: "unavailable" }], beforeAction: { operationId: 214, side: "baseline", caseIds: ["selected"], caseIdsByFingerprint: {} }, afterAction: { operationId: 214, side: "candidate", caseIds: ["selected"], caseIdsByFingerprint: {} } }
+  const { calls } = renderPanel(payload)
+  await screen.findByText("measured together in #214")
+  expect(screen.queryByRole("region", { name: "Baseline v0 scripts" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("region", { name: "Candidate v3 scripts" })).not.toBeInTheDocument()
+  expect(calls.some(call => call.includes("/repro?"))).toBe(false)
+})

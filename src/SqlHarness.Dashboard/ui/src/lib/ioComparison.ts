@@ -6,9 +6,12 @@ export type IoExtras = { before: Record<string, Partial<Record<IoExtraMetric, nu
 export function selectedVariants(detail: OperationDetail | undefined, action: OptimizationActionReference | null | undefined, comparison: OptimizationComparison): VariantDetail[] {
   if (!detail || !action) return []
   const selected = comparison.selectedCase === "all" ? comparison.cases.map(item => item.id) : [comparison.selectedCase]
-  const caseIds = new Set(selected.map(id => action.caseIdsByFingerprint?.[id] ?? (action.caseIds.includes(id) ? id : null)).filter((id): id is string => id !== null))
-  // A missing case mapping must not turn an all-case comparison into a partial total.
-  if (!selected.length || selected.some(id => !action.caseIdsByFingerprint?.[id] && !action.caseIds.includes(id))) return []
+  const mapped = selected.map(id => action.caseIdsByFingerprint
+    ? action.caseIdsByFingerprint[id] ?? null
+    : action.caseIds.includes(id) ? id : null)
+  // An omitted modern mapping is authoritative, even if a raw ID has the same text.
+  if (!selected.length || mapped.some(id => id === null)) return []
+  const caseIds = new Set(mapped.filter((id): id is string => id !== null))
   const variants = detail.variants.filter(variant => caseIds.has(variant.caseId) && (variant.variant === action.side || (action.side === "measure" && variant.variant === "query")))
   return [...caseIds].every(id => variants.filter(variant => variant.caseId === id).length === 1) ? variants : []
 }

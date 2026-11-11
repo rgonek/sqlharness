@@ -99,7 +99,7 @@ test("inactive version rows cannot borrow a recorded policy from another directe
 test("baseline result coverage follows the active selected-case comparison", () => {
   const whole = { resultsEquivalent: 4, resultsDifferent: 0, resultsUnavailable: 0, ioBetter: 3, ioSame: 1, ioWorse: 0, ioUnavailable: 0, policyPass: 4, policyFail: 0, policyUnavailable: 0 }
   const selected = { ...whole, resultsEquivalent: 1, ioBetter: 1, ioSame: 0, policyPass: 1 }
-  const comparison = { a: "v0", b: "v1", outcomes: selected } as import("@/api/types").OptimizationComparison
+  const comparison: import("@/api/types").OptimizationComparison = { a: "v0", b: "v1", selectedCase: "one", aggregate: "sum", cases: [], outcomes: selected, basis: "MeasuredTogether", operationId: 1, equivalenceLabel: "equivalent", coverageLabel: "", mixed: null, tables: [], collapsed: null, elapsed: { beforeMs: null, afterMs: null, differentRun: false, policyVerdict: null } }
   render(<VersionTable subject="Selected coverage" sessionId={1} sessionSearch={{ case: "one" }} versions={[{ ...versions[0], outcomes: whole }, { ...versions[1], outcomes: whole }]} comparison={comparison} selectedA="v0" selectedB="v1" onSelect={() => {}} />)
   const baseline = screen.getByRole("rowheader", { name: "v0" }).closest("tr")!
   expect(within(baseline).getByText("Results 1/1")).toBeInTheDocument()

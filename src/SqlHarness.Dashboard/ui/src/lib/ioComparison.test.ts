@@ -37,3 +37,13 @@ test("additional IO preserves unknown counters, real zeroes and sum versus mean"
   expect(aggregate([], false)).toBeNull()
   expect(aggregate([0, 0], true)).toBe(0)
 })
+
+
+test.each(["all", "raw-collision"])("modern omitted fingerprint never falls back to raw variant metrics for %s", selectedCase => {
+  const detail = operationDetail({ variants: [variant({ variant: "baseline", caseId: "raw-collision" })] })
+  const action = { operationId: 10, side: "baseline" as const, caseIds: ["raw-collision"], caseIdsByFingerprint: {} }
+  const selection = { ...comparison, selectedCase, cases: [{ id: "raw-collision", label: "Ambiguous", outcome: "unavailable" }] }
+  expect(selectedVariants(detail, action, selection)).toEqual([])
+  const legacy = { operationId: action.operationId, side: action.side, caseIds: action.caseIds }
+  expect(selectedVariants(detail, legacy, selection).map(item => item.caseId)).toEqual(["raw-collision"])
+})

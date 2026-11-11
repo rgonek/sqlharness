@@ -25,8 +25,7 @@ import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
 function actionCase(action: OptimizationActionReference | null | undefined, selectedCase: string): string | null {
   if (!action?.caseIds.length) return null
-  const mappedCaseId = action.caseIdsByFingerprint?.[selectedCase]
-  if (mappedCaseId) return mappedCaseId
+  if (action.caseIdsByFingerprint) return action.caseIdsByFingerprint[selectedCase] ?? null
   return action.caseIds.includes(selectedCase) ? selectedCase : null
 }
 
@@ -98,7 +97,7 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
   return <section aria-label="Version comparison" className="comparison-panel" aria-busy={pending}>
     <ComparisonPending pending={pending}><div className="flex flex-wrap items-center justify-between gap-2" aria-label="Comparison provenance">
       <div className="flex flex-wrap items-center gap-3">{comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="inline-flex min-h-6 items-center text-sm underline">Operation #{comparison.operationId}</Link> : <><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></>}</div>
-      <OutcomeDimensions outcomes={comparison.outcomes} cases={comparison.caseOutcomes} />
+      <OutcomeDimensions outcomes={pending ? undefined : comparison.outcomes} cases={pending ? [] : comparison.caseOutcomes} />
     </div></ComparisonPending>
     {!navigation && (toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar)}
 
