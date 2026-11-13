@@ -1,0 +1,58 @@
+
+ RUN  v5.0.3 D:/Dev/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ✓ src/pages/OperationPage.test.tsx > shows cancellation explanation for client without opening the status dialog 201ms
+ ✓ src/pages/OperationPage.test.tsx > shows cancellation explanation for deadline without opening the status dialog 83ms
+ ✓ src/pages/OperationPage.test.tsx > shows cancellation explanation for null without opening the status dialog 70ms
+ ✓ src/pages/OperationPage.test.tsx > shows the stored error as text and keeps interrupted compare measurements available 84ms
+ ✓ src/pages/OperationPage.test.tsx > shows cancelled reason and missing message in operation detail 69ms
+ ✓ src/pages/OperationPage.test.tsx > shows rejected reason and missing message in operation detail 60ms
+ ✓ src/pages/OperationPage.test.tsx > compare operation returns to its session with the originating subject and scope 92ms
+ ✓ src/pages/OperationPage.test.tsx > aggregate measure from a different MCP child returns to the typed agent session 63ms
+ ✓ src/pages/OperationPage.test.tsx > compare operation restores every optimization search selection on return 95ms
+ ✓ src/pages/OperationPage.test.tsx > compare operation returns to the unassigned group without inventing subject or scope 81ms
+ ✓ src/pages/OperationPage.test.tsx > compare opens on the Optimization panel and carries selected case and aggregate in its URL 754ms
+ ✓ src/pages/OperationPage.test.tsx > measure shows facts, KPIs, table IO, waits and the sql-not-stored note 278ms
+ ✓ src/pages/OperationPage.test.tsx > operation detail renders labels as text and exposes owner annotations and unavailable SQL reuse 68ms
+ ✓ src/pages/OperationPage.test.tsx > operation detail offers SQL reuse only when SQL was stored 72ms
+ ✓ src/pages/OperationPage.test.tsx > operation detail shows owner annotation save failures 102ms
+ ✓ src/pages/OperationPage.test.tsx > operation detail shows clipboard rejection 93ms
+ ✓ src/pages/OperationPage.test.tsx > owner note editor follows the operation when cached detail navigation reuses the page 107ms
+ ✓ src/pages/OperationPage.test.tsx > compare operation detail also exposes owner annotation controls 63ms
+ ✓ src/pages/OperationPage.test.tsx > operation details show phase timing shares and expandable connection diagnostics 141ms
+ ✓ src/pages/OperationPage.test.tsx > legacy operation details show an empty time breakdown without zero-valued phases 79ms
+ ✓ src/pages/OperationPage.test.tsx > compare shows baseline versus candidate and stored plans with operators 505ms
+ ✓ src/pages/OperationPage.test.tsx > Operation_without_metrics_or_target_renders 48ms
+ ✓ src/pages/OperationPage.test.tsx > failed operation with a variant that has no metrics renders 167ms
+ ✓ src/pages/OperationPage.test.tsx > a non-numeric operation id shows not found without fetching operation data 32ms
+ ✓ src/pages/OperationPage.test.tsx > measure-sets summary shows set stability 52ms
+ ✓ src/pages/OperationPage.test.tsx > stable measure-sets summary has no unstable badge 64ms
+ ✓ src/pages/OperationPage.test.tsx > compare-matrix summary shows the matrix parameter and equivalent cells 57ms
+ ✓ src/pages/OperationPage.test.tsx > agent call card shows the client-supplied labels and is absent without them 269ms
+ ✓ src/pages/OperationPage.test.tsx > shows transcript model and effort when the call has no client labels 233ms
+ ✓ src/pages/OperationPage.test.tsx > operations without call labels render no agent call card 70ms
+ ✓ src/pages/OperationPage.test.tsx > measure operation shows recorded setup SQL before the measured query 93ms
+ ✓ src/pages/OperationPage.test.tsx > measure attribution shows single-run after values, hidden work, plan access, and PostgreSQL availability 183ms
+ ✓ src/pages/OperationPage.test.tsx > plan deep link selects the exact parameter set (planParameterSet=) 105ms
+ ✓ src/pages/OperationPage.test.tsx > plan deep link selects the exact parameter set (planParameterSetNull=true) 91ms
+ ✓ src/pages/OperationPage.test.tsx > measure retains a stored SQL fallback when its stored plan source is unavailable 148ms
+ ✓ src/pages/OperationPage.test.tsx > compare panel returns to the originating typed agent optimization 85ms
+ ✓ src/pages/OperationPage.test.tsx > mutation displays recorded affected rows 0 and lifecycle 153ms
+ ✓ src/pages/OperationPage.test.tsx > mutation displays recorded affected rows 12 and lifecycle 131ms
+ ✓ src/pages/OperationPage.test.tsx > unavailable old mutation evidence is not presented as zero or a decision 139ms
+ ✓ src/pages/OperationPage.test.tsx > denied request and unknown outcome show only recorded lifecycle 126ms
+ ✓ src/pages/OperationPage.test.tsx > query retains its recorded row count without a columns placeholder 119ms
+ ✓ src/pages/OperationPage.test.tsx > failure reason is visible without opening status details: Cancelled by the client. 50ms
+ ✓ src/pages/OperationPage.test.tsx > failure reason is visible without opening status details: Cancelled when the call time budget ran… 58ms
+ ✓ src/pages/OperationPage.test.tsx > failure reason is visible without opening status details: The operation failed. 52ms
+ ✓ src/pages/OperationFailure.test.tsx > failed compares retain recorded diagnostics when no optimization pair is eligible 280ms
+
+ Test Files  2 passed (2)
+      Tests  45 passed (45)
+   Start at  10:38:06
+   Duration  21.25s (import 54%, tests 29%, transform 8%, environment 7%, setup 3%)
+
+     Import  258 modules were evaluated 391 times · 11.30s total, 54% of tracked time
+             ~3.84s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+

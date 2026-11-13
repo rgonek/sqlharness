@@ -1,0 +1,10 @@
+
+ RUN  v5.0.3 D:/Dev/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ✓ src/pages/OperationFailure.test.tsx > failed compares retain recorded diagnostics when no optimization pair is eligible 277ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  10:38:41
+   Duration  9.26s (import 69%, transform 16%, environment 8%, setup 3%, tests 3%)
+

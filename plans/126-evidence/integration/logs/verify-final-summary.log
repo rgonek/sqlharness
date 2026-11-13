@@ -1,0 +1,8 @@
+pwsh ./scripts/verify.ps1 -LogDirectory D:/temp/sqlharness-quality-main-gate-final-20261113
+==> ui-install skipped (lockfile unchanged)
+==> build ok 29,4s
+==> ui-check ok 7m59s
+==> test ok 6m36s
+format: skipped (0 changed C# files)
+==> format skipped (0 changed C# files)
+verify: OK  stages=5  14m36s

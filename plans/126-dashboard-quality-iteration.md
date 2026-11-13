@@ -9,7 +9,7 @@ Plan 125, preserve operator context, and verify actual rendered workflows with s
 **Tech stack:** .NET/C#, SQLite, React/TypeScript, Vitest, Playwright, Windows PowerShell.
 **Spec:** [Approved design](../docs/superpowers/specs/2026-11-10-dashboard-quality-design.md).
 **Baseline:** a274b0ecca09bd447c875849799194aea724bcd7.
-**Status:** COMPLETE on `dashboard-quality-9`; all14 categories9.0-9.2 after actual NVDA and copy-focus acceptance. Final product85c75cb2 passes Windows verification (UI544, Core4873/11skips, MCP537/4skips); no main integration. [Scorecard](126-evidence/scorecard.md), [native NVDA](126-evidence/browser/native-accessibility/nvda-acceptance.md).
+**Status:** COMPLETE and integrated into main (2026-11-13). Combined product `0420529c` passes Windows verification in the destination checkout: UI570, Core4919/11skips, MCP537/4skips; Release browser67/67,13 axe scans with zero violations. [Integration](126-evidence/integration/integration.md). Original all14 category scores9.0-9.2 and native NVDA acceptance retain their recorded revisions: [scorecard](126-evidence/scorecard.md), [native NVDA](126-evidence/browser/native-accessibility/nvda-acceptance.md).
 
 ## Global constraints
 

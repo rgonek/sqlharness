@@ -1,5 +1,7 @@
 # Final Windows verification
 
+Integrated main product `0420529c` subsequently passes Windows `just verify` in `D:/Dev/sqlharness` on 2026-11-13: UI570, Core4919/11skips, MCP537/4skips, exit0,14m36s. Combined Release browser67/67;13 axe scans with zero violations. See the [integration report](integration/integration.md) for merged contracts, initial failure/fix, explicit branch formatting and final raw logs. The evidence below remains the original feature-branch acceptance.
+
 Final product: `85c75cb2f2219ac36c0c4e89ea362e99968f0c71`, branch `dashboard-quality-9`, 2026-11-11.
 
 Command: `just verify -LogDirectory D:/temp/sqlharness-quality-gate-85c75cb2`. Actual exit code0; `verify: OK stages=5 11m48s`.
