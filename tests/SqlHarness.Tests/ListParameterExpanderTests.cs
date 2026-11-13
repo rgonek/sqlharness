@@ -11,7 +11,7 @@ public sealed class ListParameterExpanderTests
     {
         var expanded = ListParameterExpander.Expand(
             "SELECT * FROM dbo.Items WHERE Id IN @Ids OR ParentId IN (@Ids)",
-            [new ListValues("Ids", "int", ["1", "2", "3"]) ]);
+            [new ListValues("Ids", "int", ["1", "2", "3"])]);
 
         Assert.Equal(
             "SELECT * FROM dbo.Items WHERE Id IN (@Ids1, @Ids2, @Ids3) OR ParentId IN (@Ids1, @Ids2, @Ids3)",
@@ -26,7 +26,7 @@ public sealed class ListParameterExpanderTests
     {
         var expanded = ListParameterExpander.Expand(
             "SELECT * FROM dbo.Items WHERE Id IN@Ids",
-            [new ListValues("Ids", "int", ["7"]) ]);
+            [new ListValues("Ids", "int", ["7"])]);
 
         Assert.Equal("SELECT * FROM dbo.Items WHERE Id IN (@Ids1)", expanded.Text);
     }
@@ -36,7 +36,7 @@ public sealed class ListParameterExpanderTests
     {
         var expanded = ListParameterExpander.Expand(
             "SELECT * FROM dbo.Items WHERE Id IN @Ids AND ParentId IN @Ids AND Code = @IdsOther",
-            [new ListValues("Ids", "int", ["1", "2"]) ]);
+            [new ListValues("Ids", "int", ["1", "2"])]);
 
         Assert.Equal(
             "SELECT * FROM dbo.Items WHERE Id IN (@Ids1, @Ids2) AND ParentId IN (@Ids1, @Ids2) AND Code = @IdsOther",
@@ -49,7 +49,7 @@ public sealed class ListParameterExpanderTests
     {
         var expanded = ListParameterExpander.Expand(
             "SELECT 1",
-            [new ListValues("Ids", "int", ["1", "2"]) ]);
+            [new ListValues("Ids", "int", ["1", "2"])]);
 
         Assert.Equal("SELECT 1", expanded.Text);
         Assert.Empty(expanded.Parameters);
@@ -86,7 +86,7 @@ public sealed class ListParameterExpanderTests
     {
         var expanded = ListParameterExpander.Expand(
             "SELECT '@Ids' AS Literal -- @Ids\nFROM dbo.Items WHERE Id IN @Ids /* @Ids */",
-            [new ListValues("Ids", "int", ["1", "2"]) ]);
+            [new ListValues("Ids", "int", ["1", "2"])]);
 
         Assert.Equal(
             "SELECT '@Ids' AS Literal -- @Ids\nFROM dbo.Items WHERE Id IN (@Ids1, @Ids2) /* @Ids */",

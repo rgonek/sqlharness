@@ -1,8 +1,8 @@
 using System.Diagnostics;
 
+using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
-using SqlHarness.Core.Dialect;
 
 using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 

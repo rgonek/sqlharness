@@ -1,6 +1,7 @@
 using System.Data;
 
 using Microsoft.Data.SqlClient.Server;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Dialect;
 
@@ -212,8 +213,13 @@ public sealed class TableParameterMaterializerTests
             var column = columns[index];
             return ordinal switch
             {
-                0 => qualifiedName, 1 => column.Name, 2 => column.TypeName,
-                3 => column.Size, 4 => (int)column.Precision, 5 => (int)column.Scale, 6 => column.Nullable,
+                0 => qualifiedName,
+                1 => column.Name,
+                2 => column.TypeName,
+                3 => column.Size,
+                4 => (int)column.Precision,
+                5 => (int)column.Scale,
+                6 => column.Nullable,
                 _ => throw new ArgumentOutOfRangeException(nameof(ordinal)),
             };
         }

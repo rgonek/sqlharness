@@ -1032,17 +1032,17 @@ internal sealed class SqlSafetyClassifier
             case NumericLiteral numeric when decimal.TryParse(numeric.Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value):
                 return true;
             case UnaryExpression
-                {
-                    UnaryExpressionType: UnaryExpressionType.Negative,
-                    Expression: IntegerLiteral integer,
-                } when decimal.TryParse(integer.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var magnitude):
+            {
+                UnaryExpressionType: UnaryExpressionType.Negative,
+                Expression: IntegerLiteral integer,
+            } when decimal.TryParse(integer.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var magnitude):
                 value = -magnitude;
                 return true;
             case UnaryExpression
-                {
-                    UnaryExpressionType: UnaryExpressionType.Negative,
-                    Expression: NumericLiteral numeric,
-                } when decimal.TryParse(numeric.Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var decimalMagnitude):
+            {
+                UnaryExpressionType: UnaryExpressionType.Negative,
+                Expression: NumericLiteral numeric,
+            } when decimal.TryParse(numeric.Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var decimalMagnitude):
                 value = -decimalMagnitude;
                 return true;
             default:
