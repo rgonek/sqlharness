@@ -22,6 +22,8 @@ Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrate
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|---|
+| [127](127-compare-parameter-set-tvp-classification.md) | Compare fixed classification admits TVPs supplied by parameter sets (restores Plan 083 decision 2) | 083 DONE | PENDING; planned at `85d1c95e`, not approved for implementation |
+| [128](128-validation-messages-name-field-and-rule.md) | Profile-var and compare-context validation errors name the field and rule | none | PENDING; planned at `85d1c95e`, not approved for implementation |
 
 Plan [122](122-dashboard-data-value-new-sessions.md): **DONE on `plan-122-backend`; final product `50a4ffb9` verified** — all six tasks including UI, rebased onto main `b7a820f5`; Terra high and Sol low reviews approved; Windows gate PASS (Core 4771, MCP 535, UI 406), branch format and 14 browser states PASS. New-session evidence only, no backfill; locally integrated into `main` at `4baefd17`, merge Windows gate PASS (Core 4771, MCP 535, UI 406); no push. [Integration](122-evidence/integration.md). [Evidence](122-evidence/verification.md). Requires Plan 121 product and mock-alignment corrections; see [spec](../docs/superpowers/specs/2026-10-26-dashboard-data-value.md).
 
