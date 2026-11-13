@@ -174,24 +174,22 @@ public sealed class McpInputReaderTests : IDisposable
     [Fact]
     public async Task Outside_root_error_lists_configured_roots_points_to_capabilities_and_echoes_the_path()
     {
-        var outside = Path.Combine(_home, "outside.sql");
-        File.WriteAllText(outside, "SELECT 1;");
+        var root = ShortSyntheticRoot();
+        var outside = Path.Combine(ShortSyntheticRoot(), "outside.sql");
 
         var exception = await Assert.ThrowsAsync<McpInputException>(
-            () => McpInputReader.ReadSqlAsync(null, outside, _scope, CancellationToken.None));
+            () => McpInputReader.ReadTextFileAsync(outside, [root], McpLimits.MaxSqlBytes, CancellationToken.None));
 
         Assert.Contains("outside every configured input root", exception.Message, StringComparison.Ordinal);
         Assert.Contains("sqlharness_capabilities", exception.Message, StringComparison.Ordinal);
-        Assert.Contains(Assert.Single(_scope.InputRoots), exception.Message, StringComparison.Ordinal);
+        Assert.Contains(root, exception.Message, StringComparison.Ordinal);
         Assert.Contains(outside, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Outside_root_error_with_several_roots_lists_each_of_them()
     {
-        var second = Path.Combine(_home, "inputs-b");
-        Directory.CreateDirectory(second);
-        var roots = new[] { _root, second };
+        var roots = new[] { ShortSyntheticRoot(), ShortSyntheticRoot() };
 
         var exception = await Assert.ThrowsAsync<McpInputException>(
             () => McpInputReader.ReadTextFileAsync(Path.Combine(_home, "outside.sql"), roots, McpLimits.MaxSqlBytes, CancellationToken.None));
@@ -251,8 +249,10 @@ public sealed class McpInputReaderTests : IDisposable
         Assert.Contains("UNC", uncMessage, StringComparison.Ordinal);
         Assert.Contains(unc, uncMessage, StringComparison.Ordinal);
 
-        var missing = Path.Combine(_root, "no-such-file.sql");
-        var missingMessage = await Message(missing);
+        var missingRoot = ShortSyntheticRoot();
+        var missing = Path.Combine(missingRoot, "no-such-file.sql");
+        var missingMessage = (await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadTextFileAsync(missing, [missingRoot], McpLimits.MaxSqlBytes, CancellationToken.None))).Message;
         Assert.Contains("cannot be read", missingMessage, StringComparison.Ordinal);
         Assert.Contains(missing, missingMessage, StringComparison.Ordinal);
 
@@ -266,10 +266,11 @@ public sealed class McpInputReaderTests : IDisposable
     [Fact]
     public async Task Echoed_path_preserves_caller_supplied_diagnostics()
     {
-        var path = Path.Combine(_root, "Password=hunter2;x.sql");
+        var root = ShortSyntheticRoot();
+        var path = Path.Combine(root, "Password=hunter2;x.sql");
 
         var exception = await Assert.ThrowsAsync<McpInputException>(
-            () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
+            () => McpInputReader.ReadTextFileAsync(path, [root], McpLimits.MaxSqlBytes, CancellationToken.None));
 
         Assert.Contains("Password=hunter2;x.sql", exception.Message, StringComparison.Ordinal);
     }
@@ -311,7 +312,7 @@ public sealed class McpInputReaderTests : IDisposable
     [Fact]
     public async Task Outside_root_message_preserves_the_caller_path_for_diagnostics()
     {
-        var path = Path.Combine(_home, "Password=hunter2;outside.sql");
+        var path = Path.Combine(ShortSyntheticRoot(), "Password=hunter2;outside.sql");
 
         var exception = await Assert.ThrowsAsync<McpInputException>(
             () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
@@ -324,9 +325,10 @@ public sealed class McpInputReaderTests : IDisposable
     public async Task MCP_result_redacts_an_exact_known_secret_in_a_caller_path()
     {
         const string knownSecret = "mcp-reader-known-secret-4197";
-        var path = Path.Combine(_home, "secret=" + knownSecret + ";outside.sql");
+        var path = Path.Combine(ShortSyntheticRoot(), "secret=" + knownSecret + ";outside.sql");
         var inputError = await Assert.ThrowsAsync<McpInputException>(
             () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
+        Assert.Contains(knownSecret, inputError.Message, StringComparison.Ordinal);
         var result = McpResultAdapter.Adapt(
             new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, inputError.Message),
             "sqlharness_query",
@@ -367,6 +369,22 @@ public sealed class McpInputReaderTests : IDisposable
         Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.MinCallToolResultBudgetBytes);
     }
 
+    // Rejection-only fixtures stay below the diagnostic budgets even when TEMP
+    // has a long host-specific prefix. These unique roots are never created.
+    private string ShortSyntheticRoot()
+    {
+        var root = Path.Combine(Path.GetPathRoot(_home)!, "mcp-" + Guid.NewGuid().ToString("N"));
+        Assert.False(Directory.Exists(root));
+        return root;
+    }
+
+    private static void AssertBoundedCallerPath(string path, string message)
+    {
+        Assert.Contains(path[..Math.Min(path.Length, McpInputReader.MaxEchoedPathCharacters)], message, StringComparison.Ordinal);
+        if (path.Length > McpInputReader.MaxEchoedPathCharacters)
+            Assert.Contains("[truncated,", message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Oversized_sql_files_and_inline_payloads_are_rejected()
     {
@@ -398,19 +416,19 @@ public sealed class McpInputReaderTests : IDisposable
 
         var extra = WriteFile("extra.sqljson", "{\"name\":\"s\",\"parameters\":[\"id:int=1\"],\"values\":[]}");
         var unknown = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([extra], _scope, CancellationToken.None));
-        Assert.Contains(extra, unknown.Message, StringComparison.Ordinal);
+        AssertBoundedCallerPath(extra, unknown.Message);
         Assert.Contains("unknown property 'values'", unknown.Message, StringComparison.Ordinal);
 
         var wrongExtension = WriteFile("set.json", "{\"name\":\"s\",\"parameters\":[\"id:int=1\"]}");
         var extension = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([wrongExtension], _scope, CancellationToken.None));
         Assert.Contains(".sqljson", extension.Message, StringComparison.Ordinal);
-        Assert.Contains(wrongExtension, extension.Message, StringComparison.Ordinal);
+        AssertBoundedCallerPath(wrongExtension, extension.Message);
 
         var big = Path.Combine(_root, "big.sqljson");
         var padding = new string(' ', (16 * 1024 * 1024) + 1);
         File.WriteAllText(big, "{\"name\":\"s\",\"parameters\":[\"id:int=1\"]}" + padding);
         var oversized = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([big], _scope, CancellationToken.None));
-        Assert.Contains(big, oversized.Message, StringComparison.Ordinal);
+        AssertBoundedCallerPath(big, oversized.Message);
         Assert.Contains("16 MiB", oversized.Message, StringComparison.Ordinal);
     }
 
