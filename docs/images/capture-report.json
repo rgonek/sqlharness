@@ -1,0 +1,62 @@
+{
+  "source": "synthetic showcase; no SQL executed",
+  "schemaVersion": 26,
+  "viewport": {
+    "width": 1500,
+    "height": 1060
+  },
+  "browser": "156.0.8078.4",
+  "screenshots": [
+    {
+      "name": "comparison.png",
+      "viewport": {
+        "width": 1500,
+        "height": 1060
+      },
+      "fullPage": false,
+      "route": "/operations/4?planParameterSetNull=false&returnUnassigned=false"
+    },
+    {
+      "name": "optimization.png",
+      "viewport": {
+        "width": 1500,
+        "height": 1300
+      },
+      "fullPage": true,
+      "route": "/sessions/1?subject=annual-sales&scope=whole+query&a=v0&b=v2&view=whole&unassigned=false&db=NorthwindDemo&group=demo-sales-measurement"
+    },
+    {
+      "name": "statement-io.png",
+      "viewport": {
+        "width": 1500,
+        "height": 1060
+      },
+      "fullPage": false,
+      "route": "/operations/4?case=demo-annual-sales&planParameterSetNull=false&returnUnassigned=false"
+    }
+  ],
+  "errors": [],
+  "comparison": {
+    "operationId": 4,
+    "beforeReads": 48200,
+    "afterReads": 2140,
+    "elapsed": {
+      "beforeMs": 842,
+      "afterMs": 94,
+      "policyVerdict": "pass",
+      "differentRun": false
+    },
+    "outcomes": {
+      "resultsEquivalent": 1,
+      "resultsDifferent": 0,
+      "resultsUnavailable": 0,
+      "ioBetter": 1,
+      "ioSame": 0,
+      "ioWorse": 0,
+      "ioUnavailable": 0,
+      "policyPass": 1,
+      "policyFail": 0,
+      "policyUnavailable": 0
+    }
+  }
+}

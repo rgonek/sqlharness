@@ -5,9 +5,46 @@
 
 # SQLHarness
 
-SQLHarness helps engineers and coding agents measure SQL changes on SQL Server, Azure SQL, and PostgreSQL. Run bounded queries, compare a baseline with a candidate, check their results, and inspect compact execution plans. SQLHarness also records workflow output costs locally. The engine is a property of the locked target profile (omit `engine` for SQL Server; set `"engine": "postgres"` for Postgres).
+**Measure whether your AI agent's SQL rewrite is actually better.**
+
+SQLHarness helps engineers and coding agents compare query performance, check result equivalence, and inspect execution plans on **SQL Server, Azure SQL, and PostgreSQL**. Use the CLI directly or connect your coding agent over MCP, then review the evidence in a local dashboard.
+
+![SQLHarness dashboard comparing the original annual sales query with a rewritten candidate](docs/images/comparison.png)
+
+*Demo data throughout these screenshots. The dashboard is real; the SQL and measurements are synthetic and illustrate the workflow, not measured speedups.*
+
+- **Measure the change.** Compare a baseline and candidate with repeated runs, elapsed time, CPU, and engine-specific IO metrics.
+- **Check the results.** Check result equivalence for the tested inputs alongside performance; inspect inconclusive outcomes before choosing a version.
+- **Keep the evidence.** Review SQL versions, attempts, statement details, and recorded plans in your browser. Copy a comparison as Markdown for a pull request.
+
+Free and open source under the [MIT license](LICENSE). Release binaries include the .NET runtime. The dashboard runs locally.
 
 [Install](#install-a-release-binary) · [Quick start](#quick-start) · [MCP](#mcp-over-local-stdio) · [Commands](#commands) · [Safety](#safety-contract) · [Dashboard](#dashboard) · [Development](#development)
+
+## See an optimization from start to finish
+
+Start with a slow annual sales report, try a date-range filter, then aggregate orders before joining customers. Keep the timeout in the history and compare the final query against the original under the same conditions.
+
+![SQLHarness optimization history with three measured SQL versions](docs/images/optimization.png)
+
+Inspect where the reads changed, rather than relying on elapsed time alone:
+
+![SQLHarness statement and table IO evidence for the annual sales report](docs/images/statement-io.png)
+
+To explore this same synthetic session locally without a database connection, follow the [dashboard demo instructions](scripts/showcase/README.md). Regenerating the demo requires Node.js 24 or newer and a source checkout.
+
+## Try one comparison
+
+After [installing SQLHarness](#install-a-release-binary) and creating your target profile from [the example](docs/example-targets.json), compare two files containing read-only SQL:
+
+```powershell
+sqlharness compare local --subject annual-sales --scope whole --baseline before.sql --candidate after.sql --compare-results multiset --repeat 7 --json-summary
+sqlharness dashboard
+```
+
+Replace `local` with your configured profile name and supply any variables required by that profile. SQLHarness measures both versions and checks result equivalence for the tested inputs. Review the measurements, result checks, and policy outcome together in the output or dashboard; equivalence for tested inputs is not a proof for every possible input.
+
+Using a coding agent? See [MCP setup](#mcp-over-local-stdio) and the bundled [SQLHarness skill](skills/sqlharness/SKILL.md).
 
 ## Install a release binary
 
