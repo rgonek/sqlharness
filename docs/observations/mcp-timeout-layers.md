@@ -117,3 +117,35 @@ comparisons? The cheapest next check is to correlate existing records with the s
 boundaries, then use an offline synthetic characterization if needed. No retry, timeout increase,
 new instrumentation or implementation is selected. See the
 [report observation](../superpowers/specs/2026-10-07-agent-session-report-draft.md#2026-10-29---current-source-ranking-candidate-with-an-io-memory-trade-off).
+
+## 2026-11-12 - read-only query timeout reported as cleanup failure first
+
+Status: collecting observations, not approved for implementation. Inspected HEAD `85d1c95e`.
+
+Observed workflow: a read-only `query` of one small `SELECT TOP (...)` join, with an explicit
+SQL timeout, returned `sql_execution_failed` / phase `sql` with the message
+"open transaction could not be rolled back; connection discarded | Execution Timeout Expired. ...
+| The wait operation timed out." The batch opened no transaction. The agent rewrote the query
+without one join, and the next call succeeded. Cost: one failed call and one rewrite.
+
+Verified behavior: the leading text is `SqlExecution.cs:384` (`CleanupFailureMessage`).
+[Plan 081](../../plans/081-session-control-flow-safety.md) (line 37) specifies it: after a
+timeout or cancel, failed cleanup clears the pool and the operation fails with this message. The
+envelope therefore matches the design; the friction is precedence. The primary cause (the
+command timeout) appears second, and the first clause suggests a transaction the caller never
+opened.
+
+Hypotheses (unconfirmed):
+- after the SqlClient attention on timeout, `IF @@TRANCOUNT > 0 ROLLBACK` itself fails on the
+  broken connection, so "could not be rolled back" can be reported without any open transaction;
+- the whole-call wait may have been the SQL timeout alone; why the statement was slow was not
+  established.
+
+Missing evidence: no artifact exists for a failed `query`; journal phase aggregates were not
+read, because the dashboard and its API stay with the operator. No live SQL was rerun.
+
+Classification: ux gap, single occurrence, medium confidence. Owner: Plan 081 message contract.
+Question for later synthesis: on a timeout, should the primary error lead, with cleanup failure
+moved to a warning or second clause, at least when the batch opened no transaction? Cheapest next
+check: an offline unit test of the cleanup path with a fake session whose rollback throws after a
+command timeout, to confirm which branch produces this text when `@@TRANCOUNT` was zero.
