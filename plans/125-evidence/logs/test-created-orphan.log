@@ -1,0 +1,3 @@
+2026-10-30: after both dotnet test parent processes exited, the 79ea6e68 gate had not completed collecting test output. Process 52860 had parent PID 22592 (the exited SqlHarness.Tests testhost), started 13:20:15, and command line:
+"dotnet" C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\sqlharness.dll dashboard --background
+Only PID 52860, created by that test run, was terminated. The gate then emitted its failed test summaries. This is consistent with an inherited output pipe holding collection open; the exact handle was not inspected. No pre-existing dashboard was touched.

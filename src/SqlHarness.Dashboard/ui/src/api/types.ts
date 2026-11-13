@@ -1,7 +1,7 @@
 // Mirrors src/SqlHarness.Dashboard/DashboardModels.cs (JSON camelCase). Pinned by DashboardContractTests.
 export type Page<T> = { items: T[]; nextCursor: number | null; matching?: boolean }
 
-export type OperationStatus = "running" | "succeeded" | "failed" | "rejected" | "abandoned"
+export type OperationStatus = "running" | "succeeded" | "failed" | "rejected" | "cancelled" | "abandoned"
 
 export type WatchProgress = { polls: number; changedPolls: number; elapsedMs: number }
 
@@ -176,7 +176,7 @@ export type OutcomeCounts = {
   policyPass: number; policyFail: number; policyUnavailable: number
 }
 export type CaseOutcomeDetail = {
-  caseCount?: number
+  id?: string; caseCount?: number
   caseKey: string; label: string; resultsEquivalent: boolean | null; ioOutcome: string
   policyVerdict: string | null; policyUnavailableReason: string | null; policyReasons: string[]
   readsBefore: number | null; readsAfter: number | null
@@ -186,11 +186,12 @@ export type VersionCaseMetric = {
   caseKey: string; caseId: string; label: string; varyingFingerprint?: string | null
   logicalReads: number | null; scans: number | null; elapsedMs: number | null; cpuMs: number | null
 }
-export type MetricAvailability = { status: string; reason: string | null; contributingCases: number; selectedCases: number }
+export type CaseMetricAvailability = { status: string; reason: string | null; contributingCases: number; selectedCases: number }
 export type ComparisonTableRow = {
   table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string
   dataLogicalReadsBefore?: number | null; dataLogicalReadsAfter?: number | null
   lobLogicalReadsBefore?: number | null; lobLogicalReadsAfter?: number | null
+  pageServerReadsBefore?: number | null; pageServerReadsAfter?: number | null
   physicalReadsBefore?: number | null; physicalReadsAfter?: number | null
   readAheadReadsBefore?: number | null; readAheadReadsAfter?: number | null
   lobPhysicalReadsBefore?: number | null; lobPhysicalReadsAfter?: number | null
@@ -199,18 +200,22 @@ export type ComparisonTableRow = {
 export type OptimizationVersion = {
   outcomes?: OutcomeCounts | null; caseOutcomes?: CaseOutcomeDetail[]; metricCases?: VersionCaseMetric[]; cpuMedianMs?: number | null
   version: string; hash: string; logicalReadsSum: number | null; logicalReadsMean: number | null; scansSum: number | null
+  caseTimings?: { id: string; varyingId?: string | null; elapsedMedianMs: number | null; cpuMedianMs: number | null }[]
   rowsReturnedSum?: number | null; rowsReturnedVaries?: boolean
   elapsedMedianMs: number | null; caseOutcome: string; measuredIn: number[]; latestOperationId: number; verdictBasis: string
 }
 export type UnassignedCompare = { operationId: number; startedAt: string; status: string }
 export type OptimizationActionReference = { operationId: number; side: "baseline" | "candidate" | "measure"; caseIds: string[]; caseIdsByFingerprint?: Record<string, string> }
 export type HiddenWork = { kind: string; name: string; executions: number | null; sharePercent: number | null }
+export type MetricAvailability = { status: "available" | "unavailable"; reason: string | null; availableCases: number; totalCases: number; provenance?: string | null }
+export type MetricAvailabilityPair = { before: MetricAvailability; after: MetricAvailability }
 export type StatementRow = {
+  availability?: Record<string, MetricAvailabilityPair> | null
   key: string; occurrence: number; text: string
   status: "shared" | "different-work" | "only-baseline" | "only-candidate" | "not-executed" | "measured" | string
   readsBefore: number | null; readsAfter: number | null; scansBefore: number | null; scansAfter: number | null
-  executions: number | null; change: string; attribution: "confirmed" | "partial" | "unavailable" | string
-  hiddenWork: HiddenWork[]; objects: { table: string; lobLogicalReadsBefore?: number | null; lobLogicalReadsAfter?: number | null; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
+  executions: number | null; executionsBefore?: number | null; executionsAfter?: number | null; change: string; attribution: "confirmed" | "partial" | "unavailable" | string
+  hiddenWork: HiddenWork[]; objects: { availability?: Record<string, MetricAvailabilityPair> | null; table: string; lobLogicalReadsBefore?: number | null; lobLogicalReadsAfter?: number | null; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string }[]
   planHashBefore: string | null; planHashAfter: string | null; planLinkBefore: string | null; planLinkAfter: string | null
   cpuBeforeMs?: number | null; cpuAfterMs?: number | null; elapsedBeforeMs?: number | null; elapsedAfterMs?: number | null
   grantRequestedKbBefore?: number | null; grantRequestedKbAfter?: number | null
@@ -219,12 +224,24 @@ export type StatementRow = {
   hasSpillWarningBefore?: boolean | null; hasSpillWarningAfter?: boolean | null
   planRepetitionBefore?: number | null; planRepetitionAfter?: number | null
   udfElapsedMilliseconds: number | null
-  metricAvailabilityBefore?: Record<string, MetricAvailability>; metricAvailabilityAfter?: Record<string, MetricAvailability>
+  metricAvailabilityBefore?: Record<string, CaseMetricAvailability>; metricAvailabilityAfter?: Record<string, CaseMetricAvailability>
+}
+export type NestedOutcomeCounts = {
+  total: number; results: { equivalent: number; different: number; unavailable: number }
+  io: { better: number; same: number; worse: number; unavailable: number }
+  policy: { pass: number; fail: number; unavailable: number }
+}
+export type CaseOutcome = {
+  id: string; label: string; resultsEquivalent: boolean | null; ioOutcome: string
+  readsBefore: number | null; readsAfter: number | null; elapsedBeforeMs: number | null; elapsedAfterMs: number | null
+  cpuBeforeMs: number | null; cpuAfterMs: number | null; policyVerdict: string | null; policyReasons: string[]; policyUnavailableReason: string | null
 }
 export type OptimizationComparison = {
   outcomes?: OutcomeCounts | null; caseOutcomes?: CaseOutcomeDetail[]
   a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql" | "ApproximateAcrossConditions"
   groupA?: string | null; groupB?: string | null; groupLabelA?: string | null; groupLabelB?: string | null
+  outcomeCounts?: NestedOutcomeCounts
+  timingContributors?: { id: string; elapsedBeforeMs: number | null; elapsedAfterMs: number | null; cpuBeforeMs: number | null; cpuAfterMs: number | null }[]
   caseRows?: { caseKey: string; labelA: string; labelB: string; rowsA: number | null; rowsB: number | null; rowsAVaries: boolean; rowsBVaries: boolean }[]
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]
   selectedCase: string; aggregate: string; coverageLabel: string; statementMetricsUnavailableReason?: string | null

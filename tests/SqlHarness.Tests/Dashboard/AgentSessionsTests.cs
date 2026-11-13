@@ -10,6 +10,18 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class AgentSessionsTests
 {
+    private static void RecordCompareEvidence(JournalSeed seed, JournalHandle handle, ConditionsModel? conditions = null)
+    {
+        static JournalVariantMetrics Variant(string variant) => new(
+            variant, null, null, 1, new CompareDistribution(10, 10, 10), new CompareDistribution(8, 8, 8),
+            new CompareDistribution(100, 100, 100), null, null, null, null, null, null, 0, false, false, 0,
+            [], null, [], [])
+        { CaseId = "0", CaseLabel = "Case 1 of 1" };
+        seed.CompareEvidence(handle, conditions ?? JournalSeed.ReproConditions(),
+            """{"kind":"compare","cases":[{"caseId":"0","caseLabel":"Case 1 of 1"}]}""",
+            new BenchmarkJournalRecord([Variant("baseline"), Variant("candidate")], []));
+    }
+
     private static async Task<DashboardServerTests.AuthenticatedDashboard> StartEnabled(TempHome home)
     {
         File.WriteAllText(Path.Combine(home.Path, "config.json"), "{\"dashboard\":{\"agentTranscripts\":{\"enabled\":true}}}");
@@ -437,11 +449,11 @@ public sealed class AgentSessionsTests
         seed.Operation(child, agent: new AgentCallMetadata("tool-pending", null, null, null, null, null, null));
         var compare = MeasuredCompare(seed, child, "orders", "whole", "sha256:h0", "sha256:h1",
             agent: new AgentCallMetadata("tool-linked", null, null, null, null, null, null));
-        seed.RecordConditions(compare);
+        RecordCompareEvidence(seed, compare);
         JournalSeed.Link(home.DatabasePath, compare.OperationId, "claude", "conversation-1", "Conversation");
         var other = MeasuredCompare(seed, child, "orders", "whole", "sha256:h2", "sha256:h3",
             agent: new AgentCallMetadata("tool-linked-2", null, null, null, null, null, null));
-        seed.RecordConditions(other, JournalSeed.ReproConditions() with { FixedForFingerprint = [new ConditionsParameter("@fixed", "int", JsonSerializer.SerializeToElement(2))] });
+        RecordCompareEvidence(seed, other, JournalSeed.ReproConditions() with { FixedForFingerprint = [new ConditionsParameter("@fixed", "int", JsonSerializer.SerializeToElement(2))] });
         JournalSeed.Link(home.DatabasePath, other.OperationId, "claude", "conversation-1", "Conversation");
 
         await using var dashboard = await StartEnabled(home);
@@ -485,9 +497,9 @@ public sealed class AgentSessionsTests
         var cliSession = JournalSeed.Session("codex:cli", "codex");
         var first = MeasuredCompare(seed, firstSession, "orders", "whole", "sha256:h0", "sha256:h1",
             agent: new AgentCallMetadata(null, null, null, "thread-1", null, null, null));
-        MeasuredCompare(seed, secondSession, "orders", "whole", "sha256:h1", "sha256:h2",
+        var second = MeasuredCompare(seed, secondSession, "orders", "whole", "sha256:h1", "sha256:h2",
             agent: new AgentCallMetadata(null, null, null, "thread-1", null, null, null));
-        MeasuredCompare(seed, cliSession, "orders", "whole", "sha256:h2", "sha256:h3",
+        var cli = MeasuredCompare(seed, cliSession, "orders", "whole", "sha256:h2", "sha256:h3",
             agent: new AgentCallMetadata(null, null, null, "thread-1", null, null, null));
         await using var dashboard = await StartEnabled(home);
         var (_, client) = dashboard;
@@ -526,6 +538,8 @@ public sealed class AgentSessionsTests
         var inferred = MeasuredCompare(seed, session, "orders", "whole", "sha256:h1", "sha256:h3");
         var last = MeasuredCompare(seed, session, "orders", "whole", "sha256:h1", "sha256:h2",
             agent: new AgentCallMetadata("tool-last", null, null, null, null, null, null));
+        foreach (var handle in new[] { first, inferred, last })
+            RecordCompareEvidence(seed, handle);
         JournalSeed.Link(home.DatabasePath, first.OperationId, "claude", "conversation-inferred", null);
         JournalSeed.Link(home.DatabasePath, last.OperationId, "claude", "conversation-inferred", null);
         await using var dashboard = await StartEnabled(home);

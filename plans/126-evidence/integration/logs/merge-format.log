@@ -1,0 +1,4 @@
+format: 11 changed C# file(s) (working-tree)
+C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Dashboard\Optimization\OptimizationEligibility.cs(9,2): error FINALNEWLINE: Fix final newline. Delete 2 characters. [C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj]
+C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Dashboard\Optimization\OptimizationModels.cs(293,72): error FINALNEWLINE: Fix final newline. Delete 2 characters. [C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj]
+format: FAILED (dotnet format exit 2)

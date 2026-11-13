@@ -1,0 +1,51 @@
+// Run with Node 24; PLAYWRIGHT_MODULE points to a locally installed playwright package.
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
+const root=process.cwd(), require=createRequire(path.resolve(process.env.PLAYWRIGHT_MODULE));
+const {chromium}=require('playwright');
+const {session,operation}=await import(pathToFileURL(path.join(root,'src/SqlHarness.Dashboard/ui/src/test/fixtures.ts')));
+const browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM}), page=await browser.newPage({viewport:{width:1440,height:1000}});
+page.setDefaultTimeout(20000);
+page.setDefaultNavigationTimeout(120000);
+const sess=session({id:8,title:'Session 8 fixture',hasCompare:true});
+const versions=Array.from({length:4},(_,i)=>({version:`v${i}`,hash:`hash-${i}`,logicalReadsSum:100-i*10,logicalReadsMean:100-i*10,scansSum:1,elapsedMedianMs:10,caseOutcome:'1/1 ok',measuredIn:[30+i],latestOperationId:30+i,verdictBasis:'whole batch',rowsReturnedSum:i===2?null:10+i}));
+const groups=[0,1].map(i=>({fingerprint:`fp${i}`,label:`Conditions ${i?'B':'A'}`,subject:'orders',database:'ShopDb',defaultA:i?'v2':'v0',defaultB:i?'v3':'v1',scopes:[{scope:'whole query',defaultA:i?'v2':'v0',defaultB:i?'v3':'v1',versions:versions.slice(i*2,i*2+2)}]}));
+const comparison={a:'v0',b:'v2',basis:'ApproximateAcrossConditions',groupA:'fp0',groupB:'fp1',groupLabelA:'Conditions A',groupLabelB:'Conditions B',operationId:null,equivalenceLabel:'',cases:[{id:'case-1',label:'case 1',outcome:null}],caseRows:[{caseKey:'case-1',labelA:'case 1',labelB:'case 1',rowsA:10,rowsB:12,rowsAVaries:false,rowsBVaries:false}],selectedCase:'all',aggregate:'sum',coverageLabel:'1 paired case',mixed:null,tables:[],collapsed:null,elapsed:{beforeMs:10,afterMs:12,policyVerdict:null,differentRun:false}};
+await page.addInitScript(()=>{localStorage.setItem('theme','light');window.EventSource=class extends EventTarget{static OPEN=1;readyState=1;close(){}}});
+await page.route(/^http:\/\/127\.0\.0\.1:48139\/api\//,async route=>{const u=new URL(route.request().url()),p=u.pathname;console.log('API',p);let data={};
+ if(p==='/api/sessions/8')data={session:sess,operations:[operation({id:30,sessionId:8,operation:'compare'})],note:null,conversations:[],compareSubjects:[],unassignedCompareCount:0};
+ else if(p==='/api/sessions/8/operations')data={items:[],nextCursor:null};
+ else if(p==='/api/sessions/8/optimization')data={subjects:[{subject:'orders',database:'ShopDb',engine:'SqlServer',groups}],unassigned:[]};
+ else if(p==='/api/sessions/8/optimization/compare')data=comparison;
+ else if(p==='/api/profiles')data={profiles:[],status:'valid'};
+ else if(p.endsWith('/sql'))data={hash:'',text:null,tooLarge:false};
+ else if(p==='/api/settings')data={status:'valid',settings:{dashboard:{},journal:{},mutations:{},connection:{},execution:{},compare:{},diagnostics:{}}};
+ else if(p==='/api/live')return route.fulfill({status:200,contentType:'text/event-stream',body:': fixture\n\n'});
+ return route.fulfill({json:data});});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')console.log('console error:',m.text())});
+try {
+ await page.goto('http://127.0.0.1:48139/sessions/8?subject=orders&db=ShopDb&group=fp0&a=v0&b=v1');
+ const table=page.getByRole('table',{name:'orders-ShopDb versions'});await table.waitFor();
+ for(const v of ['v0','v1','v2','v3'])if(await table.getByRole('rowheader',{name:v,exact:true}).count()!==1)throw Error(`missing ${v}`);
+ if(await table.getByRole('columnheader',{name:'Rows',exact:true}).count()!==1)throw Error('Rows column missing');
+ if(!(await table.getByRole('row',{name:/v0/}).innerText()).includes('10'))throw Error('v0 row count missing');
+ if(!(await table.getByRole('row',{name:/v2/}).innerText()).includes('—'))throw Error('v2 missing row count must render dash');
+ for(const label of ['A','B'])if(!await table.getByText(label,{exact:true}).count())throw Error(`badge ${label} missing`);
+ await table.getByRole('radio',{name:'B v2'}).locator('..').click();
+ await page.waitForURL(url=>url.searchParams.get('groupB')==='fp1' && url.searchParams.get('b')==='v2');
+ await page.getByText('A: Conditions A',{exact:true}).waitFor();
+ await page.getByText('B: Conditions B',{exact:true}).waitFor();
+ await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+ await page.getByRole('button',{name:'Copy summary'}).click();
+ const copied=await page.evaluate(()=>navigator.clipboard.readText());
+ for(const text of ['A: Conditions A (group: fp0)','B: Conditions B (group: fp1)'])if(!copied.includes(text))throw Error(`copied summary missing ${text}`);
+ await page.getByText('Different conditions — approximate, not a verdict',{exact:true}).waitFor();
+ if(errors.length)throw Error(errors.join('\n'));
+ await page.screenshot({path:'plans/125-evidence/browser-shared-table.png',fullPage:true});
+ console.log('PASS: one shared table v0–v3, A/B group badges, Rows column, cross-group banner, A/B labels and copied group identities; page errors 0');
+} catch (error) {
+ console.error('page errors:', errors, 'body:', await page.locator('body').innerText());
+ await page.screenshot({path:'plans/125-evidence/browser-diagnostic.png',fullPage:true});
+ throw error;
+} finally {await browser.close()}

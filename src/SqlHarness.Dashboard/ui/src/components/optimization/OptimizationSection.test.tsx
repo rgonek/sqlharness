@@ -68,6 +68,7 @@ test("puts the optimization section first, preserves scope defaults and lists un
   expect(await screen.findByRole("radio", { name: "B v39" })).toBeChecked()
   await userEvent.click(screen.getByRole("tab", { name: "IO" }))
   expect(screen.getAllByText("basis: whole batch").length).toBeGreaterThan(0)
+  expect(screen.queryByText("Comparison evidence and scripts")).not.toBeInTheDocument()
   expect(screen.getByText("Unassigned compares (1)")).toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "Compare #999" })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Unassigned compares (1)" }))
@@ -127,6 +128,7 @@ test("version table shows measure-only outcomes and unverified comparison label"
   renderApp("/sessions/7")
 
   expect((await screen.findAllByText("Results unavailable")).length).toBeGreaterThanOrEqual(2)
+  expect(await screen.findByRole("columnheader", { name: "Results" })).toBeInTheDocument()
   expect(await screen.findByText("results not compared")).toBeInTheDocument()
 })
 

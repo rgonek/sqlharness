@@ -24,7 +24,7 @@ internal static class OptimizationOutcomes
                 var attribution = OptimizationComparer.CompareCase(left, right);
                 var a = attribution.VerdictBasis == "changed statements" ? attribution.ChangedBefore : readsBefore;
                 var b = attribution.VerdictBasis == "changed statements" ? attribution.ChangedAfter : readsAfter;
-                if (a.HasValue && b.HasValue) io = OptimizationComparer.Outcome(a.Value, b.Value);
+                if (direct?.Engine?.Contains("postgres", StringComparison.OrdinalIgnoreCase) != true && a.HasValue && b.HasValue) io = OptimizationComparer.Outcome(a.Value, b.Value);
             }
             var recorded = !baseline && forward && !approximate && !ambiguous && evidence is not null;
             var verdict = recorded ? evidence!.RegressionVerdict : null;
@@ -38,7 +38,7 @@ internal static class OptimizationOutcomes
             return new CaseOutcomeDetail(id, ambiguous ? $"Ambiguous case identity ({caseCount} cases)" : labels.GetValueOrDefault(id, id),
                 approximate || ambiguous ? null : evidence?.ResultsEquivalent, io,
                 verdict is "pass" or "fail" ? verdict : null, reason,
-                recorded ? evidence!.PolicyReasons : [], readsBefore, baseline ? null : readsAfter,
+                recorded ? evidence!.PolicyReasons.Count > 0 ? evidence.PolicyReasons : evidence.RegressionReasons : [], readsBefore, baseline ? null : readsAfter,
                 left?.ElapsedMedianMs, baseline ? null : right?.ElapsedMedianMs, left?.CpuMedianMs, baseline ? null : right?.CpuMedianMs)
             { CaseCount = caseCount };
         }).OrderBy(row => row.PolicyVerdict == "fail" ? 0 : row.IoOutcome == "worse" ? 1 : 2).ToArray();

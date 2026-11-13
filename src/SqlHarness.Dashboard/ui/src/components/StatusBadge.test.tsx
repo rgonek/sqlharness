@@ -91,3 +91,9 @@ test("a cancellation names who cancelled", async () => {
   await userEvent.click(screen.getByRole("button", { name: /failed/ }))
   expect(await screen.findByRole("dialog")).toHaveTextContent("Cancelled by the client.")
 })
+
+test("a cancelled status opens the same cancellation explanation", async () => {
+  render(<StatusBadge operation={operation({ status: "cancelled", errorKind: null, cancelReason: "deadline" })} />)
+  await userEvent.click(screen.getByRole("button", { name: /cancelled/ }))
+  expect(await screen.findByRole("dialog")).toHaveTextContent("Cancelled when the call time budget ran out.")
+})

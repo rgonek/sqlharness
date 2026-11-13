@@ -1,0 +1,479 @@
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/8723/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ✓ src/components/optimization/StatementRows.test.tsx > renders statement status, counters, and only the resolved plan destination 100ms
+ ✓ src/components/optimization/StatementRows.test.tsx > Objects retains its nested open state across close and reopen 225ms
+ ✓ src/components/optimization/StatementRows.test.tsx > renders both hidden-work flag forms 13ms
+ ✓ src/components/optimization/StatementRows.test.tsx > sorts comparison rows by absolute read change 26ms
+ ✓ src/components/optimization/StatementRows.test.tsx > shows selected-run metrics and LOB values in statement details 57ms
+ ✓ src/components/optimization/StatementRows.test.tsx > measured statement shows unavailable reason while retaining plan 10ms
+ ✓ src/components/optimization/StatementRows.test.tsx > missing IO preserves statement text and plan without numeric grid 7ms
+ ✓ src/components/optimization/StatementRows.test.tsx > shows unequal execution counts and hidden work without IO 18ms
+ × src/components/optimization/StatementRows.test.tsx > empty flat availability dictionaries preserve paired unavailable reasons 18ms
+   → Unable to find an element with the text: /ambiguous attribution/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33maria-label[39m=[32m"Statement IO"[39m
+      [33mclass[39m=[32m"space-y-3"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"relative w-full overflow-x-auto"[39m
+        [33mdata-slot[39m=[32m"table-container"[39m
+      [36m>[39m
+        [36m<table[39m
+          [33maria-label[39m=[32m"Statement IO rows"[39m
+          [33mclass[39m=[32m"w-full caption-bottom text-xs"[39m
+          [33mdata-slot[39m=[32m"table"[39m
+        [36m>[39m
+          [36m<thead[39m
+            [33mclass[39m=[32m"[&_tr]:border-b"[39m
+            [33mdata-slot[39m=[32m"table-header"[39m
+          [36m>[39m
+            [36m<tr[39m
+              [33mclass[39m=[32m"border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"[39m
+              [33mdata-slot[39m=[32m"table-row"[39m
+            [36m>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+                [33mdata-slot[39m=[32m"table-head"[39m
+              [36m>[39m
+                [0mStatement[0m
+              [36m</th>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+                [33mdata-slot[39m=[32m"table-head"[39m
+              [36m>[39m
+                [0mStatus[0m
+              [36m</th>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+                [33mdata-slot[39m=[32m"table-head"[39m
+              [36m>[39m
+                [0mExecutions[0m
+              [36m</th>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+                [33mdata-slot[39m=[32m"table-head"[39m
+              [36m>[39m
+                [0mScans[0m
+              [36m</th>[39m
+            [36m</tr>[39m
+          [36m</thead>[39m
+          [36m<tbody[39m
+            [33mclass[39m=[32m"[&_tr:last-child]:border-0"[39m
+            [33mdata-slot[39m=[32m"table-body"[39m
+          [36m>[39m
+            [36m<tr[39m
+              [33mclass[39m=[32m"border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted align-top"[39m
+              [33mdata-slot[39m=[32m"table-row"[39m
+            [36m>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"p-2 align-middle [&:has([role=checkbox])]:pr-0 whitespace-normal"[39m
+                [33mdata-slot[39m=[32m"table-cell"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"max-w-2xl whitespace-pre-wrap break-words"[39m
+                [36m>[39m
+                  [0mSELECT * FROM Orders[0m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"mt-1 flex flex-wrap gap-2 text-xs"[39m
+                [36m>[39m
+                  [36m<a[39m
+                    [33mclass[39m=[32m"underline"[39m
+                    [33mhref[39m=[32m"/plan"[39m
+                  [36m>[39m
+                    [0mPlan after[0m
+                  [36m</a>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33maria-label[39m=[32m"Hidden work for statement 1"[39m
+                  [33mclass[39m=[32m"mt-2 flex flex-wrap gap-1"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"rounded border px-2 py-1 text-xs"[39m
+                  [36m>[39m
+                    [0mUDF time [0m
+                    [0m15[0m
+                    [0m% of statement[0m
+                  [36m</span>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"text-xs font-normal text-muted-foreground"[39m
+                [36m/>[39m
+                [36m<span>[39m
+                  [0mAdditional statement metrics unavailable[0m
+                [36m</span>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"mt-2"[39m
+                  [33mdata-closed[39m=[32m""[39m
+                  [33mdata-slot[39m=[32m"collapsible"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33maria-disabled[39m=[32m"false"[39m
+                    [33maria-expanded[39m=[32m"false"[39m
+                    [33mclass[39m=[32m"cursor-pointer text-sm"[39m
+                    [33mdata-slot[39m=[32m"collapsible-trigger"[39m
+                    [33mtabindex[39m=[32m"0"[39m
+                    [33mtype[39m=[32m"button"[39m
+                  [36m>[39m
+                    [0mObjects ([0m
+                    [0m1[0m
+                    [0m)[0m
+                  [36m</button>[39m
+                  [36m<div[39m
+                    [33mdata-closed[39m=[32m""[39m
+                    [33mdata-slot[39m=[32m"collapsible-content"[39m
+                    [33mhidden[39m=[32m""[39m
+                    [33mid[39m=[32m"base-ui-_r_8_"[39m
+                    [33mstyle[39m=[32m"--collapsible-panel-height: auto; --collapsible-panel-width: auto;"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mclass[39m=[32m"mt-2"[39m
+                    [36m>[39m
+                      [36m<div[39m
+                        [33mclass[39m=[32m"relative w-full overflow-x-auto"[39m
+                        [33mdata-slot[39m=[32m"table-container"[39m
+                      [36m>[39m
+                        [36m<table[39m
+                          [33maria-label[39m=[32m"SELECT * FROM Orders object IO"[39m
+                          [33mclass[39m=[32m"w-full caption-bottom text-xs"[39m
+                          [33mdata-slot[39m=[32m"table"[39m
+                        [36m>[39m
+                          [36m<thead[39m
+                            [33mclass[39m=[32m"[&_tr]:border-b"[39m
+                            [33mdata-slot[39m=[32m"table-header"[39m
+                          [36m>[39m
+                            [36m<tr[39m
+                              [33mclass[39m=[32m"border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"[39m
+                              [33mdata-slot[39m=[32m"table-row"[39m
+                            [36m>[39m
+                              [36m<th[39m
+                                [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+                                [33mdata-slot[39m=[32m"table-head"[39m
+                              [36m>[39m
+                                [0mObject[0m
+                              [36m</th>[39m
+                              [36m<th[39m
+                                [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+                                [33mdata-slot[39m=[32m"table-head"[39m
+                              [36m>[39m
+                                [0mScans[0m
+                              [36m</th>[39m
+                              [36m<th[39m
+                                [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+                                [33mdata-slot[39m=[32m"table-head"[39m
+                              [36m>[39m
+                                [0mLogical reads[0m
+                              [36m</th>[39m
+                            [36m</tr>[39m
+                          [36m</thead>[39m
+                          [36m<tbody[39m
+                            [33mclass[39m=[32m"[&_tr:last-child]:border-0"[39m
+                            [33mdata-slot[39m=[32m"table-body"[39m
+                          [36m>[39m
+                            [36m<tr[39m
+                              [33mclass[39m=[32m"border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"[39m
+                              [33mdata-slot[39m=[32m"table-row"[39m
+                            [36m>[39m
+                              [36m<th[39m
+                                [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium text-foreground [&:has([role=checkbox])]:pr-0 whitespace-normal"[39m
+                                [33mdata-slot[39m=[32m"table-head"[39m
+                                [33mscope[39m=[32m"row"[39m
+                              [36m>[39m
+                                [0mdbo.Orders[0m
+                                [36m<div[39m
+                                  [33mclass[39m=[32m"flex flex-col"[39m
+                                [36m/>[39m
+                              [36m</th>[39m
+                              [36m<td[39m
+                                [33mclass[39m=[32m"p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"[39m
+                                [33mdata-slot[39m=[32m"table-cell"[39m
+                              [36m>[39m
+                                [0m4[0m
+                              [36m</td>[39m
+                              [36m<td[39m
+                                [33mclass[39m=[32m"p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"[39m
+                                [33mdata-slot[39m=[32m"table-cell"[39m
+                              [36m>[39m
+                                [0m240[0m
+                              [36m</td>[39m
+                            [36m</tr>[39m
+                          [36m</tbody>[39m
+                        [36m</table>[39m
+                      [36m</div>[39m
+                    [36m</div>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"p-2 align-middle [&:has([role=checkbox])]:pr-0 whitespace-normal"[39m
+                [33mdata-slot[39m=[32m"table-cell"[39m
+              [36m>[39m
+                [0mdifferent work[0m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"[39m
+                [33mdata-slot[39m=[32m"table-cell"[39m
+              [36m>[39m
+                [0m3 executions[0m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"[39m
+                [33mdata-slot[39m=[32m"table-cell"[39m
+              [36m>[39m
+                [0m4[0m
+              [36m</td>[39m
+            [36m</tr>[39m
+          [36m</tbody>[39m
+        [36m</table>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/optimization/StatementRows.test.tsx > empty flat availability dictionaries preserve paired unavailable reasons
+TestingLibraryElementError: Unable to find an element with the text: /ambiguous attribution/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <section
+      aria-label="Statement IO"
+      class="space-y-3"
+    >
+      <div
+        class="relative w-full overflow-x-auto"
+        data-slot="table-container"
+      >
+        <table
+          aria-label="Statement IO rows"
+          class="w-full caption-bottom text-xs"
+          data-slot="table"
+        >
+          <thead
+            class="[&_tr]:border-b"
+            data-slot="table-header"
+          >
+            <tr
+              class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+              data-slot="table-row"
+            >
+              <th
+                class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+                data-slot="table-head"
+              >
+                Statement
+              </th>
+              <th
+                class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+                data-slot="table-head"
+              >
+                Status
+              </th>
+              <th
+                class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+                data-slot="table-head"
+              >
+                Executions
+              </th>
+              <th
+                class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+                data-slot="table-head"
+              >
+                Scans
+              </th>
+            </tr>
+          </thead>
+          <tbody
+            class="[&_tr:last-child]:border-0"
+            data-slot="table-body"
+          >
+            <tr
+              class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted align-top"
+              data-slot="table-row"
+            >
+              <td
+                class="p-2 align-middle [&:has([role=checkbox])]:pr-0 whitespace-normal"
+                data-slot="table-cell"
+              >
+                <div
+                  class="max-w-2xl whitespace-pre-wrap break-words"
+                >
+                  SELECT * FROM Orders
+                </div>
+                <div
+                  class="mt-1 flex flex-wrap gap-2 text-xs"
+                >
+                  <a
+                    class="underline"
+                    href="/plan"
+                  >
+                    Plan after
+                  </a>
+                </div>
+                <div
+                  aria-label="Hidden work for statement 1"
+                  class="mt-2 flex flex-wrap gap-1"
+                >
+                  <span
+                    class="rounded border px-2 py-1 text-xs"
+                  >
+                    UDF time 
+                    15
+                    % of statement
+                  </span>
+                </div>
+                <div
+                  class="text-xs font-normal text-muted-foreground"
+                />
+                <span>
+                  Additional statement metrics unavailable
+                </span>
+                <div
+                  class="mt-2"
+                  data-closed=""
+                  data-slot="collapsible"
+                >
+                  <button
+                    aria-disabled="false"
+                    aria-expanded="false"
+                    class="cursor-pointer text-sm"
+                    data-slot="collapsible-trigger"
+                    tabindex="0"
+                    type="button"
+                  >
+                    Objects (
+                    1
+                    )
+                  </button>
+                  <div
+                    data-closed=""
+                    data-slot="collapsible-content"
+                    hidden=""
+                    id="base-ui-_r_8_"
+                    style="--collapsible-panel-height: auto; --collapsible-panel-width: auto;"
+                  >
+                    <div
+                      class="mt-2"
+                    >
+                      <div
+                        class="relative w-full overflow-x-auto"
+                        data-slot="table-container"
+                      >
+                        <table
+                          aria-label="SELECT * FROM Orders object IO"
+                          class="w-full caption-bottom text-xs"
+                          data-slot="table"
+                        >
+                          <thead
+                            class="[&_tr]:border-b"
+                            data-slot="table-header"
+                          >
+                            <tr
+                              class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+                              data-slot="table-row"
+                            >
+                              <th
+                                class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+                                data-slot="table-head"
+                              >
+                                Object
+                              </th>
+                              <th
+                                class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+                                data-slot="table-head"
+                              >
+                                Scans
+                              </th>
+                              <th
+                                class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+                                data-slot="table-head"
+                              >
+                                Logical reads
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody
+                            class="[&_tr:last-child]:border-0"
+                            data-slot="table-body"
+                          >
+                            <tr
+                              class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+                              data-slot="table-row"
+                            >
+                              <th
+                                class="h-10 px-2 text-left align-middle font-medium text-foreground [&:has([role=checkbox])]:pr-0 whitespace-normal"
+                                data-slot="table-head"
+                                scope="row"
+                              >
+                                dbo.Orders
+                                <div
+                                  class="flex flex-col"
+                                />
+                              </th>
+                              <td
+                                class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+                                data-slot="table-cell"
+                              >
+                                4
+                              </td>
+                              <td
+                                class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+                                data-slot="table-cell"
+                              >
+                                240
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td
+                class="p-2 align-middle [&:has([role=checkbox])]:pr-0 whitespace-normal"
+                data-slot="table-cell"
+              >
+                different work
+              </td>
+              <td
+                class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+                data-slot="table-cell"
+              >
+                3 executions
+              </td>
+              <td
+                class="p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0"
+                data-slot="table-cell"
+              >
+                4
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</body>
+
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  10:17:36
+   Duration  2.32s (environment 40%, tests 23%, setup 15%, import 14%, transform 7%)
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/optimization/StatementRows.test.tsx:109:17
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+

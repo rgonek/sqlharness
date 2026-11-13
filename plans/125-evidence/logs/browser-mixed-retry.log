@@ -1,0 +1,46 @@
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+API /api/sessions/8/optimization/compare
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+API /api/operations/30
+console error: %o
+
+%s
+
+%s
+ TypeError: Cannot read properties of undefined (reading 'filter')
+    at selectedVariants (http://127.0.0.1:48139/src/lib/ioComparison.ts:7:35)
+    at IoDetails (http://127.0.0.1:48139/src/components/optimization/IoDetails.tsx:18:17)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=e4a9eb36:14142:12)
+    at renderWithHooks (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=e4a9eb36:4400:19)
+    at updateFunctionComponent (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=e4a9eb36:5775:16)
+    at beginWork (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=e4a9eb36:6391:20)
+    at runWithFiberInDEV (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=e4a9eb36:944:66)
+    at performUnitOfWork (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=e4a9eb36:9148:92)
+    at workLoopSync (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=e4a9eb36:9044:37)
+    at renderRootSync (http://127.0.0.1:48139/node_modules/.vite/deps/react-dom_client.js?v=e4a9eb36:9028:6) The above error occurred in the <IoDetails> component. React will try to recreate this component tree from scratch using the error boundary you provided, CatchBoundary.
+page errors: [] body: Something went wrong!
+Hide Error
+Cannot read properties of undefined (reading 'filter')
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 20000ms exceeded.
+Call log:
+  - waiting for getByRole('radio', { name: 'By statement' })
+
+    at C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\plans\125-evidence\browser-mixed-fixture.mjs:39:54 {
+  log: [ "  - waiting for getByRole('radio', { name: 'By statement' })" ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.18.0

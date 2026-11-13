@@ -1,0 +1,8 @@
+pwsh ./scripts/verify.ps1 -LogDirectory plans/125-evidence/integration/logs/gate
+[6 q==> ui-install ok 6m26s
+==> build ok 2m23s
+==> ui-check ok 7m13s
+==> test ok 3m45s
+format: 9 changed C# file(s) (working-tree)
+==> format ok 58,8s
+verify: OK  stages=5  18m24s

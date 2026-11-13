@@ -1,0 +1,15 @@
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+API /api/sessions/8/optimization/compare
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+API /api/operations/30
+API /api/sessions/8/optimization/compare
+PASS mixed IO/policy, keyboard drill-down and focus return, partial statement text, whole batch, executed script copy, Plan tab; page errors 0

@@ -1,0 +1,476 @@
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/8723/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > shows basis, case chips, mixed warning, collapsed rows and URL-backed selectors 1390ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > shows different-run and conditions-differ badges without making up an operation link 465ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > shows the engine IO message and action links and copies the panel Markdown 582ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > SQL diff starts at the selected non-default A/B pair 331ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > reproduction actions resolve a selected fingerprint to each side's raw case ID 575ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > operation navigation round-trips the selected multi-group session search 287ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > conditions-differ wording and collapsed row match their copied Markdown 619ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > shows PostgreSQL CPU and buffer totals in the panel and copied summary when reads are unavailable 343ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > view selection is URL-backed and the query receives the selected view 528ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > incomplete attribution visibly falls back to Whole batch 299ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > approximate comparison shows per-case rows and coverage 177ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > approximate comparison without paired cases hides metric totals 289ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > same version across conditions identifies both sides 223ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > partial attribution does not trap the operator outside confirmed statement evidence 391ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > provenance remains visible and the duplicate evidence drawer is removed 194ms
+ ✓ src/components/optimization/ComparisonPanel.test.tsx > scripts do not bind a raw case ID omitted from a modern fingerprint map 233ms
+ ✓ src/components/optimization/VersionTable.test.tsx > A and B are independent exclusive native groups, isolated per table instance 353ms
+ ✓ src/components/optimization/VersionTable.test.tsx > version labels share the version line and retain their full title 20ms
+ ✓ src/components/optimization/VersionTable.test.tsx > shows rows column and dash for missing 41ms
+ ✓ src/components/optimization/VersionTable.test.tsx > shows explicit row count variation separately from missing 15ms
+ ✓ src/components/optimization/VersionTable.test.tsx > selected-case sum and mean use per-case medians, missing contributors remain unavailable 1ms
+ ✓ src/components/optimization/VersionTable.test.tsx > timing headings identify the aggregation and scans and CPU are visible 55ms
+ ✓ src/components/optimization/VersionTable.test.tsx > foreign case IDs never silently select another condition group's own cases 1ms
+ ✓ src/components/optimization/VersionTable.test.tsx > inactive version rows cannot borrow a recorded policy from another directed pair 22ms
+ ✓ src/components/optimization/VersionTable.test.tsx > baseline result coverage follows the active selected-case comparison 28ms
+ × src/components/optimization/VersionTable.test.tsx > baseline coverage follows selected case and candidate uses the projected counts 51ms
+   → Unable to find an element with the text: Baseline · 0/1 measured. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative w-full overflow-x-auto"[39m
+      [33mdata-slot[39m=[32m"table-container"[39m
+    [36m>[39m
+      [36m<table[39m
+        [33maria-label[39m=[32m"Selected versions"[39m
+        [33mclass[39m=[32m"w-full caption-bottom text-xs version-table"[39m
+        [33mdata-slot[39m=[32m"table"[39m
+      [36m>[39m
+        [36m<caption[39m
+          [33mclass[39m=[32m"caption-top pb-2 text-left text-xs text-muted-foreground md:hidden"[39m
+        [36m>[39m
+          [0mScroll horizontally for metrics and outcomes.[0m
+        [36m</caption>[39m
+        [36m<thead[39m
+          [33mclass[39m=[32m"[&_tr]:border-b"[39m
+          [33mdata-slot[39m=[32m"table-header"[39m
+        [36m>[39m
+          [36m<tr[39m
+            [33mclass[39m=[32m"border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"[39m
+            [33mdata-slot[39m=[32m"table-row"[39m
+          [36m>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mVersion[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mConditions[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mRows[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mLogical reads[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mvs A[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mScans[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mElapsed ([0m
+              [0mmedian[0m
+              [0m)[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mCPU ([0m
+              [0mmedian[0m
+              [0m)[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mResults[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mIO[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [0mPolicy[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+              [33mid[39m=[32m"_r_1a_-a-label"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+              [36m>[39m
+                [0mA[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+              [36m>[39m
+                [0mBaseline A[0m
+              [36m</span>[39m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+              [33mid[39m=[32m"_r_1a_-b-label"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+              [36m>[39m
+                [0mB[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+              [36m>[39m
+                [0mCandidate B[0m
+              [36m</span>[39m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 w-10"[39m
+              [33mdata-slot[39m=[32m"table-head"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"sr-only"[39m
+              [36m>[39m
+                [0mObserved in[0m
+              [36m</span>[39m
+            [36m</th>[39m
+          [36m</tr>[39m
+        [36m</thead>[39m
+        [36m<tbody[39m
+          [33mclass[39m=[32m"[&_tr:last-child]:border-0"[39m
+          [33mdata-slot[39m=[32m"table-body"[39m
+        [36m>[39m
+          [36m<tr[39m
+            [33mclass[39m=[32m"border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted bg-muted/40"[39m
+            [33mdata-slot[39m=[32m"table-row"[39m
+          [36m>[39m
+            [36m<th[39m
+              [33mc...
+ ✓ src/components/optimization/VersionTable.test.tsx > shows selected timing summaries and scans in the version table 49ms
+ ✓ src/components/optimization/VersionTable.test.tsx > unpaired rows retain their own case timing while selection changes the active pair 40ms
+ ✓ src/components/optimization/VersionTable.test.tsx > without a pair uses all cases and shows missing timing coverage in scrollable table 22ms
+ ✓ src/components/optimization/VersionTable.test.tsx > uses full timing contributors for other rows and per-side metric coverage 36ms
+ ✓ src/components/optimization/VersionTable.test.tsx > cross-condition contributors use varying identities only for group A and preserve other groups 47ms
+ ✓ src/components/optimization/VersionTable.test.tsx > an unpaired row missing a selected contributor is unavailable rather than a partial sum 51ms
+ ✓ src/components/optimization/StatementRows.test.tsx > renders statement status, counters, and only the resolved plan destination 101ms
+ ✓ src/components/optimization/StatementRows.test.tsx > Objects retains its nested open state across close and reopen 203ms
+ ✓ src/components/optimization/StatementRows.test.tsx > renders both hidden-work flag forms 13ms
+ ✓ src/components/optimization/StatementRows.test.tsx > sorts comparison rows by absolute read change 25ms
+ ✓ src/components/optimization/StatementRows.test.tsx > shows selected-run metrics and LOB values in statement details 58ms
+ ✓ src/components/optimization/StatementRows.test.tsx > measured statement shows unavailable reason while retaining plan 10ms
+ ✓ src/components/optimization/StatementRows.test.tsx > missing IO preserves statement text and plan without numeric grid 4ms
+ ✓ src/components/optimization/StatementRows.test.tsx > shows unequal execution counts and hidden work without IO 13ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > does not request or render optimization when the session has no compare 234ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > puts the optimization section first, preserves scope defaults and lists unassigned compares 1858ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > omits blank metadata and adjacent separators for subject  661ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > omits blank metadata and adjacent separators for subject Orders 885ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > renders forty versions and updates the URL when a version picker changes 3012ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > version table shows measure-only outcomes and unverified comparison label 180ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > hides one-option controls and gives each subject its own accessible selector names 2094ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > keeps B unset when the selected scope has no qualified default 212ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > renders a separate card for every subject and database 1524ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > links every retained measurement operation with the current session return context 315ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > lists versions across conditions and selects B in another group 365ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > same version labels in different groups remain distinct selections 176ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > stale group B resets to the selected group defaults 1180ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > scope picker includes scopes from every conditions group 1705ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > 404 for a stale cross-group selection resets B to group defaults 1766ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > selecting a nondefault A in another group keeps it when B is unset 112ms
+ ✓ src/components/optimization/OptimizationSection.test.tsx > invalid B recovery preserves a valid explicit A 499ms
+ ✓ src/pages/OperationPage.test.tsx > shows cancellation explanation for client without opening the status dialog 246ms
+ ✓ src/pages/OperationPage.test.tsx > shows cancellation explanation for deadline without opening the status dialog 72ms
+ ✓ src/pages/OperationPage.test.tsx > shows cancellation explanation for null without opening the status dialog 72ms
+ ✓ src/pages/OperationPage.test.tsx > shows the stored error as text and keeps interrupted compare measurements available 78ms
+ ✓ src/pages/OperationPage.test.tsx > shows cancelled reason and missing message in operation detail 58ms
+ ✓ src/pages/OperationPage.test.tsx > shows rejected reason and missing message in operation detail 56ms
+ ✓ src/pages/OperationPage.test.tsx > compare operation returns to its session with the originating subject and scope 90ms
+ ✓ src/pages/OperationPage.test.tsx > aggregate measure from a different MCP child returns to the typed agent session 71ms
+ ✓ src/pages/OperationPage.test.tsx > compare operation restores every optimization search selection on return 79ms
+ ✓ src/pages/OperationPage.test.tsx > compare operation returns to the unassigned group without inventing subject or scope 80ms
+ ✓ src/pages/OperationPage.test.tsx > compare opens on the Optimization panel and carries selected case and aggregate in its URL 750ms
+ ✓ src/pages/OperationPage.test.tsx > measure shows facts, KPIs, table IO, waits and the sql-not-stored note 246ms
+ ✓ src/pages/OperationPage.test.tsx > operation detail renders labels as text and exposes owner annotations and unavailable SQL reuse 54ms
+ ✓ src/pages/OperationPage.test.tsx > operation detail offers SQL reuse only when SQL was stored 83ms
+ ✓ src/pages/OperationPage.test.tsx > operation detail shows owner annotation save failures 104ms
+ ✓ src/pages/OperationPage.test.tsx > operation detail shows clipboard rejection 108ms
+ ✓ src/pages/OperationPage.test.tsx > owner note editor follows the operation when cached detail navigation reuses the page 124ms
+ ✓ src/pages/OperationPage.test.tsx > compare operation detail also exposes owner annotation controls 47ms
+ ✓ src/pages/OperationPage.test.tsx > operation details show phase timing shares and expandable connection diagnostics 178ms
+ ✓ src/pages/OperationPage.test.tsx > legacy operation details show an empty time breakdown without zero-valued phases 74ms
+ ✓ src/pages/OperationPage.test.tsx > compare shows baseline versus candidate and stored plans with operators 458ms
+ ✓ src/pages/OperationPage.test.tsx > Operation_without_metrics_or_target_renders 50ms
+ ✓ src/pages/OperationPage.test.tsx > failed operation with a variant that has no metrics renders 121ms
+ ✓ src/pages/OperationPage.test.tsx > a non-numeric operation id shows not found without fetching operation data 48ms
+ ✓ src/pages/OperationPage.test.tsx > measure-sets summary shows set stability 54ms
+ ✓ src/pages/OperationPage.test.tsx > stable measure-sets summary has no unstable badge 73ms
+ ✓ src/pages/OperationPage.test.tsx > compare-matrix summary shows the matrix parameter and equivalent cells 78ms
+ ✓ src/pages/OperationPage.test.tsx > agent call card shows the client-supplied labels and is absent without them 145ms
+ ✓ src/pages/OperationPage.test.tsx > shows transcript model and effort when the call has no client labels 138ms
+ ✓ src/pages/OperationPage.test.tsx > operations without call labels render no agent call card 60ms
+ ✓ src/pages/OperationPage.test.tsx > measure operation shows recorded setup SQL before the measured query 66ms
+ ✓ src/pages/OperationPage.test.tsx > measure attribution shows single-run after values, hidden work, plan access, and PostgreSQL availability 111ms
+ ✓ src/pages/OperationPage.test.tsx > plan deep link selects the exact parameter set (planParameterSet=) 89ms
+ ✓ src/pages/OperationPage.test.tsx > plan deep link selects the exact parameter set (planParameterSetNull=true) 71ms
+ ✓ src/pages/OperationPage.test.tsx > measure retains a stored SQL fallback when its stored plan source is unavailable 89ms
+ ✓ src/pages/OperationPage.test.tsx > compare panel returns to the originating typed agent optimization 69ms
+ ✓ src/pages/OperationPage.test.tsx > mutation displays recorded affected rows 0 and lifecycle 83ms
+ ✓ src/pages/OperationPage.test.tsx > mutation displays recorded affected rows 12 and lifecycle 96ms
+ ✓ src/pages/OperationPage.test.tsx > unavailable old mutation evidence is not presented as zero or a decision 80ms
+ ✓ src/pages/OperationPage.test.tsx > denied request and unknown outcome show only recorded lifecycle 91ms
+ ✓ src/pages/OperationPage.test.tsx > query retains its recorded row count without a columns placeholder 76ms
+ ✓ src/pages/OperationPage.test.tsx > failure reason is visible without opening status details: Cancelled by the client. 71ms
+ ✓ src/pages/OperationPage.test.tsx > failure reason is visible without opening status details: Cancelled when the call time budget ran… 52ms
+ ✓ src/pages/OperationPage.test.tsx > failure reason is visible without opening status details: The operation failed. 48ms
+ ✓ src/components/optimization/OptimizationPendingEvidence.test.tsx > session consumer hides placeholder pair evidence until the selected case response settles 673ms
+ ✓ src/components/optimization/OptimizationPendingEvidence.test.tsx > agent-session consumer hides placeholder pair evidence until the selected case response settles 382ms
+ ✓ src/components/optimization/OptimizationPendingEvidence.test.tsx > session reconciles a stale bookmarked case to the settled server selection 219ms
+ ✓ src/components/optimization/OptimizationPendingEvidence.test.tsx > agent-session reconciles a stale bookmarked case to the settled server selection 219ms
+ ✓ src/components/optimization/OptimizationPendingEvidence.test.tsx > session clears a case invalidated by a delayed conditions-pair change 375ms
+ ✓ src/components/optimization/OptimizationPendingEvidence.test.tsx > agent-session clears a case invalidated by a delayed conditions-pair change 350ms
+ ✓ src/components/optimization/OptimizationPendingEvidence.test.tsx > PostgreSQL buffer evidence is inaccessible during a pending case transition 514ms
+ ✓ src/components/optimization/IoComparison.test.tsx > IO expands statements, switches scope and toggles optional counters 537ms
+ ✓ src/components/optimization/IoComparison.test.tsx > shows selected-run metrics and object LOB without replacing missing values 99ms
+ ✓ src/components/optimization/IoComparison.test.tsx > explains unavailable statement metrics for all cases 19ms
+ ✓ src/components/optimization/IoComparison.test.tsx > shows the all-cases explanation even when statement rows are absent 10ms
+ ✓ src/components/optimization/IoComparison.test.tsx > shows the all-cases explanation even when statement rows are absent 10ms
+ ✓ src/components/optimization/IoComparison.test.tsx > keeps the all-cases explanation visible when a statement is collapsed 57ms
+ ✓ src/components/optimization/IoComparison.test.tsx > shows nullable grant values and tri-state spill with selected-run provenance 21ms
+ ✓ src/components/optimization/IoComparison.test.tsx > does not turn unknown spill into no warning or sum metrics across cases 25ms
+ ✓ src/components/optimization/IoComparison.test.tsx > only exposes supported counters when switching IO views 405ms
+ ✓ src/components/optimization/IoComparison.test.tsx > measured statement grants and spill show only after values 3ms
+ ✓ src/components/optimization/IoComparison.test.tsx > batch memory does not claim statement memory is never retained 19ms
+ ✓ src/components/optimization/IoComparison.test.tsx > the statement's counter cells toggle expansion without swallowing its plan links 192ms
+ ✓ src/components/optimization/IoComparison.test.tsx > no statement IO replaces the empty numeric grid with navigation and preserves plan links 74ms
+ ✓ src/components/optimization/IoComparison.test.tsx > whole batch offers only supported recorded optional columns and preserves zero 164ms
+ ✓ src/components/optimization/IoComparison.test.tsx > does not offer scan columns when no selected statement records scans 21ms
+ ✓ src/components/optimization/IoComparison.test.tsx > objects remain inspectable when statement IO cannot be attributed 16ms
+ ✓ src/components/optimization/IoComparison.test.tsx > no attributable IO keeps plan navigation and offers whole batch 65ms
+ ✓ src/components/optimization/IoComparison.test.tsx > mixed availability shows confirmed values and reason 25ms
+ ✓ src/components/optimization/IoComparison.test.tsx > shows unequal per-side execution counts 41ms
+ ✓ src/components/optimization/IoComparison.test.tsx > whole batch exposes recorded counters and hides unavailable ones 155ms
+ ✓ src/components/optimization/IoComparison.test.tsx > PostgreSQL does not offer unavailable SQL Server counters 10ms
+ ✓ src/components/optimization/VersionTablePairEvidence.test.tsx > active pair uses operation #10 rather than latest A-to-C #11: all/sum 156ms
+ ✓ src/components/optimization/VersionTablePairEvidence.test.tsx > active pair uses operation #10 rather than latest A-to-C #11: all/mean 57ms
+ ✓ src/components/optimization/VersionTablePairEvidence.test.tsx > active pair uses operation #10 rather than latest A-to-C #11: one/sum 54ms
+ ✓ src/components/optimization/VersionTablePairEvidence.test.tsx > ambiguous or unavailable pair counters never fall back to latest version measurements 86ms
+ ✓ src/components/optimization/VersionTablePairEvidence.test.tsx > pending selection hides stale outcomes and closes old case details while A/B controls retain focus 174ms
+ ✓ src/components/optimization/VersionTablePairEvidence.test.tsx > baseline IO coverage weights ambiguous case groups: selected only=false 36ms
+ ✓ src/components/optimization/VersionTablePairEvidence.test.tsx > baseline IO coverage weights ambiguous case groups: selected only=true 35ms
+ ✓ src/components/optimization/CaseOutcomeDetails.test.tsx > IO improvements and recorded policy failures remain independent in shared case details 254ms
+ ✓ src/components/optimization/CaseOutcomeDetails.test.tsx > separates IO from recorded policy and opens a failure-first table by keyboard 75ms
+ ✓ src/components/optimization/CaseOutcomeDetails.test.tsx > shows independent counts, unavailable evidence and a zero baseline without a percentage 77ms
+ ✓ src/components/optimization/CaseOutcomeDetails.test.tsx > sorts policy failures, then IO regressions, preserving order within each category 69ms
+ ✓ src/components/optimization/VersionPlan.test.tsx > plan versions use segmented radios with keyboard navigation 164ms
+ ✓ src/components/optimization/VersionPlan.test.tsx > plan does not substitute a different case with missing mapping 46ms
+ ✓ src/components/optimization/VersionPlan.test.tsx > plan does not substitute a different case with missing variant 30ms
+ ✓ src/components/optimization/VersionPlan.test.tsx > plan opens the exact mapped case and side 47ms
+ ✓ src/components/optimization/VersionPlan.test.tsx > all cases without paired metrics opens an action case 31ms
+ ✓ src/components/optimization/VersionPlan.test.tsx > modern omitted fingerprint cannot bind a colliding raw case for selected 45ms
+ ✓ src/components/optimization/VersionPlan.test.tsx > modern omitted fingerprint cannot bind a colliding raw case for all 31ms
+ ✓ src/components/optimization/versionMetrics.test.ts > ambiguous varying fingerprints cannot become a paired timing total 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/optimization/VersionTable.test.tsx > baseline coverage follows selected case and candidate uses the projected counts
+TestingLibraryElementError: Unable to find an element with the text: Baseline · 0/1 measured. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="relative w-full overflow-x-auto"
+      data-slot="table-container"
+    >
+      <table
+        aria-label="Selected versions"
+        class="w-full caption-bottom text-xs version-table"
+        data-slot="table"
+      >
+        <caption
+          class="caption-top pb-2 text-left text-xs text-muted-foreground md:hidden"
+        >
+          Scroll horizontally for metrics and outcomes.
+        </caption>
+        <thead
+          class="[&_tr]:border-b"
+          data-slot="table-header"
+        >
+          <tr
+            class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted"
+            data-slot="table-row"
+          >
+            <th
+              class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+              data-slot="table-head"
+            >
+              Version
+            </th>
+            <th
+              class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+              data-slot="table-head"
+            >
+              Conditions
+            </th>
+            <th
+              class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+              data-slot="table-head"
+            >
+              Rows
+            </th>
+            <th
+              class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+              data-slot="table-head"
+            >
+              Logical reads
+            </th>
+            <th
+              class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+              data-slot="table-head"
+            >
+              vs A
+            </th>
+            <th
+              class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+              data-slot="table-head"
+            >
+              Scans
+            </th>
+            <th
+              class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+              data-slot="table-head"
+            >
+              Elapsed (
+              median
+              )
+            </th>
+            <th
+              class="h-10 px-2 align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 text-right"
+              data-slot="table-head"
+            >
+              CPU (
+              median
+              )
+            </th>
+            <th
+              class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+              data-slot="table-head"
+            >
+              Results
+            </th>
+            <th
+              class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+              data-slot="table-head"
+            >
+              IO
+            </th>
+            <th
+              class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+              data-slot="table-head"
+            >
+              Policy
+            </th>
+            <th
+              class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+              data-slot="table-head"
+              id="_r_1a_-a-label"
+            >
+              <span
+                aria-hidden="true"
+              >
+                A
+              </span>
+              <span
+                class="sr-only"
+              >
+                Baseline A
+              </span>
+            </th>
+            <th
+              class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0"
+              data-slot="table-head"
+              id="_r_1a_-b-label"
+            >
+              <span
+                aria-hidden="true"
+              >
+                B
+              </span>
+              <span
+                class="sr-only"
+              >
+                Candidate B
+              </span>
+            </th>
+            <th
+              class="h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 w-10"
+              data-slot="table-head"
+            >
+              <span
+                class="sr-only"
+              >
+                Observed in
+              </span>
+            </th>
+          </tr>
+        </thead>
+        <tbody
+          class="[&_tr:last-child]:border-0"
+          data-slot="table-body"
+        >
+          <tr
+            class="border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted bg-muted/40"
+            data-slot="table-row"
+          >
+            <th
+              c...
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/optimization/VersionTable.test.tsx:113:17
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 10 passed (11)
+      Tests  1 failed | 147 passed (148)
+   Start at  10:12:46
+   Duration  109.82s (import 52%, tests 34%, environment 8%, setup 3%, transform 2%)
+
+     Import  306 modules were evaluated 1005 times · 56.32s total, 52% of tracked time
+             ~39.17s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+

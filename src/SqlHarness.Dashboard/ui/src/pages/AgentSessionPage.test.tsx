@@ -248,7 +248,7 @@ test("aggregate measure from a second MCP child keeps the agent-session return r
     },
   })
   renderApp("/agent-sessions/claude/conversation-1")
-  const measure = await screen.findByRole("link", { name: "Measure for v1" })
+  const measure = await screen.findByRole("link", { name: "Operation #22" })
   const target = new URL(measure.getAttribute("href")!, "http://dashboard")
   expect(target.pathname).toBe("/operations/22")
   expect(target.searchParams.get("returnSession")).toBe("7")

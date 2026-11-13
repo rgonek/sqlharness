@@ -9,7 +9,8 @@
 projection, expose metric-level availability, and simplify the existing comparison components.
 **Tech stack:** C#/.NET, SQLite, ASP.NET Core, React/TypeScript, xUnit, Vitest.
 **Spec:** The approved direction is recorded in [Design contract](#design-contract) below.
-**Status:** IMPLEMENTED AND WINDOWS-VERIFIED on `dashboard-quality-9` within [Plan 126](126-dashboard-quality-iteration.md), final product `85c75cb2`. All six tasks delivered; [verification](126-evidence/verification.md), [browser evidence](126-evidence/browser/acceptance-5f05ca07/report.md), [review resolution](126-evidence/final-review-resolution.md). No main integration or live/Linux acceptance. Plan126 native NVDA acceptance and the final Windows gate subsequently passed on85c75cb2.
+**Status:** DONE / VERIFIED on `502f12ed`; all six Terra high task reviews and Sol low whole-branch/final scoped reviews approved. Locally integrated into `main` at `ef580dc` with a passing combined Windows gate; no push. See [integration evidence](125-evidence/integration/integration.md) and [feature verification](125-evidence/verification.md).
+**Dashboard quality follow-up:** Plan126 independently delivered additional ambiguity, selected-pair, navigation and accessibility fixes. This integration preserves both completed implementations; [Plan126 evidence](126-evidence/verification.md) remains historical until the combined tree is verified.
 **Baseline:** `8d8d959f`, inspected 2026-10-29; working tree initially clean.
 **Related work:** Builds on 104/105 statement evidence and 121/122/123 dashboard work.
 Read those contracts when changing their invariants; do not duplicate their collectors or version-label machinery.

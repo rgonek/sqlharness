@@ -1,0 +1,35 @@
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+API /api/sessions/8/optimization/compare
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+API /api/sessions/8/optimization/compare
+API /api/sessions/8/optimization/compare
+API /api/operations/30
+API /api/sessions/8/optimization/compare
+PASS mixed IO/policy, keyboard focus, case/mean selection, partial statement, zero counter, both script copies, Plan tab
+API /api/sessions/8
+API /api/sessions/8/operations
+API /api/profiles
+API /api/settings
+API /api/sessions/8/optimization
+API /api/sessions/8/optimization/compare
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/operations/30/repro
+API /api/sessions/8/sql
+API /api/sessions/8/sql
+API /api/operations/30
+API /api/sessions/8/optimization/compare
+API /api/operations/99
+API /api/profiles
+API /api/settings
+PASS no statement IO explanation and failed attempt; page errors 0

@@ -1,0 +1,99 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for C:\Users\robert.gonek\.codex\worktrees\4b41\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.4+50e68bbb8b (64-bit .NET 10.0.11)
+[xUnit.net 00:00:01.04]   Discovering: SqlHarness.Tests
+[xUnit.net 00:00:02.28]   Discovered:  SqlHarness.Tests
+[xUnit.net 00:00:02.35]   Starting:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_alone_supplies_no_pair_evidence(status: "abandoned") [39 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_alone_supplies_no_pair_evidence(status: "rejected") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_alone_supplies_no_pair_evidence(status: "running") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_alone_supplies_no_pair_evidence(status: "cancelled") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_alone_supplies_no_pair_evidence(status: "failed") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Equal_reads_with_different_plan_hashes_are_not_shared [136 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Common_compare_beats_newer_measure_observations [82 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Same_group_compare_preserves_existing_verdict_semantics [2 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Cases_pair_by_measurement_fingerprint_when_case_ids_differ [20 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Equivalence_labels_distinguish_direct_chain_and_uncompared [3 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Across_groups_pair_four_of_five_varying_cases [20 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Missing_lob_table_reads_remain_unknown [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Metadata_only_attempt_does_not_replace_recorded_direct_pair [2 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: DifferentRunsSameConditions, expected: "DifferentRunsSameConditions") [71 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: SameSql, expected: "SameSql") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: ConditionsDiffer, expected: "ConditionsDiffer") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Pair_basis_json_matches_dashboard_frontend_contract(basis: MeasuredTogether, expected: "MeasuredTogether") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Timing_uses_selected_case_medians(selected: "0", mode: "sum", expected: 12) [8 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Timing_uses_selected_case_medians(selected: "all", mode: "mean", expected: 20) [5 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Timing_uses_selected_case_medians(selected: "all", mode: "sum", expected: 40) [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Independent_case_outcomes_keep_policy_and_metrics_separate_and_directional [111 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Conditions_differ_returns_no_numbers [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Measure_pairs_with_different_conditions_are_not_compared [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Successful_policy_failure_still_supplies_direct_pair [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Different_runs_keep_the_actual_source_operation_and_variant_for_each_version [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Outcomes_keep_missing_io_and_differing_results_and_never_invent_policy [8 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Different_runs_same_conditions_marks_different_run [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.All_case_branch_uses_confirmed_absence_as_zero_and_mean_includes_it [12 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Execution_counts_are_independent_per_side_and_survive_old_evidence [5 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Case_outcome_uses_both_read_thresholds(before: 1000, after: 995, expected: "same") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Case_outcome_uses_both_read_thresholds(before: 1000, after: 985, expected: "better") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Case_outcome_uses_both_read_thresholds(before: 500, after: 505, expected: "same") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Missing_branch_with_unavailable_attribution_stays_null [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Measure_pairs_use_logical_read_outcomes_and_mixed_case_warning [14 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Across_groups_rejects_ambiguous_keys_and_keeps_missing_rows_unknown [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Postgres_cases_without_logical_reads_keep_available_elapsed_cpu_and_buffers [5 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Partial_coverage_and_ambiguous_object_identity_do_not_invent_values [43 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_does_not_override_successful_pair(status: "abandoned") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_does_not_override_successful_pair(status: "rejected") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_does_not_override_successful_pair(status: "cancelled") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_does_not_override_successful_pair(status: "running") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ineligible_attempt_does_not_override_successful_pair(status: "failed") [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Branch_statement_is_not_collapsed_when_missing_in_one_case [4 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Ambiguous_or_incomplete_object_contributions_have_no_lob_value [4 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Measured_together_uses_that_operation [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Independent_timings_project_union_and_selected_case [2 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Batch_label_keeps_known_totals_when_shared_is_unknown [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Zero_baseline_reads_show_absolute_change [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Unknown_object_kind_is_not_matched_by_name [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Unidentified_group_rejects_colliding_evidence [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Across_groups_pairs_only_varying_keys_and_never_claims_verdict [7 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Builder_identity_filters_same_fingerprint_and_scope_collisions [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Statement_projections_preserve_side_availability_and_are_unavailable_for_all_cases [8 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Across_groups_without_pair_keys_retains_snapshots_and_unknown_rows [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Duplicate_identity_does_not_prove_another_statement_absent [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Occurrences_and_unmatched_hidden_work_do_not_mix_new_evidence [3 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Partial_cases_do_not_drop_missing_table_contributors [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Omitted_statement_and_missing_object_evidence_are_not_zero [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Mixed_names_worst_case [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Breakdown_is_additive_and_all_cases_share_only_when_each_case_matches [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Engine_without_table_io_returns_message_and_postgres_metrics [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Partial_attribution_falls_back_to_whole_batch_without_collapsing [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Missing_timing_contributor_is_unavailable_even_when_reads_are_missing [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Duplicate_version_labels_across_scopes_are_not_joined [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Op203_shape_focuses_on_changed_statement [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.All_cases_report_partial_metric_coverage_without_aggregating_missing_evidence [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Stored_table_counters_aggregate_case_representatives(mode: "mean", data: 15, scans: 2, physical: 3, pageServer: 4, readAhead: 5, lob: 6, lobPhysical: 7, lobReadAhead: 8) [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Stored_table_counters_aggregate_case_representatives(mode: "sum", data: 30, scans: 3, physical: 5, pageServer: 7, readAhead: 9, lob: 11, lobPhysical: 13, lobReadAhead: 15) [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Results_differ_overrides_read_outcome [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Timing_contributors_include_missing_metric_records_and_independent_side_availability [13 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Compared_statement_objects_join_by_name_and_report_the_side_to_side_change [2 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Statement_and_table_contributors_do_not_depend_on_batch_reads(allMissing: False, aggregate: "sum", expectedBefore: 22, expectedAfter: 20, expectedPhysical: 5) [2 ms]
+[xUnit.net 00:00:03.12]   Finished:    SqlHarness.Tests
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Statement_and_table_contributors_do_not_depend_on_batch_reads(allMissing: True, aggregate: "mean", expectedBefore: 11, expectedAfter: 10, expectedPhysical: 3) [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Identical_versions_show_same_sql [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Missing_batch_reads_do_not_hide_unavailable_statement_or_missing_case [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Duplicate_occurrence_does_not_upgrade_verdict_or_show_counters [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Sum_and_mean_aggregate_per_case_medians [< 1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Mean_breakdown_derives_changed_reads_from_rounded_whole_and_shared_totals [1 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Temp_objects_and_zero_read_rows_collapse_and_real_tables_sort_by_change [4 ms]
+  Passed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Missing_read_metrics_do_not_create_a_same_outcome [< 1 ms]
+
+Test Run Successful.
+Total tests: 80
+     Passed: 80
+ Total time: 4,3048 Seconds

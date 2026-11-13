@@ -1,0 +1,200 @@
+
+> ui@0.0.0 test
+> vitest run --run src/pages/AgentSessionPage.test.tsx
+
+
+ RUN  v5.0.3 C:/Users/robert.gonek/.codex/worktrees/4b41/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ❯ src/pages/AgentSessionPage.test.tsx (8 tests | 1 failed) 18867ms
+   × aggregate measure from a second MCP child keeps the agent-session return route 5067ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/AgentSessionPage.test.tsx > aggregate measure from a second MCP child keeps the agent-session return route
+TestingLibraryElementError: Unable to find role="link" and name "Measure for v1"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="min-h-screen"
+    >
+      <header
+        class="app-header flex items-center gap-3 p-4"
+      >
+        <a
+          aria-label="SQLHarness home"
+          class="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          href="/"
+        >
+          <span
+            class="inline-flex items-center gap-2 whitespace-nowrap"
+          >
+            <svg
+              aria-hidden="true"
+              class="size-8 shrink-0"
+              viewBox="205 205 268 254"
+            >
+              <path
+                d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"
+                fill="#10AC61"
+              />
+              <path
+                class="fill-[#0B203B] dark:fill-white"
+                d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"
+              />
+            </svg>
+            <span
+              class="hidden text-lg font-semibold tracking-tight md:inline"
+            >
+              <span
+                class="text-[#0B203B] dark:text-white"
+              >
+                SQL
+              </span>
+              <span
+                class="text-[#10AC61]"
+              >
+                Harness
+              </span>
+            </span>
+          </span>
+        </a>
+        <nav
+          aria-label="Main navigation"
+          class="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+        >
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/"
+          >
+            Activity
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/stats"
+          >
+            Usage
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/profiles"
+          >
+            Profiles
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/settings"
+          >
+            Settings
+          </a>
+        </nav>
+        <div
+          class="shrink-0"
+        >
+          <button
+            aria-expanded="false"
+            aria-haspopup="menu"
+            aria-label="Theme: syste...
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="min-h-screen"
+    >
+      <header
+        class="app-header flex items-center gap-3 p-4"
+      >
+        <a
+          aria-label="SQLHarness home"
+          class="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          href="/"
+        >
+          <span
+            class="inline-flex items-center gap-2 whitespace-nowrap"
+          >
+            <svg
+              aria-hidden="true"
+              class="size-8 shrink-0"
+              viewBox="205 205 268 254"
+            >
+              <path
+                d="M218 272 C218 266 223 261 233 257 L325 220 Q336 215 347 220 L449 258 Q459 262 459 272 L459 291 Q459 303 448 308 L402 327 L402 289 L371 301 L371 338 Q340 354 309 339 L309 301 L279 288 L279 327 L230 310 Q218 306 218 294 Z"
+                fill="#10AC61"
+              />
+              <path
+                class="fill-[#0B203B] dark:fill-white"
+                d="M218 355 Q218 341 232 341 Q237 341 242 343 L277 356 L278 393 L309 405 L309 368 Q340 385 371 368 L371 405 L402 393 L402 356 L438 342 Q459 336 459 355 L459 389 Q459 401 448 406 L353 443 Q339 449 327 444 L230 406 Q218 401 218 388 Z"
+              />
+            </svg>
+            <span
+              class="hidden text-lg font-semibold tracking-tight md:inline"
+            >
+              <span
+                class="text-[#0B203B] dark:text-white"
+              >
+                SQL
+              </span>
+              <span
+                class="text-[#10AC61]"
+              >
+                Harness
+              </span>
+            </span>
+          </span>
+        </a>
+        <nav
+          aria-label="Main navigation"
+          class="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+        >
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/"
+          >
+            Activity
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/stats"
+          >
+            Usage
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/profiles"
+          >
+            Profiles
+          </a>
+          <a
+            class="group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+            href="/settings"
+          >
+            Settings
+          </a>
+        </nav>
+        <div
+          class="shrink-0"
+        >
+          <button
+            aria-expanded="false"
+            aria-haspopup="menu"
+            aria-label="Theme: syste...
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/AgentSessionPage.test.tsx:251:32
+    249|   })
+    250|   renderApp("/agent-sessions/claude/conversation-1")
+    251|   const measure = await screen.findByRole("link", { name: "Measure for…
+       |                                ^
+    252|   const target = new URL(measure.getAttribute("href")!, "http://dashbo…
+    253|   expect(target.pathname).toBe("/operations/22")
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  12:42:17
+   Duration  98.37s (import 74%, tests 19%, transform 4%, environment 2%, setup 1%)
+

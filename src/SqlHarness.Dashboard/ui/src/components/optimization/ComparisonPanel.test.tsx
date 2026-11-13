@@ -131,11 +131,21 @@ test("reproduction actions resolve a selected fingerprint to each side's raw cas
   await expect.poll(() => calls.some(call => call.includes("/repro?") && call.includes("case=candidate-raw-b"))).toBe(true)
   expect(calls.some(call => call.includes("/repro?") && call.includes("case=baseline-raw-a"))).toBe(true)
   expect(calls.some(call => call.includes("/repro?") && call.includes("case=candidate-raw-a"))).toBe(true)
+  for (const [side, id] of [["baseline", "baseline-raw-b"], ["candidate", "candidate-raw-b"]]) {
+    for (const form of ["as-executed", "local-variables"]) {
+      await expect.poll(() => calls.some(call => {
+        const url = new URL(call, "http://dashboard")
+        return url.pathname.endsWith("/repro") && url.searchParams.get("side") === side && url.searchParams.get("case") === id && url.searchParams.get("form") === form
+      })).toBe(true)
+    }
+  }
+  expect(screen.queryByText("Comparison evidence and scripts")).not.toBeInTheDocument()
+  expect(within(screen.getByRole("region", { name: "Version comparison" })).queryByText("Elapsed (median)")).not.toBeInTheDocument()
 })
 
 test("operation navigation round-trips the selected multi-group session search", async () => {
   const { router } = renderPanel(comparison, undefined, "/sessions/7?subject=Orders&db=shop&group=fp-2&scope=fragment%3Acustomer&a=v1&b=v2&case=customer-9001&agg=mean")
-  const planLink = await screen.findByRole("link", { name: "Plans for v0" })
+  const planLink = (await screen.findAllByRole("link", { name: "Operation #214" }))[0]!
   const planTarget = new URL(planLink.getAttribute("href")!, "http://dashboard")
   expect(Object.fromEntries(planTarget.searchParams)).toMatchObject({ returnSession: "7", returnSubject: "Orders", returnDb: "shop", returnGroup: "fp-2", returnScope: "fragment:customer", returnA: "v1", returnB: "v2", returnCase: "customer-9001", returnAgg: "mean" })
   await userEvent.click((await screen.findAllByRole("link", { name: "Operation #214" }))[0]!)
@@ -172,7 +182,7 @@ test("shows PostgreSQL CPU and buffer totals in the panel and copied summary whe
   expect(screen.queryByText("12 → 8", { exact: false })).not.toBeInTheDocument()
   expect(screen.getByText(/shared hit 7, shared read 2/)).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Copy summary" }))
-  await expect.poll(() => writeText.mock.calls[0]?.[0]).toContain("| CPU (ms) | 12 | 8 |")
+  await expect.poll(() => writeText.mock.calls[0]?.[0]).toContain("| CPU (sum of case medians, ms) | 12 | 8 |")
   expect(writeText.mock.calls[0]?.[0]).toContain("| Buffers | shared hit 7, shared read 2, shared dirtied 1, shared written 0, temp read 0, temp written 3 | shared hit 5, shared read 1, shared dirtied 0, shared written 0, temp read 0, temp written 1 |")
 })
 
@@ -190,7 +200,7 @@ test("view selection is URL-backed and the query receives the selected view", as
 
   await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
   expect(screen.getByRole("radio", { name: "By statement" })).toBeChecked()
-  expect(screen.getByText("whole batch: 500 → 650 reads (shared statements: 100)")).toBeInTheDocument()
+  expect(screen.getByText("basis: changed statements")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("radio", { name: "Whole batch" }))
   expect(router.state.location.search).toMatchObject({ view: "whole" })
   await expect.poll(() => calls.some(call => new URL(call, "http://dashboard").searchParams.get("view") === "whole")).toBe(true)
